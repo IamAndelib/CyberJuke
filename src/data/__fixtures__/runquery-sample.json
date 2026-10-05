@@ -1,0 +1,1118 @@
+[
+ {
+  "document": {
+   "name": "projects/cyberspace-cyberspace/databases/(default)/documents/posts/zxQ91atgkGA6lzKlLobH",
+   "fields": {
+    "authorUsername": {
+     "stringValue": "monimos"
+    },
+    "deleted": {
+     "booleanValue": false
+    },
+    "isBanned": {
+     "booleanValue": false
+    },
+    "isShadowBanned": {
+     "booleanValue": false
+    },
+    "isNSFW": {
+     "booleanValue": false
+    },
+    "isPublic": {
+     "booleanValue": true
+    },
+    "isGuildThread": {
+     "booleanValue": false
+    },
+    "slug": {
+     "stringValue": "am-i-being-stalked-by-a-greek-celebrity"
+    },
+    "title": {
+     "stringValue": "Am I being stalked by a Greek Celebrity???"
+    },
+    "topics": {
+     "arrayValue": {
+      "values": [
+       {
+        "stringValue": "apon"
+       },
+       {
+        "stringValue": "i hate my luck"
+       },
+       {
+        "stringValue": "famous"
+       }
+      ]
+     }
+    },
+    "attachments": {
+     "arrayValue": {
+      "values": [
+       {
+        "mapValue": {
+         "fields": {
+          "type": {
+           "stringValue": "audio"
+          },
+          "origin": {
+           "stringValue": "youtube"
+          },
+          "src": {
+           "stringValue": "https://youtu.be/VgUy-Mazsbw"
+          },
+          "artist": {
+           "stringValue": "APON"
+          },
+          "title": {
+           "stringValue": "Kaigomai"
+          },
+          "genre": {
+           "stringValue": "greek"
+          }
+         }
+        }
+       }
+      ]
+     }
+    },
+    "hasAudioAttachment": {
+     "booleanValue": true
+    },
+    "audioAttachmentGenre": {
+     "stringValue": "greek"
+    },
+    "createdAt": {
+     "timestampValue": "2026-10-05T00:26:30.893Z"
+    },
+    "randomKey": {
+     "doubleValue": 0.018453533581
+    },
+    "bookmarksCount": {
+     "integerValue": "1"
+    },
+    "lastActivityAt": {
+     "timestampValue": "2026-10-05T09:32:28.312Z"
+    },
+    "repliesCount": {
+     "integerValue": "16"
+    }
+   },
+   "createTime": "2026-10-05T00:26:30.919567Z",
+   "updateTime": "2026-10-05T09:32:28.555759Z"
+  },
+  "readTime": "2026-10-05T11:52:35.360227Z"
+ },
+ {
+  "document": {
+   "name": "projects/cyberspace-cyberspace/databases/(default)/documents/posts/6tq06kyNfyLml7cwJisS",
+   "fields": {
+    "authorUsername": {
+     "stringValue": "newt"
+    },
+    "deleted": {
+     "booleanValue": false
+    },
+    "isBanned": {
+     "booleanValue": false
+    },
+    "isShadowBanned": {
+     "booleanValue": false
+    },
+    "isNSFW": {
+     "booleanValue": false
+    },
+    "isPublic": {
+     "booleanValue": true
+    },
+    "isGuildThread": {
+     "booleanValue": false
+    },
+    "repliesCount": {
+     "integerValue": "0"
+    },
+    "slug": {
+     "stringValue": "bayonne-forget"
+    },
+    "attachments": {
+     "arrayValue": {
+      "values": [
+       {
+        "mapValue": {
+         "fields": {
+          "type": {
+           "stringValue": "audio"
+          },
+          "origin": {
+           "stringValue": "youtube"
+          },
+          "src": {
+           "stringValue": "https://music.youtube.com/watch?v=gPbGK_62bLU"
+          },
+          "artist": {
+           "stringValue": "Bayonne"
+          },
+          "title": {
+           "stringValue": "Forget"
+          },
+          "genre": {
+           "stringValue": "indie pop"
+          }
+         }
+        }
+       }
+      ]
+     }
+    },
+    "hasAudioAttachment": {
+     "booleanValue": true
+    },
+    "audioAttachmentGenre": {
+     "stringValue": "indie-pop"
+    },
+    "createdAt": {
+     "timestampValue": "2026-10-04T06:53:51.743Z"
+    },
+    "randomKey": {
+     "doubleValue": 0.468184156251
+    },
+    "bookmarksCount": {
+     "integerValue": "1"
+    }
+   },
+   "createTime": "2026-10-04T06:53:51.788527Z",
+   "updateTime": "2026-10-04T07:04:04.070575Z"
+  },
+  "readTime": "2026-10-05T11:52:35.360227Z"
+ },
+ {
+  "document": {
+   "name": "projects/cyberspace-cyberspace/databases/(default)/documents/posts/G8UcMUtloAx7IMYI8q5L",
+   "fields": {
+    "authorUsername": {
+     "stringValue": "guineaw0rm"
+    },
+    "deleted": {
+     "booleanValue": false
+    },
+    "isBanned": {
+     "booleanValue": false
+    },
+    "isShadowBanned": {
+     "booleanValue": false
+    },
+    "isNSFW": {
+     "booleanValue": false
+    },
+    "isPublic": {
+     "booleanValue": true
+    },
+    "isGuildThread": {
+     "booleanValue": false
+    },
+    "repliesCount": {
+     "integerValue": "0"
+    },
+    "bookmarksCount": {
+     "integerValue": "0"
+    },
+    "slug": {
+     "stringValue": "i-beat-end-of-abyss-on-ps5-and-i-wanted-to-talk-about-it-a"
+    },
+    "topics": {
+     "arrayValue": {
+      "values": [
+       {
+        "stringValue": "end of abyss"
+       },
+       {
+        "stringValue": "videogames"
+       },
+       {
+        "stringValue": "reviews"
+       }
+      ]
+     }
+    },
+    "attachments": {
+     "arrayValue": {
+      "values": [
+       {
+        "mapValue": {
+         "fields": {
+          "type": {
+           "stringValue": "audio"
+          },
+          "origin": {
+           "stringValue": "youtube"
+          },
+          "src": {
+           "stringValue": "https://youtu.be/jVExs4d4-7o"
+          },
+          "artist": {
+           "stringValue": "Death Breath"
+          },
+          "title": {
+           "stringValue": "Flabby Little Things From Beyond"
+          },
+          "genre": {
+           "stringValue": "death metal"
+          }
+         }
+        }
+       }
+      ]
+     }
+    },
+    "hasAudioAttachment": {
+     "booleanValue": true
+    },
+    "audioAttachmentGenre": {
+     "stringValue": "death-metal"
+    },
+    "createdAt": {
+     "timestampValue": "2026-10-04T02:19:02.040Z"
+    },
+    "randomKey": {
+     "doubleValue": 0.346791486408
+    }
+   },
+   "createTime": "2026-10-04T02:19:02.067039Z",
+   "updateTime": "2026-10-04T02:19:02.873279Z"
+  },
+  "readTime": "2026-10-05T11:52:35.360227Z"
+ },
+ {
+  "document": {
+   "name": "projects/cyberspace-cyberspace/databases/(default)/documents/posts/hQmMZlsl0osRpEEL1fFT",
+   "fields": {
+    "authorUsername": {
+     "stringValue": "knightshadow"
+    },
+    "deleted": {
+     "booleanValue": false
+    },
+    "isBanned": {
+     "booleanValue": false
+    },
+    "isShadowBanned": {
+     "booleanValue": false
+    },
+    "isNSFW": {
+     "booleanValue": false
+    },
+    "isPublic": {
+     "booleanValue": true
+    },
+    "isGuildThread": {
+     "booleanValue": false
+    },
+    "repliesCount": {
+     "integerValue": "0"
+    },
+    "bookmarksCount": {
+     "integerValue": "0"
+    },
+    "slug": {
+     "stringValue": "movie-recommendation-ti-wests-x-trilogy"
+    },
+    "title": {
+     "stringValue": "Movie Recommendation: Ti West's \"X Trilogy\""
+    },
+    "topics": {
+     "arrayValue": {
+      "values": [
+       {
+        "stringValue": "movies"
+       },
+       {
+        "stringValue": "horror"
+       }
+      ]
+     }
+    },
+    "attachments": {
+     "arrayValue": {
+      "values": [
+       {
+        "mapValue": {
+         "fields": {
+          "type": {
+           "stringValue": "audio"
+          },
+          "origin": {
+           "stringValue": "youtube"
+          },
+          "src": {
+           "stringValue": "https://www.youtube.com/watch?v=WeVLw9GJbWM"
+          },
+          "artist": {
+           "stringValue": "Iron Maiden"
+          },
+          "title": {
+           "stringValue": "The Trooper"
+          },
+          "genre": {
+           "stringValue": "heavy metal"
+          }
+         }
+        }
+       }
+      ]
+     }
+    },
+    "hasAudioAttachment": {
+     "booleanValue": true
+    },
+    "audioAttachmentGenre": {
+     "stringValue": "heavy-metal"
+    },
+    "createdAt": {
+     "timestampValue": "2026-10-03T17:20:53.403Z"
+    },
+    "randomKey": {
+     "doubleValue": 0.922422930996
+    }
+   },
+   "createTime": "2026-10-03T17:20:53.449375Z",
+   "updateTime": "2026-10-03T17:20:54.282751Z"
+  },
+  "readTime": "2026-10-05T11:52:35.360227Z"
+ },
+ {
+  "document": {
+   "name": "projects/cyberspace-cyberspace/databases/(default)/documents/posts/JTNtevFjCyO5OHJDzyQg",
+   "fields": {
+    "authorUsername": {
+     "stringValue": "hibouboule"
+    },
+    "deleted": {
+     "booleanValue": false
+    },
+    "isBanned": {
+     "booleanValue": false
+    },
+    "isShadowBanned": {
+     "booleanValue": false
+    },
+    "isNSFW": {
+     "booleanValue": false
+    },
+    "isPublic": {
+     "booleanValue": true
+    },
+    "isGuildThread": {
+     "booleanValue": false
+    },
+    "repliesCount": {
+     "integerValue": "0"
+    },
+    "slug": {
+     "stringValue": "in-scotland-i-shall-live"
+    },
+    "topics": {
+     "arrayValue": {
+      "values": [
+       {
+        "stringValue": "music"
+       },
+       {
+        "stringValue": "scotish folk"
+       },
+       {
+        "stringValue": "scotland"
+       }
+      ]
+     }
+    },
+    "attachments": {
+     "arrayValue": {
+      "values": [
+       {
+        "mapValue": {
+         "fields": {
+          "type": {
+           "stringValue": "audio"
+          },
+          "origin": {
+           "stringValue": "youtube"
+          },
+          "src": {
+           "stringValue": "https://www.youtube.com/watch?v=qfXMbZTMP4k"
+          },
+          "artist": {
+           "stringValue": "Arany Zolt\u00e0n"
+          },
+          "title": {
+           "stringValue": "Ye Jacobites by name"
+          },
+          "genre": {
+           "stringValue": "folk"
+          }
+         }
+        }
+       }
+      ]
+     }
+    },
+    "hasAudioAttachment": {
+     "booleanValue": true
+    },
+    "audioAttachmentGenre": {
+     "stringValue": "folk"
+    },
+    "createdAt": {
+     "timestampValue": "2026-10-01T18:18:50.568Z"
+    },
+    "randomKey": {
+     "doubleValue": 0.969698752964
+    },
+    "bookmarksCount": {
+     "integerValue": "2"
+    }
+   },
+   "createTime": "2026-10-01T18:18:50.600719Z",
+   "updateTime": "2026-10-01T18:25:23.719983Z"
+  },
+  "readTime": "2026-10-05T11:52:35.360227Z"
+ },
+ {
+  "document": {
+   "name": "projects/cyberspace-cyberspace/databases/(default)/documents/posts/vgAJ41HR7ESRmQvnzaxl",
+   "fields": {
+    "authorUsername": {
+     "stringValue": "newt"
+    },
+    "deleted": {
+     "booleanValue": false
+    },
+    "isBanned": {
+     "booleanValue": false
+    },
+    "isShadowBanned": {
+     "booleanValue": false
+    },
+    "isNSFW": {
+     "booleanValue": false
+    },
+    "isPublic": {
+     "booleanValue": true
+    },
+    "isGuildThread": {
+     "booleanValue": false
+    },
+    "slug": {
+     "stringValue": "what-were-the-skies-like-when-you-were-young"
+    },
+    "title": {
+     "stringValue": "what were the skies like when you were young"
+    },
+    "topics": {
+     "arrayValue": {
+      "values": [
+       {
+        "stringValue": "little fluffy clouds"
+       }
+      ]
+     }
+    },
+    "attachments": {
+     "arrayValue": {
+      "values": [
+       {
+        "mapValue": {
+         "fields": {
+          "type": {
+           "stringValue": "audio"
+          },
+          "origin": {
+           "stringValue": "youtube"
+          },
+          "src": {
+           "stringValue": "https://music.youtube.com/watch?v=2Ng9Pf_p7Fw"
+          },
+          "artist": {
+           "stringValue": "The Orb"
+          },
+          "title": {
+           "stringValue": "Little Fluffy Clouds"
+          },
+          "genre": {
+           "stringValue": "electronic"
+          }
+         }
+        }
+       }
+      ]
+     }
+    },
+    "hasAudioAttachment": {
+     "booleanValue": true
+    },
+    "audioAttachmentGenre": {
+     "stringValue": "electronic"
+    },
+    "createdAt": {
+     "timestampValue": "2026-10-01T02:52:15.396Z"
+    },
+    "randomKey": {
+     "doubleValue": 0.372917607407
+    },
+    "lastActivityAt": {
+     "timestampValue": "2026-10-01T06:39:48.983Z"
+    },
+    "repliesCount": {
+     "integerValue": "2"
+    },
+    "bookmarksCount": {
+     "integerValue": "5"
+    }
+   },
+   "createTime": "2026-10-01T02:52:15.425055Z",
+   "updateTime": "2026-10-01T20:37:36.499743Z"
+  },
+  "readTime": "2026-10-05T11:52:35.360227Z"
+ },
+ {
+  "document": {
+   "name": "projects/cyberspace-cyberspace/databases/(default)/documents/posts/NlZYoK9UiLsjAd5hjW3f",
+   "fields": {
+    "authorUsername": {
+     "stringValue": "newt"
+    },
+    "deleted": {
+     "booleanValue": false
+    },
+    "isBanned": {
+     "booleanValue": false
+    },
+    "isShadowBanned": {
+     "booleanValue": false
+    },
+    "isNSFW": {
+     "booleanValue": false
+    },
+    "isPublic": {
+     "booleanValue": true
+    },
+    "isGuildThread": {
+     "booleanValue": false
+    },
+    "repliesCount": {
+     "integerValue": "0"
+    },
+    "slug": {
+     "stringValue": "new-artistic-concept-just-dropped"
+    },
+    "title": {
+     "stringValue": "new artistic concept just dropped"
+    },
+    "attachments": {
+     "arrayValue": {
+      "values": [
+       {
+        "mapValue": {
+         "fields": {
+          "type": {
+           "stringValue": "audio"
+          },
+          "origin": {
+           "stringValue": "youtube"
+          },
+          "src": {
+           "stringValue": "http://music.youtube.com/watch?v=5jxdjeYumRY"
+          },
+          "artist": {
+           "stringValue": "chemical brothers"
+          },
+          "title": {
+           "stringValue": "Come With Us"
+          },
+          "genre": {
+           "stringValue": "electronic"
+          }
+         }
+        }
+       }
+      ]
+     }
+    },
+    "hasAudioAttachment": {
+     "booleanValue": true
+    },
+    "audioAttachmentGenre": {
+     "stringValue": "electronic"
+    },
+    "createdAt": {
+     "timestampValue": "2026-09-30T22:22:00.778Z"
+    },
+    "randomKey": {
+     "doubleValue": 0.451654012776
+    },
+    "bookmarksCount": {
+     "integerValue": "1"
+    }
+   },
+   "createTime": "2026-09-30T22:22:00.827695Z",
+   "updateTime": "2026-09-30T22:23:48.711487Z"
+  },
+  "readTime": "2026-10-05T11:52:35.360227Z"
+ },
+ {
+  "document": {
+   "name": "projects/cyberspace-cyberspace/databases/(default)/documents/posts/8rMEbe62pH9ya3yAZpJ6",
+   "fields": {
+    "isNSFW": {
+     "booleanValue": false
+    },
+    "deleted": {
+     "booleanValue": false
+    },
+    "isPublic": {
+     "booleanValue": true
+    },
+    "audioAttachmentGenre": {
+     "stringValue": "doom-metal"
+    },
+    "isBanned": {
+     "booleanValue": false
+    },
+    "slug": {
+     "stringValue": "i-beat-dragons-dogma-ii-last-month-not-100-complete-yet-and"
+    },
+    "attachments": {
+     "arrayValue": {
+      "values": [
+       {
+        "mapValue": {
+         "fields": {
+          "genre": {
+           "stringValue": "doom metal"
+          },
+          "src": {
+           "stringValue": "https://m.youtube.com/watch?v=DVkrh9fihFk&list=RDDVkrh9fihFk&start_radio=1&pp=ygUbY2xvYWsgb2YgZmVhdGhlcnMgdGhlIHN3b3JkoAcB&ra=m"
+          },
+          "origin": {
+           "stringValue": "youtube"
+          },
+          "artist": {
+           "stringValue": "The Sword"
+          },
+          "type": {
+           "stringValue": "audio"
+          },
+          "title": {
+           "stringValue": "Cloak of Feathers"
+          }
+         }
+        }
+       }
+      ]
+     }
+    },
+    "isGuildThread": {
+     "booleanValue": false
+    },
+    "authorUsername": {
+     "stringValue": "guineaw0rm"
+    },
+    "topics": {
+     "arrayValue": {
+      "values": [
+       {
+        "stringValue": "dragons dogma ii"
+       },
+       {
+        "stringValue": "gaming"
+       },
+       {
+        "stringValue": "art"
+       }
+      ]
+     }
+    },
+    "hasAudioAttachment": {
+     "booleanValue": true
+    },
+    "isShadowBanned": {
+     "booleanValue": false
+    },
+    "createdAt": {
+     "timestampValue": "2026-09-09T02:47:05.647Z"
+    },
+    "randomKey": {
+     "doubleValue": 0.227683367863
+    },
+    "editedAt": {
+     "timestampValue": "2026-09-09T02:47:30.422Z"
+    },
+    "hasImageAttachment": {
+     "booleanValue": false
+    },
+    "bookmarksCount": {
+     "integerValue": "1"
+    },
+    "lastActivityAt": {
+     "timestampValue": "2026-09-25T08:49:15.508Z"
+    },
+    "repliesCount": {
+     "integerValue": "4"
+    }
+   },
+   "createTime": "2026-09-09T02:47:05.669839Z",
+   "updateTime": "2026-09-25T08:49:16.066175Z"
+  },
+  "readTime": "2026-10-05T11:52:35.360227Z"
+ },
+ {
+  "document": {
+   "name": "projects/cyberspace-cyberspace/databases/(default)/documents/posts/QKIheDQMsKvv3SgPQQZT",
+   "fields": {
+    "isPublic": {
+     "booleanValue": true
+    },
+    "hasAudioAttachment": {
+     "booleanValue": true
+    },
+    "audioAttachmentGenre": {
+     "stringValue": "folk-rock"
+    },
+    "repliesCount": {
+     "integerValue": "0"
+    },
+    "slug": {
+     "stringValue": "the-animals-house-of-the-rising-sun"
+    },
+    "isNSFW": {
+     "booleanValue": false
+    },
+    "authorUsername": {
+     "stringValue": "madchimp"
+    },
+    "isShadowBanned": {
+     "booleanValue": false
+    },
+    "isBanned": {
+     "booleanValue": false
+    },
+    "attachments": {
+     "arrayValue": {
+      "values": [
+       {
+        "mapValue": {
+         "fields": {
+          "type": {
+           "stringValue": "audio"
+          },
+          "title": {
+           "stringValue": "House Of The Rising Sun"
+          },
+          "artist": {
+           "stringValue": "The Animals"
+          },
+          "src": {
+           "stringValue": "https://m.youtube.com/watch?v=MJkr0DWbhTk&ra=m"
+          },
+          "genre": {
+           "stringValue": "folk-rock"
+          },
+          "origin": {
+           "stringValue": "youtube"
+          }
+         }
+        }
+       }
+      ]
+     }
+    },
+    "isGuildThread": {
+     "booleanValue": false
+    },
+    "deleted": {
+     "booleanValue": false
+    },
+    "createdAt": {
+     "timestampValue": "2026-09-08T13:01:00.885Z"
+    },
+    "randomKey": {
+     "doubleValue": 0.235360051276
+    },
+    "bookmarksCount": {
+     "integerValue": "1"
+    }
+   },
+   "createTime": "2026-09-08T13:01:00.927535Z",
+   "updateTime": "2026-09-08T14:50:19.292191Z"
+  },
+  "readTime": "2026-10-05T11:52:35.360227Z"
+ },
+ {
+  "document": {
+   "name": "projects/cyberspace-cyberspace/databases/(default)/documents/posts/jzXBvN5FUETSx8gqITIj",
+   "fields": {
+    "authorUsername": {
+     "stringValue": "hemalet"
+    },
+    "deleted": {
+     "booleanValue": false
+    },
+    "isBanned": {
+     "booleanValue": false
+    },
+    "isShadowBanned": {
+     "booleanValue": false
+    },
+    "isNSFW": {
+     "booleanValue": false
+    },
+    "isPublic": {
+     "booleanValue": true
+    },
+    "isGuildThread": {
+     "booleanValue": false
+    },
+    "repliesCount": {
+     "integerValue": "0"
+    },
+    "slug": {
+     "stringValue": "music-for-an-afternoon-at-work"
+    },
+    "title": {
+     "stringValue": "Music for an afternoon at work..."
+    },
+    "attachments": {
+     "arrayValue": {
+      "values": [
+       {
+        "mapValue": {
+         "fields": {
+          "type": {
+           "stringValue": "audio"
+          },
+          "origin": {
+           "stringValue": "youtube"
+          },
+          "src": {
+           "stringValue": "https://www.youtube.com/live/Q89Dzox4jAE?si=fTtVGemhUy5tccwJ"
+          },
+          "artist": {
+           "stringValue": "Chill Village"
+          },
+          "title": {
+           "stringValue": "LOFI WORK SPACE"
+          },
+          "genre": {
+           "stringValue": "chillout"
+          }
+         }
+        }
+       }
+      ]
+     }
+    },
+    "hasAudioAttachment": {
+     "booleanValue": true
+    },
+    "audioAttachmentGenre": {
+     "stringValue": "chillout"
+    },
+    "createdAt": {
+     "timestampValue": "2026-08-20T18:33:03.266Z"
+    },
+    "randomKey": {
+     "doubleValue": 0.300052009455
+    },
+    "bookmarksCount": {
+     "integerValue": "2"
+    }
+   },
+   "createTime": "2026-08-20T18:33:03.291647Z",
+   "updateTime": "2026-08-30T00:05:35.998095Z"
+  },
+  "readTime": "2026-10-05T11:52:35.360227Z"
+ },
+ {
+  "document": {
+   "name": "projects/cyberspace-cyberspace/databases/(default)/documents/posts/nesQOZiWyMuSEWpTRZjL",
+   "fields": {
+    "authorUsername": {
+     "stringValue": "chou"
+    },
+    "deleted": {
+     "booleanValue": false
+    },
+    "isBanned": {
+     "booleanValue": false
+    },
+    "isShadowBanned": {
+     "booleanValue": false
+    },
+    "isNSFW": {
+     "booleanValue": true
+    },
+    "isPublic": {
+     "booleanValue": true
+    },
+    "isGuildThread": {
+     "booleanValue": false
+    },
+    "slug": {
+     "stringValue": "i-need-a-new-coding-playlist"
+    },
+    "title": {
+     "stringValue": "I need a new coding playlist"
+    },
+    "topics": {
+     "arrayValue": {
+      "values": [
+       {
+        "stringValue": "princess superstar has a potty mouth too"
+       },
+       {
+        "stringValue": "seriously i really do need new music though"
+       },
+       {
+        "stringValue": "send help immediately"
+       }
+      ]
+     }
+    },
+    "attachments": {
+     "arrayValue": {
+      "values": [
+       {
+        "mapValue": {
+         "fields": {
+          "type": {
+           "stringValue": "audio"
+          },
+          "origin": {
+           "stringValue": "youtube"
+          },
+          "src": {
+           "stringValue": "https://www.youtube.com/watch?v=JeyLI3xgQok"
+          },
+          "artist": {
+           "stringValue": "Mason vs Princess Superstar"
+          },
+          "title": {
+           "stringValue": "Perfect [Exceeder]"
+          },
+          "genre": {
+           "stringValue": "electro house"
+          }
+         }
+        }
+       }
+      ]
+     }
+    },
+    "hasAudioAttachment": {
+     "booleanValue": true
+    },
+    "audioAttachmentGenre": {
+     "stringValue": "electro-house"
+    },
+    "createdAt": {
+     "timestampValue": "2026-08-09T16:00:16.279Z"
+    },
+    "randomKey": {
+     "doubleValue": 0.431077191593
+    },
+    "lastActivityAt": {
+     "timestampValue": "2026-08-09T21:10:48.398Z"
+    },
+    "repliesCount": {
+     "integerValue": "6"
+    },
+    "bookmarksCount": {
+     "integerValue": "2"
+    }
+   },
+   "createTime": "2026-08-09T16:00:16.305359Z",
+   "updateTime": "2026-08-10T08:29:38.347103Z"
+  },
+  "readTime": "2026-10-05T11:52:35.360227Z"
+ },
+ {
+  "document": {
+   "name": "projects/cyberspace-cyberspace/databases/(default)/documents/posts/sPVimvDsFyet6YkEQnyn",
+   "fields": {
+    "authorUsername": {
+     "stringValue": "ramgarden"
+    },
+    "deleted": {
+     "booleanValue": false
+    },
+    "isShadowBanned": {
+     "booleanValue": false
+    },
+    "isNSFW": {
+     "booleanValue": false
+    },
+    "isPublic": {
+     "booleanValue": true
+    },
+    "isGuildThread": {
+     "booleanValue": false
+    },
+    "repliesCount": {
+     "integerValue": "0"
+    },
+    "slug": {
+     "stringValue": "found-this-music-stream-to-help-me-focus-on-work-today"
+    },
+    "attachments": {
+     "arrayValue": {
+      "values": [
+       {
+        "mapValue": {
+         "fields": {
+          "type": {
+           "stringValue": "audio"
+          },
+          "origin": {
+           "stringValue": "youtube"
+          },
+          "src": {
+           "stringValue": "https://www.youtube.com/live/EXRu5ihe8jU?is=PF8keZEia1KorSz8"
+          },
+          "artist": {
+           "stringValue": "Neural Singularity Radio"
+          },
+          "title": {
+           "stringValue": "Various"
+          },
+          "genre": {
+           "stringValue": "electronic rock"
+          }
+         }
+        }
+       }
+      ]
+     }
+    },
+    "hasAudioAttachment": {
+     "booleanValue": true
+    },
+    "audioAttachmentGenre": {
+     "stringValue": "electronic-rock"
+    },
+    "createdAt": {
+     "timestampValue": "2026-06-24T04:24:32.275Z"
+    },
+    "randomKey": {
+     "doubleValue": 0.543897612026
+    },
+    "bookmarksCount": {
+     "integerValue": "4"
+    },
+    "isBanned": {
+     "booleanValue": false
+    }
+   },
+   "createTime": "2026-06-24T04:24:32.308015Z",
+   "updateTime": "2026-09-19T11:02:44.644303Z"
+  },
+  "readTime": "2026-10-05T11:52:35.360227Z"
+ }
+]
