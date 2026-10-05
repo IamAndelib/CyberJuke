@@ -1,0 +1,162 @@
+name: Release
+
+# Manual release: builds a signed APK and publishes a GitHub release. The tag v<version>
+# is created by the release action itself (pushing tags from the dev proxy is not possible).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version without the leading v (e.g. 0.1.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark the GitHub release as a pre-release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish v${{ inputs.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Check inputs and signing secrets
+        env:
+          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [[ ! "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error title=Invalid version::'$VERSION' is not semver like 0.1.0 or 0.2.0-beta.1 (no leading v)"
+            exit 1
+          fi
+          missing=()
+          for name in KEYSTORE_FILE KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then missing+=("$name"); fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            echo "::error title=Missing signing secrets::Add these repository secrets (Settings > Secrets and variables > Actions): ${missing[*]}. KEYSTORE_FILE is the base64 of the .jks file (base64 -w0 release.jks)."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v5
+
+      - name: Fail if the tag already exists
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+            echo "::error title=Tag exists::v$VERSION already exists. Bump the version."
+            exit 1
+          fi
+
+      - name: Compute versionCode
+        id: ver
+        run: |
+          [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]]
+          major=${BASH_REMATCH[1]}; minor=${BASH_REMATCH[2]}; patch=${BASH_REMATCH[3]}
+          if (( minor > 999 || patch > 999 )); then
+            echo "::error::minor and patch must be < 1000 for the versionCode scheme"; exit 1
+          fi
+          # MAJOR*1000000 + MINOR*1000 + PATCH  (0.1.0 -> 1000, 1.2.3 -> 1002003)
+          code=$(( major * 1000000 + minor * 1000 + patch ))
+          if (( code < 1 )); then code=1; fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "versionName=$VERSION versionCode=$code"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync android
+
+      - name: Decode keystore
+        env:
+          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
+        run: |
+          printf '%s' "$KEYSTORE_FILE" | base64 -d > "$RUNNER_TEMP/release.jks"
+          if [[ ! -s "$RUNNER_TEMP/release.jks" ]]; then
+            echo "::error::KEYSTORE_FILE did not decode to a keystore (expected base64)"; exit 1
+          fi
+
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          CYBERJUKE_KEYSTORE: ${{ runner.temp }}/release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --stacktrace \
+            -PversionName="$VERSION" -PversionCode="${{ steps.ver.outputs.code }}"
+
+      - name: Verify signature and write checksum
+        run: |
+          src="android/app/build/outputs/apk/release/CyberJuke-$VERSION-release.apk"
+          if [[ ! -f "$src" ]]; then
+            echo "::error::Expected $src"; ls -la android/app/build/outputs/apk/release || true; exit 1
+          fi
+          mkdir -p out
+          cp "$src" "out/CyberJuke-$VERSION.apk"
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)apksigner"
+          "$apksigner" verify --verbose --print-certs "out/CyberJuke-$VERSION.apk"
+          (cd out && sha256sum "CyberJuke-$VERSION.apk" > "CyberJuke-$VERSION.apk.sha256" && cat "CyberJuke-$VERSION.apk.sha256")
+
+      - name: Release notes from CHANGELOG.md
+        id: notes
+        run: |
+          found=false
+          if [[ -f CHANGELOG.md ]]; then
+            # Section headed "## [0.1.0]", "## 0.1.0" or "## v0.1.0" (anything after is ignored)
+            awk -v v="$VERSION" '
+              BEGIN { esc = v; gsub(/\./, "\\.", esc) }
+              /^## / {
+                if (insec) exit
+                if ($0 ~ ("^## \\[?v?" esc "([] ]|$)")) { insec = 1; next }
+              }
+              insec { print }
+            ' CHANGELOG.md > release-notes.md
+            if grep -q '[^[:space:]]' release-notes.md; then found=true; fi
+          fi
+          echo "found=$found" >> "$GITHUB_OUTPUT"
+          echo "Changelog section found: $found"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: CyberJuke v${{ inputs.version }}
+          body_path: ${{ steps.notes.outputs.found == 'true' && 'release-notes.md' || '' }}
+          generate_release_notes: ${{ steps.notes.outputs.found != 'true' }}
+          prerelease: ${{ inputs.prerelease }}
+          fail_on_unmatched_files: true
+          files: |
+            out/CyberJuke-${{ inputs.version }}.apk
+            out/CyberJuke-${{ inputs.version }}.apk.sha256
+
+      - name: Remove keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
