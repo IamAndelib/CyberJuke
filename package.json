@@ -21,6 +21,7 @@
     "@capacitor/network": "^8.0.1",
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/status-bar": "^8.0.4",
+    "@preact/signals": "^2.11.3",
     "preact": "^11.0.0"
   },
   "devDependencies": {
