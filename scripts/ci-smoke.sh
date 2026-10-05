@@ -20,7 +20,9 @@ APK_ARG="${1:-apk}"
 OUT="${2:-smoke}"
 TIMEOUT="${SMOKE_TIMEOUT:-90}"
 BACKGROUND_WAIT="${SMOKE_BACKGROUND_WAIT:-30}"
-PLAYING_PATTERN='state=PlaybackState {state=3'
+# Android prints the media session state as e.g. "state=PlaybackState {state=3, position=..."
+# but the exact rendering has changed between releases, so accept the known shapes.
+PLAYING_REGEX='state=(PlaybackState \{state=)?(3|PLAYING)[,)} ]'
 
 SHOTS="$OUT/shots"
 LOGS="$OUT/logs"
@@ -53,7 +55,31 @@ session_dump() {
   if [[ -n "$ours" ]]; then printf '%s\n' "$ours"; else printf '%s\n' "$dump"; fi
 }
 
-is_playing() { session_dump | grep -qF "$PLAYING_PATTERN"; }
+is_playing() { session_dump | grep -qE "$PLAYING_REGEX"; }
+
+# Print a block into the job log AND as a GitHub annotation (artifacts are not always
+# reachable, so failures must be readable from the annotation alone).
+annotate_file() { # $1 = title, $2 = file
+  local msg
+  msg=$(sed -e 's/%/%25/g' -e 's/\r//g' "$2" | sed -e ':a;N;$!ba;s/\n/%0A/g')
+  echo "::error title=$1::$msg"
+}
+
+diagnostics() { # collect the state that explains a playback failure
+  local f="$LOGS/diagnostics.txt"
+  {
+    echo "--- media session state lines"
+    session_dump | grep -E "state=|package=|active=" | head -n 12
+    echo "--- services"
+    adb shell dumpsys activity services "$PKG" 2>&1 | grep -E "ServiceRecord|started=|foreground" | head -n 8
+    echo "--- app logcat (tail)"
+    adb logcat -d -v brief 2>/dev/null \
+      | grep -E 'CyberJuke|ExoPlayer|MediaSession|MediaCodec|AudioTrack|Capacitor|chromium|AndroidRuntime|FATAL' \
+      | tail -n 45
+  } > "$f" 2>&1
+  cat "$f"
+  annotate_file "Playback diagnostics" "$f"
+}
 
 shot() {
   adb exec-out screencap -p > "$SHOTS/$1.png" 2>/dev/null || log "screenshot $1 failed"
@@ -156,7 +182,7 @@ if [[ $live != "pass" ]]; then
     summary "### :robot: Live YouTube: bot check (runner IP), not verified"
     grep -E "resolve\(|BOT_CHECK" "$P1" | head -n 3 | sed 's/^/    /'
   else
-    grep -E "CyberJukeResolver|TRACK_ERROR|ExoPlayer" "$P1" | tail -n 15 | sed 's/^/    /'
+    diagnostics
     finish 1 "Live phase: playback never reached PLAYING and it was not a YouTube bot check"
   fi
 else
@@ -164,12 +190,19 @@ else
 fi
 
 # ---- Phase 2: playback pipeline with the bundled CI tone (must pass) -----------------------
+# The tone only exists in debug builds (src/debug/assets); if packaging dropped it, say so
+# plainly rather than reporting a broken player.
+if command -v unzip >/dev/null && ! unzip -l "$APK" | grep -q "assets/ci-tone.ogg"; then
+  finish 1 "The APK does not contain assets/ci-tone.ogg (debug asset was not packaged)"
+fi
+
 log "Phase 2: restarting with autoplay=ci-tone (bundled test tone, debug builds only)"
 adb shell am force-stop "$PKG"
 sleep 2
 adb shell am start -W -n "$PKG/.MainActivity" --es autoplay ci-tone
 if ! wait_playing "$TIMEOUT"; then
   shot 02-ci-tone
+  diagnostics
   finish 1 "CI tone never reached PLAYING (state=3) within ${TIMEOUT}s: playback service/session is broken"
 fi
 shot 02-ci-tone
@@ -189,6 +222,7 @@ shot 04-notification
 adb shell cmd statusbar collapse >/dev/null 2>&1 || true
 
 if [[ $background_ok -ne 1 ]]; then
+  diagnostics
   finish 1 "Playback stopped after ${BACKGROUND_WAIT}s in the background"
 fi
 finish 0 "Pipeline: PLAYING and still PLAYING after ${BACKGROUND_WAIT}s in the background. Live YouTube: ${live}"
