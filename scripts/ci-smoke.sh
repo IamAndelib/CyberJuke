@@ -55,7 +55,13 @@ session_dump() {
   if [[ -n "$ours" ]]; then printf '%s\n' "$ours"; else printf '%s\n' "$dump"; fi
 }
 
-is_playing() { session_dump | grep -qE "$PLAYING_REGEX"; }
+# Capture first, then grep: with `set -o pipefail`, `producer | grep -q` reports failure when
+# grep exits early on a match and the producer dies of SIGPIPE.
+is_playing() {
+  local dump
+  dump="$(session_dump)"
+  grep -qE "$PLAYING_REGEX" <<<"$dump"
+}
 
 # Print a block into the job log AND as a GitHub annotation (artifacts are not always
 # reachable, so failures must be readable from the annotation alone).
@@ -192,7 +198,8 @@ fi
 # ---- Phase 2: playback pipeline with the bundled CI tone (must pass) -----------------------
 # The tone only exists in debug builds (src/debug/assets); if packaging dropped it, say so
 # plainly rather than reporting a broken player.
-if command -v unzip >/dev/null && ! unzip -l "$APK" | grep -q "assets/ci-tone.ogg"; then
+unzip -l "$APK" > "$LOGS/apk-contents.txt" 2>&1 || true
+if ! grep -q "assets/ci-tone.ogg" "$LOGS/apk-contents.txt"; then
   finish 1 "The APK does not contain assets/ci-tone.ogg (debug asset was not packaged)"
 fi
 
