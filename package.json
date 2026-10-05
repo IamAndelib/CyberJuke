@@ -11,8 +11,9 @@
     "preview": "vite preview --port 4173",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "e2e": "playwright test",
-    "sync": "npm run build && cap sync android"
+    "e2e": "playwright test --project=e2e",
+    "sync": "npm run build && cap sync android",
+    "screenshots": "playwright test --project=screenshots"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
