@@ -56,7 +56,7 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
 
-      - uses: android-actions/setup-android@v3
+      # The GitHub Ubuntu runner image already ships the Android SDK (ANDROID_HOME).
 
       - uses: gradle/actions/setup-gradle@v4
 
@@ -73,7 +73,17 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          set -o pipefail
+          ./gradlew assembleDebug --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"
+
+      - name: Report Gradle errors as annotations
+        if: failure()
+        run: |
+          # Job logs are not always reachable; annotations are. Surface the key lines.
+          grep -E '^e: |error:|What went wrong|Could not (find|resolve)|FAILURE|> ' "$RUNNER_TEMP/gradle.log" \
+            | grep -v '^> Task' | head -60 > "$RUNNER_TEMP/errs.txt" || true
+          msg=$(sed -e 's/%/%25/g' "$RUNNER_TEMP/errs.txt" | sed -e ':a;N;$!ba;s/\n/%0A/g')
+          echo "::error title=Gradle failure::${msg}"
 
       - uses: actions/upload-artifact@v4
         with:
