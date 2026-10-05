@@ -1,4 +1,19 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+// Versioning: override on the command line with -PversionName=1.2.3 -PversionCode=42
+def appVersionName = project.findProperty('versionName')?.toString() ?: '0.1.0'
+def appVersionCode = (project.findProperty('versionCode')?.toString() ?: '1').toInteger()
+
+// Release signing: only configured when every env var is present (CI release workflow).
+def keystorePath = System.getenv('CYBERJUKE_KEYSTORE')
+def keystorePassword = System.getenv('KEYSTORE_PASSWORD')
+def releaseKeyAlias = System.getenv('KEY_ALIAS')
+def releaseKeyPassword = System.getenv('KEY_PASSWORD')
+def hasReleaseSigning = [keystorePath, keystorePassword, releaseKeyAlias, releaseKeyPassword]
+        .every { it != null && !it.isEmpty() } && file(keystorePath).exists()
 
 android {
     namespace = "io.github.iamandelib.cyberjuke"
@@ -7,8 +22,8 @@ android {
         applicationId "io.github.iamandelib.cyberjuke"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,11 +31,59 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(keystorePath)
+                storePassword keystorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
+    }
+
+    compileOptions {
+        // Java 21 is also set by capacitor.build.gradle; desugaring is needed by NewPipeExtractor.
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+        coreLibraryDesugaringEnabled true
+    }
+
+    packaging {
+        resources {
+            excludes += [
+                'META-INF/DEPENDENCIES',
+                'META-INF/INDEX.LIST',
+                'META-INF/LICENSE.md',
+                'META-INF/NOTICE.md',
+            ]
+            pickFirsts += ['META-INF/versions/9/OSGI-INF/MANIFEST.MF']
+        }
+    }
+
+    // APK file name: CyberJuke-<versionName>-<buildType>.apk
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            outputFileName = "CyberJuke-${variant.versionName}-${variant.buildType.name}.apk"
+        }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_21)
     }
 }
 
@@ -35,7 +98,18 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation "androidx.core:core-ktx:$androidxCoreVersion"
     implementation project(':capacitor-android')
+
+    // Native player
+    implementation "androidx.media3:media3-exoplayer:$media3Version"
+    implementation "androidx.media3:media3-exoplayer-hls:$media3Version"
+    implementation "androidx.media3:media3-session:$media3Version"
+    implementation "androidx.media3:media3-datasource-okhttp:$media3Version"
+    implementation "com.squareup.okhttp3:okhttp:$okhttpVersion"
+    implementation "com.github.TeamNewPipe:NewPipeExtractor:$newPipeExtractorVersion"
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs_nio:$desugarJdkLibsVersion"
+
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

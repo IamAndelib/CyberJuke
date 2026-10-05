@@ -13,4 +13,20 @@ ext {
     androidxJunitVersion = '1.3.0'
     androidxEspressoCoreVersion = '3.7.0'
     cordovaAndroidVersion = '14.0.1'
+
+    // ---- CyberJuke native player ----
+    // Kotlin Gradle plugin. 2.3.x is the line tested against AGP 8.13 / Gradle 8.14.
+    kotlinVersion = '2.3.21'
+    // https://github.com/TeamNewPipe/NewPipeExtractor/releases (JitPack only).
+    // v0.26.5 was the newest tag on 2026-10-05 (checked with git ls-remote).
+    // YouTube breaks old extractor versions: bump this first when playback starts failing.
+    // If a tag has not been released yet, a commit hash also works here.
+    newPipeExtractorVersion = 'v0.26.5'
+    // https://github.com/androidx/media/releases - 1.11.1 is the newest stable tag
+    // (Google Maven was not reachable to double-check the artifact; TODO verify on CI).
+    media3Version = '1.11.1'
+    // Same OkHttp version NewPipe uses (verified on Maven Central).
+    okhttpVersion = '5.5.0'
+    // NIO flavour is required by NewPipeExtractor. TODO verify latest (Google Maven only).
+    desugarJdkLibsVersion = '2.1.5'
 }
