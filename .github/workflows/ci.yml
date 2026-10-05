@@ -80,8 +80,9 @@ jobs:
         if: failure()
         run: |
           # Job logs are not always reachable; annotations are. Surface the key lines.
-          grep -E '^e: |error:|What went wrong|Could not (find|resolve)|FAILURE|> ' "$RUNNER_TEMP/gradle.log" \
-            | grep -v '^> Task' | head -60 > "$RUNNER_TEMP/errs.txt" || true
+          { grep -E '^e: ' "$RUNNER_TEMP/gradle.log" | head -40
+            awk '/What went wrong/{f=1;n=0} f&&n<40{print;n++} /^\* Try:/{f=0}' "$RUNNER_TEMP/gradle.log"
+          } > "$RUNNER_TEMP/errs.txt" || true
           msg=$(sed -e 's/%/%25/g' "$RUNNER_TEMP/errs.txt" | sed -e ':a;N;$!ba;s/\n/%0A/g')
           echo "::error title=Gradle failure::${msg}"
 
