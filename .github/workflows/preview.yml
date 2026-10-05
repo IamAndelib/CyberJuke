@@ -1,0 +1,84 @@
+name: Preview
+
+# Manual: builds the debug APK and publishes it as the rolling "preview" pre-release, for
+# trying CyberJuke before signed releases exist. Debug-signed, so a signed release cannot be
+# installed over it (uninstall the preview first).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: preview
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  JAVA_VERSION: '21'
+
+jobs:
+  preview:
+    name: Build and publish preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      VERSION_NAME: 0.1.0-preview.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      # The GitHub Ubuntu runner image already ships the Android SDK (ANDROID_HOME).
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace -PversionName="$VERSION_NAME"
+
+      - name: Rename and checksum
+        run: |
+          mkdir -p out
+          cp "android/app/build/outputs/apk/debug/CyberJuke-${VERSION_NAME}-debug.apk" out/CyberJuke-preview.apk
+          cd out && sha256sum CyberJuke-preview.apk > CyberJuke-preview.apk.sha256
+          cat CyberJuke-preview.apk.sha256
+
+      - name: Remove the previous preview release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete preview --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" || true
+
+      - name: Publish preview release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: preview
+          target_commitish: ${{ github.sha }}
+          name: CyberJuke preview (debug build)
+          prerelease: true
+          make_latest: false
+          body: |
+            Debug build of CyberJuke `${{ env.VERSION_NAME }}` from commit ${{ github.sha }}, for trying the app before signed releases.
+
+            - **Install:** download `CyberJuke-preview.apk` on your phone and open it. Android 7.0 or newer.
+            - **Debug-signed:** a signed release has a different signature and cannot be installed over this preview. Uninstall the preview first; liked tracks and history are lost.
+            - **Live playback is untested on CI:** YouTube blocks GitHub's servers, so CI checks background playback with a bundled test tone instead.
+
+            Verify: `sha256sum -c CyberJuke-preview.apk.sha256`
+          files: |
+            out/CyberJuke-preview.apk
+            out/CyberJuke-preview.apk.sha256
