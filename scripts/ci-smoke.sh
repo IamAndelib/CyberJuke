@@ -22,7 +22,7 @@ TIMEOUT="${SMOKE_TIMEOUT:-90}"
 BACKGROUND_WAIT="${SMOKE_BACKGROUND_WAIT:-30}"
 # Android prints the media session state as e.g. "state=PlaybackState {state=3, position=..."
 # but the exact rendering has changed between releases, so accept the known shapes.
-PLAYING_REGEX='state=(PlaybackState \{state=)?(3|PLAYING)[,)} ]'
+PLAYING_REGEX='state=(PlaybackState \{state=)?(3|PLAYING)[(,)} ]'
 
 SHOTS="$OUT/shots"
 LOGS="$OUT/logs"
