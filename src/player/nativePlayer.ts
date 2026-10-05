@@ -1,0 +1,144 @@
+/**
+ * Player backed by the native JukePlayer plugin. The native side owns the queue;
+ * this class only forwards commands and mirrors native state from events.
+ */
+import { signal } from '@preact/signals';
+import type { Track } from '../data/model';
+import { knownTrack } from '../store/library';
+import { toast } from '../store/toast';
+import { JukePlayer, type NativeState, type NativeTrack, type RepeatMode } from './native';
+import { EMPTY_STATE, type Player, type PlayerState, type UpNextItem } from './types';
+
+export function toNative(t: Track): NativeTrack {
+  return { id: t.id, ytId: t.ytId, title: t.title, artist: t.artist, artworkUrl: t.artworkUrl, by: t.by, postUrl: t.postUrl };
+}
+
+function placeholder(id: string): Track {
+  return {
+    id,
+    ytId: '',
+    title: 'Unknown track',
+    artist: '',
+    genre: '',
+    by: '',
+    postTitle: '',
+    postUrl: '',
+    createdAt: '',
+    nsfw: false,
+    artworkUrl: '',
+  };
+}
+
+export class NativePlayer implements Player {
+  readonly kind = 'native' as const;
+  private readonly s = signal<PlayerState>({ ...EMPTY_STATE });
+  readonly state = this.s;
+  /** Every Track we've handed to native, so ids in native state resolve to full Tracks. */
+  private known = new Map<string, Track>();
+
+  constructor() {
+    JukePlayer.addListener('state', (st) => this.apply(st)).catch(() => {});
+    JukePlayer.addListener('trackError', (e) => {
+      const t = this.resolve(e.trackId);
+      if (e.skipped) toast(`Skipped "${t.title}": unavailable`);
+      else toast(`Can't play "${t.title}"`);
+    }).catch(() => {});
+    JukePlayer.getState()
+      .then((st) => this.apply(st))
+      .catch(() => {});
+  }
+
+  private remember(tracks: Track[]): void {
+    for (const t of tracks) this.known.set(t.id, t);
+  }
+
+  private resolve(id: string): Track {
+    return this.known.get(id) ?? knownTrack(id) ?? placeholder(id);
+  }
+
+  private apply(st: NativeState): void {
+    const queue = st.queueIds.map((id) => this.resolve(id));
+    const index = st.index >= 0 && st.index < queue.length ? st.index : -1;
+    // Map upNext ids back to list indices; with duplicate ids, use each list slot once.
+    const used = new Set<number>([index]);
+    const upNext: UpNextItem[] = [];
+    for (const id of st.upNextIds) {
+      let i = -1;
+      for (let k = 0; k < st.queueIds.length; k++) {
+        if (st.queueIds[k] === id && !used.has(k)) {
+          i = k;
+          break;
+        }
+      }
+      if (i < 0) continue;
+      used.add(i);
+      upNext.push({ track: queue[i], index: i });
+    }
+    this.s.value = {
+      queue,
+      index,
+      current: index >= 0 ? queue[index] : null,
+      isPlaying: st.isPlaying,
+      isBuffering: st.isBuffering,
+      positionMs: st.positionMs,
+      durationMs: st.durationMs,
+      sampledAt: performance.now(),
+      shuffle: st.shuffle,
+      repeat: st.repeat,
+      upNext,
+    };
+  }
+
+  async playList(tracks: Track[], startIndex: number): Promise<void> {
+    if (!tracks.length) return;
+    this.remember(tracks);
+    const i = Math.max(0, Math.min(startIndex, tracks.length - 1));
+    // Optimistic: show the mini player immediately; native state events follow.
+    this.s.value = {
+      ...this.s.value,
+      queue: tracks,
+      index: i,
+      current: tracks[i],
+      isPlaying: true,
+      isBuffering: true,
+      positionMs: 0,
+      durationMs: 0,
+      sampledAt: performance.now(),
+      upNext: tracks.slice(i + 1, i + 51).map((track, k) => ({ track, index: i + 1 + k })),
+    };
+    await JukePlayer.setQueue({ tracks: tracks.map(toNative), startIndex: i, playWhenReady: true });
+  }
+
+  play = () => JukePlayer.play();
+  pause = () => JukePlayer.pause();
+  toggle = () => (this.s.value.isPlaying ? JukePlayer.pause() : JukePlayer.play());
+  next = () => JukePlayer.skipToNext();
+  prev = () => JukePlayer.skipToPrevious();
+
+  async seek(positionMs: number): Promise<void> {
+    this.s.value = { ...this.s.value, positionMs, sampledAt: performance.now() };
+    await JukePlayer.seekTo({ positionMs: Math.round(positionMs) });
+  }
+
+  skipTo = (index: number) => JukePlayer.skipToIndex({ index });
+  setShuffle = (enabled: boolean) => JukePlayer.setShuffle({ enabled });
+  setRepeat = (mode: RepeatMode) => JukePlayer.setRepeat({ mode });
+  move = (from: number, to: number) => JukePlayer.moveItem({ from, to });
+  remove = (index: number) => JukePlayer.removeItem({ index });
+
+  async playNext(tracks: Track[]): Promise<void> {
+    if (!tracks.length) return;
+    if (this.s.value.index < 0) return this.playList(tracks, 0);
+    this.remember(tracks);
+    await JukePlayer.addItems({ tracks: tracks.map(toNative), index: this.s.value.index + 1 });
+  }
+
+  async addToQueue(tracks: Track[]): Promise<void> {
+    if (!tracks.length) return;
+    if (this.s.value.index < 0) return this.playList(tracks, 0);
+    this.remember(tracks);
+    await JukePlayer.addItems({ tracks: tracks.map(toNative) });
+  }
+
+  setQuality = (quality: 'high' | 'low') => JukePlayer.setQuality({ quality });
+}
