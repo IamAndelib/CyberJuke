@@ -13,6 +13,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -48,7 +49,8 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
 
-        val upstream = OkHttpDataSource.Factory(Http.client)
+        // DefaultDataSource handles asset:// (CI test tone) and delegates http(s) to OkHttp.
+        val upstream = DefaultDataSource.Factory(this, OkHttpDataSource.Factory(Http.client))
         val dataSourceFactory = ResolvingDataSource.Factory(upstream, YtDataSpecResolver)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
             .setLoadErrorHandlingPolicy(JukeLoadErrorPolicy())
@@ -270,6 +272,9 @@ internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
 
     override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
         val ytId = JukeUris.ytIdOf(dataSpec.uri)
+        if (ytId == LaunchOptions.CI_TONE) {
+            return dataSpec.buildUpon().setUri(Uri.parse(LaunchOptions.CI_TONE_ASSET)).build()
+        }
         val url: String
         val headers = HashMap(dataSpec.httpRequestHeaders)
         if (ytId != null) {

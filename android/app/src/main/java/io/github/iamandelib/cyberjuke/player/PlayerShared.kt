@@ -60,6 +60,20 @@ object LaunchOptions {
 
     @JvmStatic
     fun updateFrom(intent: Intent?) {
-        autoplay = intent?.getStringExtra("autoplay")?.takeIf { it == "latest" }
+        autoplay = intent?.getStringExtra("autoplay")?.takeIf { it == "latest" || it == CI_TONE }
+        ciToneConsumed = false
     }
+
+    /**
+     * CI only: `--es autoplay ci-tone` makes the plugin queue a bundled test tone directly,
+     * so the playback service, media session and background playback can be verified on
+     * runners whose IPs YouTube blocks. The asset only exists in debug builds
+     * (src/debug/assets), so in release this id just fails to load.
+     */
+    const val CI_TONE = "ci-tone"
+    const val CI_TONE_ASSET = "asset:///ci-tone.ogg"
+
+    @Volatile
+    @JvmStatic
+    var ciToneConsumed = false
 }

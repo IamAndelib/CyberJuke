@@ -122,12 +122,30 @@ class JukePlayerPlugin : Plugin() {
             val queued = ArrayList(pending)
             pending.clear()
             queued.forEach { (call, action) -> runAction(call, c, action) }
+            maybePlayCiTone(c)
             emitState(c)
             if (c.isPlaying) {
                 main.removeCallbacks(ticker)
                 main.postDelayed(ticker, TICK_MS)
             }
         }, ContextCompat.getMainExecutor(ctx))
+    }
+
+    /** CI only, see [LaunchOptions.CI_TONE]. */
+    private fun maybePlayCiTone(c: MediaController) {
+        if (LaunchOptions.autoplay != LaunchOptions.CI_TONE || LaunchOptions.ciToneConsumed) return
+        LaunchOptions.ciToneConsumed = true
+        Log.i(TAG, "CI: queueing bundled test tone")
+        val item = MediaItem.Builder()
+            .setMediaId(LaunchOptions.CI_TONE)
+            .setUri(JukeUris.forYt(LaunchOptions.CI_TONE))
+            .setMediaMetadata(
+                MediaMetadata.Builder().setTitle("CI test tone").setArtist("CyberJuke").build(),
+            )
+            .build()
+        c.setMediaItems(listOf(item))
+        c.prepare()
+        c.play()
     }
 
     private fun onControllerLost() {
@@ -346,7 +364,7 @@ class JukePlayerPlugin : Plugin() {
     @PluginMethod
     fun getLaunchOptions(call: PluginCall) {
         val result = JSObject()
-        LaunchOptions.autoplay?.let { result.put("autoplay", it) }
+        LaunchOptions.autoplay?.takeIf { it == "latest" }?.let { result.put("autoplay", it) }
         call.resolve(result)
     }
 
