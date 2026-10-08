@@ -6,7 +6,7 @@ import { musicTracks, type MusicFilter, type MusicItem } from '../../data/ytmusi
 import { catalog } from '../../stores/catalog';
 import { genres } from '../../stores/genres';
 import { addRecentSearch, loadRecentSearches, recentSearches, removeRecentSearch } from '../../stores/searches';
-import { Icon } from '../icons';
+import { Icon } from '../../ui/icons';
 import {
   openGenrePage,
   popPage,
@@ -17,15 +17,15 @@ import {
   type AlbumRef,
   type SearchContext,
   type SearchMode,
-} from '../nav';
-import { Rail, RailRow, RailSep, type RailItem } from '../components/Rail';
-import { ChunkedTracks, EmptyState, ErrorState, Tracks } from '../components/TrackList';
-import { SkeletonRows } from '../components/TrackRow';
-import { Screen } from '../components/Screen';
-import { CoverRow, GlobalError, LoadMore, MUSIC_ITEM_OPTS, MusicRow, searchLoader } from '../components/Music';
-import { useFeed } from '../usePaged';
+} from '../../ui/nav';
+import { Rail, RailRow, RailSep, type RailItem } from '../../ui/components/Rail';
+import { ChunkedTracks, EmptyState, ErrorState, Tracks } from '../../ui/components/TrackList';
+import { SkeletonRows } from '../../ui/components/TrackRow';
+import { Screen } from '../../ui/components/Screen';
+import { CoverRow, GlobalError, LoadMore, MUSIC_ITEM_OPTS, MusicRow, searchLoader } from '../../ui/components/Music';
+import { useFeed } from '../../ui/usePaged';
 import { globalFeeds } from '../../stores/feed';
-import { list, radio } from '../playAll';
+import { list, radio } from '../../ui/playAll';
 
 export const DEBOUNCE_MS = 120;
 export const GLOBAL_DEBOUNCE_MS = 400;

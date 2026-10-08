@@ -23,7 +23,7 @@ import {
 import { ArtistChooser, MiniPlayer, NowPlaying, TrackMenu } from '../features/now-playing/PlayerUI';
 import { Toasts } from './components/Toasts';
 import { ConfirmSheet } from './ConfirmSheet';
-import { SearchFab } from './components/SearchFab';
+import { SearchFab } from '../features/search/SearchFab';
 import { scrollToTop } from './scrollToTop';
 import { reducedMotion } from '../core/motion';
 import { AlbumPage } from '../features/artists/Album';
@@ -33,7 +33,7 @@ import { GenreDetail, GenreGrid } from '../features/genres/Genres';
 import { Home } from '../features/home/Home';
 import { Library } from './screens/Library';
 import { ReleasesPage } from '../features/artists/Releases';
-import { Search } from './screens/Search';
+import { Search } from '../features/search/Search';
 import { Settings } from './screens/Settings';
 
 const TAB_ITEMS: { id: Tab; label: string; icon: IconName }[] = [

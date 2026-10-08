@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks';
-import { Icon } from '../icons';
-import { openSearch, pageSearchContext, tab } from '../nav';
-import { usePress } from '../usePress';
+import { Icon } from '../../ui/icons';
+import { openSearch, pageSearchContext, tab } from '../../ui/nav';
+import { usePress } from '../../ui/usePress';
 
 /** Scrolling this far in one direction hides (down) or shows (up) the button. */
 export const FAB_SCROLL_PX = 24;
