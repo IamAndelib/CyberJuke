@@ -1,6 +1,6 @@
 import { useRef } from 'preact/hooks';
 import { player, playContext, upNextSections, type PlayerState, type UpItem } from '../../player';
-import { toast } from '../../store/toast';
+import { toast } from '../../stores/toast';
 import { Icon } from '../icons';
 import { Art } from './Art';
 

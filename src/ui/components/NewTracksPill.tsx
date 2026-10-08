@@ -6,7 +6,7 @@
  * own. Self-contained: mount it as the first child of Home.
  */
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { freshness, refreshLatest } from '../../store/newTracks';
+import { freshness, refreshLatest } from '../../stores/newTracks';
 import { FRESHNESS_LIMIT } from '../../data/firestore';
 import { SMOOTH_SCROLL_MS, scrollAnimating } from '../clickGuard';
 import { Icon } from '../icons';

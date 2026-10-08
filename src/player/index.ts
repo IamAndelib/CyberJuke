@@ -9,10 +9,10 @@
  */
 import { Capacitor } from '@capacitor/core';
 import { computed, effect } from '@preact/signals';
-import { addRecent, recent, settings, showNsfw } from '../store/library';
-import { block } from '../store/block';
-import { catalog } from '../store/catalog';
-import { toast } from '../store/toast';
+import { addRecent, recent, settings, showNsfw } from '../stores/library';
+import { block } from '../stores/block';
+import { catalog } from '../stores/catalog';
+import { toast } from '../stores/toast';
 import { auth } from '../data/auth';
 import { music, musicTracks } from '../data/ytmusic';
 import { logError } from '../core/log';

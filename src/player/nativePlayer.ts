@@ -4,8 +4,8 @@
  */
 import { signal } from '@preact/signals';
 import { artworkUrl, type Track } from '../data/model';
-import { knownTrack } from '../store/library';
-import { toast } from '../store/toast';
+import { knownTrack } from '../stores/library';
+import { toast } from '../stores/toast';
 import { YT_ID_RE, parseNativeState } from '../core/guards';
 import { logError } from '../core/log';
 import { JukePlayer, type NativeState, type NativeTrack, type RepeatMode } from './native';

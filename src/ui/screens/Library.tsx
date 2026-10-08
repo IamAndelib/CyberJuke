@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals';
-import { history, liked, recent } from '../../store/library';
-import { groupByDay } from '../../store/history';
-import { clearHistoryWithUndo } from '../../store/undo';
+import { history, liked, recent } from '../../stores/library';
+import { groupByDay } from '../../stores/history';
+import { clearHistoryWithUndo } from '../../stores/undo';
 import { Icon } from '../icons';
 import { EmptyState, PlayShuffle, Tracks, playFrom } from '../components/TrackList';
 import { TrackRow } from '../components/TrackRow';

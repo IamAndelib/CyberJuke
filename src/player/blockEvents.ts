@@ -6,7 +6,7 @@
 import { Capacitor } from '@capacitor/core';
 import { logError } from '../core/log';
 import { exposeForTests } from '../core/testHooks';
-import { block, type BlockStore } from '../store/block';
+import { block, type BlockStore } from '../stores/block';
 import { JukePlayer } from './native';
 
 export function startBlockEvents(store: BlockStore = block): void {

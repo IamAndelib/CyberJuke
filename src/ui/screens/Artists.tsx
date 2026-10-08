@@ -1,8 +1,8 @@
 import { artistKey } from '../../data/artists';
-import { catalog } from '../../store/catalog';
-import { artistIndex, displayArtist } from '../../store/artists';
-import { favoriteArtists } from '../../store/library';
-import { toggleFavoriteArtistWithUndo } from '../../store/undo';
+import { catalog } from '../../stores/catalog';
+import { artistIndex, displayArtist } from '../../stores/artists';
+import { favoriteArtists } from '../../stores/library';
+import { toggleFavoriteArtistWithUndo } from '../../stores/undo';
 import { Icon } from '../icons';
 import { openArtistPage } from '../nav';
 import { ErrorState } from '../components/TrackList';
@@ -12,7 +12,7 @@ import { groupAZ } from '../azSections';
 import { useMemo } from 'preact/hooks';
 import { takeSections, useChunks } from '../useChunks';
 import type { Artist } from '../../data/artists';
-import { artistsSort } from '../../store/prefs';
+import { artistsSort } from '../../stores/prefs';
 import { useSettled } from '../useSettled';
 
 function ArtistTile({ name, fav }: { name: string; fav: boolean }) {

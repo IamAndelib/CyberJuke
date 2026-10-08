@@ -1,5 +1,5 @@
 import type { Signal } from '@preact/signals';
-import type { GridSort } from '../../store/prefs';
+import type { GridSort } from '../../stores/prefs';
 import { Rail, type RailItem } from './Rail';
 
 const SORTS: RailItem<GridSort>[] = [

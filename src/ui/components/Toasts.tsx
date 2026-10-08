@@ -1,4 +1,4 @@
-import { runToastAction, toasts } from '../../store/toast';
+import { runToastAction, toasts } from '../../stores/toast';
 
 export function Toasts() {
   return (

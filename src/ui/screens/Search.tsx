@@ -3,9 +3,9 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Track } from '../../data/model';
 import { buildIndex, searchGenres, searchTitles, searchTracks } from '../../data/search';
 import { musicTracks, type MusicFilter, type MusicItem } from '../../data/ytmusic';
-import { catalog } from '../../store/catalog';
-import { genres } from '../../store/genres';
-import { addRecentSearch, loadRecentSearches, recentSearches, removeRecentSearch } from '../../store/searches';
+import { catalog } from '../../stores/catalog';
+import { genres } from '../../stores/genres';
+import { addRecentSearch, loadRecentSearches, recentSearches, removeRecentSearch } from '../../stores/searches';
 import { Icon } from '../icons';
 import {
   openGenrePage,

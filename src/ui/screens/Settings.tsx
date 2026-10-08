@@ -6,10 +6,10 @@ import {
   settings,
   updateSettings,
   type ThemeId,
-} from '../../store/library';
+} from '../../stores/library';
 import { useState } from 'preact/hooks';
 import { AuthError, SIGN_UP_URL, auth, authErrorText } from '../../data/auth';
-import { toast } from '../../store/toast';
+import { toast } from '../../stores/toast';
 import { Screen } from '../components/Screen';
 import { openExternal } from '../links';
 import { askConfirm } from '../nav';

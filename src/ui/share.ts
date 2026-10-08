@@ -7,7 +7,7 @@
 import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
 import { isGlobal, type Track } from '../data/model';
-import { toast } from '../store/toast';
+import { toast } from '../stores/toast';
 import { isPostUrl } from './links';
 import { TEST_HOOKS } from '../core/testHooks';
 

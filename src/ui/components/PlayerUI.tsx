@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { canSkipNext, currentTrack, hasCurrent, isAdvancing, isBuffering, isPlaying, livePosition, playContext, player, upNextSections, type PlayerState } from '../../player';
-import { block } from '../../store/block';
-import { isLiked, liked } from '../../store/library';
-import { toggleLikeWithUndo } from '../../store/undo';
-import { toast } from '../../store/toast';
+import { block } from '../../stores/block';
+import { isLiked, liked } from '../../stores/library';
+import { toggleLikeWithUndo } from '../../stores/undo';
+import { toast } from '../../stores/toast';
 import { Icon } from '../icons';
 import { artistChoice, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage } from '../nav';
 import { openExternal, openPost, youtubeUrl } from '../links';

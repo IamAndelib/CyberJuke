@@ -4,7 +4,7 @@
  */
 import { signal } from '@preact/signals';
 import type { Track } from '../data/model';
-import { toast } from '../store/toast';
+import { toast } from '../stores/toast';
 import { TEST_HOOKS } from '../core/testHooks';
 import { Queue } from './queue';
 import type { RepeatMode } from './native';

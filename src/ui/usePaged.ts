@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useState } from 'preact/hooks';
 import type { Track } from '../data/model';
 import type { Cursor, Page } from '../data/source';
 import { source } from '../data';
-import { recordTracks } from '../store/genres';
+import { recordTracks } from '../stores/genres';
 import { feeds, type Feed, type FeedCache, type FeedError, type FeedLoader, type FeedOptions, type FeedSnapshot, type FeedStatus } from './feed';
 
 export type Status = FeedStatus;

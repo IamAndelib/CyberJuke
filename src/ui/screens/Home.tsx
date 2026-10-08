@@ -1,10 +1,10 @@
 import { signal } from '@preact/signals';
 import { useMemo, useState } from 'preact/hooks';
 import { shuffled, source } from '../../data';
-import { catalog, mostSaved, type SavedRange } from '../../store/catalog';
-import { catalogGenre, chipGenres } from '../../store/genres';
-import { favoriteGenres, showNsfw } from '../../store/library';
-import { toast } from '../../store/toast';
+import { catalog, mostSaved, type SavedRange } from '../../stores/catalog';
+import { catalogGenre, chipGenres } from '../../stores/genres';
+import { favoriteGenres, showNsfw } from '../../stores/library';
+import { toast } from '../../stores/toast';
 import { Icon } from '../icons';
 import { EmptyState, ErrorState, PagedTracks, Tracks } from '../components/TrackList';
 import { SkeletonRows } from '../components/TrackRow';

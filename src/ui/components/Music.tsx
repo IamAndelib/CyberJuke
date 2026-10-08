@@ -22,7 +22,7 @@ import {
   type Release,
   type ReleaseKind,
 } from '../../data/ytmusic';
-import { artistChannels } from '../../store/artistChannels';
+import { artistChannels } from '../../stores/artistChannels';
 import type { Track } from '../../data/model';
 import type { FeedError, FeedLoader, FeedOptions } from '../feed';
 import { Icon } from '../icons';

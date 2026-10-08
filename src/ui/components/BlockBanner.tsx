@@ -4,7 +4,7 @@
  *   minutes) and what helps; dismissable until the next block.
  * - YouTube changed something: only an app update helps; links to the releases.
  */
-import { block, blockedText, BROKEN_TEXT, minutesLeft, RELEASES_URL } from '../../store/block';
+import { block, blockedText, BROKEN_TEXT, minutesLeft, RELEASES_URL } from '../../stores/block';
 import { Icon } from '../icons';
 import { openExternal } from '../links';
 import { useTickValue } from '../useTick';

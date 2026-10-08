@@ -5,7 +5,7 @@
 import { FirestoreSource } from './firestore';
 export { shuffled } from './firestore';
 import type { TrackSource } from './source';
-import { showNsfw } from '../store/library';
+import { showNsfw } from '../stores/library';
 import { auth } from './auth';
 
 export const source: TrackSource = new FirestoreSource({ showNsfw: () => showNsfw.value, auth });
