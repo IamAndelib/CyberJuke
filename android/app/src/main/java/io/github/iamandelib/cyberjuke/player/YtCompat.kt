@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.player
 
+import io.github.iamandelib.cyberjuke.net.FailureKind
 import org.schabi.newpipe.extractor.MediaFormat
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList

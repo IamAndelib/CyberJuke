@@ -1,5 +1,7 @@
 package io.github.iamandelib.cyberjuke.player
 
+import io.github.iamandelib.cyberjuke.net.BlockReason
+import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.player.TrackErrorPolicy.Action
 import io.github.iamandelib.cyberjuke.player.TrackErrorPolicy.Facts
 import org.junit.Assert.assertEquals

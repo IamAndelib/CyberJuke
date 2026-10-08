@@ -9,6 +9,8 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import io.github.iamandelib.cyberjuke.net.FailureKind
+import io.github.iamandelib.cyberjuke.net.NetBlock
 import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors

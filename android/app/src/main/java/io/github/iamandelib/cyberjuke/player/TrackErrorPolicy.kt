@@ -1,5 +1,8 @@
 package io.github.iamandelib.cyberjuke.player
 
+import io.github.iamandelib.cyberjuke.net.BlockReason
+import io.github.iamandelib.cyberjuke.net.FailureKind
+
 /**
  * The decision part of PlaybackService's error handling, as a pure function (TrackErrorPolicyTest).
  * Only real per-video failures skip ahead; a block, a network failure or a broken extractor

@@ -1,5 +1,7 @@
 package io.github.iamandelib.cyberjuke.player
 
+import io.github.iamandelib.cyberjuke.net.Hosts
+import io.github.iamandelib.cyberjuke.net.Http
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody

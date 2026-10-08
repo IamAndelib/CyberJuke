@@ -1,4 +1,4 @@
-package io.github.iamandelib.cyberjuke.player
+package io.github.iamandelib.cyberjuke.net
 
 /**
  * What kind of failure an extraction or stream load hit. [YtCompat.classify] maps NewPipe

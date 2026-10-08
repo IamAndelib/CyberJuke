@@ -1,4 +1,4 @@
-package io.github.iamandelib.cyberjuke.player
+package io.github.iamandelib.cyberjuke.net
 
 import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull

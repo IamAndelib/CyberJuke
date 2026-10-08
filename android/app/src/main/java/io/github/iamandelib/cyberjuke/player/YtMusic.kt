@@ -1,5 +1,7 @@
 package io.github.iamandelib.cyberjuke.player
 
+import io.github.iamandelib.cyberjuke.net.FailureKind
+import io.github.iamandelib.cyberjuke.net.NetBlock
 import org.schabi.newpipe.extractor.Image
 import org.schabi.newpipe.extractor.InfoItem
 import org.schabi.newpipe.extractor.ListExtractor.InfoItemsPage

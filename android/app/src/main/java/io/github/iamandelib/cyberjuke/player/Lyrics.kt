@@ -2,6 +2,7 @@ package io.github.iamandelib.cyberjuke.player
 
 import android.content.Context
 import android.util.Log
+import io.github.iamandelib.cyberjuke.net.Http
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.json.JSONArray

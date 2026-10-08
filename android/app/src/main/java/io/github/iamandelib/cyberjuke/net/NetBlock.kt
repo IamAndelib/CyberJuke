@@ -1,4 +1,4 @@
-package io.github.iamandelib.cyberjuke.player
+package io.github.iamandelib.cyberjuke.net
 
 import java.io.IOException
 import java.util.concurrent.CopyOnWriteArraySet

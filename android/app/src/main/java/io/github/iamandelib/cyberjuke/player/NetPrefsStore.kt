@@ -1,6 +1,7 @@
 package io.github.iamandelib.cyberjuke.player
 
 import android.content.Context
+import io.github.iamandelib.cyberjuke.net.NetPrefs
 
 /** Persists [NetPrefs] (SharedPreferences "cyberjuke_player"); applied at service start. */
 internal object NetPrefsStore {

@@ -27,6 +27,8 @@ import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.google.common.util.concurrent.ListenableFuture
+import io.github.iamandelib.cyberjuke.net.BlockReason
+import io.github.iamandelib.cyberjuke.net.NetBlock
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.roundToInt
