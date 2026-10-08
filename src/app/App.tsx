@@ -3,8 +3,8 @@ import { memo } from 'preact/compat';
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import { hasCurrent } from '../player';
 import { online } from '../core/network';
-import { BlockBanner } from './components/BlockBanner';
-import { Icon, type IconName } from './icons';
+import { BlockBanner } from '../ui/components/BlockBanner';
+import { Icon, type IconName } from '../ui/icons';
 import {
   PageKey,
   goBack,
@@ -19,12 +19,12 @@ import {
   type Page,
   type StackEntry,
   type Tab,
-} from './nav';
+} from '../ui/nav';
 import { ArtistChooser, MiniPlayer, NowPlaying, TrackMenu } from '../features/now-playing/PlayerUI';
-import { Toasts } from './components/Toasts';
-import { ConfirmSheet } from './components/ConfirmSheet';
+import { Toasts } from '../ui/components/Toasts';
+import { ConfirmSheet } from '../ui/components/ConfirmSheet';
 import { SearchFab } from '../features/search/SearchFab';
-import { scrollToTop } from './scrollToTop';
+import { scrollToTop } from '../ui/scrollToTop';
 import { reducedMotion } from '../core/motion';
 import { AlbumPage } from '../features/artists/Album';
 import { ArtistPage } from '../features/artists/Artist';
