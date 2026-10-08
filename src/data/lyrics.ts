@@ -4,13 +4,17 @@
  * This module cleans the lookup metadata, normalizes and caches results, and holds the
  * pure helpers the panel uses (LRC parsing, current line).
  *
- * Cache: an LRU of LYRICS_CACHE_MAX results in Preferences; "not found" is cached too,
- * for NOT_FOUND_TTL_MS, so a song without lyrics isn't looked up on every play.
- * Failures (offline, plugin unavailable) are never cached.
+ * Cache: an LRU of LYRICS_CACHE_MAX results in the cache file
+ * cyberjuke-cache/lyrics.json (migrated once from the Preferences key lyrics.v1);
+ * "not found" is cached too, for NOT_FOUND_TTL_MS, so a song without lyrics isn't
+ * looked up on every play. Failures (offline, plugin unavailable) are never cached.
+ * Lyrics of members-only tracks are marked, so signing out can drop them.
  */
 import { cleanCredit, splitArtists } from './artists';
 import type { Track } from './model';
 import { appPlugin, toMusicError, type JukeMusicPlugin, type LyricsResult } from './ytmusic';
+import { textFile } from '../core/storage';
+import { online } from '../store/network';
 
 export interface LyricLine {
   /** ms from the start of the track. */
@@ -159,6 +163,8 @@ export interface LyricsStorage {
 interface CacheEntry {
   at: number;
   l: Lyrics;
+  /** For a members-only track. */
+  m?: true;
 }
 
 export const LYRICS_CACHE_KEY = 'lyrics.v1';
@@ -169,6 +175,8 @@ export interface LyricsClient {
   get(track: Track, durationMs?: number): Promise<LyricsOutcome>;
   /** A cached result, if any (no request). */
   peek(trackId: string): Lyrics | undefined;
+  /** Forget the lyrics of members-only tracks (signed out). */
+  dropMembersOnly(): Promise<void>;
 }
 
 export interface LyricsDeps {
@@ -223,6 +231,17 @@ export function createLyricsClient(deps: LyricsDeps): LyricsClient {
       const e = map?.get(id);
       return fresh(e) ? e!.l : undefined;
     },
+    async dropMembersOnly() {
+      const m = await ready();
+      let changed = false;
+      for (const [k, v] of [...m]) {
+        if (v.m) {
+          m.delete(k);
+          changed = true;
+        }
+      }
+      if (changed) persist();
+    },
     async get(track, durationMs) {
       const m = await ready();
       const hit = m.get(track.id);
@@ -246,7 +265,7 @@ export function createLyricsClient(deps: LyricsDeps): LyricsClient {
         )
         .then((r): LyricsOutcome => {
           const lyrics = normalizeLyrics(r);
-          touch(track.id, { at: now(), l: lyrics });
+          touch(track.id, { at: now(), l: lyrics, ...(track.membersOnly && { m: true as const }) });
           persist();
           return { status: 'ok', lyrics };
         })
@@ -262,20 +281,17 @@ export function createLyricsClient(deps: LyricsDeps): LyricsClient {
   };
 }
 
-const prefsStorage: LyricsStorage = {
-  get: async (key) => {
-    const { Preferences } = await import('@capacitor/preferences');
-    return (await Preferences.get({ key })).value;
-  },
-  set: async (key, value) => {
-    const { Preferences } = await import('@capacitor/preferences');
-    await Preferences.set({ key, value });
-  },
+const cacheFile = textFile('cache', 'lyrics', { legacyKeys: [LYRICS_CACHE_KEY] });
+
+/** One cache file; the key is kept in the interface for tests. */
+const fileStorage: LyricsStorage = {
+  get: () => cacheFile.read(),
+  set: (_key, value) => cacheFile.write(value),
 };
 
 /** The app's lyrics client. */
 export const lyrics = createLyricsClient({
   plugin: appPlugin,
-  storage: prefsStorage,
-  isOffline: () => typeof navigator !== 'undefined' && navigator.onLine === false,
+  storage: fileStorage,
+  isOffline: () => !online.peek(),
 });

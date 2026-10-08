@@ -6,6 +6,7 @@
  * listed once per (local) day: replaying it moves it to the top of that day.
  */
 import type { Track } from '../data/model';
+import { asTrack, isObj } from '../core/guards';
 
 export interface HistoryEntry {
   track: Track;
@@ -44,10 +45,6 @@ export function addPlay(entries: HistoryEntry[], track: Track, now: number): His
   return pruneHistory([{ track, playedAt: now }, ...rest], now);
 }
 
-function isTrack(t: unknown): t is Track {
-  return !!t && typeof (t as Track).id === 'string' && typeof (t as Track).ytId === 'string';
-}
-
 /**
  * Read stored history. Accepts the current `{ track, playedAt }[]` shape and the old
  * plain `Track[]` list (newest first, no timestamps): old entries get staggered
@@ -58,9 +55,51 @@ export function migrateHistory(raw: unknown, now: number): HistoryEntry[] {
   const out: HistoryEntry[] = [];
   let k = 0;
   for (const x of raw) {
-    const e = x as Partial<HistoryEntry>;
-    if (e && isTrack(e.track) && typeof e.playedAt === 'number' && isFinite(e.playedAt)) out.push({ track: e.track, playedAt: e.playedAt });
-    else if (isTrack(x)) out.push({ track: x, playedAt: now - k++ * MIGRATION_STEP_MS });
+    if (isObj(x) && 'track' in x && 'playedAt' in x) {
+      const t = asTrack(x.track);
+      if (t && typeof x.playedAt === 'number' && isFinite(x.playedAt)) out.push({ track: t, playedAt: x.playedAt });
+      continue;
+    }
+    const t = asTrack(x);
+    if (t) out.push({ track: t, playedAt: now - k++ * MIGRATION_STEP_MS });
+  }
+  return pruneHistory(out, now);
+}
+
+/**
+ * How history is stored: plays as `{ id, playedAt }`, newest first, and each track
+ * once in a table (a track played on many days is stored once).
+ */
+export interface StoredHistory {
+  v: 2;
+  plays: { id: string; playedAt: number }[];
+  tracks: Record<string, Track>;
+}
+
+export function encodeHistory(entries: HistoryEntry[]): StoredHistory {
+  const tracks: Record<string, Track> = {};
+  const plays = entries.map((e) => {
+    tracks[e.track.id] ??= e.track;
+    return { id: e.track.id, playedAt: e.playedAt };
+  });
+  return { v: 2, plays, tracks };
+}
+
+/** Stored history in any shape it was ever saved in (v2, timed entries, a plain track list). */
+export function decodeHistory(raw: unknown, now: number): HistoryEntry[] {
+  if (Array.isArray(raw)) return migrateHistory(raw, now);
+  if (!isObj(raw) || raw.v !== 2 || !Array.isArray(raw.plays) || !isObj(raw.tracks)) return [];
+  const table = raw.tracks as Record<string, unknown>;
+  const cache = new Map<string, Track | null>();
+  const out: HistoryEntry[] = [];
+  for (const p of raw.plays) {
+    if (!isObj(p) || typeof p.id !== 'string' || typeof p.playedAt !== 'number' || !isFinite(p.playedAt)) continue;
+    if (!cache.has(p.id)) {
+      const t = Object.prototype.hasOwnProperty.call(table, p.id) ? asTrack(table[p.id]) : null;
+      cache.set(p.id, t && t.id === p.id ? t : null);
+    }
+    const track = cache.get(p.id);
+    if (track) out.push({ track, playedAt: p.playedAt });
   }
   return pruneHistory(out, now);
 }

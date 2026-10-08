@@ -127,6 +127,20 @@ describe('lyrics client cache', () => {
     return { c, plugin, store, tick: (ms: number) => (now += ms) };
   }
 
+  it('signing out drops the lyrics of members-only tracks only', async () => {
+    const { c, plugin, store } = setup();
+    await c.get({ ...track('m'), membersOnly: true });
+    await c.get(track('p'));
+    expect(c.peek('m')).toBeDefined();
+    await c.dropMembersOnly();
+    expect(c.peek('m')).toBeUndefined();
+    expect(c.peek('p')).toBeDefined();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(JSON.parse(store.get(l.LYRICS_CACHE_KEY)!).map((e: [string]) => e[0])).toEqual(['p']);
+    await c.get({ ...track('m'), membersOnly: true });
+    expect(plugin.lyrics).toHaveBeenCalledTimes(3);
+  });
+
   it('looks up with cleaned metadata and caches found results', async () => {
     const { c, plugin } = setup();
     const r = await c.get(track('1', 'Song (Official Video)', 'Artist - Topic'), 201_400);

@@ -327,3 +327,37 @@ describe('catalog per sign-in state', () => {
     expect(s.storage.data.has(CATALOG_MEMBERS_KEY)).toBe(false);
   });
 });
+
+describe('saving', () => {
+  it('writes the tracks only when they changed; the times go to the meta key', async () => {
+    const s = setup();
+    await s.cat.refresh();
+    const trackWrites = () => s.storage.set.mock.calls.filter((c) => c[0] === CATALOG_KEY).length;
+    expect(trackWrites()).toBe(1);
+    expect(JSON.parse(s.storage.data.get(CATALOG_KEY)!)).toEqual({ v: 1, tracks: expect.any(Array) });
+    expect(JSON.parse(s.storage.data.get(CATALOG_KEY + '.meta')!)).toEqual({ fullAt: expect.any(Number), checkedAt: expect.any(Number) });
+    s.tick(INCREMENTAL_AFTER_MS + 1);
+    await s.cat.refresh(); // nothing new
+    expect(trackWrites()).toBe(1);
+    s.setServer([t('a', D(1)), t('b', D(2)), t('c', D(3)), t('d', D(4))]);
+    s.tick(INCREMENTAL_AFTER_MS + 1);
+    await s.cat.refresh();
+    expect(trackWrites()).toBe(2);
+  });
+
+  it('a run saves under the key it started with', async () => {
+    let signedIn = false;
+    const data = new Map<string, string>();
+    const storage = { get: async (k: string) => data.get(k) ?? null, set: vi.fn(async (k: string, v: string) => void data.set(k, v)) };
+    let release!: () => void;
+    const source = { catalog: vi.fn(() => new Promise<Track[]>((r) => (release = () => r([t('a', D(1))])))) };
+    const cat = createCatalog({ source, storage, showNsfw: () => false, storageKey: () => catalogKey(signedIn) });
+    const run = cat.refresh();
+    await new Promise((r) => setTimeout(r, 0));
+    signedIn = true; // the key would now be the members one
+    release();
+    await run;
+    expect(data.has(CATALOG_KEY)).toBe(true);
+    expect(data.has(CATALOG_MEMBERS_KEY)).toBe(false);
+  });
+});

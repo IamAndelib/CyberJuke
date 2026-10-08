@@ -5,6 +5,8 @@ import {
   HISTORY_MAX,
   MIGRATION_STEP_MS,
   addPlay,
+  decodeHistory,
+  encodeHistory,
   dayLabel,
   groupByDay,
   migrateHistory,
@@ -13,7 +15,7 @@ import {
   type HistoryEntry,
 } from './history';
 
-const tr = (id: string): Track => ({ id, ytId: 'y' + id, title: id, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '' });
+const tr = (id: string): Track => ({ id, ytId: ('y' + id).padEnd(11, '0').slice(0, 11), title: id, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '' });
 const H = 3600_000;
 const D = 24 * H;
 const NOW = new Date(2026, 9, 8, 15, 0).getTime(); // Thu 8 Oct 2026, 15:00 local
@@ -103,5 +105,33 @@ describe('day groups', () => {
     const g = groupByDay(es, NOW);
     expect(g.map((d) => d.label)).toEqual(['Today', 'Yesterday', 'Mon 5 Oct']);
     expect(g[0].tracks.map((t) => t.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('stored shape (v2)', () => {
+  it('stores each track once and reads it back', () => {
+    const es = [
+      { track: tr('a'), playedAt: NOW },
+      { track: tr('b'), playedAt: NOW - 1000 },
+      { track: tr('a'), playedAt: NOW - D },
+    ];
+    const enc = encodeHistory(es);
+    expect(enc.v).toBe(2);
+    expect(enc.plays).toEqual([
+      { id: 'a', playedAt: NOW },
+      { id: 'b', playedAt: NOW - 1000 },
+      { id: 'a', playedAt: NOW - D },
+    ]);
+    expect(Object.keys(enc.tracks)).toEqual(['a', 'b']);
+    const back = decodeHistory(JSON.parse(JSON.stringify(enc)), NOW);
+    expect(back).toEqual(es);
+  });
+
+  it('reads older shapes and drops plays whose track is missing or broken', () => {
+    expect(ids(decodeHistory([tr('a'), tr('b')], NOW))).toEqual(['a', 'b']);
+    const raw = { v: 2, plays: [{ id: 'a', playedAt: NOW }, { id: 'zz', playedAt: NOW - 1 }, { id: 'b', playedAt: 'x' }, null], tracks: { a: tr('a'), b: tr('b'), zz: { id: 'zz' } } };
+    expect(ids(decodeHistory(raw, NOW))).toEqual(['a']);
+    expect(decodeHistory({ v: 3 }, NOW)).toEqual([]);
+    expect(decodeHistory(null, NOW)).toEqual([]);
   });
 });
