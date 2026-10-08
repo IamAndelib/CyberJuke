@@ -19,7 +19,7 @@ import java.io.IOException
 
 /**
  * The ONLY file that touches the NewPipeExtractor stream API (checked against commit
- * 13a655fe53e0c3065f88725fc1fb594c3ede0169, which only asks YouTube's visionOS client for
+ * 65cabc2ba5216ee871ace4a9963c08bdbf5d5dc0, which only asks YouTube's visionOS client for
  * streams: the ANDROID, iOS and WEB_EMBEDDED_PLAYER clients were removed upstream, PR #1529).
  * If a NewPipeExtractor bump breaks compilation, the fix should be confined to this file.
  */

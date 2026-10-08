@@ -18,7 +18,7 @@ import kotlin.math.abs
 
 /**
  * YouTube Music data (search, albums, playlists). Like [YtCompat], this is the ONLY file of
- * the music feature that touches the NewPipeExtractor API (checked against commit 13a655fe);
+ * the music feature that touches the NewPipeExtractor API (checked against commit 65cabc2b);
  * everything it returns is plain data. All calls are blocking network calls: never call them
  * on the main thread.
  */
