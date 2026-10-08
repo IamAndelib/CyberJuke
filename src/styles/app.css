@@ -159,6 +159,10 @@ h3 {
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
 }
+/* Pull-to-refresh screens: no Android overscroll glow/stretch competing with the pull. */
+.screen.has-ptr {
+  overscroll-behavior-y: none;
+}
 
 .screen-body {
   padding: 4px 0 24px;

@@ -351,7 +351,7 @@ export function Screen({
 
   return (
     <div
-      class={'screen' + (backToTop ? ' has-totop' : '') + (cls ? ' ' + cls : '')}
+      class={'screen' + (onRefresh ? ' has-ptr' : '') + (backToTop ? ' has-totop' : '') + (cls ? ' ' + cls : '')}
       ref={scroller}
       data-testid={testid}
       role={role}
