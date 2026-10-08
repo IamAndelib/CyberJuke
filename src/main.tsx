@@ -5,24 +5,42 @@ import './styles/ui-b.css';
 import './styles/ui-a.css';
 import './styles/ui-c.css';
 import { render } from 'preact';
-import { installRenderCounter } from './core/renderCount';
 import { effect } from '@preact/signals';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import { installRenderCounter } from './core/renderCount';
+import { describeError, logError } from './core/log';
+import { TEST_HOOKS } from './core/testHooks';
 import { loadLibrary, settings } from './store/library';
-import { online, watchNetwork } from './store/network';
+import { onReconnect, watchNetwork } from './store/network';
 import { catalog } from './store/catalog';
 import { startFreshness } from './store/newTracks';
 import { startAccount } from './store/account';
 import { auth } from './data/auth';
 import { goBack } from './ui/nav';
+import { retryWatchedFeeds } from './ui/feed';
 import { JukePlayer } from './player/native';
-import { player } from './player';
+import { player, startPlayerPrefs } from './player';
+import { startBlockEvents } from './player/blockEvents';
 import { source } from './data';
 import { App, Overlays } from './ui/App';
+import { BootError } from './ui/BootError';
+import { Home } from './ui/screens/Home';
+import { TrackRow } from './ui/components/TrackRow';
+import { MiniPlayer, NowPlaying } from './ui/components/PlayerUI';
 
 const native = Capacitor.isNativePlatform();
+
+/** Nothing fails silently: anything not handled where it happened is logged here. */
+function catchStrays(): void {
+  window.addEventListener('unhandledrejection', (e) => {
+    logError('unhandled rejection', e.reason);
+  });
+  window.addEventListener('error', (e) => {
+    logError('uncaught error', e.error ?? e.message);
+  });
+}
 
 function applyTheme(): void {
   effect(() => {
@@ -47,15 +65,18 @@ function wireBackButton(): void {
       // Keep music playing: background the app instead of finishing the activity.
       CapApp.minimizeApp().catch(() => CapApp.exitApp());
     }
-  }).catch(() => {});
+  }).catch((e) => logError('backButton', e));
 }
 
-/** CI smoke-test hook: start playing the newest track on launch. */
+/**
+ * CI hook: start playing the newest track on launch. Native honours the launch extra
+ * only on debuggable builds; the browser's ?autoplay=latest exists in dev/test builds only.
+ */
 async function maybeAutoplay(): Promise<void> {
   let want: string | undefined;
   if (native) {
     want = (await JukePlayer.getLaunchOptions().catch(() => ({}) as { autoplay?: 'latest' })).autoplay;
-  } else {
+  } else if (TEST_HOOKS) {
     want = new URLSearchParams(location.search).get('autoplay') ?? undefined;
   }
   if (want !== 'latest') return;
@@ -76,22 +97,23 @@ function startCatalog(): void {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') kick();
   });
-  let wasOnline = online.value;
-  effect(() => {
-    const now = online.value;
-    if (now && !wasOnline) kick();
-    wasOnline = now;
-  });
+  onReconnect(kick);
 }
 
 async function boot(): Promise<void> {
-  installRenderCounter();
+  // e2e: the boot-failure screen.
+  if (TEST_HOOKS && localStorage.getItem('__cyberjukeFailBoot')) throw new Error('Simulated boot failure');
+  installRenderCounter({ App, Overlays, Home, TrackRow, MiniPlayer, NowPlaying });
   // A saved Cyberspace login decides which query the first requests use.
-  await Promise.all([loadLibrary().catch(() => {}), auth.restore()]);
+  await Promise.all([loadLibrary().catch((e) => logError('loadLibrary', e)), auth.restore()]);
   startAccount();
+  startPlayerPrefs();
   applyTheme();
   watchNetwork();
+  // Back online: lists on screen that failed to load try again.
+  onReconnect(() => retryWatchedFeeds());
   wireBackButton();
+  startBlockEvents();
   const root = document.getElementById('app')!;
   render(
     <>
@@ -102,7 +124,12 @@ async function boot(): Promise<void> {
   );
   startCatalog();
   startFreshness();
-  maybeAutoplay().catch((e) => console.warn('autoplay failed', e));
+  maybeAutoplay().catch((e) => logError('autoplay', e));
 }
 
-void boot();
+catchStrays();
+boot().catch((e) => {
+  logError('boot', e);
+  const root = document.getElementById('app');
+  if (root) render(<BootError detail={describeError(e)} onRetry={() => location.reload()} />, root);
+});

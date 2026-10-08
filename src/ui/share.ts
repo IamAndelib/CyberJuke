@@ -7,6 +7,7 @@ import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
 import type { Track } from '../data/model';
 import { toast } from '../store/toast';
+import { TEST_HOOKS } from '../core/testHooks';
 
 export function shareUrl(t: Pick<Track, 'ytId'>): string {
   return `https://music.youtube.com/watch?v=${encodeURIComponent(t.ytId)}`;
@@ -32,7 +33,7 @@ function cancelled(e: unknown): boolean {
 export async function shareTrack(t: Track): Promise<void> {
   const p = sharePayload(t);
   try {
-    if (window.__cyberjukeShareStub) return await window.__cyberjukeShareStub(p);
+    if (TEST_HOOKS && window.__cyberjukeShareStub) return await window.__cyberjukeShareStub(p);
     if (Capacitor.isNativePlatform()) {
       await Share.share({ ...p, dialogTitle: 'Share' });
       return;

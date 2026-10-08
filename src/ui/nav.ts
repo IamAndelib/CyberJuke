@@ -198,6 +198,4 @@ export function goBack(switchTab = true): boolean {
   return false;
 }
 
-export function openPost(url: string): void {
-  if (url) window.open(url, '_blank', 'noopener');
-}
+export { openPost, openExternal } from './links';

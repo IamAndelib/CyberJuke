@@ -11,6 +11,8 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { artworkUrl, type Track } from './model';
 import { artistKey, cleanCredit, splitArtists } from './artists';
+import { TEST_HOOKS } from '../core/testHooks';
+import { isObj, parseMusicItems, parseMusicPage } from '../core/guards';
 
 // ---- Plugin contract (keep in sync with MusicPlugin.kt) ------------------------------
 
@@ -331,24 +333,68 @@ export function createMusicClient(deps: MusicClientDeps): MusicClient {
 
   const sKey = (query: string, filter: MusicFilter) => `s|${filter}|${query.trim().toLowerCase()}`;
 
+  // Everything the plugin returns is checked at the bridge (core/guards).
   return {
-    search: (query, filter) => call(sKey(query, filter), (p) => p.search({ query: query.trim(), filter })),
-    more: (next) => call(`m|${next}`, (p) => p.more({ next })),
-    playlist: (url) => call(`p|${url}`, (p) => p.playlist({ url })),
-    artist: (name) => call(`a|${artistKey(name)}`, (p) => p.artist({ name: name.trim() }).then((r) => r.items ?? [])),
+    search: (query, filter) => call(sKey(query, filter), (p) => p.search({ query: query.trim(), filter }).then(parseMusicPage)),
+    more: (next) => call(`m|${next}`, (p) => p.more({ next }).then(parseMusicPage)),
+    playlist: (url) => call(`p|${url}`, (p) => p.playlist({ url }).then(parseAlbumPage)),
+    artist: (name) => call(`a|${artistKey(name)}`, (p) => p.artist({ name: name.trim() }).then((r) => parseMusicItems((r as { items?: unknown } | null)?.items))),
     artistPage: (channelId, fresh) =>
-      (fresh && cache.delete(`ap|${channelId}`),
-      call(`ap|${channelId}`, (p) =>
-        p.artistPage({ channelId }).then((r) => ({ ...r, topSongs: r?.topSongs ?? [], releases: r?.releases ?? [] })),
-      )),
-    artistReleases: (token) => call(`ar|${token}`, (p) => p.artistReleases({ token }).then((r) => r?.releases ?? [])),
+      (fresh && cache.delete(`ap|${channelId}`), call(`ap|${channelId}`, (p) => p.artistPage({ channelId }).then(parseArtistPage))),
+    artistReleases: (token) => call(`ar|${token}`, (p) => p.artistReleases({ token }).then((r) => parseReleases((r as { releases?: unknown } | null)?.releases))),
     peekSearch: (query, filter) => fresh<MusicPage>(sKey(query, filter)),
     clear: () => cache.clear(),
   };
 }
 
+const KINDS: readonly ReleaseKind[] = ['album', 'ep', 'single', 'live'];
+
+/** Releases from the plugin: a kind, a title and a URL each, or dropped. */
+export function parseReleases(x: unknown): Release[] {
+  if (!Array.isArray(x)) return [];
+  const out: Release[] = [];
+  for (const r of x) {
+    if (!isObj(r) || typeof r.url !== 'string' || !r.url || typeof r.title !== 'string') continue;
+    out.push({
+      kind: KINDS.includes(r.kind as ReleaseKind) ? (r.kind as ReleaseKind) : 'album',
+      title: r.title,
+      url: r.url,
+      ...(typeof r.year === 'string' && r.year && { year: r.year }),
+      ...(typeof r.thumbnailUrl === 'string' && /^https:\/\//.test(r.thumbnailUrl) && { thumbnailUrl: r.thumbnailUrl }),
+    });
+  }
+  return out;
+}
+
+function parseAlbumPage(x: unknown): AlbumPage {
+  const o = isObj(x) ? x : {};
+  return {
+    ...parseMusicPage(o),
+    title: typeof o.title === 'string' ? o.title : '',
+    subtitle: typeof o.subtitle === 'string' ? o.subtitle : '',
+    ...(typeof o.thumbnailUrl === 'string' && /^https:\/\//.test(o.thumbnailUrl) && { thumbnailUrl: o.thumbnailUrl }),
+  };
+}
+
+function parseArtistPage(x: unknown): ArtistPageResult {
+  const o = isObj(x) ? x : {};
+  const more = isObj(o.more) ? o.more : {};
+  return {
+    name: typeof o.name === 'string' ? o.name : '',
+    ...(typeof o.thumbnailUrl === 'string' && /^https:\/\//.test(o.thumbnailUrl) && { thumbnailUrl: o.thumbnailUrl }),
+    topSongs: parseMusicItems(o.topSongs),
+    ...(typeof o.topSongsPlaylistUrl === 'string' && o.topSongsPlaylistUrl && { topSongsPlaylistUrl: o.topSongsPlaylistUrl }),
+    releases: parseReleases(o.releases),
+    more: {
+      ...(typeof more.albums === 'string' && more.albums && { albums: more.albums }),
+      ...(typeof more.singles === 'string' && more.singles && { singles: more.singles }),
+    },
+  };
+}
+
 export function appPlugin(): JukeMusicPlugin | null {
-  if (typeof window !== 'undefined' && window.__cyberjukeMusicStub) return window.__cyberjukeMusicStub;
+  // e2e: the fake plugin (dev and test builds only).
+  if (TEST_HOOKS && typeof window !== 'undefined' && window.__cyberjukeMusicStub) return window.__cyberjukeMusicStub;
   return Capacitor.isNativePlatform() ? JukeMusic : null;
 }
 

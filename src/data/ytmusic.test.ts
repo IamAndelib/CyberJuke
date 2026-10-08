@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { JukeMusicPlugin, MusicItem, Release, ReleaseKind } from './ytmusic';
 
 vi.mock('@capacitor/core', () => ({
   Capacitor: { isNativePlatform: () => false },
@@ -6,9 +7,9 @@ vi.mock('@capacitor/core', () => ({
 }));
 
 const m = await import('./ytmusic');
-type Plugin = import('./ytmusic').JukeMusicPlugin;
+type Plugin = JukeMusicPlugin;
 
-const song = (id: string, extra: Partial<import('./ytmusic').MusicItem> = {}) => ({
+const song = (id: string, extra: Partial<MusicItem> = {}) => ({
   kind: 'song' as const,
   title: 'Song ' + id,
   subtitle: 'Artist',
@@ -177,19 +178,38 @@ describe('exact artist identity', () => {
   });
 
   it('caches artist lookups by normalized name', async () => {
-    const plugin = { search: vi.fn(), more: vi.fn(), playlist: vi.fn(), artist: vi.fn(async () => ({ items: [artist('Queen', QUEEN)] })), lyrics: vi.fn() };
+    const plugin = { search: vi.fn(), more: vi.fn(), playlist: vi.fn(), artist: vi.fn(async () => ({ items: [artist('Queen', QUEEN, 'https://music.youtube.com/channel/' + QUEEN), { kind: 'artist', title: 'no url' }] })), lyrics: vi.fn() };
     const c = m.createMusicClient({ plugin: () => plugin as unknown as Plugin });
-    expect(await c.artist('Queen')).toHaveLength(1);
+    expect(await c.artist('Queen')).toHaveLength(1); // the item without a URL is dropped at the bridge
     await c.artist(' queen ');
     expect(plugin.artist).toHaveBeenCalledTimes(1);
   });
 });
 
+describe('results are checked at the bridge', () => {
+  it('drops junk items, releases and fields from the plugin', async () => {
+    const plugin = {
+      search: vi.fn(async () => ({ items: [song('abcdefghijk'), null, { kind: 'song' }], next: 7 })),
+      artistPage: vi.fn(async () => ({ name: 'A', topSongs: 'nope', releases: [{ kind: 'weird', title: 'T', url: 'u', thumbnailUrl: 'http://x' }, { title: 'no url' }], more: { albums: 3 } })),
+      artistReleases: vi.fn(async () => null),
+    };
+    const c = m.createMusicClient({ plugin: () => plugin as unknown as Plugin });
+    const page = await c.search('q', 'songs');
+    expect(page.items).toHaveLength(1);
+    expect(page.next).toBeUndefined();
+    const ap = await c.artistPage('UC1');
+    expect(ap.topSongs).toEqual([]);
+    expect(ap.releases).toEqual([{ kind: 'album', title: 'T', url: 'u' }]);
+    expect(ap.more).toEqual({});
+    expect(await c.artistReleases('t')).toEqual([]);
+  });
+});
+
 describe('discography shelves', () => {
-  const r = (kind: import('./ytmusic').ReleaseKind, title: string, url = title): import('./ytmusic').Release => ({ kind, title, url });
+  const r = (kind: ReleaseKind, title: string, url = title): Release => ({ kind, title, url });
 
   it('classifies albums, EPs, singles and live albums, with tricky titles', () => {
-    const cases: [import('./ytmusic').ReleaseKind, string, import('./ytmusic').ReleaseKind][] = [
+    const cases: [ReleaseKind, string, ReleaseKind][] = [
       ['album', 'A Night at the Opera', 'album'],
       ['album', 'Live Killers', 'live'],
       ['album', 'Live at Wembley ’86', 'live'],
