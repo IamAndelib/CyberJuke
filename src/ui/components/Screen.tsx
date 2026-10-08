@@ -139,6 +139,8 @@ export function Screen({
       ro.observe(body.current);
     }
     return done;
+    // Runs per scroll key; `updateTop` reads only refs and the `backToTop` prop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollKey]);
 
   useEffect(
@@ -223,7 +225,7 @@ export function Screen({
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchEnd}
     >
-      <FastScroller scroller={scroller} az={azScroller} />
+      <FastScroller scroller={scroller} az={azScroller} onDragStart={cancelRestore} />
       {bar ?? (
         <header class="topbar">
           {left && <div class="topbar-left">{left}</div>}

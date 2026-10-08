@@ -3,13 +3,16 @@ import { source } from '../../data';
 import { player } from '../../player';
 import { catalog } from '../../store/catalog';
 import { genres, genresComplete } from '../../store/genres';
-import { favoriteGenres, settings, toggleFavoriteGenre } from '../../store/library';
+import { favoriteGenres, showNsfw, toggleFavoriteGenre } from '../../store/library';
+import { useMemo } from 'preact/hooks';
+import { takeSections, useChunks } from '../useChunks';
 import { Icon } from '../icons';
 import { openGenre, useSearchContext } from '../nav';
 import { ErrorState, PagedTracks } from '../components/TrackList';
 import { Screen } from '../components/Screen';
 import { AZHead, GridSortRail } from '../components/GridSort';
 import { groupAZ } from '../azSections';
+import type { GenreCount } from '../../store/genres';
 import { genresSort } from '../../store/prefs';
 import { usePaged } from '../usePaged';
 import { authScope } from '../feed';
@@ -85,28 +88,43 @@ function GenreGrid() {
             <div class="genre-tile skel-block" key={i} />
           ))}
         </div>
-      ) : sort === 'az' ? (
-        <div data-testid="genre-grid" data-sort="az">
-          {groupAZ(list, (g) => g.name).map((sec) => (
-            <section class="az-section" key={sec.letter} data-testid="az-section" data-letter={sec.letter}>
-              <AZHead letter={sec.letter} />
-              <div class="genre-grid">
-                {sec.items.map((g) => (
-                  <GenreTile key={g.name} name={g.name} fav={favs.includes(g.name)} />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
       ) : (
-        <div class="genre-grid" data-testid="genre-grid" data-sort="popular">
-          {list.map((g) => (
-            <GenreTile key={g.name} name={g.name} fav={favs.includes(g.name)} />
-          ))}
-        </div>
+        <GenreTiles list={list} sort={sort} favs={favs} />
       )}
       <p class="fineprint">Genres are free text chosen by each poster. Tap the heart to pin a genre to the top.</p>
     </Screen>
+  );
+}
+
+/** Grid tiles per chunk: the first screens render at once, the rest in idle time. */
+const GRID_CHUNK = 120;
+
+/** Every genre as tiles, Popular or A–Z, rendered in chunks. */
+function GenreTiles({ list, sort, favs }: { list: GenreCount[]; sort: 'popular' | 'az'; favs: string[] }) {
+  const sections = useMemo(() => (sort === 'az' ? groupAZ(list, (g) => g.name) : null), [list, sort]);
+  const { shown } = useChunks(list.length, `genres:${sort}`, GRID_CHUNK, { fill: true });
+  if (sections) {
+    return (
+      <div data-testid="genre-grid" data-sort="az">
+        {takeSections(sections, shown).map((sec) => (
+          <section class="az-section" key={sec.letter} data-testid="az-section" data-letter={sec.letter}>
+            <AZHead letter={sec.letter} />
+            <div class="genre-grid">
+              {sec.items.map((g) => (
+                <GenreTile key={g.name} name={g.name} fav={favs.includes(g.name)} />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div class="genre-grid" data-testid="genre-grid" data-sort="popular">
+      {list.slice(0, shown).map((g) => (
+        <GenreTile key={g.name} name={g.name} fav={favs.includes(g.name)} />
+      ))}
+    </div>
   );
 }
 
@@ -121,13 +139,18 @@ function catalogGenre(genre: string): Track[] {
 }
 
 function GenreDetail({ genre }: { genre: string }) {
-  const nsfw = settings.value.showNsfw;
+  const nsfw = showNsfw.value;
   const scope = authScope(auth.state.value.status === 'signedIn');
-  const paged = usePaged(`genre:${scope}:${genre}:${nsfw}`, async (c) => {
+  const feedKey = `genre:${scope}:${genre}:${nsfw}`;
+  const paged = usePaged(feedKey, async (c) => {
     const p = await source.byGenre(genre, c);
     // Some posts only carry the genre on the attachment, which the query can't see:
-    // fall back to the local catalog rather than showing an empty genre.
-    if (!c && !p.tracks.length) return { tracks: catalog.tracks.value.filter((t) => t.genre === genre), cursor: null };
+    // fall back to the local catalog rather than showing an empty genre. Opened
+    // before the catalog has loaded, it waits for it, so the page fills in by itself.
+    if (!c && !p.tracks.length) {
+      if (!catalog.tracks.value.length) await catalog.refresh();
+      return { tracks: catalog.tracks.value.filter((t) => t.genre === genre), cursor: null };
+    }
     return p;
   });
   const has = paged.tracks.length > 0;
@@ -170,7 +193,7 @@ function GenreDetail({ genre }: { genre: string }) {
           <Icon name="shuffle" size={18} /> Shuffle
         </button>
       </div>
-      <PagedTracks paged={paged} hideGenre />
+      <PagedTracks paged={paged} hideGenre chunkKey={feedKey} />
     </Screen>
   );
 }

@@ -40,7 +40,7 @@ export function useFeed<T, C, M = undefined>(
     cache.touch(key);
     feed.start();
     return un;
-  }, [feed]);
+  }, [feed, cache, key]);
   return { feed, snap: feed.snapshot };
 }
 

@@ -8,6 +8,9 @@ import { ErrorState } from '../components/TrackList';
 import { Screen } from '../components/Screen';
 import { AZHead, GridSortRail } from '../components/GridSort';
 import { groupAZ } from '../azSections';
+import { useMemo } from 'preact/hooks';
+import { takeSections, useChunks } from '../useChunks';
+import type { Artist } from '../../data/artists';
 import { artistsSort } from '../../store/prefs';
 import { ArtistPage } from './Artist';
 import { ReleasesPage } from './Releases';
@@ -34,6 +37,38 @@ function ArtistTile({ name, fav }: { name: string; fav: boolean }) {
       >
         <Icon name={fav ? 'heart' : 'heartOutline'} size={20} />
       </button>
+    </div>
+  );
+}
+
+/** Grid tiles per chunk: the first screens render at once, the rest in idle time. */
+const GRID_CHUNK = 120;
+
+/** Every artist as tiles, Popular or A–Z, rendered in chunks. */
+function ArtistTiles({ list, sort, favKeys }: { list: Artist[]; sort: 'popular' | 'az'; favKeys: Set<string> }) {
+  const sections = useMemo(() => (sort === 'az' ? groupAZ(list, (a) => a.name) : null), [list, sort]);
+  const { shown } = useChunks(list.length, `artists:${sort}`, GRID_CHUNK, { fill: true });
+  if (sections) {
+    return (
+      <div data-testid="artist-grid" data-sort="az">
+        {takeSections(sections, shown).map((sec) => (
+          <section class="az-section" key={sec.letter} data-testid="az-section" data-letter={sec.letter}>
+            <AZHead letter={sec.letter} />
+            <div class="genre-grid">
+              {sec.items.map((a) => (
+                <ArtistTile key={a.key} name={a.name} fav={favKeys.has(a.key)} />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div class="genre-grid" data-testid="artist-grid" data-sort="popular">
+      {list.slice(0, shown).map((a) => (
+        <ArtistTile key={a.key} name={a.name} fav={favKeys.has(a.key)} />
+      ))}
     </div>
   );
 }
@@ -80,25 +115,8 @@ function ArtistGrid() {
             <div class="genre-tile skel-block" key={i} />
           ))}
         </div>
-      ) : sort === 'az' ? (
-        <div data-testid="artist-grid" data-sort="az">
-          {groupAZ(list, (a) => a.name).map((sec) => (
-            <section class="az-section" key={sec.letter} data-testid="az-section" data-letter={sec.letter}>
-              <AZHead letter={sec.letter} />
-              <div class="genre-grid">
-                {sec.items.map((a) => (
-                  <ArtistTile key={a.key} name={a.name} fav={favKeys.has(a.key)} />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
       ) : (
-        <div class="genre-grid" data-testid="artist-grid" data-sort="popular">
-          {list.map((a) => (
-            <ArtistTile key={a.key} name={a.name} fav={favKeys.has(a.key)} />
-          ))}
-        </div>
+        <ArtistTiles list={list} sort={sort} favKeys={favKeys} />
       )}
       <p class="fineprint">Everyone whose music has been shared on the Jukebox. Tap the heart to pin an artist to the top.</p>
     </Screen>

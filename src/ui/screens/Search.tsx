@@ -6,7 +6,7 @@ import { musicTracks, type MusicFilter, type MusicItem } from '../../data/ytmusi
 import { catalog } from '../../store/catalog';
 import { genres } from '../../store/genres';
 import { Icon } from '../icons';
-import { openGenrePage, read, searchContext, searchOpen, searchMode, searchOverAlbum, type SearchContext, type SearchMode } from '../nav';
+import { openGenrePage, read, searchContext, searchOpen, searchMode, searchOverAlbum, type AlbumRef, type SearchContext, type SearchMode } from '../nav';
 import { Rail, RailRow, RailSep, type RailItem } from '../components/Rail';
 import { ChunkedTracks, EmptyState, ErrorState, Tracks } from '../components/TrackList';
 import { SkeletonRows } from '../components/TrackRow';
@@ -69,11 +69,15 @@ function HereLoading() {
  * list may still be growing (`ctx.loading`); matching releases (`ctx.albums`) show
  * as a cover row above the tracks.
  */
+const NO_ALBUMS: AlbumRef[] = [];
+
 function HereResults({ q, ctx }: { q: string; ctx: SearchContext }) {
   const tracks = read(ctx.tracks);
   const loading = ctx.loading ? read(ctx.loading) : false;
-  const albums = ctx.albums ? read(ctx.albums) : [];
+  const albums = ctx.albums ? read(ctx.albums) : NO_ALBUMS;
   const idx = useMemo(() => buildIndex(tracks), [tracks]);
+  const hits: Track[] = useMemo(() => (q.trim() ? searchTracks(idx, q) : []), [idx, q]);
+  const releases = useMemo(() => (q.trim() ? searchTitles(albums, (a) => a.title, q) : []), [albums, q]);
   useEffect(() => {
     ctx.load?.();
   }, [ctx]);
@@ -93,8 +97,6 @@ function HereResults({ q, ctx }: { q: string; ctx: SearchContext }) {
       </>
     );
   }
-  const hits: Track[] = searchTracks(idx, q);
-  const releases = searchTitles(albums, (a) => a.title, q);
   if (!hits.length && !releases.length) {
     if (loading) return <HereLoading />;
     return (
@@ -137,6 +139,11 @@ function HereResults({ q, ctx }: { q: string; ctx: SearchContext }) {
 function JukeboxResults({ q }: { q: string }) {
   const tracks = catalog.tracks.value;
   const status = catalog.status.value;
+  const idx = index.value;
+  const genreList = genres.value;
+  // Recomputed only when the query or the catalog changes (not on every render).
+  const hits = useMemo(() => (q.trim() ? searchTracks(idx, q) : []), [idx, q]);
+  const gHits = useMemo(() => (q.trim() ? searchGenres(genreList, q) : []), [genreList, q]);
   if (!tracks.length) {
     if (status === 'error') {
       const err = catalog.error.value ?? { message: "Couldn't load the Jukebox.", offline: false };
@@ -152,8 +159,6 @@ function JukeboxResults({ q }: { q: string }) {
   // Empty query: the whole Jukebox, newest first.
   if (!q.trim()) return <ChunkedTracks tracks={tracks} chunkKey="search:jukebox:" testid="search-latest" />;
 
-  const hits = searchTracks(index.value, q);
-  const gHits = searchGenres(genres.value, q);
   if (!hits.length && !gHits.length) {
     return (
       <>

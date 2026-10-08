@@ -19,7 +19,18 @@ const MIN_THUMB = 48;
  * Lives in a zero-height sticky dock at the top of the scroller, so it stays put while
  * the content scrolls; everything is updated directly in a requestAnimationFrame.
  */
-export function FastScroller({ scroller, az }: { scroller: RefObject<HTMLDivElement | null>; az: boolean }) {
+export function FastScroller({
+  scroller,
+  az,
+  onDragStart,
+}: {
+  scroller: RefObject<HTMLDivElement | null>;
+  az: boolean;
+  /** A drag of the thumb begins (the Screen cancels a pending scroll-memory restore). */
+  onDragStart?: () => void;
+}) {
+  const dragStart = useRef(onDragStart);
+  dragStart.current = onDragStart;
   const box = useRef<HTMLDivElement>(null);
   const track = useRef<HTMLDivElement>(null);
   const thumb = useRef<HTMLDivElement>(null);
@@ -136,12 +147,16 @@ export function FastScroller({ scroller, az }: { scroller: RefObject<HTMLDivElem
     return () => {
       el.removeEventListener('scroll', onScroll);
       ro?.disconnect();
+      // st holds plain timer state (not a DOM node); its latest values are what to clear.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       const s = st.current;
       cancelAnimationFrame(s.frame);
       s.frame = 0;
       clearTimeout(s.hideT);
       clearTimeout(s.popT);
     };
+    // Mount-only: `scroller` is a stable ref and `schedule` reads only refs (UX rework pending).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -149,6 +164,8 @@ export function FastScroller({ scroller, az }: { scroller: RefObject<HTMLDivElem
     st.current.letter = '';
     if (!az) popup.current?.classList.remove('on');
     schedule();
+    // `schedule` reads only refs; the effect is about `az` (UX rework pending).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [az]);
 
   const scrollToPointer = (clientY: number) => {
@@ -180,7 +197,7 @@ export function FastScroller({ scroller, az }: { scroller: RefObject<HTMLDivElem
     showLetter(true);
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     // A pending scroll-memory restore must not fight the drag.
-    scroller.current?.dispatchEvent(new Event('wheel'));
+    dragStart.current?.();
     scrollToPointer(e.clientY);
   };
   const onPointerMove = (e: PointerEvent) => {

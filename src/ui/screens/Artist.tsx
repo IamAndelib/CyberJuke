@@ -206,6 +206,8 @@ function useArtistHere(name: string, page: Feed<Track, TopCursor, ArtistPageMeta
       offPage();
       offSongs?.();
     };
+    // `songsKey` is fixed for a given `songs` feed, and `rev` is a stable signal (written, not read).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, songs]);
 
   const merged = useRef<{ inputs: Track[][]; out: Track[] } | null>(null);

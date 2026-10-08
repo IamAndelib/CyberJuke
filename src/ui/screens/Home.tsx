@@ -1,10 +1,10 @@
 import { signal } from '@preact/signals';
-import { useState } from 'preact/hooks';
+import { useMemo, useState } from 'preact/hooks';
 import { shuffled, source } from '../../data';
 import { player } from '../../player';
 import { catalog, mostSaved, type SavedRange } from '../../store/catalog';
 import { chipGenres } from '../../store/genres';
-import { favoriteGenres, settings } from '../../store/library';
+import { favoriteGenres, showNsfw } from '../../store/library';
 import { toast } from '../../store/toast';
 import { Icon } from '../icons';
 import { EmptyState, ErrorState, PagedTracks, Tracks } from '../components/TrackList';
@@ -135,6 +135,7 @@ function MostSaved({ genre }: { genre: string | null }) {
   const status = catalog.status.value;
   const all = catalog.tracks.value;
   const range = savedRange.value;
+  const list = useMemo(() => mostSaved(all, { genre, range }).slice(0, SAVED_MAX), [all, genre, range]);
   if (!all.length) {
     if (status === 'error') {
       const err = catalog.error.value ?? { message: "Couldn't load the Jukebox.", offline: false };
@@ -142,7 +143,6 @@ function MostSaved({ genre }: { genre: string | null }) {
     }
     return <SkeletonRows />;
   }
-  const list = mostSaved(all, { genre, range }).slice(0, SAVED_MAX);
   if (!list.length) {
     return (
       <EmptyState title={range === 'month' ? 'No saves this month yet' : 'No saved tracks yet'}>
@@ -167,10 +167,11 @@ function MostSaved({ genre }: { genre: string | null }) {
 export function Home() {
   const g = homeGenre.value;
   const sort = homeSort.value;
-  const nsfw = settings.value.showNsfw;
+  const nsfw = showNsfw.value;
   // Latest stays loaded while Most saved is shown, so switching back is instant.
   const scope = authScope(auth.state.value.status === 'signedIn');
-  const paged = usePaged(`home:${scope}:${g ?? ''}:${nsfw}`, (c) => (g == null ? source.latest(c) : source.byGenre(g, c)));
+  const feedKey = `home:${scope}:${g ?? ''}:${nsfw}`;
+  const paged = usePaged(feedKey, (c) => (g == null ? source.latest(c) : source.byGenre(g, c)));
   return (
     <Screen
       testid="screen-home"
@@ -186,7 +187,7 @@ export function Home() {
       <ShuffleHero />
       <GenreChips />
       <SortRail />
-      {sort === 'latest' ? <PagedTracks paged={paged} /> : <MostSaved genre={g} />}
+      {sort === 'latest' ? <PagedTracks paged={paged} chunkKey={feedKey} /> : <MostSaved genre={g} />}
     </Screen>
   );
 }

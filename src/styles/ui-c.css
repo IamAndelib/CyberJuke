@@ -170,3 +170,40 @@ section[data-kind] > .shelf {
   align-items: center;
   gap: 8px;
 }
+
+/* ---- YouTube block / broken banners (above the mini player) ------------------------ */
+
+.block-dock {
+  flex: none;
+}
+.block-banner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 4px 6px var(--gutter);
+  border-top: var(--border-w) solid var(--color-fg);
+  background: var(--color-surface);
+  font-size: 13px;
+}
+.block-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.block-text a {
+  color: var(--color-accent);
+}
+
+/* ---- Long lists: skip layout and paint of rows and sections far off screen ---------- */
+
+.list > .row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
+}
+.list.compact > .row {
+  contain-intrinsic-size: auto 60px;
+}
+.az-section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 240px;
+}
