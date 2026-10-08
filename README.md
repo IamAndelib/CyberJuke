@@ -18,15 +18,18 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 
 - **Latest tracks** posted to the Jukebox, as an endless list.
 - **Most saved**: the tracks people saved most on Cyberspace, this month or all time.
-- **Search** every track on the Jukebox by title, artist, genre or @poster, with typo tolerance. It works offline once the catalog is cached.
+- **Search** every track on the Jukebox by title, artist, genre or @poster, with typo tolerance. With an empty query it lists the whole Jukebox, newest first. It works offline once the catalog is cached.
 - **Shuffle the Jukebox**: one tap for a random mix from the whole Jukebox.
 - **Genres**: browse every genre, heart your favorites to pin them to the top and to Home's filters, and play or shuffle any genre.
+- **Artists**: every artist shared on the Jukebox, most-shared first, with hearts for a Favorite artists section. An artist page puts what Cyberspace people shared first, then "More by" the artist and their albums. Tap the artist or genre in Now Playing to jump to their page.
+- **Global search** (optional): a separate `[Global]` mode in Search for any song, album, artist or playlist beyond the Jukebox, powered by YouTube Music data. Global tracks can be played, liked and queued, but never show up on Home, Genres, Most saved or Shuffle.
 - **Library**: liked tracks and recently played, stored on your phone.
 - **Background playback**: the notification, lock screen and headset buttons all work, and the queue keeps going with the screen off.
 - **Now Playing**: seek, shuffle, repeat, like, and an Up Next queue you can reorder.
 - **"Posted by @user"** opens the original post on Cyberspace, so you can see what the poster wrote and reply.
 - **Cyberspace themes**: Dark, Light, C64, VT320, Matrix, Crypt, Bubblegum and Brutalist.
 - **NSFW** posts are hidden unless you turn them on.
+- **Scroll memory**: every list keeps its place when you switch tabs or go back from a genre or artist, and a back-to-top button appears on long lists.
 
 ## Install
 
@@ -44,9 +47,10 @@ CyberJuke is not on the Play Store and won't be (see [Caveats](#caveats)).
 |---|---|
 | **Track list** | Reads the same public post data the Cyberspace website shows on its Jukebox page, through `src/data/firestore.ts`. All data access goes through the `TrackSource` interface in `src/data/source.ts`, so it can be swapped for the [official Cyberspace API](https://api.cyberspace.online) by changing one file. |
 | **Playback** | Every Jukebox track is a YouTube link. A native Android player resolves the audio stream with [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) and plays it with Media3/ExoPlayer in a media session. The queue lives in that native service, which is what keeps music going with the screen off. |
+| **Global search** | Artist pages ("More by", albums) and Global search use YouTube Music data, read on the phone by NewPipeExtractor through the `JukeMusic` plugin (`src/data/ytmusic.ts` on the web side). Results are cached for 10 minutes. |
 | **UI** | Preact and TypeScript in a [Capacitor](https://capacitorjs.com) WebView, with the native player as a Capacitor plugin. |
 
-The app doesn't use an account, track you or include analytics. The only network requests are for the track list, YouTube (to play audio) and track artwork.
+The app doesn't use an account, track you or include analytics. The only network requests are for the track list, YouTube (to play audio), YouTube Music (only when you use Global search or open an artist page) and artwork.
 
 ## Caveats
 
@@ -74,7 +78,7 @@ GitHub's runners are often blocked by YouTube's bot check, so the test also play
 
 - **[Cyberspace](https://beta.cyberspace.online)** and its creator **[@genghis_khan](https://beta.cyberspace.online/genghis_khan)**, for the site, its look and the Jukebox.
 - **Everyone who posts music** to the Jukebox. Every track in the app is credited to its poster and links to their post.
-- **[NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor)** by Team NewPipe (GPL-3.0).
+- **[NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor)** by Team NewPipe (GPL-3.0), for playback and the YouTube Music data behind Global search and "More by".
 - Fonts: [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) and [Departure Mono](https://departuremono.com), both under the SIL Open Font License.
 
 See [NOTICE.md](NOTICE.md) for all third-party components and their licenses.
