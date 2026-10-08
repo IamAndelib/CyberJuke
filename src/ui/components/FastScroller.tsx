@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'preact/hooks';
 
 /** The thumb fades this long after scrolling stops. */
 export const SCROLLBAR_HIDE_MS = 1200;
-/** The A–Z letter popup fades this long after scrolling or dragging stops. */
+/** The A–Z letter popup fades this long after a drag of the thumb ends. */
 export const LETTER_HIDE_MS = 600;
 /** Lists longer than this many screens get a draggable thumb. */
 export const DRAG_SCREENS = 3;
@@ -13,8 +13,8 @@ const MIN_THUMB = 48;
  * Overlay scrollbar for a `Screen` (the native one is hidden): a thin thumb on the right
  * edge that shows while scrolling and fades after. On long lists the thumb can be
  * dragged (44px-wide touch area). With `az`, the letter of the `.az-head` section at
- * the top of the list shows in a centred box while scrolling or dragging, and beside
- * the thumb while dragging.
+ * the top of the list shows in a centred box only while the thumb is dragged (never on
+ * ordinary scrolling), fading LETTER_HIDE_MS after the drag ends.
  *
  * Lives in a zero-height sticky dock at the top of the scroller, so it stays put while
  * the content scrolls; everything is updated directly in a requestAnimationFrame.
@@ -23,7 +23,6 @@ export function FastScroller({ scroller, az }: { scroller: RefObject<HTMLDivElem
   const box = useRef<HTMLDivElement>(null);
   const track = useRef<HTMLDivElement>(null);
   const thumb = useRef<HTMLDivElement>(null);
-  const label = useRef<HTMLSpanElement>(null);
   const popup = useRef<HTMLDivElement>(null);
   const azRef = useRef(az);
   azRef.current = az;
@@ -86,7 +85,6 @@ export function FastScroller({ scroller, az }: { scroller: RefObject<HTMLDivElem
       if (l !== st.current.letter) {
         st.current.letter = l;
         if (popup.current) popup.current.firstElementChild!.textContent = l;
-        if (label.current) label.current.textContent = l;
       }
     }
   };
@@ -95,7 +93,7 @@ export function FastScroller({ scroller, az }: { scroller: RefObject<HTMLDivElem
     if (!st.current.frame) st.current.frame = requestAnimationFrame(layout);
   };
 
-  /** Show the thumb (and, in A–Z, the letter popup), then fade them after a pause. */
+  /** Show the thumb, then fade it after a pause. */
   const wake = () => {
     const s = st.current;
     box.current?.classList.add('on');
@@ -103,13 +101,17 @@ export function FastScroller({ scroller, az }: { scroller: RefObject<HTMLDivElem
     s.hideT = setTimeout(() => {
       if (!s.dragging) box.current?.classList.remove('on');
     }, SCROLLBAR_HIDE_MS);
-    if (azRef.current && popup.current) {
-      popup.current.classList.add('on');
-      clearTimeout(s.popT);
-      s.popT = setTimeout(() => {
-        if (!s.dragging) popup.current?.classList.remove('on');
-      }, LETTER_HIDE_MS);
+  };
+
+  /** The A–Z letter popup: on for the whole drag, fading LETTER_HIDE_MS after it ends. */
+  const showLetter = (on: boolean) => {
+    const s = st.current;
+    clearTimeout(s.popT);
+    if (on) {
+      if (azRef.current) popup.current?.classList.add('on');
+      return;
     }
+    s.popT = setTimeout(() => popup.current?.classList.remove('on'), LETTER_HIDE_MS);
   };
 
   useEffect(() => {
@@ -175,6 +177,7 @@ export function FastScroller({ scroller, az }: { scroller: RefObject<HTMLDivElem
     s.grab = inThumb ? e.clientY - tr.top : th.offsetHeight / 2;
     s.dragging = true;
     b.classList.add('dragging');
+    showLetter(true);
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     // A pending scroll-memory restore must not fight the drag.
     scroller.current?.dispatchEvent(new Event('wheel'));
@@ -192,6 +195,7 @@ export function FastScroller({ scroller, az }: { scroller: RefObject<HTMLDivElem
     box.current?.classList.remove('dragging');
     (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
     wake();
+    showLetter(false);
   };
   // Keep pull-to-refresh (touch handlers on the scroller) out of a drag.
   const stop = (e: Event) => {
@@ -215,7 +219,6 @@ export function FastScroller({ scroller, az }: { scroller: RefObject<HTMLDivElem
             onTouchEnd={stop}
           >
             <span class="sb-bar" />
-            {az && <span class="sb-label" ref={label} data-testid="scroll-label" />}
           </div>
         </div>
       </div>

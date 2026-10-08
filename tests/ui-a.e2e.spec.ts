@@ -136,7 +136,7 @@ for (const kind of ['genres', 'artists'] as const) {
   });
 }
 
-test('scrollbar: appears while scrolling, fades, and drags on a long list; A–Z shows the letter', async ({ page }) => {
+test('scrollbar: appears while scrolling, fades, and drags on a long list; A–Z letter only while dragging', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('tab-artists').click();
   await page.getByTestId('grid-sort-az').click();
@@ -146,12 +146,35 @@ test('scrollbar: appears while scrolling, fades, and drags on a long list; A–Z
   // No native scrollbar.
   expect(await screen.evaluate((el) => (el as HTMLElement).offsetWidth - el.clientWidth)).toBe(0);
   await expect(sb).not.toHaveClass(/\bon\b/);
+  // No small letter beside the thumb.
+  await expect(screen.getByTestId('scroll-label')).toHaveCount(0);
+  await expect(screen.locator('.sb-label')).toHaveCount(0);
 
-  await screen.evaluate((el) => el.scrollTo(0, el.scrollHeight * 0.3));
+  // Ordinary scrolling shows the thumb but never the letter popup.
+  const popup = screen.getByTestId('az-popup');
+  const popupSeen = () => screen.evaluate(() => (window as unknown as { __popSeen: boolean }).__popSeen);
+  await screen.evaluate((el) => {
+    const w = window as unknown as { __popSeen: boolean };
+    w.__popSeen = false;
+    const pop = el.querySelector('[data-testid="az-popup"]')!;
+    new MutationObserver(() => {
+      if (pop.classList.contains('on')) w.__popSeen = true;
+    }).observe(pop, { attributes: true, attributeFilter: ['class'] });
+  });
+  for (const f of [0.1, 0.2, 0.3]) {
+    await screen.evaluate((el, frac) => el.scrollTo(0, el.scrollHeight * frac), f);
+    await page.waitForTimeout(60);
+  }
+  await page.mouse.move(200, 400);
+  await page.mouse.wheel(0, 600);
   await expect(sb).toHaveClass(/\bon\b/);
   await expect(sb).toHaveClass(/draggable/);
-  const popup = screen.getByTestId('az-popup');
-  await expect(popup).toHaveClass(/\bon\b/);
+  await page.waitForTimeout(300);
+  await expect(popup).not.toHaveClass(/\bon\b/);
+  expect(await popupSeen()).toBe(false);
+  // The bar fades after 1.2s.
+  await expect(sb).not.toHaveClass(/\bon\b/, { timeout: 2500 });
+
   // The popup letter is the section at the top of the list.
   const topLetter = () =>
     screen.evaluate((el) => {
@@ -160,16 +183,8 @@ test('scrollbar: appears while scrolling, fades, and drags on a long list; A–Z
       for (const h of el.querySelectorAll<HTMLElement>('.az-head')) if (h.getBoundingClientRect().top <= top) cur = h.dataset.letter!;
       return cur;
     });
-  await expect(popup).toHaveText(await topLetter());
-  // Centred, about 96px.
-  const pb = (await popup.locator('.az-pop-letter').boundingBox())!;
-  expect(pb.width).toBeGreaterThanOrEqual(90);
-  expect(Math.abs(pb.x + pb.width / 2 - page.viewportSize()!.width / 2)).toBeLessThanOrEqual(8);
-  // Fades: popup after 600ms, the bar after 1.2s.
-  await expect(popup).not.toHaveClass(/\bon\b/, { timeout: 1500 });
-  await expect(sb).not.toHaveClass(/\bon\b/, { timeout: 2500 });
 
-  // Drag the thumb (44px touch area) to the bottom.
+  // Drag the thumb (44px touch area): the popup shows for the whole drag.
   await screen.evaluate((el) => el.scrollBy(0, 10));
   const thumb = screen.getByTestId('scroll-thumb');
   const tb = (await thumb.boundingBox())!;
@@ -180,7 +195,14 @@ test('scrollbar: appears while scrolling, fades, and drags on a long list; A–Z
   await page.mouse.move(tb.x + tb.width / 2, tb.y + 250, { steps: 6 });
   await expect(sb).toHaveClass(/dragging/);
   await expect(popup).toHaveClass(/\bon\b/);
-  await expect(screen.getByTestId('scroll-label')).toHaveText(await topLetter());
+  await expect(popup).toHaveText(await topLetter());
+  // Centred, about 96px.
+  const pb = (await popup.locator('.az-pop-letter').boundingBox())!;
+  expect(pb.width).toBeGreaterThanOrEqual(90);
+  expect(Math.abs(pb.x + pb.width / 2 - page.viewportSize()!.width / 2)).toBeLessThanOrEqual(8);
+  // Holding still mid-drag keeps it up.
+  await page.waitForTimeout(900);
+  await expect(popup).toHaveClass(/\bon\b/);
   await page.mouse.move(tb.x + tb.width / 2, 2000, { steps: 6 });
   const atEnd = await screen.evaluate((el) => Math.abs(el.scrollTop + el.clientHeight - el.scrollHeight) <= 2);
   expect(atEnd).toBe(true);
@@ -188,6 +210,8 @@ test('scrollbar: appears while scrolling, fades, and drags on a long list; A–Z
   await page.mouse.up();
   expect(await screen.evaluate((el) => el.scrollTop)).toBeGreaterThan(before);
   await expect(sb).not.toHaveClass(/dragging/);
+  // Fades 600ms after the drag ends.
+  await expect(popup).not.toHaveClass(/\bon\b/, { timeout: 1500 });
   // The bar ends above the search button.
   const track = (await screen.locator('.sb-track').boundingBox())!;
   const fab = (await page.getByTestId('search-fab').boundingBox())!;

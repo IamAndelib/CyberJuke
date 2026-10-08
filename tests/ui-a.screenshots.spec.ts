@@ -29,7 +29,7 @@ async function open(page: Page, theme: string, width: number) {
   await settle(page);
 }
 
-/** Hold the fast-scroll thumb halfway down so the letter popup and label show. */
+/** Hold the fast-scroll thumb halfway down so the letter popup shows. */
 async function holdThumb(page: Page, screen: string) {
   await page.getByTestId(screen).evaluate((el) => el.scrollTo(0, el.scrollHeight * 0.45));
   const thumb = page.getByTestId(screen).getByTestId('scroll-thumb');

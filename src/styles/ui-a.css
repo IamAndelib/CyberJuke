@@ -249,27 +249,6 @@
 .sb.dragging .sb-bar {
   background: var(--color-fg);
 }
-.sb-label {
-  position: absolute;
-  top: 50%;
-  right: 48px;
-  display: none;
-  min-width: 32px;
-  padding: 4px 8px;
-  transform: translateY(-50%);
-  font-family: var(--font-display);
-  font-size: 18px;
-  line-height: 1;
-  text-align: center;
-  background: var(--color-fg);
-  color: var(--color-bg);
-  text-shadow: none;
-  border-radius: var(--radius);
-}
-.sb.dragging .sb-label:not(:empty) {
-  display: block;
-}
-
 /* ---- A–Z letter popup: centred, framed, checkered hard shadow ---------------------- */
 
 .az-pop {
