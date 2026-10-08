@@ -10,15 +10,8 @@ const K_RECENT_SEARCHES = 'recentSearches';
 
 export const recentSearches = signal<string[]>([]);
 
-let store: KV = kv;
+const store: KV = kv;
 let loaded: Promise<void> | null = null;
-
-/** Tests: use other storage (and forget what was loaded). */
-export function setSearchesStorage(s: KV): void {
-  store = s;
-  loaded = null;
-  recentSearches.value = [];
-}
 
 function clean(list: unknown): string[] {
   if (!Array.isArray(list)) return [];
