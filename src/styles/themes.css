@@ -5,7 +5,7 @@
  *
  * Tokens
  *   --color-bg / --color-fg       page background / ink
- *   --color-fg-dim                secondary text
+ *   --color-fg-dim                secondary text (at least 4.5:1 on the background, themes.test.ts)
  *   --color-border                hairlines, idle borders
  *   --color-surface               raised/pressed fill (site's code-bg)
  *   --color-accent                site's --color-code (links, highlights)
@@ -52,11 +52,11 @@
   --scheme: light;
 }
 
-/* site: fg #ffffffbf, dim #fff6, border #ffffff4d on #2a2ab8 */
+/* site: fg #ffffffbf, dim #fff6, border #ffffff4d on #2a2ab8. Dim lightened to 4.5:1. */
 [data-theme='c64'] {
   --color-bg: #2a2ab8;
   --color-fg: #cacaed;
-  --color-fg-dim: #8b8bd9;
+  --color-fg-dim: #acace4;
   --color-border: #6a6acd;
   --color-surface: #ffffff14;
   --color-accent: #aaccff;
@@ -91,11 +91,11 @@
   --scheme: dark;
 }
 
-/* site: fg #a0e044e6, dim #a0e04480, border #a0e04466 on #000 */
+/* site: fg #a0e044e6, dim #a0e04480, border #a0e04466 on #000. Dim lightened to 4.5:1. */
 [data-theme='matrix'] {
   --color-bg: #000;
   --color-fg: #90ca3d;
-  --color-fg-dim: #507022;
+  --color-fg-dim: #5c8127;
   --color-border: #2f4214;
   --color-surface: #00ff4114;
   --color-accent: #a0e044;
@@ -110,11 +110,12 @@
   --scheme: dark;
 }
 
-/* site: fg #e10, dim #f00c, border #ff00004d on #100202 */
+/* site: fg #e10, dim #f00c, border #ff00004d on #100202. Dim is a duller red of the
+   same hue at 4.5:1 (as bright as the ink, so it reads dimmer by saturation). */
 [data-theme='crypt'] {
   --color-bg: #100202;
   --color-fg: #ee1100;
-  --color-fg-dim: #b00404;
+  --color-fg-dim: #c65353;
   --color-border: #580101;
   --color-surface: #ff00000f;
   --color-accent: #ff2a1a;
@@ -129,10 +130,11 @@
   --scheme: dark;
 }
 
+/* Dim darkened to 4.5:1. */
 [data-theme='bubblegum'] {
   --color-bg: #ffe4f1;
   --color-fg: #6b1a4a;
-  --color-fg-dim: #b86b93;
+  --color-fg-dim: #a04d78;
   --color-border: #f5b5d1;
   --color-surface: #ffd0e5;
   --color-accent: #c71585;
