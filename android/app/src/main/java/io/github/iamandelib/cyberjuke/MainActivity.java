@@ -16,8 +16,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MusicPlugin.class);
         LaunchOptions.updateFrom(getIntent());
         super.onCreate(savedInstanceState);
-        // CI only (debuggable builds): `--es ci_music_search "<query>"` logs one search result count.
-        MusicPlugin.maybeRunCiSearch(this, getIntent());
+        // CI only (debuggable builds): ci_music_search / ci_artist / ci_lyrics extras log one check each.
+        MusicPlugin.maybeRunCiChecks(this, getIntent());
     }
 
     @Override
@@ -25,6 +25,6 @@ public class MainActivity extends BridgeActivity {
         // e.g. `am start ... --es autoplay latest` while the app is already running
         LaunchOptions.updateFrom(intent);
         super.onNewIntent(intent);
-        MusicPlugin.maybeRunCiSearch(this, intent);
+        MusicPlugin.maybeRunCiChecks(this, intent);
     }
 }

@@ -52,6 +52,10 @@ internal object YtMusic {
         val durationSec: Long? = null,
         val thumbnailUrl: String? = null,
         val itemCount: Long? = null,
+        /** Songs/albums: the first credited artist's channel URL (NewPipe getUploaderUrl()). */
+        val artistUrl: String? = null,
+        /** Songs/albums: [artistUrl]'s channel id; artists: their own channel id. */
+        val channelId: String? = null,
     )
 
     /**
@@ -95,6 +99,13 @@ internal object YtMusic {
             continuation(page.nextPage) { Continuation(it, null, null, url) },
         )
     }
+
+    /**
+     * Artist candidates for a name: the first page of a MUSIC_ARTISTS search, in YouTube's
+     * ranking, keeping only results whose channel id is known.
+     */
+    fun artist(name: String): List<Item> =
+        search(name, Filter.ARTISTS).items.filter { it.kind == "artist" && it.channelId != null }
 
     /** Album or playlist page (YouTube Music albums are playlists too). */
     fun playlist(url: String): Playlist {
@@ -145,6 +156,8 @@ internal object YtMusic {
                     ytId = id,
                     durationSec = item.duration.takeIf { it > 0 },
                     thumbnailUrl = thumb,
+                    artistUrl = item.uploaderUrl,
+                    channelId = MusicText.channelIdOf(item.uploaderUrl),
                 )
             }
             is PlaylistInfoItem -> Item(
@@ -154,6 +167,8 @@ internal object YtMusic {
                 url = url,
                 thumbnailUrl = thumb,
                 itemCount = item.streamCount.takeIf { it >= 0 },
+                artistUrl = item.uploaderUrl,
+                channelId = MusicText.channelIdOf(item.uploaderUrl),
             )
             is ChannelInfoItem -> Item(
                 kind = "artist",
@@ -161,6 +176,7 @@ internal object YtMusic {
                 subtitle = item.description?.takeIf { it.isNotBlank() } ?: "",
                 url = url,
                 thumbnailUrl = thumb,
+                channelId = MusicText.channelIdOf(url),
             )
             else -> null
         }
