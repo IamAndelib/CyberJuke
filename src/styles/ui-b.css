@@ -194,13 +194,26 @@
   font-family: var(--font-ui), system-ui, -apple-system, 'Roboto', 'Noto Sans', 'Noto Sans CJK JP', 'Noto Sans CJK SC', 'Noto Sans Arabic',
     'Noto Naskh Arabic', 'Noto Sans Hebrew', 'Noto Sans Devanagari', 'Noto Sans Thai', 'Droid Sans Fallback', sans-serif;
 }
+.lyr {
+  padding-top: 48px; /* header: credit on the left, [art] on the right */
+}
+.lyr::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 47px;
+  border-top: 1px dashed var(--color-border);
+}
 .lyr-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 44px 16px 40px;
+  padding: 16px 16px 24px;
   scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 8px, #000 40px, #000 calc(100% - 32px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, transparent 8px, #000 40px, #000 calc(100% - 32px), transparent 100%);
 }
 .lyr-synced {
   /* room so the first and last lines can sit in the middle */
@@ -248,6 +261,7 @@ button.lyr-line {
 }
 .lyr-gap {
   min-height: 14px;
+  text-align: center;
   color: var(--color-fg-dim);
   font-size: 14px;
   padding: 2px 0;
@@ -269,14 +283,16 @@ button.lyr-line {
 }
 .lyr-credit {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 18px 12px 8px;
+  left: 14px;
+  right: 90px;
+  top: 10px;
+  line-height: 28px;
   font-family: var(--font-ui);
   font-size: 11px;
   color: var(--color-fg-dim);
-  background: linear-gradient(to bottom, transparent, var(--color-bg) 55%);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   pointer-events: none;
 }
 @media (prefers-reduced-motion: reduce) {
