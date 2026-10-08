@@ -53,7 +53,7 @@ function setup(o: Opts = {}) {
     throw new Error('unexpected ' + u);
   });
   const auth = createAuth({
-    store: { get: store.get, set, remove: store.remove },
+    store: { get: store.get, set, remove: (o) => store.remove(o) },
     fetch: fetch as unknown as typeof globalThis.fetch,
     now: () => clock,
     setTimer: (fn, ms) => {
@@ -222,6 +222,17 @@ describe('auth: token refresh', () => {
     expect((await s.store.get({ key: SESSION_KEY })).value).toBeNull();
   });
 
+  it('a 400 without an auth error code keeps the session (retried later)', async () => {
+    const s = setup({ refresh: () => json(400, { error: { message: 'SOMETHING_ELSE' } }) });
+    await s.auth.signIn('a@b.c', 'pw');
+    await expect(s.auth.refreshNow()).rejects.toMatchObject({ code: 'NETWORK' });
+    expect(s.auth.signedIn()).toBe(true);
+    const html = setup({ refresh: () => new Response('<html>bad gateway</html>', { status: 400 }) });
+    await html.auth.signIn('a@b.c', 'pw');
+    await expect(html.auth.refreshNow()).rejects.toBeTruthy();
+    expect(html.auth.signedIn()).toBe(true);
+  });
+
   it('a refresh that fails offline keeps the session', async () => {
     const s = setup({
       refresh: () => {
@@ -261,6 +272,19 @@ describe('auth: restore and sign out', () => {
     expect((await s.store.get({ key: SESSION_KEY })).value).toBeNull();
     expect(s.changes.at(-1)).toEqual([false, 'signOut']);
     expect(s.timers).toHaveLength(0);
+  });
+
+  it('sign out overwrites the saved session when the store refuses to delete it', async () => {
+    const s = setup();
+    await s.auth.signIn('a@b.c', 'pw');
+    const removing = vi.spyOn(s.store, 'remove');
+    removing.mockRejectedValueOnce(new Error('KEYSTORE'));
+    await s.auth.signOut();
+    expect(s.auth.signedIn()).toBe(false);
+    expect((await s.store.get({ key: SESSION_KEY })).value).toBe('');
+    // Nothing to restore from it.
+    await s.auth.restore();
+    expect(s.auth.state.value.status).toBe('signedOut');
   });
 
   it('a refresh still running when signing out cannot revive the session', async () => {

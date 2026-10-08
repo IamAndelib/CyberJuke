@@ -242,13 +242,25 @@ export function createAuth(deps: AuthDeps): Auth {
     }, wait);
   };
 
+  /**
+   * Delete the saved session. If the store refuses the delete, overwrite it with an
+   * empty value, so no refresh token is left behind either way.
+   */
+  const forget = async (): Promise<void> => {
+    try {
+      await deps.store.remove({ key: SESSION_KEY });
+    } catch {
+      await deps.store.set({ key: SESSION_KEY, value: '' }).catch(() => {});
+    }
+  };
+
   const end = async (reason: AuthChangeReason) => {
     const had = !!session;
     epoch++;
     session = null;
     refreshing = null;
     stopTimer();
-    await deps.store.remove({ key: SESSION_KEY }).catch(() => {});
+    await forget();
     publish();
     if (had) emit(false, reason);
   };
@@ -284,8 +296,9 @@ export function createAuth(deps: AuthDeps): Auth {
       const j = r.json as { id_token?: string; refresh_token?: string; expires_in?: string | number; user_id?: string } | null;
       if (!r.ok || !j?.id_token) {
         const code = authErrorCode(errorMessage(r.json));
-        // The server rejected the login itself: sign out. Anything else (5xx) is retried later.
-        if (code === 'SESSION_EXPIRED' || code === 'USER_DISABLED' || code === 'USER_NOT_FOUND' || r.status === 400) {
+        // The server rejected the login itself: sign out. Anything else (a 5xx, a 400
+        // without one of these codes, a proxy's error page) is retried later.
+        if (code === 'SESSION_EXPIRED' || code === 'USER_DISABLED' || code === 'USER_NOT_FOUND') {
           await end('expired');
           return null;
         }
@@ -359,7 +372,7 @@ export function createAuth(deps: AuthDeps): Auth {
       };
       // Can't be stored (Keystore unavailable): signed in until the app closes.
       const saved = await save(session);
-      if (!saved) await deps.store.remove({ key: SESSION_KEY }).catch(() => {});
+      if (!saved) await forget();
       schedule();
       publish();
       emit(true, 'signIn');

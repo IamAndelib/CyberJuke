@@ -1,7 +1,8 @@
 /**
  * The Cyberspace login (../data/auth) wired to the app's data: signing in or out drops
  * the source cache, the Jukebox feeds, the new-tracks baseline and both saved catalogs,
- * then fetches the whole catalog again for the new state. While signed in, genre pages
+ * then fetches the whole catalog again for the new state. Signing out also drops
+ * members-only tracks from Liked, history and the lyrics cache. While signed in, genre pages
  * read the catalog (exact genre match), since the members query has no genre filter.
  */
 import { auth } from '../data/auth';
@@ -9,7 +10,9 @@ import { source } from '../data';
 import { FirestoreError, FirestoreSource } from '../data/firestore';
 import type { Track } from '../data/model';
 import { feeds, JUKEBOX_FEED_PREFIXES } from '../ui/feed';
+import { lyrics } from '../data/lyrics';
 import { catalog } from './catalog';
+import { dropMembersOnly } from './library';
 import { freshness } from './newTracks';
 import { toast } from './toast';
 
@@ -40,7 +43,12 @@ let started = false;
 export function startAccount(): void {
   if (started) return;
   started = true;
-  auth.onChange((_signedIn, reason) => {
+  auth.onChange((signedIn, reason) => {
+    if (!signedIn) {
+      // Members-only posts don't stay on the phone after signing out (S8).
+      dropMembersOnly();
+      void lyrics.dropMembersOnly();
+    }
     void resetForSignIn();
     if (reason === 'expired') toast('Your Cyberspace login expired. Sign in again in Settings.', 4000);
   });
