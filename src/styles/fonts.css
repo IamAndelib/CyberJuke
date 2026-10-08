@@ -1,22 +1,24 @@
-/* Bundled OFL fonts; see public/fonts/OFL.txt. Paths are relative to the built CSS. */
+/* Bundled OFL fonts; see public/fonts/OFL.txt. Paths are relative to the built CSS.
+   font-display: block: the bundled fonts load in a few ms, and a fallback face first would
+   reflow every line at boot. */
 @font-face {
   font-family: 'JetBrains Mono';
   font-style: normal;
   font-weight: 400;
-  font-display: swap;
+  font-display: block;
   src: url('/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2');
 }
 @font-face {
   font-family: 'JetBrains Mono';
   font-style: normal;
   font-weight: 700;
-  font-display: swap;
+  font-display: block;
   src: url('/fonts/jetbrains-mono-latin-700-normal.woff2') format('woff2');
 }
 @font-face {
   font-family: 'Departure Mono';
   font-style: normal;
   font-weight: 400;
-  font-display: swap;
+  font-display: block;
   src: url('/fonts/departure-mono-regular.woff2') format('woff2');
 }

@@ -247,17 +247,24 @@ button.lyr-line {
 .lyr-line.past {
   opacity: 0.65;
 }
+/* The current line changes colour and glow only: same weight, and the marker sits in
+   padding every line has, so nothing changes width or wraps differently. */
+.lyr-synced .lyr-line {
+  position: relative;
+  padding-inline-start: 2ch;
+}
 .lyr-line.on {
   color: var(--color-fg);
-  font-weight: 700;
   text-shadow: var(--glow);
 }
 .lyr-line.on::before {
-  content: '> ';
+  content: '>';
+  position: absolute;
+  inset-inline-start: 0;
   color: var(--color-accent);
 }
 .lyr-line.on:dir(rtl)::before {
-  content: ' <';
+  content: '<';
 }
 .lyr-gap {
   min-height: 14px;
