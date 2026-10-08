@@ -15,6 +15,8 @@
 # the background; otherwise the exit code is non-zero.
 # Phase 3 (soft, debug builds) runs one YouTube Music search through NewPipeExtractor via
 # `--es ci_music_search "<query>"` and reports the logged result count. It never fails the job.
+# Phase 4 (soft, debug builds) resolves artist candidates (`--es ci_artist`) and looks up one
+# song's lyrics (`--es ci_lyrics "artist|title|durationSec"`). Annotations only, never fails.
 set -uo pipefail
 
 PKG="io.github.iamandelib.cyberjuke"
@@ -279,4 +281,62 @@ else
 fi
 log "Phase 3: ${music}${music_line:+ ($music_line)}"
 
-finish 0 "Pipeline: PLAYING and still PLAYING after ${BACKGROUND_WAIT}s in the background. Live YouTube: ${live}. YouTube Music search: ${music}"
+# ---- Phase 4 (soft): artist channel resolution + lyrics (MusicPlugin CI hooks) -------------
+# Annotations only: ::notice on success, ::warning otherwise; never fails the job.
+# Waits for the first `CI <kind> '...' (->|failed)` line of tag CyberJukeMusic; capture, then grep.
+ci_hook_line() { # <kind> <timeout>
+  local kind="$1" timeout="$2" logs line=""
+  for ((i = 1; i <= timeout; i++)); do
+    logs="$(adb logcat -d -v brief -s CyberJukeMusic:V 2>/dev/null)"
+    line="$(grep -E "CI $kind '.*' (->|failed)" <<<"$logs" | tail -n 1)"
+    [[ -n "$line" ]] && break
+    sleep 1
+  done
+  line="${line//$'\r'/}"
+  printf '%s' "$line"
+}
+
+ARTIST_QUERY="${SMOKE_ARTIST_QUERY:-Queen}"
+LYRICS_QUERY="${SMOKE_LYRICS_QUERY:-Queen|Bohemian Rhapsody|354}"
+SOFT_TIMEOUT="${SMOKE_SOFT_TIMEOUT:-45}"
+artist_res="not verified"
+lyrics_res="not verified"
+log "Phase 4 (soft): artist '$ARTIST_QUERY', lyrics '$LYRICS_QUERY'"
+adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
+sleep 2
+adb shell am start -W -n "$PKG/.MainActivity" --es ci_artist "\"$ARTIST_QUERY\"" \
+  --es ci_lyrics "\"$LYRICS_QUERY\"" >/dev/null 2>&1 || true
+
+artist_line="$(ci_hook_line artist "$SOFT_TIMEOUT")"
+artist_msg="${artist_line#*CyberJukeMusic*: }"
+if [[ -z "$artist_line" ]]; then
+  echo "::warning title=Artist resolution not verified::No 'CI artist' log line within ${SOFT_TIMEOUT}s (is this a debug build?)"
+  summary "### :warning: Artist resolution: no result within ${SOFT_TIMEOUT}s"
+elif [[ "$artist_line" =~ \-\>\ ([0-9]+)\ candidates ]] && ((BASH_REMATCH[1] > 0)); then
+  artist_res="pass (${BASH_REMATCH[1]} candidates)"
+  echo "::notice title=Artist resolution::$artist_msg"
+  summary "### :white_check_mark: Artist resolution: $artist_msg"
+else
+  artist_res="failed"
+  echo "::warning title=Artist resolution not verified::$artist_msg"
+  summary "### :warning: Artist resolution: $artist_msg"
+fi
+log "Phase 4 artist: ${artist_res}${artist_line:+ ($artist_line)}"
+
+lyrics_line="$(ci_hook_line lyrics "$SOFT_TIMEOUT")"
+lyrics_msg="${lyrics_line#*CyberJukeMusic*: }"
+if [[ -z "$lyrics_line" ]]; then
+  echo "::warning title=Lyrics not verified::No 'CI lyrics' log line within ${SOFT_TIMEOUT}s (is this a debug build?)"
+  summary "### :warning: Lyrics: no result within ${SOFT_TIMEOUT}s"
+elif [[ "$lyrics_line" == *"-> source="* ]]; then
+  lyrics_res="pass"
+  echo "::notice title=Lyrics::$lyrics_msg"
+  summary "### :white_check_mark: Lyrics: $lyrics_msg"
+else
+  lyrics_res="failed"
+  echo "::warning title=Lyrics not verified::$lyrics_msg"
+  summary "### :warning: Lyrics: $lyrics_msg"
+fi
+log "Phase 4 lyrics: ${lyrics_res}${lyrics_line:+ ($lyrics_line)}"
+
+finish 0 "Pipeline: PLAYING and still PLAYING after ${BACKGROUND_WAIT}s in the background. Live YouTube: ${live}. YouTube Music search: ${music}. Artist: ${artist_res}. Lyrics: ${lyrics_res}"
