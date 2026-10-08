@@ -4,6 +4,8 @@ import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.player.TrackErrorPolicy.Action
 import io.github.iamandelib.cyberjuke.player.TrackErrorPolicy.Facts
+import io.github.iamandelib.cyberjuke.yt.RateLimitedException
+import io.github.iamandelib.cyberjuke.yt.YtCompat
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.schabi.newpipe.extractor.exceptions.AgeRestrictedContentException

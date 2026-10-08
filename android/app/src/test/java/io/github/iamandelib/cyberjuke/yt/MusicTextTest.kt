@@ -1,4 +1,4 @@
-package io.github.iamandelib.cyberjuke.player
+package io.github.iamandelib.cyberjuke.yt
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

@@ -1,5 +1,6 @@
-package io.github.iamandelib.cyberjuke.player
+package io.github.iamandelib.cyberjuke.yt
 
+import io.github.iamandelib.cyberjuke.player.SessionPolicy
 import org.json.JSONArray
 import org.json.JSONObject
 import org.schabi.newpipe.extractor.exceptions.ParsingException

@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.player
 
+import io.github.iamandelib.cyberjuke.yt.MusicText
 import kotlin.math.abs
 
 /**

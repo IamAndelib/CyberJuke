@@ -41,6 +41,9 @@ import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.net.Hosts
 import io.github.iamandelib.cyberjuke.net.Http
 import io.github.iamandelib.cyberjuke.net.NetBlock
+import io.github.iamandelib.cyberjuke.yt.Radio
+import io.github.iamandelib.cyberjuke.yt.YtCompat
+import io.github.iamandelib.cyberjuke.yt.YtMusic
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Random

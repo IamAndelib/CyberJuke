@@ -1,6 +1,6 @@
-package io.github.iamandelib.cyberjuke.player
+package io.github.iamandelib.cyberjuke.yt
 
-import io.github.iamandelib.cyberjuke.player.ArtistPage.Kind
+import io.github.iamandelib.cyberjuke.yt.ArtistPage.Kind
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull

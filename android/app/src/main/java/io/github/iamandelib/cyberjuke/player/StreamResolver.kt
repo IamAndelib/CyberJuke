@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.media3.common.MimeTypes
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.net.NetBlock
+import io.github.iamandelib.cyberjuke.yt.YtCompat
 import java.io.IOException
 import java.util.concurrent.Callable
 import java.util.concurrent.ConcurrentHashMap

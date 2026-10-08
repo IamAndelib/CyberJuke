@@ -1,4 +1,4 @@
-package io.github.iamandelib.cyberjuke.player
+package io.github.iamandelib.cyberjuke.yt
 
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import org.schabi.newpipe.extractor.MediaFormat

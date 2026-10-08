@@ -3,6 +3,8 @@ package io.github.iamandelib.cyberjuke.player
 import android.content.Context
 import android.util.Log
 import io.github.iamandelib.cyberjuke.net.Http
+import io.github.iamandelib.cyberjuke.yt.InnerTube
+import io.github.iamandelib.cyberjuke.yt.YtCompat
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.json.JSONArray
