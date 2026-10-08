@@ -112,9 +112,15 @@ test('a double tap on a row plays once; tapping the playing row opens Now Playin
   expect(await queues(page)).toHaveLength(1);
 });
 
+/** The Genres grid in its final order (it reorders once the whole catalog has loaded). */
+async function genresLoaded(page: Page): Promise<void> {
+  await page.getByTestId('tab-genres').click();
+  await expect(page.getByTestId('screen-genres').locator('.topbar-sub')).toContainText('genres on the Jukebox');
+}
+
 test('the second tap of a double tap on a tile does not land on the new page (M9)', async ({ page }) => {
   await page.goto('/');
-  await page.getByTestId('tab-genres').click();
+  await genresLoaded(page);
   const tile = page.getByTestId('genre-grid').getByTestId('genre-tile').nth(6);
   await expect(tile).toBeVisible();
   const b = await box(tile);
@@ -152,7 +158,7 @@ test('a scroll that starts on a row never opens its menu (P10)', async ({ page }
 
 test('favouriting a genre tile: a toast with Undo; the grid stays put; Favourites shows it next visit (C1, M1, M8, P6)', async ({ page }) => {
   await page.goto('/');
-  await page.getByTestId('tab-genres').click();
+  await genresLoaded(page);
   const grid = page.getByTestId('genre-grid');
   const cell = grid.getByTestId('genre-cell').nth(3);
   const genre = (await cell.getAttribute('data-genre'))!;
