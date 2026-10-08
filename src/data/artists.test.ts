@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildArtistIndex, creditsArtist, pickByArtist, splitArtists, FALLBACK_TOP } from './artists';
+import { buildArtistIndex, splitArtists } from './artists';
 import type { Track } from './model';
 
 const t = (id: string, artist: string): Track => ({
@@ -77,39 +77,3 @@ describe('buildArtistIndex', () => {
   });
 });
 
-describe('creditsArtist', () => {
-  it('matches a credited artist in a song credit', () => {
-    expect(creditsArtist('Daft Punk', 'daft punk')).toBe(true);
-    expect(creditsArtist('Daft Punk - Topic', 'Daft Punk')).toBe(true);
-    expect(creditsArtist('Daft Punk, Pharrell Williams', 'Pharrell Williams')).toBe(true);
-    expect(creditsArtist('Daft Punk & Pharrell Williams', 'Daft Punk')).toBe(true);
-    expect(creditsArtist('Joey Valence & Brae', 'Joey Valence & Brae')).toBe(true);
-    expect(creditsArtist('Björk', 'Bjork')).toBe(true);
-  });
-
-  it('does not match other artists or partial words', () => {
-    expect(creditsArtist('Daft Punk Tribute Band', 'Punk')).toBe(true); // whole words inside a credit
-    expect(creditsArtist('Punkrockers', 'Punk')).toBe(false);
-    expect(creditsArtist('Someone Else', 'Daft Punk')).toBe(false);
-    expect(creditsArtist('', 'Daft Punk')).toBe(false);
-  });
-});
-
-describe('pickByArtist', () => {
-  const credit = (s: string) => s;
-  it('keeps matches when there are at least 3', () => {
-    const r = pickByArtist(['A', 'B', 'A', 'A feat. C', 'D'], 'A', credit, null);
-    expect(r).toEqual({ items: ['A', 'A', 'A feat. C'], all: false });
-    // later pages keep filtering
-    expect(pickByArtist(['A', 'B'], 'A', credit, false)).toEqual({ items: ['A'], all: false });
-  });
-
-  it('falls back to the top 20 when fewer than 3 match', () => {
-    const many = Array.from({ length: 30 }, (_, i) => `X${i}`);
-    const r = pickByArtist(['A', ...many], 'A', credit, null);
-    expect(r.all).toBe(true);
-    expect(r.items).toHaveLength(FALLBACK_TOP);
-    expect(r.items[0]).toBe('A');
-    expect(pickByArtist(many, 'A', credit, true).items).toHaveLength(30);
-  });
-});

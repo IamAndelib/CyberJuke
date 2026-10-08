@@ -51,19 +51,6 @@ export function cleanCredit(credit: string): string {
   return (credit ?? '').replace(/\s+-\s+Topic$/i, '').trim();
 }
 
-/**
- * Whether `credit` (e.g. a song's artist line) credits `artist`: one of its split
- * artists matches, or the artist's name appears as whole words inside it (covers
- * joined credits like "A & B" for artist "A").
- */
-export function creditsArtist(credit: string, artist: string): boolean {
-  const key = artistKey(artist);
-  if (!key) return false;
-  const c = cleanCredit(credit);
-  if (splitArtists(c).some((a) => artistKey(a) === key)) return true;
-  return (' ' + normalize(c) + ' ').includes(' ' + key + ' ');
-}
-
 export interface Artist {
   key: string;
   /** Display name: the most common spelling. */
@@ -104,20 +91,4 @@ export function buildArtistIndex(tracks: Track[]): ArtistIndex {
   }
   artists.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   return { artists, tracks: lists, byKey: new Map(artists.map((a) => [a.key, a])) };
-}
-
-/** Matched songs/albums below this count fall back to the top results. */
-export const MIN_MATCHES = 3;
-export const FALLBACK_TOP = 20;
-
-/**
- * Global results for an artist from a search for their name: the ones crediting them,
- * or, if fewer than MIN_MATCHES do, the top FALLBACK_TOP instead. `all` carries the
- * decision to later pages: null = first page (decide), true = unfiltered, false = filter.
- */
-export function pickByArtist<T>(items: T[], artist: string, credit: (t: T) => string, all: boolean | null): { items: T[]; all: boolean } {
-  if (all === true) return { items, all };
-  const matched = items.filter((t) => creditsArtist(credit(t), artist));
-  if (all === false) return { items: matched, all };
-  return matched.length < MIN_MATCHES ? { items: items.slice(0, FALLBACK_TOP), all: true } : { items: matched, all: false };
 }
