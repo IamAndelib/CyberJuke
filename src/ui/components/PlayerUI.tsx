@@ -5,7 +5,7 @@ import { isLiked, liked } from '../../stores/library';
 import { toggleLikeWithUndo } from '../../stores/undo';
 import { toast } from '../../stores/toast';
 import { Icon } from '../icons';
-import { artistChoice, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage } from '../nav';
+import { artistChoice, lyricsOpen, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage } from '../nav';
 import { openExternal, openPost, youtubeUrl } from '../links';
 import { positionNow, useLiveProgress, useTickValue } from '../useTick';
 import { splitArtists } from '../../data/artists';
@@ -14,7 +14,7 @@ import { reducedMotion } from '../../core/motion';
 import { Art } from './Art';
 import { Marquee } from './Marquee';
 import { MembersTag } from './TrackRow';
-import { LyricsPanel, lyricsOpen } from './Lyrics';
+import { LyricsPanel } from './Lyrics';
 import { UpNext } from './UpNext';
 import { canSharePost, sharePost, shareTrack } from '../share';
 

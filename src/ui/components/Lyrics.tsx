@@ -7,7 +7,6 @@
  * dir="auto" so right-to-left scripts render correctly; the font stack falls back to
  * system fonts for scripts the pixel fonts don't cover.
  */
-import { signal } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { activeLine, lyrics as client, type Lyrics, type LyricsOutcome } from '../../data/lyrics';
@@ -17,9 +16,6 @@ import { online } from '../../core/network';
 import { smoothScrolling } from '../clickGuard';
 import { reducedMotion } from '../../core/motion';
 import { useTickValue } from '../useTick';
-
-/** Lyrics shown instead of the art (kept across tracks and reopenings). */
-export const lyricsOpen = signal(false);
 
 export const MANUAL_PAUSE_MS = 4000;
 

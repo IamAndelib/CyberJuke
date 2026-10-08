@@ -12,7 +12,6 @@ import { computed, signal, useComputed, type ReadonlySignal } from '@preact/sign
 import { createContext } from 'preact';
 import { useContext, useEffect, useRef } from 'preact/hooks';
 import type { Track } from '../data/model';
-import { lyricsOpen } from './components/Lyrics';
 
 export type Tab = 'home' | 'genres' | 'artists' | 'library' | 'settings';
 export const TABS: readonly Tab[] = ['home', 'genres', 'artists', 'library', 'settings'];
@@ -67,6 +66,8 @@ export const stack = computed(() => stacks.value[tab.value]);
 export const topEntry = computed<StackEntry | null>(() => stack.value.at(-1) ?? null);
 
 export const nowPlayingOpen = signal(false);
+/** Lyrics shown instead of the art (kept across tracks and reopenings). */
+export const lyricsOpen = signal(false);
 /** Track whose ⋯ menu is open. */
 export const menuTrack = signal<Track | null>(null);
 /** Artist chooser (a track credits several artists), opened from Now Playing. */
