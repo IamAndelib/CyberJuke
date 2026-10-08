@@ -10,7 +10,9 @@
     "build": "vite build",
     "preview": "vite preview --port 4173",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
     "test": "vitest run",
+    "check": "npm run typecheck && npm run lint && npm test",
     "e2e": "playwright test --project=e2e",
     "sync": "npm run build && cap sync android",
     "screenshots": "playwright test --project=screenshots"
@@ -30,10 +32,19 @@
   "devDependencies": {
     "@babel/core": "^7.29.7",
     "@capacitor/cli": "^8.5.2",
+    "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.63.0",
     "@preact/preset-vite": "^2.10.6",
+    "@typescript/typescript6": "^6.0.2",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
     "typescript": "^7.0.2",
+    "typescript-eslint": "^8.71.1",
     "vite": "^8.3.2",
     "vitest": "^5.0.3"
+  },
+  "overrides": {
+    "typescript": "$typescript"
   }
 }
