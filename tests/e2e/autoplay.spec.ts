@@ -87,19 +87,17 @@ test('a Home row starts a radio: Up next is similar Jukebox tracks', async ({ pa
   expect(Number(await rows.first().locator('.row-main').evaluate((el) => getComputedStyle(el).opacity))).toBeLessThan(1);
 });
 
-test('Up next: 48px Up, Down and Remove 8px apart; Remove offers Undo', async ({ page }) => {
+test('Up next: autoplay rows have only a 48px Remove, which offers Undo', async ({ page }) => {
   await start(page);
   await visible(page, 'track-play').first().click();
   const q = await withAutoplay(page);
   await openNowPlaying(page);
   const row = page.locator('[data-testid="upnext-row"][data-section="autoplay"]').nth(1);
-  const [up, down, remove] = await Promise.all(['upnext-up', 'upnext-down', 'upnext-remove'].map((id) => row.getByTestId(id).boundingBox()));
-  for (const b of [up, down, remove]) {
-    expect(b!.width).toBe(48);
-    expect(b!.height).toBe(48);
-  }
-  expect(Math.round(down!.x - (up!.x + up!.width))).toBe(8);
-  expect(Math.round(remove!.x - (down!.x + down!.width))).toBe(8);
+  await expect(page.locator('[data-section="autoplay"] [data-testid="upnext-up"]')).toHaveCount(0);
+  await expect(page.locator('[data-section="autoplay"] [data-testid="upnext-down"]')).toHaveCount(0);
+  const rb = await row.getByTestId('upnext-remove').boundingBox();
+  expect(rb!.width).toBe(48);
+  expect(rb!.height).toBe(48);
 
   const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
   const before = await rows.count();
@@ -141,6 +139,15 @@ test('Album Play plays the album, then continues into autoplay at the end', asyn
 
   await openNowPlaying(page);
   await expect(page.getByTestId('upnext-list-label')).toContainText('Next from:');
+  // List rows can be reordered: 48px Up, Down and Remove, 8px apart.
+  const listRow = page.locator('[data-testid="upnext-row"][data-section="list"]').nth(1);
+  const [up, down, remove] = await Promise.all(['upnext-up', 'upnext-down', 'upnext-remove'].map((id) => listRow.getByTestId(id).boundingBox()));
+  for (const b of [up, down, remove]) {
+    expect(b!.width).toBe(48);
+    expect(b!.height).toBe(48);
+  }
+  expect(Math.round(down!.x - (up!.x + up!.width))).toBe(8);
+  expect(Math.round(remove!.x - (down!.x + down!.width))).toBe(8);
   // Jump to the album's last track; Next then plays the first autoplay track.
   const lastRow = page.locator('[data-testid="upnext-row"][data-section="list"]').last();
   await expect(lastRow.locator('.row-title')).toHaveText(titles[7]);

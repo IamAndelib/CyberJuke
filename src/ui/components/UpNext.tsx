@@ -12,7 +12,7 @@ const REMOVE_GUARD_MS = 300;
 /**
  * Now Playing → Up next, in three sections (AP1): queued by you, the rest of the list
  * ("Next from: <source>"), then autoplay ("Autoplay · similar to <seed>"). Up and Down
- * move a track within its section; Remove offers Undo.
+ * move a queued or list track within its section; Remove (every row) offers Undo.
  */
 export function UpNext({ s }: { s: PlayerState }) {
   const sec = upNextSections.value;
@@ -56,7 +56,8 @@ export function UpNext({ s }: { s: PlayerState }) {
               </div>
             </button>
             <div class="upnext-actions">
-              {!s.shuffle ? (
+              {/* Autoplay rows are suggestions: no reordering, only Remove. */}
+              {!s.shuffle && kind !== 'autoplay' ? (
                 <>
                   <button
                     class="icon-btn"
