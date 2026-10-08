@@ -12,6 +12,8 @@ import { AZHead, GridSortRail } from '../components/GridSort';
 import { groupAZ } from '../azSections';
 import { genresSort } from '../../store/prefs';
 import { usePaged } from '../usePaged';
+import { authScope } from '../feed';
+import { auth } from '../../data/auth';
 
 export function Genres() {
   if (openGenre.value) return <GenreDetail genre={openGenre.value} />;
@@ -120,7 +122,8 @@ function catalogGenre(genre: string): Track[] {
 
 function GenreDetail({ genre }: { genre: string }) {
   const nsfw = settings.value.showNsfw;
-  const paged = usePaged(`genre:${genre}:${nsfw}`, async (c) => {
+  const scope = authScope(auth.state.value.status === 'signedIn');
+  const paged = usePaged(`genre:${scope}:${genre}:${nsfw}`, async (c) => {
     const p = await source.byGenre(genre, c);
     // Some posts only carry the genre on the attachment, which the query can't see:
     // fall back to the local catalog rather than showing an empty genre.

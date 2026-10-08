@@ -7,6 +7,9 @@ import {
   updateSettings,
   type ThemeId,
 } from '../../store/library';
+import { useState } from 'preact/hooks';
+import { AuthError, SIGN_UP_URL, auth, authErrorText } from '../../data/auth';
+import { toast } from '../../store/toast';
 import { Screen } from '../components/Screen';
 import { openPost } from '../nav';
 
@@ -95,6 +98,151 @@ function CheckEvery() {
   );
 }
 
+/** Settings → Account, signed out: "Sign in with Cyberspace". The password is never kept. */
+function SignInForm() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = async (e: Event) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const user = await auth.signIn(email, password);
+      setPassword('');
+      toast(
+        user.saved
+          ? `Signed in as ${user.name}`
+          : `Signed in as ${user.name} for this session only: the login couldn't be saved on this phone`,
+        user.saved ? 2400 : 5000,
+      );
+    } catch (err) {
+      setError(err instanceof AuthError ? err.message : authErrorText('UNKNOWN'));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form class="signin" onSubmit={submit} noValidate data-testid="signin-form">
+      <div class="setting-name">Sign in with Cyberspace</div>
+      <p class="setting-desc signin-lead">
+        Optional. Signed in, the Jukebox also shows members-only posts, marked <span class="mtag">[members]</span>.
+      </p>
+      <div class="field">
+        <label class="field-label" for="signin-email">
+          Email
+        </label>
+        <input
+          id="signin-email"
+          class="field-input"
+          type="email"
+          name="email"
+          autocomplete="username"
+          inputMode="email"
+          autocapitalize="off"
+          spellcheck={false}
+          value={email}
+          onInput={(e) => setEmail((e.currentTarget as HTMLInputElement).value)}
+          disabled={busy}
+          data-testid="signin-email"
+        />
+      </div>
+      <div class="field">
+        <label class="field-label" for="signin-password">
+          Password
+        </label>
+        <span class="field-row">
+          <input
+            id="signin-password"
+            class="field-input"
+            // "text" while [show] is on; typed as one variant for Preact's input unions.
+            type={(show ? 'text' : 'password') as 'password'}
+            name="password"
+            autocomplete="current-password"
+            autocapitalize="off"
+            spellcheck={false}
+            value={password}
+            onInput={(e) => setPassword((e.currentTarget as HTMLInputElement).value)}
+            disabled={busy}
+            data-testid="signin-password"
+          />
+          <button
+            type="button"
+            class="field-reveal"
+            aria-pressed={show}
+            aria-label={show ? 'Hide password' : 'Show password'}
+            onClick={() => setShow(!show)}
+            data-testid="signin-reveal"
+          >
+            {show ? '[hide]' : '[show]'}
+          </button>
+        </span>
+      </div>
+      {error && (
+        <p class="signin-error" role="alert" data-testid="signin-error">
+          ! {error}
+        </p>
+      )}
+      <button type="submit" class="btn primary signin-submit" disabled={busy} aria-busy={busy} data-testid="signin-submit">
+        {busy ? <span class="spinner" aria-hidden="true" /> : null}
+        {busy ? 'Signing in…' : 'Sign in'}
+      </button>
+      <p class="setting-desc signin-note" data-testid="signin-note">
+        Your password goes only to Cyberspace's login. CyberJuke keeps only a login token, encrypted on this phone.
+      </p>
+      <p class="setting-desc signin-note">
+        No account? <A href={SIGN_UP_URL}>Create one on cyberspace.online</A>
+      </p>
+    </form>
+  );
+}
+
+/** Settings → Account, signed in. */
+function SignedIn({ name }: { name: string }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div class="setting stack account-in" data-testid="signed-in">
+      <div class="setting-text">
+        <div class="setting-name">
+          Signed in as <span data-testid="account-name">{name}</span>
+        </div>
+        <div class="setting-desc">
+          Members-only posts show on Home, Genres, Artists and Search, marked <span class="mtag">[members]</span>.
+        </div>
+      </div>
+      <button
+        class="btn"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await auth.signOut();
+            toast('Signed out of Cyberspace', 2000);
+          } finally {
+            setBusy(false);
+          }
+        }}
+        data-testid="signout"
+      >
+        Sign out
+      </button>
+    </div>
+  );
+}
+
+function Account() {
+  const st = auth.state.value;
+  return (
+    <section class="card" data-testid="account">
+      <h2 class="card-title">Account</h2>
+      {st.status === 'signedIn' && st.user ? <SignedIn name={st.user.name} /> : <SignInForm />}
+    </section>
+  );
+}
+
 export function Settings() {
   const s = settings.value;
   return (
@@ -107,6 +255,8 @@ export function Settings() {
           ))}
         </div>
       </section>
+
+      <Account />
 
       <section class="card">
         <h2 class="card-title">Playback &amp; data</h2>
@@ -149,14 +299,15 @@ export function Settings() {
         </p>
         <p>
           <b>Data:</b> public posts with music attachments, read from Cyberspace's public database exactly as the
-          website shows them. Nothing is posted and no account is needed.
+          website shows them. Nothing is posted and no account is needed. Signing in with Cyberspace (optional)
+          adds the members-only posts the site shows its members.
         </p>
         <p>
           <b>Audio:</b> tracks are the videos posters link to, streamed from where they are hosted. Availability depends
           on that host, and some tracks may be skipped.
         </p>
         <p>
-          <b>Global:</b> Global search and "More by" on artist pages look beyond the Jukebox. What they find plays like
+          <b>Global:</b> Global search and the top songs and discography on artist pages look beyond the Jukebox. What they find plays like
           any track but is never added to the Jukebox, Genres or Most saved.
         </p>
         <p>

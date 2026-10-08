@@ -13,6 +13,8 @@ import { Screen } from '../components/Screen';
 import { NewTracksPill } from '../components/NewTracksPill';
 import { Rail, RailRow, type RailItem } from '../components/Rail';
 import { usePaged } from '../usePaged';
+import { authScope } from '../feed';
+import { auth } from '../../data/auth';
 
 /** Selected genre chip on Home (null = All). Survives tab switches. */
 export const homeGenre = signal<string | null>(null);
@@ -167,7 +169,8 @@ export function Home() {
   const sort = homeSort.value;
   const nsfw = settings.value.showNsfw;
   // Latest stays loaded while Most saved is shown, so switching back is instant.
-  const paged = usePaged(`home:${g ?? ''}:${nsfw}`, (c) => (g == null ? source.latest(c) : source.byGenre(g, c)));
+  const scope = authScope(auth.state.value.status === 'signedIn');
+  const paged = usePaged(`home:${scope}:${g ?? ''}:${nsfw}`, (c) => (g == null ? source.latest(c) : source.byGenre(g, c)));
   return (
     <Screen
       testid="screen-home"

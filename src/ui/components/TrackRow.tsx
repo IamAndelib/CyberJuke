@@ -14,6 +14,15 @@ export function Bars() {
   );
 }
 
+/** A members-only post (seen only when signed in with Cyberspace). */
+export function MembersTag({ class: cls }: { class?: string }) {
+  return (
+    <span class={'mtag' + (cls ? ' ' + cls : '')} title="Members-only post" aria-label="Members-only post" data-testid="members-tag">
+      [members]
+    </span>
+  );
+}
+
 export function TrackRow({
   track,
   onPlay,
@@ -57,6 +66,7 @@ export function TrackRow({
                 {track.saves ?? 0}
               </span>
             )}
+            {track.membersOnly && <MembersTag />}
             {track.genre && !hideGenre && <span class="tag">{track.genre}</span>}
             {track.by && <span class="by">by @{track.by}</span>}
           </div>

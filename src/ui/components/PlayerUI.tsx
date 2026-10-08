@@ -8,6 +8,7 @@ import { artistChoice, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage,
 import { splitArtists } from '../../data/artists';
 import { isGlobal, type Track } from '../../data/model';
 import { Art } from './Art';
+import { MembersTag } from './TrackRow';
 import { LyricsPanel, lyricsOpen } from './Lyrics';
 import { shareTrack } from '../share';
 
@@ -267,6 +268,7 @@ export function NowPlaying() {
                 {t.title}
               </h2>
               <NpArtist track={t} />
+              {t.membersOnly && <MembersTag class="np-members" />}
               {t.genre && (
                 <button class="tag np-genre" onClick={() => openGenrePage(t.genre)} aria-label={`Open genre ${t.genre}`} data-testid="np-genre">
                   {t.genre}
