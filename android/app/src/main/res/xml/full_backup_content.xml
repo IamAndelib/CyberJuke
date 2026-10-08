@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup rules for Android 11 and older (Auto Backup and adb backup). Android 12+ uses
+  data_extraction_rules.xml; keep the two in sync. See that file for why these are excluded.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="cyberjuke_secure.xml" />
+    <exclude domain="file" path="cyberjuke/" />
+</full-backup-content>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup rules for Android 12+ (API 31+). Older versions use full_backup_content.xml; keep the
+  two in sync.
+
+  Never backed up or transferred to a new phone:
+  - sharedpref/cyberjuke_secure.xml: the SecureStore ciphertext (Cyberspace refresh token). Its
+    Keystore key never leaves the device, so a copy is useless elsewhere anyway.
+  - files/cyberjuke/: the web side's data files (catalog-public.json, catalog-members.json,
+    history.json). The members-only catalog, and history and liked tracks that can contain
+    members-only tracks, must not end up in a cloud backup or on a device that is not signed in.
+  The cache directory (lyrics) is never backed up by Android.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="cyberjuke_secure.xml" />
+        <exclude domain="file" path="cyberjuke/" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="cyberjuke_secure.xml" />
+        <exclude domain="file" path="cyberjuke/" />
+    </device-transfer>
+</data-extraction-rules>

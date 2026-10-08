@@ -3,6 +3,8 @@
 
     <application
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/full_backup_content"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -26,7 +28,8 @@
 
         <!-- Native player: Media3 MediaSessionService (foreground media notification,
              lock screen controls, headset buttons). Exported so system UI / Bluetooth
-             controllers can bind to the session. -->
+             controllers can bind to the session; PlaybackService.onConnectAsync gives other
+             apps transport commands only (SessionPolicy). -->
         <service
             android:name=".player.PlaybackService"
             android:foregroundServiceType="mediaPlayback"
@@ -36,15 +39,6 @@
             </intent-filter>
         </service>
 
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths"></meta-data>
-        </provider>
     </application>
 
     <!-- Permissions -->
