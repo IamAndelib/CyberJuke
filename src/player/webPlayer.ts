@@ -40,6 +40,8 @@ declare global {
   interface Window {
     YT?: YTNamespace;
     onYouTubeIframeAPIReady?: () => void;
+    /** e2e only: native-equivalent player calls made by the web player. */
+    __cyberjukePlayerCalls?: unknown[][];
   }
 }
 
@@ -87,6 +89,7 @@ export class WebPlayer implements Player {
     const index = this.q.index;
     const upIdx = this.q.upNextIndices();
     const items = this.q.items;
+    const queued = this.q.queuedCount;
     this.s.value = {
       ...prev,
       queue: items,
@@ -94,7 +97,7 @@ export class WebPlayer implements Player {
       current: this.q.current,
       shuffle: this.q.shuffle,
       repeat: this.q.repeat,
-      upNext: upIdx.map((i) => ({ track: items[i], index: i })),
+      upNext: upIdx.map((i, k) => (k < queued ? { track: items[i], index: i, queued: true } : { track: items[i], index: i })),
       ...patch,
     };
   }
@@ -294,16 +297,12 @@ export class WebPlayer implements Player {
     if (changed) await this.loadCurrent(this.s.value.isPlaying, true);
   }
 
-  async playNext(tracks: Track[]): Promise<void> {
-    const wasEmpty = !this.q.current;
-    this.q.playNext(tracks);
-    this.publish();
-    if (wasEmpty) await this.loadCurrent(true, true);
-  }
-
   async addToQueue(tracks: Track[]): Promise<void> {
+    if (!tracks.length) return;
+    // e2e: record what the native plugin would receive.
+    window.__cyberjukePlayerCalls?.push(['queueNext', tracks.map((t) => t.id)]);
     const wasEmpty = !this.q.current;
-    this.q.add(tracks);
+    this.q.queueNext(tracks);
     this.publish();
     if (wasEmpty) await this.loadCurrent(true, true);
   }

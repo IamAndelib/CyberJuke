@@ -199,21 +199,55 @@ describe('Queue: editing', () => {
     expect(q.length).toBe(0);
   });
 
-  it('playNext inserts right after the current track', () => {
+  it('queueNext inserts right after the current track', () => {
     const q = new Queue();
     q.setList(abc(), 1);
-    q.playNext([t('x'), t('y')]);
+    q.queueNext([t('x'), t('y')]);
     expect(ids(q.items)).toEqual(['a', 'b', 'x', 'y', 'c', 'd', 'e']);
     expect(ids(q.upNext(2))).toEqual(['x', 'y']);
+    expect(q.queuedCount).toBe(2);
     expect(q.next()?.id).toBe('x');
+    expect(q.queuedCount).toBe(1);
   });
 
-  it('playNext respects shuffle play order', () => {
+  it('queueNext is first in, first out: A then B gives A, B, then the rest', () => {
+    const q = new Queue();
+    q.setList(abc(), 0);
+    q.queueNext([t('A')]);
+    q.queueNext([t('B')]);
+    expect(ids(q.upNext())).toEqual(['A', 'B', 'b', 'c', 'd', 'e']);
+    q.next(); // A plays
+    q.queueNext([t('C')]);
+    expect(ids(q.upNext())).toEqual(['B', 'C', 'b', 'c', 'd', 'e']);
+    q.next();
+    q.next();
+    expect(q.queuedCount).toBe(0);
+    q.queueNext([t('D')]);
+    expect(ids(q.upNext(2))).toEqual(['D', 'b']);
+  });
+
+  it('queueNext plays next with shuffle on, in order, and survives reshuffles', () => {
     const q = new Queue(seeded(5));
     q.setList(abc(), 0);
     q.setShuffle(true);
-    q.playNext([t('x')]);
-    expect(q.upNext(1)[0].id).toBe('x');
+    q.queueNext([t('x')]);
+    q.queueNext([t('y')]);
+    expect(ids(q.upNext(2))).toEqual(['x', 'y']);
+    q.setShuffle(false);
+    expect(ids(q.upNext(2))).toEqual(['x', 'y']);
+    q.setShuffle(true);
+    expect(ids(q.upNext(2))).toEqual(['x', 'y']);
+    expect(q.queuedCount).toBe(2);
+  });
+
+  it('a new list or removing a queued track forgets it', () => {
+    const q = new Queue();
+    q.setList(abc(), 0);
+    q.queueNext([t('x'), t('y')]);
+    q.remove(1);
+    expect(q.queuedCount).toBe(1);
+    q.setList(abc(), 0);
+    expect(q.queuedCount).toBe(0);
   });
 
   it('add appends to list and play order', () => {
@@ -225,13 +259,14 @@ describe('Queue: editing', () => {
     expect(q.upNext().at(-1)?.id).toBe('z');
   });
 
-  it('play next / add on an empty queue makes the first item current', () => {
+  it('queueNext / add on an empty queue makes the first item current', () => {
     const q = new Queue();
     q.add([t('a'), t('b')]);
     expect(q.current?.id).toBe('a');
     const q2 = new Queue();
-    q2.playNext([t('x')]);
+    q2.queueNext([t('x'), t('y')]);
     expect(q2.current?.id).toBe('x');
+    expect(q2.queuedCount).toBe(1);
   });
 
   it('allows the same track twice and tracks them independently', () => {

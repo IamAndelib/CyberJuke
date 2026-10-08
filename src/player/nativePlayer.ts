@@ -35,6 +35,8 @@ export class NativePlayer implements Player {
   readonly state = this.s;
   /** Every Track we've handed to native, so ids in native state resolve to full Tracks. */
   private known = new Map<string, Track>();
+  /** Ids added with queueNext that haven't played yet, oldest first. */
+  private queuedIds: string[] = [];
 
   constructor() {
     JukePlayer.addListener('state', (st) => this.apply(st)).catch(() => {});
@@ -59,6 +61,14 @@ export class NativePlayer implements Player {
   private apply(st: NativeState): void {
     const queue = st.queueIds.map((id) => this.resolve(id));
     const index = st.index >= 0 && st.index < queue.length ? st.index : -1;
+    // A queued track that started playing, or left the list, is no longer "queued".
+    if (this.queuedIds.length) {
+      const inList = new Set(st.queueIds);
+      const cur = this.queuedIds.indexOf(st.trackId ?? '');
+      if (cur >= 0) this.queuedIds.splice(0, cur + 1);
+      this.queuedIds = this.queuedIds.filter((id) => inList.has(id));
+    }
+    const pending = this.queuedIds.slice();
     // Map upNext ids back to list indices; with duplicate ids, use each list slot once.
     const used = new Set<number>([index]);
     const upNext: UpNextItem[] = [];
@@ -72,7 +82,10 @@ export class NativePlayer implements Player {
       }
       if (i < 0) continue;
       used.add(i);
-      upNext.push({ track: queue[i], index: i });
+      // The leading run of user-queued tracks, in the order they were added.
+      const queued = pending.length > 0 && pending[0] === id && upNext.every((u) => u.queued);
+      if (queued) pending.shift();
+      upNext.push({ track: queue[i], index: i, ...(queued && { queued: true }) });
     }
     this.s.value = {
       queue,
@@ -92,6 +105,7 @@ export class NativePlayer implements Player {
   async playList(tracks: Track[], startIndex: number): Promise<void> {
     if (!tracks.length) return;
     this.remember(tracks);
+    this.queuedIds = [];
     const i = Math.max(0, Math.min(startIndex, tracks.length - 1));
     // Optimistic: show the mini player immediately; native state events follow.
     this.s.value = {
@@ -126,18 +140,12 @@ export class NativePlayer implements Player {
   move = (from: number, to: number) => JukePlayer.moveItem({ from, to });
   remove = (index: number) => JukePlayer.removeItem({ index });
 
-  async playNext(tracks: Track[]): Promise<void> {
-    if (!tracks.length) return;
-    if (this.s.value.index < 0) return this.playList(tracks, 0);
-    this.remember(tracks);
-    await JukePlayer.addItems({ tracks: tracks.map(toNative), index: this.s.value.index + 1 });
-  }
-
   async addToQueue(tracks: Track[]): Promise<void> {
     if (!tracks.length) return;
     if (this.s.value.index < 0) return this.playList(tracks, 0);
     this.remember(tracks);
-    await JukePlayer.addItems({ tracks: tracks.map(toNative) });
+    this.queuedIds.push(...tracks.map((t) => t.id));
+    await JukePlayer.queueNext({ tracks: tracks.map(toNative) });
   }
 
   setQuality = (quality: 'high' | 'low') => JukePlayer.setQuality({ quality });

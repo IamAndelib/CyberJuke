@@ -18,6 +18,8 @@ export interface NativeState {
 export interface JukePlayerPlugin {
   setQueue(o: { tracks: NativeTrack[]; startIndex: number; positionMs?: number; playWhenReady: boolean }): Promise<void>;
   addItems(o: { tracks: NativeTrack[]; index?: number }): Promise<void>;   // index omitted = append
+  /** Insert after the current track + tracks already user-queued; respects shuffle; upNextIds reflects it. */
+  queueNext(o: { tracks: NativeTrack[] }): Promise<void>;
   removeItem(o: { index: number }): Promise<void>;
   moveItem(o: { from: number; to: number }): Promise<void>;
   play(): Promise<void>; pause(): Promise<void>;

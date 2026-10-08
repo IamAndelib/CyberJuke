@@ -8,6 +8,8 @@ export interface UpNextItem {
   track: Track;
   /** Index in list order (what move/remove/skipTo take). */
   index: number;
+  /** Added with "Add to queue" and not played yet (shown under "Queued by you"). */
+  queued?: boolean;
 }
 
 export interface PlayerState {
@@ -58,7 +60,10 @@ export interface Player {
   setRepeat(mode: RepeatMode): Promise<void>;
   move(from: number, to: number): Promise<void>;
   remove(index: number): Promise<void>;
-  playNext(tracks: Track[]): Promise<void>;
+  /**
+   * "Add to queue": play next, after the current track and anything queued before
+   * (first in, first out), shuffle or not. With nothing playing, plays them.
+   */
   addToQueue(tracks: Track[]): Promise<void>;
   setQuality(q: 'high' | 'low'): Promise<void>;
 }

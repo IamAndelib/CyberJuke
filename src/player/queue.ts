@@ -27,6 +27,8 @@ export class Queue<T extends Identified> {
   private list: Entry<T>[] = [];
   private order: Entry<T>[] = [];
   private cur: Entry<T> | null = null;
+  /** Entries added with queueNext() that haven't become current yet. */
+  private queued = new Set<Entry<T>>();
   private nextKey = 1;
   shuffle = false;
   repeat: RepeatMode = 'off';
@@ -65,10 +67,19 @@ export class Queue<T extends Identified> {
     return this.order.slice(p + 1, p + 1 + max).map((e) => this.list.indexOf(e));
   }
 
+  /** How many of the first upNext() items were queued by the user ("Queued by you"). */
+  get queuedCount(): number {
+    const p = this.cur ? this.order.indexOf(this.cur) : -1;
+    let n = 0;
+    while (p + 1 + n < this.order.length && this.queued.has(this.order[p + 1 + n])) n++;
+    return n;
+  }
+
   // ---- loading -------------------------------------------------------------------
 
   /** Replace the queue with `items` and make `startIndex` current. */
   setList(items: T[], startIndex = 0): T | null {
+    this.queued.clear();
     this.list = items.map((item) => this.entry(item));
     if (!this.list.length) {
       this.order = [];
@@ -94,10 +105,12 @@ export class Queue<T extends Identified> {
     const p = this.order.indexOf(this.cur);
     if (p + 1 < this.order.length) {
       this.cur = this.order[p + 1];
+      this.settle();
       return this.cur.item;
     }
     if (this.repeat === 'all' || (this.repeat === 'one' && !auto)) {
       this.cur = this.order[0];
+      this.settle();
       return this.cur.item;
     }
     return null;
@@ -113,10 +126,12 @@ export class Queue<T extends Identified> {
     const p = this.order.indexOf(this.cur);
     if (p > 0) {
       this.cur = this.order[p - 1];
+      this.settle();
       return 'moved';
     }
     if (this.repeat === 'all' && this.order.length > 1) {
       this.cur = this.order[this.order.length - 1];
+      this.settle();
       return 'moved';
     }
     return 'restart';
@@ -127,6 +142,7 @@ export class Queue<T extends Identified> {
     const e = this.list[index];
     if (!e) return null;
     this.cur = e;
+    this.settle();
     return e.item;
   }
 
@@ -163,25 +179,38 @@ export class Queue<T extends Identified> {
     if (e === this.cur) {
       const p = this.order.indexOf(e);
       this.cur = this.order[p + 1] ?? this.order[p - 1] ?? null;
+      this.settle();
       changed = true;
     }
+    this.queued.delete(e);
     this.list.splice(index, 1);
     this.order.splice(this.order.indexOf(e), 1);
     return changed;
   }
 
-  /** Insert tracks to play right after the current one (in list and play order). */
-  playNext(items: T[]): void {
+  /**
+   * "Add to queue": play these next, after the current track and after anything queued
+   * earlier (first in, first out), in list and play order, shuffle or not. With nothing
+   * playing, the first one becomes current.
+   */
+  queueNext(items: T[]): void {
     if (!items.length) return;
     const entries = items.map((i) => this.entry(i));
     if (!this.cur) {
       this.list.unshift(...entries);
       this.order.unshift(...entries);
       this.cur = entries[0];
+      for (const e of entries.slice(1)) this.queued.add(e);
       return;
     }
-    this.list.splice(this.list.indexOf(this.cur) + 1, 0, ...entries);
-    this.order.splice(this.order.indexOf(this.cur) + 1, 0, ...entries);
+    const at = (arr: Entry<T>[]) => {
+      let k = arr.indexOf(this.cur!) + 1;
+      while (k < arr.length && this.queued.has(arr[k])) k++;
+      return k;
+    };
+    this.list.splice(at(this.list), 0, ...entries);
+    this.order.splice(at(this.order), 0, ...entries);
+    for (const e of entries) this.queued.add(e);
   }
 
   /** Append tracks to the end of the queue (in list and play order). */
@@ -194,12 +223,18 @@ export class Queue<T extends Identified> {
   }
 
   clear(): void {
+    this.queued.clear();
     this.list = [];
     this.order = [];
     this.cur = null;
   }
 
   // ---- internals -----------------------------------------------------------------
+
+  /** The current entry changed: a queued track that starts playing is no longer "queued". */
+  private settle(): void {
+    if (this.cur) this.queued.delete(this.cur);
+  }
 
   private entry(item: T): Entry<T> {
     return { key: this.nextKey++, item };
@@ -210,12 +245,14 @@ export class Queue<T extends Identified> {
       this.order = this.list.slice();
       return;
     }
-    const rest = this.list.filter((e) => e !== this.cur);
+    // Queued tracks keep playing next, in the order they were added.
+    const queued = this.list.filter((e) => e !== this.cur && this.queued.has(e));
+    const rest = this.list.filter((e) => e !== this.cur && !this.queued.has(e));
     for (let i = rest.length - 1; i > 0; i--) {
       const j = Math.floor(this.rand() * (i + 1));
       [rest[i], rest[j]] = [rest[j], rest[i]];
     }
-    this.order = this.cur ? [this.cur, ...rest] : rest;
+    this.order = this.cur ? [this.cur, ...queued, ...rest] : [...queued, ...rest];
   }
 }
 
