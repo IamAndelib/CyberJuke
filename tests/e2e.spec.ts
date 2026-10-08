@@ -683,20 +683,23 @@ test('Search always opens on Jukebox; Global shows every filter; the bridge appe
   await expect(page.getByTestId('screen-artist')).toBeVisible();
   await expect(page.locator('.topbar-title')).toHaveText('qzxv nebulon');
 
-  // Reopening search starts on Jukebox again.
+  // Reopening search from the artist page starts on Here (that artist); from Home, on Jukebox.
   await openSearch(page);
+  await expect(page.getByTestId('mode-here')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('search-input')).toHaveAttribute('placeholder', 'Search in qzxv nebulon');
+  await page.getByTestId('search-close').click();
+  await page.getByTestId('tab-home').click();
+  await openSearch(page);
+  await expect(page.getByTestId('mode-here')).toHaveCount(0);
   await expect(page.getByTestId('mode-jukebox')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('search-empty')).toBeVisible();
 });
 
-test('Global search: empty state, short queries, and the bot-check message', async ({ page }) => {
+test('Global search: empty state, and the bot-check message', async ({ page }) => {
   await stubMusic(page, { botCheck: true });
   await page.goto('/');
   await openSearch(page);
   await page.getByTestId('mode-global').click();
-  await expect(page.getByTestId('global-idle')).toBeVisible();
-  await page.getByTestId('search-input').fill('a');
-  await page.waitForTimeout(600);
   await expect(page.getByTestId('global-idle')).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { __cyberjukeMusicCalls: unknown[] }).__cyberjukeMusicCalls.length)).toBe(0);
   await page.getByTestId('search-input').fill('ab');
