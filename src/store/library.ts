@@ -2,10 +2,11 @@
  * User library: liked tracks, recently played, favorite genres and settings.
  * Persisted with @capacitor/preferences (localStorage on the web).
  */
-import { signal } from '@preact/signals';
+import { computed, signal } from '@preact/signals';
 import { Preferences } from '@capacitor/preferences';
 import type { Track } from '../data/model';
 import { artistKey } from '../data/artists';
+import { addPlay, migrateHistory, uniqueTracks, type HistoryEntry } from './history';
 
 export const THEMES = ['dark', 'light', 'c64', 'vt320', 'matrix', 'crypt', 'bubblegum', 'brutalist'] as const;
 export type ThemeId = (typeof THEMES)[number];
@@ -22,17 +23,30 @@ export const THEME_LABELS: Record<ThemeId, string> = {
 
 export type Quality = 'high' | 'low';
 
+/** Minutes between checks for new tracks; 0 = only when I refresh. */
+export type CheckEvery = 5 | 15 | 30 | 60 | 0;
+export const CHECK_EVERY_OPTIONS: readonly CheckEvery[] = [5, 15, 30, 60, 0];
+export const CHECK_EVERY_LABELS: Record<CheckEvery, string> = {
+  5: '5 min',
+  15: '15 min',
+  30: '30 min',
+  60: '1 hour',
+  0: 'Only when I refresh',
+};
+
 export interface Settings {
   theme: ThemeId;
   showNsfw: boolean;
   quality: Quality;
+  checkEvery: CheckEvery;
 }
 
-export const DEFAULT_SETTINGS: Settings = { theme: 'dark', showNsfw: false, quality: 'high' };
-export const RECENT_MAX = 100;
+export const DEFAULT_SETTINGS: Settings = { theme: 'dark', showNsfw: false, quality: 'high', checkEvery: 15 };
 
 const K_LIKED = 'liked';
+/** Old untimed history (Track[]); read once and migrated to K_HISTORY. */
 const K_RECENT = 'recent';
+const K_HISTORY = 'history';
 const K_SETTINGS = 'settings';
 const K_FAV_GENRES = 'favGenres';
 const K_FAV_ARTISTS = 'favArtists';
@@ -41,7 +55,10 @@ const K_FAV_ARTISTS = 'favArtists';
 const THEME_MIGRATIONS: Record<string, ThemeId> = { grid: 'brutalist' };
 
 export const liked = signal<Track[]>([]);
-export const recent = signal<Track[]>([]);
+/** Listening history, newest first (see ./history for the retention rules). */
+export const history = signal<HistoryEntry[]>([]);
+/** History as a plain track list, each track once. */
+export const recent = computed<Track[]>(() => uniqueTracks(history.value));
 export const settings = signal<Settings>({ ...DEFAULT_SETTINGS });
 /** Favorite genres, in the order they were added. */
 export const favoriteGenres = signal<string[]>([]);
@@ -66,15 +83,26 @@ function isTrack(t: unknown): t is Track {
 }
 
 export async function loadLibrary(): Promise<void> {
-  const [l, r, s, g, a] = await Promise.all([
+  const [l, h, s, g, a] = await Promise.all([
     read<unknown[]>(K_LIKED, []),
-    read<unknown[]>(K_RECENT, []),
+    read<unknown[] | null>(K_HISTORY, null),
     read<Partial<Settings>>(K_SETTINGS, {}),
     read<unknown[]>(K_FAV_GENRES, []),
     read<unknown[]>(K_FAV_ARTISTS, []),
   ]);
   liked.value = Array.isArray(l) ? l.filter(isTrack) : [];
-  recent.value = Array.isArray(r) ? r.filter(isTrack).slice(0, RECENT_MAX) : [];
+  if (h == null) {
+    // First run with timed history: migrate the old list, keeping every entry.
+    history.value = migrateHistory(await read<unknown[]>(K_RECENT, []), Date.now());
+    if (history.value.length) write(K_HISTORY, history.value);
+    try {
+      Preferences.remove({ key: K_RECENT }).catch(() => {});
+    } catch {
+      /* ignore */
+    }
+  } else {
+    history.value = migrateHistory(h, Date.now());
+  }
   favoriteGenres.value = Array.isArray(g)
     ? [...new Set(g.filter((x): x is string => typeof x === 'string' && x.trim() !== ''))]
     : [];
@@ -94,6 +122,7 @@ export async function loadLibrary(): Promise<void> {
   if (!THEMES.includes(merged.theme)) merged.theme = DEFAULT_SETTINGS.theme;
   if (merged.quality !== 'low') merged.quality = 'high';
   merged.showNsfw = merged.showNsfw === true;
+  if (!CHECK_EVERY_OPTIONS.includes(merged.checkEvery)) merged.checkEvery = DEFAULT_SETTINGS.checkEvery;
   settings.value = merged;
   if (migrated) write(K_SETTINGS, merged);
 }
@@ -137,15 +166,16 @@ export function toggleLike(track: Track): boolean {
   return !was;
 }
 
-export function addRecent(track: Track): void {
-  if (recent.value[0]?.id === track.id) return;
-  recent.value = [track, ...recent.value.filter((t) => t.id !== track.id)].slice(0, RECENT_MAX);
-  write(K_RECENT, recent.value);
+export function addRecent(track: Track, now = Date.now()): void {
+  const next = addPlay(history.value, track, now);
+  if (next === history.value) return;
+  history.value = next;
+  write(K_HISTORY, next);
 }
 
 export function clearRecent(): void {
-  recent.value = [];
-  write(K_RECENT, []);
+  history.value = [];
+  write(K_HISTORY, []);
 }
 
 export function updateSettings(patch: Partial<Settings>): void {

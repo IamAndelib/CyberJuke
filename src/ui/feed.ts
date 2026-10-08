@@ -78,6 +78,11 @@ export class Feed<T, C, M = undefined> {
     });
   }
 
+  /** Whether a mounted component is subscribed (the list is on screen). */
+  get watched(): boolean {
+    return this.listeners.size > 0;
+  }
+
   subscribe(fn: () => void): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
@@ -198,6 +203,15 @@ export class FeedCache {
 
   has(key: string): boolean {
     return this.map.has(key);
+  }
+
+  /** Keys and feeds whose key starts with `prefix` (no LRU touch). */
+  entries(prefix = ''): [string, Feed<unknown, unknown, unknown>][] {
+    return [...this.map].filter(([k]) => k.startsWith(prefix));
+  }
+
+  delete(key: string): void {
+    this.map.delete(key);
   }
 
   get size(): number {
