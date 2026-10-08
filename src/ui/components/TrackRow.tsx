@@ -40,12 +40,37 @@ function buzz(): void {
 }
 
 /**
+ * The click a browser makes when the finger lifts after a long press goes to whatever
+ * is under it by then (the menu that just opened): swallow it, wherever it lands.
+ */
+function swallowNextClick(): void {
+  let timer = setTimeout(() => off(), 1500);
+  const stop = (e: Event) => {
+    e.preventDefault();
+    e.stopPropagation();
+    off();
+  };
+  const up = () => {
+    document.removeEventListener('pointerup', up, true);
+    clearTimeout(timer);
+    // The click, if any, follows the finger lifting at once.
+    timer = setTimeout(() => off(), 400);
+  };
+  const off = () => {
+    clearTimeout(timer);
+    document.removeEventListener('click', stop, true);
+    document.removeEventListener('pointerup', up, true);
+  };
+  document.addEventListener('click', stop, true);
+  document.addEventListener('pointerup', up, true);
+}
+
+/**
  * P10: long-press opens the row's ⋯ menu (with a short haptic tick), and the click that
  * ends the press is swallowed. Moving the finger (a scroll) cancels it. No re-renders.
  */
 function useLongPress(track: Track) {
   const press = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null);
-  const fired = useRef(false);
   const cancel = () => {
     if (press.current) clearTimeout(press.current.timer);
     press.current = null;
@@ -54,13 +79,12 @@ function useLongPress(track: Track) {
     onPointerDown: (e: PointerEvent) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       cancel();
-      fired.current = false;
       press.current = {
         x: e.clientX,
         y: e.clientY,
         timer: setTimeout(() => {
           press.current = null;
-          fired.current = true;
+          swallowNextClick();
           buzz();
           menuTrack.value = track;
         }, LONG_PRESS_MS),
@@ -74,12 +98,6 @@ function useLongPress(track: Track) {
     onPointerCancel: cancel,
     onPointerLeave: cancel,
     onContextMenu: (e: Event) => e.preventDefault(),
-    /** True (once) when this click ends a long-press. */
-    swallow: () => {
-      const f = fired.current;
-      fired.current = false;
-      return f;
-    },
   };
 }
 
@@ -120,15 +138,13 @@ export function TrackRow({
   // and only the current row follows play/pause.
   const current = useComputed(() => currentId.value === track.id);
   const isCurrent = current.value;
-  const { swallow, ...press } = useLongPress(track);
+  const press = useLongPress(track);
   return (
     <li class={'row' + (isCurrent ? ' is-current' : '')} data-testid="track-row" data-track-id={track.id}>
       <button
         class="row-main"
         {...press}
-        onClick={() => {
-          if (!swallow()) tapRow(track, onPlay);
-        }}
+        onClick={() => tapRow(track, onPlay)}
         aria-label={`Play ${track.title} by ${track.artist}`}
         data-testid="track-play"
         data-index={index}
