@@ -3,17 +3,27 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 apply plugin: 'com.android.application'
 apply plugin: 'org.jetbrains.kotlin.android'
 
-// Versioning: override on the command line with -PversionName=1.2.3 -PversionCode=42
-def appVersionName = project.findProperty('versionName')?.toString() ?: '0.1.0'
-def appVersionCode = (project.findProperty('versionCode')?.toString() ?: '1').toInteger()
+// Versioning: literal values, so F-Droid's `AutoUpdateMode: Version` can read and bump them.
+// The Release workflow updates both lines in a commit before it builds and tags.
+// versionCode = major * 1000000 + minor * 1000 + patch  (0.1.0 -> 1000, 1.2.3 -> 1002003)
 
-// Release signing: only configured when every env var is present (CI release workflow).
+// Release signing for local builds: only configured when every env var is present. CI does
+// not use it: the Release workflow builds unsigned and signs with apksigner in a separate job.
 def keystorePath = System.getenv('CYBERJUKE_KEYSTORE')
 def keystorePassword = System.getenv('KEYSTORE_PASSWORD')
 def releaseKeyAlias = System.getenv('KEY_ALIAS')
 def releaseKeyPassword = System.getenv('KEY_PASSWORD')
 def hasReleaseSigning = [keystorePath, keystorePassword, releaseKeyAlias, releaseKeyPassword]
         .every { it != null && !it.isEmpty() } && file(keystorePath).exists()
+
+// Preview signing (the separate "CyberJuke Preview" app): its own key, kept only in the
+// repository secrets. Without all four variables the preview APK is built unsigned (CI checks).
+def previewKeystorePath = System.getenv('PREVIEW_KEYSTORE_FILE')
+def previewKeystorePassword = System.getenv('PREVIEW_KEYSTORE_PASSWORD')
+def previewKeyAlias = System.getenv('PREVIEW_KEY_ALIAS')
+def previewKeyPassword = System.getenv('PREVIEW_KEY_PASSWORD')
+def hasPreviewSigning = [previewKeystorePath, previewKeystorePassword, previewKeyAlias, previewKeyPassword]
+        .every { it != null && !it.isEmpty() } && file(previewKeystorePath).exists()
 
 android {
     namespace = "io.github.iamandelib.cyberjuke"
@@ -22,8 +32,12 @@ android {
         applicationId "io.github.iamandelib.cyberjuke"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode appVersionCode
-        versionName appVersionName
+        versionCode 1000
+        versionName "0.1.0"
+        // App and launcher names live here (not in res/values/strings.xml) so the preview
+        // build type can rename itself.
+        resValue "string", "app_name", "CyberJuke"
+        resValue "string", "title_activity_main", "CyberJuke"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -33,14 +47,7 @@ android {
     }
 
     signingConfigs {
-        // Fixed, committed debug key (standard public debug credentials, not a secret), so
-        // every CI/preview debug build has the same signature and installs over the last one.
-        debug {
-            storeFile file('debug.keystore')
-            storePassword 'android'
-            keyAlias 'androiddebugkey'
-            keyPassword 'android'
-        }
+        // No custom debug config: debug builds use each machine's own ~/.android/debug.keystore.
         if (hasReleaseSigning) {
             release {
                 storeFile file(keystorePath)
@@ -49,20 +56,43 @@ android {
                 keyPassword releaseKeyPassword
             }
         }
+        if (hasPreviewSigning) {
+            preview {
+                storeFile file(previewKeystorePath)
+                storePassword previewKeystorePassword
+                keyAlias previewKeyAlias
+                keyPassword previewKeyPassword
+            }
+        }
     }
 
     buildTypes {
-        debug {
-            signingConfig signingConfigs.debug
-        }
         release {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            if (hasReleaseSigning) {
-                signingConfig signingConfigs.release
-            }
+            signingConfig hasReleaseSigning ? signingConfigs.release : null
         }
+        // A separate app ("CyberJuke Preview", io.github.iamandelib.cyberjuke.preview) that
+        // installs alongside the release and never shares its data. Built like a release
+        // (R8, same ProGuard rules, not debuggable), signed with the preview key.
+        preview {
+            initWith release
+            applicationIdSuffix ".preview"
+            versionNameSuffix "-preview"
+            debuggable false
+            resValue "string", "app_name", "CyberJuke Preview"
+            resValue "string", "title_activity_main", "CyberJuke Preview"
+            signingConfig hasPreviewSigning ? signingConfigs.preview : null
+            // Library modules (Capacitor and its plugins) only have debug and release.
+            matchingFallbacks = ['release']
+        }
+    }
+
+    // Reproducible builds (F-Droid): no encrypted dependency-metadata block in the APK/AAB.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
     }
 
     compileOptions {
@@ -130,12 +160,3 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
-
-try {
-    def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
-        apply plugin: 'com.google.gms.google-services'
-    }
-} catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
-}

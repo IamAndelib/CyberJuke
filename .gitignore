@@ -15,6 +15,4 @@ android/app/src/main/assets/capacitor.config.json
 android/app/src/main/assets/capacitor.plugins.json
 android/capacitor-cordova-android-plugins/
 *.keystore
-# Public debug key used for preview builds (see android/app/build.gradle)
-!android/app/debug.keystore
 *.jks
