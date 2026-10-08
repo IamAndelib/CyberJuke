@@ -19,6 +19,16 @@
 # song's lyrics (`--es ci_lyrics "artist|title|durationSec"`). Annotations only, never fails.
 # Phase 5 (soft, debug builds) loads one YouTube Music artist page (`--es ci_artist_page
 # "<channel id>"`) and reports its counts per shelf (songs, albums, live, EPs, singles).
+#
+# Also checked (debug builds log these at info/verbose level; R8 strips them from release):
+# - Web -> native bridge (hard): the web UI's boot call to JukePlayer.getLaunchOptions must
+#   reach native code (`BRIDGE getLaunchOptions`). This is what breaks if the CSP in
+#   index.html ever blocks Capacitor's bridge injection (old WebViews inject it inline).
+# - No state ticks in the background (soft): the plugin's 1 s state ticker logs `tick` under
+#   CyberJukeTick; while the app is in the background (HOME) the count must not grow.
+# - MediaSession controllers (soft): lists who connected and with which access (FULL or
+#   TRANSPORT, see SessionPolicy). A second app's controller is not exercised: that needs a
+#   separate test APK, which this repo does not build.
 set -uo pipefail
 
 PKG="io.github.iamandelib.cyberjuke"
@@ -184,6 +194,15 @@ if grep -q "FATAL EXCEPTION" "$P1"; then
   grep -A 20 "FATAL EXCEPTION" "$P1" | head -n 40
   finish 1 "App crashed during the live phase"
 fi
+# The web UI calls getLaunchOptions at boot: if that never reaches native code, the Capacitor
+# bridge is broken (e.g. the CSP blocked its injected script). Debug builds only (Log.i).
+if grep -q "BRIDGE getLaunchOptions" "$P1"; then
+  log "Bridge: web -> native call received (getLaunchOptions)"
+  summary "### :white_check_mark: Web -> native bridge works (getLaunchOptions reached native code)"
+else
+  diagnostics
+  finish 1 "The web UI never called JukePlayer.getLaunchOptions: the Capacitor bridge is not working (CSP blocking the bridge script? JS crash at boot?)"
+fi
 if [[ $live != "pass" ]]; then
   if ! grep -q "resolve(" "$P1"; then
     finish 1 "Live phase: the web UI never asked the native player to resolve a track (autoplay wiring broken?)"
@@ -221,9 +240,19 @@ fi
 shot 02-ci-tone
 session_dump | grep -E "metadata|description" | head -n 3 | sed 's/^/    /'
 
+tick_count() { # state ticks logged so far (capture, then count)
+  local t
+  t="$(adb logcat -d -v brief -s CyberJukeTick:V 2>/dev/null)"
+  grep -c "tick" <<<"$t" || true
+}
+sleep 5
+ticks_fg="$(tick_count)"
 log "Pressing HOME and waiting ${BACKGROUND_WAIT}s"
 adb shell input keyevent KEYCODE_HOME
+sleep 3 # let onPause land; a tick already queued may still fire
+ticks_bg_start="$(tick_count)"
 sleep "$BACKGROUND_WAIT"
+ticks_bg_end="$(tick_count)"
 shot 03-home
 background_ok=0
 if is_playing; then background_ok=1; fi
@@ -238,6 +267,39 @@ if [[ $background_ok -ne 1 ]]; then
   diagnostics
   finish 1 "Playback stopped after ${BACKGROUND_WAIT}s in the background"
 fi
+
+# ---- Soft: no state ticks while backgrounded (P1) ------------------------------------------
+ticks_bg=$((ticks_bg_end - ticks_bg_start))
+ticker="not verified"
+if ((ticks_fg == 0)); then
+  echo "::warning title=Background ticks not verified::No foreground state ticks were logged (is this a debug build?)"
+  summary "### :warning: Background ticks: not verified (no foreground ticks logged)"
+elif ((ticks_bg == 0)); then
+  ticker="pass"
+  echo "::notice title=No background ticks::${ticks_fg} ticks in the foreground, 0 during ${BACKGROUND_WAIT}s in the background"
+  summary "### :white_check_mark: No state ticks while in the background (${ticks_fg} in the foreground)"
+else
+  ticker="failed"
+  echo "::warning title=State ticks in the background::${ticks_bg} ticks during ${BACKGROUND_WAIT}s in the background (expected 0)"
+  summary "### :warning: ${ticks_bg} state ticks while in the background (expected 0)"
+fi
+log "Background ticks: ${ticker} (foreground ${ticks_fg}, background ${ticks_bg})"
+
+# ---- Soft: who connected to the MediaSession, with which access (S1) -----------------------
+controllers="$(adb logcat -d -v brief -s CyberJukeService:V 2>/dev/null | grep -oE "Controller [^ ]+ uid=[0-9-]+ access=[A-Z]+" | sort -u)"
+if [[ -n "$controllers" ]]; then
+  log "MediaSession controllers:"
+  sed 's/^/    /' <<<"$controllers"
+  summary "### MediaSession controllers"
+  while IFS= read -r line; do summary "- \`$line\`"; done <<<"$controllers"
+  full_others="$(grep -E "access=FULL" <<<"$controllers" | grep -vE "Controller ($PKG|com\.android\.systemui|android|com\.android\.shell) " || true)"
+  if [[ -n "$full_others" ]]; then
+    echo "::notice title=MediaSession access::Another package got FULL access (check it is a system controller): ${full_others//$'\n'/; }"
+  fi
+else
+  summary "### :warning: MediaSession controllers: no connection logged (is this a debug build?)"
+fi
+
 # ---- Phase 3 (soft): YouTube Music search (MusicPlugin CI hook, debug builds only) ----------
 # Annotations only: a bot check, an error or a timeout is a warning, never a failure.
 MUSIC_QUERY="${SMOKE_MUSIC_QUERY:-daft punk}"
@@ -370,4 +432,4 @@ else
 fi
 log "Phase 5 artist page: ${artist_page_res}${page_line:+ ($page_line)}"
 
-finish 0 "Pipeline: PLAYING and still PLAYING after ${BACKGROUND_WAIT}s in the background. Live YouTube: ${live}. YouTube Music search: ${music}. Artist: ${artist_res}. Lyrics: ${lyrics_res}. Artist page: ${artist_page_res}"
+finish 0 "Pipeline: PLAYING and still PLAYING after ${BACKGROUND_WAIT}s in the background. Bridge: ok. Background ticks: ${ticker}. Live YouTube: ${live}. YouTube Music search: ${music}. Artist: ${artist_res}. Lyrics: ${lyrics_res}. Artist page: ${artist_page_res}"
