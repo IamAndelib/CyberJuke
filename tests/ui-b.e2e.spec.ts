@@ -77,7 +77,9 @@ test('Now Playing: a swipe down closes it, a short drag springs back, the seek b
   await page.getByTestId('mini-open').click();
   await expect(np).toHaveClass(/open/);
   await page.waitForTimeout(350);
-  await touchDrag(page, 200, 150, 250, 60, 4);
+  // No waits between moves: CDP round trips alone stretch a "60ms" flick past the
+  // velocity window on a busy machine (this was flaky). Still short: 100px < 25%.
+  await touchDrag(page, 200, 150, 250, 0, 4);
   await expect(np).not.toHaveClass(/open/);
 
   // Scrolled down: dragging down scrolls the content instead of closing.
