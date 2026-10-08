@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -17,6 +16,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionResult
 import androidx.media3.session.SessionToken
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
@@ -30,7 +30,7 @@ import org.json.JSONObject
 
 /**
  * Capacitor bridge to PlaybackService. Contract (TS side):
- *   setQueue, addItems, removeItem, moveItem, play, pause, seekTo, skipToNext,
+ *   setQueue, addItems, queueNext, removeItem, moveItem, play, pause, seekTo, skipToNext,
  *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, getState,
  *   getLaunchOptions; events 'state' and 'trackError'.
  *
@@ -223,6 +223,43 @@ class JukePlayerPlugin : Plugin() {
                 }
             }
             call.resolve()
+        }
+    }
+
+    /**
+     * "Add to queue": plays [tracks] right after the current item and after tracks queued
+     * earlier (FIFO), then the original queue continues, also with shuffle on. Handled in
+     * PlaybackService as a custom session command (see [JukeCommands.QUEUE_NEXT]).
+     */
+    @PluginMethod
+    fun queueNext(call: PluginCall) {
+        val tracks = call.getArray("tracks")
+        val count = try {
+            parseTracks(tracks).size // validate here so bad input rejects with a clear message
+        } catch (e: Exception) {
+            call.reject("Invalid tracks: ${e.message}")
+            return
+        }
+        if (count == 0) {
+            call.resolve()
+            return
+        }
+        val args = Bundle().apply { putString(JukeCommands.ARG_TRACKS, tracks.toString()) }
+        withController(call) { c ->
+            val future = c.sendCustomCommand(JukeCommands.QUEUE_NEXT, args)
+            future.addListener({
+                val result = try {
+                    future.get()
+                } catch (e: Exception) {
+                    call.reject("queueNext failed: ${e.message}")
+                    return@addListener
+                }
+                if (result.resultCode == SessionResult.RESULT_SUCCESS) {
+                    call.resolve()
+                } else {
+                    call.reject("queueNext failed: result ${result.resultCode}")
+                }
+            }, ContextCompat.getMainExecutor(context))
         }
     }
 
@@ -419,38 +456,7 @@ class JukePlayerPlugin : Plugin() {
 
     // ---- helpers --------------------------------------------------------------------------
 
-    private fun parseTracks(arr: JSONArray?): List<MediaItem> {
-        if (arr == null) return emptyList()
-        val items = ArrayList<MediaItem>(arr.length())
-        for (i in 0 until arr.length()) {
-            items.add(trackToMediaItem(arr.getJSONObject(i)))
-        }
-        return items
-    }
-
-    private fun trackToMediaItem(o: JSONObject): MediaItem {
-        val id = o.str("id") ?: throw IllegalArgumentException("track.id missing")
-        val ytId = o.str("ytId") ?: throw IllegalArgumentException("track.ytId missing ($id)")
-        val extras = Bundle().apply {
-            putString(JukeUris.EXTRA_YT_ID, ytId)
-            o.str("by")?.let { putString(JukeUris.EXTRA_BY, it) }
-            o.str("postUrl")?.let { putString(JukeUris.EXTRA_POST_URL, it) }
-        }
-        val metadata = MediaMetadata.Builder()
-            .setTitle(o.str("title"))
-            .setArtist(o.str("artist"))
-            .setArtworkUri(o.str("artworkUrl")?.let { Uri.parse(it) })
-            .setExtras(extras)
-            .build()
-        return MediaItem.Builder()
-            .setMediaId(id)
-            .setUri(JukeUris.forYt(ytId))
-            .setMediaMetadata(metadata)
-            .build()
-    }
-
-    private fun JSONObject.str(key: String): String? =
-        if (isNull(key)) null else optString(key).takeIf { it.isNotEmpty() }
+    private fun parseTracks(arr: JSONArray?): List<MediaItem> = JukeTracks.parse(arr)
 
     /** JS numbers arrive as Integer, Long or Double; PluginCall.getInt/getLong are type-strict. */
     private fun numArg(call: PluginCall, key: String): Number? {

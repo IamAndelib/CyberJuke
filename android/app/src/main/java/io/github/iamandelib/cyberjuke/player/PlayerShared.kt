@@ -2,7 +2,12 @@ package io.github.iamandelib.cyberjuke.player
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.session.SessionCommand
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.concurrent.CopyOnWriteArraySet
 
 /** Custom URI scheme for queue items. The real stream URL is resolved lazily at load time. */
@@ -26,6 +31,57 @@ internal object JukeUris {
         return ytIdOf(item.localConfiguration?.uri)
             ?: item.mediaMetadata.extras?.getString(EXTRA_YT_ID)
     }
+}
+
+/** NativeTrack JSON (the TS contract) to MediaItems; used by the plugin and the service. */
+internal object JukeTracks {
+    fun parse(arr: JSONArray?): List<MediaItem> {
+        if (arr == null) return emptyList()
+        val items = ArrayList<MediaItem>(arr.length())
+        for (i in 0 until arr.length()) {
+            items.add(toMediaItem(arr.getJSONObject(i)))
+        }
+        return items
+    }
+
+    fun toMediaItem(o: JSONObject): MediaItem {
+        val id = o.str("id") ?: throw IllegalArgumentException("track.id missing")
+        val ytId = o.str("ytId") ?: throw IllegalArgumentException("track.ytId missing ($id)")
+        val extras = Bundle().apply {
+            putString(JukeUris.EXTRA_YT_ID, ytId)
+            o.str("by")?.let { putString(JukeUris.EXTRA_BY, it) }
+            o.str("postUrl")?.let { putString(JukeUris.EXTRA_POST_URL, it) }
+        }
+        val metadata = MediaMetadata.Builder()
+            .setTitle(o.str("title"))
+            .setArtist(o.str("artist"))
+            .setArtworkUri(o.str("artworkUrl")?.let { Uri.parse(it) })
+            .setExtras(extras)
+            .build()
+        return MediaItem.Builder()
+            .setMediaId(id)
+            .setUri(JukeUris.forYt(ytId))
+            .setMediaMetadata(metadata)
+            .build()
+    }
+
+    private fun JSONObject.str(key: String): String? =
+        if (isNull(key)) null else optString(key).takeIf { it.isNotEmpty() }
+}
+
+/** Custom session commands between JukePlayerPlugin and PlaybackService. */
+internal object JukeCommands {
+    /**
+     * queueNext: args [ARG_TRACKS] = the NativeTrack[] JSON. A custom command because the
+     * shuffle order can only be set on the service's ExoPlayer, not through a MediaController.
+     */
+    const val ACTION_QUEUE_NEXT = "io.github.iamandelib.cyberjuke.QUEUE_NEXT"
+    const val ARG_TRACKS = "tracks"
+
+    val QUEUE_NEXT = SessionCommand(ACTION_QUEUE_NEXT, Bundle.EMPTY)
+
+    /** MediaMetadata extra (Long) marking a user-queued item; unique per queueNext insert. */
+    const val EXTRA_QUEUE_SERIAL = "cyberjukeQueueSerial"
 }
 
 /**

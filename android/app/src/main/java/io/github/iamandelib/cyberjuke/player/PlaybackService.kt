@@ -3,6 +3,7 @@ package io.github.iamandelib.cyberjuke.player
 import android.app.PendingIntent
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
@@ -20,14 +21,20 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
+import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import io.github.iamandelib.cyberjuke.MainActivity
+import org.json.JSONArray
+import java.util.Random
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -45,6 +52,17 @@ class PlaybackService : MediaSessionService() {
 
     /** mediaIds already retried once after an HTTP 403/410 (expired stream URL). */
     private val expiredRetried = HashSet<String>()
+
+    /**
+     * User-queued items ("Add to queue") that have not started playing yet, as serials
+     * ([JukeCommands.EXTRA_QUEUE_SERIAL] in the item's metadata extras) in FIFO order. A serial
+     * rather than the mediaId, so the same track queued twice stays two entries. An entry is
+     * dropped once its item becomes current (it has played) or leaves the playlist (removed,
+     * or the whole queue replaced by setQueue).
+     */
+    private val userQueued = LinkedHashSet<Long>()
+    private var nextQueueSerial = 1L
+    private val shuffleSeeds = Random()
 
     override fun onCreate() {
         super.onCreate()
@@ -122,6 +140,8 @@ class PlaybackService : MediaSessionService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val p = player ?: return
+            pruneUserQueued(p)
+            enforceShuffleOrder(p)
             Log.i(TAG, "Transition to ${mediaItem?.mediaId} (${JukeUris.ytIdOf(mediaItem)}), reason=$reason")
             val next = p.nextMediaItemIndex
             if (next != C.INDEX_UNSET) {
@@ -133,6 +153,113 @@ class PlaybackService : MediaSessionService() {
             val p = player ?: return
             handlePlayerError(p, error)
         }
+
+        override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+            if (reason != Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) return
+            val p = player ?: return
+            pruneUserQueued(p)
+            // Additions by the web side re-randomise the shuffle order around our items; put
+            // the user-queued ones back next. Idempotent, so our own setShuffleOrder (which
+            // also lands here) ends the loop.
+            enforceShuffleOrder(p)
+        }
+
+        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+            val p = player ?: return
+            pruneUserQueued(p)
+            // Toggling keeps user-queued tracks next in both directions.
+            if (shuffleModeEnabled) enforceShuffleOrder(p) else enforceLinearOrder(p)
+        }
+    }
+
+    // ---- "Add to queue" (play next, FIFO) ----------------------------------------------------
+
+    private fun serialOf(item: MediaItem): Long =
+        item.mediaMetadata.extras?.getLong(JukeCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L
+
+    /** Playlist indices of pending user-queued items, FIFO, excluding the current item. */
+    private fun userQueuedIndices(p: Player): List<Int> {
+        if (userQueued.isEmpty()) return emptyList()
+        val bySerial = HashMap<Long, Int>()
+        for (i in 0 until p.mediaItemCount) {
+            val s = serialOf(p.getMediaItemAt(i))
+            if (s != 0L) bySerial[s] = i
+        }
+        val current = p.currentMediaItemIndex
+        return userQueued.mapNotNull { bySerial[it] }.filter { it != current }
+    }
+
+    /** Drops entries that have played (now current) or are no longer in the playlist. */
+    private fun pruneUserQueued(p: Player) {
+        if (userQueued.isEmpty()) return
+        val present = HashSet<Long>()
+        for (i in 0 until p.mediaItemCount) present.add(serialOf(p.getMediaItemAt(i)))
+        if (p.mediaItemCount > 0) present.remove(serialOf(p.getMediaItemAt(p.currentMediaItemIndex)))
+        userQueued.retainAll(present)
+    }
+
+    /**
+     * Inserts [items] after the current item and after earlier user-queued items, so they play
+     * in the order they were added, then the original queue continues.
+     */
+    private fun queueNext(p: ExoPlayer, items: List<MediaItem>) {
+        if (items.isEmpty()) return
+        pruneUserQueued(p)
+        val tagged = items.map { item ->
+            val serial = nextQueueSerial++
+            val extras = Bundle(item.mediaMetadata.extras ?: Bundle.EMPTY)
+            extras.putLong(JukeCommands.EXTRA_QUEUE_SERIAL, serial)
+            serial to item.buildUpon()
+                .setMediaMetadata(item.mediaMetadata.buildUpon().setExtras(extras).build())
+                .build()
+        }
+        if (p.mediaItemCount == 0) {
+            p.addMediaItems(tagged.map { it.second })
+            userQueued.addAll(tagged.map { it.first })
+            pruneUserQueued(p)
+            return
+        }
+        // Linear order: earlier queued items sit right after the current one (FIFO), so the
+        // new ones go after that block. With shuffle on the playlist position only matters
+        // once shuffle is turned off again; the shuffle order is fixed up below.
+        if (!p.shuffleModeEnabled) enforceLinearOrder(p)
+        val current = p.currentMediaItemIndex
+        var at = current + 1
+        while (at < p.mediaItemCount && serialOf(p.getMediaItemAt(at)) in userQueued) at++
+        p.addMediaItems(at, tagged.map { it.second })
+        userQueued.addAll(tagged.map { it.first })
+        enforceShuffleOrder(p)
+        Log.i(TAG, "queueNext: ${items.size} item(s) at $at, ${userQueued.size} pending")
+    }
+
+    /** Shuffle on: a shuffle order with the pending user-queued items right after current. */
+    private fun enforceShuffleOrder(p: ExoPlayer) {
+        if (!p.shuffleModeEnabled || userQueued.isEmpty()) return
+        val n = p.mediaItemCount
+        val shuffle = p.shuffleOrder
+        if (n == 0 || shuffle.length != n) return
+        val order = IntArray(n)
+        var i = shuffle.firstIndex
+        var k = 0
+        while (i != C.INDEX_UNSET && k < n) {
+            order[k++] = i
+            i = shuffle.getNextIndex(i)
+        }
+        if (k != n) return
+        val desired = QueueOrder.placeNext(order, p.currentMediaItemIndex, userQueuedIndices(p))
+        if (!desired.contentEquals(order)) {
+            p.setShuffleOrder(DefaultShuffleOrder(desired, shuffleSeeds.nextLong()))
+        }
+    }
+
+    /** Shuffle off: moves the pending user-queued items right after the current item. */
+    private fun enforceLinearOrder(p: ExoPlayer) {
+        if (p.shuffleModeEnabled || userQueued.isEmpty()) return
+        val n = p.mediaItemCount
+        if (n == 0) return
+        val linear = IntArray(n) { it }
+        val desired = QueueOrder.placeNext(linear, p.currentMediaItemIndex, userQueuedIndices(p))
+        for ((from, to) in QueueOrder.moves(desired)) p.moveMediaItem(from, to)
     }
 
     private fun handlePlayerError(p: ExoPlayer, error: PlaybackException) {
@@ -227,6 +354,42 @@ class PlaybackService : MediaSessionService() {
     // ---------------------------------------------------------------------------------------
 
     private inner class SessionCallback : MediaSession.Callback {
+        /** Same defaults as Media3, plus our custom commands for this app's own controller. */
+        override fun onConnectAsync(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): ListenableFuture<MediaSession.ConnectionResult> {
+            val builder = MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
+            if (controller.isTrusted && controller.packageName == packageName) {
+                builder.setAvailableSessionCommands(
+                    MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                        .add(JukeCommands.QUEUE_NEXT)
+                        .build(),
+                )
+            }
+            return Futures.immediateFuture(builder.build())
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction != JukeCommands.ACTION_QUEUE_NEXT) {
+                return super.onCustomCommand(session, controller, customCommand, args)
+            }
+            val p = player ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
+            val items = try {
+                JukeTracks.parse(JSONArray(args.getString(JukeCommands.ARG_TRACKS) ?: "[]"))
+            } catch (e: Exception) {
+                Log.w(TAG, "queueNext: bad tracks: ${e.message}")
+                return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
+            }
+            queueNext(p, items)
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+
         /**
          * Controllers may send items without a local configuration (URI); rebuild our
          * custom URI from the metadata extras so they stay playable.
