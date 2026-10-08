@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Feed, FeedCache, JUKEBOX_FEED_PREFIXES, authScope, type FeedPage } from './feed';
+import { Feed, FeedCache, JUKEBOX_FEED_PREFIXES, authScope, fillFeed, isFilling, type FeedPage } from './feed';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
@@ -120,5 +120,79 @@ describe('feed keys per sign-in state', () => {
     for (const k of ['home:p::false', 'home:m:rock:false', 'genre:p:rock:false', 'artistpage:queen', 'album:x']) cache.get(k, loader);
     cache.deletePrefix(...JUKEBOX_FEED_PREFIXES);
     expect(cache.entries().map(([k]) => k)).toEqual(['artistpage:queen', 'album:x']);
+  });
+});
+
+describe('fillFeed (an artist\'s whole song list for Here search)', () => {
+  /** Ten pages of 10 numbers; `failAt` cursors reject once. */
+  function tens(failAt: number[] = []) {
+    const failed = new Set<number>();
+    return vi.fn(async (c: number | null): Promise<FeedPage<number, number>> => {
+      const start = c ?? 0;
+      if (failAt.includes(start) && !failed.has(start)) {
+        failed.add(start);
+        throw new Error('NETWORK: timeout');
+      }
+      return { items: Array.from({ length: 10 }, (_, i) => start + i), cursor: start + 10 < 100 ? start + 10 : null };
+    });
+  }
+  const settle = async () => {
+    for (let i = 0; i < 30; i++) await flush();
+  };
+
+  it('loads page after page up to the cap, then stops', async () => {
+    const loader = tens();
+    const feed = new Feed(loader);
+    fillFeed(feed, 35);
+    expect(isFilling(feed.snapshot, 35)).toBe(true);
+    await settle();
+    expect(feed.snapshot.items).toHaveLength(40);
+    expect(loader).toHaveBeenCalledTimes(4);
+    expect(isFilling(feed.snapshot, 35)).toBe(false);
+    expect(feed.watched).toBe(false); // unsubscribed when done
+  });
+
+  it('loads a short list to the end', async () => {
+    const feed = new Feed(tens());
+    fillFeed(feed, 300);
+    await settle();
+    expect(feed.snapshot.items).toHaveLength(100);
+    expect(feed.snapshot.hasMore).toBe(false);
+    expect(isFilling(feed.snapshot, 300)).toBe(false);
+  });
+
+  it('is idempotent while running', async () => {
+    const loader = tens();
+    const feed = new Feed(loader);
+    fillFeed(feed, 30);
+    fillFeed(feed, 30);
+    await settle();
+    expect(loader).toHaveBeenCalledTimes(3);
+    expect(feed.snapshot.items).toHaveLength(30);
+  });
+
+  it('stops at a failed page and retries it once on the next call', async () => {
+    const loader = tens([20]);
+    const feed = new Feed(loader);
+    fillFeed(feed, 50);
+    await settle();
+    expect(feed.snapshot.items).toHaveLength(20);
+    expect(feed.snapshot.error).not.toBeNull();
+    expect(isFilling(feed.snapshot, 50)).toBe(false);
+    fillFeed(feed, 50);
+    await settle();
+    expect(feed.snapshot.items).toHaveLength(50);
+    expect(feed.snapshot.error).toBeNull();
+  });
+
+  it('continues a feed whose first page is already loaded', async () => {
+    const loader = tens();
+    const feed = new Feed(loader);
+    feed.start();
+    await settle();
+    fillFeed(feed, 20);
+    await settle();
+    expect(feed.snapshot.items).toHaveLength(20);
+    expect(loader).toHaveBeenCalledTimes(2);
   });
 });

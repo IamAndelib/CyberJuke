@@ -181,6 +181,50 @@ export class Feed<T, C, M = undefined> {
   }
 }
 
+// ---- Loading a whole list in the background ------------------------------------------
+
+/** Feeds being filled by `fillFeed`. */
+const filling = new WeakSet<Feed<unknown, unknown, unknown>>();
+
+/**
+ * Whether a feed being filled up to `max` items still has pages to come: loading,
+ * or loaded with more pages, no error and fewer than `max` items.
+ */
+export function isFilling(snap: FeedSnapshot<unknown, unknown>, max: number): boolean {
+  if (snap.status === 'loading' || snap.loadingMore) return true;
+  return snap.status === 'ready' && snap.hasMore && !snap.error && snap.items.length < max;
+}
+
+/**
+ * Load a feed's pages one after another until the list is complete or has `max`
+ * items (e.g. an artist's whole song list for search). Safe to call again: a fill
+ * already running continues, and a stopped one resumes, retrying a failed page once.
+ * Stops at the first error after that.
+ */
+export function fillFeed<T, C, M>(feed: Feed<T, C, M>, max: number): void {
+  const f = feed as Feed<unknown, unknown, unknown>;
+  if (filling.has(f)) return;
+  filling.add(f);
+  let retry = true;
+  const step = () => {
+    const s = feed.snapshot;
+    if (s.status === 'loading' || s.loadingMore) return;
+    if (s.status === 'ready' && s.hasMore && s.items.length < max) {
+      if (!s.error || retry) {
+        retry = false;
+        feed.loadMore();
+        return;
+      }
+    }
+    // Complete, at the cap, or failed: stop (status 'error' is retried by the next call).
+    un();
+    filling.delete(f);
+  };
+  const un = feed.subscribe(step);
+  feed.start();
+  step();
+}
+
 /** Most feeds kept; the least recently used ones beyond this are dropped. */
 export const FEED_CACHE_MAX = 40;
 

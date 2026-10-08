@@ -150,3 +150,23 @@
 section[data-kind] > .shelf {
   padding-bottom: 4px;
 }
+
+/* ---- Round 5: Here search on an artist page ------------------------------------- */
+
+/* Matching releases: a smaller cover row above the tracks. */
+.shelf-sm {
+  gap: 12px;
+  padding-bottom: 6px;
+}
+.shelf-sm .shelf-item,
+.shelf-sm .shelf-item .art-md {
+  width: 88px;
+}
+.shelf-sm .shelf-title {
+  font-size: 12px;
+}
+.here-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

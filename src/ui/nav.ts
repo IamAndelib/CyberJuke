@@ -1,5 +1,5 @@
 /** App navigation state: which tab, sub-pages, and overlays are open. */
-import { computed, signal } from '@preact/signals';
+import { computed, signal, type ReadonlySignal } from '@preact/signals';
 import { useEffect, useRef } from 'preact/hooks';
 import type { Track } from '../data/model';
 
@@ -44,14 +44,29 @@ export const menuTrack = signal<Track | null>(null);
 /** Artist chooser (a track credits several artists), opened from Now Playing. */
 export const artistChoice = signal<string[] | null>(null);
 
+/** A value Search reads while it renders: a signal, or a getter (that may read signals). */
+export type Source<T> = ReadonlySignal<T> | (() => T);
+
+/** The current value of a Source; read during render, so the reader re-renders when it changes. */
+export function read<T>(src: Source<T>): T {
+  return typeof src === 'function' ? src() : src.value;
+}
+
 /**
  * "Here" scope for Search: the place Search was opened from (a genre, an artist, an
- * album, Liked, Recently played). `tracks` is read when Search needs the list.
+ * album, Liked, Recently played). `tracks` is read whenever Search renders, so it may
+ * grow while Search is open (an artist's full song list arriving page by page).
  */
 export interface SearchContext {
   /** Shown as "Search in <label>". */
   label: string;
-  tracks: () => Track[];
+  tracks: Source<Track[]>;
+  /** Called when Search shows Here: start loading the rest (e.g. an artist's song list). */
+  load?: () => void;
+  /** More tracks are still on the way ("Searching all songs…"). */
+  loading?: Source<boolean>;
+  /** Releases whose titles Here also matches, shown as a cover row above the tracks. */
+  albums?: Source<AlbumRef[]>;
 }
 
 /** Contexts of mounted screens, innermost (topmost) last. */
@@ -81,7 +96,8 @@ export function openSearch(ctx: SearchContext | null = pageSearchContext.value):
 /**
  * Register the screen's Here context while it is mounted: the search button then opens
  * Search scoped to it. Pass null when the screen has nothing to scope to (yet).
- * The latest `ctx` is used, so `tracks` may close over current render values.
+ * The latest `ctx` is used, so its getters may close over current render values, and
+ * a signal or a getter reading signals keeps an open Search up to date as it grows.
  */
 export function useSearchContext(ctx: SearchContext | null): void {
   const latest = useRef(ctx);
@@ -89,7 +105,13 @@ export function useSearchContext(ctx: SearchContext | null): void {
   const label = ctx?.label ?? null;
   useEffect(() => {
     if (label == null) return;
-    const mine: SearchContext = { label, tracks: () => latest.current?.tracks() ?? [] };
+    const mine: SearchContext = {
+      label,
+      tracks: () => (latest.current ? read(latest.current.tracks) : []),
+      load: () => latest.current?.load?.(),
+      loading: () => (latest.current?.loading ? read(latest.current.loading) : false),
+      albums: () => (latest.current?.albums ? read(latest.current.albums) : []),
+    };
     contextStack.value = [...contextStack.value, mine];
     return () => {
       contextStack.value = contextStack.value.filter((c) => c !== mine);

@@ -1,5 +1,8 @@
+import { signal } from '@preact/signals';
+import { useEffect, useMemo, useRef } from 'preact/hooks';
 import { artistKey } from '../../data/artists';
 import type { Track } from '../../data/model';
+import { mergeTracks } from '../../data/search';
 import { SHELF_LABEL, SHELF_ORDER, shelfToken, type MusicItem, type ReleaseKind } from '../../data/ytmusic';
 import { player } from '../../player';
 import { catalog } from '../../store/catalog';
@@ -7,11 +10,12 @@ import { displayArtist, jukeboxTracksBy } from '../../store/artists';
 import { favoriteArtists, isFavoriteArtist, toggleFavoriteArtist } from '../../store/library';
 import { toast } from '../../store/toast';
 import { Icon } from '../icons';
-import { openArtist, useSearchContext } from '../nav';
+import { openArtist, useSearchContext, type AlbumRef } from '../nav';
 import { Tracks } from '../components/TrackList';
 import { SkeletonRows } from '../components/TrackRow';
 import { Screen } from '../components/Screen';
 import {
+  ARTIST_SONGS_MAX,
   AlbumShelf,
   GlobalError,
   LoadMore,
@@ -20,8 +24,13 @@ import {
   ReleaseShelf,
   albumsLoader,
   artistPageLoader,
+  artistSongsLoader,
   moreByLoader,
+  releaseRef,
+  type ArtistPageMeta,
+  type TopCursor,
 } from '../components/Music';
+import { feeds, fillFeed, isFilling, type Feed } from '../feed';
 import { useFeed } from '../usePaged';
 
 export async function playAll(tracks: Track[], shuffle: boolean): Promise<void> {
@@ -71,10 +80,10 @@ export function ArtistPage({ name: raw }: { name: string }) {
   void favoriteArtists.value;
   const fav = isFavoriteArtist(name);
   const jukebox = jukeboxTracksBy(name);
-  useSearchContext({ label: name, tracks: () => jukeboxTracksBy(name) });
   const catalogReady = catalog.tracks.value.length > 0;
 
   const page = useFeed(`artistpage:${key}`, artistPageLoader(name), MUSIC_TRACK_OPTS);
+  useArtistHere(name, page.feed);
   const meta = page.snap.meta;
   const failed = page.snap.status === 'error';
 
@@ -167,6 +176,67 @@ export function ArtistPage({ name: raw }: { name: string }) {
       )}
     </Screen>
   );
+}
+
+/**
+ * Here search on an artist page covers everything on it: the artist's Jukebox tracks,
+ * Top songs, and their full song list (read the first time Search shows Here, up to
+ * ARTIST_SONGS_MAX songs, cached with the page), each song once, Jukebox first; plus
+ * the releases on the page by title. Results update as the song list arrives.
+ */
+function useArtistHere(name: string, page: Feed<Track, TopCursor, ArtistPageMeta>): void {
+  const key = artistKey(name);
+  /** Bumped on every change of the page or song list: Search's reads depend on it. */
+  const rev = useMemo(() => signal(0), []);
+  /** Search has shown Here at least once: the song list is wanted. */
+  const wanted = useRef(false);
+  const url = page.snapshot.meta?.songsUrl;
+  const songs = url ? feeds.get(`artistsongs:${key}`, artistSongsLoader(name, url), MUSIC_TRACK_OPTS) : null;
+
+  useEffect(() => {
+    const bump = () => rev.value++;
+    const offPage = page.subscribe(bump);
+    const offSongs = songs?.subscribe(bump);
+    // The list can be found only once the page has loaded: start it if Search asked already.
+    if (songs && wanted.current) fillFeed(songs, ARTIST_SONGS_MAX);
+    bump();
+    return () => {
+      offPage();
+      offSongs?.();
+    };
+  }, [page, songs]);
+
+  const merged = useRef<{ inputs: Track[][]; out: Track[] } | null>(null);
+  useSearchContext({
+    label: name,
+    tracks: () => {
+      void rev.value;
+      const inputs = [jukeboxTracksBy(name), page.snapshot.items, songs?.snapshot.items ?? []];
+      const m = merged.current;
+      if (m && m.inputs.every((l, i) => l === inputs[i])) return m.out;
+      const out = mergeTracks([inputs[0], inputs[1], inputs[2].slice(0, ARTIST_SONGS_MAX)]);
+      merged.current = { inputs, out };
+      return out;
+    },
+    load: () => {
+      wanted.current = true;
+      if (songs) fillFeed(songs, ARTIST_SONGS_MAX);
+      rev.value++;
+    },
+    loading: () => {
+      void rev.value;
+      if (page.snapshot.status === 'loading') return true;
+      return wanted.current && !!songs && isFilling(songs.snapshot, ARTIST_SONGS_MAX);
+    },
+    albums: () => {
+      void rev.value;
+      const meta = page.snapshot.meta;
+      if (!meta?.resolved) return [];
+      const out: AlbumRef[] = [];
+      for (const kind of SHELF_ORDER) for (const r of meta.releases[kind]) out.push(releaseRef(r, name, kind));
+      return out;
+    },
+  });
 }
 
 /** Fallback when the artist page can't be read: "More by" and Albums from channel-filtered search. */

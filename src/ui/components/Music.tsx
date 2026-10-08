@@ -161,6 +161,30 @@ export function ReleaseGrid({ releases, artist, kind }: { releases: Release[]; a
   );
 }
 
+/** Releases matching a Here search: a row of small covers that open the album page. */
+export function CoverRow({ items, testid = 'here-releases' }: { items: AlbumRef[]; testid?: string }) {
+  return (
+    <ul class="shelf shelf-sm" data-testid={testid}>
+      {items.map((r) => (
+        <li key={r.url} class="shelf-item">
+          <button
+            class="shelf-btn release-btn"
+            onClick={() => openAlbumPage(r)}
+            aria-label={`Open ${(r.label ?? (r.kind === 'album' ? 'Album' : 'Playlist')).toLowerCase()} ${r.title}`}
+            data-testid="here-release"
+          >
+            <Cover url={r.thumbnailUrl} size="md" />
+            <span class="shelf-title" data-testid="release-title">
+              {r.title}
+            </span>
+            {r.label && <span class="shelf-year">{r.label}</span>}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** An album, playlist or artist in Global search results. */
 export function MusicRow({ item }: { item: MusicItem }) {
   const isArtist = item.kind === 'artist';
@@ -286,6 +310,8 @@ export interface ArtistPageMeta {
   channelId?: string;
   releases: Record<ReleaseKind, Release[]>;
   more: { albums?: string; singles?: string };
+  /** The artist's full song list (a playlist), read for Here search. */
+  songsUrl?: string;
 }
 
 const NO_RELEASES = (): Record<ReleaseKind, Release[]> => ({ album: [], live: [], ep: [], single: [] });
@@ -307,8 +333,28 @@ export function artistPageLoader(artist: string): FeedLoader<Track, TopCursor, A
     return {
       items: musicTracks(page.topSongs, artist),
       cursor: page.topSongsPlaylistUrl ? { playlist: page.topSongsPlaylistUrl } : null,
-      meta: { resolved: true, channelId: channel, releases: groupReleases(page.releases), more: page.more ?? {} },
+      meta: {
+        resolved: true,
+        channelId: channel,
+        releases: groupReleases(page.releases),
+        more: page.more ?? {},
+        songsUrl: page.topSongsPlaylistUrl,
+      },
     };
+  };
+}
+
+/** Most songs of an artist's full list that Here search loads. */
+export const ARTIST_SONGS_MAX = 300;
+
+/**
+ * The artist's full song list for Here search: the songs playlist from their page,
+ * then its own pages. Kept in the feed cache with the artist page.
+ */
+export function artistSongsLoader(artist: string, url: string): FeedLoader<Track, string> {
+  return async (next) => {
+    const p = next ? await music.more(next) : await music.playlist(url);
+    return { items: musicTracks(p.items, artist), cursor: p.next ?? null };
   };
 }
 

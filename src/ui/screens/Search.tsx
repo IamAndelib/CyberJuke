@@ -1,17 +1,17 @@
 import { computed, signal } from '@preact/signals';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Track } from '../../data/model';
-import { buildIndex, searchGenres, searchTracks } from '../../data/search';
+import { buildIndex, searchGenres, searchTitles, searchTracks } from '../../data/search';
 import { musicTracks, type MusicFilter, type MusicItem } from '../../data/ytmusic';
 import { catalog } from '../../store/catalog';
 import { genres } from '../../store/genres';
 import { Icon } from '../icons';
-import { openGenrePage, searchContext, searchOpen, searchMode, searchOverAlbum, type SearchContext, type SearchMode } from '../nav';
+import { openGenrePage, read, searchContext, searchOpen, searchMode, searchOverAlbum, type SearchContext, type SearchMode } from '../nav';
 import { Rail, RailRow, RailSep, type RailItem } from '../components/Rail';
 import { ChunkedTracks, EmptyState, ErrorState, Tracks } from '../components/TrackList';
 import { SkeletonRows } from '../components/TrackRow';
 import { Screen } from '../components/Screen';
-import { GlobalError, LoadMore, MUSIC_ITEM_OPTS, MusicRow, searchLoader } from '../components/Music';
+import { CoverRow, GlobalError, LoadMore, MUSIC_ITEM_OPTS, MusicRow, searchLoader } from '../components/Music';
 import { useFeed } from '../usePaged';
 
 export const DEBOUNCE_MS = 120;
@@ -53,22 +53,49 @@ function Bridge({ q, to = 'global' }: { q: string; to?: 'jukebox' | 'global' }) 
   );
 }
 
-/** Here: the tracks of the place Search was opened from, filtered like Jukebox. */
+/** Shown while a Here list is still growing (an artist's full song list). */
+function HereLoading() {
+  return (
+    <p class="section-note dim here-loading" role="status" data-testid="here-loading">
+      <span class="spinner" aria-hidden="true" />
+      Searching all songs…
+    </p>
+  );
+}
+
+/**
+ * Here: the tracks of the place Search was opened from, filtered like Jukebox. The
+ * list may still be growing (`ctx.loading`); matching releases (`ctx.albums`) show
+ * as a cover row above the tracks.
+ */
 function HereResults({ q, ctx }: { q: string; ctx: SearchContext }) {
-  const tracks = ctx.tracks();
+  const tracks = read(ctx.tracks);
+  const loading = ctx.loading ? read(ctx.loading) : false;
+  const albums = ctx.albums ? read(ctx.albums) : [];
   const idx = useMemo(() => buildIndex(tracks), [tracks]);
+  useEffect(() => {
+    ctx.load?.();
+  }, [ctx]);
   if (!q.trim()) {
     if (!tracks.length) {
+      if (loading) return <HereLoading />;
       return (
         <EmptyState title="Nothing here yet" testid="here-empty">
           No tracks in {ctx.label} to search.
         </EmptyState>
       );
     }
-    return <ChunkedTracks tracks={tracks} chunkKey={`search:here:${ctx.label}:`} testid="here-list" />;
+    return (
+      <>
+        {loading && <HereLoading />}
+        <ChunkedTracks tracks={tracks} chunkKey={`search:here:${ctx.label}:`} testid="here-list" />
+      </>
+    );
   }
   const hits: Track[] = searchTracks(idx, q);
-  if (!hits.length) {
+  const releases = searchTitles(albums, (a) => a.title, q);
+  if (!hits.length && !releases.length) {
+    if (loading) return <HereLoading />;
     return (
       <>
         <EmptyState title="No matches" testid="here-empty">
@@ -80,14 +107,28 @@ function HereResults({ q, ctx }: { q: string; ctx: SearchContext }) {
   }
   return (
     <div data-testid="here-results">
-      <div class="section-head">
-        <h2 class="section-title">In {ctx.label}</h2>
-        <span class="dim small" data-testid="search-count">
-          {hits.length === 100 ? 'top 100' : `${hits.length} match${hits.length === 1 ? '' : 'es'}`}
-        </span>
-      </div>
-      <Tracks tracks={hits} />
-      {hits.length < BRIDGE_BELOW && <Bridge q={q} to="jukebox" />}
+      {releases.length > 0 && (
+        <>
+          <div class="section-head">
+            <h2 class="section-title">Releases</h2>
+          </div>
+          <CoverRow items={releases} />
+        </>
+      )}
+      {hits.length > 0 && (
+        <>
+          <div class="section-head">
+            <h2 class="section-title">In {ctx.label}</h2>
+            <span class="dim small" data-testid="search-count">
+              {hits.length === 100 ? 'top 100' : `${hits.length} match${hits.length === 1 ? '' : 'es'}`}
+            </span>
+          </div>
+          {loading && <HereLoading />}
+          <Tracks tracks={hits} />
+        </>
+      )}
+      {!hits.length && loading && <HereLoading />}
+      {!loading && hits.length < BRIDGE_BELOW && <Bridge q={q} to="jukebox" />}
     </div>
   );
 }
