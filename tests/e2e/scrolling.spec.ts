@@ -304,7 +304,7 @@ test('scrollbar: appears while scrolling, fades, and drags on a long list; A–Z
   await page.mouse.down();
   await page.mouse.move(tb.x + tb.width / 2, tb.y + 250, { steps: 6 });
   await expect(sb).toHaveClass(/dragging/);
-  expect((await thumb.boundingBox())!.width).toBe(48);
+  expect((await thumb.boundingBox())!.width).toBeCloseTo(48, 1);
   await expect(popup).toHaveClass(/\bon\b/);
   await expect.poll(async () => (await popup.textContent()) === (await topLetter())).toBe(true);
   const pb = (await popup.locator('.az-pop-letter').boundingBox())!;

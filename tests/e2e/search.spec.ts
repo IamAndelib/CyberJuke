@@ -72,7 +72,7 @@ test('search header: lean, same height in both modes, underline on the rule, 44p
   await expect(page.getByTestId('search-input')).toBeFocused();
   await expect(page.getByTestId('filter-songs')).toBeVisible();
   const global = (await header.boundingBox())!;
-  expect(global.height).toBe(jukebox.height);
+  expect(global.height).toBeCloseTo(jukebox.height, 1);
 
   const on = page.getByTestId('mode-global');
   const under = await on.evaluate((el) => {

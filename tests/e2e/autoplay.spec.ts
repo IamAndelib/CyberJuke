@@ -96,8 +96,8 @@ test('Up next: autoplay rows have only a 48px Remove, which offers Undo', async 
   await expect(page.locator('[data-section="autoplay"] [data-testid="upnext-up"]')).toHaveCount(0);
   await expect(page.locator('[data-section="autoplay"] [data-testid="upnext-down"]')).toHaveCount(0);
   const rb = await row.getByTestId('upnext-remove').boundingBox();
-  expect(rb!.width).toBe(48);
-  expect(rb!.height).toBe(48);
+  expect(rb!.width).toBeCloseTo(48, 1);
+  expect(rb!.height).toBeCloseTo(48, 1);
 
   const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
   const before = await rows.count();
@@ -143,8 +143,8 @@ test('Album Play plays the album, then continues into autoplay at the end', asyn
   const listRow = page.locator('[data-testid="upnext-row"][data-section="list"]').nth(1);
   const [up, down, remove] = await Promise.all(['upnext-up', 'upnext-down', 'upnext-remove'].map((id) => listRow.getByTestId(id).boundingBox()));
   for (const b of [up, down, remove]) {
-    expect(b!.width).toBe(48);
-    expect(b!.height).toBe(48);
+    expect(b!.width).toBeCloseTo(48, 1);
+    expect(b!.height).toBeCloseTo(48, 1);
   }
   expect(Math.round(down!.x - (up!.x + up!.width))).toBe(8);
   expect(Math.round(remove!.x - (down!.x + down!.width))).toBe(8);

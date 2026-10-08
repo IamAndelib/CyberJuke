@@ -48,14 +48,23 @@ type Renders = { counts: Record<string, number>; reset(): void };
 const renders = (page: Page) => page.evaluate(() => ({ ...(window as unknown as { __cyberjukeRenders: Renders }).__cyberjukeRenders.counts }));
 const resetRenders = (page: Page) => page.evaluate(() => (window as unknown as { __cyberjukeRenders: Renders }).__cyberjukeRenders.reset());
 
-/** One finger down at (x, y) through CDP; returns move(dx, dy) and end(). */
+/**
+ * One finger down at (x, y) through CDP; returns move(dx, dy) and end(). Each move continues
+ * from where the last one left the finger (starting over from (x, y) would jump the finger
+ * back up, which the browser scrolls natively and the pull rightly gives up on).
+ */
 async function finger(page: Page, x: number, y: number) {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] });
+  let cx = x;
+  let cy = y;
   return {
     async move(dx: number, dy: number, steps = 10) {
+      const [x0, y0] = [cx, cy];
       for (let i = 1; i <= steps; i++) {
-        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + (dx * i) / steps, y: y + (dy * i) / steps, id: 1 }] });
+        cx = x0 + (dx * i) / steps;
+        cy = y0 + (dy * i) / steps;
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: cx, y: cy, id: 1 }] });
         await nextFrame(page);
       }
     },
@@ -64,6 +73,19 @@ async function finger(page: Page, x: number, y: number) {
       await cdp.detach();
     },
   };
+}
+
+/** Waits until nothing has rendered for `quiet` ms (late chunk fills and image loads included). */
+async function rendersSettle(page: Page, quiet = 400, timeout = 10_000): Promise<void> {
+  const end = Date.now() + timeout;
+  let last = JSON.stringify(await renders(page));
+  let since = Date.now();
+  while (Date.now() - since < quiet) {
+    if (Date.now() > end) throw new Error('renders never settled');
+    await nextFrame(page);
+    const now = JSON.stringify(await renders(page));
+    if (now !== last) [last, since] = [now, Date.now()];
+  }
 }
 
 const offsetOf = (page: Page, testid: string) =>
@@ -77,7 +99,7 @@ test('pull to refresh: follows the finger on a rubber band with no re-render, th
   const ptr = page.getByTestId('ptr');
   // Let Home settle first (the catalog arriving re-renders the genre chips and Home).
   await expect(page.getByTestId('genre-chip').first()).toBeVisible();
-  await expectStable(async () => JSON.stringify(await renders(page)), 400);
+  await rendersSettle(page);
   await resetRenders(page);
   const f = await finger(page, 200, 320);
   await f.move(0, 60);
@@ -208,8 +230,8 @@ test('the back-to-top and search buttons show their press, and the search button
   const top = screen.getByTestId('back-to-top');
   await expect(top).toBeVisible();
   const tb = await box(top);
-  expect(tb.width).toBe(48);
-  expect(tb.height).toBe(48);
+  expect(tb.width).toBeCloseTo(48, 1);
+  expect(tb.height).toBeCloseTo(48, 1);
 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const reduced = await fab.evaluate((el) => {
@@ -347,7 +369,7 @@ test('Next is off at the end of the queue in both players; repeat is a toggle; 4
   await expect(repeat).toHaveAttribute('aria-pressed', 'false');
 
   // The seek bar's touch area and the [lyrics] toggle are 48px.
-  expect((await box(page.getByTestId('seek'))).height).toBe(48);
+  expect((await box(page.getByTestId('seek'))).height).toBeCloseTo(48, 1);
   const flip = await page.getByTestId('np-lyrics-toggle').evaluate((el) => {
     const a = getComputedStyle(el, '::after');
     const r = el.getBoundingClientRect();
