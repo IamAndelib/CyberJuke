@@ -4,6 +4,7 @@
  * Only exact matches are stored; a name with no exact match is retried next session.
  */
 import { Preferences } from '@capacitor/preferences';
+import { Cache } from '../core/cache';
 import { artistKey } from '../data/artists';
 import { music, resolveArtistChannel, type MusicClient } from '../data/ytmusic';
 
@@ -23,21 +24,24 @@ export interface ArtistChannelDeps {
 }
 
 export function createArtistChannels(deps: ArtistChannelDeps): ArtistChannelStore {
-  let map: Map<string, string> | null = null;
-  let loading: Promise<Map<string, string>> | null = null;
+  /** No expiry; past ARTIST_CHANNELS_MAX the least recently stored name goes. */
+  let map: Cache<string, string> | null = null;
+  let loading: Promise<Cache<string, string>> | null = null;
   const ready = () =>
     map
       ? Promise.resolve(map)
       : (loading ??= deps
           .load()
           .catch(() => ({}))
-          .then((o) => (map = new Map(Object.entries(o ?? {}).filter(([, v]) => typeof v === 'string')))));
+          .then((o) => {
+            const c = new Cache<string, string>({ max: ARTIST_CHANNELS_MAX });
+            for (const [k, v] of Object.entries(o ?? {})) if (typeof v === 'string') c.restore(k, v, 0);
+            return (map = c);
+          }));
   const put = (key: string, id: string) => {
     if (!map) return;
-    map.delete(key);
     map.set(key, id);
-    while (map.size > ARTIST_CHANNELS_MAX) map.delete(map.keys().next().value!);
-    deps.save(Object.fromEntries(map));
+    deps.save(Object.fromEntries(map.pairs()));
   };
   return {
     async get(name) {
