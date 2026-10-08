@@ -1,12 +1,12 @@
 /**
- * User library: liked tracks, recently played, and settings.
+ * User library: liked tracks, recently played, favorite genres and settings.
  * Persisted with @capacitor/preferences (localStorage on the web).
  */
 import { signal } from '@preact/signals';
 import { Preferences } from '@capacitor/preferences';
 import type { Track } from '../data/model';
 
-export const THEMES = ['dark', 'light', 'c64', 'vt320', 'matrix', 'crypt', 'bubblegum', 'grid'] as const;
+export const THEMES = ['dark', 'light', 'c64', 'vt320', 'matrix', 'crypt', 'bubblegum', 'brutalist'] as const;
 export type ThemeId = (typeof THEMES)[number];
 export const THEME_LABELS: Record<ThemeId, string> = {
   dark: 'Dark',
@@ -16,7 +16,7 @@ export const THEME_LABELS: Record<ThemeId, string> = {
   matrix: 'Matrix',
   crypt: 'Crypt',
   bubblegum: 'Bubblegum',
-  grid: 'GRiD',
+  brutalist: 'Brutalist',
 };
 
 export type Quality = 'high' | 'low';
@@ -33,10 +33,16 @@ export const RECENT_MAX = 100;
 const K_LIKED = 'liked';
 const K_RECENT = 'recent';
 const K_SETTINGS = 'settings';
+const K_FAV_GENRES = 'favGenres';
+
+/** Theme ids that were renamed or replaced, mapped to their successor. */
+const THEME_MIGRATIONS: Record<string, ThemeId> = { grid: 'brutalist' };
 
 export const liked = signal<Track[]>([]);
 export const recent = signal<Track[]>([]);
 export const settings = signal<Settings>({ ...DEFAULT_SETTINGS });
+/** Favorite genres, in the order they were added. */
+export const favoriteGenres = signal<string[]>([]);
 
 async function read<T>(key: string, fallback: T): Promise<T> {
   try {
@@ -56,18 +62,37 @@ function isTrack(t: unknown): t is Track {
 }
 
 export async function loadLibrary(): Promise<void> {
-  const [l, r, s] = await Promise.all([
+  const [l, r, s, g] = await Promise.all([
     read<unknown[]>(K_LIKED, []),
     read<unknown[]>(K_RECENT, []),
     read<Partial<Settings>>(K_SETTINGS, {}),
+    read<unknown[]>(K_FAV_GENRES, []),
   ]);
   liked.value = Array.isArray(l) ? l.filter(isTrack) : [];
   recent.value = Array.isArray(r) ? r.filter(isTrack).slice(0, RECENT_MAX) : [];
+  favoriteGenres.value = Array.isArray(g)
+    ? [...new Set(g.filter((x): x is string => typeof x === 'string' && x.trim() !== ''))]
+    : [];
   const merged = { ...DEFAULT_SETTINGS, ...(s && typeof s === 'object' ? s : {}) };
+  const migrated = THEME_MIGRATIONS[merged.theme as string];
+  if (migrated) merged.theme = migrated;
   if (!THEMES.includes(merged.theme)) merged.theme = DEFAULT_SETTINGS.theme;
   if (merged.quality !== 'low') merged.quality = 'high';
   merged.showNsfw = merged.showNsfw === true;
   settings.value = merged;
+  if (migrated) write(K_SETTINGS, merged);
+}
+
+export function isFavoriteGenre(name: string): boolean {
+  return favoriteGenres.value.includes(name);
+}
+
+/** Toggle a favorite genre; returns the new state. New favorites go last. */
+export function toggleFavoriteGenre(name: string): boolean {
+  const was = isFavoriteGenre(name);
+  favoriteGenres.value = was ? favoriteGenres.value.filter((x) => x !== name) : [...favoriteGenres.value, name];
+  write(K_FAV_GENRES, favoriteGenres.value);
+  return !was;
 }
 
 export function isLiked(id: string): boolean {

@@ -147,22 +147,23 @@
   --scheme: light;
 }
 
-/* site: fg #ff9810, dim #ff9810cc, border #ff981047 on #120900 */
-[data-theme='grid'] {
-  --color-bg: #120900;
-  --color-fg: #ff9810;
-  --color-fg-dim: #d07c0d;
-  --color-border: #543105;
-  --color-surface: #ff981014;
-  --color-accent: #ffa810;
-  --glow: 0 0 10px #ff981075;
+/* site: fg #c0d0e8, dim #99a9bf, border #a0b4dc2e on #080810 (flattened to #232735),
+   surface #a0b4dc0f, glow #a0b4dc80, 1px radius, 1.5px borders. The site's accent equals
+   its text colour, so the now-playing highlight uses a brighter tone here. */
+[data-theme='brutalist'] {
+  --color-bg: #080810;
+  --color-fg: #c0d0e8;
+  --color-fg-dim: #99a9bf;
+  --color-border: #232735;
+  --color-surface: #a0b4dc0f;
+  --color-accent: #e8f0ff;
+  --glow: 0 0 10px #a0b4dc80;
   --font-ui: 'Departure Mono', 'JetBrains Mono', monospace;
   --font-display: 'Departure Mono', 'JetBrains Mono', monospace;
-  --radius: 3px;
-  --radius-lg: 4px;
-  --border-w: 2px;
-  --art-tint: #ff9810;
+  --radius: 1px;
+  --radius-lg: 1px;
+  --border-w: 1.5px;
+  --art-tint: #c0d0e8;
   --art-blend: multiply;
   --scheme: dark;
-  letter-spacing: -0.015rem;
 }
