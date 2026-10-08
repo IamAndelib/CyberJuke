@@ -6,6 +6,8 @@ import { signal } from '@preact/signals';
 import type { Track } from '../data/model';
 import { knownTrack } from '../store/library';
 import { toast } from '../store/toast';
+import { parseNativeState } from '../core/guards';
+import { logError } from '../core/log';
 import { JukePlayer, type NativeState, type NativeTrack, type RepeatMode } from './native';
 import { EMPTY_STATE, type Player, type PlayerState, type UpNextItem } from './types';
 
@@ -37,17 +39,36 @@ export class NativePlayer implements Player {
   private known = new Map<string, Track>();
   /** Ids added with queueNext that haven't played yet, oldest first. */
   private queuedIds: string[] = [];
+  /** The last full list native sent (events with queueIdsUnchanged omit it). */
+  private lastQueueIds: string[] = [];
+  /**
+   * After playList: the track native should report next. Events still describing the
+   * old queue (sent before setQueue landed) are ignored until then, so the optimistic
+   * state doesn't flicker back to the previous track.
+   */
+  private expect: { id: string; until: number } | null = null;
 
   constructor() {
-    JukePlayer.addListener('state', (st) => this.apply(st)).catch(() => {});
+    JukePlayer.addListener('state', (st) => this.onState(st)).catch((e) => logError('player.listen', e));
     JukePlayer.addListener('trackError', (e) => {
-      const t = this.resolve(e.trackId);
-      if (e.skipped) toast(`Skipped "${t.title}": unavailable`);
+      const t = this.resolve(String(e?.trackId ?? ''));
+      if (e?.skipped) toast(`Skipped "${t.title}": unavailable`);
       else toast(`Can't play "${t.title}"`);
-    }).catch(() => {});
+    }).catch((e) => logError('player.listen', e));
     JukePlayer.getState()
-      .then((st) => this.apply(st))
-      .catch(() => {});
+      .then((st) => this.onState(st))
+      .catch((e) => logError('player.getState', e));
+  }
+
+  private onState(raw: unknown): void {
+    const st = parseNativeState(raw, this.lastQueueIds);
+    if (!st) return;
+    this.lastQueueIds = st.queueIds;
+    if (this.expect) {
+      if (st.trackId !== this.expect.id && performance.now() < this.expect.until) return;
+      this.expect = null;
+    }
+    this.apply(st);
   }
 
   private remember(tracks: Track[]): void {
@@ -62,10 +83,11 @@ export class NativePlayer implements Player {
     const queue = st.queueIds.map((id) => this.resolve(id));
     const index = st.index >= 0 && st.index < queue.length ? st.index : -1;
     // A queued track that started playing, or left the list, is no longer "queued".
+    // Skipping past queued tracks keeps them queued (they stay next: see queue.ts).
     if (this.queuedIds.length) {
       const inList = new Set(st.queueIds);
       const cur = this.queuedIds.indexOf(st.trackId ?? '');
-      if (cur >= 0) this.queuedIds.splice(0, cur + 1);
+      if (cur >= 0) this.queuedIds.splice(cur, 1);
       this.queuedIds = this.queuedIds.filter((id) => inList.has(id));
     }
     const pending = this.queuedIds.slice();
@@ -120,7 +142,17 @@ export class NativePlayer implements Player {
       sampledAt: performance.now(),
       upNext: tracks.slice(i + 1, i + 51).map((track, k) => ({ track, index: i + 1 + k })),
     };
-    await JukePlayer.setQueue({ tracks: tracks.map(toNative), startIndex: i, playWhenReady: true });
+    this.expect = { id: tracks[i].id, until: performance.now() + EXPECT_MS };
+    try {
+      await JukePlayer.setQueue({ tracks: tracks.map(toNative), startIndex: i, playWhenReady: true });
+    } catch (e) {
+      // Native never took the list: show what it actually has again.
+      this.expect = null;
+      JukePlayer.getState()
+        .then((st) => this.onState(st))
+        .catch(() => {});
+      throw e;
+    }
   }
 
   play = () => JukePlayer.play();
@@ -149,4 +181,8 @@ export class NativePlayer implements Player {
   }
 
   setQuality = (quality: 'high' | 'low') => JukePlayer.setQuality({ quality });
+  setNetworkPrefs = (prefs: { preferIpv4: boolean }) => JukePlayer.setNetworkPrefs({ preferIpv4: prefs.preferIpv4 === true });
 }
+
+/** How long playList waits for native to report the new track before trusting events again. */
+const EXPECT_MS = 4000;

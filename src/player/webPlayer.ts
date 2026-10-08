@@ -5,6 +5,7 @@
 import { signal } from '@preact/signals';
 import type { Track } from '../data/model';
 import { toast } from '../store/toast';
+import { TEST_HOOKS } from '../core/testHooks';
 import { Queue } from './queue';
 import type { RepeatMode } from './native';
 import { EMPTY_STATE, livePosition, type Player, type PlayerState } from './types';
@@ -180,7 +181,8 @@ export class WebPlayer implements Player {
   private startPoll(): void {
     if (this.poll) return;
     this.poll = setInterval(() => {
-      if (!this.yt) return;
+      // Positions are interpolated between samples; no need to sample a hidden page.
+      if (!this.yt || document.hidden) return;
       this.s.value = { ...this.s.value, positionMs: Math.round(this.yt.getCurrentTime() * 1000), sampledAt: performance.now() };
     }, 1000);
   }
@@ -300,7 +302,7 @@ export class WebPlayer implements Player {
   async addToQueue(tracks: Track[]): Promise<void> {
     if (!tracks.length) return;
     // e2e: record what the native plugin would receive.
-    window.__cyberjukePlayerCalls?.push(['queueNext', tracks.map((t) => t.id)]);
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['queueNext', tracks.map((t) => t.id)]);
     const wasEmpty = !this.q.current;
     this.q.queueNext(tracks);
     this.publish();
@@ -310,5 +312,10 @@ export class WebPlayer implements Player {
   async setQuality(q: 'high' | 'low'): Promise<void> {
     // The IFrame API ignores quality requests nowadays; kept for interface parity.
     this.yt?.setPlaybackQuality?.(q === 'low' ? 'small' : 'default');
+  }
+
+  async setNetworkPrefs(prefs: { preferIpv4: boolean }): Promise<void> {
+    // Nothing to do in a browser; e2e checks the call the native plugin would get.
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setNetworkPrefs', { preferIpv4: prefs.preferIpv4 }]);
   }
 }

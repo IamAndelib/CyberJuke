@@ -12,9 +12,14 @@ export interface NativeState {
   trackId: string | null;
   positionMs: number; durationMs: number;   // durationMs 0 if unknown
   shuffle: boolean; repeat: RepeatMode;
-  queueIds: string[];       // the full current list, in list order
+  queueIds: string[];       // the full current list, in list order (omitted with queueIdsUnchanged)
+  /** True when the list didn't change since the last event: queueIds is then omitted, keep the previous one. */
+  queueIdsUnchanged?: boolean;
   upNextIds: string[];      // the next tracks in actual play order (respects shuffle), max 50
 }
+/** Why YouTube is refusing requests from this network (Y1). */
+export type BlockReason = 'BOT_CHECK' | 'RATE_LIMIT' | 'STREAM_FORBIDDEN';
+export interface BlockedEvent { until: number /* epoch ms */; reason: BlockReason }
 export interface JukePlayerPlugin {
   setQueue(o: { tracks: NativeTrack[]; startIndex: number; positionMs?: number; playWhenReady: boolean }): Promise<void>;
   addItems(o: { tracks: NativeTrack[]; index?: number }): Promise<void>;   // index omitted = append
@@ -31,8 +36,17 @@ export interface JukePlayerPlugin {
   setQuality(o: { quality: 'high' | 'low' }): Promise<void>;
   getState(): Promise<NativeState>;
   getLaunchOptions(): Promise<{ autoplay?: 'latest' }>;   // from Android intent extra, used by the CI smoke test
+  /** The network-wide back-off in force, if any (until 0 = none). */
+  getBlockState(): Promise<{ until: number; reason?: string }>;
+  /** Y6: resolve hostnames to IPv4 only, for extraction and streaming alike. */
+  setNetworkPrefs(o: { preferIpv4: boolean }): Promise<void>;
   addListener(event: 'state', cb: (s: NativeState) => void): Promise<{ remove: () => Promise<void> }>;
   addListener(event: 'trackError', cb: (e: { trackId: string; message: string; skipped: boolean }) => void): Promise<{ remove: () => Promise<void> }>;
+  /** YouTube is refusing this network: playback paused, nothing is requested until `until`. */
+  addListener(event: 'blocked', cb: (e: BlockedEvent) => void): Promise<{ remove: () => Promise<void> }>;
+  addListener(event: 'unblocked', cb: (e: Record<string, never>) => void): Promise<{ remove: () => Promise<void> }>;
+  /** Parsing failed in a way that means YouTube changed something (an app update is needed). */
+  addListener(event: 'extractorBroken', cb: (e: { message: string }) => void): Promise<{ remove: () => Promise<void> }>;
 }
 
 export const JukePlayer = registerPlugin<JukePlayerPlugin>('JukePlayer');

@@ -66,6 +66,8 @@ export interface Player {
    */
   addToQueue(tracks: Track[]): Promise<void>;
   setQuality(q: 'high' | 'low'): Promise<void>;
+  /** Y6: prefer IPv4 for YouTube requests (native only; the web player ignores it). */
+  setNetworkPrefs(prefs: { preferIpv4: boolean }): Promise<void>;
 }
 
 /** Estimated live position, interpolated between samples while playing. */
