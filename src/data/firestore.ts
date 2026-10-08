@@ -16,6 +16,7 @@
  * the site itself sends are sure to have an index. Signed out, nothing changes.
  */
 import { bool, isHiddenDoc, tracksFromRows, type FsRunQueryRow, type Track, ts } from './model';
+import { Cache } from '../core/cache';
 import { parseRunQueryRows } from '../core/guards';
 import type { Cursor, Page, TrackSource } from './source';
 
@@ -143,11 +144,6 @@ interface RawPage {
   cursor: Cursor | null;
 }
 
-interface CacheEntry {
-  at: number;
-  page: RawPage;
-}
-
 /** What the source needs from the Cyberspace login (./auth). */
 export interface SourceAuth {
   signedIn(): boolean;
@@ -167,11 +163,10 @@ export interface FirestoreSourceOptions {
 }
 
 export class FirestoreSource implements TrackSource {
-  private cache = new Map<string, CacheEntry>();
-  private inflight = new Map<string, Promise<RawPage>>();
+  /** Raw pages by query body (fresh for CACHE_TTL_MS; loads in progress shared). */
+  private readonly cache: Cache<string, RawPage>;
   private readonly showNsfw: () => boolean;
   private readonly fetchFn: typeof fetch;
-  private readonly now: () => number;
   private readonly auth: SourceAuth | undefined;
   /** Observer for the newest post shown on the Latest feed (freshness baseline). */
   onLatest: ((newest: string) => void) | undefined;
@@ -186,7 +181,7 @@ export class FirestoreSource implements TrackSource {
     this.auth = opts.auth;
     this.showNsfw = opts.showNsfw ?? (() => false);
     this.fetchFn = opts.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
-    this.now = opts.now ?? (() => Date.now());
+    this.cache = new Cache({ ttlMs: CACHE_TTL_MS, now: opts.now ?? (() => Date.now()) });
   }
 
   latest(cursor?: Cursor | null): Promise<Page> {
@@ -279,8 +274,7 @@ export class FirestoreSource implements TrackSource {
   }
 
   invalidate(): void {
-    const cutoff = this.now() - MIN_REFRESH_AGE_MS;
-    for (const [k, e] of this.cache) if (e.at < cutoff) this.cache.delete(k);
+    this.cache.dropOlderThan(MIN_REFRESH_AGE_MS);
   }
 
   private async page(genre: string | null, cursor: Cursor | null): Promise<Page> {
@@ -295,19 +289,11 @@ export class FirestoreSource implements TrackSource {
   private raw(genre: string | null, cursor: Cursor | null): Promise<RawPage> {
     const members = this.members();
     const body = JSON.stringify(buildQuery({ genre, cursor, members }));
-    const hit = this.cache.get(body);
-    if (hit && this.now() - hit.at < CACHE_TTL_MS) return Promise.resolve(hit.page);
-    const pending = this.inflight.get(body);
-    if (pending) return pending;
-    const req = this.request(body, members)
-      .then((page) => {
-        this.cache.set(body, { at: this.now(), page });
+    return this.cache.load(body, () => this.request(body, members), {
+      stored: (page) => {
         if (genre == null && cursor == null && page.tracks[0]?.createdAt) this.onLatest?.(page.tracks[0].createdAt);
-        return page;
-      })
-      .finally(() => this.inflight.delete(body));
-    this.inflight.set(body, req);
-    return req;
+      },
+    });
   }
 
   private async request(body: string, members: boolean, limit = PAGE_SIZE): Promise<RawPage> {
