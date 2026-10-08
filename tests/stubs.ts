@@ -55,7 +55,7 @@ const FAKE_IFRAME_API = `
       this.emit(1);
     }
     pauseVideo() { clearInterval(this.timer); this.emit(2); }
-    seekTo(s) { this.t = s; }
+    seekTo(s) { this.t = s - 71; }
     getCurrentTime() { return this.t + 71; }
     getDuration() { return 247; }
     setPlaybackQuality() {}
@@ -80,7 +80,13 @@ export async function stubYouTube(page: Page): Promise<void> {
  * like the native one: optional fields omitted, artist subtitles empty, album subtitles
  * from playlist() empty, kind 'playlist' outside the albums filter, `next` tokens, and
  * "CODE: detail" rejections. Songs for a query are credited to the query, so an artist
- * page gets "More by" matches.
+ * page gets "More by" matches. Every song/album/artist carries the first credited
+ * artist's channelId (UC + hash of the name), and each songs page mixes in decoys
+ * "Ivy <q>" and "<q> Butterfly" (own channels) plus channel-less items, so exact
+ * artist matching is exercised ("Ivy Queen" / "Queen Butterfly" for "Queen").
+ * artist() returns the decoys first, then the exact name. lyrics() returns synced
+ * Greek / Spanish / Japanese / Arabic samples, plain, instrumental or not found
+ * (window.__cyberjukeLyricsMode picks one; default by hash of the ytId).
  */
 const FAKE_MUSIC = `
 (() => {
@@ -92,11 +98,18 @@ const FAKE_MUSIC = `
   const OTHERS = ['The Midnight', 'Tycho', 'Khruangbin'];
   const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; };
   const AB = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-  const ytId = (seed) => { let h = hash(seed), out = ''; for (let i = 0; i < 11; i++) { out += AB[h % 64]; h = Math.imul(h ^ (i + 7), 2654435761) >>> 0; } return out; };
+  const mix = (h) => { h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); return (h ^ (h >>> 16)) >>> 0; };
+  const ytId = (seed) => { let out = ''; for (let i = 0; i < 11; i++) out += AB[mix(hash(seed + '#' + i)) % 64]; return out; };
   const thumb = (seed) => 'https://lh3.googleusercontent.com/fake/' + ytId(seed) + '=w300-h300';
-  const song = (title, artist, seed) => {
+  const chan = (name) => 'UC' + ytId('chan|' + name) + ytId('chan2|' + name);
+  const song = (title, artist, seed, noChannel) => {
     const id = ytId(seed);
     const it = { kind: 'song', title, subtitle: artist, url: 'https://music.youtube.com/watch?v=' + id, ytId: id, thumbnailUrl: thumb(seed) };
+    if (!noChannel) {
+      const first = artist.split(', ')[0];
+      it.channelId = chan(first);
+      it.artistUrl = 'https://www.youtube.com/channel/' + it.channelId;
+    }
     if (hash(seed) % 5) it.durationSec = 150 + (hash(seed) % 180);
     return it;
   };
@@ -111,21 +124,40 @@ const FAKE_MUSIC = `
         const by = i % 4 === 3 ? OTHERS[k % OTHERS.length] : (i % 5 === 1 ? q + ', ' + OTHERS[k % OTHERS.length] : q);
         items.push(song(SONGS[k % SONGS.length] + (n ? ' (Pt. ' + (n + 1) + ')' : ''), by, q + '|' + k));
       }
+      // Decoys (similar names with their own channels) and channel-less items; still 10 a page.
+      items[2] = song('Decoy Dance ' + (n + 1), 'Ivy ' + q, q + '|ivy|' + n);
+      items[6] = song('Decoy Wings ' + (n + 1), q + ' Butterfly', q + '|bfly|' + n);
+      items[8] = song('Unlinked Decoy ' + (n + 1), 'Ivy ' + q, q + '|ivy-nolink|' + n, true);
+      items[9] = song('Unlinked Original ' + (n + 1), q, q + '|nolink|' + n, true);
       return items;
     }
     if (filter === 'albums') {
-      return n ? [] : ALBUMS.map((a, i) => ({ kind: 'album', title: a, subtitle: i === 4 ? OTHERS[0] : q,
-        url: 'https://music.youtube.com/browse/MPREb_' + ytId(q + a), thumbnailUrl: thumb(q + a) }));
+      if (n) return [];
+      const albums = ALBUMS.map((a, i) => ({ kind: 'album', title: a, subtitle: i === 4 ? OTHERS[0] : q,
+        url: 'https://music.youtube.com/browse/MPREb_' + ytId(q + a), thumbnailUrl: thumb(q + a), channelId: chan(i === 4 ? OTHERS[0] : q) }));
+      albums.splice(1, 0, { kind: 'album', title: 'Decoy Album', subtitle: 'Ivy ' + q,
+        url: 'https://music.youtube.com/browse/MPREb_' + ytId(q + 'decoy'), thumbnailUrl: thumb(q + 'decoy'), channelId: chan('Ivy ' + q) });
+      return albums;
     }
     if (filter === 'artists') {
       return n ? [] : [q, q + ' Orchestra', 'The ' + q + ' Tribute'].map((a) => ({ kind: 'artist', title: a, subtitle: '',
-        url: 'https://music.youtube.com/channel/UC' + ytId(a), thumbnailUrl: thumb('artist' + a) }));
+        url: 'https://music.youtube.com/channel/' + chan(a), channelId: chan(a), thumbnailUrl: thumb('artist' + a) }));
     }
     return n ? [] : ['Best of ' + q, q + ' Radio', 'Chill ' + q + ' Mix', q + ' Essentials'].map((p, i) => ({ kind: 'playlist', title: p,
       subtitle: ['Night Owl', 'Curated', 'Mixtapes'][i % 3], url: 'https://music.youtube.com/playlist?list=PL' + ytId(p),
       thumbnailUrl: thumb(p), ...(i === 0 ? { itemCount: 42 } : {}) }));
   };
+  const LYRIC_MODES = ['greek', 'spanish', 'japanese', 'arabic', 'plain', 'none', 'instrumental'];
+  const LYRICS = {
+    greek: ['Το φεγγάρι λάμπει πάνω από τη θάλασσα', 'Περπατάμε μαζί στον ήσυχο δρόμο', 'Η νύχτα τραγουδά ένα παλιό τραγούδι', 'Και η καρδιά μου χορεύει ξανά'],
+    spanish: ['Bajo la luna bailamos sin prisa', 'El viento canta en la ciudad dormida', 'Tu voz es un faro en la noche', 'Y el mar nos llama otra vez'],
+    japanese: ['夜の街に光が揺れる', '君の声が風に溶けていく', '小さな夢を胸に抱いて', 'もう一度歩き出そう'],
+    arabic: ['القمر يضيء فوق البحر', 'نمشي معاً في الطريق الهادئ', 'الليل يغني أغنية قديمة', 'وقلبي يرقص من جديد'],
+    plain: ['Static on the radio, a song I used to know', 'Headlights on the ceiling, moving slow', '', 'Hold the tape and press rewind', 'Every chorus left behind'],
+  };
   const calls = (window.__cyberjukeMusicCalls = []);
+  window.__cyberjukePlayerCalls = [];
+  window.__cyberjukeShareStub = (p) => { calls.push(['share', p]); return Promise.resolve(); };
   window.__cyberjukeMusicStub = {
     search({ query, filter }) {
       calls.push(['search', query, filter]);
@@ -136,9 +168,9 @@ const FAKE_MUSIC = `
     more({ next }) {
       calls.push(['more', next]);
       const [, filter, query, n] = next.split('|');
-      if (Number(n) >= 2) return fail('UNAVAILABLE', 'unknown or expired paging token');
+      if (Number(n) >= 6) return fail('UNAVAILABLE', 'unknown or expired paging token');
       const res = { items: page(query, filter, Number(n)) };
-      if (Number(n) < 1) res.next = 'tok|' + filter + '|' + query + '|' + (Number(n) + 1);
+      if (Number(n) < 5) res.next = 'tok|' + filter + '|' + query + '|' + (Number(n) + 1);
       return wait(res);
     },
     playlist({ url }) {
@@ -148,6 +180,27 @@ const FAKE_MUSIC = `
       const items = [];
       for (let i = 0; i < 8; i++) items.push(song(SONGS[(hash(url) + i) % SONGS.length], opts.albumArtist || 'Album Artist', url + i));
       return wait({ title, subtitle: '', thumbnailUrl: thumb(url), items });
+    },
+    artist({ name }) {
+      calls.push(['artist', name]);
+      if (opts.botCheck) return fail('BOT_CHECK', 'Sign in to confirm you are not a bot');
+      const q = name.trim();
+      const items = ['Ivy ' + q, q + ' Butterfly', q].map((a) => ({ kind: 'artist', title: a, subtitle: '',
+        url: 'https://music.youtube.com/channel/' + chan(a), channelId: chan(a), thumbnailUrl: thumb('artist' + a) }));
+      return wait({ items });
+    },
+    lyrics(o) {
+      calls.push(['lyrics', o]);
+      const mode = window.__cyberjukeLyricsMode || LYRIC_MODES[hash(o.ytId || o.title) % LYRIC_MODES.length];
+      if (mode === 'error') return fail('NETWORK', 'timeout');
+      if (mode === 'none') return wait({ found: false });
+      if (mode === 'instrumental') return wait({ found: true, source: 'LRCLIB', instrumental: true });
+      if (mode === 'plain') return wait({ found: true, source: 'LRCLIB', plain: LYRICS.plain.join('\\n') });
+      const lines = LYRICS[mode] || LYRICS.greek;
+      const synced = [];
+      for (let i = 0; i < 62; i++) synced.push({ t: i * 4000, text: i % 9 === 8 ? '' : lines[i % lines.length] });
+      return wait({ found: true, source: mode === 'japanese' ? 'Source: LyricFind' : 'LRCLIB', synced,
+        plain: synced.filter((l) => l.text).map((l) => l.text).join('\\n') });
     },
   };
 })();
