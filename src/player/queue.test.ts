@@ -240,14 +240,15 @@ describe('Queue: editing', () => {
     expect(q.queuedCount).toBe(2);
   });
 
-  it('a new list or removing a queued track forgets it', () => {
+  it('removing a queued track forgets it; a new list keeps the rest (P1)', () => {
     const q = new Queue();
     q.setList(abc(), 0);
     q.queueNext([t('x'), t('y')]);
     q.remove(1);
     expect(q.queuedCount).toBe(1);
     q.setList(abc(), 0);
-    expect(q.queuedCount).toBe(0);
+    expect(q.queuedCount).toBe(1);
+    expect(ids(q.upNext(2))).toEqual(['y', 'b']);
   });
 
   it('add appends to list and play order', () => {

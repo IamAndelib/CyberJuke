@@ -7,13 +7,21 @@
  *  - "list": the queue in list order (what setQueue/addItems/moveItem index into);
  *  - "play order": the order tracks will actually play (differs when shuffled).
  *
- * The "Add to queue" rule (shared with the native queue; the cases both must pass
- * are in tests/spec/queue-rules.json):
+ * The rules (shared with the native queue; the cases both must pass are in
+ * tests/spec/queue-rules.json):
  *  - queued tracks play right after the current track, first in first out, shuffle
  *    or not, until each one plays or is removed;
  *  - a manual jump (skipTo, or prev moving back) to a track that isn't one of them
  *    keeps them next: they move to just after the new current track, in the order
- *    they were going to play. Jumping to one of them plays it; the others stay next.
+ *    they were going to play. Jumping to one of them plays it; the others stay next;
+ *  - a new list (setList) replaces the list and the autoplay tracks, but the queued
+ *    tracks stay next, in order (P1);
+ *  - autoplay tracks (addAuto) play after the list, in the order added. Shuffle
+ *    reorders only the list. Repeat all or one drops the autoplay tracks still to
+ *    come, and so does jumping to an autoplay track (the radio continues from it).
+ *
+ * Up next is three sections, in play order: queued by you, the rest of the list,
+ * autoplay (see sections()).
  */
 
 export type RepeatMode = 'off' | 'all' | 'one';
@@ -25,6 +33,15 @@ export interface Identified {
 interface Entry<T> {
   key: number;
   item: T;
+  /** Added by autoplay (addAuto). */
+  auto?: boolean;
+}
+
+/** Up next split into its three sections, each in play order, with list indices. */
+export interface QueueSections<T> {
+  queued: { item: T; index: number }[];
+  list: { item: T; index: number }[];
+  autoplay: { item: T; index: number }[];
 }
 
 export const RESTART_THRESHOLD_MS = 3000;
@@ -83,19 +100,62 @@ export class Queue<T extends Identified> {
     return n;
   }
 
+  /** Whether the item at a list index was added by autoplay. */
+  isAuto(index: number): boolean {
+    return this.list[index]?.auto === true;
+  }
+
+  /** The current track was added by autoplay. */
+  get currentIsAuto(): boolean {
+    return this.cur?.auto === true;
+  }
+
+  /** Autoplay tracks still to come (after the current one in play order). */
+  get autoAhead(): number {
+    const p = this.cur ? this.order.indexOf(this.cur) : -1;
+    let n = 0;
+    for (let k = p + 1; k < this.order.length; k++) if (this.order[k].auto) n++;
+    return n;
+  }
+
+  /**
+   * Up next (at most `max` tracks) as its three sections: the leading run of queued
+   * tracks, then the list, then autoplay.
+   */
+  sections(max = 50): QueueSections<T> {
+    const out: QueueSections<T> = { queued: [], list: [], autoplay: [] };
+    const p = this.cur ? this.order.indexOf(this.cur) : -1;
+    let leading = true;
+    for (const e of this.order.slice(p + 1, p + 1 + max)) {
+      const it = { item: e.item, index: this.list.indexOf(e) };
+      if (leading && this.queued.has(e)) {
+        out.queued.push(it);
+        continue;
+      }
+      leading = false;
+      (e.auto ? out.autoplay : out.list).push(it);
+    }
+    return out;
+  }
+
   // ---- loading -------------------------------------------------------------------
 
-  /** Replace the queue with `items` and make `startIndex` current. */
+  /**
+   * Replace the list (and any autoplay tracks) with `items` and make `startIndex`
+   * current. Tracks still queued with queueNext stay next, in play order (P1).
+   * An empty list clears everything.
+   */
   setList(items: T[], startIndex = 0): T | null {
-    this.queued.clear();
-    this.list = items.map((item) => this.entry(item));
-    if (!this.list.length) {
-      this.order = [];
-      this.cur = null;
+    if (!items.length) {
+      this.clear();
       return null;
     }
+    const kept = this.order.filter((e) => e !== this.cur && this.queued.has(e));
+    this.queued = new Set(kept);
+    this.list = items.map((item) => this.entry(item));
     const i = clamp(startIndex, 0, this.list.length - 1);
     this.cur = this.list[i];
+    this.list.splice(i + 1, 0, ...kept);
     this.rebuildOrder();
     return this.cur.item;
   }
@@ -147,13 +207,18 @@ export class Queue<T extends Identified> {
     return 'restart';
   }
 
-  /** Jump to a list index. Tracks still queued stay next (see the rule above). */
+  /**
+   * Jump to a list index. Tracks still queued stay next (see the rule above). Jumping
+   * to an autoplay track drops the autoplay tracks after it: the radio continues
+   * from the new track.
+   */
   skipTo(index: number): T | null {
     const e = this.list[index];
     if (!e) return null;
     this.cur = e;
     this.settle();
     this.keepQueuedNext();
+    if (e.auto) this.dropAuto();
     return e.item;
   }
 
@@ -164,8 +229,10 @@ export class Queue<T extends Identified> {
     this.rebuildOrder();
   }
 
+  /** Repeat all or one turns autoplay off: the autoplay tracks still to come go. */
   setRepeat(mode: RepeatMode): void {
     this.repeat = mode;
+    if (mode !== 'off') this.dropAuto();
   }
 
   // ---- editing -------------------------------------------------------------------
@@ -224,6 +291,28 @@ export class Queue<T extends Identified> {
     for (const e of entries) this.queued.add(e);
   }
 
+  /**
+   * Autoplay: append tracks after everything else, in list and play order (shuffle
+   * never moves them). With nothing playing, the first one becomes current.
+   */
+  addAuto(items: T[]): void {
+    if (!items.length) return;
+    const entries = items.map((i) => ({ ...this.entry(i), auto: true }));
+    this.list.push(...entries);
+    this.order.push(...entries);
+    if (!this.cur) this.cur = entries[0];
+  }
+
+  /** Remove the autoplay tracks still to come. Returns how many went. */
+  dropAuto(): number {
+    const p = this.cur ? this.order.indexOf(this.cur) : -1;
+    const gone = new Set(this.order.slice(p + 1).filter((e) => e.auto));
+    if (!gone.size) return 0;
+    this.list = this.list.filter((e) => !gone.has(e));
+    this.order = this.order.filter((e) => !gone.has(e));
+    return gone.size;
+  }
+
   /** Append tracks to the end of the queue (in list and play order). */
   add(items: T[]): void {
     if (!items.length) return;
@@ -268,14 +357,23 @@ export class Queue<T extends Identified> {
       this.order = this.list.slice();
       return;
     }
-    // Queued tracks keep playing next, in the order they were added.
-    const queued = this.list.filter((e) => e !== this.cur && this.queued.has(e));
-    const rest = this.list.filter((e) => e !== this.cur && !this.queued.has(e));
+    // Queued tracks keep playing next, in the order they were added; autoplay tracks
+    // stay last, in their order. Only the list is shuffled.
+    const cur = this.cur;
+    const queued = this.list.filter((e) => e !== cur && this.queued.has(e));
+    const autos = this.list.filter((e) => e.auto && !this.queued.has(e));
+    const rest = this.list.filter((e) => e !== cur && !e.auto && !this.queued.has(e));
     for (let i = rest.length - 1; i > 0; i--) {
       const j = Math.floor(this.rand() * (i + 1));
       [rest[i], rest[j]] = [rest[j], rest[i]];
     }
-    this.order = this.cur ? [this.cur, ...queued, ...rest] : [...queued, ...rest];
+    if (!cur) this.order = [...queued, ...rest, ...autos];
+    else if (!cur.auto) this.order = [cur, ...queued, ...rest, ...autos];
+    else {
+      // Playing autoplay: the list is behind; what's ahead keeps its order.
+      const k = autos.indexOf(cur);
+      this.order = [...rest, ...autos.slice(0, k + 1), ...queued, ...autos.slice(k + 1)];
+    }
   }
 }
 

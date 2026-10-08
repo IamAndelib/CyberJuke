@@ -1,4 +1,4 @@
-/** Runs the shared "Add to queue" rule table (also run against the native queue). */
+/** Runs the shared queue rule table (also run against the native queue by QueueRulesTest). */
 import { describe, expect, it } from 'vitest';
 import rules from '../../tests/spec/queue-rules.json';
 import { Queue, type RepeatMode } from './queue';
@@ -24,7 +24,7 @@ function seeded(seed = 1) {
 const t = (id: string) => ({ id });
 const ids = (xs: { id: string }[]) => xs.map((x) => x.id);
 
-describe('Add to queue rule (tests/spec/queue-rules.json)', () => {
+describe('Queue rules (tests/spec/queue-rules.json)', () => {
   for (const c of rules.cases as Case[]) {
     it(c.name, () => {
       const q = new Queue(seeded());
@@ -43,6 +43,9 @@ describe('Add to queue rule (tests/spec/queue-rules.json)', () => {
             break;
           case 'queueNext':
             q.queueNext((s.ids as string[]).map(t));
+            break;
+          case 'addAuto':
+            q.addAuto((s.ids as string[]).map(t));
             break;
           case 'skipTo':
             q.skipTo(indexOf(s.id));
@@ -77,6 +80,12 @@ describe('Add to queue rule (tests/spec/queue-rules.json)', () => {
             }
             if ('queued' in s) expect(q.queuedCount).toBe(s.queued);
             if ('list' in s) expect(ids(q.items)).toEqual(s.list);
+            const sec = q.sections();
+            const sIds = (xs: { item: { id: string } }[]) => xs.map((x) => x.item.id);
+            if ('queuedIds' in s) expect(sIds(sec.queued)).toEqual(s.queuedIds);
+            if ('listIds' in s) expect(sIds(sec.list)).toEqual(s.listIds);
+            if ('listSet' in s) expect(sIds(sec.list).sort()).toEqual((s.listSet as string[]).slice().sort());
+            if ('autoplayIds' in s) expect(sIds(sec.autoplay)).toEqual(s.autoplayIds);
             break;
           }
           default:

@@ -1,6 +1,6 @@
 {
-  "about": "The 'Add to queue' rule, shared by the web Queue (src/player/queue.ts) and the native queue. Every case starts from `list` with `start` current (list index), shuffle and repeat as given, then runs `steps` in order. Ids are track ids; ids are unique within a case. Ops: setList {ids, start}; queueNext {ids}; skipTo {id} (the list index of that id); next (a user skip); nextAuto (the track ended by itself); prev {positionMs} (go back: moves when positionMs <= 3000, else restarts the current track); remove {id}; move {id, to} (list index); setShuffle {on}; setRepeat {mode}. An expect step checks: current (id); upNext (the whole play order after the current track); upNextStartsWith (its first ids, for shuffled cases); queued (how many leading upNext tracks are 'Queued by you'); list (list order).",
-  "rule": "Queued tracks play right after the current track, first in first out, shuffle or not, until each one plays or is removed. A manual jump (skipTo, or prev moving back) keeps the still-queued tracks next: they move to just after the new current track, in the order they were going to play. Jumping to a queued track plays it; the others stay next.",
+  "about": "The queue rules, shared by the web Queue (src/player/queue.ts) and the native queue (NativeQueue, run by QueueRulesTest). Every case starts from `list` with `start` current (list index), shuffle and repeat as given, then runs `steps` in order. Ids are track ids; ids are unique within a case. Ops: setList {ids, start} (a new list: replaces the list and the autoplay tracks, keeps the queued ones); queueNext {ids}; addAuto {ids} (autoplay appends these); skipTo {id} (the list index of that id); next (a user skip); nextAuto (the track ended by itself); prev {positionMs} (go back: moves when positionMs <= 3000, else restarts the current track); remove {id}; move {id, to} (list index); setShuffle {on}; setRepeat {mode}. An expect step checks: current (id); upNext (the whole play order after the current track); upNextStartsWith (its first ids, for shuffled cases); queued (how many leading upNext tracks are 'Queued by you'); list (list order); and Up next's three sections: queuedIds (queued by you), listIds (the rest of the list, in play order), listSet (the same ids in any order, for shuffled cases), autoplayIds (autoplay, in play order).",
+  "rule": "Queued tracks play right after the current track, first in first out, shuffle or not, until each one plays or is removed. A manual jump (skipTo, or prev moving back) keeps the still-queued tracks next: they move to just after the new current track, in the order they were going to play. Jumping to a queued track plays it; the others stay next. A new list replaces the list and the autoplay tracks, but the queued tracks stay next, in order. Autoplay tracks play after the list in the order added; shuffle reorders only the list. Repeat all or one drops the autoplay tracks still to come, and so does jumping to an autoplay track (the radio continues from it).",
   "cases": [
     {
       "name": "queued tracks play next, first in first out",
@@ -9,11 +9,27 @@
       "steps": [
         { "op": "queueNext", "ids": ["X"] },
         { "op": "queueNext", "ids": ["Y"] },
-        { "op": "expect", "current": "a", "upNext": ["X", "Y", "b", "c", "d", "e"], "queued": 2, "list": ["a", "X", "Y", "b", "c", "d", "e"] },
+        {
+          "op": "expect",
+          "current": "a",
+          "upNext": ["X", "Y", "b", "c", "d", "e"],
+          "queued": 2,
+          "list": ["a", "X", "Y", "b", "c", "d", "e"]
+        },
         { "op": "next" },
-        { "op": "expect", "current": "X", "upNext": ["Y", "b", "c", "d", "e"], "queued": 1 },
+        {
+          "op": "expect",
+          "current": "X",
+          "upNext": ["Y", "b", "c", "d", "e"],
+          "queued": 1
+        },
         { "op": "queueNext", "ids": ["Z"] },
-        { "op": "expect", "current": "X", "upNext": ["Y", "Z", "b", "c", "d", "e"], "queued": 2 }
+        {
+          "op": "expect",
+          "current": "X",
+          "upNext": ["Y", "Z", "b", "c", "d", "e"],
+          "queued": 2
+        }
       ]
     },
     {
@@ -23,7 +39,13 @@
       "steps": [
         { "op": "queueNext", "ids": ["X", "Y"] },
         { "op": "skipTo", "id": "d" },
-        { "op": "expect", "current": "d", "upNext": ["X", "Y", "e"], "queued": 2, "list": ["a", "b", "c", "d", "X", "Y", "e"] },
+        {
+          "op": "expect",
+          "current": "d",
+          "upNext": ["X", "Y", "e"],
+          "queued": 2,
+          "list": ["a", "b", "c", "d", "X", "Y", "e"]
+        },
         { "op": "next" },
         { "op": "expect", "current": "X", "upNext": ["Y", "e"], "queued": 1 },
         { "op": "next" },
@@ -37,7 +59,12 @@
       "steps": [
         { "op": "queueNext", "ids": ["X", "Y", "Z"] },
         { "op": "skipTo", "id": "Y" },
-        { "op": "expect", "current": "Y", "upNext": ["X", "Z", "b", "c", "d", "e"], "queued": 2 }
+        {
+          "op": "expect",
+          "current": "Y",
+          "upNext": ["X", "Z", "b", "c", "d", "e"],
+          "queued": 2
+        }
       ]
     },
     {
@@ -47,7 +74,13 @@
       "steps": [
         { "op": "queueNext", "ids": ["X"] },
         { "op": "skipTo", "id": "a" },
-        { "op": "expect", "current": "a", "upNext": ["X", "b", "c", "d", "e"], "queued": 1, "list": ["a", "X", "b", "c", "d", "e"] }
+        {
+          "op": "expect",
+          "current": "a",
+          "upNext": ["X", "b", "c", "d", "e"],
+          "queued": 1,
+          "list": ["a", "X", "b", "c", "d", "e"]
+        }
       ]
     },
     {
@@ -57,9 +90,19 @@
       "steps": [
         { "op": "queueNext", "ids": ["X"] },
         { "op": "prev", "positionMs": 5000 },
-        { "op": "expect", "current": "c", "upNext": ["X", "d", "e"], "queued": 1 },
+        {
+          "op": "expect",
+          "current": "c",
+          "upNext": ["X", "d", "e"],
+          "queued": 1
+        },
         { "op": "prev", "positionMs": 0 },
-        { "op": "expect", "current": "b", "upNext": ["X", "c", "d", "e"], "queued": 1 }
+        {
+          "op": "expect",
+          "current": "b",
+          "upNext": ["X", "c", "d", "e"],
+          "queued": 1
+        }
       ]
     },
     {
@@ -80,7 +123,12 @@
       "steps": [
         { "op": "queueNext", "ids": ["X"] },
         { "op": "nextAuto" },
-        { "op": "expect", "current": "a", "upNext": ["X", "b", "c"], "queued": 1 },
+        {
+          "op": "expect",
+          "current": "a",
+          "upNext": ["X", "b", "c"],
+          "queued": 1
+        },
         { "op": "next" },
         { "op": "expect", "current": "X", "upNext": ["b", "c"], "queued": 0 }
       ]
@@ -92,13 +140,33 @@
       "shuffle": true,
       "steps": [
         { "op": "queueNext", "ids": ["X", "Y"] },
-        { "op": "expect", "current": "a", "upNextStartsWith": ["X", "Y"], "queued": 2 },
+        {
+          "op": "expect",
+          "current": "a",
+          "upNextStartsWith": ["X", "Y"],
+          "queued": 2
+        },
         { "op": "skipTo", "id": "e" },
-        { "op": "expect", "current": "e", "upNextStartsWith": ["X", "Y"], "queued": 2 },
+        {
+          "op": "expect",
+          "current": "e",
+          "upNextStartsWith": ["X", "Y"],
+          "queued": 2
+        },
         { "op": "setShuffle", "on": false },
-        { "op": "expect", "current": "e", "upNextStartsWith": ["X", "Y"], "queued": 2 },
+        {
+          "op": "expect",
+          "current": "e",
+          "upNextStartsWith": ["X", "Y"],
+          "queued": 2
+        },
         { "op": "setShuffle", "on": true },
-        { "op": "expect", "current": "e", "upNextStartsWith": ["X", "Y"], "queued": 2 }
+        {
+          "op": "expect",
+          "current": "e",
+          "upNextStartsWith": ["X", "Y"],
+          "queued": 2
+        }
       ]
     },
     {
@@ -108,21 +176,45 @@
       "steps": [
         { "op": "queueNext", "ids": ["X", "Y"] },
         { "op": "remove", "id": "X" },
-        { "op": "expect", "current": "a", "upNext": ["Y", "b", "c", "d", "e"], "queued": 1 },
+        {
+          "op": "expect",
+          "current": "a",
+          "upNext": ["Y", "b", "c", "d", "e"],
+          "queued": 1
+        },
         { "op": "skipTo", "id": "d" },
         { "op": "expect", "current": "d", "upNext": ["Y", "e"], "queued": 1 }
       ]
     },
     {
-      "name": "a new list forgets everything queued",
+      "name": "a new list keeps the queued tracks next, in order",
       "list": ["a", "b", "c"],
       "start": 0,
       "steps": [
         { "op": "queueNext", "ids": ["X"] },
+        { "op": "queueNext", "ids": ["Y"] },
         { "op": "setList", "ids": ["p", "q", "r"], "start": 1 },
-        { "op": "expect", "current": "q", "upNext": ["r"], "queued": 0 },
+        {
+          "op": "expect",
+          "current": "q",
+          "upNext": ["X", "Y", "r"],
+          "queued": 2,
+          "list": ["p", "q", "X", "Y", "r"]
+        },
         { "op": "skipTo", "id": "p" },
-        { "op": "expect", "current": "p", "upNext": ["q", "r"], "queued": 0 }
+        {
+          "op": "expect",
+          "current": "p",
+          "upNext": ["X", "Y", "q", "r"],
+          "queued": 2
+        },
+        { "op": "next" },
+        {
+          "op": "expect",
+          "current": "X",
+          "upNext": ["Y", "q", "r"],
+          "queued": 1
+        }
       ]
     },
     {
@@ -132,9 +224,19 @@
       "steps": [
         { "op": "queueNext", "ids": ["X", "Y"] },
         { "op": "move", "id": "Y", "to": 1 },
-        { "op": "expect", "current": "a", "upNext": ["Y", "X", "b", "c", "d"], "queued": 2 },
+        {
+          "op": "expect",
+          "current": "a",
+          "upNext": ["Y", "X", "b", "c", "d"],
+          "queued": 2
+        },
         { "op": "skipTo", "id": "c" },
-        { "op": "expect", "current": "c", "upNext": ["Y", "X", "d"], "queued": 2 }
+        {
+          "op": "expect",
+          "current": "c",
+          "upNext": ["Y", "X", "d"],
+          "queued": 2
+        }
       ]
     },
     {
@@ -144,6 +246,257 @@
       "steps": [
         { "op": "queueNext", "ids": ["X", "Y"] },
         { "op": "expect", "current": "X", "upNext": ["Y"], "queued": 1 }
+      ]
+    },
+    {
+      "name": "a new list keeps the queued tracks next, shuffled too",
+      "list": ["a", "b", "c"],
+      "start": 0,
+      "shuffle": true,
+      "steps": [
+        { "op": "queueNext", "ids": ["X", "Y"] },
+        { "op": "setList", "ids": ["p", "q", "r", "s"], "start": 2 },
+        {
+          "op": "expect",
+          "current": "r",
+          "upNextStartsWith": ["X", "Y"],
+          "queued": 2,
+          "queuedIds": ["X", "Y"],
+          "listSet": ["p", "q", "s"],
+          "autoplayIds": []
+        }
+      ]
+    },
+    {
+      "name": "a queued track that played is not kept by a new list",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "queueNext", "ids": ["X", "Y"] },
+        { "op": "next" },
+        { "op": "setList", "ids": ["p", "q"], "start": 0 },
+        { "op": "expect", "current": "p", "upNext": ["Y", "q"], "queued": 1 }
+      ]
+    },
+    {
+      "name": "a radio (a list of one) plays the queued tracks, then autoplay",
+      "list": ["a", "b", "c"],
+      "start": 0,
+      "steps": [
+        { "op": "queueNext", "ids": ["X"] },
+        { "op": "setList", "ids": ["p"], "start": 0 },
+        { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
+        {
+          "op": "expect",
+          "current": "p",
+          "upNext": ["X", "s1", "s2", "s3"],
+          "queuedIds": ["X"],
+          "listIds": [],
+          "autoplayIds": ["s1", "s2", "s3"]
+        },
+        { "op": "next" },
+        { "op": "next" },
+        {
+          "op": "expect",
+          "current": "s1",
+          "upNext": ["s2", "s3"],
+          "autoplayIds": ["s2", "s3"]
+        }
+      ]
+    },
+    {
+      "name": "the list plays to its end, then autoplay continues",
+      "list": ["a", "b", "c"],
+      "start": 1,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2"] },
+        {
+          "op": "expect",
+          "current": "b",
+          "upNext": ["c", "s1", "s2"],
+          "queuedIds": [],
+          "listIds": ["c"],
+          "autoplayIds": ["s1", "s2"]
+        },
+        { "op": "nextAuto" },
+        { "op": "nextAuto" },
+        {
+          "op": "expect",
+          "current": "s1",
+          "upNext": ["s2"],
+          "listIds": [],
+          "autoplayIds": ["s2"]
+        },
+        { "op": "addAuto", "ids": ["s3"] },
+        { "op": "expect", "current": "s1", "upNext": ["s2", "s3"] },
+        { "op": "prev", "positionMs": 0 },
+        { "op": "expect", "current": "c", "upNext": ["s1", "s2", "s3"] }
+      ]
+    },
+    {
+      "name": "shuffle reorders only the list; autoplay stays last, in order",
+      "list": ["a", "b", "c", "d", "e"],
+      "start": 0,
+      "shuffle": true,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
+        { "op": "queueNext", "ids": ["X"] },
+        {
+          "op": "expect",
+          "current": "a",
+          "queuedIds": ["X"],
+          "listSet": ["b", "c", "d", "e"],
+          "autoplayIds": ["s1", "s2", "s3"]
+        },
+        { "op": "setShuffle", "on": false },
+        {
+          "op": "expect",
+          "current": "a",
+          "upNext": ["X", "b", "c", "d", "e", "s1", "s2", "s3"]
+        },
+        { "op": "setShuffle", "on": true },
+        {
+          "op": "expect",
+          "current": "a",
+          "queuedIds": ["X"],
+          "listSet": ["b", "c", "d", "e"],
+          "autoplayIds": ["s1", "s2", "s3"]
+        }
+      ]
+    },
+    {
+      "name": "shuffle while autoplay plays keeps what's ahead in order",
+      "list": ["a", "b"],
+      "start": 1,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
+        { "op": "next" },
+        { "op": "setShuffle", "on": true },
+        {
+          "op": "expect",
+          "current": "s1",
+          "upNext": ["s2", "s3"],
+          "listIds": [],
+          "autoplayIds": ["s2", "s3"]
+        },
+        { "op": "queueNext", "ids": ["X"] },
+        {
+          "op": "expect",
+          "current": "s1",
+          "upNext": ["X", "s2", "s3"],
+          "queuedIds": ["X"],
+          "autoplayIds": ["s2", "s3"]
+        }
+      ]
+    },
+    {
+      "name": "queued while autoplay plays: next, before the rest of autoplay",
+      "list": ["a"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
+        { "op": "next" },
+        { "op": "queueNext", "ids": ["X"] },
+        {
+          "op": "expect",
+          "current": "s1",
+          "upNext": ["X", "s2", "s3"],
+          "queued": 1,
+          "queuedIds": ["X"],
+          "listIds": [],
+          "autoplayIds": ["s2", "s3"]
+        },
+        { "op": "skipTo", "id": "s3" },
+        {
+          "op": "expect",
+          "current": "s3",
+          "upNext": ["X"],
+          "queuedIds": ["X"],
+          "autoplayIds": []
+        }
+      ]
+    },
+    {
+      "name": "repeat all or one drops the autoplay tracks still to come",
+      "list": ["a", "b", "c"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2"] },
+        { "op": "setRepeat", "mode": "all" },
+        {
+          "op": "expect",
+          "current": "a",
+          "upNext": ["b", "c"],
+          "autoplayIds": []
+        },
+        { "op": "setRepeat", "mode": "off" },
+        { "op": "addAuto", "ids": ["s3"] },
+        { "op": "setRepeat", "mode": "one" },
+        {
+          "op": "expect",
+          "current": "a",
+          "upNext": ["b", "c"],
+          "autoplayIds": []
+        }
+      ]
+    },
+    {
+      "name": "tapping an autoplay track plays it; the old radio after it goes",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "queueNext", "ids": ["X"] },
+        { "op": "addAuto", "ids": ["s1", "s2", "s3", "s4"] },
+        { "op": "skipTo", "id": "s2" },
+        {
+          "op": "expect",
+          "current": "s2",
+          "upNext": ["X"],
+          "queuedIds": ["X"],
+          "listIds": [],
+          "autoplayIds": []
+        },
+        { "op": "addAuto", "ids": ["t1", "t2"] },
+        {
+          "op": "expect",
+          "current": "s2",
+          "upNext": ["X", "t1", "t2"],
+          "autoplayIds": ["t1", "t2"]
+        }
+      ]
+    },
+    {
+      "name": "a new list drops the old autoplay tracks",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2"] },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "setList", "ids": ["p", "q"], "start": 0 },
+        {
+          "op": "expect",
+          "current": "p",
+          "upNext": ["q"],
+          "listIds": ["q"],
+          "autoplayIds": [],
+          "list": ["p", "q"]
+        }
+      ]
+    },
+    {
+      "name": "removing an autoplay track",
+      "list": ["a"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
+        { "op": "remove", "id": "s2" },
+        {
+          "op": "expect",
+          "current": "a",
+          "upNext": ["s1", "s3"],
+          "autoplayIds": ["s1", "s3"]
+        }
       ]
     }
   ]
