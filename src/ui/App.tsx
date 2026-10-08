@@ -25,7 +25,7 @@ import { Toasts } from './components/Toasts';
 import { ConfirmSheet } from './ConfirmSheet';
 import { SearchFab } from './components/SearchFab';
 import { scrollToTop } from './scrollToTop';
-import { reducedMotion } from './motion';
+import { reducedMotion } from '../core/motion';
 import { AlbumPage } from './screens/Album';
 import { ArtistPage } from './screens/Artist';
 import { ArtistGrid } from './screens/Artists';

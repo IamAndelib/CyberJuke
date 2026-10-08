@@ -6,7 +6,7 @@
  */
 import type { RefObject } from 'preact';
 import { useEffect } from 'preact/hooks';
-import { reducedMotion } from './motion';
+import { reducedMotion } from '../core/motion';
 
 export const PRESS_MS = 120;
 

@@ -15,7 +15,7 @@ import type { Track } from '../../data/model';
 import { livePosition, player, type PlayerState } from '../../player';
 import { online } from '../../core/network';
 import { smoothScrolling } from '../clickGuard';
-import { reducedMotion } from '../motion';
+import { reducedMotion } from '../../core/motion';
 import { useTickValue } from '../useTick';
 
 /** Lyrics shown instead of the art (kept across tracks and reopenings). */

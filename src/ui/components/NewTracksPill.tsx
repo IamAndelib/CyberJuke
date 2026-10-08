@@ -10,7 +10,7 @@ import { freshness, refreshLatest } from '../../store/newTracks';
 import { FRESHNESS_LIMIT } from '../../data/firestore';
 import { SMOOTH_SCROLL_MS, scrollAnimating } from '../clickGuard';
 import { Icon } from '../icons';
-import { reducedMotion } from '../motion';
+import { reducedMotion } from '../../core/motion';
 
 /** The fade-out; the pill unmounts after it (or after this long without a transitionend). */
 export const PILL_FADE_MS = 200;

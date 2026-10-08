@@ -10,7 +10,7 @@ import { openExternal, openPost, youtubeUrl } from '../links';
 import { positionNow, useLiveProgress, useTickValue } from '../useTick';
 import { splitArtists } from '../../data/artists';
 import { isGlobal, type Track } from '../../data/model';
-import { reducedMotion } from '../motion';
+import { reducedMotion } from '../../core/motion';
 import { Art } from './Art';
 import { Marquee } from './Marquee';
 import { MembersTag } from './TrackRow';

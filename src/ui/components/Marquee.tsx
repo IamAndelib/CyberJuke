@@ -11,7 +11,7 @@
  * compositor; it pauses while the page is hidden.
  */
 import { useEffect, useRef } from 'preact/hooks';
-import { reducedMotion } from '../motion';
+import { reducedMotion } from '../../core/motion';
 
 export const MARQUEE_PX_S = 36;
 export const MARQUEE_HOLD_MS = 1500;

@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { TEST_HOOKS } from '../../core/testHooks';
 import { scrollAnimating } from '../clickGuard';
 import { Icon } from '../icons';
-import { reducedMotion } from '../motion';
+import { reducedMotion } from '../../core/motion';
 import { PULL_MIN_SPIN_MS, PULL_REFRESH_AT, PULL_REST, PULL_SPRING_MS, pullIntent, rubberBand } from '../pullToRefresh';
 import { scrollToTop } from '../scrollToTop';
 import { usePress } from '../usePress';
