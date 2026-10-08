@@ -1,0 +1,53 @@
+# DRAFT fdroiddata recipe for CyberJuke (metadata/io.github.iamandelib.cyberjuke.yml).
+# Modelled on Voyager's Capacitor recipe. See docs/fdroid/README.md before submitting:
+# fill in the commit, the signing-key fingerprint and the first build entry.
+Categories:
+  - Multimedia
+License: GPL-3.0-only
+AuthorName: IamAndelib
+SourceCode: https://github.com/IamAndelib/CyberJuke
+IssueTracker: https://github.com/IamAndelib/CyberJuke/issues
+Changelog: https://github.com/IamAndelib/CyberJuke/blob/HEAD/CHANGELOG.md
+
+AutoName: CyberJuke
+
+AntiFeatures:
+  NonFreeNet:
+    en-US: Plays audio from YouTube (through NewPipeExtractor) and reads its track list from Cyberspace's non-free backend (Google Firestore). Global search and artist pages use YouTube Music; lyrics come from LRCLIB.
+
+RepoType: git
+Repo: https://github.com/IamAndelib/CyberJuke.git
+# Reproducible builds: F-Droid builds the tagged commit and, when its APK matches the one on
+# GitHub byte for byte (apart from the signature), publishes the developer-signed APK.
+Binaries: https://github.com/IamAndelib/CyberJuke/releases/download/v%v/CyberJuke-%v.apk
+
+Builds:
+  - versionName: 0.1.0
+    versionCode: 1000
+    commit: v0.1.0 # replace with the full commit hash of the v0.1.0 tag
+    subdir: android/app
+    sudo:
+      # The Capacitor CLI needs Node 22 (Debian's nodejs is older): official tarball, pinned.
+      - apt-get update
+      - apt-get install -y xz-utils
+      - curl -fsSLo /tmp/node.tar.xz https://nodejs.org/dist/v22.22.0/node-v22.22.0-linux-x64.tar.xz
+      - echo '9aa8e9d2298ab68c600bd6fb86a6c13bce11a4eca1ba9b39d79fa021755d7c37  /tmp/node.tar.xz' | sha256sum -c -
+      - tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1
+      - rm /tmp/node.tar.xz
+    gradle:
+      - yes
+    prebuild:
+      - cd ../..
+      - npm ci --ignore-scripts
+      - npm run build
+      - npx cap sync android --deployment
+    scandelete:
+      - node_modules
+
+AllowedAPKSigningKeys: 0000000000000000000000000000000000000000000000000000000000000000 # SHA-256 of the release signing certificate (lowercase, no colons)
+
+AutoUpdateMode: Version
+# Only release tags (the rolling "preview" tag is ignored).
+UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$
+CurrentVersion: 0.1.0
+CurrentVersionCode: 1000
