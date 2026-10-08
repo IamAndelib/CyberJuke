@@ -10,9 +10,9 @@ import {
 import { useState } from 'preact/hooks';
 import { AuthError, SIGN_UP_URL, auth, authErrorText } from '../../data/auth';
 import { toast } from '../../stores/toast';
-import { Screen } from '../components/Screen';
-import { openExternal } from '../links';
-import { askConfirm } from '../nav';
+import { Screen } from '../../ui/components/Screen';
+import { openExternal } from '../../ui/links';
+import { askConfirm } from '../../ui/nav';
 
 function Swatch({ id }: { id: ThemeId }) {
   const on = settings.value.theme === id;

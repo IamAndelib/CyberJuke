@@ -34,7 +34,7 @@ import { Home } from '../features/home/Home';
 import { Library } from '../features/library/Library';
 import { ReleasesPage } from '../features/artists/Releases';
 import { Search } from '../features/search/Search';
-import { Settings } from './screens/Settings';
+import { Settings } from '../features/settings/Settings';
 
 const TAB_ITEMS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
