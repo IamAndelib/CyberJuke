@@ -3,10 +3,10 @@ package io.github.iamandelib.cyberjuke;
 import android.content.Intent;
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;
-import io.github.iamandelib.cyberjuke.player.JukePlayerPlugin;
+import io.github.iamandelib.cyberjuke.bridge.JukePlayerPlugin;
+import io.github.iamandelib.cyberjuke.bridge.MusicPlugin;
+import io.github.iamandelib.cyberjuke.bridge.SecureStorePlugin;
 import io.github.iamandelib.cyberjuke.player.LaunchOptions;
-import io.github.iamandelib.cyberjuke.player.MusicPlugin;
-import io.github.iamandelib.cyberjuke.player.SecureStorePlugin;
 
 public class MainActivity extends BridgeActivity {
 

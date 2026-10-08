@@ -1,4 +1,4 @@
-package io.github.iamandelib.cyberjuke.player
+package io.github.iamandelib.cyberjuke.bridge
 
 import android.content.Context
 import android.content.SharedPreferences

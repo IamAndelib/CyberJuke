@@ -1,4 +1,4 @@
-package io.github.iamandelib.cyberjuke.player
+package io.github.iamandelib.cyberjuke.bridge
 
 import android.Manifest
 import android.content.ComponentName
@@ -29,6 +29,16 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import com.google.common.util.concurrent.ListenableFuture
 import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.NetBlock
+import io.github.iamandelib.cyberjuke.player.JukeCommands
+import io.github.iamandelib.cyberjuke.player.JukeTracks
+import io.github.iamandelib.cyberjuke.player.JukeUris
+import io.github.iamandelib.cyberjuke.player.LaunchOptions
+import io.github.iamandelib.cyberjuke.player.NetPrefsStore
+import io.github.iamandelib.cyberjuke.player.PlaybackService
+import io.github.iamandelib.cyberjuke.player.PlayerBus
+import io.github.iamandelib.cyberjuke.player.QueueCommands
+import io.github.iamandelib.cyberjuke.player.QueueInfo
+import io.github.iamandelib.cyberjuke.player.StreamResolver
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.roundToInt
