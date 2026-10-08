@@ -1,8 +1,5 @@
 package io.github.iamandelib.cyberjuke.player
 
-import android.content.Context
-import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Bundle
 import androidx.media3.common.MediaItem
@@ -145,55 +142,4 @@ internal object PlayerBus {
     fun emitExtractorBroken(message: String) {
         brokenListeners.forEach { it.onExtractorBroken(message) }
     }
-}
-
-/** Persists [NetPrefs] (SharedPreferences "cyberjuke_player"); applied at service start. */
-internal object NetPrefsStore {
-    private const val PREFS = "cyberjuke_player"
-    private const val KEY_PREFER_IPV4 = "prefer_ipv4"
-
-    fun load(context: Context) {
-        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (NetPrefs.setPreferIpv4(prefs.getBoolean(KEY_PREFER_IPV4, false))) StreamResolver.clear()
-    }
-
-    fun setPreferIpv4(context: Context, value: Boolean) {
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putBoolean(KEY_PREFER_IPV4, value).apply()
-        if (NetPrefs.setPreferIpv4(value)) StreamResolver.clear()
-    }
-}
-
-internal fun Context.isDebuggable(): Boolean =
-    (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-
-/** Launch options from the activity intent (`--es autoplay latest`, debuggable builds), read by getLaunchOptions(). */
-object LaunchOptions {
-    @Volatile
-    @JvmStatic
-    var autoplay: String? = null
-
-    /** The `autoplay` extra is a CI hook: honoured on debuggable builds only (S2). */
-    @JvmStatic
-    fun updateFrom(context: Context, intent: Intent?) {
-        autoplay = if (context.isDebuggable()) {
-            intent?.getStringExtra("autoplay")?.takeIf { it == "latest" || it == CI_TONE }
-        } else {
-            null
-        }
-        ciToneConsumed = false
-    }
-
-    /**
-     * CI only: `--es autoplay ci-tone` makes the plugin queue a bundled test tone directly,
-     * so the playback service, media session and background playback can be verified on
-     * runners whose IPs YouTube blocks. The asset only exists in debug builds
-     * (src/debug/assets), so in release this id just fails to load.
-     */
-    const val CI_TONE = "ci-tone"
-    const val CI_TONE_ASSET = "asset:///ci-tone.ogg"
-
-    @Volatile
-    @JvmStatic
-    var ciToneConsumed = false
 }
