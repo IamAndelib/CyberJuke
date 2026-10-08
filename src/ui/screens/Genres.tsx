@@ -1,62 +1,76 @@
-import { useEffect, useState } from 'preact/hooks';
 import { source } from '../../data';
-import type { Cursor } from '../../data/source';
 import { player } from '../../player';
-import { genres, recordTracks } from '../../store/genres';
-import { settings } from '../../store/library';
+import { catalog } from '../../store/catalog';
+import { genres, genresComplete } from '../../store/genres';
+import { favoriteGenres, settings, toggleFavoriteGenre } from '../../store/library';
 import { Icon } from '../icons';
 import { openGenre } from '../nav';
 import { ErrorState, PagedTracks } from '../components/TrackList';
 import { Screen } from '../components/Screen';
 import { usePaged } from '../usePaged';
 
-/** Latest pages used to seed the genre grid (cached by the source, so cheap). */
-const SEED_PAGES = 3;
-
-async function seedGenres(): Promise<void> {
-  let cursor: Cursor | null = null;
-  for (let i = 0; i < SEED_PAGES; i++) {
-    const p = await source.latest(cursor);
-    recordTracks(p.tracks);
-    cursor = p.cursor;
-    if (!cursor) break;
-  }
-}
-
 export function Genres() {
   if (openGenre.value) return <GenreDetail genre={openGenre.value} />;
   return <GenreGrid />;
 }
 
+function GenreTile({ name, fav }: { name: string; fav: boolean }) {
+  return (
+    <div class={'genre-cell' + (fav ? ' fav' : '')} data-testid="genre-cell" data-genre={name}>
+      <button class="genre-tile" onClick={() => (openGenre.value = name)} data-testid="genre-tile" data-genre={name}>
+        <span class="genre-name">{name}</span>
+      </button>
+      <button
+        class={'genre-fav' + (fav ? ' on' : '')}
+        aria-pressed={fav}
+        aria-label={fav ? `Remove ${name} from favorite genres` : `Add ${name} to favorite genres`}
+        onClick={() => toggleFavoriteGenre(name)}
+        data-testid="genre-fav"
+      >
+        <Icon name={fav ? 'heart' : 'heartOutline'} size={20} />
+      </button>
+    </div>
+  );
+}
+
 function GenreGrid() {
-  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [offline, setOffline] = useState(false);
-  const load = () => {
-    setState('loading');
-    seedGenres()
-      .then(() => setState('ready'))
-      .catch((e) => {
-        setOffline(!!e?.offline);
-        setState('error');
-      });
-  };
-  useEffect(load, []);
   const list = genres.value;
+  const favs = favoriteGenres.value;
+  const status = catalog.status.value;
+  const complete = genresComplete.value;
 
   return (
     <Screen
       testid="screen-genres"
       title="Genres"
-      subtitle={list.length ? `${list.length} seen in recent posts` : 'Browse by genre'}
-      onRefresh={async () => {
-        source.invalidate?.();
-        await seedGenres().catch(() => {});
-      }}
+      subtitle={complete ? `${list.length} genres on the Jukebox` : 'Browse by genre'}
+      onRefresh={() => catalog.refresh({ force: true })}
     >
-      {state === 'error' && !list.length ? (
-        <ErrorState offline={offline} message="Couldn't load genres." onRetry={load} />
-      ) : state === 'loading' && !list.length ? (
-        <div class="genre-grid" aria-hidden="true">
+      {favs.length > 0 && (
+        <section data-testid="fav-genres">
+          <div class="section-head">
+            <h2 class="section-title">Favorite genres</h2>
+          </div>
+          <div class="genre-grid">
+            {favs.map((name) => (
+              <GenreTile key={name} name={name} fav />
+            ))}
+          </div>
+        </section>
+      )}
+      {favs.length > 0 && (
+        <div class="section-head">
+          <h2 class="section-title">All genres</h2>
+        </div>
+      )}
+      {status === 'error' && !list.length ? (
+        <ErrorState
+          offline={!!catalog.error.value?.offline}
+          message="Couldn't load genres."
+          onRetry={() => void catalog.refresh()}
+        />
+      ) : !list.length ? (
+        <div class="genre-grid" aria-hidden="true" data-testid="genre-skeleton">
           {Array.from({ length: 10 }, (_, i) => (
             <div class="genre-tile skel-block" key={i} />
           ))}
@@ -64,22 +78,11 @@ function GenreGrid() {
       ) : (
         <div class="genre-grid" data-testid="genre-grid">
           {list.map((g) => (
-            <button
-              key={g.name}
-              class="genre-tile"
-              onClick={() => (openGenre.value = g.name)}
-              data-testid="genre-tile"
-              data-genre={g.name}
-            >
-              <span class="genre-name">{g.name}</span>
-              <span class="genre-count">
-                {g.count} track{g.count === 1 ? '' : 's'}
-              </span>
-            </button>
+            <GenreTile key={g.name} name={g.name} fav={favs.includes(g.name)} />
           ))}
         </div>
       )}
-      <p class="fineprint">Genres are free text chosen by each poster. The grid grows as you browse.</p>
+      <p class="fineprint">Genres are free text chosen by each poster. Tap the heart to pin a genre to the top.</p>
     </Screen>
   );
 }

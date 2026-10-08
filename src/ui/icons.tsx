@@ -1,23 +1,10 @@
 /**
  * Pixel-art icons drawn as 12x12 ASCII bitmaps and turned into one SVG path each,
  * so they stay crisp and match Cyberspace's bitmap look. Colour = currentColor.
+ * A few icons are smooth vectors on the same 12x12 grid (see V).
  */
 
 const B: Record<string, string[]> = {
-  play: [
-    '............',
-    '..#.........',
-    '..##........',
-    '..###.......',
-    '..####......',
-    '..#####.....',
-    '..#####.....',
-    '..####......',
-    '..###.......',
-    '..##........',
-    '..#.........',
-    '............',
-  ],
   pause: [
     '............',
     '..###..###..',
@@ -326,6 +313,20 @@ const B: Record<string, string[]> = {
     '.#.######...',
     '............',
   ],
+  search: [
+    '............',
+    '..#####.....',
+    '.##...##....',
+    '##.....##...',
+    '##.....##...',
+    '##.....##...',
+    '##.....##...',
+    '.##...##....',
+    '..######....',
+    '.......###..',
+    '........###.',
+    '.........##.',
+  ],
   offline: [
     '............',
     '#...........',
@@ -341,6 +342,14 @@ const B: Record<string, string[]> = {
     '..........#.',
   ],
 };
+
+/**
+ * Vector icons on the 12x12 grid. Play is a smooth triangle as tall as the pause bars
+ * (rows 1-11) with its centroid at x = 5.83, so it looks centred next to pause.
+ */
+const V = {
+  play: 'M3.5 1 L10.5 6 L3.5 11 Z',
+} as const;
 
 const cache = new Map<string, string>();
 
@@ -366,9 +375,14 @@ function pathFor(name: string): string {
   return d;
 }
 
-export type IconName = keyof typeof B;
+export type IconName = keyof typeof B | keyof typeof V;
+
+function isVector(name: IconName): name is keyof typeof V {
+  return name in V;
+}
 
 export function Icon({ name, size = 24, class: cls }: { name: IconName; size?: number; class?: string }) {
+  const vector = isVector(name);
   return (
     <svg
       class={'icon' + (cls ? ' ' + cls : '')}
@@ -377,9 +391,10 @@ export function Icon({ name, size = 24, class: cls }: { name: IconName; size?: n
       viewBox="0 0 12 12"
       aria-hidden="true"
       focusable="false"
-      shape-rendering="crispEdges"
+      shape-rendering={vector ? 'geometricPrecision' : 'crispEdges'}
+      data-icon={name}
     >
-      <path d={pathFor(name)} fill="currentColor" />
+      <path d={vector ? V[name] : pathFor(name)} fill="currentColor" />
     </svg>
   );
 }

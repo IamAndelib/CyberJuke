@@ -1,20 +1,29 @@
 import { signal } from '@preact/signals';
 import { useState } from 'preact/hooks';
-import { source } from '../../data';
+import { shuffled, source } from '../../data';
 import { player } from '../../player';
-import { genres } from '../../store/genres';
-import { settings } from '../../store/library';
+import { catalog, mostSaved, type SavedRange } from '../../store/catalog';
+import { chipGenres } from '../../store/genres';
+import { favoriteGenres, settings } from '../../store/library';
 import { toast } from '../../store/toast';
 import { Icon } from '../icons';
-import { PagedTracks } from '../components/TrackList';
+import { EmptyState, ErrorState, PagedTracks, Tracks } from '../components/TrackList';
+import { SkeletonRows } from '../components/TrackRow';
 import { Screen } from '../components/Screen';
 import { usePaged } from '../usePaged';
 
-/** Selected genre chip on Home (null = Latest). Survives tab switches. */
+/** Selected genre chip on Home (null = All). Survives tab switches. */
 export const homeGenre = signal<string | null>(null);
+/** Home sort: newest posts (Firestore pages) or most saved (local catalog). */
+export const homeSort = signal<'latest' | 'saved'>('latest');
+export const savedRange = signal<SavedRange>('month');
+
+/** Most-saved list length; beyond this it's mostly single-save noise. */
+const SAVED_MAX = 100;
 
 export async function shuffleJukebox(): Promise<void> {
-  const tracks = await source.shuffle(50);
+  const all = catalog.tracks.value;
+  const tracks = all.length ? shuffled(all).slice(0, 50) : await source.shuffle(50);
   if (!tracks.length) throw new Error('No tracks found');
   await player.setShuffle(false);
   await player.playList(tracks, 0);
@@ -39,7 +48,7 @@ export function ShuffleHero() {
         <span class="hero-text">
           <span class="hero-kicker">Feeling lucky?</span>
           <span class="hero-title">Shuffle the Jukebox</span>
-          <span class="hero-sub">{busy ? 'Spinning the reels…' : 'Random picks from recent posts'}</span>
+          <span class="hero-sub">{busy ? 'Spinning the reels…' : 'Random picks from the whole Jukebox'}</span>
         </span>
         <span class="hero-btn" aria-hidden="true">
           {busy ? <span class="spinner big" /> : <Icon name="shuffle" size={32} />}
@@ -51,10 +60,10 @@ export function ShuffleHero() {
 }
 
 export function GenreChips() {
-  const list = genres.value.slice(0, 24);
+  void favoriteGenres.value;
   const sel = homeGenre.value;
+  const names = chipGenres(24);
   // Keep a selected genre visible even if it's not in the top slice.
-  const names = list.map((g) => g.name);
   if (sel && !names.includes(sel)) names.unshift(sel);
   return (
     <div class="chips" role="tablist" aria-label="Filter by genre" data-testid="genre-chips">
@@ -84,30 +93,114 @@ export function GenreChips() {
   );
 }
 
+function SortTabs() {
+  const cur = homeSort.value;
+  const tabs = [
+    { id: 'latest', label: 'Latest' },
+    { id: 'saved', label: 'Most saved' },
+  ] as const;
+  return (
+    <div class="sort-tabs" role="tablist" aria-label="Sort" data-testid="home-sort">
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          role="tab"
+          class={'sort-tab' + (cur === t.id ? ' on' : '')}
+          aria-selected={cur === t.id}
+          onClick={() => (homeSort.value = t.id)}
+          data-testid={`sort-${t.id}`}
+        >
+          [{t.label}]
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function RangeToggle() {
+  const cur = savedRange.value;
+  const opts = [
+    { id: 'month', label: 'This month' },
+    { id: 'all', label: 'All time' },
+  ] as const;
+  return (
+    <div class="segmented small range" role="radiogroup" aria-label="Time range" data-testid="saved-range">
+      {opts.map((o) => (
+        <button
+          key={o.id}
+          role="radio"
+          aria-checked={cur === o.id}
+          class={cur === o.id ? 'on' : ''}
+          onClick={() => (savedRange.value = o.id)}
+          data-testid={`range-${o.id}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MostSaved({ genre }: { genre: string | null }) {
+  const status = catalog.status.value;
+  const all = catalog.tracks.value;
+  const range = savedRange.value;
+  if (!all.length) {
+    if (status === 'error') {
+      const err = catalog.error.value ?? { message: "Couldn't load the Jukebox.", offline: false };
+      return <ErrorState {...err} onRetry={() => void catalog.refresh()} />;
+    }
+    return <SkeletonRows />;
+  }
+  const list = mostSaved(all, { genre, range }).slice(0, SAVED_MAX);
+  if (!list.length) {
+    return (
+      <EmptyState title={range === 'month' ? 'No saves this month yet' : 'No saved tracks yet'}>
+        {range === 'month' ? (
+          <button class="link-btn" onClick={() => (savedRange.value = 'all')}>
+            [Show all time]
+          </button>
+        ) : (
+          'Saves come from bookmarks on Cyberspace.'
+        )}
+      </EmptyState>
+    );
+  }
+  return (
+    <div data-testid="saved-list">
+      <Tracks tracks={list} showSaves hideGenre={genre != null} />
+      <div class="list-foot end">— {list.length === SAVED_MAX ? `top ${SAVED_MAX}` : 'end of tape'} —</div>
+    </div>
+  );
+}
+
 export function Home() {
   const g = homeGenre.value;
+  const sort = homeSort.value;
   const nsfw = settings.value.showNsfw;
+  // Latest stays loaded while Most saved is shown, so switching back is instant.
   const paged = usePaged(`home:${g ?? ''}:${nsfw}`, (c) => (g == null ? source.latest(c) : source.byGenre(g, c)));
   return (
     <Screen
       testid="screen-home"
       title={<span class="brand">CYBERJUKE</span>}
       subtitle="The Cyberspace Jukebox"
-      onRefresh={paged.refresh}
+      onRefresh={async () => {
+        if (sort === 'saved') await catalog.refresh({ force: true });
+        else await paged.refresh();
+      }}
     >
       <ShuffleHero />
       <GenreChips />
-      <div class="section-head">
-        <h2 class="section-title" data-testid="home-section-title">
-          {g == null ? 'Latest' : g}
-        </h2>
-        {paged.tracks.length > 0 && (
-          <button class="link-btn" onClick={() => player.playList(paged.tracks, 0)} data-testid="home-play-all">
-            [Play all]
-          </button>
-        )}
+      <div class="section-head sort-head">
+        <SortTabs />
       </div>
-      <PagedTracks paged={paged} />
+      {sort === 'saved' && (
+        <div class="range-row">
+          <RangeToggle />
+        </div>
+      )}
+      {sort === 'latest' ? <PagedTracks paged={paged} /> : <MostSaved genre={g} />}
     </Screen>
   );
 }

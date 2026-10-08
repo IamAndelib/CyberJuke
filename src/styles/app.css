@@ -8,6 +8,7 @@
   --safe-right: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
   --tabbar-h: 60px;
   --mini-h: 64px;
+  --fab: 56px;
   --gutter: 16px;
   --dither: repeating-conic-gradient(var(--color-fg-dim) 0 25%, transparent 0 50%);
 }
@@ -104,6 +105,10 @@ h3 {
   flex: 1;
   min-height: 0;
   position: relative;
+}
+
+.tab-content {
+  height: 100%;
 }
 
 .offline-banner {
@@ -382,6 +387,11 @@ h3 {
   position: absolute;
   inset: -5px -2px;
 }
+.chips.wrap {
+  flex-wrap: wrap;
+  overflow: visible;
+  row-gap: 10px;
+}
 .chip.on {
   background: var(--color-fg);
   border-color: var(--color-fg);
@@ -409,6 +419,57 @@ h3 {
 .section-title::before {
   content: '> ';
   color: var(--color-fg-dim);
+}
+
+/* Home sort: [Latest] [Most saved], a DOS menu bar with the current item inverted. */
+.sort-tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: -6px;
+  min-width: 0;
+}
+.sort-tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 6px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--color-fg-dim);
+  border-radius: var(--radius);
+}
+.sort-tab.on {
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+}
+.sort-tab:active:not(.on) {
+  background: var(--color-surface);
+  color: var(--color-fg);
+}
+.range-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px var(--gutter) 6px;
+}
+.range-row .segmented.small button {
+  min-width: 0;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+/* Saves count in Most saved rows. */
+.saves {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-display);
+  color: var(--color-accent);
 }
 
 /* ---- Track rows ------------------------------------------------------------------- */
@@ -737,13 +798,23 @@ h3 {
   gap: 12px;
   padding: 16px calc(var(--gutter) + 4px) 4px var(--gutter);
 }
+.section-head + .genre-grid {
+  padding-top: 6px;
+}
+[data-testid='fav-genres'] + .section-head {
+  margin-top: 14px;
+}
+.genre-cell {
+  position: relative;
+  min-width: 0;
+}
 .genre-tile {
   position: relative;
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: 84px;
-  padding: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 40px 10px 12px;
   border: var(--border-w) solid var(--color-fg);
   border-radius: var(--radius);
   background: var(--color-bg);
@@ -760,9 +831,6 @@ h3 {
   color: var(--color-bg);
   text-shadow: none;
 }
-.genre-tile:active .genre-count {
-  color: inherit;
-}
 .genre-name {
   font-family: var(--font-display);
   font-size: 17px;
@@ -770,10 +838,29 @@ h3 {
   overflow-wrap: anywhere;
   text-transform: lowercase;
 }
-.genre-count {
-  margin-top: 8px;
-  font-size: 12px;
+/* Heart: its own 44px button over the tile's top-right corner. */
+.genre-fav {
+  position: absolute;
+  top: 8px;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
   color: var(--color-fg-dim);
+}
+.genre-fav.on {
+  color: var(--color-accent);
+}
+.genre-fav:active {
+  color: var(--color-fg);
+}
+.genre-cell:has(.genre-tile:active) .genre-fav {
+  transform: translate(3px, 3px);
+  color: var(--color-bg);
+  text-shadow: none;
 }
 
 /* ---- Segmented control -------------------------------------------------------------- */
@@ -990,6 +1077,136 @@ h3 {
   font-family: var(--font-display);
   background: var(--color-surface);
   padding: 0 4px;
+}
+
+/* ---- Search button ------------------------------------------------------------- */
+
+/* Sits in .main, whose bottom edge is the top of the mini player (or the tab bar). */
+.fab {
+  --fab-shadow: 6px;
+  position: absolute;
+  right: calc(var(--gutter) + var(--fab-shadow));
+  bottom: calc(12px + var(--fab-shadow));
+  width: var(--fab);
+  height: var(--fab);
+  z-index: 6;
+}
+.fab-btn {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+  border-radius: var(--radius);
+  box-shadow:
+    0 0 0 var(--border-w) var(--color-bg),
+    0 0 0 calc(var(--border-w) * 2) var(--color-fg);
+}
+.fab-shadow {
+  position: absolute;
+  inset: calc(var(--border-w) * -2);
+  transform: translate(var(--fab-shadow), var(--fab-shadow));
+  border-radius: var(--radius);
+  background-color: var(--color-bg);
+  background-image: var(--dither);
+  background-size: 4px 4px;
+}
+.fab-btn:active {
+  transform: translate(calc(var(--fab-shadow) / 2), calc(var(--fab-shadow) / 2));
+}
+/* Leave room under the last row so the button never hides its ⋯ for good. */
+.has-fab .screen-body {
+  padding-bottom: calc(24px + 12px + var(--fab) + 18px);
+}
+
+/* ---- Search screen ---------------------------------------------------------------- */
+
+.search {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  background: var(--color-bg);
+}
+.search-bar {
+  gap: 6px;
+}
+.search-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding-left: 10px;
+  border: var(--border-w) solid var(--color-fg);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  box-shadow: 3px 3px 0 var(--color-border);
+  cursor: text;
+}
+.search-field:focus-within {
+  box-shadow: 3px 3px 0 var(--color-fg-dim);
+}
+.search-prompt {
+  flex: none;
+  margin-right: 8px;
+  font-family: var(--font-display);
+  color: var(--color-fg-dim);
+}
+.search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-fg);
+  font: inherit;
+  font-size: 16px;
+  text-shadow: inherit;
+  caret-color: var(--color-fg);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.search-input:focus-visible {
+  outline: none;
+}
+.search-input::placeholder {
+  color: var(--color-fg-dim);
+  opacity: 1;
+}
+.search-input::-webkit-search-cancel-button,
+.search-input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  display: none;
+}
+.search-clear {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 100%;
+  color: var(--color-fg-dim);
+}
+.search-clear:active {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+.search-hint {
+  padding: 24px var(--gutter);
+}
+.search-hint p {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.search .chips {
+  padding-top: 4px;
 }
 
 /* ---- Mini player ------------------------------------------------------------------ */

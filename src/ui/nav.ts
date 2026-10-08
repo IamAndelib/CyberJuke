@@ -8,6 +8,8 @@ export const tab = signal<Tab>('home');
 /** Genre detail page open on top of the Genres tab, if any. */
 export const openGenre = signal<string | null>(null);
 export const nowPlayingOpen = signal(false);
+/** Search overlay (covers the tab content; mini player and tab bar stay visible). */
+export const searchOpen = signal(false);
 /** Track whose ⋯ menu is open. */
 export const menuTrack = signal<Track | null>(null);
 
@@ -19,6 +21,10 @@ export function goBack(): boolean {
   }
   if (nowPlayingOpen.value) {
     nowPlayingOpen.value = false;
+    return true;
+  }
+  if (searchOpen.value) {
+    searchOpen.value = false;
     return true;
   }
   if (tab.value === 'genres' && openGenre.value) {

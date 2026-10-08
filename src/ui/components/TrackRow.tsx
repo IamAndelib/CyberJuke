@@ -14,7 +14,20 @@ export function Bars() {
   );
 }
 
-export function TrackRow({ track, onPlay, index, hideGenre }: { track: Track; onPlay: () => void; index?: number; hideGenre?: boolean }) {
+export function TrackRow({
+  track,
+  onPlay,
+  index,
+  hideGenre,
+  showSaves,
+}: {
+  track: Track;
+  onPlay: () => void;
+  index?: number;
+  hideGenre?: boolean;
+  /** Show the post's save count (Most saved). */
+  showSaves?: boolean;
+}) {
   const st = player.state.value;
   const isCurrent = st.current?.id === track.id;
   return (
@@ -38,6 +51,12 @@ export function TrackRow({ track, onPlay, index, hideGenre }: { track: Track; on
           </div>
           <div class="row-artist">{track.artist}</div>
           <div class="row-meta">
+            {showSaves && (
+              <span class="saves" data-testid="track-saves" data-saves={track.saves ?? 0} aria-label={`${track.saves ?? 0} saves`}>
+                <Icon name="heart" size={12} />
+                {track.saves ?? 0}
+              </span>
+            )}
             {track.genre && !hideGenre && <span class="tag">{track.genre}</span>}
             {track.by && <span class="by">by @{track.by}</span>}
           </div>

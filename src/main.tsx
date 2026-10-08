@@ -7,7 +7,8 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { loadLibrary, settings } from './store/library';
-import { watchNetwork } from './store/network';
+import { online, watchNetwork } from './store/network';
+import { catalog } from './store/catalog';
 import { goBack } from './ui/nav';
 import { JukePlayer } from './player/native';
 import { player } from './player';
@@ -55,6 +56,27 @@ async function maybeAutoplay(): Promise<void> {
   if (page.tracks.length) await player.playList(page.tracks, 0);
 }
 
+/**
+ * Load the catalog in the background once the first screen has painted, and bring it
+ * up to date when the app comes back to the foreground or back online. The store's
+ * own rules decide whether that means a request (at most hourly) or nothing.
+ */
+function startCatalog(): void {
+  const kick = () => void catalog.refresh();
+  const idle = (window as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+  if (idle) idle(kick, { timeout: 1500 });
+  else setTimeout(kick, 300);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') kick();
+  });
+  let wasOnline = online.value;
+  effect(() => {
+    const now = online.value;
+    if (now && !wasOnline) kick();
+    wasOnline = now;
+  });
+}
+
 async function boot(): Promise<void> {
   await loadLibrary().catch(() => {});
   applyTheme();
@@ -68,6 +90,7 @@ async function boot(): Promise<void> {
     </>,
     root,
   );
+  startCatalog();
   maybeAutoplay().catch((e) => console.warn('autoplay failed', e));
 }
 

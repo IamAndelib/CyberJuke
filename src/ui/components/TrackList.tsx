@@ -11,11 +11,11 @@ export function playFrom(tracks: Track[], i: number): void {
 }
 
 /** A plain list of tracks; tapping one plays the list from there. */
-export function Tracks({ tracks, hideGenre }: { tracks: Track[]; hideGenre?: boolean }) {
+export function Tracks({ tracks, hideGenre, showSaves }: { tracks: Track[]; hideGenre?: boolean; showSaves?: boolean }) {
   return (
     <ul class="list" data-testid="track-list">
       {tracks.map((t, i) => (
-        <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} onPlay={() => playFrom(tracks, i)} />
+        <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} showSaves={showSaves} onPlay={() => playFrom(tracks, i)} />
       ))}
     </ul>
   );
