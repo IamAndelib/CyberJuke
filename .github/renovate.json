@@ -1,0 +1,167 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Needs the Renovate GitHub App installed on the repository by its owner (https://github.com/apps/renovate). See CONTRIBUTING.md > Dependency updates.",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommitsDisabled",
+    "helpers:pinGitHubActionDigestsToSemver"
+  ],
+  "timezone": "Etc/UTC",
+  "schedule": [
+    "before 6am on monday"
+  ],
+  "prConcurrentLimit": 6,
+  "prHourlyLimit": 3,
+  "labels": [
+    "dependencies"
+  ],
+  "rangeStrategy": "bump",
+  "minimumReleaseAge": "3 days",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 6am on the first day of the month"
+    ]
+  },
+  "packageRules": [
+    {
+      "description": "Capacitor core, CLI and plugins move together (run `npx cap sync` after updating).",
+      "matchPackageNames": [
+        "@capacitor/**"
+      ],
+      "groupName": "Capacitor"
+    },
+    {
+      "description": "Preact and its tooling.",
+      "matchPackageNames": [
+        "preact",
+        "@preact/**"
+      ],
+      "groupName": "Preact"
+    },
+    {
+      "description": "Lint tooling.",
+      "matchPackageNames": [
+        "eslint",
+        "@eslint/**",
+        "typescript-eslint",
+        "@typescript-eslint/**",
+        "@typescript/typescript6",
+        "eslint-plugin-*",
+        "globals"
+      ],
+      "groupName": "ESLint"
+    },
+    {
+      "description": "Build and test tooling (non-major).",
+      "matchPackageNames": [
+        "vite",
+        "vitest",
+        "typescript",
+        "@playwright/test",
+        "@babel/core"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "Web build tooling"
+    },
+    {
+      "description": "GitHub Actions (pinned to commit SHAs with a version comment).",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "GitHub Actions"
+    },
+    {
+      "description": "Media3 artifacts share one version.",
+      "matchManagers": [
+        "gradle"
+      ],
+      "matchPackageNames": [
+        "androidx.media3:**"
+      ],
+      "groupName": "Media3"
+    },
+    {
+      "description": "Other AndroidX libraries.",
+      "matchManagers": [
+        "gradle"
+      ],
+      "matchPackageNames": [
+        "androidx.**",
+        "!androidx.media3:**"
+      ],
+      "groupName": "AndroidX"
+    },
+    {
+      "description": "Android Gradle Plugin, Kotlin and the Gradle wrapper: one PR, since they constrain each other.",
+      "matchManagers": [
+        "gradle",
+        "gradle-wrapper"
+      ],
+      "matchPackageNames": [
+        "com.android.tools.build:**",
+        "org.jetbrains.kotlin:**",
+        "gradle"
+      ],
+      "groupName": "Android toolchain"
+    },
+    {
+      "description": "NewPipeExtractor: YouTube breaks old versions, so updates are proposed at any time, on their own, and never wait for a release age.",
+      "matchPackageNames": [
+        "NewPipeExtractor"
+      ],
+      "schedule": [
+        "at any time"
+      ],
+      "minimumReleaseAge": "0 days",
+      "labels": [
+        "dependencies",
+        "youtube"
+      ],
+      "prPriority": 10
+    },
+    {
+      "description": "NewPipeExtractor is updated by the custom managers below, not by the Gradle manager (it would look on JitPack by version).",
+      "matchManagers": [
+        "gradle"
+      ],
+      "matchPackageNames": [
+        "com.github.TeamNewPipe:**"
+      ],
+      "enabled": false
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "NewPipeExtractor pinned to a release tag: newPipeExtractorVersion = 'v0.26.5' in android/variables.gradle.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^android/variables\\.gradle$/"
+      ],
+      "matchStrings": [
+        "newPipeExtractorVersion\\s*=\\s*['\"](?<currentValue>v\\d+\\.\\d+\\.\\d+)['\"]"
+      ],
+      "depNameTemplate": "NewPipeExtractor",
+      "packageNameTemplate": "TeamNewPipe/NewPipeExtractor",
+      "datasourceTemplate": "github-tags"
+    },
+    {
+      "description": "NewPipeExtractor pinned to a commit on its dev branch (what the NewPipe app ships): newPipeExtractorVersion = '<commit>' in android/variables.gradle. Renovate proposes the latest dev commit; check that NewPipe itself ships it before merging.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^android/variables\\.gradle$/"
+      ],
+      "matchStrings": [
+        "newPipeExtractorVersion\\s*=\\s*['\"](?<currentDigest>[0-9a-f]{7,40})['\"]"
+      ],
+      "depNameTemplate": "NewPipeExtractor",
+      "packageNameTemplate": "https://github.com/TeamNewPipe/NewPipeExtractor",
+      "currentValueTemplate": "dev",
+      "datasourceTemplate": "git-refs"
+    }
+  ]
+}
