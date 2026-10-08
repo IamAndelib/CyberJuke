@@ -28,7 +28,19 @@
 -keepattributes SourceFile,LineNumberTable,*Annotation*,Signature,InnerClasses,EnclosingMethod
 -dontobfuscate
 
+# ---- Logging (S5): release builds drop verbose/debug/info logs, including the strings built
+# for them. Anything with search queries, video or track ids is logged at info level only;
+# warnings and errors carry exception class names and status codes, never user data.
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+    public static boolean isLoggable(java.lang.String, int);
+}
+
 # ---- Capacitor: plugins and their @PluginMethod methods are found by reflection ----
+# The bridge core is kept whole: it is reached from the WebView (JavascriptInterface) and by
+# reflection in ways its consumer rules do not fully describe, and it is small.
 -keep class com.getcapacitor.** { *; }
 -keep @com.getcapacitor.annotation.CapacitorPlugin public class * {
     @com.getcapacitor.PluginMethod public <methods>;
@@ -41,36 +53,38 @@
     @android.webkit.JavascriptInterface <methods>;
 }
 
-# ---- Our player package (service is referenced from the manifest, plugin by reflection) ----
--keep class io.github.iamandelib.cyberjuke.** { *; }
+# ---- Our own code: no blanket keep. The plugins are kept by the Capacitor rules above, the
+# activity and PlaybackService by the manifest (AAPT rules); nothing else uses reflection.
 
-# ---- NewPipeExtractor (same rules NewPipe ships) ----
--keep class org.schabi.newpipe.extractor.** { *; }
+# ---- NewPipeExtractor (the rules the NewPipe app ships) ----
+# timeago patterns are loaded by class name per language; protobuf-lite messages reflect on
+# their fields. The rest of the extractor is plain code R8 can shrink.
 -keep class org.schabi.newpipe.extractor.timeago.patterns.** { *; }
--dontwarn org.schabi.newpipe.extractor.**
+-keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite {
+    <fields>;
+}
 
-# Rhino + Rhino engine (JS signature/throttling deobfuscation)
+# Rhino + Rhino engine (JS signature/throttling deobfuscation; heavy reflection)
 -keep class org.mozilla.javascript.* { *; }
 -keep class org.mozilla.javascript.** { *; }
 -keep class org.mozilla.javascript.engine.** { *; }
 -keep class org.mozilla.classfile.ClassFileWriter
+-keep class javax.script.** { *; }
+-keep class jdk.dynalink.** { *; }
+# Optional desktop-JVM integrations Rhino references but never loads on Android
+# (javax.script/dynalink are JDK modules, java.beans is absent on Android; the tools
+# package is Rhino's shell). Same list as the NewPipe app.
 -dontwarn org.mozilla.javascript.JavaToJSONConverters
 -dontwarn org.mozilla.javascript.tools.**
--keep class javax.script.** { *; }
 -dontwarn javax.script.**
--keep class jdk.dynalink.** { *; }
 -dontwarn jdk.dynalink.**
 -dontwarn java.beans.**
 
-# jsoup / nanojson / jsr305 / protobuf-lite
--keep class org.jsoup.** { *; }
--dontwarn org.jsoup.**
--keep class com.grack.nanojson.** { *; }
+# jsoup and OkHttp ship their own consumer rules (jsoup's optional re2j engine, OkHttp's
+# optional TLS providers), so no blanket -dontwarn for them.
+# jsr305 annotations (javax.annotation.Nonnull etc.) are compile-only in NewPipeExtractor:
+# annotation types only, nothing is loaded at runtime.
 -dontwarn javax.annotation.**
--keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite {
-    <fields>;
-}
--dontwarn com.google.protobuf.**
 
 -keepclassmembers class * implements java.io.Serializable {
     static final long serialVersionUID;
@@ -79,13 +93,12 @@
     private void readObject(java.io.ObjectInputStream);
 }
 
-# ---- OkHttp / Okio ----
--dontwarn okhttp3.**
--dontwarn okio.**
+# ---- OkHttp / Okio: optional TLS providers OkHttp probes for and never finds on Android.
+# OkHttp 4.12's consumer rules list these too; kept explicitly as they are optional by design.
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
 
-# ---- Media3: ships consumer rules; keep the reflective extension/source factories anyway ----
+# ---- Media3: ships its own consumer rules (including the reflective HLS factory), so no
+# blanket -dontwarn: a missing Media3 class should fail the release build.
 -keep class androidx.media3.exoplayer.hls.HlsMediaSource$Factory { <init>(...); }
--dontwarn androidx.media3.**
