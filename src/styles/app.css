@@ -202,16 +202,34 @@ h3 {
   letter-spacing: 2px;
 }
 
-/* Pull to refresh */
+/* Pull to refresh: the indicator waits behind the top bar, in a zero-height dock, and
+   slides down with the content (both moved by transform from Screen.tsx). */
+.ptr-dock {
+  position: relative;
+  z-index: 0;
+  height: 0;
+}
 .ptr {
-  overflow: hidden;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   font-family: var(--font-display);
   font-size: 13px;
   color: var(--color-fg-dim);
-  transition: height 0.15s steps(4);
+  opacity: 0;
+  pointer-events: none;
+}
+.ptr .spinner {
+  display: none;
+}
+.ptr.busy .spinner {
+  display: inline-block;
 }
 
 /* ---- Buttons ---------------------------------------------------------------------- */
@@ -1125,6 +1143,31 @@ h3 {
 .fab-btn:active {
   transform: translate(calc(var(--fab-shadow) / 2), calc(var(--fab-shadow) / 2));
 }
+/* Scrolling down tucks the search button away below the screen edge; scrolling up (or
+   reaching the top) brings it back (SearchFab.tsx). */
+.fab {
+  transition:
+    transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
+}
+.fab.away {
+  transform: translateY(calc(100% + 32px));
+  visibility: hidden;
+  transition:
+    transform 0.2s cubic-bezier(0.3, 0, 0.8, 0.15),
+    visibility 0s linear 0.2s;
+}
+/* .pressed (usePress): held long enough to be seen, it sinks the button into its
+   checkered shadow and eases back out. */
+.fab-btn,
+.totop-btn {
+  transition: transform 0.12s ease-out;
+}
+.fab-btn.pressed,
+.totop-btn.pressed {
+  transform: translate(calc(var(--fab-shadow) / 2), calc(var(--fab-shadow) / 2)) scale(0.94);
+  transition: transform 0.05s ease-out;
+}
 /* Back-to-top: [^] bottom-centre, same hard checkered shadow as the search button.
    A zero-height sticky dock at the end of the scroller pins it to the scrollport's
    bottom edge (the top of the mini player or tab bar), centred, so it never meets the
@@ -1138,7 +1181,7 @@ h3 {
 }
 .totop {
   --fab-shadow: 4px;
-  --totop: 44px;
+  --totop: 48px;
   position: absolute;
   left: 50%;
   /* vertically centred on the search button */

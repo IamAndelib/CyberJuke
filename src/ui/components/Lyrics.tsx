@@ -1,7 +1,9 @@
 /**
  * Lyrics panel for Now Playing. It replaces the album art in place (same frame and
  * size). Synced lyrics highlight and centre the current line, a tapped line seeks to
- * it, and scrolling by hand pauses the auto-scroll for MANUAL_PAUSE_MS. Lines carry
+ * it, and scrolling by hand pauses the auto-scroll for MANUAL_PAUSE_MS. A tap that
+ * lands while the panel is gliding to the next line only stops it (clickGuard): it
+ * doesn't seek to whatever line was passing under the finger. Lines carry
  * dir="auto" so right-to-left scripts render correctly; the font stack falls back to
  * system fonts for scripts the pixel fonts don't cover.
  */
@@ -12,16 +14,14 @@ import { activeLine, lyrics as client, type Lyrics, type LyricsOutcome } from '.
 import type { Track } from '../../data/model';
 import { livePosition, player, type PlayerState } from '../../player';
 import { online } from '../../store/network';
+import { smoothScrolling } from '../clickGuard';
+import { reducedMotion } from '../motion';
 import { useTickValue } from '../useTick';
 
 /** Lyrics shown instead of the art (kept across tracks and reopenings). */
 export const lyricsOpen = signal(false);
 
 export const MANUAL_PAUSE_MS = 4000;
-
-function reducedMotion(): boolean {
-  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
 
 /** The source credit line ("Lyrics: LRCLIB", "Source: LyricFind"). Never names the video host. */
 export function creditFor(source: string | undefined): string {
@@ -144,10 +144,16 @@ function SyncedLyrics({ lyrics, s }: { lyrics: Lyrics; s: PlayerState }) {
   const first = useRef(true);
   const resume = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /** Scroll the panel to `top`, gliding unless `instant` (or reduced motion). */
+  const follow = (el: HTMLElement, top: number, instant: boolean) => {
+    const smooth = !instant && !reducedMotion() && Math.abs(el.scrollTop - Math.max(0, top)) > 1;
+    el.scrollTo({ top: Math.max(0, top), behavior: smooth ? 'smooth' : 'auto' });
+    if (smooth) smoothScrolling(el);
+  };
   const centre = (smooth: boolean) => {
     const el = box.current;
     const line = el?.querySelector<HTMLElement>('.lyr-line.on');
-    if (el && line) el.scrollTo({ top: Math.max(0, line.offsetTop - el.clientHeight / 2 + line.offsetHeight / 2), behavior: smooth && !reducedMotion() ? 'smooth' : 'auto' });
+    if (el && line) follow(el, line.offsetTop - el.clientHeight / 2 + line.offsetHeight / 2, !smooth);
   };
 
   // Scrolling by hand pauses the auto-scroll; when the pause ends, re-centre without
@@ -161,20 +167,25 @@ function SyncedLyrics({ lyrics, s }: { lyrics: Lyrics; s: PlayerState }) {
       centre(true);
     }, MANUAL_PAUSE_MS);
   };
-  useEffect(
-    () => () => {
+  // Passive native listeners: a JSX touch handler would hold up every scroll start.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    for (const t of ['wheel', 'touchstart', 'touchmove'] as const) el.addEventListener(t, pauseAuto, { passive: true });
+    return () => {
+      for (const t of ['wheel', 'touchstart', 'touchmove'] as const) el.removeEventListener(t, pauseAuto);
       if (resume.current) clearTimeout(resume.current);
-    },
-    [],
-  );
+    };
+    // Mount-only: `pauseAuto` reads only refs (and `centre`, which reads only refs).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useLayoutEffect(() => {
     const el = box.current;
     if (!el || Date.now() < pausedUntil.current) return;
     const line = el.querySelector<HTMLElement>(`[data-i="${Math.max(0, cur)}"]`);
     if (!line) return;
-    const top = line.offsetTop - el.clientHeight / 2 + line.offsetHeight / 2;
-    el.scrollTo({ top: Math.max(0, top), behavior: first.current || reducedMotion() ? 'auto' : 'smooth' });
+    follow(el, line.offsetTop - el.clientHeight / 2 + line.offsetHeight / 2, first.current);
     first.current = false;
   }, [cur]);
 
@@ -182,9 +193,6 @@ function SyncedLyrics({ lyrics, s }: { lyrics: Lyrics; s: PlayerState }) {
     <div
       class="lyr-scroll lyr-synced"
       ref={box}
-      onWheel={pauseAuto}
-      onTouchStart={pauseAuto}
-      onTouchMove={pauseAuto}
       onKeyDown={(e) => {
         if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(e.key) && (e.target as HTMLElement) === box.current) pauseAuto();
       }}

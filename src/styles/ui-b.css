@@ -44,6 +44,15 @@
 .ntp[aria-busy='true'] {
   opacity: 0.7;
 }
+/* Fading out once the list has refreshed (NewTracksPill.tsx). */
+.ntp.out {
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition:
+    opacity 0.2s steps(3),
+    transform 0.2s steps(3);
+}
 @keyframes ntp-in {
   from {
     transform: translateY(-16px);
