@@ -40,7 +40,11 @@ internal object NetPrefs {
     var preferIpv4: Boolean = false
         private set
 
-    val dns: Dns = Dns { host -> order(Dns.SYSTEM.lookup(host), preferIpv4) }
+    // OkHttp 4's Dns is a plain Kotlin interface, not a fun interface: no SAM lambda.
+    val dns: Dns = object : Dns {
+        override fun lookup(hostname: String): List<InetAddress> =
+            order(Dns.SYSTEM.lookup(hostname), preferIpv4)
+    }
 
     /** IPv4 addresses only when [preferIpv4] and there are any; otherwise unchanged. */
     fun order(addresses: List<InetAddress>, preferIpv4: Boolean): List<InetAddress> {
