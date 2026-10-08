@@ -13,6 +13,11 @@ const config: CapacitorConfig = {
     loggingBehavior: 'none',
     webContentsDebuggingEnabled: false,
   },
+  // No Cordova plugins are used; without this, `cap sync` writes <access origin="*"/>
+  // into the generated res/xml/config.xml.
+  cordova: {
+    accessOrigins: [],
+  },
 };
 
 export default config;
