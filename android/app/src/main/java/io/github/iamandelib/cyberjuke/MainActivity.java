@@ -6,6 +6,7 @@ import com.getcapacitor.BridgeActivity;
 import io.github.iamandelib.cyberjuke.player.JukePlayerPlugin;
 import io.github.iamandelib.cyberjuke.player.LaunchOptions;
 import io.github.iamandelib.cyberjuke.player.MusicPlugin;
+import io.github.iamandelib.cyberjuke.player.SecureStorePlugin;
 
 public class MainActivity extends BridgeActivity {
 
@@ -14,9 +15,10 @@ public class MainActivity extends BridgeActivity {
         // Custom plugins must be registered before super.onCreate() creates the bridge.
         registerPlugin(JukePlayerPlugin.class);
         registerPlugin(MusicPlugin.class);
+        registerPlugin(SecureStorePlugin.class);
         LaunchOptions.updateFrom(getIntent());
         super.onCreate(savedInstanceState);
-        // CI only (debuggable builds): ci_music_search / ci_artist / ci_lyrics extras log one check each.
+        // CI only (debuggable builds): ci_music_search / ci_artist / ci_lyrics / ci_artist_page extras log one check each.
         MusicPlugin.maybeRunCiChecks(this, getIntent());
     }
 
