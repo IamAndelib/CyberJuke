@@ -29,7 +29,7 @@ import { reducedMotion } from '../core/motion';
 import { AlbumPage } from './screens/Album';
 import { ArtistPage } from './screens/Artist';
 import { ArtistGrid } from './screens/Artists';
-import { GenreDetail, GenreGrid } from './screens/Genres';
+import { GenreDetail, GenreGrid } from '../features/genres/Genres';
 import { Home } from '../features/home/Home';
 import { Library } from './screens/Library';
 import { ReleasesPage } from './screens/Releases';

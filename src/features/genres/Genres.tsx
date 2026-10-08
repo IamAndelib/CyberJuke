@@ -4,20 +4,20 @@ import { catalogGenre, genres, genresComplete } from '../../stores/genres';
 import { favoriteGenres, showNsfw } from '../../stores/library';
 import { toggleFavoriteGenreWithUndo } from '../../stores/undo';
 import { useMemo } from 'preact/hooks';
-import { takeSections, useChunks } from '../useChunks';
-import { Icon } from '../icons';
-import { openGenrePage, popPage, useSearchContext } from '../nav';
-import { ErrorState, PagedTracks, PlayShuffle } from '../components/TrackList';
-import { Screen } from '../components/Screen';
-import { AZHead, GridSortRail } from '../components/GridSort';
-import { groupAZ } from '../azSections';
+import { takeSections, useChunks } from '../../ui/useChunks';
+import { Icon } from '../../ui/icons';
+import { openGenrePage, popPage, useSearchContext } from '../../ui/nav';
+import { ErrorState, PagedTracks, PlayShuffle } from '../../ui/components/TrackList';
+import { Screen } from '../../ui/components/Screen';
+import { AZHead, GridSortRail } from '../../ui/components/GridSort';
+import { groupAZ } from '../../ui/azSections';
 import type { GenreCount } from '../../stores/genres';
 import { genresSort } from '../../stores/prefs';
-import { usePaged } from '../usePaged';
+import { usePaged } from '../../ui/usePaged';
 import { authScope } from '../../stores/feed';
 import { auth } from '../../data/auth';
-import { list as listCtx, withRest } from '../playAll';
-import { useSettled } from '../useSettled';
+import { list as listCtx, withRest } from '../../ui/playAll';
+import { useSettled } from '../../ui/useSettled';
 
 function GenreTile({ name, fav }: { name: string; fav: boolean }) {
   return (
