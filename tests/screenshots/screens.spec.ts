@@ -105,6 +105,9 @@ test('every screen (dark)', async ({ page }) => {
 
   await page.getByTestId('tab-genres').click();
   for (const i of [3, 1]) await page.getByTestId('genre-grid').getByTestId('genre-fav').nth(i).click();
+  // Favourites move into their section on the next visit, not under the finger (M8).
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('tab-genres').click();
   await expect(page.getByTestId('fav-genres').getByTestId('genre-tile')).toHaveCount(2);
   await settle(page);
   await shot(page, '06-genres');
@@ -140,6 +143,9 @@ test('every screen (dark)', async ({ page }) => {
 
   await page.getByTestId('tab-artists').click();
   for (const i of [4, 0]) await page.getByTestId('artist-grid').getByTestId('artist-fav').nth(i).click();
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('tab-artists').click();
+  await expect(page.getByTestId('fav-artists').getByTestId('artist-tile')).toHaveCount(2);
   await settle(page);
   await shot(page, '11-artists');
   await page.getByTestId('fav-artists').getByTestId('artist-tile').last().click();
@@ -159,14 +165,14 @@ test('every screen (dark)', async ({ page }) => {
   await shot(page, '13-album');
   await page.getByTestId('album-back').click();
   await page.getByTestId('artist-back').click();
-  await page.getByTestId('grid-sort-az').click();
+  await page.getByTestId('screen-artists').getByTestId('grid-sort-az').click();
   await holdThumb(page, 'screen-artists');
   await shot(page, '11b-artists-az-drag');
   await page.mouse.up();
 
   await page.getByTestId('tab-home').click();
   await page.getByTestId('screen-home').evaluate((el) => el.scrollTo(0, el.clientHeight * 3));
-  await expect(page.locator('.totop.on')).toBeVisible();
+  await expect(page.getByTestId('screen-home').locator('.totop.on')).toBeVisible();
   await settle(page);
   await shot(page, '14-back-to-top');
 
