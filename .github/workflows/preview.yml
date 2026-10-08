@@ -88,7 +88,7 @@ jobs:
           PREVIEW_KEYSTORE_PASSWORD: ${{ secrets.PREVIEW_KEYSTORE_PASSWORD }}
           PREVIEW_KEY_ALIAS: ${{ secrets.PREVIEW_KEY_ALIAS }}
           PREVIEW_KEY_PASSWORD: ${{ secrets.PREVIEW_KEY_PASSWORD }}
-        run: ./gradlew assemblePreview --stacktrace
+        run: bash ../scripts/gradlew-retry.sh assemblePreview --stacktrace
 
       - name: Remove keystore
         if: always()

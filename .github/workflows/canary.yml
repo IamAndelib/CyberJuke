@@ -62,7 +62,7 @@ jobs:
         working-directory: android
         # -Pcanary=true is passed to the test JVM as the `canary` system property
         # (android/app/build.gradle); without it the canary test skips itself.
-        run: ./gradlew testDebugUnitTest -Pcanary=true --tests "$CANARY_TESTS" --stacktrace
+        run: bash ../scripts/gradlew-retry.sh testDebugUnitTest -Pcanary=true --tests "$CANARY_TESTS" --stacktrace
 
       - name: Classify the result
         id: classify

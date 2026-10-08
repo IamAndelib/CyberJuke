@@ -138,7 +138,7 @@ jobs:
         working-directory: android
         run: |
           set -o pipefail
-          ./gradlew testDebugUnitTest --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"
+          bash ../scripts/gradlew-retry.sh testDebugUnitTest --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"
 
       - name: Report Gradle errors as annotations
         if: failure()
@@ -199,7 +199,7 @@ jobs:
         working-directory: android
         run: |
           set -o pipefail
-          ./gradlew assembleDebug assemblePreview --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"
+          bash ../scripts/gradlew-retry.sh assembleDebug assemblePreview --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"
 
       - name: Report Gradle errors as annotations
         if: failure()
