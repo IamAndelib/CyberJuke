@@ -5,6 +5,7 @@ import './styles/ui-b.css';
 import './styles/ui-a.css';
 import './styles/ui-c.css';
 import { render } from 'preact';
+import { installRenderCounter } from './core/renderCount';
 import { effect } from '@preact/signals';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
@@ -84,6 +85,7 @@ function startCatalog(): void {
 }
 
 async function boot(): Promise<void> {
+  installRenderCounter();
   // A saved Cyberspace login decides which query the first requests use.
   await Promise.all([loadLibrary().catch(() => {}), auth.restore()]);
   startAccount();
