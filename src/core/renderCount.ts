@@ -8,8 +8,13 @@ import { TEST_HOOKS, exposeForTests } from './testHooks';
 
 type RenderHook = (vnode: { type: unknown }) => void;
 
-export function installRenderCounter(): void {
+/**
+ * Install the counter. Builds minify function names, so the components the perf spec
+ * asserts on are named here (`displayName`).
+ */
+export function installRenderCounter(named: Record<string, unknown> = {}): void {
   if (!TEST_HOOKS) return;
+  for (const [name, c] of Object.entries(named)) if (typeof c === 'function') (c as { displayName?: string }).displayName = name;
   const counts: Record<string, number> = {};
   const o = options as unknown as { __r?: RenderHook };
   const prev = o.__r;

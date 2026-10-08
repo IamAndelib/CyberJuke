@@ -1,5 +1,6 @@
+import { useComputed } from '@preact/signals';
 import type { Track } from '../../data/model';
-import { player } from '../../player';
+import { currentId, isPlaying } from '../../player';
 import { Icon } from '../icons';
 import { menuTrack } from '../nav';
 import { Art } from './Art';
@@ -37,8 +38,10 @@ export function TrackRow({
   /** Show the post's save count (Most saved). */
   showSaves?: boolean;
 }) {
-  const st = player.state.value;
-  const isCurrent = st.current?.id === track.id;
+  // Only the row that becomes (or stops being) current re-renders on a track change,
+  // and only the current row follows play/pause.
+  const current = useComputed(() => currentId.value === track.id);
+  const isCurrent = current.value;
   return (
     <li class={'row' + (isCurrent ? ' is-current' : '')} data-testid="track-row" data-track-id={track.id}>
       <button
@@ -51,7 +54,7 @@ export function TrackRow({
         <div class="row-art">
           <Art track={track} size="sm" />
           {isCurrent && (
-            <div class="row-art-badge">{st.isPlaying ? <Bars /> : <Icon name="pause" size={18} />}</div>
+            <div class="row-art-badge">{isPlaying.value ? <Bars /> : <Icon name="pause" size={18} />}</div>
           )}
         </div>
         <div class="row-text">

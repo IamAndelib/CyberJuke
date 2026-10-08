@@ -1,27 +1,19 @@
 import { Fragment } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { player, livePosition, type PlayerState } from '../../player';
+import { canSkipNext, currentTrack, hasCurrent, isAdvancing, isBuffering, isPlaying, livePosition, player, type PlayerState } from '../../player';
+import { block } from '../../store/block';
 import { isLiked, liked, toggleLike } from '../../store/library';
 import { toast, toasts } from '../../store/toast';
 import { Icon } from '../icons';
-import { artistChoice, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage, openPost } from '../nav';
+import { artistChoice, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage } from '../nav';
+import { openExternal, openPost, youtubeUrl } from '../links';
+import { positionNow, useLiveProgress, useTickValue } from '../useTick';
 import { splitArtists } from '../../data/artists';
 import { isGlobal, type Track } from '../../data/model';
 import { Art } from './Art';
 import { MembersTag } from './TrackRow';
 import { LyricsPanel, lyricsOpen } from './Lyrics';
 import { shareTrack } from '../share';
-
-/** Re-render ~4x/s while playing so progress moves smoothly between samples. */
-function useLivePosition(s: PlayerState): number {
-  const [, tick] = useState(0);
-  useEffect(() => {
-    if (!s.isPlaying || s.isBuffering) return;
-    const id = setInterval(() => tick((n) => n + 1), 250);
-    return () => clearInterval(id);
-  }, [s.isPlaying, s.isBuffering]);
-  return livePosition(s);
-}
 
 export function fmt(ms: number): string {
   if (!isFinite(ms) || ms < 0) ms = 0;
@@ -32,22 +24,41 @@ export function fmt(ms: number): string {
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
 
-function PlayPauseIcon({ s, size }: { s: PlayerState; size: number }) {
-  if (s.isPlaying && s.isBuffering) return <span class={'spinner' + (size > 30 ? ' big' : '')} aria-hidden="true" />;
-  return <Icon name={s.isPlaying ? 'pause' : 'play'} size={size} />;
+/** Play/pause glyph (a spinner while starting); reads only the play state. */
+function PlayPauseIcon({ size }: { size: number }) {
+  if (isPlaying.value && isBuffering.value) return <span class={'spinner' + (size > 30 ? ' big' : '')} aria-hidden="true" />;
+  return <Icon name={isPlaying.value ? 'pause' : 'play'} size={size} />;
 }
 
 // ---- Mini player -------------------------------------------------------------------
 
+/**
+ * The thin progress line: written straight to the element's style on every sample
+ * and tick, so playback re-renders nothing.
+ */
+function MiniProgress() {
+  const ref = useRef<HTMLDivElement>(null);
+  useLiveProgress((pos, dur) => {
+    const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0;
+    ref.current?.style.setProperty('--progress', `${pct}%`);
+  }, isAdvancing.value);
+  return <div class="mini-progress" ref={ref} aria-hidden="true" data-testid="mini-progress" />;
+}
+
+function MiniToggle() {
+  return (
+    <button class="icon-btn" onClick={() => player.toggle()} aria-label={isPlaying.value ? 'Pause' : 'Play'} data-testid="mini-toggle">
+      <PlayPauseIcon size={28} />
+    </button>
+  );
+}
+
 export function MiniPlayer() {
-  const s = player.state.value;
-  const pos = useLivePosition(s);
-  const t = s.current;
+  const t = currentTrack.value;
   if (!t) return null;
-  const pct = s.durationMs > 0 ? Math.min(100, (pos / s.durationMs) * 100) : 0;
   return (
     <div class="mini" data-testid="mini-player">
-      <div class="mini-progress" style={{ '--progress': `${pct}%` }} aria-hidden="true" />
+      <MiniProgress />
       <button class="mini-open" onClick={() => (nowPlayingOpen.value = true)} aria-label={`Now playing: ${t.title} by ${t.artist}. Open player`} data-testid="mini-open">
         <Art track={t} size="sm" />
         <span class="mini-text">
@@ -57,10 +68,8 @@ export function MiniPlayer() {
           <span class="mini-artist">{t.artist}</span>
         </span>
       </button>
-      <button class="icon-btn" onClick={() => player.toggle()} aria-label={s.isPlaying ? 'Pause' : 'Play'} data-testid="mini-toggle">
-        <PlayPauseIcon s={s} size={28} />
-      </button>
-      <button class="icon-btn" onClick={() => player.next()} aria-label="Next track" data-testid="mini-next" disabled={!s.upNext.length && s.repeat === 'off'}>
+      <MiniToggle />
+      <button class="icon-btn" onClick={() => player.next()} aria-label="Next track" data-testid="mini-next" disabled={!canSkipNext.value}>
         <Icon name="next" size={28} />
       </button>
     </div>
@@ -70,7 +79,9 @@ export function MiniPlayer() {
 // ---- Now Playing -------------------------------------------------------------------
 
 function SeekBar({ s }: { s: PlayerState }) {
-  const live = useLivePosition(s);
+  // Re-renders once a second while playing (the time shown), not every frame.
+  useTickValue(s.isPlaying && !s.isBuffering, () => Math.floor(positionNow() / 1000));
+  const live = livePosition(s);
   const [drag, setDrag] = useState<number | null>(null);
   const dur = s.durationMs;
   const pos = drag ?? live;
@@ -191,25 +202,36 @@ function useSwipeToClose(ref: { current: HTMLDivElement | null }): void {
       el.removeEventListener('touchend', onEnd);
       el.removeEventListener('touchcancel', onEnd);
     };
+    // Mount-only: `ref` is a stable ref object to the sheet, which never remounts (UX rework pending).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }
 
 const NEXT_REPEAT = { off: 'all', all: 'one', one: 'off' } as const;
 const REPEAT_LABEL = { off: 'Repeat off', all: 'Repeat all', one: 'Repeat one' } as const;
 
+/** How long the sheet's contents stay after closing: the slide-down (0.28s) plus a margin. */
+export const NP_UNMOUNT_MS = 400;
+
+/**
+ * The Now Playing sheet. Its contents exist only while it is open (and while it
+ * slides away), so a closed sheet costs nothing during playback and fetches no lyrics.
+ */
 export function NowPlaying() {
   const open = nowPlayingOpen.value;
-  const s = player.state.value;
-  const t = s.current;
+  const has = hasCurrent.value;
+  const [closing, setClosing] = useState(false);
+  useEffect(() => {
+    if (open) return setClosing(true);
+    const id = setTimeout(() => setClosing(false), NP_UNMOUNT_MS);
+    return () => clearTimeout(id);
+  }, [open]);
   // Close the sheet if the queue empties.
   useEffect(() => {
-    if (!t && open) nowPlayingOpen.value = false;
-  }, [t, open]);
-  void liked.value; // subscribe to like changes
-  const isFav = t ? isLiked(t.id) : false;
+    if (!has && open) nowPlayingOpen.value = false;
+  }, [has, open]);
   const sheet = useRef<HTMLDivElement>(null);
   useSwipeToClose(sheet);
-  const showLyrics = lyricsOpen.value;
 
   return (
     <div
@@ -222,6 +244,19 @@ export function NowPlaying() {
       inert={!open}
       data-testid="now-playing"
     >
+      {has && (open || closing) && <NowPlayingContent />}
+    </div>
+  );
+}
+
+function NowPlayingContent() {
+  const s = player.state.value;
+  const t = s.current;
+  void liked.value; // subscribe to like changes
+  const isFav = t ? isLiked(t.id) : false;
+  const showLyrics = lyricsOpen.value;
+  return (
+    <>
       {t && (
         <div class="np-scroll">
           <div class="np-grab" aria-hidden="true" data-testid="np-grab">
@@ -302,7 +337,7 @@ export function NowPlaying() {
               <Icon name="prev" size={36} />
             </button>
             <button class="play-btn" aria-label={s.isPlaying ? 'Pause' : 'Play'} onClick={() => player.toggle()} data-testid="np-toggle">
-              <PlayPauseIcon s={s} size={40} />
+              <PlayPauseIcon size={40} />
             </button>
             <button class="icon-btn big" aria-label="Next track" onClick={() => player.next()} data-testid="np-next">
               <Icon name="next" size={36} />
@@ -336,7 +371,7 @@ export function NowPlaying() {
           <UpNext s={s} />
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -513,6 +548,18 @@ export function TrackMenu() {
                 <Icon name="artists" size={20} /> <span class="sheet-text">More by {n}</span>
               </button>
             ))}
+            {block.degraded.value && t.ytId && (
+              <button
+                class="sheet-item"
+                onClick={() => {
+                  openExternal(youtubeUrl(t.ytId));
+                  close();
+                }}
+                data-testid="menu-open-youtube"
+              >
+                <Icon name="external" size={20} /> <span class="sheet-text">Open in YouTube</span>
+              </button>
+            )}
             {!isGlobal(t) && t.postUrl && (
               <button
                 class="sheet-item"

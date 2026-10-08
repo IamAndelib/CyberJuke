@@ -12,6 +12,7 @@ import { activeLine, lyrics as client, type Lyrics, type LyricsOutcome } from '.
 import type { Track } from '../../data/model';
 import { livePosition, player, type PlayerState } from '../../player';
 import { online } from '../../store/network';
+import { useTickValue } from '../useTick';
 
 /** Lyrics shown instead of the art (kept across tracks and reopenings). */
 export const lyricsOpen = signal(false);
@@ -46,6 +47,8 @@ function useLyrics(track: Track, durationMs: number): [LyricsOutcome | null, () 
     setDurReady(false);
     const id = setTimeout(() => setDurReady(true), 2500);
     return () => clearTimeout(id);
+    // Only whether a duration is known matters, not its value (UX rework pending).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track.id, durationMs > 0]);
   useEffect(() => {
     let live = true;
@@ -60,6 +63,8 @@ function useLyrics(track: Track, durationMs: number): [LyricsOutcome | null, () 
     return () => {
       live = false;
     };
+    // Keyed by the track's id: a new Track object for the same id (or a duration update) mustn't refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track.id, durReady, attempt]);
   return [state.id === track.id ? state.outcome : null, () => setAttempt((n) => n + 1)];
 }
@@ -129,26 +134,39 @@ function PlainLyrics({ text }: { text: string }) {
   );
 }
 
-/** Re-render ~4x/s while playing. */
-function useTick(s: PlayerState): number {
-  const [, tick] = useState(0);
-  useEffect(() => {
-    if (!s.isPlaying || s.isBuffering) return;
-    const id = setInterval(() => tick((n) => n + 1), 250);
-    return () => clearInterval(id);
-  }, [s.isPlaying, s.isBuffering]);
-  return livePosition(s);
-}
-
 function SyncedLyrics({ lyrics, s }: { lyrics: Lyrics; s: PlayerState }) {
   const lines = lyrics.synced!;
-  const pos = useTick(s);
-  const cur = activeLine(lines, pos + 150); // a little early reads better
+  // A little early reads better. Re-renders only when the line changes.
+  const lineAt = (st: PlayerState) => activeLine(lines, livePosition(st) + 150);
+  const cur = useTickValue(s.isPlaying && !s.isBuffering, () => lineAt(player.state.peek()));
   const box = useRef<HTMLDivElement>(null);
   const pausedUntil = useRef(0);
   const first = useRef(true);
+  const resume = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const pauseAuto = () => (pausedUntil.current = Date.now() + MANUAL_PAUSE_MS);
+  const centre = (smooth: boolean) => {
+    const el = box.current;
+    const line = el?.querySelector<HTMLElement>('.lyr-line.on');
+    if (el && line) el.scrollTo({ top: Math.max(0, line.offsetTop - el.clientHeight / 2 + line.offsetHeight / 2), behavior: smooth && !reducedMotion() ? 'smooth' : 'auto' });
+  };
+
+  // Scrolling by hand pauses the auto-scroll; when the pause ends, re-centre without
+  // waiting for the next line (a timer per pause, no polling).
+  const pauseAuto = () => {
+    pausedUntil.current = Date.now() + MANUAL_PAUSE_MS;
+    if (resume.current) clearTimeout(resume.current);
+    resume.current = setTimeout(() => {
+      resume.current = null;
+      pausedUntil.current = 0;
+      centre(true);
+    }, MANUAL_PAUSE_MS);
+  };
+  useEffect(
+    () => () => {
+      if (resume.current) clearTimeout(resume.current);
+    },
+    [],
+  );
 
   useLayoutEffect(() => {
     const el = box.current;
@@ -159,18 +177,6 @@ function SyncedLyrics({ lyrics, s }: { lyrics: Lyrics; s: PlayerState }) {
     el.scrollTo({ top: Math.max(0, top), behavior: first.current || reducedMotion() ? 'auto' : 'smooth' });
     first.current = false;
   }, [cur]);
-
-  // When a manual pause ends, re-centre without waiting for the next line.
-  useEffect(() => {
-    const id = setInterval(() => {
-      const el = box.current;
-      if (!el || !pausedUntil.current || Date.now() < pausedUntil.current) return;
-      pausedUntil.current = 0;
-      const line = el.querySelector<HTMLElement>('.lyr-line.on');
-      if (line) el.scrollTo({ top: Math.max(0, line.offsetTop - el.clientHeight / 2 + line.offsetHeight / 2), behavior: reducedMotion() ? 'auto' : 'smooth' });
-    }, 500);
-    return () => clearInterval(id);
-  }, []);
 
   return (
     <div
@@ -198,6 +204,8 @@ function SyncedLyrics({ lyrics, s }: { lyrics: Lyrics; s: PlayerState }) {
             aria-current={i === cur ? 'true' : undefined}
             onClick={() => {
               pausedUntil.current = 0;
+              if (resume.current) clearTimeout(resume.current);
+              resume.current = null;
               void player.seek(l.t);
             }}
             data-testid="lyric-line"
