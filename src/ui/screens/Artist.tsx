@@ -7,7 +7,7 @@ import { displayArtist, jukeboxTracksBy } from '../../store/artists';
 import { favoriteArtists, isFavoriteArtist, toggleFavoriteArtist } from '../../store/library';
 import { toast } from '../../store/toast';
 import { Icon } from '../icons';
-import { openArtist } from '../nav';
+import { openArtist, useSearchContext } from '../nav';
 import { Tracks } from '../components/TrackList';
 import { SkeletonRows } from '../components/TrackRow';
 import { Screen } from '../components/Screen';
@@ -53,6 +53,7 @@ export function ArtistPage({ name: raw }: { name: string }) {
   void favoriteArtists.value;
   const fav = isFavoriteArtist(name);
   const jukebox = jukeboxTracksBy(name);
+  useSearchContext({ label: name, tracks: () => jukeboxTracksBy(name) });
   const catalogReady = catalog.tracks.value.length > 0;
 
   const more = useFeed(`moreby:${key}`, moreByLoader(name), MUSIC_TRACK_OPTS);
@@ -101,24 +102,26 @@ export function ArtistPage({ name: raw }: { name: string }) {
         )}
       </section>
 
-      <section data-testid="artist-more">
-        <div class="section-head">
-          <h2 class="section-title">More by {name}</h2>
-        </div>
-        {more.snap.status === 'loading' ? (
-          <SkeletonRows n={4} />
-        ) : more.snap.status === 'error' && more.snap.error ? (
-          <GlobalError error={more.snap.error} onRetry={() => more.feed.retry()} />
-        ) : moreTracks.length ? (
-          <>
-            <PlayShuffle tracks={moreTracks} testid="artist-more" />
-            <Tracks tracks={moreTracks} />
-            {more.snap.hasMore && <LoadMore busy={more.snap.loadingMore} error={!!more.snap.error} onClick={() => more.feed.loadMore()} />}
-          </>
-        ) : (
-          <p class="section-note dim">Nothing more found.</p>
-        )}
-      </section>
+      {more.snap.meta?.resolved === false ? null : (
+        <section data-testid="artist-more">
+          <div class="section-head">
+            <h2 class="section-title">More by {name}</h2>
+          </div>
+          {more.snap.status === 'loading' ? (
+            <SkeletonRows n={4} />
+          ) : more.snap.status === 'error' && more.snap.error ? (
+            <GlobalError error={more.snap.error} onRetry={() => more.feed.retry()} />
+          ) : moreTracks.length ? (
+            <>
+              <PlayShuffle tracks={moreTracks} testid="artist-more" />
+              <Tracks tracks={moreTracks} />
+              {more.snap.hasMore && <LoadMore busy={more.snap.loadingMore} error={!!more.snap.error} onClick={() => more.feed.loadMore()} />}
+            </>
+          ) : (
+            <p class="section-note dim">Nothing more found.</p>
+          )}
+        </section>
+      )}
 
       <section data-testid="artist-albums">
         <div class="section-head">

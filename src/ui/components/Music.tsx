@@ -4,8 +4,19 @@
  */
 import { useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { pickByArtist } from '../../data/artists';
-import { isEndOfList, music, musicErrorText, musicTracks, type MusicFilter, type MusicItem, type MusicErrorCode } from '../../data/ytmusic';
+import {
+  isByArtist,
+  isEndOfList,
+  itemChannelId,
+  music,
+  musicErrorText,
+  musicTracks,
+  type MusicFilter,
+  type MusicItem,
+  type MusicErrorCode,
+  type MusicPage,
+} from '../../data/ytmusic';
+import { artistChannels } from '../../store/artistChannels';
 import type { Track } from '../../data/model';
 import type { FeedError, FeedLoader, FeedOptions } from '../feed';
 import { Icon } from '../icons';
@@ -64,7 +75,12 @@ export function MusicRow({ item }: { item: MusicItem }) {
     <li class="row" data-testid="music-row" data-kind={item.kind}>
       <button
         class="row-main"
-        onClick={() => (isArtist ? openArtistPage(item.title) : openAlbumPage(albumRef(item)))}
+        onClick={() => {
+          if (!isArtist) return openAlbumPage(albumRef(item));
+          // The channel is known already: the artist page needs no lookup.
+          artistChannels.remember(item.title, itemChannelId(item));
+          openArtistPage(item.title);
+        }}
         aria-label={`${isArtist ? 'Open artist' : item.kind === 'album' ? 'Open album' : 'Open playlist'} ${item.title}`}
         data-testid="music-open"
       >
@@ -125,22 +141,51 @@ export function searchLoader(query: string, filter: MusicFilter): FeedLoader<Mus
   };
 }
 
-type ByCursor = { next: string; all: boolean };
+/** "More by" stops paging after this many matches, or MORE_BY_PAGES pages. */
+export const MORE_BY_TARGET = 20;
+export const MORE_BY_PAGES = 3;
 
-/** "More by <artist>": songs for the artist, as Tracks. */
-export function moreByLoader(artist: string): FeedLoader<Track, ByCursor> {
+type ByCursor = { next: string; channel: string };
+/** `resolved: false`: no artist matched the name exactly, so the section is hidden. */
+export interface MoreByMeta {
+  resolved: boolean;
+}
+
+/**
+ * "More by <artist>": songs whose first credited artist is this artist's channel
+ * (exact, so "Ivy Queen" never shows up for "Queen"), as Tracks. Each load pages on
+ * until MORE_BY_TARGET matches or MORE_BY_PAGES pages.
+ */
+export function moreByLoader(artist: string): FeedLoader<Track, ByCursor, MoreByMeta> {
   return async (c) => {
-    const p = c ? await music.more(c.next) : await music.search(artist, 'songs');
-    const r = pickByArtist(musicTracks(p.items, artist), artist, (t) => t.artist, c ? c.all : null);
-    return { items: r.items, cursor: p.next ? { next: p.next, all: r.all } : null };
+    const channel = c?.channel ?? (await artistChannels.get(artist));
+    if (!channel) return { items: [], cursor: null, meta: { resolved: false } };
+    const found: MusicItem[] = [];
+    let next: string | null = c?.next ?? null;
+    for (let pages = 0; pages < MORE_BY_PAGES && found.length < MORE_BY_TARGET; pages++) {
+      let p: MusicPage;
+      try {
+        p = !c && pages === 0 ? await music.search(artist, 'songs') : await music.more(next!);
+      } catch (e) {
+        if (pages === 0 && !(c && isEndOfList(e))) throw e;
+        if (isEndOfList(e)) next = null;
+        break; // keep what we have; a later "Load more" retries from `next`
+      }
+      found.push(...p.items.filter((i) => i.kind === 'song' && isByArtist(i, channel, artist)));
+      next = p.next ?? null;
+      if (!next) break;
+    }
+    return { items: musicTracks(found, artist), cursor: next ? { next, channel } : null, meta: { resolved: true } };
   };
 }
 
-/** Albums for the artist (first page only). */
+/** Albums by the artist's channel (first page only); empty when the artist isn't resolved. */
 export function albumsLoader(artist: string): FeedLoader<MusicItem, never> {
   return async () => {
+    const channel = await artistChannels.get(artist);
+    if (!channel) return { items: [], cursor: null };
     const p = await music.search(artist, 'albums');
-    const albums = p.items.filter((i) => i.kind === 'album' || i.kind === 'playlist');
-    return { items: pickByArtist(albums, artist, (i) => i.subtitle, null).items, cursor: null };
+    const albums = p.items.filter((i) => (i.kind === 'album' || i.kind === 'playlist') && isByArtist(i, channel, artist));
+    return { items: albums, cursor: null };
   };
 }
