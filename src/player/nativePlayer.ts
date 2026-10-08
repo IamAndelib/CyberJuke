@@ -6,7 +6,7 @@ import { signal } from '@preact/signals';
 import type { Track } from '../data/model';
 import { knownTrack } from '../store/library';
 import { toast } from '../store/toast';
-import { parseNativeState } from '../core/guards';
+import { YT_ID_RE, parseNativeState } from '../core/guards';
 import { logError } from '../core/log';
 import { JukePlayer, type NativeState, type NativeTrack, type RepeatMode } from './native';
 import { EMPTY_STATE, type Player, type PlayerState, type UpNextItem } from './types';
@@ -124,8 +124,15 @@ export class NativePlayer implements Player {
     };
   }
 
-  async playList(tracks: Track[], startIndex: number): Promise<void> {
-    if (!tracks.length) return;
+  async playList(all: Track[], startIndex: number): Promise<void> {
+    // Native refuses the whole list over one bad id: drop those, keeping the start track's place.
+    const start = all[Math.max(0, Math.min(startIndex, all.length - 1))];
+    const tracks = playable(all);
+    if (!tracks.length) {
+      if (all.length) toast("Can't play this track");
+      return;
+    }
+    startIndex = Math.max(0, start ? tracks.indexOf(start) : 0);
     this.remember(tracks);
     this.queuedIds = [];
     const i = Math.max(0, Math.min(startIndex, tracks.length - 1));
@@ -172,8 +179,12 @@ export class NativePlayer implements Player {
   move = (from: number, to: number) => JukePlayer.moveItem({ from, to });
   remove = (index: number) => JukePlayer.removeItem({ index });
 
-  async addToQueue(tracks: Track[]): Promise<void> {
-    if (!tracks.length) return;
+  async addToQueue(all: Track[]): Promise<void> {
+    const tracks = playable(all);
+    if (!tracks.length) {
+      if (all.length) toast("Can't play this track");
+      return;
+    }
     if (this.s.value.index < 0) return this.playList(tracks, 0);
     this.remember(tracks);
     this.queuedIds.push(...tracks.map((t) => t.id));
@@ -182,6 +193,11 @@ export class NativePlayer implements Player {
 
   setQuality = (quality: 'high' | 'low') => JukePlayer.setQuality({ quality });
   setNetworkPrefs = (prefs: { preferIpv4: boolean }) => JukePlayer.setNetworkPrefs({ preferIpv4: prefs.preferIpv4 === true });
+}
+
+/** Tracks native accepts (a valid 11-character video id). */
+function playable(tracks: Track[]): Track[] {
+  return tracks.filter((t) => YT_ID_RE.test(t.ytId));
 }
 
 /** How long playList waits for native to report the new track before trusting events again. */

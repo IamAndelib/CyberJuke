@@ -11,7 +11,7 @@ import { useState } from 'preact/hooks';
 import { AuthError, SIGN_UP_URL, auth, authErrorText } from '../../data/auth';
 import { toast } from '../../store/toast';
 import { Screen } from '../components/Screen';
-import { openPost } from '../nav';
+import { openExternal } from '../links';
 
 function Swatch({ id }: { id: ThemeId }) {
   const on = settings.value.theme === id;
@@ -50,7 +50,7 @@ function A({ href, children }: { href: string; children: string }) {
       href={href}
       onClick={(e) => {
         e.preventDefault();
-        openPost(href);
+        openExternal(href);
       }}
     >
       {children}
@@ -286,6 +286,13 @@ export function Settings() {
               </button>
             ))}
           </div>
+        </div>
+        <div class="setting">
+          <div class="setting-text">
+            <div class="setting-name">Prefer IPv4</div>
+            <div class="setting-desc">Try this if playback is blocked.</div>
+          </div>
+          <Toggle on={s.preferIpv4} onChange={(v) => updateSettings({ preferIpv4: v })} label="Prefer IPv4" testid="ipv4-toggle" />
         </div>
         <CheckEvery />
       </section>

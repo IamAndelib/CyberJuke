@@ -20,6 +20,12 @@ export interface NativeState {
 /** Why YouTube is refusing requests from this network (Y1). */
 export type BlockReason = 'BOT_CHECK' | 'RATE_LIMIT' | 'STREAM_FORBIDDEN';
 export interface BlockedEvent { until: number /* epoch ms */; reason: BlockReason }
+/**
+ * setQueue, addItems and queueNext reject the whole call ("Invalid tracks: track.ytId
+ * invalid") when any ytId isn't 11 characters of [A-Za-z0-9_-]: filter before calling.
+ * While blocked, setQueue replaces the queue without preparing it (and resolves), and
+ * play() is refused when nothing is loaded. trackError is never sent for blocks.
+ */
 export interface JukePlayerPlugin {
   setQueue(o: { tracks: NativeTrack[]; startIndex: number; positionMs?: number; playWhenReady: boolean }): Promise<void>;
   addItems(o: { tracks: NativeTrack[]; index?: number }): Promise<void>;   // index omitted = append
@@ -38,8 +44,10 @@ export interface JukePlayerPlugin {
   getLaunchOptions(): Promise<{ autoplay?: 'latest' }>;   // from Android intent extra, used by the CI smoke test
   /** The network-wide back-off in force, if any (until 0 = none). */
   getBlockState(): Promise<{ until: number; reason?: string }>;
-  /** Y6: resolve hostnames to IPv4 only, for extraction and streaming alike. */
+  /** Y6: resolve hostnames to IPv4 only, for extraction and streaming alike (saved natively, applied at service start). */
   setNetworkPrefs(o: { preferIpv4: boolean }): Promise<void>;
+  /** Keep a screen area (CSS px relative to the WebView) out of the system back gesture; null clears it. */
+  setGestureExclusion(rect: { left: number; top: number; width: number; height: number } | null): Promise<void>;
   addListener(event: 'state', cb: (s: NativeState) => void): Promise<{ remove: () => Promise<void> }>;
   addListener(event: 'trackError', cb: (e: { trackId: string; message: string; skipped: boolean }) => void): Promise<{ remove: () => Promise<void> }>;
   /** YouTube is refusing this network: playback paused, nothing is requested until `until`. */

@@ -10,6 +10,7 @@
 import { Capacitor } from '@capacitor/core';
 import { computed, effect } from '@preact/signals';
 import { addRecent, settings } from '../store/library';
+import { block } from '../store/block';
 import { toast } from '../store/toast';
 import { NativePlayer } from './nativePlayer';
 import { safePlayer } from './safePlayer';
@@ -18,7 +19,12 @@ import { WebPlayer } from './webPlayer';
 
 export * from './types';
 
-export const player: Player = safePlayer(Capacitor.isNativePlatform() ? new NativePlayer() : new WebPlayer(), toast);
+/** A failed command's toast; during a block the banner says why, so the toast says so too. */
+function commandFailed(message: string): void {
+  toast(block.blocked.peek() ? 'Playback is paused while YouTube is limiting requests' : message);
+}
+
+export const player: Player = safePlayer(Capacitor.isNativePlatform() ? new NativePlayer() : new WebPlayer(), commandFailed);
 
 const state = player.state;
 
@@ -56,21 +62,23 @@ effect(() => {
   }
 });
 
-let lastQuality: string | null = null;
-effect(() => {
-  const q = settings.value.quality;
-  if (q !== lastQuality) {
-    lastQuality = q;
-    void player.setQuality(q);
-  }
-});
-
-/** Y6: the "Prefer IPv4" setting goes to native at boot and on every change. */
-let lastIpv4: boolean | null = null;
-effect(() => {
-  const v = settings.value.preferIpv4;
-  if (v !== lastIpv4) {
-    lastIpv4 = v;
-    void player.setNetworkPrefs({ preferIpv4: v });
-  }
-});
+/**
+ * Send the player settings (audio quality, Y6 "Prefer IPv4") to the player now and on
+ * every change. Called once the library has loaded, so native never gets the
+ * defaults first.
+ */
+export function startPlayerPrefs(): void {
+  let lastQuality: string | null = null;
+  let lastIpv4: boolean | null = null;
+  effect(() => {
+    const { quality, preferIpv4 } = settings.value;
+    if (quality !== lastQuality) {
+      lastQuality = quality;
+      void player.setQuality(quality);
+    }
+    if (preferIpv4 !== lastIpv4) {
+      lastIpv4 = preferIpv4;
+      void player.setNetworkPrefs({ preferIpv4 });
+    }
+  });
+}

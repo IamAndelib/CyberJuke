@@ -1,6 +1,7 @@
 import { useEffect } from 'preact/hooks';
-import { player } from '../player';
+import { hasCurrent } from '../player';
 import { online } from '../store/network';
+import { BlockBanner } from './components/BlockBanner';
 import { Icon, type IconName } from './icons';
 import { goBack, nowPlayingOpen, openAlbum, openArtist, openGenre, openReleases, searchOpen, searchOverAlbum, tab, type Tab } from './nav';
 import { ArtistChooser, MiniPlayer, NowPlaying, Toasts, TrackMenu } from './components/PlayerUI';
@@ -55,7 +56,8 @@ function TabBar() {
 
 export function App() {
   const cur = tab.value;
-  const hasPlayer = !!player.state.value.current;
+  // Only whether something is loaded: playback itself never re-renders the app.
+  const hasPlayer = hasCurrent.value;
   const searching = searchOpen.value;
   const album = openAlbum.value;
   const covered = searching || !!album;
@@ -104,6 +106,7 @@ export function App() {
         )}
         {showFab && <SearchFab />}
       </main>
+      <BlockBanner />
       <MiniPlayer />
       <TabBar />
     </div>
