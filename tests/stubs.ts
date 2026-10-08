@@ -95,7 +95,9 @@ export async function stubYouTube(page: Page): Promise<void> {
  * stays a single), with years and `more` tokens; artistReleases() gives the full
  * lists behind them. Options: noArtistPage (artistPage rejects, so the page falls
  * back to search), shelves (only these kinds), evictToken (the first artistReleases
- * call rejects UNAVAILABLE, like an evicted token).
+ * call rejects UNAVAILABLE, like an evicted token), topSongPages (the songs playlist
+ * gets that many pages: after the first, more() gives 10 "<Name> Rarity <k>" songs a
+ * page, the last page ending with "Moonlit Rarity"; songPageDelay slows those pages).
  */
 const FAKE_MUSIC = `
 (() => {
@@ -200,6 +202,18 @@ const FAKE_MUSIC = `
     more({ next }) {
       calls.push(['more', next]);
       const [, filter, query, n] = next.split('|');
+      if (filter === 'top') {
+        const pages = opts.topSongPages || 1;
+        const items = [];
+        for (let i = 0; i < 10; i++) {
+          const k = (Number(n) - 1) * 10 + i;
+          const last = Number(n) === pages - 1 && i === 9;
+          items.push(song(last ? 'Moonlit Rarity' : 'Rarity ' + (k + 1), query, query + '|rare|' + k));
+        }
+        const res = { items };
+        if (Number(n) + 1 < pages) res.next = 'tok|top|' + query + '|' + (Number(n) + 1);
+        return new Promise((r) => setTimeout(() => r(res), opts.songPageDelay ?? opts.delay ?? 150));
+      }
       if (Number(n) >= 6) return fail('UNAVAILABLE', 'unknown or expired paging token');
       const res = { items: page(query, filter, Number(n)) };
       if (Number(n) < 5) res.next = 'tok|' + filter + '|' + query + '|' + (Number(n) + 1);
@@ -213,7 +227,9 @@ const FAKE_MUSIC = `
         const name = decodeURIComponent(top[1]);
         const items = [];
         for (let i = 0; i < 12; i++) items.push(song(SONGS[i % SONGS.length] + (i >= 5 ? ' (Deep Cut)' : ''), name, name + '|top|' + i));
-        return wait({ title: 'Top songs', subtitle: name, items });
+        const res = { title: 'Top songs', subtitle: name, items };
+        if ((opts.topSongPages || 1) > 1) res.next = 'tok|top|' + name + '|1';
+        return wait(res);
       }
       const title = ALBUMS[hash(url) % ALBUMS.length];
       const items = [];
@@ -284,6 +300,10 @@ export interface MusicStubOptions {
   shelves?: ('album' | 'live' | 'ep' | 'single')[];
   /** The first artistReleases() call rejects UNAVAILABLE (an evicted "See all" token). */
   evictToken?: boolean;
+  /** Pages of the artist's songs playlist (default 1); later pages hold "Rarity" songs, the last "Moonlit Rarity". */
+  topSongPages?: number;
+  /** Delay of those later pages, in ms (default `delay`, else 150). */
+  songPageDelay?: number;
 }
 
 export async function stubMusic(page: Page, opts: MusicStubOptions = {}): Promise<void> {
