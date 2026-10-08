@@ -37,7 +37,10 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import io.github.iamandelib.cyberjuke.MainActivity
 import org.json.JSONArray
+import org.json.JSONObject
 import java.util.Random
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -59,6 +62,30 @@ class PlaybackService : MediaSessionService() {
 
     /** "Add to queue" bookkeeping (pure, shared rule with the web: QueueRulesTest). */
     private lateinit var queue: NativeQueue<MediaItem>
+
+    // ---- autoplay (AP1, AP4) ----
+    /** The Autoplay setting (C3), sent by the web side at start. */
+    private var autoplayEnabled = true
+
+    /** The track autoplay follows; null until a list is set through SET_LIST. */
+    private var seedId: String? = null
+    private var context: Pair<String, String>? = null
+
+    /** A Global seed's YouTube Music radio: refilled here, so it works with the screen off. */
+    private data class RadioState(val ytId: String, val next: String?)
+
+    private var radio: RadioState? = null
+
+    /** Bumped when the seed or list changes: a radio page fetched for the old one is dropped. */
+    private var radioGen = 0
+    private var radioInFlight = false
+
+    /** What the last "low" check acted on, so each low state is handled once. */
+    private var lowKey: String? = null
+    private val lowCheck = Runnable { checkLow() }
+    private val radioExecutor: ExecutorService = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "JukeRadio").apply { isDaemon = true }
+    }
 
     /** "<current mediaId>><next ytId>" already prefetched, so each pair is warmed once. */
     private var prefetchedKey: String? = null
@@ -124,6 +151,8 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         Log.i(TAG, "PlaybackService destroyed")
         handler.removeCallbacks(prefetchCheck)
+        handler.removeCallbacks(lowCheck)
+        radioExecutor.shutdownNow()
         StreamResolver.cancelPrefetch()
         mediaSession?.let { session ->
             session.player.release()
@@ -157,6 +186,7 @@ class PlaybackService : MediaSessionService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             queue.onTransition()
+            queueChanged()
             // A skip makes any pending prefetch for the old "next" stale.
             StreamResolver.cancelPrefetch()
             prefetchedKey = null
@@ -172,12 +202,21 @@ class PlaybackService : MediaSessionService() {
         override fun onTimelineChanged(timeline: Timeline, reason: Int) {
             if (reason != Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) return
             queue.onPlaylistChanged()
+            queueChanged()
             schedulePrefetch()
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
             queue.onShuffleModeChanged(shuffleModeEnabled)
+            queueChanged()
             schedulePrefetch()
+        }
+
+        /** Repeat all or one turns autoplay off; back to off, autoplay fills up again. */
+        override fun onRepeatModeChanged(repeatMode: Int) {
+            queue.onRepeatModeChanged(repeatMode != Player.REPEAT_MODE_OFF)
+            lowKey = null
+            queueChanged()
         }
     }
 
@@ -211,14 +250,39 @@ class PlaybackService : MediaSessionService() {
         override fun moveItem(from: Int, to: Int) = p.moveMediaItem(from, to)
 
         override fun insertTagged(at: Int?, items: List<MediaItem>, serials: List<Long>) {
-            val tagged = items.mapIndexed { k, item ->
-                val extras = Bundle(item.mediaMetadata.extras ?: Bundle.EMPTY)
-                extras.putLong(JukeCommands.EXTRA_QUEUE_SERIAL, serials[k])
-                item.buildUpon()
-                    .setMediaMetadata(item.mediaMetadata.buildUpon().setExtras(extras).build())
-                    .build()
-            }
+            val tagged = items.mapIndexed { k, item -> tag(item) { putLong(JukeCommands.EXTRA_QUEUE_SERIAL, serials[k]) } }
             if (at == null) p.addMediaItems(tagged) else p.addMediaItems(at, tagged)
+        }
+
+        override fun itemAt(index: Int): MediaItem = p.getMediaItemAt(index)
+
+        override fun isAutoAt(index: Int): Boolean =
+            p.getMediaItemAt(index).mediaMetadata.extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) == true
+
+        override fun setItems(items: List<MediaItem>, serials: List<Long>, start: Int, positionMs: Long) {
+            if (items.isEmpty()) {
+                p.clearMediaItems()
+                return
+            }
+            val tagged = items.mapIndexed { k, item ->
+                if (serials[k] == 0L) item else tag(item) { putLong(JukeCommands.EXTRA_QUEUE_SERIAL, serials[k]) }
+            }
+            p.setMediaItems(tagged, start, positionMs.coerceAtLeast(0L))
+        }
+
+        override fun appendAuto(items: List<MediaItem>) {
+            p.addMediaItems(items.map { tag(it) { putBoolean(QueueCommands.EXTRA_AUTOPLAY, true) } })
+        }
+
+        override fun removeAt(index: Int) = p.removeMediaItem(index)
+
+        override fun seekTo(index: Int) = p.seekTo(index, 0L)
+
+        private inline fun tag(item: MediaItem, edit: Bundle.() -> Unit): MediaItem {
+            val extras = Bundle(item.mediaMetadata.extras ?: Bundle.EMPTY).apply(edit)
+            return item.buildUpon()
+                .setMediaMetadata(item.mediaMetadata.buildUpon().setExtras(extras).build())
+                .build()
         }
     }
 
@@ -263,6 +327,146 @@ class PlaybackService : MediaSessionService() {
     private fun queueNext(p: ExoPlayer, items: List<MediaItem>) {
         val at = queue.queueNext(items)
         if (p.mediaItemCount > 0) Log.i(TAG, "queueNext: ${items.size} item(s) at $at, ${queue.pendingSerials.size} pending")
+        queueChanged()
+    }
+
+    // ---- lists and autoplay (P1, AP1, AP4) ---------------------------------------------------
+
+    /** A new list (queued items stay next); autoplay starts over from the started track. */
+    private fun setList(items: List<MediaItem>, start: Int, positionMs: Long, label: String, mode: String) {
+        queue.setList(items, start, positionMs)
+        context = label to mode
+        val seed = items.getOrNull(start.coerceIn(0, (items.size - 1).coerceAtLeast(0)))
+        reseed(seed)
+        Log.i(TAG, "setList: ${items.size} item(s), mode=$mode, ${queue.pendingSerials.size} queued kept")
+    }
+
+    /** Autoplay follows [seed] from now on: a Global seed gets its radio from here. */
+    private fun reseed(seed: MediaItem?) {
+        seedId = seed?.mediaId
+        radioGen++
+        radioInFlight = false
+        lowKey = null
+        val ytId = seed?.takeIf { it.mediaId.startsWith(QueueCommands.GLOBAL_PREFIX) }?.let { JukeUris.ytIdOf(it) }
+        radio = ytId?.let { RadioState(it, null) }
+        queueChanged()
+    }
+
+    private fun addAutoplay(items: List<MediaItem>, forSeed: String?) {
+        if (!autoplayEnabled || forSeed != seedId || player?.repeatMode != Player.REPEAT_MODE_OFF) {
+            Log.i(TAG, "addAutoplay: ${items.size} item(s) dropped (stale or autoplay off)")
+            return
+        }
+        queue.addAutoplay(items)
+        Log.i(TAG, "addAutoplay: ${items.size} item(s), ${queue.autoAhead()} ahead")
+        queueChanged()
+    }
+
+    private fun setAutoplay(enabled: Boolean) {
+        if (enabled == autoplayEnabled) return
+        autoplayEnabled = enabled
+        lowKey = null
+        if (!enabled) {
+            radioGen++
+            radioInFlight = false
+            queue.dropUpcomingAuto()
+        }
+        queueChanged()
+    }
+
+    /** A tap in Up next: on an autoplay item the radio continues from it. */
+    private fun skipTo(p: ExoPlayer, index: Int) {
+        if (queue.skipTo(index)) reseed(p.currentMediaItem) else queueChanged()
+    }
+
+    /** Publishes the queue facts for the plugin's state and checks autoplay (posted, once). */
+    private fun queueChanged() {
+        QueueInfo.pendingSerials = queue.pendingSerials.toSet()
+        QueueInfo.context = context
+        QueueInfo.seedId = seedId
+        handler.removeCallbacks(lowCheck)
+        handler.post(lowCheck)
+    }
+
+    /**
+     * AP4: with 5 autoplay items or fewer to go, get more. A Global radio is refilled here;
+     * Jukebox picks come from the web side (`queueLow`). Nothing with autoplay off or repeat on.
+     */
+    private fun checkLow() {
+        val p = player ?: return
+        if (!autoplayEnabled || p.repeatMode != Player.REPEAT_MODE_OFF || p.mediaItemCount == 0 || seedId == null) {
+            lowKey = null
+            return
+        }
+        val left = queue.autoAhead()
+        if (left > QueueCommands.LOW) {
+            lowKey = null
+            return
+        }
+        val key = "$seedId|$left|${p.currentMediaItemIndex}|${p.mediaItemCount}"
+        if (key == lowKey) return
+        lowKey = key
+        val r = radio
+        if (r != null) refillRadio(r) else QueueInfo.emitQueueLow(left, seedId)
+    }
+
+    /** One radio page at a time, never during a back-off (Y1); a bot check or 429 starts one. */
+    private fun refillRadio(r: RadioState) {
+        if (radioInFlight) return
+        if (NetBlock.isBlocked()) {
+            lowKey = null // try again on a later event, once the back-off is over
+            return
+        }
+        radioInFlight = true
+        val gen = radioGen
+        try {
+            radioExecutor.execute {
+                val result = runCatching { YtMusic.radio(r.ytId, r.next) }
+                handler.post { onRadioPage(gen, r, result) }
+            }
+        } catch (_: Exception) { // RejectedExecutionException after onDestroy
+            radioInFlight = false
+        }
+    }
+
+    private fun onRadioPage(gen: Int, r: RadioState, result: Result<Radio.Page>) {
+        if (gen != radioGen) return
+        radioInFlight = false
+        val p = player ?: return
+        result.onFailure { t ->
+            val kind = YtCompat.classify(t)
+            Log.w(TAG, "Radio failed [$kind]: ${t.javaClass.simpleName}")
+            kind.blockReason?.let { NetBlock.trip(it) }
+            if (kind == FailureKind.BROKEN) PlayerBus.emitExtractorBroken(YtCompat.describe(t))
+        }
+        val page = result.getOrNull() ?: return
+        val have = HashSet<String>()
+        for (i in 0 until p.mediaItemCount) JukeUris.ytIdOf(p.getMediaItemAt(i))?.let { have.add(it) }
+        val items = page.items.mapNotNull { it ->
+            val ytId = it.ytId ?: return@mapNotNull null
+            if (!have.add(ytId)) return@mapNotNull null
+            runCatching {
+                JukeTracks.toMediaItem(
+                    JSONObject()
+                        .put("id", QueueCommands.GLOBAL_PREFIX + ytId)
+                        .put("ytId", ytId)
+                        .put("title", it.title)
+                        .put("artist", Radio.cleanCredit(it.subtitle))
+                        .put("artworkUrl", "https://i.ytimg.com/vi/$ytId/hqdefault.jpg"),
+                )
+            }.getOrNull()
+        }
+        // At the end of a radio, start a new one from its last song.
+        radio = when {
+            page.next != null -> r.copy(next = page.next)
+            items.isNotEmpty() -> JukeUris.ytIdOf(items.last())?.let { RadioState(it, null) }
+            else -> null
+        }
+        Log.i(TAG, "Radio: ${items.size} new of ${page.items.size}, more=${page.next != null}")
+        if (items.isNotEmpty() && autoplayEnabled && p.repeatMode == Player.REPEAT_MODE_OFF) {
+            queue.addAutoplay(items)
+            queueChanged()
+        }
     }
 
     // ---- errors (Y1, Y5) ----------------------------------------------------------------------
@@ -425,6 +629,7 @@ class PlaybackService : MediaSessionService() {
                     builder.setAvailableSessionCommands(
                         MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
                             .add(JukeCommands.QUEUE_NEXT)
+                            .apply { QueueCommands.ALL.forEach { add(it) } }
                             .build(),
                     )
                 }
@@ -444,17 +649,36 @@ class PlaybackService : MediaSessionService() {
             customCommand: SessionCommand,
             args: Bundle,
         ): ListenableFuture<SessionResult> {
-            if (customCommand.customAction != JukeCommands.ACTION_QUEUE_NEXT || !isOwnApp(controller)) {
+            val action = customCommand.customAction
+            val ours = action == JukeCommands.ACTION_QUEUE_NEXT || QueueCommands.ALL.any { it.customAction == action }
+            if (!ours || !isOwnApp(controller)) {
                 return super.onCustomCommand(session, controller, customCommand, args)
             }
             val p = player ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
-            val items = try {
+            fun tracks(): List<MediaItem>? = try {
                 JukeTracks.parse(JSONArray(args.getString(JukeCommands.ARG_TRACKS) ?: "[]"))
             } catch (e: Exception) {
-                Log.w(TAG, "queueNext: bad tracks: ${e.javaClass.simpleName}")
-                return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
+                Log.w(TAG, "$action: bad tracks: ${e.javaClass.simpleName}")
+                null
             }
-            queueNext(p, items)
+            val bad = Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
+            when (action) {
+                JukeCommands.ACTION_QUEUE_NEXT -> queueNext(p, tracks() ?: return bad)
+                QueueCommands.ACTION_SET_LIST -> setList(
+                    tracks() ?: return bad,
+                    args.getInt(QueueCommands.ARG_START, 0),
+                    args.getLong(QueueCommands.ARG_POSITION, 0L),
+                    args.getString(QueueCommands.ARG_LABEL) ?: "",
+                    if (args.getString(QueueCommands.ARG_MODE) == "radio") "radio" else "list",
+                )
+                QueueCommands.ACTION_ADD_AUTOPLAY -> addAutoplay(tracks() ?: return bad, args.getString(QueueCommands.ARG_SEED))
+                QueueCommands.ACTION_SET_AUTOPLAY -> setAutoplay(args.getBoolean(QueueCommands.ARG_ENABLED, true))
+                QueueCommands.ACTION_SKIP_TO -> {
+                    val index = args.getInt(QueueCommands.ARG_INDEX, -1)
+                    if (index !in 0 until p.mediaItemCount) return bad
+                    skipTo(p, index)
+                }
+            }
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
 

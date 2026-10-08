@@ -9,7 +9,7 @@ import java.io.File
 import java.util.Random
 
 /**
- * Runs the shared "Add to queue" rule table (tests/spec/queue-rules.json, also run against the
+ * Runs the shared queue rule table (tests/spec/queue-rules.json, also run against the
  * web Queue by src/player/queueRules.test.ts) against [NativeQueue], on a fake player that
  * reproduces the ExoPlayer behaviour PlaybackService relies on: index shifts, shuffle orders
  * that place inserted or moved items at random, repeat modes for auto and user navigation,
@@ -45,22 +45,27 @@ class QueueRulesTest {
         val p = FakePlayer(Random(seed))
         p.repeat = c.optString("repeat", "off")
         p.shuffle = c.optBoolean("shuffle", false)
-        p.setList(strings(c.getJSONArray("list")), c.optInt("start", 0))
+        // Like the app: the first list goes through the queue too (shuffle starts at the track).
+        p.queue.setList(strings(c.getJSONArray("list")), c.optInt("start", 0))
         val steps = c.getJSONArray("steps")
         for (k in 0 until steps.length()) {
             val s = steps.getJSONObject(k)
             val where = "'$name' (seed $seed) step $k ${s.getString("op")}"
             when (s.getString("op")) {
-                "setList" -> p.setList(strings(s.getJSONArray("ids")), s.optInt("start", 0))
+                "setList" -> p.queue.setList(strings(s.getJSONArray("ids")), s.optInt("start", 0))
                 "queueNext" -> p.queue.queueNext(strings(s.getJSONArray("ids")))
-                "skipTo" -> p.seekTo(p.ids.indexOf(s.getString("id")))
+                "addAuto" -> p.queue.addAutoplay(strings(s.getJSONArray("ids")))
+                "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")))
                 "next" -> p.next()
                 "nextAuto" -> p.nextAuto()
                 "prev" -> p.prev(s.optLong("positionMs", 0L))
                 "remove" -> p.remove(p.ids.indexOf(s.getString("id")))
                 "move" -> p.moveItem(p.ids.indexOf(s.getString("id")), s.getInt("to"))
                 "setShuffle" -> p.toggleShuffle(s.getBoolean("on"))
-                "setRepeat" -> p.repeat = s.getString("mode")
+                "setRepeat" -> {
+                    p.repeat = s.getString("mode")
+                    p.queue.onRepeatModeChanged(p.repeat != "off")
+                }
                 "expect" -> expect(p, s, where)
                 else -> throw IllegalArgumentException("unknown op in $where")
             }
@@ -81,6 +86,15 @@ class QueueRulesTest {
             assertEquals("queued in $where", s.getInt("queued"), queued)
         }
         if (s.has("list")) assertEquals("list in $where", strings(s.getJSONArray("list")), p.ids.toList())
+        // Up next's sections: the leading queued run, then list and autoplay by tag.
+        val lead = up.takeWhile { p.serials[p.ids.indexOf(it)] in p.queue.pendingSerials }
+        val after = up.drop(lead.size)
+        val autos = after.filter { p.auto[p.ids.indexOf(it)] }
+        val list = after.filter { !p.auto[p.ids.indexOf(it)] }
+        if (s.has("queuedIds")) assertEquals("queuedIds in $where", strings(s.getJSONArray("queuedIds")), lead)
+        if (s.has("listIds")) assertEquals("listIds in $where", strings(s.getJSONArray("listIds")), list)
+        if (s.has("listSet")) assertEquals("listSet in $where", strings(s.getJSONArray("listSet")).sorted(), list.sorted())
+        if (s.has("autoplayIds")) assertEquals("autoplayIds in $where", strings(s.getJSONArray("autoplayIds")), autos)
     }
 
     private fun strings(a: JSONArray) = (0 until a.length()).map { a.getString(it) }
@@ -89,6 +103,7 @@ class QueueRulesTest {
     private class FakePlayer(private val rnd: Random) : QueueHost<String> {
         val ids = ArrayList<String>()
         val serials = ArrayList<Long>()
+        val auto = ArrayList<Boolean>()
         var current = -1
         var shuffle = false
         var repeat = "off"
@@ -128,6 +143,7 @@ class QueueRulesTest {
         override fun moveItem(from: Int, to: Int) {
             ids.add(to, ids.removeAt(from))
             serials.add(to, serials.removeAt(from))
+            auto.add(to, auto.removeAt(from))
             current = when {
                 current == from -> to
                 current in (from + 1)..to -> current - 1
@@ -143,6 +159,7 @@ class QueueRulesTest {
             val pos = at ?: ids.size
             ids.addAll(pos, items)
             this.serials.addAll(pos, serials)
+            auto.addAll(pos, items.map { false })
             orderInsert(pos, items.size)
             if (current < 0) {
                 current = 0
@@ -152,6 +169,36 @@ class QueueRulesTest {
             if (pos <= current) current += items.size
             emit(timelineChanged)
         }
+
+        override fun itemAt(index: Int) = ids[index]
+        override fun isAutoAt(index: Int) = auto[index]
+
+        override fun setItems(items: List<String>, serials: List<Long>, start: Int, positionMs: Long) {
+            ids.clear()
+            this.serials.clear()
+            auto.clear()
+            ids.addAll(items)
+            this.serials.addAll(serials)
+            items.forEach { auto.add(false) }
+            order = ArrayList((items.indices).toList().shuffled(rnd))
+            current = if (items.isEmpty()) -1 else start.coerceIn(0, items.size - 1)
+            emit(timelineChanged, transition)
+        }
+
+        override fun appendAuto(items: List<String>) {
+            val pos = ids.size
+            ids.addAll(items)
+            items.forEach { serials.add(0L); auto.add(true) }
+            orderInsert(pos, items.size)
+            if (current < 0) {
+                current = 0
+                emit(timelineChanged, transition)
+                return
+            }
+            emit(timelineChanged)
+        }
+
+        override fun removeAt(index: Int) = remove(index)
 
         // ---- ExoPlayer shuffle order bookkeeping (DefaultShuffleOrder) ----
         private fun orderInsert(at: Int, n: Int) {
@@ -165,17 +212,7 @@ class QueueRulesTest {
         }
 
         // ---- player operations ----
-        fun setList(list: List<String>, start: Int) {
-            ids.clear()
-            serials.clear()
-            ids.addAll(list)
-            list.forEach { serials.add(0L) }
-            order = ArrayList((list.indices).toList().shuffled(rnd))
-            current = if (list.isEmpty()) -1 else start.coerceIn(0, list.size - 1)
-            emit(timelineChanged, transition)
-        }
-
-        fun seekTo(index: Int) {
+        override fun seekTo(index: Int) {
             require(index in ids.indices)
             if (index == current) return
             current = index
@@ -232,6 +269,7 @@ class QueueRulesTest {
             require(index in ids.indices)
             ids.removeAt(index)
             serials.removeAt(index)
+            auto.removeAt(index)
             orderRemove(index)
             val changed = index == current
             if (index < current) current--

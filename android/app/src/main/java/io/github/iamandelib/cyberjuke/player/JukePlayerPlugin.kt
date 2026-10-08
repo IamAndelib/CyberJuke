@@ -17,6 +17,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import androidx.media3.session.SessionToken
 import com.getcapacitor.JSArray
@@ -34,8 +35,18 @@ import kotlin.math.roundToInt
  * Capacitor bridge to PlaybackService. Contract (TS side):
  *   setQueue, addItems, queueNext, removeItem, moveItem, play, pause, seekTo, skipToNext,
  *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, getState,
- *   getLaunchOptions, getBlockState, setNetworkPrefs, setGestureExclusion;
- *   events 'state', 'trackError', 'blocked', 'unblocked', 'extractorBroken'.
+ *   getLaunchOptions, getBlockState, setNetworkPrefs, setGestureExclusion, addAutoplay,
+ *   setAutoplay; events 'state', 'trackError', 'blocked', 'unblocked', 'extractorBroken',
+ *   'queueLow', 'tracks'.
+ *
+ * - setQueue keeps the tracks queued with queueNext next (P1) and starts autoplay over from
+ *   the started track (a Global one gets its radio natively, refilled in the service).
+ * - state also carries `upNextKinds` (one letter per upNextIds entry: q = queued by you,
+ *   l = the list, a = autoplay), `context` ({ label, mode } or null) and `seedId`.
+ * - queueLow { left, seedId }: autoplay has `left` (<= 5) Jukebox tracks to go: the web side
+ *   computes more and sends them with addAutoplay({ tracks, seedId }).
+ * - tracks { tracks: NativeTrack[] }: autoplay items the service added itself (Global radio),
+ *   so the web side can show them; sent again after a resume or a new state listener.
  *
  * - state: NativeState. Sent on every player event and once a second while playing and the
  *   app is in the foreground (no ticks in the background). `queueIds` is only included when
@@ -70,6 +81,18 @@ class JukePlayerPlugin : Plugin() {
     /** A `blocked` event was sent and no `unblocked` since. */
     private var announcedBlock = false
 
+    /** Autoplay items already described to the web in a `tracks` event. */
+    private val announcedTracks = HashSet<String>()
+
+    private val queueLowListener = QueueInfo.QueueLowListener { left, seedId ->
+        main.post {
+            val data = JSObject()
+            data.put("left", left)
+            data.put("seedId", seedId ?: JSONObject.NULL)
+            notifyListeners("queueLow", data)
+        }
+    }
+
     private val ticker = object : Runnable {
         override fun run() {
             val c = controller ?: return
@@ -88,7 +111,10 @@ class JukePlayerPlugin : Plugin() {
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             val c = controller ?: return
-            if (events.contains(Player.EVENT_TIMELINE_CHANGED)) queueDirty = true
+            if (events.contains(Player.EVENT_TIMELINE_CHANGED)) {
+                queueDirty = true
+                announceTracks(c)
+            }
             emitState(c)
             if (events.contains(Player.EVENT_IS_PLAYING_CHANGED)) restartTicker(c)
         }
@@ -127,6 +153,7 @@ class JukePlayerPlugin : Plugin() {
         PlayerBus.add(trackErrorListener)
         PlayerBus.addBroken(brokenListener)
         NetBlock.add(blockListener)
+        QueueInfo.addLow(queueLowListener)
         main.post {
             val (until, reason) = NetBlock.active()
             if (reason != null) announceBlocked(until, reason)
@@ -150,6 +177,8 @@ class JukePlayerPlugin : Plugin() {
             // Background events may have been throttled by the WebView: send everything once.
             queueDirty = true
             lastQueueIds = null
+            announcedTracks.clear()
+            announceTracks(c)
             emitState(c)
             restartTicker(c)
         }
@@ -163,6 +192,8 @@ class JukePlayerPlugin : Plugin() {
             main.post {
                 queueDirty = true
                 lastQueueIds = null
+                announcedTracks.clear()
+                controller?.let { announceTracks(it) }
             }
         }
     }
@@ -171,6 +202,7 @@ class JukePlayerPlugin : Plugin() {
         PlayerBus.remove(trackErrorListener)
         PlayerBus.removeBroken(brokenListener)
         NetBlock.remove(blockListener)
+        QueueInfo.removeLow(queueLowListener)
         main.post {
             main.removeCallbacks(ticker)
             main.removeCallbacks(unblockTimer)
@@ -271,10 +303,15 @@ class JukePlayerPlugin : Plugin() {
 
     // ---- plugin methods -----------------------------------------------------------------------
 
+    /**
+     * `setQueue({ tracks, startIndex, positionMs?, playWhenReady, context?: { label, mode } })`:
+     * a new list. Tracks queued with queueNext stay next (P1); autoplay starts over.
+     */
     @PluginMethod
     fun setQueue(call: PluginCall) {
+        val tracks = call.getArray("tracks")
         val items = try {
-            parseTracks(call.getArray("tracks"))
+            parseTracks(tracks)
         } catch (e: Exception) {
             call.reject("Invalid tracks: ${e.message}")
             return
@@ -282,23 +319,89 @@ class JukePlayerPlugin : Plugin() {
         val startIndex = intArg(call, "startIndex") ?: 0
         val positionMs = longArg(call, "positionMs") ?: 0L
         val playWhenReady = call.getBoolean("playWhenReady", true) ?: true
+        val ctx = call.getObject("context")
         Log.i(TAG, "BRIDGE setQueue n=${items.size}")
         withController(call) { c ->
             if (items.isEmpty()) {
                 c.clearMediaItems()
-            } else {
-                val start = startIndex.coerceIn(0, items.size - 1)
-                c.setMediaItems(items, start, positionMs.coerceAtLeast(0L))
-                if (refuseWhileBlocked(c)) {
+                call.resolve()
+                return@withController
+            }
+            val args = Bundle().apply {
+                putString(QueueCommands.ARG_TRACKS, tracks.toString())
+                putInt(QueueCommands.ARG_START, startIndex.coerceIn(0, items.size - 1))
+                putLong(QueueCommands.ARG_POSITION, positionMs.coerceAtLeast(0L))
+                putString(QueueCommands.ARG_LABEL, ctx?.getString("label") ?: "")
+                putString(QueueCommands.ARG_MODE, ctx?.getString("mode") ?: "list")
+            }
+            sendCommand(call, c, QueueCommands.SET_LIST, args) {
+                if (refuseWhileBlocked(it)) {
                     // Queue updated, but no extraction until the back-off ends.
                 } else {
-                    c.playWhenReady = playWhenReady
-                    c.prepare()
+                    it.playWhenReady = playWhenReady
+                    it.prepare()
                     if (playWhenReady) maybeRequestNotificationPermission()
                 }
+                call.resolve()
             }
-            call.resolve()
         }
+    }
+
+    /**
+     * `addAutoplay({ tracks, seedId })`: Jukebox autoplay picks (after a `queueLow`) for the seed
+     * they were computed for; dropped if the seed changed meanwhile, autoplay is off or repeat on.
+     */
+    @PluginMethod
+    fun addAutoplay(call: PluginCall) {
+        val tracks = call.getArray("tracks")
+        val count = try {
+            parseTracks(tracks).size
+        } catch (e: Exception) {
+            call.reject("Invalid tracks: ${e.message}")
+            return
+        }
+        if (count == 0) {
+            call.resolve()
+            return
+        }
+        val args = Bundle().apply {
+            putString(QueueCommands.ARG_TRACKS, tracks.toString())
+            putString(QueueCommands.ARG_SEED, call.getString("seedId"))
+        }
+        withController(call) { c -> sendCommand(call, c, QueueCommands.ADD_AUTOPLAY, args) }
+    }
+
+    /** `setAutoplay({ enabled })`: the Autoplay setting (C3). Off drops the autoplay tracks to come. */
+    @PluginMethod
+    fun setAutoplay(call: PluginCall) {
+        val enabled = call.getBoolean("enabled") ?: return call.reject("enabled is required")
+        val args = Bundle().apply { putBoolean(QueueCommands.ARG_ENABLED, enabled) }
+        withController(call) { c -> sendCommand(call, c, QueueCommands.SET_AUTOPLAY, args) }
+    }
+
+    /** Sends a custom command to PlaybackService; [then] runs on success (default: resolve). */
+    private fun sendCommand(
+        call: PluginCall,
+        c: MediaController,
+        command: SessionCommand,
+        args: Bundle,
+        then: (MediaController) -> Unit = { call.resolve() },
+    ) {
+        val name = command.customAction.substringAfterLast('.')
+        val future = c.sendCustomCommand(command, args)
+        future.addListener({
+            val result = try {
+                future.get()
+            } catch (e: Exception) {
+                call.reject("$name failed: ${e.message}")
+                return@addListener
+            }
+            if (result.resultCode == SessionResult.RESULT_SUCCESS) {
+                runAction(call, c, then)
+            } else {
+                call.reject("$name failed: result ${result.resultCode}")
+            }
+        }, ContextCompat.getMainExecutor(context))
     }
 
     @PluginMethod
@@ -341,22 +444,7 @@ class JukePlayerPlugin : Plugin() {
             return
         }
         val args = Bundle().apply { putString(JukeCommands.ARG_TRACKS, tracks.toString()) }
-        withController(call) { c ->
-            val future = c.sendCustomCommand(JukeCommands.QUEUE_NEXT, args)
-            future.addListener({
-                val result = try {
-                    future.get()
-                } catch (e: Exception) {
-                    call.reject("queueNext failed: ${e.message}")
-                    return@addListener
-                }
-                if (result.resultCode == SessionResult.RESULT_SUCCESS) {
-                    call.resolve()
-                } else {
-                    call.reject("queueNext failed: result ${result.resultCode}")
-                }
-            }, ContextCompat.getMainExecutor(context))
-        }
+        withController(call) { c -> sendCommand(call, c, JukeCommands.QUEUE_NEXT, args) }
     }
 
     @PluginMethod
@@ -451,9 +539,12 @@ class JukePlayerPlugin : Plugin() {
             if (index !in 0 until c.mediaItemCount) {
                 call.reject("index out of range: $index")
             } else {
-                c.seekTo(index, 0L)
-                if (c.playbackState == Player.STATE_IDLE && !NetBlock.isBlocked()) c.prepare()
-                call.resolve()
+                // In the service: queued tracks stay next; on an autoplay track the radio continues from it.
+                val args = Bundle().apply { putInt(QueueCommands.ARG_INDEX, index) }
+                sendCommand(call, c, QueueCommands.SKIP_TO, args) {
+                    if (it.playbackState == Player.STATE_IDLE && !NetBlock.isBlocked()) it.prepare()
+                    call.resolve()
+                }
             }
         }
     }
@@ -635,6 +726,8 @@ class JukePlayerPlugin : Plugin() {
         }
 
         val upNext = ArrayList<String>()
+        val kinds = StringBuilder()
+        val pending = QueueInfo.pendingSerials
         val timeline = c.currentTimeline
         if (index >= 0 && !timeline.isEmpty && index < timeline.windowCount) {
             // Repeat-one is treated as off so the list shows what follows this track.
@@ -642,7 +735,16 @@ class JukePlayerPlugin : Plugin() {
             val shuffle = c.shuffleModeEnabled
             var i = timeline.getNextWindowIndex(index, repeat, shuffle)
             while (i != C.INDEX_UNSET && i != index && upNext.size < MAX_UP_NEXT && i < count) {
-                upNext.add(c.getMediaItemAt(i).mediaId)
+                val item = c.getMediaItemAt(i)
+                upNext.add(item.mediaId)
+                val extras = item.mediaMetadata.extras
+                kinds.append(
+                    when {
+                        (extras?.getLong(JukeCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L).let { it != 0L && it in pending } -> 'q'
+                        extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) == true -> 'a'
+                        else -> 'l'
+                    },
+                )
                 i = timeline.getNextWindowIndex(i, repeat, shuffle)
             }
         }
@@ -670,7 +772,44 @@ class JukePlayerPlugin : Plugin() {
             state.put("queueIdsUnchanged", true)
         }
         state.put("upNextIds", JSArray(upNext))
+        state.put("upNextKinds", kinds.toString())
+        val ctx = QueueInfo.context
+        if (ctx != null && count > 0) {
+            val o = JSObject()
+            o.put("label", ctx.first)
+            o.put("mode", ctx.second)
+            state.put("context", o)
+        } else {
+            state.put("context", JSONObject.NULL)
+        }
+        state.put("seedId", (if (count > 0) QueueInfo.seedId else null) ?: JSONObject.NULL)
         return state
+    }
+
+    /** Describes autoplay items the service added itself (Global radio) to the web, once each. */
+    private fun announceTracks(c: MediaController) {
+        if (!hasListeners("tracks")) return
+        val arr = JSArray()
+        for (i in 0 until c.mediaItemCount) {
+            val item = c.getMediaItemAt(i)
+            val id = item.mediaId
+            if (!id.startsWith(QueueCommands.GLOBAL_PREFIX) || id in announcedTracks) continue
+            if (item.mediaMetadata.extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) != true) continue
+            val ytId = JukeUris.ytIdOf(item) ?: continue
+            announcedTracks.add(id)
+            val o = JSObject()
+            o.put("id", id)
+            o.put("ytId", ytId)
+            o.put("title", item.mediaMetadata.title?.toString() ?: "")
+            o.put("artist", item.mediaMetadata.artist?.toString() ?: "")
+            o.put("artworkUrl", item.mediaMetadata.artworkUri?.toString() ?: "")
+            arr.put(o)
+        }
+        if (announcedTracks.size > MAX_ANNOUNCED) announcedTracks.clear()
+        if (arr.length() == 0) return
+        val data = JSObject()
+        data.put("tracks", arr)
+        notifyListeners("tracks", data)
     }
 
     // ---- helpers --------------------------------------------------------------------------
@@ -716,6 +855,7 @@ class JukePlayerPlugin : Plugin() {
         /** Android ignores gesture exclusion beyond 200dp per edge. */
         private const val MAX_EXCLUSION_DP = 200f
         private const val MAX_UP_NEXT = 50
+        private const val MAX_ANNOUNCED = 5000
         private const val PREFS = "cyberjuke_player"
         private const val PREF_NOTIF_ASKED = "notification_permission_asked"
         private const val REQUEST_NOTIFICATIONS = 0x4A55 // arbitrary, not a Capacitor plugin code
