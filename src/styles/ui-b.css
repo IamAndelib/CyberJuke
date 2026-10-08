@@ -167,7 +167,8 @@
 .np-flip::after {
   content: '';
   position: absolute;
-  inset: -8px;
+  /* a 48px target around the 28px label */
+  inset: -10px;
 }
 .np-art.lyrics .np-flip {
   bottom: auto;
@@ -289,7 +290,7 @@ button.lyr-line {
   top: 10px;
   line-height: 28px;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-fg-dim);
   white-space: nowrap;
   overflow: hidden;

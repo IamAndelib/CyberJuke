@@ -292,7 +292,7 @@ h3 {
   padding: 0 6px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 18px;
   color: var(--color-fg-dim);
   white-space: nowrap;
@@ -844,17 +844,17 @@ h3 {
   overflow-wrap: anywhere;
   text-transform: lowercase;
 }
-/* Heart: its own 44px button over the tile's top-right corner. */
+/* Star: its own 48px button over the tile's top-right corner. */
 .genre-fav {
   position: absolute;
-  top: 8px;
+  top: 6px;
   right: 0;
   z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   color: var(--color-fg-dim);
 }
 .genre-fav.on {
@@ -1702,14 +1702,16 @@ h3 {
   color: var(--color-accent);
 }
 
+/* The range is 48px tall (the touch area); the bar drawn in it stays 12px. */
 .seek {
-  padding: 14px calc(var(--gutter) + 4px) 0;
+  padding: 6px calc(var(--gutter) + 4px) 0;
 }
 .seek-range {
   -webkit-appearance: none;
   appearance: none;
+  display: block;
   width: 100%;
-  height: 32px;
+  height: 48px;
   margin: 0;
   background: transparent;
   cursor: pointer;
@@ -1752,6 +1754,7 @@ h3 {
   opacity: 0.5;
 }
 .seek-times {
+  margin-top: -6px;
   display: flex;
   justify-content: space-between;
   font-size: 12px;
