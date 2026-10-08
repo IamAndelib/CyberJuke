@@ -17,6 +17,7 @@
  */
 import { bool, isHiddenDoc, tracksFromRows, type FsRunQueryRow, type Track, ts } from './model';
 import { Cache } from '../core/cache';
+import { errorMessage, isOffline } from '../core/errors';
 import { parseRunQueryRows } from '../core/guards';
 import type { Cursor, Page, TrackSource } from './source';
 
@@ -319,7 +320,7 @@ export class FirestoreSource implements TrackSource {
     try {
       t = await get();
     } catch (e) {
-      throw new FirestoreError(e instanceof Error ? e.message : 'Network unavailable', 0, !!(e as { offline?: boolean })?.offline);
+      throw new FirestoreError(errorMessage(e, 'Network unavailable'), 0, isOffline(e));
     }
     if (!t) throw new FirestoreError('Signed out of Cyberspace', 401);
     return t;

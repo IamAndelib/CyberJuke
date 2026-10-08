@@ -24,7 +24,8 @@ import {
 } from '../../data/ytmusic';
 import { artistChannels } from '../../stores/artistChannels';
 import type { Track } from '../../data/model';
-import type { FeedError, FeedLoader, FeedOptions } from '../../stores/feed';
+import type { LoadError } from '../../core/errors';
+import type { FeedLoader, FeedOptions } from '../../stores/feed';
 import { Icon } from '../icons';
 import { openAlbumPage, openArtistPage, openReleasesPage, type AlbumRef } from '../nav';
 
@@ -221,7 +222,7 @@ export function MusicRow({ item }: { item: MusicItem }) {
   );
 }
 
-export function GlobalError({ error, onRetry, testid = 'global-error' }: { error: FeedError; onRetry?: () => void; testid?: string }) {
+export function GlobalError({ error, onRetry, testid = 'global-error' }: { error: LoadError; onRetry?: () => void; testid?: string }) {
   return (
     <div class="state compact" role="alert" data-testid={testid} data-code={error.code}>
       <div class="state-glyph" aria-hidden="true">

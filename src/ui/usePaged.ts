@@ -3,14 +3,15 @@ import type { Track } from '../data/model';
 import type { Cursor, Page } from '../data/source';
 import { source } from '../data';
 import { recordTracks } from '../stores/genres';
-import { feeds, type Feed, type FeedCache, type FeedError, type FeedLoader, type FeedOptions, type FeedSnapshot, type FeedStatus } from '../stores/feed';
+import type { LoadError } from '../core/errors';
+import { feeds, type Feed, type FeedCache, type FeedLoader, type FeedOptions, type FeedSnapshot, type FeedStatus } from '../stores/feed';
 
 export type Status = FeedStatus;
 
 export interface Paged {
   tracks: Track[];
   status: Status;
-  error: FeedError | null;
+  error: LoadError | null;
   hasMore: boolean;
   loadingMore: boolean;
   loadMore: () => void;

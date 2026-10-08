@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals';
 import { useMemo, useState } from 'preact/hooks';
 import { shuffled, source } from '../../data';
+import { isOffline } from '../../core/errors';
 import { catalog, mostSaved, type SavedRange } from '../../stores/catalog';
 import { catalogGenre, chipGenres } from '../../stores/genres';
 import { favoriteGenres, showNsfw } from '../../stores/library';
@@ -41,7 +42,7 @@ export function ShuffleHero() {
     try {
       await shuffleJukebox();
     } catch (e) {
-      toast((e as { offline?: boolean }).offline ? "You're offline" : "Couldn't shuffle right now");
+      toast(isOffline(e) ? "You're offline" : "Couldn't shuffle right now");
     } finally {
       setBusy(false);
     }

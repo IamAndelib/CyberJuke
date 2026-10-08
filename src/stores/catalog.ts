@@ -24,6 +24,7 @@ import type { Track } from '../data/model';
 import type { TrackSource } from '../data/source';
 import { source } from '../data';
 import { auth } from '../data/auth';
+import { errorMessage, isOffline, type LoadError } from '../core/errors';
 import { isObj, isTrackFull } from '../core/guards';
 import { kv, textFile, type TextFile } from '../core/storage';
 import { showNsfw } from './library';
@@ -74,7 +75,7 @@ export interface Catalog {
   /** Total tracks including NSFW ones (for diagnostics/tests). */
   all: ReadonlySignal<Track[]>;
   status: ReadonlySignal<CatalogStatus>;
-  error: ReadonlySignal<{ message: string; offline: boolean } | null>;
+  error: ReadonlySignal<LoadError | null>;
   /**
    * Bring the catalog up to date following the refresh rules. `force` skips the
    * 1-hour wait (pull-to-refresh) but still prefers an incremental fetch.
@@ -129,7 +130,7 @@ export function createCatalog(deps: CatalogDeps): Catalog {
   const now = deps.now ?? (() => Date.now());
   const all = signal<Track[]>([]);
   const status = signal<CatalogStatus>('idle');
-  const error = signal<{ message: string; offline: boolean } | null>(null);
+  const error = signal<LoadError | null>(null);
   const tracks = computed(() => (deps.showNsfw() ? all.value : all.value.filter((t) => !t.nsfw)));
   let fullAt = 0;
   let checkedAt = 0;
@@ -194,10 +195,7 @@ export function createCatalog(deps: CatalogDeps): Catalog {
       persist(k);
     } catch (e) {
       if (g !== gen) return;
-      error.value = {
-        message: e instanceof Error ? e.message : String(e),
-        offline: !!(e as { offline?: boolean })?.offline,
-      };
+      error.value = { message: errorMessage(e), offline: isOffline(e) };
       // With a cache we keep showing it; only an empty catalog is an error state.
       status.value = all.value.length ? 'ready' : 'error';
     }

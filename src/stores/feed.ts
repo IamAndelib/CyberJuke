@@ -4,15 +4,10 @@
  * module-level cache, so leaving a screen and coming back gets everything already
  * loaded instantly, with no refetch. Pure TS, no Preact: hooks subscribe to it.
  */
+import { toLoadError, type LoadError } from '../core/errors';
 import { online } from '../core/network';
 
 export type FeedStatus = 'loading' | 'ready' | 'error';
-
-export interface FeedError {
-  message: string;
-  offline: boolean;
-  code?: string;
-}
 
 export interface FeedPage<T, C, M = undefined> {
   items: T[];
@@ -26,7 +21,7 @@ export type FeedLoader<T, C, M = undefined> = (cursor: C | null) => Promise<Feed
 export interface FeedSnapshot<T, M = undefined> {
   items: T[];
   status: FeedStatus;
-  error: FeedError | null;
+  error: LoadError | null;
   hasMore: boolean;
   loadingMore: boolean;
   meta?: M;
@@ -41,21 +36,12 @@ export interface FeedOptions<T> {
   isEnd?: (e: unknown) => boolean;
 }
 
-export function toFeedError(e: unknown): FeedError {
-  const x = e as { offline?: boolean; code?: unknown } | null;
-  return {
-    message: e instanceof Error ? e.message : String(e),
-    offline: !!x?.offline || !online.peek(),
-    ...(typeof x?.code === 'string' && { code: x.code }),
-  };
-}
-
 export class Feed<T, C, M = undefined> {
   private items: T[] = [];
   private cursor: C | null = null;
   private meta: M | undefined;
   private status: FeedStatus = 'loading';
-  private error: FeedError | null = null;
+  private error: LoadError | null = null;
   private loadingMore = false;
   private started = false;
   private gen = 0;
@@ -136,7 +122,7 @@ export class Feed<T, C, M = undefined> {
       .catch((e) => {
         if (g !== this.gen) return;
         if (this.opts.isEnd?.(e)) this.cursor = null;
-        else this.error = toFeedError(e);
+        else this.error = toLoadError(e, !online.peek());
       })
       .finally(() => {
         if (g !== this.gen) return;
@@ -167,7 +153,7 @@ export class Feed<T, C, M = undefined> {
       this.status = 'ready';
     } catch (e) {
       if (g !== this.gen) return;
-      this.error = toFeedError(e);
+      this.error = toLoadError(e, !online.peek());
       // A failed refresh keeps showing what we had.
       if (this.status !== 'ready') this.status = 'error';
     } finally {
