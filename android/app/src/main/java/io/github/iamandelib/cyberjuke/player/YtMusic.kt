@@ -5,7 +5,10 @@ import org.schabi.newpipe.extractor.InfoItem
 import org.schabi.newpipe.extractor.ListExtractor.InfoItemsPage
 import org.schabi.newpipe.extractor.Page
 import org.schabi.newpipe.extractor.ServiceList
+import org.json.JSONObject
 import org.schabi.newpipe.extractor.channel.ChannelInfoItem
+import org.schabi.newpipe.extractor.channel.tabs.ChannelTabs
+import org.schabi.newpipe.extractor.exceptions.ContentNotAvailableException
 import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
 import org.schabi.newpipe.extractor.exceptions.SignInConfirmNotBotException
 import org.schabi.newpipe.extractor.playlist.PlaylistInfo
@@ -107,11 +110,17 @@ internal object YtMusic {
     fun artist(name: String): List<Item> =
         search(name, Filter.ARTISTS).items.filter { it.kind == "artist" && it.channelId != null }
 
-    /** Album or playlist page (YouTube Music albums are playlists too). */
+    /**
+     * Album or playlist page (YouTube Music albums are playlists too). An album browse URL
+     * (`…/browse/MPREb_…`, from [artistPage]) is first resolved to its OLAK5uy_ playlist.
+     */
     fun playlist(url: String): Playlist {
         YtCompat.ensureInit()
-        val info = PlaylistInfo.getInfo(ServiceList.YouTube, url)
-        val pageUrl = info.url ?: url
+        val target = ArtistPage.albumBrowseIdOf(url)
+            ?.let { ArtistPage.playlistUrl(albumPlaylistId(it)) }
+            ?: url
+        val info = PlaylistInfo.getInfo(ServiceList.YouTube, target)
+        val pageUrl = info.url ?: target
         return Playlist(
             title = info.name ?: "",
             subtitle = info.uploaderName ?: "",
@@ -119,6 +128,130 @@ internal object YtMusic {
             items = info.relatedItems.mapNotNull { mapItem(it, null) },
             next = continuation(info.nextPage) { Continuation(it, null, null, pageUrl) },
         )
+    }
+
+    // ---- artist pages (InnerTube browse, see ArtistPage) ---------------------------------
+
+    data class Artist(
+        val name: String,
+        val thumbnailUrl: String?,
+        val topSongs: List<Item>,
+        val topSongsPlaylistUrl: String?,
+        val releases: List<ArtistPage.Release>,
+        val moreAlbums: ArtistPage.More?,
+        val moreSingles: ArtistPage.More?,
+        /** "innertube", "innertube+releases-tab" or "releases-tab" (for logs only). */
+        val source: String,
+    )
+
+    /**
+     * The YouTube Music artist page for a channel id: header, top songs, release shelves and
+     * their "See all" tokens. When it yields no releases, the YouTube channel's Releases tab
+     * (NewPipe, ChannelTabs.ALBUMS) supplies them, classified by title. Throws the artist
+     * page's error only when neither source produced anything.
+     */
+    fun artistPage(channelId: String): Artist {
+        YtCompat.ensureInit()
+        var parsed: ArtistPage.Parsed? = null
+        var failure: Throwable? = null
+        try {
+            val json = InnerTube.post("browse", JSONObject().put("browseId", channelId))
+                ?: throw ContentNotAvailableException("artist page $channelId not found")
+            parsed = ArtistPage.parseArtist(json, channelId)
+        } catch (t: Throwable) {
+            failure = t
+        }
+        val p = parsed
+        if (p != null && p.releases.isNotEmpty()) return artistOf(p, p.releases, "innertube")
+
+        val tab = try {
+            releasesTab(channelId)
+        } catch (t: Throwable) {
+            if (p == null) throw failure ?: t
+            null
+        }
+        if (p == null && tab?.second.isNullOrEmpty()) {
+            throw failure ?: ContentNotAvailableException("artist $channelId has no releases")
+        }
+        val releases = tab?.second ?: emptyList()
+        if (p != null) return artistOf(p, releases, if (releases.isEmpty()) "innertube" else "innertube+releases-tab")
+        return Artist(
+            name = tab?.first ?: "",
+            thumbnailUrl = null,
+            topSongs = emptyList(),
+            topSongsPlaylistUrl = null,
+            releases = releases,
+            moreAlbums = null,
+            moreSingles = null,
+            source = "releases-tab",
+        )
+    }
+
+    /** A "See all" discography grid for a token from [artistPage]. */
+    fun artistReleases(more: ArtistPage.More): List<ArtistPage.Release> {
+        YtCompat.ensureInit()
+        val payload = JSONObject().put("browseId", more.browseId)
+        more.params?.let { payload.put("params", it) }
+        val json = InnerTube.post("browse", payload)
+            ?: throw ContentNotAvailableException("releases ${more.browseId} not found")
+        return ArtistPage.parseReleases(json, more.shelf)
+    }
+
+    private fun artistOf(p: ArtistPage.Parsed, releases: List<ArtistPage.Release>, source: String) = Artist(
+        name = p.name,
+        thumbnailUrl = p.thumbnailUrl,
+        topSongs = p.topSongs.map { s ->
+            Item(
+                kind = "song",
+                title = s.title,
+                subtitle = s.subtitle,
+                url = "https://music.youtube.com/watch?v=${s.ytId}",
+                ytId = s.ytId,
+                durationSec = s.durationSec,
+                thumbnailUrl = s.thumbnailUrl,
+                artistUrl = s.channelId?.let { "https://www.youtube.com/channel/$it" },
+                channelId = s.channelId,
+            )
+        },
+        topSongsPlaylistUrl = p.topSongsPlaylistUrl,
+        releases = releases,
+        moreAlbums = p.moreAlbums,
+        moreSingles = p.moreSingles,
+        source = source,
+    )
+
+    /** (channel name or null, releases) from the YouTube channel's Releases tab. */
+    private fun releasesTab(channelId: String): Pair<String?, List<ArtistPage.Release>> {
+        val ex = ServiceList.YouTube.getChannelTabExtractorFromId("channel/$channelId", ChannelTabs.ALBUMS)
+        ex.fetchPage()
+        val items = ex.initialPage.items.filterIsInstance<PlaylistInfoItem>()
+        val releases = items.mapNotNull { it ->
+            val url = it.url ?: return@mapNotNull null
+            val title = it.name ?: return@mapNotNull null
+            ArtistPage.Release(
+                kind = ArtistPage.classifyByTitle(title, it.streamCount.takeIf { n -> n > 0 }),
+                title = title,
+                year = null,
+                url = url,
+                thumbnailUrl = bestThumbnail(it.thumbnails),
+            )
+        }.distinctBy { it.url }
+        return items.firstNotNullOfOrNull { it.uploaderName?.takeIf { n -> n.isNotBlank() } } to releases
+    }
+
+    private val albumIds = object : LinkedHashMap<String, String>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 200
+    }
+
+    /** MPREb_… album browse id -> its OLAK5uy_… playlist id (one `browse`, cached). */
+    private fun albumPlaylistId(browseId: String): String {
+        synchronized(albumIds) { albumIds[browseId] }?.let { return it }
+        val json = InnerTube.post("browse", JSONObject().put("browseId", browseId))
+            ?: throw ContentNotAvailableException("album $browseId not found")
+        val id = ArtistPage.albumPlaylistIdOf(json)
+            ?: throw ContentNotAvailableException("album $browseId has no playlist")
+        synchronized(albumIds) { albumIds[browseId] = id }
+        return id
     }
 
     /** BOT_CHECK | NETWORK | UNAVAILABLE, for the plugin's reject code. */

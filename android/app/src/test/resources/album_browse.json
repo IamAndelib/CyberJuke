@@ -1,0 +1,24 @@
+{
+ "microformat":{
+  "microformatDataRenderer":{
+   "urlCanonical":"https://music.youtube.com/playlist?list=OLAK5uy_killersXXXXXXXXXXXXXXXXXXXXXXXXX",
+   "title":"Live Killers"
+  }
+ },
+ "header":{
+  "musicResponsiveHeaderRenderer":{
+   "buttons":[
+    {
+     "musicPlayButtonRenderer":{
+      "playNavigationEndpoint":{
+       "watchEndpoint":{
+        "videoId":"x",
+        "playlistId":"OLAK5uy_otherXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+       }
+      }
+     }
+    }
+   ]
+  }
+ }
+}

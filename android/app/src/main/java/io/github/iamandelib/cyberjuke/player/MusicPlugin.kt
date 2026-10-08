@@ -30,12 +30,18 @@ import java.util.concurrent.Executors
  *   lyrics({ ytId, title, artist, album?, durationSec? }): Promise<{ found: boolean;
  *     source?: string; synced?: { t: number (ms); text: string }[]; plain?: string;
  *     instrumental?: boolean }>   // not found resolves { found: false }
+ *   interface Release { kind: 'album' | 'ep' | 'single' | 'live'; title: string; year?: string;
+ *     url: string; thumbnailUrl?: string }   // url opens with playlist({ url })
+ *   artistPage({ channelId }): Promise<{ name: string; thumbnailUrl?: string;
+ *     topSongs: MusicItem[]; topSongsPlaylistUrl?: string; releases: Release[];
+ *     more?: { albums?: string; singles?: string } }>   // opaque "See all" tokens
+ *   artistReleases({ token }): Promise<{ releases: Release[] }>
  *
  * Rejections carry code BOT_CHECK, NETWORK or UNAVAILABLE.
  *
  * All NewPipe work runs on a small background pool; lyrics run on their own single thread,
- * one request at a time. `next` is an opaque token for a
- * continuation kept native-side in a 50-entry LRU; an evicted token rejects UNAVAILABLE.
+ * one request at a time. `next` (and the artist page's `more` tokens) are opaque tokens
+ * kept native-side in 50-entry LRUs; an evicted token rejects UNAVAILABLE.
  */
 @CapacitorPlugin(name = "JukeMusic")
 class MusicPlugin : Plugin() {
@@ -50,6 +56,11 @@ class MusicPlugin : Plugin() {
 
     private val pages = object : LinkedHashMap<String, YtMusic.Continuation>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, YtMusic.Continuation>?) =
+            size > MAX_PAGES
+    }
+
+    private val releaseTokens = object : LinkedHashMap<String, ArtistPage.More>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ArtistPage.More>?) =
             size > MAX_PAGES
     }
 
@@ -99,6 +110,46 @@ class MusicPlugin : Plugin() {
             call.reject("name is required", "UNAVAILABLE"); return
         }
         run(call, "artist '$name'") { itemsToJs(YtMusic.artist(name), null) }
+    }
+
+    @PluginMethod
+    fun artistPage(call: PluginCall) {
+        val channelId = call.getString("channelId")?.trim()
+        if (channelId.isNullOrEmpty()) {
+            call.reject("channelId is required", "UNAVAILABLE"); return
+        }
+        run(call, "artistPage $channelId") {
+            val a = YtMusic.artistPage(channelId)
+            val out = JSObject()
+            out.put("name", a.name)
+            a.thumbnailUrl?.let { out.put("thumbnailUrl", it) }
+            val songs = JSArray()
+            for (it in a.topSongs) songs.put(itemToJs(it))
+            out.put("topSongs", songs)
+            a.topSongsPlaylistUrl?.let { out.put("topSongsPlaylistUrl", it) }
+            out.put("releases", releasesToJs(a.releases))
+            if (a.moreAlbums != null || a.moreSingles != null) {
+                val more = JSObject()
+                a.moreAlbums?.let { more.put("albums", releaseToken(it)) }
+                a.moreSingles?.let { more.put("singles", releaseToken(it)) }
+                out.put("more", more)
+            }
+            out
+        }
+    }
+
+    @PluginMethod
+    fun artistReleases(call: PluginCall) {
+        val token = call.getString("token")
+        val more = token?.let { synchronized(releaseTokens) { releaseTokens[it] } }
+        if (more == null) {
+            call.reject("unknown or expired releases token", "UNAVAILABLE"); return
+        }
+        run(call, "artistReleases ${more.browseId}") {
+            val out = JSObject()
+            out.put("releases", releasesToJs(YtMusic.artistReleases(more)))
+            out
+        }
     }
 
     @PluginMethod
@@ -182,6 +233,26 @@ class MusicPlugin : Plugin() {
         return o
     }
 
+    private fun releaseToken(more: ArtistPage.More): String {
+        val token = UUID.randomUUID().toString()
+        synchronized(releaseTokens) { releaseTokens[token] = more }
+        return token
+    }
+
+    private fun releasesToJs(releases: List<ArtistPage.Release>): JSArray {
+        val arr = JSArray()
+        for (r in releases) {
+            val o = JSObject()
+            o.put("kind", r.kind.js)
+            o.put("title", r.title)
+            r.year?.let { o.put("year", it) }
+            o.put("url", r.url)
+            r.thumbnailUrl?.let { o.put("thumbnailUrl", it) }
+            arr.put(o)
+        }
+        return arr
+    }
+
     private fun lyricsToJs(r: Lyrics.Result): JSObject {
         val o = JSObject()
         o.put("found", r.found)
@@ -207,6 +278,7 @@ class MusicPlugin : Plugin() {
         const val CI_EXTRA = "ci_music_search"
         const val CI_ARTIST = "ci_artist"
         const val CI_LYRICS = "ci_lyrics"
+        const val CI_ARTIST_PAGE = "ci_artist_page"
 
         /**
          * CI only (debuggable builds), each extra runs one background check and logs one line
@@ -217,6 +289,10 @@ class MusicPlugin : Plugin() {
          * - `--es ci_lyrics "Queen|Bohemian Rhapsody|354"` (artist|title|durationSec, optional
          *   4th field ytId for the YouTube Music fallback):
          *   `CI lyrics '…' -> source=LRCLIB synced=N plain=N` or `-> not found`.
+         * - `--es ci_artist_page "UCEPMVbUzImPl4p8k4LkGevA"`: the artist page,
+         *   `CI artistPage 'UC…' -> name='Queen' songs=N album=N live=N ep=N single=N
+         *   more=albums,singles songsPlaylist=yes firstRelease=12tracks source=innertube`
+         *   (firstRelease opens the first album through playlist(), as the web does).
          * Failures log `CI <kind> '…' failed: <describe>` (BOT_CHECK: … for a bot check).
          */
         @JvmStatic
@@ -226,12 +302,16 @@ class MusicPlugin : Plugin() {
             val search = intent.getStringExtra(CI_EXTRA)?.trim()
             val artist = intent.getStringExtra(CI_ARTIST)?.trim()
             val lyrics = intent.getStringExtra(CI_LYRICS)?.trim()
-            if (search.isNullOrEmpty() && artist.isNullOrEmpty() && lyrics.isNullOrEmpty()) return
+            val artistPage = intent.getStringExtra(CI_ARTIST_PAGE)?.trim()
+            if (search.isNullOrEmpty() && artist.isNullOrEmpty() && lyrics.isNullOrEmpty() &&
+                artistPage.isNullOrEmpty()
+            ) return
             Lyrics.init(context.applicationContext)
             Thread({
                 if (!search.isNullOrEmpty()) ciSearch(search)
                 if (!artist.isNullOrEmpty()) ciArtist(artist)
                 if (!lyrics.isNullOrEmpty()) ciLyrics(lyrics)
+                if (!artistPage.isNullOrEmpty()) ciArtistPage(artistPage)
             }, "JukeMusicCi").start()
         }
 
@@ -251,6 +331,35 @@ class MusicPlugin : Plugin() {
                 Log.i(TAG, "CI artist '$name' -> ${items.size} candidates: $list")
             } catch (t: Throwable) {
                 Log.w(TAG, "CI artist '$name' failed: ${YtMusic.describe(t)}")
+            }
+        }
+
+        private fun ciArtistPage(channelId: String) {
+            try {
+                val a = YtMusic.artistPage(channelId)
+                fun n(k: ArtistPage.Kind) = a.releases.count { it.kind == k }
+                val more = listOfNotNull(
+                    a.moreAlbums?.let { "albums" },
+                    a.moreSingles?.let { "singles" },
+                ).joinToString(",").ifEmpty { "none" }
+                // Open the first album the way the web does (MPREb_ urls resolve lazily).
+                val album = a.releases.firstOrNull { it.kind == ArtistPage.Kind.ALBUM } ?: a.releases.firstOrNull()
+                val open = if (album == null) "none" else try {
+                    val pl = YtMusic.playlist(album.url)
+                    "${pl.items.size}tracks"
+                } catch (t: Throwable) {
+                    "failed[${YtMusic.errorCode(t)}]"
+                }
+                Log.i(
+                    TAG,
+                    "CI artistPage '$channelId' -> name='${a.name}' songs=${a.topSongs.size} " +
+                        "album=${n(ArtistPage.Kind.ALBUM)} live=${n(ArtistPage.Kind.LIVE)} " +
+                        "ep=${n(ArtistPage.Kind.EP)} single=${n(ArtistPage.Kind.SINGLE)} " +
+                        "more=$more songsPlaylist=${if (a.topSongsPlaylistUrl != null) "yes" else "no"} " +
+                        "firstRelease=$open source=${a.source}",
+                )
+            } catch (t: Throwable) {
+                Log.w(TAG, "CI artistPage '$channelId' failed: [${YtMusic.errorCode(t)}] ${YtMusic.describe(t)}")
             }
         }
 
