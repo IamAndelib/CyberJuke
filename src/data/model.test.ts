@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fixture from './__fixtures__/runquery-sample.json';
-import { isHiddenDoc, isMembersOnlyDoc, parseYouTubeId, tracksFromDocument, tracksFromRows, type FsDocument, type FsRunQueryRow } from './model';
+import { artworkUrl, isHiddenDoc, isMembersOnlyDoc, parseYouTubeId, smallArtworkUrl, tracksFromDocument, tracksFromRows, type FsDocument, type FsRunQueryRow } from './model';
 
 const rows = fixture as unknown as FsRunQueryRow[];
 
@@ -190,5 +190,16 @@ describe('members-only and hidden posts', () => {
     expect(tracksFromDocument(base({ isBanned: { booleanValue: true } }))).toEqual([]);
     expect(tracksFromDocument(base({ isShadowBanned: { booleanValue: true } }))).toEqual([]);
     expect(tracksFromDocument(base({ isBanned: { booleanValue: false }, isShadowBanned: { booleanValue: false } }))).not.toEqual([]);
+  });
+});
+
+describe('smallArtworkUrl', () => {
+  it('swaps a video thumbnail for its 16:9 mqdefault', () => {
+    expect(smallArtworkUrl(artworkUrl('VgUy-Mazsbw'))).toBe('https://i.ytimg.com/vi/VgUy-Mazsbw/mqdefault.jpg');
+  });
+  it('leaves other artwork alone', () => {
+    expect(smallArtworkUrl('https://lh3.googleusercontent.com/abc=w120-h120')).toBeNull();
+    expect(smallArtworkUrl('https://i.ytimg.com/vi/VgUy-Mazsbw/maxresdefault.jpg')).toBeNull();
+    expect(smallArtworkUrl('')).toBeNull();
   });
 });

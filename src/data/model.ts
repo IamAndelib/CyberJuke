@@ -95,6 +95,18 @@ export function artworkUrl(ytId: string): string {
   return `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
 }
 
+const HQ_ART = /^(https:\/\/i\.ytimg\.com\/vi\/[^/]+\/)hqdefault\.jpg$/;
+
+/**
+ * The small thumbnail for rows: YouTube's 320x180 mqdefault, a true 16:9 frame, instead
+ * of the 480x360 letterboxed hqdefault (a third of the pixels to fetch and decode).
+ * Null when `url` isn't a video thumbnail (keep it as it is).
+ */
+export function smallArtworkUrl(url: string): string | null {
+  const m = HQ_ART.exec(url);
+  return m ? `${m[1]}mqdefault.jpg` : null;
+}
+
 export function postUrl(username: string, slug: string): string {
   return `${SITE_ORIGIN}/${encodeURIComponent(username)}/${encodeURIComponent(slug)}`;
 }

@@ -12,8 +12,11 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
-/** A 480x360 "hqdefault": 16:9 scene with black letterbox bars, like YouTube's. */
-export function fakeThumb(id: string): string {
+/**
+ * A 480x360 "hqdefault": 16:9 scene with black letterbox bars, like YouTube's. With
+ * `wide`, the 320x180 "mqdefault": the same scene without the bars.
+ */
+export function fakeThumb(id: string, wide = false): string {
   const h = hash(id);
   const hue = h % 360;
   const sx = 120 + (h % 240);
@@ -28,7 +31,8 @@ export function fakeThumb(id: string): string {
         : `<ellipse cx="${sx}" cy="210" rx="70" ry="90" fill="hsl(${hue} 25% 20%)"/>
            <circle cx="${sx}" cy="120" r="44" fill="hsl(${(hue + 20) % 360} 35% 72%)"/>
            <rect x="0" y="260" width="480" height="55" fill="hsl(${(hue + 200) % 360} 40% 30%)"/>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360">
+  const frame = wide ? 'width="320" height="180" viewBox="0 45 480 270"' : 'width="480" height="360" viewBox="0 0 480 360"';
+  return `<svg xmlns="http://www.w3.org/2000/svg" ${frame}>
     <rect width="480" height="360" fill="#000"/>
     <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="hsl(${hue} 70% 62%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360} 60% 30%)"/>
@@ -73,7 +77,7 @@ const FAKE_YT = `
 export async function stubYouTube(page: Page): Promise<void> {
   await page.route(/^https:\/\/i\.ytimg\.com\/vi\/([^/]+)\//, (route) => {
     const id = /\/vi\/([^/]+)\//.exec(route.request().url())?.[1] ?? 'x';
-    return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: fakeThumb(id) });
+    return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: fakeThumb(id, /\/mqdefault\.jpg$/.test(route.request().url())) });
   });
   await page.addInitScript(FAKE_YT);
 }
