@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Track } from './model';
-import { buildIndex, editDistance, matchWord, normalize, searchGenres, searchTracks, words } from './search';
+import { buildIndex, editDistance, matchWord, mergeTracks, normalize, searchGenres, searchTitles, searchTracks, words } from './search';
 
 let n = 0;
 function t(p: Partial<Track>): Track {
@@ -205,5 +205,81 @@ describe('searchGenres', () => {
     const lots = Array.from({ length: 20 }, (_, i) => ({ name: `rock ${i}`, count: i }));
     expect(searchGenres(lots, 'rock')).toHaveLength(8);
     expect(searchGenres(lots, '')).toEqual([]);
+  });
+});
+
+/** A Global (artist page) song: no poster, no date. */
+function g(p: Partial<Track>): Track {
+  return t({ by: '', createdAt: '', source: 'ytmusic', id: `ytm:${p.ytId}`, ...p });
+}
+
+describe('mergeTracks (artist page "Here")', () => {
+  const shared = t({ id: 'post1', ytId: 'SaveTears01', title: 'Save Your Tears', artist: 'The Weeknd', by: 'nightowl' });
+  const shared2 = t({ id: 'post2', ytId: 'SaveTears01', title: 'Save Your Tears', artist: 'The Weeknd', by: 'moth' });
+  const top = [g({ ytId: 'SaveTears01', title: 'Save Your Tears', artist: 'The Weeknd' }), g({ ytId: 'BlindLight1', title: 'Blinding Lights', artist: 'The Weeknd' })];
+  const all = [
+    g({ ytId: 'BlindLight1', title: 'Blinding Lights', artist: 'The Weeknd' }),
+    g({ ytId: 'BlindLight2', title: 'Blinding  Lights!', artist: 'The Weeknd' }), // same song, another upload
+    g({ ytId: 'StarBoy0001', title: 'Starboy', artist: 'The Weeknd, Daft Punk' }),
+    g({ ytId: 'StarBoy0002', title: 'Starboy', artist: 'the weeknd' }), // same title and first artist
+    g({ ytId: 'Hills000001', title: 'The Hills', artist: 'The Weeknd' }),
+  ];
+
+  it('keeps list order (Jukebox first) and drops songs an earlier list already has', () => {
+    const merged = mergeTracks([[shared], top, all]);
+    expect(merged.map((x) => x.ytId)).toEqual(['SaveTears01', 'BlindLight1', 'StarBoy0001', 'StarBoy0002', 'Hills000001']);
+    expect(merged[0]).toBe(shared); // the Jukebox post, not the Global copy
+  });
+
+  it('de-duplicates by ytId, or by normalized title plus first credited artist', () => {
+    const merged = mergeTracks([top, all]);
+    expect(merged.filter((x) => normalize(x.title) === 'blinding lights')).toHaveLength(1);
+    expect(merged.filter((x) => x.title === 'Starboy')).toHaveLength(2); // within one list nothing is dropped
+    expect(mergeTracks([[all[2]], [all[3]]])).toHaveLength(1);
+    // A different song by the same artist stays.
+    expect(mergeTracks([[shared], [g({ ytId: 'SaveTearsRx', title: 'Save Your Tears (Remix)', artist: 'The Weeknd' })]])).toHaveLength(2);
+  });
+
+  it('keeps two Jukebox posts of one song (one list)', () => {
+    expect(mergeTracks([[shared, shared2], top])).toEqual([shared, shared2, top[1]]);
+  });
+
+  it('stops at the limit and handles empty lists', () => {
+    expect(mergeTracks([[shared], top, all], 2)).toHaveLength(2);
+    expect(mergeTracks([])).toEqual([]);
+    expect(mergeTracks([[], []])).toEqual([]);
+  });
+
+  it('a top song and a song only in the full list are both searchable after merging', () => {
+    const idx = buildIndex(mergeTracks([[shared], top, all]));
+    expect(searchTracks(idx, 'save').map((x) => x.id)).toEqual(['post1']);
+    expect(searchTracks(idx, 'hills').map((x) => x.ytId)).toEqual(['Hills000001']);
+  });
+});
+
+describe('searchTracks ranking of Jukebox and Global tracks', () => {
+  it('puts Jukebox tracks first on equal scores, whatever the list order', () => {
+    const jb = t({ id: 'jb', ytId: 'Jukebox0001', title: 'Neon Rain', artist: 'Glass', by: 'x' });
+    const gl = g({ ytId: 'Global00001', title: 'Neon Rain', artist: 'Glass' });
+    expect(searchTracks(buildIndex([gl, jb]), 'neon rain').map((x) => x.id)).toEqual(['jb', gl.id]);
+  });
+
+  it('a better Global match still ranks above a weaker Jukebox one', () => {
+    const jb = t({ id: 'jb', ytId: 'Jukebox0001', title: 'Rainy Neon Days', artist: 'Glass', by: 'x' });
+    const gl = g({ ytId: 'Global00001', title: 'Neon Rain', artist: 'Glass' });
+    expect(searchTracks(buildIndex([jb, gl]), 'neon rain')[0].id).toBe(gl.id);
+  });
+});
+
+describe('searchTitles', () => {
+  const releases = [{ title: 'After Hours' }, { title: 'Dawn FM' }, { title: 'Hours of Static' }, { title: 'Starboy' }];
+  it('matches titles word by word, phrase first, ties in the given order', () => {
+    expect(searchTitles(releases, (r) => r.title, 'hours').map((r) => r.title)).toEqual(['After Hours', 'Hours of Static']);
+    expect(searchTitles(releases, (r) => r.title, 'after hours').map((r) => r.title)).toEqual(['After Hours']);
+    expect(searchTitles(releases, (r) => r.title, 'starbo').map((r) => r.title)).toEqual(['Starboy']);
+  });
+  it('returns nothing for an empty query or no match', () => {
+    expect(searchTitles(releases, (r) => r.title, '  ')).toEqual([]);
+    expect(searchTitles(releases, (r) => r.title, 'save')).toEqual([]);
   });
 });

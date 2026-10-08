@@ -9,9 +9,9 @@
  *      typo 0.5 (Damerau-Levenshtein 1 for 5-7 letters, 2 for 8+; never for 1-4);
  *  - each match is weighted by field (title/artist 3, genre/poster 2, post title 1);
  *  - +2 when the whole query appears in the title or artist as a phrase starting at a
- *    word boundary; ties go to the newest post.
+ *    word boundary; ties go to Jukebox tracks before Global ones, then the newest post.
  */
-import type { Track } from './model';
+import { isGlobal, type Track } from './model';
 
 export const MAX_RESULTS = 100;
 export const MAX_GENRES = 8;
@@ -138,8 +138,63 @@ export function searchTracks(index: SearchIndex, query: string, limit = MAX_RESU
     const s = scoreTrack(qWords, qPhrase, item);
     if (s > 0) hits.push({ t: item.track, s });
   }
-  hits.sort((a, b) => b.s - a.s || (a.t.createdAt < b.t.createdAt ? 1 : a.t.createdAt > b.t.createdAt ? -1 : 0));
+  hits.sort(
+    (a, b) =>
+      b.s - a.s ||
+      Number(isGlobal(a.t)) - Number(isGlobal(b.t)) ||
+      (a.t.createdAt < b.t.createdAt ? 1 : a.t.createdAt > b.t.createdAt ? -1 : 0),
+  );
   return hits.slice(0, limit).map((h) => h.t);
+}
+
+/** Identity for de-duplicating one song across lists: normalized title and first credited artist. */
+function songKey(t: Track): string {
+  const first = t.artist.split(/\s*(?:[,;]|\s\/\s|\s(?:feat\.?|ft\.?|featuring)\s)\s*/i)[0] ?? '';
+  return normalize(t.title) + '|' + normalize(first);
+}
+
+/**
+ * Several track lists as one, in the order given (earlier lists win: pass the
+ * Jukebox's first). A track is dropped when an earlier list already has the same
+ * song: the same ytId, or the same normalized title and first credited artist.
+ * Within one list nothing is dropped (two posts of one song stay two posts).
+ * At most `limit` tracks.
+ */
+export function mergeTracks(lists: readonly (readonly Track[])[], limit = Infinity): Track[] {
+  const out: Track[] = [];
+  const ids = new Set<string>();
+  const keys = new Set<string>();
+  for (const list of lists) {
+    const added: Track[] = [];
+    for (const t of list) {
+      if (out.length >= limit) return out;
+      if ((t.ytId && ids.has(t.ytId)) || keys.has(songKey(t))) continue;
+      out.push(t);
+      added.push(t);
+    }
+    for (const t of added) {
+      if (t.ytId) ids.add(t.ytId);
+      keys.add(songKey(t));
+    }
+  }
+  return out;
+}
+
+/** Items whose title matches the query (every word, typo-tolerant), best first; ties keep their order. */
+export function searchTitles<T>(items: readonly T[], title: (item: T) => string, query: string, limit = MAX_GENRES): T[] {
+  const qWords = words(query);
+  if (!qWords.length) return [];
+  const needle = ' ' + qWords.join(' ');
+  const hits: { item: T; s: number; i: number }[] = [];
+  items.forEach((item, i) => {
+    const norm = normalize(title(item));
+    let s = scoreFields(qWords, [{ words: norm ? norm.split(' ') : [], weight: 1 }]);
+    if (s === 0) return;
+    if ((' ' + norm + ' ').includes(needle)) s += PHRASE_BONUS;
+    hits.push({ item, s, i });
+  });
+  hits.sort((a, b) => b.s - a.s || a.i - b.i);
+  return hits.slice(0, limit).map((h) => h.item);
 }
 
 /** Genre names matching the query, best first (ties: more tracks first). */
