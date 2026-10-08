@@ -3,6 +3,8 @@ import fixture from './__fixtures__/runquery-sample.json';
 import {
   buildQuery,
   CACHE_TTL_MS,
+  CATALOG_FIELDS,
+  CATALOG_PAGE_SIZE,
   FirestoreError,
   FirestoreSource,
   nextCursor,
@@ -62,6 +64,35 @@ describe('buildQuery', () => {
       ],
       before: false,
     });
+  });
+});
+
+describe('buildQuery (catalog)', () => {
+  it('adds the field mask and keeps the same filters and order', () => {
+    const q = buildQuery({ select: CATALOG_FIELDS, limit: CATALOG_PAGE_SIZE }).structuredQuery as any;
+    expect(q.select.fields.map((f: any) => f.fieldPath)).toEqual([...CATALOG_FIELDS]);
+    expect(q.select.fields.map((f: any) => f.fieldPath)).toEqual(expect.arrayContaining(['bookmarksCount', 'repliesCount', 'attachments']));
+    expect(q.where.compositeFilter.filters).toEqual(BASE_FILTERS);
+    expect(q.orderBy).toEqual((buildQuery({}).structuredQuery as any).orderBy);
+    expect(q.limit).toBe(300);
+  });
+
+  it('adds createdAt > since as the last filter', () => {
+    const q = buildQuery({ select: CATALOG_FIELDS, since: '2026-10-01T00:00:00.000Z' }).structuredQuery as any;
+    expect(q.where.compositeFilter.filters).toEqual([
+      ...BASE_FILTERS,
+      { fieldFilter: { field: { fieldPath: 'createdAt' }, op: 'GREATER_THAN', value: { timestampValue: '2026-10-01T00:00:00.000Z' } } },
+    ]);
+  });
+
+  it('only ever orders by createdAt DESC, __name__ DESC', () => {
+    for (const opts of [{}, { genre: 'x' }, { select: CATALOG_FIELDS, since: 't' }]) {
+      const q = buildQuery(opts).structuredQuery as any;
+      expect(q.orderBy.map((o: any) => [o.field.fieldPath, o.direction])).toEqual([
+        ['createdAt', 'DESCENDING'],
+        ['__name__', 'DESCENDING'],
+      ]);
+    }
   });
 });
 
@@ -187,6 +218,38 @@ describe('FirestoreSource', () => {
     for (const call of f.mock.calls) expect(JSON.stringify(JSON.parse(call[1].body as string))).not.toContain('randomKey');
     await src.shuffle(10);
     expect(f).toHaveBeenCalledTimes(4);
+  });
+
+  it('catalog() pages by cursor with the field mask and includes NSFW', async () => {
+    const docs = Array.from({ length: 650 }, (_, i) => {
+      const d = structuredClone(rows[i % 12].document!);
+      d.name = d.name.replace(/[^/]+$/, `doc${i}`);
+      d.fields!.createdAt = { timestampValue: new Date(Date.UTC(2026, 9, 5) - i * 60_000).toISOString() };
+      return { document: d };
+    });
+    const f = mockFetch((body) => {
+      const after = body.structuredQuery.startAt?.values[1].referenceValue as string | undefined;
+      const start = after ? docs.findIndex((d) => d.document.name === after) + 1 : 0;
+      return docs.slice(start, start + body.structuredQuery.limit);
+    });
+    const src = new FirestoreSource({ fetch: f as any });
+    const all = await src.catalog();
+    expect(f).toHaveBeenCalledTimes(3);
+    expect(all.length).toBeGreaterThan(600);
+    expect(all.some((t) => t.nsfw)).toBe(true);
+    const first = JSON.parse(f.mock.calls[0][1].body as string);
+    expect(first).toEqual(buildQuery({ select: CATALOG_FIELDS, limit: CATALOG_PAGE_SIZE }));
+    expect(JSON.parse(f.mock.calls[1][1].body as string).structuredQuery.startAt.values[1].referenceValue).toMatch(/doc299$/);
+  });
+
+  it('catalog(since) sends the createdAt filter', async () => {
+    const f = mockFetch(rows);
+    const src = new FirestoreSource({ fetch: f as any });
+    await src.catalog(new Date('2026-10-01T00:00:00Z'));
+    const q = JSON.parse(f.mock.calls[0][1].body as string).structuredQuery;
+    expect(q.where.compositeFilter.filters.at(-1)).toEqual({
+      fieldFilter: { field: { fieldPath: 'createdAt' }, op: 'GREATER_THAN', value: { timestampValue: '2026-10-01T00:00:00.000Z' } },
+    });
   });
 
   it('shuffled() is a permutation', () => {

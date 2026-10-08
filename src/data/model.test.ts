@@ -80,7 +80,23 @@ describe('tracksFromRows with live fixtures', () => {
       createdAt: '2026-10-05T00:26:30.893Z',
       nsfw: false,
       artworkUrl: 'https://i.ytimg.com/vi/VgUy-Mazsbw/hqdefault.jpg',
+      saves: 1,
+      replies: 16,
     });
+  });
+
+  it('leaves saves/replies undefined when the counts are missing', () => {
+    const [t] = tracksFromDocument({
+      name: 'projects/p/databases/(default)/documents/posts/x',
+      fields: {
+        attachments: {
+          arrayValue: { values: [{ mapValue: { fields: { type: { stringValue: 'audio' }, src: { stringValue: 'https://youtu.be/VgUy-Mazsbw' } } } }] },
+        },
+      },
+    });
+    expect(t.saves).toBeUndefined();
+    expect(t.replies).toBeUndefined();
+    expect('saves' in t).toBe(false);
   });
 
   it('flags the NSFW post', () => {

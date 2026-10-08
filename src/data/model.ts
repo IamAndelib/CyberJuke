@@ -20,6 +20,10 @@ export interface Track {
   createdAt: string;
   nsfw: boolean;
   artworkUrl: string;
+  /** Times the post was saved (bookmarked) on Cyberspace, when known. */
+  saves?: number;
+  /** Replies to the post, when known. */
+  replies?: number;
 }
 
 export const SITE_ORIGIN = 'https://beta.cyberspace.online';
@@ -119,6 +123,16 @@ export function ts(v: FsValue | undefined): string {
   return '';
 }
 
+/** Firestore integers arrive as strings; anything else (or missing) is undefined. */
+export function int(v: FsValue | undefined): number | undefined {
+  if (v && 'integerValue' in v) {
+    const n = Number(v.integerValue);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  if (v && 'doubleValue' in v && Number.isFinite(v.doubleValue)) return Math.round(v.doubleValue);
+  return undefined;
+}
+
 export function docId(name: string): string {
   const i = name.lastIndexOf('/');
   return i >= 0 ? name.slice(i + 1) : name;
@@ -144,6 +158,8 @@ export function tracksFromDocument(doc: FsDocument): Track[] {
   const nsfw = bool(f.isNSFW);
   const postTitle = str(f.title).trim();
   const url = by && slug ? postUrl(by, slug) : SITE_ORIGIN + '/jukebox';
+  const saves = int(f.bookmarksCount);
+  const replies = int(f.repliesCount);
 
   const audio: { index: number; fields: Record<string, FsValue> }[] = [];
   arrayValues(f.attachments).forEach((a, index) => {
@@ -171,6 +187,8 @@ export function tracksFromDocument(doc: FsDocument): Track[] {
       createdAt,
       nsfw,
       artworkUrl: artworkUrl(ytId),
+      ...(saves !== undefined && { saves }),
+      ...(replies !== undefined && { replies }),
     });
   }
   return out;

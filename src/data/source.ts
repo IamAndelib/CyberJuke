@@ -22,6 +22,11 @@ export interface TrackSource {
   latest(cursor?: Cursor | null): Promise<Page>;
   byGenre(genre: string, cursor?: Cursor | null): Promise<Page>;
   shuffle(n: number): Promise<Track[]>;
+  /**
+   * The whole catalog, newest first, NSFW included (callers filter). With `since`,
+   * only tracks posted after that instant (for incremental refreshes).
+   */
+  catalog(since?: Date): Promise<Track[]>;
   /** Optional: drop cached results so a pull-to-refresh fetches fresh data. */
   invalidate?(): void;
 }

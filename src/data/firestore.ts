@@ -2,7 +2,8 @@
  * TrackSource backed by the public Firestore REST API the Cyberspace web app uses.
  *
  * Courtesy rules (this is someone else's database):
- *  - only the two query shapes that have composite indexes (latest, latest-by-genre);
+ *  - only query shapes that have composite indexes (latest, latest-by-genre, and the
+ *    catalog: latest with a field mask, optionally `createdAt > since`);
  *  - results cached in memory for ~5 minutes; in-flight requests are de-duplicated;
  *  - no polling: requests only happen in response to the user.
  */
@@ -18,15 +19,42 @@ export const CACHE_TTL_MS = 5 * 60 * 1000;
 export const MIN_REFRESH_AGE_MS = 20 * 1000;
 /** How many latest pages shuffle() draws from. */
 export const SHUFFLE_PAGES = 4;
+/** Catalog page size: the whole Jukebox (~640 posts) takes two or three requests. */
+export const CATALOG_PAGE_SIZE = 300;
+/** Safety stop for catalog paging (300 * 40 = 12,000 posts). */
+export const CATALOG_MAX_PAGES = 40;
+/** Field mask for catalog requests: only what parseDoc and the counts need. */
+export const CATALOG_FIELDS = [
+  'attachments',
+  'audioAttachmentGenre',
+  'authorUsername',
+  'slug',
+  'title',
+  'isNSFW',
+  'createdAt',
+  'topics',
+  'bookmarksCount',
+  'repliesCount',
+] as const;
 
-type Filter = { fieldFilter: { field: { fieldPath: string }; op: 'EQUAL'; value: Record<string, unknown> } };
+type Filter = {
+  fieldFilter: { field: { fieldPath: string }; op: 'EQUAL' | 'GREATER_THAN'; value: Record<string, unknown> };
+};
 
 function eq(fieldPath: string, value: Record<string, unknown>): Filter {
   return { fieldFilter: { field: { fieldPath }, op: 'EQUAL', value } };
 }
 
 /** Build the runQuery body. Exported for tests: these are the ONLY query shapes we send. */
-export function buildQuery(opts: { genre?: string | null; cursor?: Cursor | null; limit?: number }) {
+export function buildQuery(opts: {
+  genre?: string | null;
+  cursor?: Cursor | null;
+  limit?: number;
+  /** Field mask (catalog requests). */
+  select?: readonly string[];
+  /** Only posts created strictly after this ISO timestamp (incremental catalog). */
+  since?: string | null;
+}) {
   const filters: Filter[] = [
     eq('isPublic', { booleanValue: true }),
     eq('deleted', { booleanValue: false }),
@@ -35,7 +63,11 @@ export function buildQuery(opts: { genre?: string | null; cursor?: Cursor | null
     eq('hasAudioAttachment', { booleanValue: true }),
   ];
   if (opts.genre != null) filters.push(eq('audioAttachmentGenre', { stringValue: opts.genre }));
+  if (opts.since) {
+    filters.push({ fieldFilter: { field: { fieldPath: 'createdAt' }, op: 'GREATER_THAN', value: { timestampValue: opts.since } } });
+  }
   const structuredQuery: Record<string, unknown> = {
+    ...(opts.select && { select: { fields: opts.select.map((fieldPath) => ({ fieldPath })) } }),
     from: [{ collectionId: 'posts' }],
     where: { compositeFilter: { op: 'AND', filters } },
     orderBy: [
@@ -131,6 +163,26 @@ export class FirestoreSource implements TrackSource {
     return shuffled(pool).slice(0, Math.max(0, n));
   }
 
+  /**
+   * Every post (or every post newer than `since`), NSFW included: the caller filters,
+   * so toggling the setting needs no refetch. Not cached here; the catalog store
+   * persists the result and de-duplicates calls.
+   */
+  async catalog(since?: Date): Promise<Track[]> {
+    const out: Track[] = [];
+    let cursor: Cursor | null = null;
+    for (let i = 0; i < CATALOG_MAX_PAGES; i++) {
+      const body = JSON.stringify(
+        buildQuery({ select: CATALOG_FIELDS, limit: CATALOG_PAGE_SIZE, cursor, since: since ? since.toISOString() : null }),
+      );
+      const p = await this.request(body, CATALOG_PAGE_SIZE);
+      out.push(...p.tracks);
+      cursor = p.cursor;
+      if (!cursor) break;
+    }
+    return out;
+  }
+
   invalidate(): void {
     const cutoff = this.now() - MIN_REFRESH_AGE_MS;
     for (const [k, e] of this.cache) if (e.at < cutoff) this.cache.delete(k);
@@ -161,7 +213,7 @@ export class FirestoreSource implements TrackSource {
     return req;
   }
 
-  private async request(body: string): Promise<RawPage> {
+  private async request(body: string, limit = PAGE_SIZE): Promise<RawPage> {
     let res: Response;
     try {
       res = await this.fetchFn(RUN_QUERY_URL, {
@@ -183,7 +235,7 @@ export class FirestoreSource implements TrackSource {
       throw new FirestoreError(err?.message || `Request failed (${res.status})`, res.status);
     }
     const rows = json as FsRunQueryRow[];
-    return { tracks: tracksFromRows(rows), cursor: nextCursor(rows) };
+    return { tracks: tracksFromRows(rows), cursor: nextCursor(rows, limit) };
   }
 }
 

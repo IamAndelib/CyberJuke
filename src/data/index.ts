@@ -3,6 +3,7 @@
  * Swap FirestoreSource for an official-API source here.
  */
 import { FirestoreSource } from './firestore';
+export { shuffled } from './firestore';
 import type { TrackSource } from './source';
 import { settings } from '../store/library';
 
