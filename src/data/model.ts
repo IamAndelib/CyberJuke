@@ -24,6 +24,19 @@ export interface Track {
   saves?: number;
   /** Replies to the post, when known. */
   replies?: number;
+  /**
+   * Where the track came from. Missing means 'jukebox' (everything stored before
+   * Global search existed). 'ytmusic' tracks come from Global search / "More by":
+   * id `ytm:<ytId>`, and genre, poster and post URL are empty.
+   */
+  source?: TrackOrigin;
+}
+
+export type TrackOrigin = 'jukebox' | 'ytmusic';
+
+/** True for tracks from Global search (not shared on the Jukebox). */
+export function isGlobal(t: Pick<Track, 'source'> | null | undefined): boolean {
+  return t?.source === 'ytmusic';
 }
 
 export const SITE_ORIGIN = 'https://beta.cyberspace.online';
