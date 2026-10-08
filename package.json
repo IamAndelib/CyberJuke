@@ -14,6 +14,7 @@
     "test": "vitest run",
     "check": "npm run typecheck && npm run lint && npm test",
     "e2e": "playwright test --project=e2e",
+    "e2e:live": "PW_LIVE=1 playwright test --project=e2e --grep @live",
     "sync": "npm run build && cap sync android",
     "screenshots": "playwright test --project=screenshots"
   },

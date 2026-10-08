@@ -46,6 +46,6 @@ jobs:
         if: ${{ !cancelled() }}
         with:
           name: web-screenshots
-          path: media/web-screenshots
+          path: test-results/screenshots
           if-no-files-found: error
           retention-days: 30
