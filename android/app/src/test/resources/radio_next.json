@@ -1,0 +1,773 @@
+{
+ "contents": {
+  "singleColumnMusicWatchNextResultsRenderer": {
+   "tabbedRenderer": {
+    "watchNextTabbedResultsRenderer": {
+     "tabs": [
+      {
+       "tabRenderer": {
+        "title": "Up next",
+        "content": {
+         "musicQueueRenderer": {
+          "content": {
+           "playlistPanelRenderer": {
+            "contents": [
+             {
+              "playlistPanelVideoRenderer": {
+               "title": {
+                "runs": [
+                 {
+                  "text": "Queen – Bohemian Rhapsody (Official Video Remastered)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Queen Official",
+                  "navigationEndpoint": {
+                   "browseEndpoint": {
+                    "browseId": "UCiMhD4jzUqG-IgPzUmmytRQ",
+                    "browseEndpointContextSupportedConfigs": {
+                     "browseEndpointContextMusicConfig": {
+                      "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                     }
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2.1B views"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "14M likes"
+                 }
+                ]
+               },
+               "thumbnail": {
+                "thumbnails": [
+                 {
+                  "url": "https://i.ytimg.com/vi/fJ9rUzIMcZQ/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3lsQhmUoD8y1EjuRw739pQAHDsUjw",
+                  "width": 400,
+                  "height": 225
+                 },
+                 {
+                  "url": "https://i.ytimg.com/vi/fJ9rUzIMcZQ/hqdefault.jpg?sqp=-oaymwEWCOADEI4CIAQqCggAEOADGC0guwJIWg&rs=AMzJL3lNhrufpvOldx4x5cwA_KHNquseEg",
+                  "width": 480,
+                  "height": 270
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "6:00"
+                 }
+                ]
+               },
+               "selected": true,
+               "navigationEndpoint": {
+                "watchEndpoint": {
+                 "videoId": "fJ9rUzIMcZQ",
+                 "playlistId": "RDAMVMfJ9rUzIMcZQ",
+                 "index": 0,
+                 "params": "OAHyAQIIAQ%3D%3D",
+                 "playlistSetVideoId": "56B44F6D10557CC6",
+                 "watchEndpointMusicSupportedConfigs": {
+                  "watchEndpointMusicConfig": {
+                   "hasPersistentPlaylistPanel": true,
+                   "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                  }
+                 }
+                }
+               },
+               "videoId": "fJ9rUzIMcZQ",
+               "shortBylineText": {
+                "runs": [
+                 {
+                  "text": "Queen Official"
+                 }
+                ]
+               },
+               "playlistSetVideoId": "56B44F6D10557CC6",
+               "canReorder": true
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "title": {
+                "runs": [
+                 {
+                  "text": "Queen - Somebody To Love (Official Video)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Queen Official",
+                  "navigationEndpoint": {
+                   "browseEndpoint": {
+                    "browseId": "UCiMhD4jzUqG-IgPzUmmytRQ",
+                    "browseEndpointContextSupportedConfigs": {
+                     "browseEndpointContextMusicConfig": {
+                      "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                     }
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "537M views"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "3M likes"
+                 }
+                ]
+               },
+               "thumbnail": {
+                "thumbnails": [
+                 {
+                  "url": "https://i.ytimg.com/vi/kijpcUv-b8M/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3kIBz5w3tD89ihc76JT0ha_oT980A",
+                  "width": 400,
+                  "height": 225
+                 },
+                 {
+                  "url": "https://i.ytimg.com/vi/kijpcUv-b8M/hqdefault.jpg?sqp=-oaymwEWCOADEI4CIAQqCggAEOADGC0guwJIWg&rs=AMzJL3m_bo8MBtGrY_4lX5F5JIX4wzMNFg",
+                  "width": 480,
+                  "height": 270
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "5:10"
+                 }
+                ]
+               },
+               "selected": false,
+               "navigationEndpoint": {
+                "watchEndpoint": {
+                 "videoId": "kijpcUv-b8M",
+                 "playlistId": "RDAMVMfJ9rUzIMcZQ",
+                 "index": 1,
+                 "params": "OAHyAQIIAQ%3D%3D",
+                 "playlistSetVideoId": "289F4A46DF0A30D2",
+                 "watchEndpointMusicSupportedConfigs": {
+                  "watchEndpointMusicConfig": {
+                   "hasPersistentPlaylistPanel": true,
+                   "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                  }
+                 }
+                }
+               },
+               "videoId": "kijpcUv-b8M",
+               "shortBylineText": {
+                "runs": [
+                 {
+                  "text": "Queen Official"
+                 }
+                ]
+               },
+               "playlistSetVideoId": "289F4A46DF0A30D2",
+               "canReorder": true
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "title": {
+                "runs": [
+                 {
+                  "text": "Scorpions - Still Loving You (Official Video)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Scorpions",
+                  "navigationEndpoint": {
+                   "browseEndpoint": {
+                    "browseId": "UCcvnDgwSH5Dl2b3Bxfz4OCQ",
+                    "browseEndpointContextSupportedConfigs": {
+                     "browseEndpointContextMusicConfig": {
+                      "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                     }
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "158M views"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "1.2M likes"
+                 }
+                ]
+               },
+               "thumbnail": {
+                "thumbnails": [
+                 {
+                  "url": "https://i.ytimg.com/vi/7pOr3dBFAeY/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3mbuKdQIkEOFqRdCQJ3SjNFfuXitg",
+                  "width": 400,
+                  "height": 225
+                 },
+                 {
+                  "url": "https://i.ytimg.com/vi/7pOr3dBFAeY/hq720.jpg?sqp=-oaymwEKCKAGEMIDIABIWg&rs=AMzJL3luoACqzC6PDjxcGBNbtyjsxgrc5w",
+                  "width": 800,
+                  "height": 450
+                 },
+                 {
+                  "url": "https://i.ytimg.com/vi/7pOr3dBFAeY/hq720.jpg?sqp=-oaymwEKCNUGEN8DIABIWg&rs=AMzJL3m2bH-wrNorXprSRSn1W63OCJj4Xw",
+                  "width": 853,
+                  "height": 479
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:48"
+                 }
+                ]
+               },
+               "selected": false,
+               "navigationEndpoint": {
+                "watchEndpoint": {
+                 "videoId": "7pOr3dBFAeY",
+                 "playlistId": "RDAMVMfJ9rUzIMcZQ",
+                 "index": 2,
+                 "params": "OAHyAQIIAQ%3D%3D",
+                 "playlistSetVideoId": "017208FAA85233F9",
+                 "watchEndpointMusicSupportedConfigs": {
+                  "watchEndpointMusicConfig": {
+                   "hasPersistentPlaylistPanel": true,
+                   "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                  }
+                 }
+                }
+               },
+               "videoId": "7pOr3dBFAeY",
+               "shortBylineText": {
+                "runs": [
+                 {
+                  "text": "Scorpions"
+                 }
+                ]
+               },
+               "playlistSetVideoId": "017208FAA85233F9",
+               "canReorder": true
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "title": {
+                "runs": [
+                 {
+                  "text": "Eagles - Hotel California (Official Audio)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Eagles",
+                  "navigationEndpoint": {
+                   "browseEndpoint": {
+                    "browseId": "UCPTypnDNlOZVnD7MY30_YBw",
+                    "browseEndpointContextSupportedConfigs": {
+                     "browseEndpointContextMusicConfig": {
+                      "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                     }
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "116M views"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "570K likes"
+                 }
+                ]
+               },
+               "thumbnail": {
+                "thumbnails": [
+                 {
+                  "url": "https://i.ytimg.com/vi/dLl4PZtxia8/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3kzdZCVE2qBWKHNDaVMwBuSiK3PHw",
+                  "width": 400,
+                  "height": 225
+                 },
+                 {
+                  "url": "https://i.ytimg.com/vi/dLl4PZtxia8/hq720.jpg?sqp=-oaymwEKCKAGEMIDIABIWg&rs=AMzJL3lxY_xsa2u4naIBAw-hKPMhzWC5aQ",
+                  "width": 800,
+                  "height": 450
+                 },
+                 {
+                  "url": "https://i.ytimg.com/vi/dLl4PZtxia8/hq720.jpg?sqp=-oaymwEKCNUGEN8DIABIWg&rs=AMzJL3nxTwzQcKlyTLfmGNjYVxuvRihMCA",
+                  "width": 853,
+                  "height": 479
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "6:32"
+                 }
+                ]
+               },
+               "selected": false,
+               "navigationEndpoint": {
+                "watchEndpoint": {
+                 "videoId": "dLl4PZtxia8",
+                 "playlistId": "RDAMVMfJ9rUzIMcZQ",
+                 "index": 3,
+                 "params": "OAHyAQIIAQ%3D%3D",
+                 "playlistSetVideoId": "52152B4946C2F73F",
+                 "watchEndpointMusicSupportedConfigs": {
+                  "watchEndpointMusicConfig": {
+                   "hasPersistentPlaylistPanel": true,
+                   "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                  }
+                 }
+                }
+               },
+               "videoId": "dLl4PZtxia8",
+               "shortBylineText": {
+                "runs": [
+                 {
+                  "text": "Eagles"
+                 }
+                ]
+               },
+               "playlistSetVideoId": "52152B4946C2F73F",
+               "canReorder": true
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "title": {
+                "runs": [
+                 {
+                  "text": "Marc Martel - Somebody To Love - Featuring One Vision Of Queen (Queen cover)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Marc Martel",
+                  "navigationEndpoint": {
+                   "browseEndpoint": {
+                    "browseId": "UC2Xqkyhusuu1dvIgp6USEeg",
+                    "browseEndpointContextSupportedConfigs": {
+                     "browseEndpointContextMusicConfig": {
+                      "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                     }
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2.1M views"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "73K likes"
+                 }
+                ]
+               },
+               "thumbnail": {
+                "thumbnails": [
+                 {
+                  "url": "https://i.ytimg.com/vi/L3eRHmFV8aM/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3k1Ldv2ut1stUvGJZsahVq1vHGe9Q",
+                  "width": 400,
+                  "height": 225
+                 },
+                 {
+                  "url": "https://i.ytimg.com/vi/L3eRHmFV8aM/hq720.jpg?sqp=-oaymwEKCKAGEMIDIABIWg&rs=AMzJL3naLfX-7H1YpYoi63JzZszIA8vDaw",
+                  "width": 800,
+                  "height": 450
+                 },
+                 {
+                  "url": "https://i.ytimg.com/vi/L3eRHmFV8aM/hq720.jpg?sqp=-oaymwEKCNUGEN8DIABIWg&rs=AMzJL3kZwg_tMjy_e8eror6lhIu7FCr6qw",
+                  "width": 853,
+                  "height": 479
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:36"
+                 }
+                ]
+               },
+               "selected": false,
+               "navigationEndpoint": {
+                "watchEndpoint": {
+                 "videoId": "L3eRHmFV8aM",
+                 "playlistId": "RDAMVMfJ9rUzIMcZQ",
+                 "index": 4,
+                 "params": "OAHyAQIIAQ%3D%3D",
+                 "playlistSetVideoId": "090796A75D153932",
+                 "watchEndpointMusicSupportedConfigs": {
+                  "watchEndpointMusicConfig": {
+                   "hasPersistentPlaylistPanel": true,
+                   "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                  }
+                 }
+                }
+               },
+               "videoId": "L3eRHmFV8aM",
+               "shortBylineText": {
+                "runs": [
+                 {
+                  "text": "Marc Martel"
+                 }
+                ]
+               },
+               "playlistSetVideoId": "090796A75D153932",
+               "canReorder": true
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "title": {
+                "runs": [
+                 {
+                  "text": "Queen - We Are The Champions (Official Video Remastered)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Queen Official",
+                  "navigationEndpoint": {
+                   "browseEndpoint": {
+                    "browseId": "UCiMhD4jzUqG-IgPzUmmytRQ",
+                    "browseEndpointContextSupportedConfigs": {
+                     "browseEndpointContextMusicConfig": {
+                      "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                     }
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "298M views"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "2.1M likes"
+                 }
+                ]
+               },
+               "thumbnail": {
+                "thumbnails": [
+                 {
+                  "url": "https://i.ytimg.com/vi/04854XqcfCY/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3kt5YcEO_Fc0Fz_zeEGB-isOvEOig",
+                  "width": 400,
+                  "height": 225
+                 },
+                 {
+                  "url": "https://i.ytimg.com/vi/04854XqcfCY/hq720.jpg?sqp=-oaymwEKCKAGEMIDIABIWg&rs=AMzJL3kFCfcWdISfdbo9d0oLA0AyO_pKCg",
+                  "width": 800,
+                  "height": 450
+                 },
+                 {
+                  "url": "https://i.ytimg.com/vi/04854XqcfCY/hq720.jpg?sqp=-oaymwEKCNUGEN8DIABIWg&rs=AMzJL3nYlkTZiAyervqzu5x4uApbFFA5Ow",
+                  "width": 853,
+                  "height": 479
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:05"
+                 }
+                ]
+               },
+               "selected": false,
+               "navigationEndpoint": {
+                "watchEndpoint": {
+                 "videoId": "04854XqcfCY",
+                 "playlistId": "RDAMVMfJ9rUzIMcZQ",
+                 "index": 5,
+                 "params": "OAHyAQIIAQ%3D%3D",
+                 "playlistSetVideoId": "12EFB3B1C57DE4E1",
+                 "watchEndpointMusicSupportedConfigs": {
+                  "watchEndpointMusicConfig": {
+                   "hasPersistentPlaylistPanel": true,
+                   "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                  }
+                 }
+                }
+               },
+               "videoId": "04854XqcfCY",
+               "shortBylineText": {
+                "runs": [
+                 {
+                  "text": "Queen Official"
+                 }
+                ]
+               },
+               "playlistSetVideoId": "12EFB3B1C57DE4E1",
+               "canReorder": true
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "title": {
+                "runs": [
+                 {
+                  "text": "Freddie Mercury - Love Me Like There’s No Tomorrow (Official Video)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Freddie Mercury Solo",
+                  "navigationEndpoint": {
+                   "browseEndpoint": {
+                    "browseId": "UCxbkO0haK5H6zhsa_lRcn0A",
+                    "browseEndpointContextSupportedConfigs": {
+                     "browseEndpointContextMusicConfig": {
+                      "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                     }
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "43M views"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "609K likes"
+                 }
+                ]
+               },
+               "thumbnail": {
+                "thumbnails": [
+                 {
+                  "url": "https://i.ytimg.com/vi/H1Wbu_AF2e4/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3nSW6-TGc_gwSFdPnQ2rCRCx15iqQ",
+                  "width": 400,
+                  "height": 225
+                 },
+                 {
+                  "url": "https://i.ytimg.com/vi/H1Wbu_AF2e4/hq720.jpg?sqp=-oaymwEKCKAGEMIDIABIWg&rs=AMzJL3loldQ5v9b4yzeU8fO52XOX76cL8A",
+                  "width": 800,
+                  "height": 450
+                 },
+                 {
+                  "url": "https://i.ytimg.com/vi/H1Wbu_AF2e4/hq720.jpg?sqp=-oaymwEKCNUGEN8DIABIWg&rs=AMzJL3mHvA4OCcUI0Z13GvPxbvISwKhExA",
+                  "width": 853,
+                  "height": 479
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "3:53"
+                 }
+                ]
+               },
+               "selected": false,
+               "navigationEndpoint": {
+                "watchEndpoint": {
+                 "videoId": "H1Wbu_AF2e4",
+                 "playlistId": "RDAMVMfJ9rUzIMcZQ",
+                 "index": 6,
+                 "params": "OAHyAQIIAQ%3D%3D",
+                 "playlistSetVideoId": "532BB0B422FBC7EC",
+                 "watchEndpointMusicSupportedConfigs": {
+                  "watchEndpointMusicConfig": {
+                   "hasPersistentPlaylistPanel": true,
+                   "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                  }
+                 }
+                }
+               },
+               "videoId": "H1Wbu_AF2e4",
+               "shortBylineText": {
+                "runs": [
+                 {
+                  "text": "Freddie Mercury Solo"
+                 }
+                ]
+               },
+               "playlistSetVideoId": "532BB0B422FBC7EC",
+               "canReorder": true
+              }
+             },
+             {
+              "playlistPanelVideoRenderer": {
+               "title": {
+                "runs": [
+                 {
+                  "text": "Journey - Don't Stop Believin' (Visualizer)"
+                 }
+                ]
+               },
+               "longBylineText": {
+                "runs": [
+                 {
+                  "text": "Lost Elephant",
+                  "navigationEndpoint": {
+                   "browseEndpoint": {
+                    "browseId": "UCmEdDM_muSYAV-14QzA0k-w",
+                    "browseEndpointContextSupportedConfigs": {
+                     "browseEndpointContextMusicConfig": {
+                      "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                     }
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "12M views"
+                 },
+                 {
+                  "text": " • "
+                 },
+                 {
+                  "text": "104K likes"
+                 }
+                ]
+               },
+               "thumbnail": {
+                "thumbnails": [
+                 {
+                  "url": "https://i.ytimg.com/vi/Wu8c5RdfL8Y/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3kPCknD9YaeVJ2HsLj0z9WUVhKh-g",
+                  "width": 400,
+                  "height": 225
+                 },
+                 {
+                  "url": "https://i.ytimg.com/vi/Wu8c5RdfL8Y/hq720.jpg?sqp=-oaymwEKCKAGEMIDIABIWg&rs=AMzJL3mQ-YXeNTLERLaN-sgQyox1ifC4Sw",
+                  "width": 800,
+                  "height": 450
+                 },
+                 {
+                  "url": "https://i.ytimg.com/vi/Wu8c5RdfL8Y/hq720.jpg?sqp=-oaymwEKCNUGEN8DIABIWg&rs=AMzJL3ksSZvGHtM2caVeBjWe-y6Cep9sCw",
+                  "width": 853,
+                  "height": 479
+                 }
+                ]
+               },
+               "lengthText": {
+                "runs": [
+                 {
+                  "text": "4:10"
+                 }
+                ]
+               },
+               "selected": false,
+               "navigationEndpoint": {
+                "watchEndpoint": {
+                 "videoId": "Wu8c5RdfL8Y",
+                 "playlistId": "RDAMVMfJ9rUzIMcZQ",
+                 "index": 7,
+                 "params": "OAHyAQIIAQ%3D%3D",
+                 "playlistSetVideoId": "CACDD466B3ED1565",
+                 "watchEndpointMusicSupportedConfigs": {
+                  "watchEndpointMusicConfig": {
+                   "hasPersistentPlaylistPanel": true,
+                   "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                  }
+                 }
+                }
+               },
+               "videoId": "Wu8c5RdfL8Y",
+               "shortBylineText": {
+                "runs": [
+                 {
+                  "text": "Lost Elephant"
+                 }
+                ]
+               },
+               "playlistSetVideoId": "CACDD466B3ED1565",
+               "canReorder": true
+              }
+             }
+            ],
+            "playlistId": "RDAMVMfJ9rUzIMcZQ",
+            "isInfinite": true,
+            "continuations": [
+             {
+              "nextRadioContinuationData": {
+               "continuation": "CDISOBILNG9QQThKVXR0Q3ciEVJEQU1WTWZKOXJVeklNY1pRODHQAQH6ARBENjI1QUI0MDI5NEQzODFEGAo%3D"
+              }
+             }
+            ],
+            "numItemsToShow": 25
+           }
+          },
+          "hack": true,
+          "musicQueueConfig": {}
+         }
+        }
+       }
+      }
+     ]
+    }
+   }
+  }
+ },
+ "currentVideoEndpoint": {
+  "watchEndpoint": {
+   "videoId": "fJ9rUzIMcZQ",
+   "playlistId": "RDAMVMfJ9rUzIMcZQ",
+   "index": 0,
+   "playlistSetVideoId": "56B44F6D10557CC6"
+  }
+ }
+}

@@ -127,6 +127,23 @@ class YouTubeCanaryTest {
         assertTrue("artist page: top songs without ids", a.topSongs.all { SessionPolicy.isValidYtId(it.ytId) })
     }
 
+    /**
+     * The song radio (AP3) and its continuation. A layout change fails (ParsingException ->
+     * BROKEN); a blocked or empty radio (no catalog from this region) is inconclusive.
+     */
+    @Test
+    fun radio() {
+        val (id, _) = VIDEOS.first()
+        val first = live("radio $id") { YtMusic.radio(id) }
+        if (first.items.isEmpty()) throw AssumptionViolatedException("INCONCLUSIVE radio $id: empty from this IP's region")
+        assertTrue("radio $id: items without an id or title", first.items.all { SessionPolicy.isValidYtId(it.ytId) && it.title.isNotBlank() })
+        assertTrue("radio $id: the seed is listed", first.items.none { it.ytId == id })
+        val next = first.next ?: throw AssertionError("radio $id: no continuation")
+        val more = live("radio $id page 2") { YtMusic.radio(id, next) }
+        assumeTrue("INCONCLUSIVE radio $id page 2: empty", more.items.isNotEmpty())
+        assertTrue("radio $id page 2: items without an id", more.items.all { SessionPolicy.isValidYtId(it.ytId) })
+    }
+
     @Test
     fun lyricsLookup() {
         val r = live("LRCLIB lyrics") { Lyrics.lrclib("Bohemian Rhapsody", "Queen", null, 354.0) }

@@ -19,6 +19,8 @@
 # song's lyrics (`--es ci_lyrics "artist|title|durationSec"`). Annotations only, never fails.
 # Phase 5 (soft, debug builds) loads one YouTube Music artist page (`--es ci_artist_page
 # "<channel id>"`) and reports its counts per shelf (songs, albums, live, EPs, singles).
+# Phase 6 (soft, debug builds) loads one song's radio, two pages (`--es ci_radio "<video id>"`),
+# the source of Global autoplay.
 #
 # Also checked (debug builds log these at info/verbose level; R8 strips them from release):
 # - Web -> native bridge (hard): the web UI's boot call to JukePlayer.getLaunchOptions must
@@ -432,4 +434,29 @@ else
 fi
 log "Phase 5 artist page: ${artist_page_res}${page_line:+ ($page_line)}"
 
-finish 0 "Pipeline: PLAYING and still PLAYING after ${BACKGROUND_WAIT}s in the background. Bridge: ok. Background ticks: ${ticker}. Live YouTube: ${live}. YouTube Music search: ${music}. Artist: ${artist_res}. Lyrics: ${lyrics_res}. Artist page: ${artist_page_res}"
+# ---- Phase 6 (soft): song radio (InnerTube next, MusicPlugin CI hook) --------------------
+# Annotations only: ::notice when the radio has songs, ::warning otherwise.
+RADIO_ID="${SMOKE_RADIO_ID:-fJ9rUzIMcZQ}"
+radio_res="not verified"
+log "Phase 6 (soft): radio '$RADIO_ID'"
+adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
+sleep 2
+adb shell am start -W -n "$PKG/.MainActivity" --es ci_radio "\"$RADIO_ID\"" >/dev/null 2>&1 || true
+
+radio_line="$(ci_hook_line radio "$SOFT_TIMEOUT")"
+radio_msg="${radio_line#*CyberJukeMusic*: }"
+if [[ -z "$radio_line" ]]; then
+  echo "::warning title=Radio not verified::No 'CI radio' log line within ${SOFT_TIMEOUT}s (is this a debug build?)"
+  summary "### :warning: Radio: no result within ${SOFT_TIMEOUT}s"
+elif [[ "$radio_line" =~ items=([1-9][0-9]*) ]]; then
+  radio_res="pass"
+  echo "::notice title=Radio::$radio_msg"
+  summary "### :white_check_mark: Radio: $radio_msg"
+else
+  radio_res="failed"
+  echo "::warning title=Radio not verified::$radio_msg"
+  summary "### :warning: Radio: $radio_msg"
+fi
+log "Phase 6 radio: ${radio_res}${radio_line:+ ($radio_line)}"
+
+finish 0 "Pipeline: PLAYING and still PLAYING after ${BACKGROUND_WAIT}s in the background. Bridge: ok. Background ticks: ${ticker}. Live YouTube: ${live}. YouTube Music search: ${music}. Artist: ${artist_res}. Lyrics: ${lyrics_res}. Artist page: ${artist_page_res}. Radio: ${radio_res}"

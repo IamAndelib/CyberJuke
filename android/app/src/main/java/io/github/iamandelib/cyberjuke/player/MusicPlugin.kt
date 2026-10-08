@@ -35,6 +35,8 @@ import java.util.concurrent.Executors
  *     topSongs: MusicItem[]; topSongsPlaylistUrl?: string; releases: Release[];
  *     more?: { albums?: string; singles?: string } }>   // opaque "See all" tokens
  *   artistReleases({ token }): Promise<{ releases: Release[] }>
+ *   radio({ ytId, next? }): Promise<MusicPage>   // the song's radio (songs, without the seed);
+ *     next pages with the returned `next`. Rejects BOT_CHECK during a back-off without a request.
  *
  * Rejections carry code BOT_CHECK, NETWORK or UNAVAILABLE.
  *
@@ -147,6 +149,29 @@ class MusicPlugin : Plugin() {
         run(call, "artistReleases ${more.browseId}") {
             val out = JSObject()
             out.put("releases", releasesToJs(YtMusic.artistReleases(more)))
+            out
+        }
+    }
+
+    /** YouTube Music's radio for a song (AP3); `next` is the continuation from the last page. */
+    @PluginMethod
+    fun radio(call: PluginCall) {
+        val ytId = call.getString("ytId")?.trim()
+        if (ytId == null || !SessionPolicy.isValidYtId(ytId)) {
+            call.reject("ytId is required", "UNAVAILABLE"); return
+        }
+        val next = call.getString("next")?.takeIf { it.isNotBlank() }
+        // Y1: no request at all while YouTube is backing us off.
+        if (NetBlock.isBlocked()) {
+            call.reject("BOT_CHECK: YouTube is limiting requests from this network", "BOT_CHECK"); return
+        }
+        run(call, "radio $ytId") {
+            val page = YtMusic.radio(ytId, next)
+            val arr = JSArray()
+            for (it in page.items) arr.put(itemToJs(it))
+            val out = JSObject()
+            out.put("items", arr)
+            page.next?.let { out.put("next", it) }
             out
         }
     }
@@ -291,6 +316,7 @@ class MusicPlugin : Plugin() {
         const val CI_ARTIST = "ci_artist"
         const val CI_LYRICS = "ci_lyrics"
         const val CI_ARTIST_PAGE = "ci_artist_page"
+        const val CI_RADIO = "ci_radio"
 
         /**
          * CI only (debuggable builds), each extra runs one background check and logs one line
@@ -305,6 +331,8 @@ class MusicPlugin : Plugin() {
          *   `CI artistPage 'UC…' -> name='Queen' songs=N album=N live=N ep=N single=N
          *   more=albums,singles songsPlaylist=yes firstRelease=12tracks source=innertube`
          *   (firstRelease opens the first album through playlist(), as the web does).
+         * - `--es ci_radio "fJ9rUzIMcZQ"`: the song's radio, two pages,
+         *   `CI radio 'fJ9rUzIMcZQ' -> items=N more=yes page2=N first='Artist - Title'`.
          * Failures log `CI <kind> '…' failed: <describe>` (BOT_CHECK: … for a bot check).
          */
         @JvmStatic
@@ -315,8 +343,9 @@ class MusicPlugin : Plugin() {
             val artist = intent.getStringExtra(CI_ARTIST)?.trim()
             val lyrics = intent.getStringExtra(CI_LYRICS)?.trim()
             val artistPage = intent.getStringExtra(CI_ARTIST_PAGE)?.trim()
+            val radio = intent.getStringExtra(CI_RADIO)?.trim()
             if (search.isNullOrEmpty() && artist.isNullOrEmpty() && lyrics.isNullOrEmpty() &&
-                artistPage.isNullOrEmpty()
+                artistPage.isNullOrEmpty() && radio.isNullOrEmpty()
             ) return
             Lyrics.init(context.applicationContext)
             Thread({
@@ -324,7 +353,23 @@ class MusicPlugin : Plugin() {
                 if (!artist.isNullOrEmpty()) ciArtist(artist)
                 if (!lyrics.isNullOrEmpty()) ciLyrics(lyrics)
                 if (!artistPage.isNullOrEmpty()) ciArtistPage(artistPage)
+                if (!radio.isNullOrEmpty()) ciRadio(radio)
             }, "JukeMusicCi").start()
+        }
+
+        private fun ciRadio(ytId: String) {
+            try {
+                val r = YtMusic.radio(ytId)
+                val page2 = r.next?.let { YtMusic.radio(ytId, it).items.size }
+                val first = r.items.firstOrNull()?.let { "${it.subtitle} - ${it.title}" } ?: "none"
+                Log.i(
+                    TAG,
+                    "CI radio '$ytId' -> items=${r.items.size} more=${if (r.next != null) "yes" else "no"} " +
+                        "page2=${page2 ?: 0} first='$first'",
+                )
+            } catch (t: Throwable) {
+                Log.i(TAG, "CI radio '$ytId' failed: [${YtMusic.errorCode(t)}] ${YtMusic.describe(t)}")
+            }
         }
 
         private fun ciSearch(q: String) {

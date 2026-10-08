@@ -127,6 +127,21 @@ internal object YtMusic {
         )
     }
 
+    // ---- radio (InnerTube next, see Radio) -----------------------------------------------
+
+    /**
+     * YouTube Music's radio for [videoId] (`RDAMVM<videoId>`): about 25-50 songs a page, without
+     * the seed itself, and the continuation for the next page (null at the end). With
+     * [continuation], the page after it. Refused (BlockedException) during a back-off (Y1).
+     */
+    fun radio(videoId: String, continuation: String? = null): Radio.Page {
+        NetBlock.check()
+        YtCompat.ensureInit()
+        val json = InnerTube.post("next", Radio.payload(videoId, continuation))
+            ?: throw ContentNotAvailableException("radio $videoId not found")
+        return Radio.parse(json, videoId)
+    }
+
     // ---- artist pages (InnerTube browse, see ArtistPage) ---------------------------------
 
     data class Artist(
