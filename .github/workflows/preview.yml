@@ -1,13 +1,13 @@
 name: Preview
 
-# Manual: builds the debug APK and publishes it as the rolling "preview" pre-release, for
-# trying CyberJuke before signed releases exist. Debug-signed, so a signed release cannot be
-# installed over it (uninstall the preview first).
+# Manual: builds the "preview" build type and publishes it as the rolling "preview" pre-release.
+# The preview is a separate app (io.github.iamandelib.cyberjuke.preview, "CyberJuke Preview"):
+# a release-like build (R8, not debuggable) signed with its own key, which lives only in the
+# PREVIEW_* secrets. It installs alongside the release and never shares its data.
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: preview
@@ -22,39 +22,88 @@ jobs:
     name: Build and publish preview
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      VERSION_NAME: 0.1.0-preview.${{ github.run_number }}
+    permissions:
+      contents: write # replace the "preview" release and its tag
     steps:
-      - uses: actions/checkout@v5
+      - name: Check signing secrets
+        env:
+          PREVIEW_KEYSTORE_FILE: ${{ secrets.PREVIEW_KEYSTORE_FILE }}
+          PREVIEW_KEYSTORE_PASSWORD: ${{ secrets.PREVIEW_KEYSTORE_PASSWORD }}
+          PREVIEW_KEY_ALIAS: ${{ secrets.PREVIEW_KEY_ALIAS }}
+          PREVIEW_KEY_PASSWORD: ${{ secrets.PREVIEW_KEY_PASSWORD }}
+        run: |
+          missing=()
+          for name in PREVIEW_KEYSTORE_FILE PREVIEW_KEYSTORE_PASSWORD PREVIEW_KEY_ALIAS PREVIEW_KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then missing+=("$name"); fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            echo "::error title=Missing preview signing secrets::Add these repository secrets (Settings > Secrets and variables > Actions): ${missing[*]}. PREVIEW_KEYSTORE_FILE is the base64 of the preview .jks (base64 -w0 preview.jks). See CONTRIBUTING.md > Preview builds."
+            exit 1
+          fi
 
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: gradle/actions/wrapper-validation@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
 
       # The GitHub Ubuntu runner image already ships the Android SDK (ANDROID_HOME).
 
-      - uses: gradle/actions/setup-gradle@v4
+      # Signed builds don't write to the shared Gradle cache.
+      - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+        with:
+          cache-read-only: true
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run build
       - run: npx cap sync android
 
-      - name: Build debug APK
-        working-directory: android
+      - name: Decode preview keystore
+        env:
+          PREVIEW_KEYSTORE_FILE: ${{ secrets.PREVIEW_KEYSTORE_FILE }}
         run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace -PversionName="$VERSION_NAME"
+          umask 077
+          printf '%s' "$PREVIEW_KEYSTORE_FILE" | base64 -d > "$RUNNER_TEMP/preview.jks"
+          if [[ ! -s "$RUNNER_TEMP/preview.jks" ]]; then
+            echo "::error::PREVIEW_KEYSTORE_FILE did not decode to a keystore (expected base64)"; exit 1
+          fi
 
-      - name: Rename and checksum
+      - name: Build signed preview APK
+        working-directory: android
+        env:
+          # android/app/build.gradle reads these; the file variable is the decoded path here.
+          PREVIEW_KEYSTORE_FILE: ${{ runner.temp }}/preview.jks
+          PREVIEW_KEYSTORE_PASSWORD: ${{ secrets.PREVIEW_KEYSTORE_PASSWORD }}
+          PREVIEW_KEY_ALIAS: ${{ secrets.PREVIEW_KEY_ALIAS }}
+          PREVIEW_KEY_PASSWORD: ${{ secrets.PREVIEW_KEY_PASSWORD }}
+        run: ./gradlew assemblePreview --stacktrace
+
+      - name: Remove keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/preview.jks"
+
+      - name: Verify signature, rename and checksum
         run: |
+          shopt -s nullglob
+          apks=(android/app/build/outputs/apk/preview/*.apk)
+          if (( ${#apks[@]} != 1 )); then
+            echo "::error::Expected one preview APK, found ${#apks[@]}"; ls -la android/app/build/outputs/apk/preview || true; exit 1
+          fi
           mkdir -p out
-          cp "android/app/build/outputs/apk/debug/CyberJuke-${VERSION_NAME}-debug.apk" out/CyberJuke-preview.apk
+          cp "${apks[0]}" out/CyberJuke-preview.apk
+          apksigner="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)/apksigner"
+          # Fails on an unsigned APK, so a build without the key can never be published.
+          "$apksigner" verify --print-certs out/CyberJuke-preview.apk
           cd out && sha256sum CyberJuke-preview.apk > CyberJuke-preview.apk.sha256
           cat CyberJuke-preview.apk.sha256
 
@@ -64,21 +113,23 @@ jobs:
         run: gh release delete preview --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" || true
 
       - name: Publish preview release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: preview
           target_commitish: ${{ github.sha }}
-          name: CyberJuke preview (debug build)
+          name: CyberJuke Preview
           prerelease: true
           make_latest: false
+          fail_on_unmatched_files: true
           body: |
-            Debug build of CyberJuke `${{ env.VERSION_NAME }}` from commit ${{ github.sha }}, for trying the app before signed releases.
+            Preview build of CyberJuke from commit ${{ github.sha }} (run ${{ github.run_number }}), for trying changes before a release.
 
-            - **Install:** download `CyberJuke-preview.apk` on your phone and open it. Android 7.0 or newer.
-            - **Debug-signed:** a signed release has a different signature and cannot be installed over this preview. Uninstall the preview first; liked tracks and history are lost.
+            - **A separate app:** "CyberJuke Preview" (`io.github.iamandelib.cyberjuke.preview`). It installs alongside the regular CyberJuke and never shares its data: liked tracks, history, settings and sign-in are separate.
+            - **Install:** download `CyberJuke-preview.apk` on your phone and open it. Android 7.0 or newer. Later previews install over this one.
+            - **Signed with the preview key,** not the release key. If you installed a preview from before this change (the old debug-signed one, named "CyberJuke"), uninstall it first.
             - **Live playback is untested on CI:** YouTube blocks GitHub's servers, so CI checks background playback with a bundled test tone instead.
 
-            Verify: `sha256sum -c CyberJuke-preview.apk.sha256`
+            Verify: `sha256sum -c CyberJuke-preview.apk.sha256` and `apksigner verify --print-certs CyberJuke-preview.apk`.
           files: |
             out/CyberJuke-preview.apk
             out/CyberJuke-preview.apk.sha256

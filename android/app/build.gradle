@@ -89,6 +89,18 @@ android {
         }
     }
 
+    testOptions {
+        unitTests.all {
+            // The YouTube canary (live network) runs only when asked for:
+            // ./gradlew testDebugUnitTest -Pcanary=true --tests '*YouTubeCanaryTest*'
+            // (-Dcanary=true on the command line works too).
+            def canary = project.findProperty('canary') ?: System.getProperty('canary')
+            if (canary != null) {
+                systemProperty 'canary', canary.toString()
+            }
+        }
+    }
+
     // Reproducible builds (F-Droid): no encrypted dependency-metadata block in the APK/AAB.
     dependenciesInfo {
         includeInApk = false
