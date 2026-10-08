@@ -34,7 +34,7 @@ body {
 }
 
 body {
-  text-shadow: var(--glow);
+  text-shadow: var(--glow-soft);
   /* App UI, not a document: a long-press never selects text or opens the callout. */
   -webkit-user-select: none;
   user-select: none;
@@ -91,6 +91,20 @@ h2,
 h3 {
   margin: 0;
   font-weight: 400;
+}
+
+/* The full CRT glow on titles and the current row; body text has the 3px one. */
+.topbar-title,
+.np-title,
+.hero-title,
+.section-title,
+.state-title,
+.album-title,
+.row.is-current .row-title {
+  text-shadow: var(--glow);
+}
+.hero:active .hero-title {
+  text-shadow: none;
 }
 
 .icon {

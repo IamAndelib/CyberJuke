@@ -9,7 +9,10 @@
  *   --color-border                hairlines, idle borders
  *   --color-surface               raised/pressed fill (site's code-bg)
  *   --color-accent                site's --color-code (links, highlights)
- *   --glow                        CRT text-shadow (none on flat themes)
+ *   --glow                        CRT text-shadow (none on flat themes): titles, the
+ *                                 current row, the active lyric line
+ *   --glow-soft                   the same glow at 3px, for body text (a 10px blur on
+ *                                 every glyph costs the GPU on long lists)
  *   --font-ui / --font-display    body / headings (+ labels)
  *   --radius, --border-w
  *   --art-tint, --art-blend       duotone treatment for YouTube thumbnails
@@ -24,6 +27,7 @@
   --color-surface: #ffffff12;
   --color-accent: #e0a044;
   --glow: none;
+  --glow-soft: none;
   --font-ui: 'JetBrains Mono', 'Courier New', monospace;
   --font-display: 'Departure Mono', 'JetBrains Mono', monospace;
   --radius: 5px;
@@ -42,6 +46,7 @@
   --color-surface: #00000014;
   --color-accent: #994411;
   --glow: none;
+  --glow-soft: none;
   --font-ui: 'JetBrains Mono', 'Courier New', monospace;
   --font-display: 'Departure Mono', 'JetBrains Mono', monospace;
   --radius: 5px;
@@ -61,6 +66,7 @@
   --color-surface: #ffffff14;
   --color-accent: #aaccff;
   --glow: none;
+  --glow-soft: none;
   --font-ui: 'Departure Mono', 'JetBrains Mono', monospace;
   --font-display: 'Departure Mono', 'JetBrains Mono', monospace;
   --radius: 5px;
@@ -81,6 +87,7 @@
   --color-surface: #ff9b000d;
   --color-accent: #ffa920;
   --glow: 0 0 10px #ff9b0080;
+  --glow-soft: 0 0 3px #ff9b0080;
   --font-ui: 'Departure Mono', 'JetBrains Mono', monospace;
   --font-display: 'Departure Mono', 'JetBrains Mono', monospace;
   --radius: 2.5px;
@@ -100,6 +107,7 @@
   --color-surface: #00ff4114;
   --color-accent: #a0e044;
   --glow: 0 0 10px #009b41b0;
+  --glow-soft: 0 0 3px #009b41b0;
   --font-ui: 'Departure Mono', 'JetBrains Mono', monospace;
   --font-display: 'Departure Mono', 'JetBrains Mono', monospace;
   --radius: 5px;
@@ -120,6 +128,7 @@
   --color-surface: #ff00000f;
   --color-accent: #ff2a1a;
   --glow: 0 0 10px #ff000075;
+  --glow-soft: 0 0 3px #ff000075;
   --font-ui: 'JetBrains Mono', 'Courier New', monospace;
   --font-display: 'Departure Mono', 'JetBrains Mono', monospace;
   --radius: 3px;
@@ -139,6 +148,7 @@
   --color-surface: #ffd0e5;
   --color-accent: #c71585;
   --glow: none;
+  --glow-soft: none;
   --font-ui: 'JetBrains Mono', 'Courier New', monospace;
   --font-display: 'Departure Mono', 'JetBrains Mono', monospace;
   --radius: 5px;
@@ -160,6 +170,7 @@
   --color-surface: #a0b4dc0f;
   --color-accent: #e8f0ff;
   --glow: 0 0 10px #a0b4dc80;
+  --glow-soft: 0 0 3px #a0b4dc80;
   --font-ui: 'Departure Mono', 'JetBrains Mono', monospace;
   --font-display: 'Departure Mono', 'JetBrains Mono', monospace;
   --radius: 1px;
