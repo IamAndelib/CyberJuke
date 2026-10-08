@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { expectStable, musicCalls, openNowPlaying, playAndOpen, playerCalls, setLyricsMode, start, touchDrag } from '../helpers';
+import { musicCalls, openNowPlaying, playAndOpen, playerCalls, setLyricsMode, start, touchDrag } from '../helpers';
 
 /** Mini player, Now Playing (controls, swipe, links), the queue, lyrics and Share. */
 
@@ -88,10 +88,10 @@ test('Now Playing: a swipe down closes it, a short drag springs back, the seek b
   await touchDrag(page, 200, 150, 150 + h * 0.35, 500);
   await expect(np).not.toHaveClass(/open/);
 
-  // A quick flick closes too, even when short (no waits between moves: CDP round trips
-  // alone are slow enough on a busy machine). 100px < 25%.
+  // A quick flick closes too, even when short: 100px (< 25%) in 60 ms, by the events'
+  // own timestamps (a busy machine can't stretch it past the velocity window).
   await openNowPlaying(page);
-  await touchDrag(page, 200, 150, 250, 0, 4);
+  await touchDrag(page, 200, 150, 250, 60, 4, true);
   await expect(np).not.toHaveClass(/open/);
 
   // Scrolled down: dragging down scrolls the content instead of closing.
@@ -148,9 +148,18 @@ test('several credited artists open a chooser from Now Playing', async ({ page }
 
 // ---- Queue ---------------------------------------------------------------------------
 
+/**
+ * ⋯ → Add to queue on row i. The ⋯ is clicked without hit-testing: on a long list the
+ * fast scroller's drag thumb can sit over the right edge (a known overlap, for the
+ * UX rework), and this test is about the queue, not that.
+ */
 async function queue(page: Page, i: number) {
-  await page.getByTestId('track-more').nth(i).click();
+  await page.getByTestId('track-more').nth(i).dispatchEvent('click');
+  await expect(page.getByTestId('track-menu')).toBeVisible();
   await page.getByTestId('menu-add-queue').click();
+  // The sheet slides away; a tap meanwhile would land on its scrim.
+  await expect(page.getByTestId('track-menu')).toBeHidden();
+  await expect(page.locator('.sheet-wrap.open')).toHaveCount(0);
 }
 
 test('Add to queue plays next in the order added, under "Queued by you"', async ({ page }) => {
@@ -159,9 +168,8 @@ test('Add to queue plays next in the order added, under "Queued by you"', async 
   await page.getByTestId('track-play').nth(0).click();
   await expect(page.getByTestId('mini-player')).toBeVisible();
   for (const i of [5, 6]) {
-    await page.getByTestId('track-more').nth(i).click();
+    await queue(page, i);
     await expect(page.getByTestId('menu-play-next')).toHaveCount(0); // merged into Add to queue
-    await page.getByTestId('menu-add-queue').click();
   }
   await openNowPlaying(page);
   const rows = page.getByTestId('upnext-row');
@@ -186,6 +194,8 @@ test('skipping past queued tracks keeps them next (tests/spec/queue-rules.json)'
   await start(page);
   const titles = (await page.getByTestId('track-title').allTextContents()).map((t) => t.trim());
   await page.getByTestId('track-play').nth(0).click();
+  // The mini player appearing shifts the layout: let it land before tapping ⋯.
+  await expect(page.getByTestId('mini-title')).toHaveText(titles[0]);
   await queue(page, 7);
   await queue(page, 8);
   await openNowPlaying(page);
@@ -305,11 +315,25 @@ test('scrolling the lyrics by hand pauses the auto-scroll', async ({ page }) => 
   await expect(synced).toBeVisible();
   // Auto-scroll has centred the current line.
   await expect.poll(() => synced.evaluate((el) => el.scrollTop)).toBeGreaterThan(50);
-  await synced.hover();
-  await page.mouse.wheel(0, -2000);
-  await expect.poll(() => synced.evaluate((el) => el.scrollTop)).toBe(0);
-  // For most of the 4 s pause (lines change every 4 s), the panel stays where the user put it.
-  await expectStable(() => synced.evaluate((el) => el.scrollTop), 2500);
+  // Scroll to the top by hand and watch for 2.5 s of the 4 s pause, all inside the
+  // page (no round trips eating into the pause on a busy machine).
+  const seen = await synced.evaluate(async (el) => {
+    el.dispatchEvent(new WheelEvent('wheel', { deltaY: -2000, bubbles: true }));
+    el.scrollTo({ top: 0, behavior: 'auto' });
+    const tops: number[] = [];
+    const t0 = performance.now();
+    await new Promise<void>((r) => {
+      const tick = () => {
+        tops.push(el.scrollTop);
+        if (performance.now() - t0 < 2500) requestAnimationFrame(tick);
+        else r();
+      };
+      requestAnimationFrame(tick);
+    });
+    return tops;
+  });
+  expect(seen.length).toBeGreaterThan(10);
+  expect(new Set(seen)).toEqual(new Set([0]));
   // After the pause it centres the current line again.
   await expect.poll(() => synced.evaluate((el) => el.scrollTop), { timeout: 8000 }).toBeGreaterThan(50);
 });

@@ -90,16 +90,22 @@ export async function expectStable<T>(read: () => Promise<T>, ms: number): Promi
 /** Gesture pacing: real time between touch moves, so velocity math sees a real drag. */
 const pace = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** A one-finger drag through CDP touch events (real touchstart/move/end). */
-export async function touchDrag(page: Page, x: number, y0: number, y1: number, ms: number, steps = 12): Promise<void> {
+/**
+ * A one-finger drag through CDP touch events (real touchstart/move/end). With
+ * `stamped`, the events carry timestamps `ms` apart in total, so velocity math sees
+ * exactly that duration however slow the machine is (no real waiting).
+ */
+export async function touchDrag(page: Page, x: number, y0: number, y1: number, ms: number, steps = 12, stamped = false): Promise<void> {
   const cdp = await page.context().newCDPSession(page);
   const pt = (y: number) => [{ x, y, id: 1 }];
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(y0) });
+  const t0 = Date.now() / 1000;
+  const at = (i: number) => (stamped ? { timestamp: t0 + (ms / 1000) * (i / steps) } : {});
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(y0), ...at(0) });
   for (let i = 1; i <= steps; i++) {
-    if (ms) await pace(ms / steps);
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(y0 + ((y1 - y0) * i) / steps) });
+    if (ms && !stamped) await pace(ms / steps);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(y0 + ((y1 - y0) * i) / steps), ...at(i) });
   }
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], ...at(steps) });
   await cdp.detach();
 }
 
