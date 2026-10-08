@@ -35,6 +35,20 @@ body {
 
 body {
   text-shadow: var(--glow);
+  /* App UI, not a document: a long-press never selects text or opens the callout. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input,
+textarea,
+[contenteditable]:not([contenteditable='false']) {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+img {
+  -webkit-user-drag: none;
 }
 
 #app {
