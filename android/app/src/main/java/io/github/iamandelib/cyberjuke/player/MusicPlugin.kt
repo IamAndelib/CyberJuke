@@ -9,6 +9,7 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import io.github.iamandelib.cyberjuke.lyrics.Lyrics
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.net.NetBlock
 import io.github.iamandelib.cyberjuke.yt.ArtistPage

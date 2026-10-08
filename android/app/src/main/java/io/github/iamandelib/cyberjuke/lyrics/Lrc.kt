@@ -1,4 +1,4 @@
-package io.github.iamandelib.cyberjuke.player
+package io.github.iamandelib.cyberjuke.lyrics
 
 import io.github.iamandelib.cyberjuke.yt.MusicText
 import kotlin.math.abs

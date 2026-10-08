@@ -1,9 +1,9 @@
 package io.github.iamandelib.cyberjuke.yt
 
+import io.github.iamandelib.cyberjuke.lyrics.Lyrics
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.net.Hosts
 import io.github.iamandelib.cyberjuke.net.Http
-import io.github.iamandelib.cyberjuke.player.Lyrics
 import io.github.iamandelib.cyberjuke.player.SessionPolicy
 import io.github.iamandelib.cyberjuke.player.StreamResolver
 import io.github.iamandelib.cyberjuke.player.StreamUrls

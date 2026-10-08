@@ -1,4 +1,4 @@
-package io.github.iamandelib.cyberjuke.player
+package io.github.iamandelib.cyberjuke.lyrics
 
 import android.content.Context
 import android.util.Log
