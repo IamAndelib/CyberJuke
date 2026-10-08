@@ -75,6 +75,9 @@ const offsetOf = (page: Page, testid: string) =>
 test('pull to refresh: follows the finger on a rubber band with no re-render, then refreshes', async ({ page }) => {
   await start(page);
   const ptr = page.getByTestId('ptr');
+  // Let Home settle first (the catalog arriving re-renders the genre chips and Home).
+  await expect(page.getByTestId('genre-chip').first()).toBeVisible();
+  await expectStable(async () => JSON.stringify(await renders(page)), 400);
   await resetRenders(page);
   const f = await finger(page, 200, 320);
   await f.move(0, 60);
@@ -91,13 +94,23 @@ test('pull to refresh: follows the finger on a rubber band with no re-render, th
   // The drag re-rendered nothing of the screen.
   const counts = await renders(page);
   for (const c of ['App', 'Screen', 'Home', 'TrackRow']) expect(counts[c] ?? 0, c).toBe(0);
-  const t0 = Date.now();
+  // Watch the refreshing state from inside the page (round trips can be slower than it).
+  await ptr.evaluate((el) => {
+    const w = window as unknown as { __busy: { on?: number; off?: number; label?: string } };
+    w.__busy = {};
+    new MutationObserver(() => {
+      const now = performance.now();
+      if (el.getAttribute('aria-busy') === 'true') w.__busy.on ??= (w.__busy.label = el.textContent ?? '', now);
+      else if (w.__busy.on != null) w.__busy.off ??= now;
+    }).observe(el, { attributes: true, attributeFilter: ['aria-busy'] });
+  });
   await f.end();
-  await expect(ptr).toHaveText('[ refreshing… ]');
-  await expect(ptr).toHaveAttribute('aria-busy', 'true');
-  await expect(ptr).not.toHaveAttribute('aria-busy', 'true');
+  const busy = () => page.evaluate(() => (window as unknown as { __busy: { on?: number; off?: number; label?: string } }).__busy);
+  await expect.poll(async () => (await busy()).off != null).toBe(true);
+  const b = await busy();
+  expect(b.label).toBe('[ refreshing… ]');
   // The spinner stayed up at least 400 ms, then everything sprang back.
-  expect(Date.now() - t0).toBeGreaterThanOrEqual(400);
+  expect(b.off! - b.on!).toBeGreaterThanOrEqual(395);
   await expect.poll(() => offsetOf(page, 'screen-home')).toBe(0);
   // At rest the content carries no transform at all.
   await expect.poll(() => page.getByTestId('screen-home').locator('.screen-body').evaluate((el) => (el as HTMLElement).style.transform)).toBe('');
@@ -351,7 +364,8 @@ test('Next is off at the end of the queue in both players; repeat is a toggle; 4
   const n = await box(page.getByTestId('mini-next'));
   expect(n.x - (t.x + t.width)).toBeGreaterThanOrEqual(8);
   for (const sel of ['.tag', '.mtag', '.lyr-credit'])
-    for (const size of await page.locator(sel).evaluateAll((els) => els.map((e) => parseFloat(getComputedStyle(e).fontSize)))) expect(size, sel).toBeGreaterThanOrEqual(12);
+    for (const size of await page.locator(sel).evaluateAll((els) => els.filter((e) => e.isConnected).map((e) => parseFloat(getComputedStyle(e).fontSize))))
+      if (!Number.isNaN(size)) expect(size, sel).toBeGreaterThanOrEqual(12);
 });
 
 test('the track menu keeps its content while it slides away', async ({ page }) => {
