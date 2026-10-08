@@ -41,6 +41,9 @@ describe('safePlayer', () => {
       move: vi.fn(fail),
       remove: vi.fn(fail),
       addToQueue: vi.fn(fail),
+      addAutoplay: vi.fn(fail),
+      setAutoplay: vi.fn(fail),
+      onQueueLow: () => () => {},
       setQuality: vi.fn(fail),
       setNetworkPrefs: vi.fn(fail),
     };

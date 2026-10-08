@@ -6,7 +6,7 @@
 import { safe, type Notify } from '../core/safe';
 import type { Player } from './types';
 
-type Command = Exclude<keyof Player, 'kind' | 'state'>;
+type Command = Exclude<keyof Player, 'kind' | 'state' | 'onQueueLow'>;
 
 /** What the toast says when a command fails. */
 export const COMMAND_ERRORS: Record<Command, string> = {
@@ -23,18 +23,27 @@ export const COMMAND_ERRORS: Record<Command, string> = {
   move: "Couldn't move that track",
   remove: "Couldn't remove that track",
   addToQueue: "Couldn't add to the queue",
+  addAutoplay: "Couldn't add autoplay tracks",
+  setAutoplay: "Couldn't change autoplay",
   setQuality: "Couldn't change the audio quality",
   setNetworkPrefs: "Couldn't change the network setting",
 };
+
+/** Background work the user didn't ask for: a failure is logged, not toasted. */
+const SILENT: ReadonlySet<Command> = new Set<Command>(['addAutoplay', 'setAutoplay']);
+const quiet: Notify = () => {};
 
 export function safePlayer(p: Player, notify: Notify): Player {
   const wrap =
     <K extends Command>(name: K) =>
     (...args: Parameters<Player[K]>): Promise<void> =>
-      safe(`player.${name}`, () => (p[name] as (...a: Parameters<Player[K]>) => Promise<void>)(...args), notify, COMMAND_ERRORS[name]).then(() => {});
+      safe(`player.${name}`, () => (p[name] as (...a: Parameters<Player[K]>) => Promise<void>)(...args), SILENT.has(name) ? quiet : notify, COMMAND_ERRORS[name]).then(
+        () => {},
+      );
   return {
     kind: p.kind,
     state: p.state,
+    onQueueLow: (cb) => p.onQueueLow(cb),
     playList: wrap('playList'),
     play: wrap('play'),
     pause: wrap('pause'),
@@ -48,6 +57,8 @@ export function safePlayer(p: Player, notify: Notify): Player {
     move: wrap('move'),
     remove: wrap('remove'),
     addToQueue: wrap('addToQueue'),
+    addAutoplay: wrap('addAutoplay'),
+    setAutoplay: wrap('setAutoplay'),
     setQuality: wrap('setQuality'),
     setNetworkPrefs: wrap('setNetworkPrefs'),
   };

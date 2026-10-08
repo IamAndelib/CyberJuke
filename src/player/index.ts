@@ -9,12 +9,17 @@
  */
 import { Capacitor } from '@capacitor/core';
 import { computed, effect } from '@preact/signals';
-import { addRecent, settings } from '../store/library';
+import { addRecent, recent, settings, showNsfw } from '../store/library';
 import { block } from '../store/block';
+import { catalog } from '../store/catalog';
 import { toast } from '../store/toast';
+import { auth } from '../data/auth';
+import { music, musicTracks } from '../data/ytmusic';
+import { logError } from '../core/log';
+import { createAutoplay, type Autoplay } from './autoplay';
 import { NativePlayer } from './nativePlayer';
 import { safePlayer } from './safePlayer';
-import type { Player } from './types';
+import type { PlayContext, Player, UpItem, UpNextItem, UpNextSections } from './types';
 import { WebPlayer } from './webPlayer';
 
 export * from './types';
@@ -39,6 +44,41 @@ export const isAdvancing = computed(() => state.value.isPlaying && !state.value.
 /** "Next" does something: a track after this one, or repeat wraps around. */
 export const canSkipNext = computed(() => state.value.upNext.length > 0 || state.value.repeat !== 'off');
 
+/** The context the current list was started with (C2); null before the first. Changes only with the list. */
+export const playContext = computed<PlayContext | null>(() => state.value.context);
+
+const NO_SECTIONS: UpNextSections = { queued: [], list: [], autoplay: [], seed: null };
+let lastSections = NO_SECTIONS;
+
+/**
+ * Up next as its three sections (C2): queued by you, the rest of the list, autoplay; and
+ * the track autoplay follows. The same object until one of them changes (never on a
+ * position tick).
+ */
+export const upNextSections = computed<UpNextSections>(() => {
+  const s = state.value;
+  const next = sectionsOf(s.upNext, s.seed);
+  if (sameSections(lastSections, next)) return lastSections;
+  return (lastSections = next);
+});
+
+function sectionsOf(upNext: UpNextItem[], seed: UpNextSections['seed']): UpNextSections {
+  const out: UpNextSections = { queued: [], list: [], autoplay: [], seed };
+  for (const u of upNext) {
+    const item: UpItem = { track: u.track, index: u.index };
+    (u.queued ? out.queued : u.auto ? out.autoplay : out.list).push(item);
+  }
+  return out;
+}
+
+function sameItems(a: UpItem[], b: UpItem[]): boolean {
+  return a.length === b.length && a.every((x, i) => x.track === b[i].track && x.index === b[i].index);
+}
+
+function sameSections(a: UpNextSections, b: UpNextSections): boolean {
+  return a.seed === b.seed && sameItems(a.queued, b.queued) && sameItems(a.list, b.list) && sameItems(a.autoplay, b.autoplay);
+}
+
 export interface PositionSample {
   positionMs: number;
   durationMs: number;
@@ -62,16 +102,41 @@ effect(() => {
   }
 });
 
+/** The Autoplay setting (C3); on unless turned off. */
+export function autoplayEnabled(): boolean {
+  return (settings.value as { autoplay?: boolean }).autoplay !== false;
+}
+
+let autoplay: Autoplay | null = null;
+
+/** Start autoplay (AP4): it answers the player's "running low" signals. Once. */
+export function startAutoplay(): Autoplay {
+  autoplay ??= createAutoplay({
+    player,
+    catalog: () => catalog.tracks.peek(),
+    history: () => recent.peek(),
+    showNsfw: () => showNsfw.peek(),
+    signedIn: () => auth.signedIn(),
+    blocked: () => block.blocked.peek() != null,
+    radio: (ytId, next) => music.radio(ytId, next).then((page) => ({ tracks: musicTracks(page.items), next: page.next })),
+    log: logError,
+  });
+  return autoplay;
+}
+
 /**
- * Send the player settings (audio quality, Y6 "Prefer IPv4") to the player now and on
- * every change. Called once the library has loaded, so native never gets the
- * defaults first.
+ * Send the player settings (audio quality, Y6 "Prefer IPv4", Autoplay) to the player now
+ * and on every change, and start autoplay. Called once the library has loaded, so native
+ * never gets the defaults first.
  */
 export function startPlayerPrefs(): void {
   let lastQuality: string | null = null;
   let lastIpv4: boolean | null = null;
+  let lastAutoplay: boolean | null = null;
+  startAutoplay();
   effect(() => {
     const { quality, preferIpv4 } = settings.value;
+    const auto = autoplayEnabled();
     if (quality !== lastQuality) {
       lastQuality = quality;
       void player.setQuality(quality);
@@ -79,6 +144,10 @@ export function startPlayerPrefs(): void {
     if (preferIpv4 !== lastIpv4) {
       lastIpv4 = preferIpv4;
       void player.setNetworkPrefs({ preferIpv4 });
+    }
+    if (auto !== lastAutoplay) {
+      lastAutoplay = auto;
+      void player.setAutoplay(auto);
     }
   });
 }

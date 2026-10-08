@@ -16,6 +16,12 @@ export interface NativeState {
   /** True when the list didn't change since the last event: queueIds is then omitted, keep the previous one. */
   queueIdsUnchanged?: boolean;
   upNextIds: string[];      // the next tracks in actual play order (respects shuffle), max 50
+  /** One letter per upNextIds entry: q = queued by you, l = the list, a = autoplay. */
+  upNextKinds: string;
+  /** The context the current list was started with (C2), null before the first. */
+  context: { label: string; mode: 'radio' | 'list' } | null;
+  /** The track autoplay follows (the started track, or the autoplay track tapped). */
+  seedId: string | null;
 }
 /** Why YouTube is refusing requests from this network (Y1). */
 export type BlockReason = 'BOT_CHECK' | 'RATE_LIMIT' | 'STREAM_FORBIDDEN';
@@ -27,7 +33,12 @@ export interface BlockedEvent { until: number /* epoch ms */; reason: BlockReaso
  * play() is refused when nothing is loaded. trackError is never sent for blocks.
  */
 export interface JukePlayerPlugin {
-  setQueue(o: { tracks: NativeTrack[]; startIndex: number; positionMs?: number; playWhenReady: boolean }): Promise<void>;
+  /** A new list. Tracks queued with queueNext stay next (P1); autoplay starts over from the start track (a Global one gets its radio natively). */
+  setQueue(o: { tracks: NativeTrack[]; startIndex: number; positionMs?: number; playWhenReady: boolean; context?: { label: string; mode: 'radio' | 'list' } }): Promise<void>;
+  /** Jukebox autoplay picks for `seedId` (after queueLow); dropped if the seed changed, autoplay is off or repeat is on. */
+  addAutoplay(o: { tracks: NativeTrack[]; seedId: string }): Promise<void>;
+  /** The Autoplay setting; off drops the autoplay tracks still to come. */
+  setAutoplay(o: { enabled: boolean }): Promise<void>;
   addItems(o: { tracks: NativeTrack[]; index?: number }): Promise<void>;   // index omitted = append
   /** Insert after the current track + tracks already user-queued; respects shuffle; upNextIds reflects it. */
   queueNext(o: { tracks: NativeTrack[] }): Promise<void>;
@@ -36,6 +47,7 @@ export interface JukePlayerPlugin {
   play(): Promise<void>; pause(): Promise<void>;
   seekTo(o: { positionMs: number }): Promise<void>;
   skipToNext(): Promise<void>; skipToPrevious(): Promise<void>;
+  /** A tap in Up next: queued tracks stay next; on an autoplay track the radio continues from it. */
   skipToIndex(o: { index: number }): Promise<void>;
   setShuffle(o: { enabled: boolean }): Promise<void>;
   setRepeat(o: { mode: RepeatMode }): Promise<void>;
@@ -53,6 +65,10 @@ export interface JukePlayerPlugin {
   /** YouTube is refusing this network: playback paused, nothing is requested until `until`. */
   addListener(event: 'blocked', cb: (e: BlockedEvent) => void): Promise<{ remove: () => Promise<void> }>;
   addListener(event: 'unblocked', cb: (e: Record<string, never>) => void): Promise<{ remove: () => Promise<void> }>;
+  /** Autoplay has `left` (<= 5) Jukebox tracks to go: send more with addAutoplay. */
+  addListener(event: 'queueLow', cb: (e: { left: number; seedId: string | null }) => void): Promise<{ remove: () => Promise<void> }>;
+  /** Tracks the service added itself (Global radio), so they can be shown. */
+  addListener(event: 'tracks', cb: (e: { tracks: NativeTrack[] }) => void): Promise<{ remove: () => Promise<void> }>;
   /** Parsing failed in a way that means YouTube changed something (an app update is needed). */
   addListener(event: 'extractorBroken', cb: (e: { message: string }) => void): Promise<{ remove: () => Promise<void> }>;
 }

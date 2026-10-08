@@ -17,8 +17,29 @@ const track = {
 
 describe('parseNativeState', () => {
   it('passes a well-formed state through', () => {
-    const st = { isPlaying: true, isBuffering: false, index: 1, trackId: 'b', positionMs: 1200, durationMs: 9000, shuffle: false, repeat: 'all', queueIds: ['a', 'b'], upNextIds: ['a'] };
+    const st = {
+      isPlaying: true,
+      isBuffering: false,
+      index: 1,
+      trackId: 'b',
+      positionMs: 1200,
+      durationMs: 9000,
+      shuffle: false,
+      repeat: 'all',
+      queueIds: ['a', 'b', 'c'],
+      upNextIds: ['a', 'c'],
+      upNextKinds: 'qa',
+      context: { label: 'Liked', mode: 'list' },
+      seedId: 'b',
+    };
     expect(parseNativeState(st)).toEqual(st);
+  });
+
+  it('pads the up-next kinds to the ids and repairs the context', () => {
+    const st = parseNativeState({ index: 0, queueIds: ['a', 'b', 'c'], upNextIds: ['b', 'c'], upNextKinds: 'z', context: { label: 3, mode: 'x' }, seedId: '' });
+    expect(st?.upNextKinds).toBe('ll');
+    expect(st?.context).toEqual({ label: '', mode: 'list' });
+    expect(st?.seedId).toBeNull();
   });
 
   it('keeps the previous list when the event says it is unchanged', () => {
@@ -29,7 +50,21 @@ describe('parseNativeState', () => {
 
   it('repairs junk instead of throwing', () => {
     const st = parseNativeState({ isPlaying: 'yes', index: 7, positionMs: -5, durationMs: NaN, repeat: 'sometimes', queueIds: ['a', 3, null], upNextIds: 'x' });
-    expect(st).toEqual({ isPlaying: false, isBuffering: false, index: -1, trackId: null, positionMs: 0, durationMs: 0, shuffle: false, repeat: 'off', queueIds: ['a'], upNextIds: [] });
+    expect(st).toEqual({
+      isPlaying: false,
+      isBuffering: false,
+      index: -1,
+      trackId: null,
+      positionMs: 0,
+      durationMs: 0,
+      shuffle: false,
+      repeat: 'off',
+      queueIds: ['a'],
+      upNextIds: [],
+      upNextKinds: '',
+      context: null,
+      seedId: null,
+    });
     expect(parseNativeState(null)).toBeNull();
     expect(parseNativeState([1])).toBeNull();
   });

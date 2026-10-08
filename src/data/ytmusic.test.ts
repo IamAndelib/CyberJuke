@@ -85,6 +85,7 @@ describe('client', () => {
       lyrics: vi.fn(async () => ({ found: false })),
       artistPage: vi.fn(async () => ({ name: 'A', topSongs: [], releases: [] })),
       artistReleases: vi.fn(async () => ({ releases: [] })),
+      radio: vi.fn(async ({ next }) => ({ items: [song(next ? 'cdefghijklm' : 'bcdefghijkl'), { kind: 'song', title: 'bad' } as never], ...(!next && { next: 'r2' }) })),
     };
     const c = m.createMusicClient({ plugin: () => plugin, now: () => now });
     return { c, plugin, tick: (ms: number) => (now += ms) };
@@ -126,10 +127,24 @@ describe('client', () => {
       lyrics: vi.fn(),
       artistPage: vi.fn(),
       artistReleases: vi.fn(),
+      radio: vi.fn(),
     };
     const c = m.createMusicClient({ plugin: () => plugin });
     await expect(c.search('x', 'songs')).rejects.toMatchObject({ code: 'BOT_CHECK' });
     await expect(c.search('x', 'songs')).resolves.toEqual({ items: [] });
+  });
+
+  it('radio pages: checked items, the continuation passed back, never cached', async () => {
+    const { c, plugin } = setup();
+    const first = await c.radio('abcdefghijk');
+    expect(first.items.map((i) => i.ytId)).toEqual(['bcdefghijkl']);
+    expect(first.next).toBe('r2');
+    const second = await c.radio('abcdefghijk', first.next);
+    expect(second.items.map((i) => i.ytId)).toEqual(['cdefghijklm']);
+    expect(second.next).toBeUndefined();
+    await c.radio('abcdefghijk');
+    expect(plugin.radio).toHaveBeenCalledTimes(3);
+    expect(plugin.radio).toHaveBeenNthCalledWith(2, { ytId: 'abcdefghijk', next: 'r2' });
   });
 
   it('rejects with UNAVAILABLE when there is no plugin (browser without a stub)', async () => {

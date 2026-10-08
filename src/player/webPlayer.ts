@@ -8,7 +8,7 @@ import { toast } from '../store/toast';
 import { TEST_HOOKS } from '../core/testHooks';
 import { Queue } from './queue';
 import type { RepeatMode } from './native';
-import { EMPTY_STATE, livePosition, type Player, type PlayerState } from './types';
+import { AUTOPLAY_LOW, EMPTY_STATE, LIST_CONTEXT, livePosition, type PlayContext, type Player, type PlayerState, type QueueLow } from './types';
 
 /* Minimal typings for the parts of the IFrame API we use. */
 interface YTPlayer {
@@ -84,6 +84,14 @@ export class WebPlayer implements Player {
   private ytReady: Promise<YTPlayer> | null = null;
   private loadedId: string | null = null;
   private poll: ReturnType<typeof setInterval> | null = null;
+  /** The current list's context (one object per playList). */
+  private context: PlayContext | null = null;
+  /** The track autoplay follows. */
+  private seed: Track | null = null;
+  private autoplayOn = true;
+  private lowListeners = new Set<(e: QueueLow) => void>();
+  /** The low state last announced, so each one is announced once. */
+  private lowKey: string | null = null;
 
   private publish(patch: Partial<PlayerState> = {}): void {
     const prev = this.s.value;
@@ -98,9 +106,35 @@ export class WebPlayer implements Player {
       current: this.q.current,
       shuffle: this.q.shuffle,
       repeat: this.q.repeat,
-      upNext: upIdx.map((i, k) => (k < queued ? { track: items[i], index: i, queued: true } : { track: items[i], index: i })),
+      upNext: upIdx.map((i, k) =>
+        k < queued ? { track: items[i], index: i, queued: true } : this.q.isAuto(i) ? { track: items[i], index: i, auto: true } : { track: items[i], index: i },
+      ),
+      context: this.context,
+      seed: this.seed,
       ...patch,
     };
+    this.checkLow();
+  }
+
+  /** AP4, inline: with 5 autoplay tracks or fewer to go, ask for more (once per state). */
+  private checkLow(): void {
+    const seed = this.seed;
+    if (!this.autoplayOn || this.q.repeat !== 'off' || !this.q.current || !seed) {
+      this.lowKey = null;
+      return;
+    }
+    const left = this.q.autoAhead;
+    if (left > AUTOPLAY_LOW) {
+      this.lowKey = null;
+      return;
+    }
+    const key = `${seed.id}|${left}|${this.q.index}|${this.q.length}`;
+    if (key === this.lowKey) return;
+    this.lowKey = key;
+    const ev: QueueLow = { left, seedId: seed.id };
+    queueMicrotask(() => {
+      for (const cb of this.lowListeners) cb(ev);
+    });
   }
 
   private host(): HTMLElement {
@@ -234,9 +268,15 @@ export class WebPlayer implements Player {
     void this.loadCurrent(true, n === before);
   }
 
-  async playList(tracks: Track[], startIndex: number): Promise<void> {
+  async playList(tracks: Track[], startIndex: number, ctx: PlayContext = LIST_CONTEXT): Promise<void> {
     if (!tracks.length) return;
-    this.q.setList(tracks, startIndex);
+    const i = Math.max(0, Math.min(startIndex, tracks.length - 1));
+    // A radio plays the tapped track, then autoplay: the rest of the list isn't queued.
+    if (ctx.mode === 'radio') this.q.setList([tracks[i]], 0);
+    else this.q.setList(tracks, i);
+    this.context = { label: ctx.label, mode: ctx.mode };
+    this.seed = this.q.current;
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setQueue', { n: this.q.length, context: this.context }]);
     await this.loadCurrent(true, true);
   }
 
@@ -275,7 +315,11 @@ export class WebPlayer implements Player {
   }
 
   async skipTo(index: number): Promise<void> {
-    if (this.q.skipTo(index)) await this.loadCurrent(true, true);
+    const auto = this.q.isAuto(index);
+    if (!this.q.skipTo(index)) return;
+    // A tapped autoplay track: the radio continues from it.
+    if (auto) this.seed = this.q.current;
+    await this.loadCurrent(true, true);
   }
 
   async setShuffle(enabled: boolean): Promise<void> {
@@ -307,6 +351,27 @@ export class WebPlayer implements Player {
     this.q.queueNext(tracks);
     this.publish();
     if (wasEmpty) await this.loadCurrent(true, true);
+  }
+
+  async addAutoplay(tracks: Track[], seedId: string): Promise<void> {
+    if (!tracks.length || !this.autoplayOn || this.q.repeat !== 'off' || this.seed?.id !== seedId) return;
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['addAutoplay', tracks.map((t) => t.id)]);
+    const wasEmpty = !this.q.current;
+    this.q.addAuto(tracks);
+    this.publish();
+    if (wasEmpty) await this.loadCurrent(true, true);
+  }
+
+  async setAutoplay(enabled: boolean): Promise<void> {
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setAutoplay', enabled]);
+    this.autoplayOn = enabled;
+    if (!enabled) this.q.dropAuto();
+    this.publish();
+  }
+
+  onQueueLow(cb: (e: QueueLow) => void): () => void {
+    this.lowListeners.add(cb);
+    return () => this.lowListeners.delete(cb);
   }
 
   async setQuality(q: 'high' | 'low'): Promise<void> {

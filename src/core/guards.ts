@@ -24,13 +24,17 @@ const REPEAT: readonly RepeatMode[] = ['off', 'all', 'one'];
 /**
  * A `state` event (or getState() result) from the JukePlayer plugin. `prevQueueIds` is
  * used when the event says the list didn't change (`queueIdsUnchanged`, no
- * `queueIds`). Null when it isn't a state object at all.
+ * `queueIds`). `upNextKinds` always comes back with one letter per upNext id. Null when
+ * it isn't a state object at all.
  */
 export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = []): NativeState | null {
   if (!isObj(x)) return null;
   const unchanged = x.queueIdsUnchanged === true && !Array.isArray(x.queueIds);
   const queueIds = unchanged ? prevQueueIds.slice() : strings(x.queueIds);
   const index = typeof x.index === 'number' && Number.isInteger(x.index) && x.index >= -1 && x.index < queueIds.length ? x.index : -1;
+  const upNextIds = strings(x.upNextIds).slice(0, 50);
+  const kinds = isStr(x.upNextKinds) ? x.upNextKinds : '';
+  const ctx = isObj(x.context) ? x.context : null;
   return {
     isPlaying: x.isPlaying === true,
     isBuffering: x.isBuffering === true,
@@ -41,7 +45,11 @@ export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [
     shuffle: x.shuffle === true,
     repeat: REPEAT.includes(x.repeat as RepeatMode) ? (x.repeat as RepeatMode) : 'off',
     queueIds,
-    upNextIds: strings(x.upNextIds).slice(0, 50),
+    upNextIds,
+    // One of q/l/a per upNext entry; anything missing or unknown is the list.
+    upNextKinds: upNextIds.map((_, i) => (kinds[i] === 'q' || kinds[i] === 'a' ? kinds[i] : 'l')).join(''),
+    context: ctx ? { label: isStr(ctx.label) ? ctx.label : '', mode: ctx.mode === 'radio' ? 'radio' : 'list' } : null,
+    seedId: isStr(x.seedId) && x.seedId ? x.seedId : null,
   };
 }
 

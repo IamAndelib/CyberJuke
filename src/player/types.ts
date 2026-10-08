@@ -10,7 +10,48 @@ export interface UpNextItem {
   index: number;
   /** Added with "Add to queue" and not played yet (shown under "Queued by you"). */
   queued?: boolean;
+  /** Added by autoplay (shown under "Autoplay"). */
+  auto?: boolean;
 }
+
+/**
+ * Where playback comes from (C2). `radio` (feeds and results): the tapped track, then
+ * similar tracks; the rest of the list is not queued. `list` (an album, Liked, a genre,
+ * Play/Shuffle): the list in order, then similar tracks. `label` is the source shown in
+ * Now Playing ("Home · Latest", "Liked", ...).
+ */
+export interface PlayContext {
+  label: string;
+  mode: 'radio' | 'list';
+}
+
+/** What playList uses when no context is given. */
+export const LIST_CONTEXT: PlayContext = { label: '', mode: 'list' };
+
+export interface UpItem {
+  track: Track;
+  index: number;
+}
+
+/** Up next as its three sections, in play order (C2), and the track autoplay follows. */
+export interface UpNextSections {
+  queued: UpItem[];
+  list: UpItem[];
+  autoplay: UpItem[];
+  seed: Track | null;
+}
+
+/** Autoplay is running low: `left` tracks to go after the current one. */
+export interface QueueLow {
+  left: number;
+  seedId: string | null;
+}
+
+/** Autoplay tracks left when more are added (AP4). */
+export const AUTOPLAY_LOW = 5;
+/** Autoplay tracks added at the start of a list or radio, and on each refill. */
+export const AUTOPLAY_FIRST = 25;
+export const AUTOPLAY_MORE = 20;
 
 export interface PlayerState {
   /** Full queue in list order. */
@@ -28,6 +69,10 @@ export interface PlayerState {
   repeat: RepeatMode;
   /** Next tracks in actual play order (respects shuffle). */
   upNext: UpNextItem[];
+  /** The context of the current list (same object until it changes); null before the first. */
+  context: PlayContext | null;
+  /** The track autoplay follows: the started track, or the autoplay track tapped. */
+  seed: Track | null;
 }
 
 export const EMPTY_STATE: PlayerState = {
@@ -42,13 +87,19 @@ export const EMPTY_STATE: PlayerState = {
   shuffle: false,
   repeat: 'off',
   upNext: [],
+  context: null,
+  seed: null,
 };
 
 /** Same interface for the native (Android) and web (YouTube IFrame) implementations. */
 export interface Player {
   readonly kind: 'native' | 'web';
   readonly state: ReadonlySignal<PlayerState>;
-  playList(tracks: Track[], startIndex: number): Promise<void>;
+  /**
+   * Start a list (C2). `radio` plays only `tracks[startIndex]`, then autoplay; `list` plays
+   * the list from there, then autoplay. Tracks added with "Add to queue" stay next (P1).
+   */
+  playList(tracks: Track[], startIndex: number, ctx?: PlayContext): Promise<void>;
   play(): Promise<void>;
   pause(): Promise<void>;
   toggle(): Promise<void>;
@@ -65,6 +116,12 @@ export interface Player {
    * (first in, first out), shuffle or not. With nothing playing, plays them.
    */
   addToQueue(tracks: Track[]): Promise<void>;
+  /** Autoplay tracks computed for `seedId`; ignored if the seed changed meanwhile. */
+  addAutoplay(tracks: Track[], seedId: string): Promise<void>;
+  /** The Autoplay setting (C3). Off drops the autoplay tracks still to come. */
+  setAutoplay(enabled: boolean): Promise<void>;
+  /** Called when autoplay needs more tracks (native: the `queueLow` event). Returns an unsubscribe. */
+  onQueueLow(cb: (e: QueueLow) => void): () => void;
   setQuality(q: 'high' | 'low'): Promise<void>;
   /** Y6: prefer IPv4 for YouTube requests (native only; the web player ignores it). */
   setNetworkPrefs(prefs: { preferIpv4: boolean }): Promise<void>;

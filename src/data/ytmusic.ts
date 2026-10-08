@@ -46,6 +46,11 @@ export interface JukeMusicPlugin {
   artistPage(o: { channelId: string }): Promise<ArtistPageResult>;
   /** A "See all" token from `artistPage().more`: the full list of that shelf. */
   artistReleases(o: { token: string }): Promise<{ releases: Release[] }>;
+  /**
+   * The song's radio (Global autoplay): songs without the seed; `next` gives the page
+   * after. Rejects BOT_CHECK without a request during a YouTube back-off.
+   */
+  radio(o: { ytId: string; next?: string }): Promise<MusicPage>;
 }
 
 export type ReleaseKind = 'album' | 'ep' | 'single' | 'live';
@@ -281,6 +286,8 @@ export interface MusicClient {
   /** `fresh`: skip the cache (a "See all" token was evicted native-side; get new ones). */
   artistPage(channelId: string, fresh?: boolean): Promise<ArtistPageResult>;
   artistReleases(token: string): Promise<Release[]>;
+  /** One page of a song's radio (not cached: each page is asked for once). */
+  radio(ytId: string, next?: string): Promise<MusicPage>;
   /** A cached, still-fresh search result, if any (lets screens render instantly on remount). */
   peekSearch(query: string, filter: MusicFilter): MusicPage | undefined;
   clear(): void;
@@ -342,6 +349,16 @@ export function createMusicClient(deps: MusicClientDeps): MusicClient {
     artistPage: (channelId, fresh) =>
       (fresh && cache.delete(`ap|${channelId}`), call(`ap|${channelId}`, (p) => p.artistPage({ channelId }).then(parseArtistPage))),
     artistReleases: (token) => call(`ar|${token}`, (p) => p.artistReleases({ token }).then((r) => parseReleases((r as { releases?: unknown } | null)?.releases))),
+    radio: (ytId, next) => {
+      const p = deps.plugin();
+      if (!p) return Promise.reject(new MusicError('UNAVAILABLE', 'UNAVAILABLE: Global search needs the Android app'));
+      return Promise.resolve()
+        .then(() => p.radio(next ? { ytId, next } : { ytId }))
+        .then(parseMusicPage)
+        .catch((e) => {
+          throw toMusicError(e);
+        });
+    },
     peekSearch: (query, filter) => fresh<MusicPage>(sKey(query, filter)),
     clear: () => cache.clear(),
   };
