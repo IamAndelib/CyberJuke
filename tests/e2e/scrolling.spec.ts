@@ -126,7 +126,7 @@ test('the last row stays clear of back-to-top and search buttons at the end of a
   expect(more.y + more.height).toBeLessThanOrEqual(Math.min(b.y, f.y));
 });
 
-test('back-to-top: a pointerdown during a fling reaches the top, with no click needed', async ({ page }) => {
+test('back-to-top: finger down stops a fling, finger up jumps to the top, with no click needed', async ({ page }) => {
   await start(page);
   await openSearch(page);
   await expect(page.getByTestId('search-latest').getByTestId('track-row').first()).toBeVisible();
@@ -134,8 +134,21 @@ test('back-to-top: a pointerdown during a fling reaches the top, with no click n
   const btn = screen.getByTestId('back-to-top');
   await screen.evaluate((el) => el.scrollTo(0, el.clientHeight * 2));
   await expect(btn).toBeVisible();
+  // Touch pointer events on the button, as a finger sends them.
+  await page.evaluate(() => {
+    const w = window as unknown as { __press: (type: string, dy?: number) => boolean };
+    w.__press = (type, dy = 0) => {
+      const btn = document.querySelector('[data-testid="search"] [data-testid="back-to-top"]') as HTMLElement;
+      const r = btn.getBoundingClientRect();
+      const e = new PointerEvent(type, { pointerType: 'touch', pointerId: 7, isPrimary: true, bubbles: true, cancelable: true, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 + dy });
+      btn.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+  });
+  type Press = { __press: (type: string, dy?: number) => boolean };
   // A fling: a long native smooth scroll still under way when the button is pressed.
   const run = await screen.evaluate(async (el) => {
+    const press = (window as unknown as Press).__press;
     const btn = el.querySelector('[data-testid="back-to-top"]') as HTMLElement;
     let clicks = 0;
     btn.addEventListener('click', () => clicks++);
@@ -146,12 +159,22 @@ test('back-to-top: a pointerdown during a fling reaches the top, with no click n
       const check = () => (el.scrollTop > start + 50 ? r() : requestAnimationFrame(check));
       requestAnimationFrame(check);
     });
-    const flinging = el.scrollTop;
+    const prevented = press('pointerdown');
+    // Finger still down: the fling has stopped, and nothing jumps yet.
+    const held: number[] = [];
+    await new Promise<void>((r) => {
+      const t0 = performance.now();
+      const tick = () => {
+        held.push(el.scrollTop);
+        if (performance.now() - t0 < 300) requestAnimationFrame(tick);
+        else r();
+      };
+      requestAnimationFrame(tick);
+    });
     const seen: number[] = [];
     const onScroll = () => seen.push(el.scrollTop);
     el.addEventListener('scroll', onScroll);
-    const down = new PointerEvent('pointerdown', { pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true });
-    btn.dispatchEvent(down);
+    press('pointerup');
     // Until the top is reached (or 3 s).
     await new Promise<void>((r) => {
       const t0 = performance.now();
@@ -159,10 +182,11 @@ test('back-to-top: a pointerdown during a fling reaches the top, with no click n
       requestAnimationFrame(check);
     });
     el.removeEventListener('scroll', onScroll);
-    return { flinging, start, seen, end: el.scrollTop, clicks, prevented: down.defaultPrevented };
+    return { start, held, seen, end: el.scrollTop, clicks, prevented };
   });
-  expect(run.flinging).toBeGreaterThan(run.start);
   expect(run.prevented).toBe(true);
+  expect(run.held[0]).toBeGreaterThan(run.start);
+  expect(new Set(run.held).size).toBe(1);
   expect(run.clicks).toBe(0);
   expect(run.end).toBe(0);
   expect(new Set(run.seen).size).toBeGreaterThanOrEqual(4);
@@ -170,14 +194,28 @@ test('back-to-top: a pointerdown during a fling reaches the top, with no click n
   await expectStable(() => screen.evaluate((el) => el.scrollTop), 300); // no momentum came back
   await expect(btn).toBeHidden();
 
-  // A touch on the list during the jump stops it where it is.
+  // A finger that moves 10px or more on the button is scrolling: no jump.
   await screen.evaluate((el) => el.scrollTo(0, el.clientHeight * 3));
   await expect(btn).toBeVisible();
+  const kept = await screen.evaluate((el) => {
+    const press = (window as unknown as Press).__press;
+    const from = el.scrollTop;
+    press('pointerdown');
+    press('pointermove', 12);
+    press('pointerup', 12);
+    return { from, now: el.scrollTop };
+  });
+  expect(kept.now).toBe(kept.from);
+  await expectStable(() => screen.evaluate((el) => el.scrollTop), 400);
+  expect(await screen.evaluate((el) => el.scrollTop)).toBe(kept.from);
+
+  // A touch on the list during the jump stops it where it is.
   const at = await screen.evaluate(async (el) => {
-    const btn = el.querySelector('[data-testid="back-to-top"]') as HTMLElement;
+    const press = (window as unknown as Press).__press;
     const row = el.querySelector('[data-testid="track-row"]') as HTMLElement;
     const from = el.scrollTop;
-    btn.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+    press('pointerdown');
+    press('pointerup');
     await new Promise<void>((r) => {
       const check = () => (el.scrollTop < from - 20 ? r() : requestAnimationFrame(check));
       requestAnimationFrame(check);
@@ -195,16 +233,19 @@ test('back-to-top: a pointerdown during a fling reaches the top, with no click n
   await page.keyboard.press('Enter');
   await expect.poll(() => screen.evaluate((el) => el.scrollTop)).toBe(0);
 
-  // Reduced motion: straight to the top.
+  // Reduced motion: straight to the top on finger up.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await screen.evaluate((el) => el.scrollTo(0, el.clientHeight * 3));
   await expect(btn).toBeVisible();
   const instant = await screen.evaluate((el) => {
-    const btn = el.querySelector('[data-testid="back-to-top"]') as HTMLElement;
-    btn.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
-    return el.scrollTop;
+    const press = (window as unknown as Press).__press;
+    press('pointerdown');
+    const down = el.scrollTop;
+    press('pointerup');
+    return { down, up: el.scrollTop };
   });
-  expect(instant).toBe(0);
+  expect(instant.down).toBeGreaterThan(0);
+  expect(instant.up).toBe(0);
 });
 
 test('scrollbar: appears while scrolling, fades, and drags on a long list; A–Z letter only while dragging', async ({ page }) => {
@@ -256,12 +297,14 @@ test('scrollbar: appears while scrolling, fades, and drags on a long list; A–Z
   await screen.evaluate((el) => el.scrollBy(0, 10));
   const thumb = screen.getByTestId('scroll-thumb');
   const tb = (await thumb.boundingBox())!;
-  expect(tb.width).toBeGreaterThanOrEqual(44);
+  // 24px to grab at rest (clear of the tiles' stars), wider once dragging.
+  expect(tb.width).toBe(24);
   const before = await screen.evaluate((el) => el.scrollTop);
   await page.mouse.move(tb.x + tb.width / 2, tb.y + 10);
   await page.mouse.down();
   await page.mouse.move(tb.x + tb.width / 2, tb.y + 250, { steps: 6 });
   await expect(sb).toHaveClass(/dragging/);
+  expect((await thumb.boundingBox())!.width).toBe(48);
   await expect(popup).toHaveClass(/\bon\b/);
   await expect.poll(async () => (await popup.textContent()) === (await topLetter())).toBe(true);
   const pb = (await popup.locator('.az-pop-letter').boundingBox())!;
@@ -279,7 +322,8 @@ test('scrollbar: appears while scrolling, fades, and drags on a long list; A–Z
   const track = (await screen.locator('.sb-track').boundingBox())!;
   const fab = (await page.getByTestId('search-fab').boundingBox())!;
   expect(track.y + track.height).toBeLessThanOrEqual(fab.y);
-  await expect(screen.getByTestId('ptr')).toHaveCSS('height', '0px');
+  // The drag never pulled to refresh.
+  await expect(screen.locator('.screen-body')).toHaveCSS('transform', 'none');
 });
 
 test('scrollbar: no letter popup in Popular order; reduced motion has no fade transition', async ({ page }) => {

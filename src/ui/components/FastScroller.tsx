@@ -1,5 +1,6 @@
 import type { RefObject } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
+import { setGestureExclusion } from '../gestureExclusion';
 
 /** The thumb fades this long after scrolling stops. */
 export const SCROLLBAR_HIDE_MS = 1200;
@@ -7,12 +8,19 @@ export const SCROLLBAR_HIDE_MS = 1200;
 export const LETTER_HIDE_MS = 600;
 /** Lists longer than this many screens get a draggable thumb. */
 export const DRAG_SCREENS = 3;
+/** A press on the thumb becomes a drag once it has moved this far; a tap does nothing. */
+export const DRAG_START_PX = 6;
+/** The thumb's rect goes to the back-gesture exclusion at most this often while it moves. */
+const EXCLUSION_MS = 100;
 const MIN_THUMB = 48;
 
 /**
  * Overlay scrollbar for a `Screen` (the native one is hidden): a thin thumb on the right
  * edge that shows while scrolling and fades after. On long lists the thumb can be
- * dragged (44px-wide touch area). With `az`, the letter of the `.az-head` section at
+ * dragged: its touch area is 24px wide at rest (clear of the rows' ⋯ buttons and the
+ * tiles' stars) and widens once a drag has started; a tap on it does nothing, only a
+ * press that moves DRAG_START_PX drags. While a draggable thumb shows, its rect is kept
+ * out of Android's back gesture. With `az`, the letter of the `.az-head` section at
  * the top of the list shows in a centred box only while the thumb is dragged (never on
  * ordinary scrolling), fading LETTER_HIDE_MS after the drag ends.
  *
@@ -42,7 +50,12 @@ export function FastScroller({
     hideT: 0 as ReturnType<typeof setTimeout> | 0,
     popT: 0 as ReturnType<typeof setTimeout> | 0,
     dragging: false,
+    /** A finger on the thumb that hasn't moved far enough to drag yet. */
+    press: null as { id: number; y: number; grab: number } | null,
     grab: 0,
+    /** When the exclusion rect was last sent, and a trailing send pending. */
+    exclAt: 0,
+    exclT: 0 as ReturnType<typeof setTimeout> | 0,
     letter: '',
     heads: [] as { top: number; letter: string }[],
     headsFor: -1,
@@ -108,6 +121,7 @@ export function FastScroller({
     if (max <= 1) return;
     const y = (Math.min(max, Math.max(0, el.scrollTop)) / max) * (z.trackH - z.thumbH);
     th.style.transform = `translateY(${y}px)`;
+    syncExclusion();
     if (azRef.current) {
       const l = currentLetter(el, z.head, z.scroll);
       if (l !== s.letter) {
@@ -121,13 +135,44 @@ export function FastScroller({
     if (!st.current.frame) st.current.frame = requestAnimationFrame(layout);
   };
 
+  /**
+   * Send the thumb's rect to the back-gesture exclusion while a draggable thumb shows
+   * (throttled to EXCLUSION_MS while it moves), and clear it once it hides.
+   */
+  const syncExclusion = () => {
+    const s = st.current;
+    const b = box.current;
+    const shown = !!b && b.classList.contains('draggable') && (b.classList.contains('on') || s.dragging);
+    if (!shown) {
+      clearTimeout(s.exclT);
+      s.exclT = 0;
+      if (s.exclAt) setGestureExclusion(null);
+      s.exclAt = 0;
+      return;
+    }
+    if (s.exclT) return;
+    const send = () => {
+      s.exclT = 0;
+      const th = thumb.current;
+      if (!th || !box.current?.classList.contains('on')) return;
+      const r = th.getBoundingClientRect();
+      s.exclAt = performance.now();
+      setGestureExclusion({ left: r.left, top: r.top, width: r.width, height: r.height });
+    };
+    const wait = EXCLUSION_MS - (performance.now() - s.exclAt);
+    if (wait <= 0) send();
+    else s.exclT = setTimeout(send, wait);
+  };
+
   /** Show the thumb, then fade it after a pause. */
   const wake = () => {
     const s = st.current;
     box.current?.classList.add('on');
     clearTimeout(s.hideT);
     s.hideT = setTimeout(() => {
-      if (!s.dragging) box.current?.classList.remove('on');
+      if (s.dragging) return;
+      box.current?.classList.remove('on');
+      syncExclusion();
     }, SCROLLBAR_HIDE_MS);
   };
 
@@ -171,6 +216,10 @@ export function FastScroller({
       s.frame = 0;
       clearTimeout(s.hideT);
       clearTimeout(s.popT);
+      clearTimeout(s.exclT);
+      s.exclT = 0;
+      if (s.exclAt) setGestureExclusion(null);
+      s.exclAt = 0;
     };
     // Mount-only: `scroller` is a stable ref and `schedule` reads only refs (UX rework pending).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -205,29 +254,36 @@ export function FastScroller({
     if (!b?.classList.contains('draggable') || !th) return;
     e.preventDefault();
     e.stopPropagation();
-    const s = st.current;
     const tr = th.getBoundingClientRect();
     const inThumb = e.clientY >= tr.top && e.clientY <= tr.bottom;
-    s.grab = inThumb ? e.clientY - tr.top : th.offsetHeight / 2;
-    s.dragging = true;
-    b.classList.add('dragging');
-    showLetter(true);
+    // Nothing moves yet: a tap on the thumb leaves the list where it is.
+    st.current.press = { id: e.pointerId, y: e.clientY, grab: inThumb ? e.clientY - tr.top : th.offsetHeight / 2 };
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    // A pending scroll-memory restore must not fight the drag.
-    dragStart.current?.();
-    scrollToPointer(e.clientY);
+    wake();
   };
   const onPointerMove = (e: PointerEvent) => {
-    if (!st.current.dragging) return;
+    const s = st.current;
+    const p = s.press;
+    if (p && p.id === e.pointerId && Math.abs(e.clientY - p.y) >= DRAG_START_PX) {
+      s.press = null;
+      s.grab = p.grab;
+      s.dragging = true;
+      box.current?.classList.add('dragging');
+      showLetter(true);
+      // A pending scroll-memory restore must not fight the drag.
+      dragStart.current?.();
+    }
+    if (!s.dragging) return;
     e.preventDefault();
     scrollToPointer(e.clientY);
   };
   const onPointerUp = (e: PointerEvent) => {
     const s = st.current;
+    s.press = null;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
     if (!s.dragging) return;
     s.dragging = false;
     box.current?.classList.remove('dragging');
-    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
     wake();
     showLetter(false);
   };

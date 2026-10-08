@@ -199,7 +199,7 @@
   position: absolute;
   top: 0;
   right: 0;
-  width: 44px;
+  width: 48px;
   padding: 6px 0 var(--sb-bottom);
   opacity: 0;
   transition: opacity 0.3s steps(3);
@@ -220,13 +220,17 @@
   position: relative;
   height: 100%;
 }
+/* 24px to grab at rest (clear of the rows' ⋯ and the tiles' stars), wider mid-drag. */
 .sb-thumb {
   position: absolute;
   top: 0;
   right: 0;
-  width: 44px;
+  width: 24px;
   min-height: 48px;
   touch-action: none;
+}
+.sb.dragging .sb-thumb {
+  width: 48px;
 }
 .sb.draggable.on .sb-thumb,
 .sb.dragging .sb-thumb {
