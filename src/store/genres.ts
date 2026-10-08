@@ -42,3 +42,13 @@ export function chipGenres(max: number): string[] {
   const rest = genres.value.map((g) => g.name).filter((n) => !favs.includes(n));
   return [...favs, ...rest.slice(0, Math.max(0, max - favs.length))];
 }
+
+/** Catalog tracks of one genre (NSFW setting applied), recomputed only when the catalog changes. */
+let genreMemo: { src: Track[]; genre: string; out: Track[] } | null = null;
+export function catalogGenre(genre: string): Track[] {
+  const src = catalog.tracks.value;
+  if (genreMemo?.src !== src || genreMemo.genre !== genre) {
+    genreMemo = { src, genre, out: src.filter((t) => t.genre === genre) };
+  }
+  return genreMemo.out;
+}

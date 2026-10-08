@@ -1,0 +1,67 @@
+/**
+ * M1: actions that take something away come with an Undo toast, and Undo puts the item
+ * back exactly where it was. Use these from the UI rather than the bare toggles.
+ */
+import type { Track } from '../data/model';
+import {
+  clearRecent,
+  isFavoriteArtist,
+  isFavoriteGenre,
+  isLiked,
+  removeFavoriteArtist,
+  removeFavoriteGenre,
+  restoreFavoriteArtist,
+  restoreFavoriteGenre,
+  restoreHistory,
+  restoreLike,
+  toggleFavoriteArtist,
+  toggleFavoriteGenre,
+  toggleLike,
+  unlike,
+} from './library';
+import { toast } from './toast';
+
+const UNDO = 'Undo';
+
+/** Like or unlike; an unlike can be undone. Returns the new liked state. */
+export function toggleLikeWithUndo(track: Track): boolean {
+  if (!isLiked(track.id)) {
+    toggleLike(track);
+    toast('Added to Liked', 1800);
+    return true;
+  }
+  const r = unlike(track.id);
+  if (r) toast('Removed from Liked', undefined, { label: UNDO, run: () => restoreLike(r) });
+  return false;
+}
+
+/** Favourite or unfavourite a genre, with Undo either way. Returns the new state. */
+export function toggleFavoriteGenreWithUndo(name: string): boolean {
+  if (!isFavoriteGenre(name)) {
+    toggleFavoriteGenre(name);
+    toast(`${name}: added to ★ Favourites`, undefined, { label: UNDO, run: () => void removeFavoriteGenre(name) });
+    return true;
+  }
+  const r = removeFavoriteGenre(name);
+  if (r) toast(`${name}: removed from Favourites`, undefined, { label: UNDO, run: () => restoreFavoriteGenre(r) });
+  return false;
+}
+
+/** Favourite or unfavourite an artist, with Undo either way. Returns the new state. */
+export function toggleFavoriteArtistWithUndo(name: string): boolean {
+  if (!isFavoriteArtist(name)) {
+    toggleFavoriteArtist(name);
+    toast(`${name}: added to ★ Favourites`, undefined, { label: UNDO, run: () => void removeFavoriteArtist(name) });
+    return true;
+  }
+  const r = removeFavoriteArtist(name);
+  if (r) toast(`${name}: removed from Favourites`, undefined, { label: UNDO, run: () => restoreFavoriteArtist(r) });
+  return false;
+}
+
+/** Clear listening history, with Undo. */
+export function clearHistoryWithUndo(): void {
+  const old = clearRecent();
+  if (!old.length) return;
+  toast(`Cleared ${old.length} play${old.length === 1 ? '' : 's'}`, undefined, { label: UNDO, run: () => restoreHistory(old) });
+}

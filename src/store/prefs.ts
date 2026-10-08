@@ -2,6 +2,9 @@
 import { signal, type Signal } from '@preact/signals';
 import { Preferences } from '@capacitor/preferences';
 
+/** The app settings (theme, NSFW, quality, autoplay…) live with the library; re-exported here. */
+export { settings, updateSettings, type Settings } from './library';
+
 export type GridSort = 'popular' | 'az';
 export const GRID_SORTS: readonly GridSort[] = ['popular', 'az'];
 
