@@ -1,1 +1,33 @@
 /* Wave 1c interaction UI: toast actions, confirm sheets, recent searches, favourites. */
+
+/* ---- Toast with an action (Undo) ------------------------------------------------- */
+
+.toast.has-action {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-right: 0;
+  min-height: 48px;
+}
+.toast-text {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 0;
+}
+.toast-action {
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0 14px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: inherit;
+  text-shadow: none;
+  touch-action: manipulation;
+}
+.toast-action:active {
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
