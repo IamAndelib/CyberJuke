@@ -173,7 +173,7 @@ export class FirestoreSource implements TrackSource {
   onLatest: ((newest: string) => void) | undefined;
   /**
    * Signed in: one genre's tracks, NSFW included (the catalog filtered for an exact
-   * genre match). Wired by the app (store/account.ts); without it a genre is empty.
+   * genre match). Wired by the app (stores/account.ts); without it a genre is empty.
    */
   genreTracks: ((genre: string) => Promise<Track[]>) | undefined;
 
