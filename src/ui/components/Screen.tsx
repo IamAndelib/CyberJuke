@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../icons';
+import { scrollToTop } from '../scrollToTop';
 import { FastScroller } from './FastScroller';
 
 const THRESHOLD = 64;
@@ -8,6 +9,8 @@ const THRESHOLD = 64;
 export const TOTOP_SCREENS = 1.5;
 /** How long a restore keeps waiting for the content to grow tall enough. */
 export const RESTORE_WAIT_MS = 1000;
+/** A click this soon after back-to-top's pointerdown is that tap's own click: ignored. */
+export const TOTOP_CLICK_MS = 1000;
 
 /** scrollTop per scrollKey, for the whole app session. */
 const positions = new Map<string, number>();
@@ -28,6 +31,11 @@ function reducedMotion(): boolean {
  * screen with that key mounts (or the key changes), as soon as the content is tall
  * enough, waiting up to RESTORE_WAIT_MS for it to grow. Touching the screen cancels a
  * pending restore.
+ *
+ * Back-to-top acts on pointerdown, so the tap that stops a fling also starts the jump
+ * (Android WebViews often drop that tap's click), and the click that follows is
+ * ignored; keyboard Enter/Space still go through click. The jump is a frame-by-frame
+ * animation (`scrollToTop`) that a new touch on the list cancels.
  */
 export function Screen({
   title,
@@ -72,6 +80,10 @@ export function Screen({
   /** Target of a restore still waiting for content; saving is paused meanwhile. */
   const pending = useRef<(() => void) | null>(null);
   const frame = useRef(0);
+  /** Cancels a running back-to-top animation. */
+  const stopTop = useRef<(() => void) | null>(null);
+  /** When back-to-top last fired on pointerdown (its click is then ignored). */
+  const topDownAt = useRef(-Infinity);
 
   const updateTop = () => {
     frame.current = 0;
@@ -88,6 +100,14 @@ export function Screen({
   };
 
   const cancelRestore = () => pending.current?.();
+  const cancelTop = () => {
+    stopTop.current?.();
+    stopTop.current = null;
+  };
+  /** A new touch or wheel on the list (not on back-to-top itself): stop a running back-to-top. */
+  const interruptTop = (e: Event) => {
+    if (!(e.target as Element | null)?.closest?.('.totop-btn')) cancelTop();
+  };
 
   useLayoutEffect(() => {
     keyRef.current = scrollKey;
@@ -123,10 +143,17 @@ export function Screen({
     return done;
   }, [scrollKey]);
 
-  useEffect(() => () => cancelAnimationFrame(frame.current), []);
+  useEffect(
+    () => () => {
+      cancelAnimationFrame(frame.current);
+      stopTop.current?.();
+    },
+    [],
+  );
 
   const onTouchStart = (e: TouchEvent) => {
     cancelRestore();
+    interruptTop(e);
     if (!onRefresh || refreshing) return;
     startY.current = (scroller.current?.scrollTop ?? 0) <= 0 ? e.touches[0].clientY : null;
   };
@@ -156,7 +183,27 @@ export function Screen({
 
   const toTop = () => {
     cancelRestore();
-    scroller.current?.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' });
+    cancelTop();
+    const el = scroller.current;
+    if (!el) return;
+    stopTop.current = scrollToTop(el, {
+      reduced: reducedMotion(),
+      onDone: () => (stopTop.current = null),
+    });
+  };
+  const onTopDown = (e: PointerEvent) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    // No focus move or compatibility mouse events; the jump starts now.
+    e.preventDefault();
+    topDownAt.current = performance.now();
+    toTop();
+  };
+  const onTopClick = () => {
+    if (performance.now() - topDownAt.current < TOTOP_CLICK_MS) {
+      topDownAt.current = -Infinity;
+      return;
+    }
+    toTop(); // keyboard (Enter/Space) or assistive tech
   };
 
   const shown = refreshing ? THRESHOLD * 0.75 : pull;
@@ -168,7 +215,11 @@ export function Screen({
       role={role}
       aria-label={label}
       onScroll={onScroll}
-      onWheel={cancelRestore}
+      onPointerDown={interruptTop}
+      onWheel={(e) => {
+        cancelRestore();
+        interruptTop(e);
+      }}
       onKeyDown={cancelRestore}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
@@ -202,7 +253,8 @@ export function Screen({
             <button
               class="totop-btn"
               aria-label="Back to top"
-              onClick={toTop}
+              onPointerDown={onTopDown}
+              onClick={onTopClick}
               tabIndex={showTop ? 0 : -1}
               aria-hidden={showTop ? undefined : true}
               data-testid="back-to-top"
