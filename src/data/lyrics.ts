@@ -14,7 +14,7 @@ import { cleanCredit, splitArtists } from './artists';
 import type { Track } from './model';
 import { appPlugin, toMusicError, type JukeMusicPlugin, type LyricsResult } from './ytmusic';
 import { textFile } from '../core/storage';
-import { online } from '../store/network';
+import { online } from '../core/network';
 
 export interface LyricLine {
   /** ms from the start of the track. */

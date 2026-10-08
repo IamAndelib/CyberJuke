@@ -15,7 +15,7 @@ import { installRenderCounter } from './core/renderCount';
 import { describeError, logError } from './core/log';
 import { TEST_HOOKS } from './core/testHooks';
 import { loadLibrary, settings } from './store/library';
-import { onReconnect, watchNetwork } from './store/network';
+import { onReconnect, watchNetwork } from './core/network';
 import { catalog } from './store/catalog';
 import { startFreshness } from './store/newTracks';
 import { startAccount } from './store/account';

@@ -10,7 +10,7 @@ import { feeds } from '../ui/feed';
 import { catalog } from './catalog';
 import { createFreshness } from './freshness';
 import { settings, showNsfw } from './library';
-import { online, onReconnect } from './network';
+import { online, onReconnect } from '../core/network';
 
 const fs = source instanceof FirestoreSource ? source : null;
 

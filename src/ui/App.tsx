@@ -2,7 +2,7 @@ import { effect, useComputed } from '@preact/signals';
 import { memo } from 'preact/compat';
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import { hasCurrent } from '../player';
-import { online } from '../store/network';
+import { online } from '../core/network';
 import { BlockBanner } from './components/BlockBanner';
 import { Icon, type IconName } from './icons';
 import {

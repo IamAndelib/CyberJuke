@@ -5,7 +5,7 @@
  */
 import { effect, signal } from '@preact/signals';
 import { Network } from '@capacitor/network';
-import { logError } from '../core/log';
+import { logError } from './log';
 
 export const online = signal(typeof navigator === 'undefined' ? true : navigator.onLine !== false);
 

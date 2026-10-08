@@ -13,7 +13,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { activeLine, lyrics as client, type Lyrics, type LyricsOutcome } from '../../data/lyrics';
 import type { Track } from '../../data/model';
 import { livePosition, player, type PlayerState } from '../../player';
-import { online } from '../../store/network';
+import { online } from '../../core/network';
 import { smoothScrolling } from '../clickGuard';
 import { reducedMotion } from '../motion';
 import { useTickValue } from '../useTick';

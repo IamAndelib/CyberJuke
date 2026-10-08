@@ -4,7 +4,7 @@
  * module-level cache, so leaving a screen and coming back gets everything already
  * loaded instantly, with no refetch. Pure TS, no Preact: hooks subscribe to it.
  */
-import { online } from '../store/network';
+import { online } from '../core/network';
 
 export type FeedStatus = 'loading' | 'ready' | 'error';
 
