@@ -88,7 +88,7 @@ jobs:
           PLAYWRIGHT_HTML_OPEN: never
         run: >-
           npx playwright test --project=e2e --grep-invert @live
-          --shard=${{ matrix.shard }}/3 --reporter=list,html
+          --shard=${{ matrix.shard }}/3 --reporter=list,github,html
 
       - name: Upload report and screenshots
         if: ${{ !cancelled() }}
