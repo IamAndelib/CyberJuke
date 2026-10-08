@@ -8,12 +8,12 @@ import { catalog } from '../../stores/catalog';
 import { displayArtist, jukeboxTracksBy } from '../../stores/artists';
 import { favoriteArtists, isFavoriteArtist } from '../../stores/library';
 import { toggleFavoriteArtistWithUndo } from '../../stores/undo';
-import { Icon } from '../icons';
-import { popPage, useSearchContext, type AlbumRef } from '../nav';
-import { ErrorState, PlayShuffle, Tracks } from '../components/TrackList';
-import { list as listCtx } from '../playAll';
-import { SkeletonRows } from '../components/TrackRow';
-import { Screen } from '../components/Screen';
+import { Icon } from '../../ui/icons';
+import { popPage, useSearchContext, type AlbumRef } from '../../ui/nav';
+import { ErrorState, PlayShuffle, Tracks } from '../../ui/components/TrackList';
+import { list as listCtx } from '../../ui/playAll';
+import { SkeletonRows } from '../../ui/components/TrackRow';
+import { Screen } from '../../ui/components/Screen';
 import {
   ARTIST_SONGS_MAX,
   AlbumShelf,
@@ -29,9 +29,9 @@ import {
   releaseRef,
   type ArtistPageMeta,
   type TopCursor,
-} from '../components/Music';
+} from '../../ui/components/Music';
 import { feeds, fillFeed, isFilling, type Feed } from '../../stores/feed';
-import { useFeed } from '../usePaged';
+import { useFeed } from '../../ui/usePaged';
 
 function ShelfSkeleton() {
   return (

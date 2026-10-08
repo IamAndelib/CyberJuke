@@ -1,12 +1,12 @@
 import { artistKey } from '../../data/artists';
 import { SHELF_LABEL, musicErrorText, type MusicErrorCode, type Release } from '../../data/ytmusic';
 import { feeds } from '../../stores/feed';
-import { Icon } from '../icons';
-import { popPage, type ReleasesRef } from '../nav';
-import { Screen } from '../components/Screen';
-import { ReleaseGrid, releasesLoader } from '../components/Music';
-import { EmptyState } from '../components/TrackList';
-import { useFeed } from '../usePaged';
+import { Icon } from '../../ui/icons';
+import { popPage, type ReleasesRef } from '../../ui/nav';
+import { Screen } from '../../ui/components/Screen';
+import { ReleaseGrid, releasesLoader } from '../../ui/components/Music';
+import { EmptyState } from '../../ui/components/TrackList';
+import { useFeed } from '../../ui/usePaged';
 
 function GridSkeleton() {
   return (

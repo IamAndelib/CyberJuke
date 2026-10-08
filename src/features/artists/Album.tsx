@@ -1,13 +1,13 @@
 import type { Track } from '../../data/model';
 import { music, musicTracks } from '../../data/ytmusic';
-import { Icon } from '../icons';
-import { openArtistPage, popPage, useSearchContext, type AlbumRef } from '../nav';
-import { PlayShuffle, Tracks } from '../components/TrackList';
-import { SkeletonRows } from '../components/TrackRow';
-import { Screen } from '../components/Screen';
-import { Cover, GlobalError, LoadMore, MUSIC_TRACK_OPTS } from '../components/Music';
-import { useFeed } from '../usePaged';
-import { list } from '../playAll';
+import { Icon } from '../../ui/icons';
+import { openArtistPage, popPage, useSearchContext, type AlbumRef } from '../../ui/nav';
+import { PlayShuffle, Tracks } from '../../ui/components/TrackList';
+import { SkeletonRows } from '../../ui/components/TrackRow';
+import { Screen } from '../../ui/components/Screen';
+import { Cover, GlobalError, LoadMore, MUSIC_TRACK_OPTS } from '../../ui/components/Music';
+import { useFeed } from '../../ui/usePaged';
+import { list } from '../../ui/playAll';
 
 interface AlbumMeta {
   title: string;

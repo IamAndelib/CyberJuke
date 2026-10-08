@@ -26,13 +26,13 @@ import { ConfirmSheet } from './ConfirmSheet';
 import { SearchFab } from './components/SearchFab';
 import { scrollToTop } from './scrollToTop';
 import { reducedMotion } from '../core/motion';
-import { AlbumPage } from './screens/Album';
-import { ArtistPage } from './screens/Artist';
-import { ArtistGrid } from './screens/Artists';
+import { AlbumPage } from '../features/artists/Album';
+import { ArtistPage } from '../features/artists/Artist';
+import { ArtistGrid } from '../features/artists/Artists';
 import { GenreDetail, GenreGrid } from '../features/genres/Genres';
 import { Home } from '../features/home/Home';
 import { Library } from './screens/Library';
-import { ReleasesPage } from './screens/Releases';
+import { ReleasesPage } from '../features/artists/Releases';
 import { Search } from './screens/Search';
 import { Settings } from './screens/Settings';
 

@@ -3,17 +3,17 @@ import { catalog } from '../../stores/catalog';
 import { artistIndex, displayArtist } from '../../stores/artists';
 import { favoriteArtists } from '../../stores/library';
 import { toggleFavoriteArtistWithUndo } from '../../stores/undo';
-import { Icon } from '../icons';
-import { openArtistPage } from '../nav';
-import { ErrorState } from '../components/TrackList';
-import { Screen } from '../components/Screen';
-import { AZHead, GridSortRail } from '../components/GridSort';
-import { groupAZ } from '../azSections';
+import { Icon } from '../../ui/icons';
+import { openArtistPage } from '../../ui/nav';
+import { ErrorState } from '../../ui/components/TrackList';
+import { Screen } from '../../ui/components/Screen';
+import { AZHead, GridSortRail } from '../../ui/components/GridSort';
+import { groupAZ } from '../../ui/azSections';
 import { useMemo } from 'preact/hooks';
-import { takeSections, useChunks } from '../useChunks';
+import { takeSections, useChunks } from '../../ui/useChunks';
 import type { Artist } from '../../data/artists';
 import { artistsSort } from '../../stores/prefs';
-import { useSettled } from '../useSettled';
+import { useSettled } from '../../ui/useSettled';
 
 function ArtistTile({ name, fav }: { name: string; fav: boolean }) {
   return (
