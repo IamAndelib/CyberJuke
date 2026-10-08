@@ -1601,28 +1601,45 @@ h3 {
 
 /* ---- Now Playing sheet ------------------------------------------------------------ */
 
+/* Material's emphasized motion for Now Playing and the sheets: in over 250ms, slowing
+   to a stop; out over 200ms, speeding away. */
+:root {
+  --ease-in-ms: 250ms;
+  --ease-in: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-out-ms: 200ms;
+  --ease-out: cubic-bezier(0.3, 0, 0.8, 0.15);
+}
+
+/* Closed it is faded a little, so a swipe released part-way (the sheet dims as it is
+   dragged) carries on smoothly instead of flashing back to full. */
 .np {
   position: fixed;
   inset: 0;
   z-index: 20;
   background: var(--color-bg);
   transform: translateY(100%);
+  opacity: 0.6;
   visibility: hidden;
   transition:
-    transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
-    visibility 0s linear 0.28s;
+    transform var(--ease-out-ms) var(--ease-out),
+    opacity var(--ease-out-ms) var(--ease-out),
+    visibility 0s linear var(--ease-out-ms);
 }
 .np.open {
   transform: none;
+  opacity: 1;
   visibility: visible;
+  /* Kept on its own layer while open, so a drag never waits for one to be made. */
+  will-change: transform, opacity;
   transition:
-    transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform var(--ease-in-ms) var(--ease-in),
+    opacity var(--ease-in-ms) var(--ease-in),
     visibility 0s;
 }
 .np-scroll {
   height: 100%;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: none;
   padding: var(--safe-top) calc(var(--safe-right)) calc(24px + var(--safe-bottom)) var(--safe-left);
 }
 .np-head {
@@ -1838,7 +1855,7 @@ h3 {
   inset: 0;
   z-index: 30;
   visibility: hidden;
-  transition: visibility 0s linear 0.2s;
+  transition: visibility 0s linear var(--ease-out-ms);
 }
 .sheet-wrap.open {
   visibility: visible;
@@ -1849,10 +1866,11 @@ h3 {
   inset: 0;
   background-color: rgb(0 0 0 / 0.55);
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity var(--ease-out-ms) var(--ease-out);
 }
 .sheet-wrap.open .scrim {
   opacity: 1;
+  transition: opacity var(--ease-in-ms) var(--ease-in);
 }
 .sheet {
   position: absolute;
@@ -1871,10 +1889,11 @@ h3 {
   max-height: calc(100dvh - 16px - var(--safe-top) - var(--safe-bottom));
   overflow-y: auto;
   transform: translateY(calc(100% + 40px));
-  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform var(--ease-out-ms) var(--ease-out);
 }
 .sheet-wrap.open .sheet {
   transform: none;
+  transition: transform var(--ease-in-ms) var(--ease-in);
 }
 .sheet-head {
   display: flex;

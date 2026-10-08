@@ -134,12 +134,6 @@
   /* pixel-stepped ends */
   clip-path: polygon(2px 0, calc(100% - 2px) 0, calc(100% - 2px) 1px, 100% 1px, 100% 3px, calc(100% - 2px) 3px, calc(100% - 2px) 100%, 2px 100%, 2px 3px, 0 3px, 0 1px, 2px 1px);
 }
-.np.dragging {
-  will-change: transform;
-}
-.np.dragging .np-scroll {
-  overflow-y: hidden;
-}
 
 /* ---- Now Playing: art <-> lyrics ------------------------------------------------- */
 

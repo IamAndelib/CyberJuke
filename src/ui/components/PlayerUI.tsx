@@ -214,7 +214,7 @@ function useSwipeToClose(ref: { current: HTMLDivElement | null }): void {
 const NEXT_REPEAT = { off: 'all', all: 'one', one: 'off' } as const;
 const REPEAT_LABEL = { off: 'Repeat off', all: 'Repeat all', one: 'Repeat one' } as const;
 
-/** How long the sheet's contents stay after closing: the slide-down (0.28s) plus a margin. */
+/** How long the sheet's contents stay after closing: the slide-down (0.2s) plus a margin. */
 export const NP_UNMOUNT_MS = 400;
 
 /**
