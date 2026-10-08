@@ -9,19 +9,16 @@ import org.json.JSONObject
 import org.schabi.newpipe.extractor.channel.ChannelInfoItem
 import org.schabi.newpipe.extractor.channel.tabs.ChannelTabs
 import org.schabi.newpipe.extractor.exceptions.ContentNotAvailableException
-import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
-import org.schabi.newpipe.extractor.exceptions.SignInConfirmNotBotException
 import org.schabi.newpipe.extractor.playlist.PlaylistInfo
 import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.search.SearchExtractor
 import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQueryHandlerFactory
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
-import java.io.IOException
 import kotlin.math.abs
 
 /**
  * YouTube Music data (search, albums, playlists). Like [YtCompat], this is the ONLY file of
- * the music feature that touches the NewPipeExtractor API (checked against tag v0.26.5);
+ * the music feature that touches the NewPipeExtractor API (checked against commit 13a655fe);
  * everything it returns is plain data. All calls are blocking network calls: never call them
  * on the main thread.
  */
@@ -254,10 +251,14 @@ internal object YtMusic {
         return id
     }
 
-    /** BOT_CHECK | NETWORK | UNAVAILABLE, for the plugin's reject code. */
-    fun errorCode(t: Throwable): String = when (t) {
-        is SignInConfirmNotBotException, is ReCaptchaException -> "BOT_CHECK"
-        is IOException -> "NETWORK"
+    /**
+     * BOT_CHECK | NETWORK | UNAVAILABLE, for the plugin's reject code: bot checks and rate
+     * limits (HTTP 429) are BOT_CHECK; I/O failures and HTTP 5xx anywhere in the cause chain
+     * are NETWORK; everything else (missing content, parse errors) is UNAVAILABLE.
+     */
+    fun errorCode(t: Throwable): String = when (YtCompat.classify(t)) {
+        FailureKind.BOT_CHECK, FailureKind.RATE_LIMIT -> "BOT_CHECK"
+        FailureKind.NETWORK -> "NETWORK"
         else -> "UNAVAILABLE"
     }
 

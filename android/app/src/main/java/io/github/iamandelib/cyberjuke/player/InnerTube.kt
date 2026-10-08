@@ -16,7 +16,11 @@ import java.nio.charset.StandardCharsets
 internal object InnerTube {
     private const val YTM = "https://music.youtube.com/youtubei/v1"
 
-    /** POST /youtubei/v1/<endpoint>; parsed JSON on 200, null on 404, throws otherwise. */
+    /**
+     * POST /youtubei/v1/<endpoint>; parsed JSON on 200, null on 404. Throws otherwise:
+     * [RateLimitedException] on 429 (BOT_CHECK), IOException on 5xx (NETWORK: YouTube's side,
+     * retry later), IllegalStateException on any other status (UNAVAILABLE).
+     */
     fun post(endpoint: String, payload: JSONObject): JSONObject? {
         YtCompat.ensureInit()
         val version = YoutubeParsingHelper.getYoutubeMusicClientVersion()
@@ -45,6 +49,8 @@ internal object InnerTube {
                 throw IOException("YouTube Music $endpoint: invalid JSON", e)
             }
             404 -> null
+            429 -> throw RateLimitedException(url)
+            in 500..599 -> throw IOException("YouTube Music $endpoint: HTTP ${response.responseCode()}")
             else -> throw IllegalStateException("YouTube Music $endpoint: HTTP ${response.responseCode()}")
         }
     }

@@ -5,6 +5,7 @@ import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.exceptions.AgeRestrictedContentException
 import org.schabi.newpipe.extractor.exceptions.ContentNotAvailableException
+import org.schabi.newpipe.extractor.exceptions.ExtractionException
 import org.schabi.newpipe.extractor.exceptions.GeographicRestrictionException
 import org.schabi.newpipe.extractor.exceptions.PaidContentException
 import org.schabi.newpipe.extractor.exceptions.PrivateContentException
@@ -14,9 +15,12 @@ import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
 import org.schabi.newpipe.extractor.stream.AudioTrackType
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import org.schabi.newpipe.extractor.stream.StreamInfo
+import java.io.IOException
 
 /**
- * The ONLY file that touches the NewPipeExtractor API (checked against tag v0.26.5).
+ * The ONLY file that touches the NewPipeExtractor stream API (checked against commit
+ * 13a655fe53e0c3065f88725fc1fb594c3ede0169, which only asks YouTube's visionOS client for
+ * streams: the ANDROID, iOS and WEB_EMBEDDED_PLAYER clients were removed upstream, PR #1529).
  * If a NewPipeExtractor bump breaks compilation, the fix should be confined to this file.
  */
 internal object YtCompat {
@@ -24,6 +28,7 @@ internal object YtCompat {
     /** Plain data the rest of the player uses, independent of NewPipe types. */
     data class Candidate(
         val url: String,
+        val itag: Int,             // YouTube format id; -1 if unknown
         val bitrate: Int,          // bits per second-ish; -1 if unknown
         val mimeType: String?,     // e.g. audio/mp4, audio/webm
         val kind: Kind,
@@ -66,6 +71,7 @@ internal object YtCompat {
                 }
                 Candidate(
                     url = it.content,
+                    itag = it.itag,
                     bitrate = bitrate,
                     mimeType = it.format?.mimeType,
                     kind = Kind.AUDIO_PROGRESSIVE,
@@ -79,6 +85,7 @@ internal object YtCompat {
             .map {
                 Candidate(
                     url = it.content,
+                    itag = it.itag,
                     // Rank muxed streams by height: lowest first is what we want.
                     bitrate = it.height,
                     mimeType = it.format?.mimeType,
@@ -129,16 +136,56 @@ internal object YtCompat {
     fun describe(t: Throwable): String = when (t) {
         is SignInConfirmNotBotException ->
             "BOT_CHECK: YouTube asks to sign in to confirm you're not a bot (IP blocked?): ${t.message}"
-        is ReCaptchaException -> "BOT_CHECK: reCAPTCHA / HTTP 429 from YouTube: ${t.message}"
+        is RateLimitedException -> "BOT_CHECK: rate limited by YouTube (HTTP 429): ${t.message}"
+        is ReCaptchaException -> "BOT_CHECK: reCAPTCHA from YouTube: ${t.message}"
         is AgeRestrictedContentException -> "AGE_RESTRICTED: ${t.message}"
         is GeographicRestrictionException -> "GEO_BLOCKED: ${t.message}"
         is PrivateContentException -> "PRIVATE: ${t.message}"
         is PaidContentException -> "PAID: ${t.message}"
-        is ContentNotAvailableException -> "UNAVAILABLE: ${t.message}"
-        else -> "${t.javaClass.simpleName}: ${t.message}"
+        is ContentNotAvailableException ->
+            if (isTryAgainLater(t)) "BOT_CHECK: rate limited (try again later): ${t.message}"
+            else "UNAVAILABLE: ${t.message}"
+        else -> "${classify(t)}: ${t.javaClass.simpleName}: ${t.message}"
+    }
+
+    /**
+     * What a failure means for the player (see [FailureKind]): a bot check or rate limit is
+     * network-wide, a ContentNotAvailableException is about this video, a parsing failure means
+     * YouTube changed something, and an I/O failure anywhere in the cause chain is the network.
+     */
+    fun classify(t: Throwable): FailureKind = when (t) {
+        is SignInConfirmNotBotException -> FailureKind.BOT_CHECK
+        is RateLimitedException -> FailureKind.RATE_LIMIT
+        is ReCaptchaException -> FailureKind.BOT_CHECK
+        // YouTube's per-IP throttling shows up as UNPLAYABLE "This content isn't available,
+        // try again later." on every video: a rate limit, not a broken track.
+        is ContentNotAvailableException -> if (isTryAgainLater(t)) FailureKind.RATE_LIMIT else FailureKind.CONTENT
+        is IOException -> FailureKind.NETWORK
+        is ExtractionException -> if (hasIoCause(t)) FailureKind.NETWORK else FailureKind.BROKEN
+        else -> if (hasIoCause(t)) FailureKind.NETWORK else FailureKind.OTHER
+    }
+
+    private fun isTryAgainLater(t: Throwable): Boolean =
+        t.message?.contains("try again later", ignoreCase = true) == true
+
+    private fun hasIoCause(t: Throwable): Boolean {
+        var c: Throwable? = t.cause
+        var depth = 0
+        while (c != null && depth < 8) {
+            if (c is IOException) return true
+            c = c.cause
+            depth++
+        }
+        return false
     }
 
     /** True if retrying the same video soon is pointless. */
-    fun isPermanent(t: Throwable): Boolean =
-        t is ContentNotAvailableException || t is SignInConfirmNotBotException
+    fun isPermanent(t: Throwable): Boolean = classify(t) != FailureKind.NETWORK
 }
+
+/**
+ * HTTP 429 from YouTube, thrown by [DownloaderImpl]. A [ReCaptchaException] so NewPipe treats
+ * it like before; [YtCompat.classify] tells it apart (RATE_LIMIT rather than BOT_CHECK).
+ */
+internal class RateLimitedException(url: String) :
+    ReCaptchaException("Rate limited by YouTube (HTTP 429)", url)
