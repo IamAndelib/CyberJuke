@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { canSkipNext, currentTrack, hasCurrent, isAdvancing, isBuffering, isPlaying, livePosition, player, type PlayerState } from '../../player';
+import { canSkipNext, currentTrack, hasCurrent, isAdvancing, isBuffering, isPlaying, livePosition, playContext, player, upNextSections, type PlayerState } from '../../player';
 import { block } from '../../store/block';
-import { isLiked, liked, toggleLike } from '../../store/library';
+import { isLiked, liked } from '../../store/library';
+import { toggleLikeWithUndo } from '../../store/undo';
 import { toast } from '../../store/toast';
 import { Icon } from '../icons';
 import { artistChoice, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage } from '../nav';
@@ -9,11 +10,13 @@ import { openExternal, openPost, youtubeUrl } from '../links';
 import { positionNow, useLiveProgress, useTickValue } from '../useTick';
 import { splitArtists } from '../../data/artists';
 import { isGlobal, type Track } from '../../data/model';
+import { reducedMotion } from '../motion';
 import { Art } from './Art';
+import { Marquee } from './Marquee';
 import { MembersTag } from './TrackRow';
 import { LyricsPanel, lyricsOpen } from './Lyrics';
 import { UpNext } from './UpNext';
-import { shareTrack } from '../share';
+import { canSharePost, sharePost, shareTrack } from '../share';
 
 export function fmt(ms: number): string {
   if (!isFinite(ms) || ms < 0) ms = 0;
@@ -57,25 +60,85 @@ function MiniToggle() {
   );
 }
 
+/** The mini player's title: it scrolls when too long, except under Now Playing. */
+function MiniTitle({ text }: { text: string }) {
+  return (
+    <span class="mini-title" data-testid="mini-title">
+      <Marquee text={text} active={!nowPlayingOpen.value} />
+    </span>
+  );
+}
+
+/** "Next" in the mini player and Now Playing alike: off at the end of the queue (canSkipNext). */
+function NextButton({ size, class: cls, testid }: { size: number; class: string; testid: string }) {
+  return (
+    <button class={cls} onClick={() => player.next()} aria-label="Next track" data-testid={testid} disabled={!canSkipNext.value}>
+      <Icon name="next" size={size} />
+    </button>
+  );
+}
+
+/** A swipe up this far on the mini player (more up than sideways) opens Now Playing. */
+export const MINI_SWIPE_PX = 32;
+
+/**
+ * Swipe up on the mini player to open Now Playing (P11). Sideways swipes do nothing (no
+ * next/previous: too easy to set off while scrolling). Passive listeners.
+ */
+function useSwipeUpToOpen(ref: { current: HTMLDivElement | null }): void {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let start: { x: number; y: number } | null = null;
+    const onStart = (e: TouchEvent) => {
+      start = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!start) return;
+      const dx = e.touches[0].clientX - start.x;
+      const dy = e.touches[0].clientY - start.y;
+      if (Math.abs(dx) > MINI_SWIPE_PX && Math.abs(dx) > Math.abs(dy)) return void (start = null);
+      if (-dy >= MINI_SWIPE_PX && -dy > Math.abs(dx) * 1.5) {
+        start = null;
+        nowPlayingOpen.value = true;
+      }
+    };
+    const onEnd = () => (start = null);
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: true });
+    el.addEventListener('touchend', onEnd, { passive: true });
+    el.addEventListener('touchcancel', onEnd, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+    // Mount-only: `ref` is a stable ref to the mini player.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
+
 export function MiniPlayer() {
   const t = currentTrack.value;
-  if (!t) return null;
+  return t ? <MiniBar track={t} /> : null;
+}
+
+function MiniBar({ track: t }: { track: Track }) {
+  const bar = useRef<HTMLDivElement>(null);
+  useSwipeUpToOpen(bar);
   return (
-    <div class="mini" data-testid="mini-player">
+    <div class="mini" ref={bar} data-testid="mini-player">
       <MiniProgress />
       <button class="mini-open" onClick={() => (nowPlayingOpen.value = true)} aria-label={`Now playing: ${t.title} by ${t.artist}. Open player`} data-testid="mini-open">
         <Art track={t} size="sm" />
         <span class="mini-text">
-          <span class="mini-title" data-testid="mini-title">
-            {t.title}
-          </span>
+          <MiniTitle text={t.title} />
           <span class="mini-artist">{t.artist}</span>
         </span>
       </button>
       <MiniToggle />
-      <button class="icon-btn" onClick={() => player.next()} aria-label="Next track" data-testid="mini-next" disabled={!canSkipNext.value}>
-        <Icon name="next" size={28} />
-      </button>
+      <NextButton size={28} class="icon-btn" testid="mini-next" />
     </div>
   );
 }
@@ -188,7 +251,7 @@ function useSwipeToClose(ref: { current: HTMLDivElement | null }): void {
       const v = b && a && b.t > a.t ? (b.y - a.y) / (b.t - a.t) : 0;
       const close = dy > (el.clientHeight || 1) * SWIPE_CLOSE_FRACTION || v > SWIPE_CLOSE_VELOCITY;
       if (close) {
-        const instant = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const instant = reducedMotion();
         el.style.transition = instant ? 'none' : '';
         el.style.transform = '';
         el.style.opacity = '';
@@ -272,7 +335,7 @@ function NowPlayingContent() {
             </button>
             <div class="np-head-title">
               <span class="np-kicker">Now playing</span>
-              <span class="np-from">{s.queue.length > 1 ? `${s.index + 1} of ${s.queue.length}` : 'Single track'}</span>
+              <NpFrom s={s} />
             </div>
             <button class="icon-btn" onClick={() => (menuTrack.value = t)} aria-label="More options" data-testid="np-more">
               <Icon name="more" />
@@ -304,7 +367,7 @@ function NowPlayingContent() {
           <div class="np-meta">
             <div class="np-titles">
               <h2 class="np-title" data-testid="np-title">
-                {t.title}
+                <Marquee text={t.title} />
               </h2>
               <NpArtist track={t} />
               {t.membersOnly && <MembersTag class="np-members" />}
@@ -318,7 +381,7 @@ function NowPlayingContent() {
               class={'icon-btn like' + (isFav ? ' on' : '')}
               aria-pressed={isFav}
               aria-label={isFav ? 'Remove from liked' : 'Like'}
-              onClick={() => toast(toggleLike(t) ? 'Added to Liked' : 'Removed from Liked', 1800)}
+              onClick={() => toggleLikeWithUndo(t)}
               data-testid="np-like"
             >
               <Icon name={isFav ? 'heart' : 'heartOutline'} size={28} />
@@ -343,11 +406,10 @@ function NowPlayingContent() {
             <button class="play-btn" aria-label={s.isPlaying ? 'Pause' : 'Play'} onClick={() => player.toggle()} data-testid="np-toggle">
               <PlayPauseIcon size={40} />
             </button>
-            <button class="icon-btn big" aria-label="Next track" onClick={() => player.next()} data-testid="np-next">
-              <Icon name="next" size={36} />
-            </button>
+            <NextButton size={36} class="icon-btn big" testid="np-next" />
             <button
               class={'icon-btn toggle-icon' + (s.repeat !== 'off' ? ' on' : '')}
+              aria-pressed={s.repeat !== 'off'}
               aria-label={REPEAT_LABEL[s.repeat]}
               onClick={() => player.setRepeat(NEXT_REPEAT[s.repeat])}
               data-testid="np-repeat"
@@ -379,10 +441,33 @@ function NowPlayingContent() {
   );
 }
 
+/**
+ * Under "Now playing": where the music comes from (P8), "Playing from Home · Latest",
+ * or "Radio · <seed>" for a radio. Without shuffle the position ("3 of 50") comes
+ * first; under shuffle the position means little, so only the source shows.
+ */
+function NpFrom({ s }: { s: PlayerState }) {
+  const ctx = playContext.value;
+  const seed = upNextSections.value.seed;
+  const from = !ctx?.label ? '' : ctx.mode === 'radio' ? `Radio · ${seed?.title || ctx.label}` : `Playing from ${ctx.label}`;
+  const pos = s.queue.length > 1 ? `${s.index + 1} of ${s.queue.length}` : 'Single track';
+  const text = s.shuffle && from ? from : from ? `${pos} · ${from}` : pos;
+  return (
+    <span class="np-from" data-testid="np-from">
+      <Marquee text={text} />
+    </span>
+  );
+}
+
 /** Artist line in Now Playing: tapping opens the artist page (or a chooser for several). */
 function NpArtist({ track }: { track: Track }) {
   const names = splitArtists(track.artist);
-  if (!names.length) return <div class="np-artist">{track.artist}</div>;
+  if (!names.length)
+    return (
+      <div class="np-artist">
+        <Marquee text={track.artist} />
+      </div>
+    );
   return (
     <div class="np-artist">
       <button
@@ -392,7 +477,7 @@ function NpArtist({ track }: { track: Track }) {
         aria-haspopup={names.length > 1 ? 'dialog' : undefined}
         data-testid="np-artist"
       >
-        {track.artist}
+        <Marquee text={track.artist} />
       </button>
     </div>
   );
@@ -505,12 +590,24 @@ export function TrackMenu() {
               }}
               data-testid="menu-share"
             >
-              <Icon name="share" size={20} /> Share
+              <Icon name="share" size={20} /> {canSharePost(t) ? 'Share track' : 'Share'}
             </button>
+            {canSharePost(t) && (
+              <button
+                class="sheet-item"
+                onClick={() => {
+                  close();
+                  void sharePost(t);
+                }}
+                data-testid="menu-share-post"
+              >
+                <Icon name="share" size={20} /> Share post
+              </button>
+            )}
             <button
               class="sheet-item"
               onClick={() => {
-                toast(toggleLike(t) ? 'Added to Liked' : 'Removed from Liked', 1800);
+                toggleLikeWithUndo(t);
                 close();
               }}
               data-testid="menu-like"

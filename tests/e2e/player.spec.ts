@@ -150,13 +150,9 @@ test('several credited artists open a chooser from Now Playing', async ({ page }
 
 // ---- Queue ---------------------------------------------------------------------------
 
-/**
- * ⋯ → Add to queue on row i. The ⋯ is clicked without hit-testing: on a long list the
- * fast scroller's drag thumb can sit over the right edge (a known overlap, for the
- * UX rework), and this test is about the queue, not that.
- */
+/** ⋯ → Add to queue on row i (a real tap: the fast scroller's thumb stays clear of ⋯). */
 async function queue(page: Page, i: number) {
-  await page.getByTestId('track-more').nth(i).dispatchEvent('click');
+  await page.getByTestId('track-more').nth(i).click();
   await expect(page.getByTestId('track-menu')).toBeVisible();
   await page.getByTestId('menu-add-queue').click();
   // The sheet slides away; a tap meanwhile would land on its scrim.
@@ -177,7 +173,7 @@ test('Add to queue plays next in the order added, under "Queued by you"', async 
   const rows = page.getByTestId('upnext-row');
   await expect(rows.nth(0).locator('.row-title')).toHaveText(titles[5]);
   await expect(rows.nth(1).locator('.row-title')).toHaveText(titles[6]);
-  await expect(rows.nth(2).locator('.row-title')).toHaveText(titles[1]);
+  await expect(rows.nth(2)).toHaveAttribute('data-section', 'autoplay');
   await expect(page.getByTestId('upnext-queued-label')).toHaveText('Queued by you');
   await expect(page.locator('[data-testid="upnext-row"][data-queued="true"]')).toHaveCount(2);
   expect((await playerCalls(page)).filter((c) => c[0] === 'queueNext')).toHaveLength(2);
@@ -202,9 +198,10 @@ test('skipping past queued tracks keeps them next (tests/spec/queue-rules.json)'
   await queue(page, 8);
   await openNowPlaying(page);
   // Jump to a track further down the list (not a queued one).
-  const target = page.getByTestId('upnext-row').filter({ has: page.locator('.row-title', { hasText: titles[4] }) }).first();
+  const target = page.locator('[data-testid="upnext-row"][data-section="autoplay"]').nth(2);
+  const pick = (await target.locator('.row-title').textContent())!.trim();
   await target.locator('.row-main').click();
-  await expect(page.getByTestId('np-title')).toHaveText(titles[4]);
+  await expect(page.getByTestId('np-title')).toHaveText(pick);
   const rows = page.getByTestId('upnext-row');
   await expect(rows.nth(0).locator('.row-title')).toHaveText(titles[7]);
   await expect(rows.nth(1).locator('.row-title')).toHaveText(titles[8]);
@@ -234,10 +231,13 @@ test('lyrics replace the art: synced lines follow the position, a tap seeks, oth
   const current = page.locator('.lyr-line.on');
   if (await current.count()) await expect(current).toBeInViewport();
 
-  // Tap a line: seeks there.
+  // Tap a line: seeks there. A tap that lands while the panel glides to the next line
+  // only stops it (clickGuard), so tap again if it did.
   const line = page.locator('.lyr-line[data-i="40"]');
-  await line.click();
-  await expect.poll(async () => Number(await synced.getAttribute('data-current'))).toBeGreaterThanOrEqual(40);
+  await expect(async () => {
+    await line.click();
+    await expect.poll(async () => Number(await synced.getAttribute('data-current')), { timeout: 2000 }).toBeGreaterThanOrEqual(40);
+  }).toPass();
   await expect(line).toHaveClass(/\bon\b/);
   await expect(page.getByTestId('time-pos')).toHaveText(/^2:4\d$/);
   for (const d of await page.getByTestId('lyric-line').evaluateAll((els) => els.slice(0, 5).map((e) => e.getAttribute('dir')))) expect(d).toBe('auto');
@@ -349,7 +349,9 @@ test('Share in the ⋯ menu shares the track title, artist and music.youtube.com
   const ytId = /\/vi\/([^/]+)\//.exec(src)![1];
   const title = (await page.getByTestId('np-title').innerText()).trim();
   await page.getByTestId('np-more').click();
-  await expect(page.getByTestId('menu-share')).toHaveText('Share');
+  // A Jukebox track: "Share track", and "Share post" for its Cyberspace post.
+  await expect(page.getByTestId('menu-share')).toHaveText('Share track');
+  await expect(page.getByTestId('menu-share-post')).toHaveText('Share post');
   await page.getByTestId('menu-share').click();
   await expect(page.getByTestId('track-menu')).not.toBeVisible();
   const shares = (await musicCalls(page)).filter((c) => c[0] === 'share').map((c) => c[1] as { title: string; text: string; url: string });

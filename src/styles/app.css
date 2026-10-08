@@ -1497,6 +1497,7 @@ h3 {
 .np-link {
   display: inline-flex;
   align-items: center;
+  min-width: 0;
   max-width: 100%;
   min-height: 44px;
   padding: 0 4px;
@@ -1537,6 +1538,30 @@ h3 {
   color: var(--color-fg-dim);
 }
 
+/* ---- Marquee: one line that scrolls when it doesn't fit (Marquee.tsx) -------------- */
+
+/* At rest the glow may paint past the clip; scrolling text is cut at the edges. */
+.marquee {
+  display: block;
+  min-width: 0;
+  overflow: clip;
+  overflow-clip-margin: 10px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.marquee.run {
+  overflow-clip-margin: 0;
+  text-overflow: clip;
+}
+.marquee.run .marquee-text {
+  display: inline-block;
+  will-change: transform;
+}
+/* The repeat after a gap, so the loop is seamless (not in the DOM's text). */
+.marquee.run .marquee-text::after {
+  content: attr(data-text);
+  padding-left: var(--marquee-gap);
+}
 /* ---- Mini player ------------------------------------------------------------------ */
 
 .mini {
@@ -1693,6 +1718,7 @@ h3 {
 }
 .np-head-title {
   flex: 1;
+  min-width: 0;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -1734,7 +1760,6 @@ h3 {
   font-family: var(--font-display);
   font-size: 22px;
   line-height: 1.2;
-  overflow-wrap: anywhere;
 }
 .np-artist {
   font-size: 15px;
