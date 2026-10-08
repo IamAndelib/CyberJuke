@@ -15,7 +15,8 @@ test('playback with the sheet closed re-renders (almost) nothing', async ({ page
   await page.getByTestId('track-play').first().click();
   await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Pause');
   // Wait for playback to have settled (buffering over: the progress bar moves).
-  const progress = () => page.getByTestId('mini-progress').evaluate((el) => parseFloat(getComputedStyle(el).getPropertyValue('--progress')));
+  // Percent played: the fill's scaleX as last written (not mid-transition).
+  const progress = () => page.getByTestId('mini-progress').evaluate((el) => 100 * Number(/scaleX\(([\d.]+)\)/.exec((el.firstElementChild as HTMLElement).style.transform)?.[1] ?? 0));
   const p0 = await progress();
   await expect.poll(progress).toBeGreaterThan(p0);
 

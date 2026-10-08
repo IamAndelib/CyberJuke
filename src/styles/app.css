@@ -582,9 +582,12 @@ h3 {
   gap: 2px;
   height: 16px;
 }
+/* Bars scale (compositor only) rather than change height. */
 .bars i {
   width: 4px;
+  height: 100%;
   background: var(--color-fg);
+  transform-origin: bottom;
   animation: bar 0.9s steps(4) infinite;
 }
 .bars i:nth-child(2) {
@@ -596,10 +599,10 @@ h3 {
 @keyframes bar {
   0%,
   100% {
-    height: 25%;
+    transform: scaleY(0.25);
   }
   50% {
-    height: 100%;
+    transform: scaleY(1);
   }
 }
 
@@ -1497,25 +1500,40 @@ h3 {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 8px;
   height: var(--mini-h);
   padding: 0 6px 0 0;
   border-top: var(--border-w) solid var(--color-fg);
   background: var(--color-bg);
   flex: none;
 }
+/* The dithered rail, and the filled part as a child scaled from the left: each tick
+   changes only its transform, eased over the tick so it glides. */
 .mini-progress {
   position: absolute;
   left: 0;
   right: 0;
   top: 0;
   height: 3px;
+  overflow: hidden;
   background-color: var(--color-bg);
-  background-image: linear-gradient(to right, var(--color-fg) var(--progress), transparent var(--progress)), var(--dither);
-  background-size:
-    100% 100%,
-    2px 2px;
+  background-image: var(--dither);
+  background-size: 2px 2px;
   pointer-events: none;
+}
+.mini-progress-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--color-fg);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s linear;
+  will-change: transform;
+}
+/* Play/Pause and Next: 48px targets, 8px apart. */
+.mini .icon-btn {
+  min-width: 48px;
+  min-height: 48px;
 }
 .mini-open {
   flex: 1;

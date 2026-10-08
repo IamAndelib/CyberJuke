@@ -95,19 +95,32 @@ export function Rail<T extends string>({
 export function RailRow({ children, ruled, class: cls, testid }: { children: ComponentChildren; ruled?: boolean; class?: string; testid?: string }) {
   const el = useRef<HTMLDivElement>(null);
   const [more, setMore] = useState(false);
+  const frame = useRef(0);
+  /** Re-measure on the next frame (at most once a frame, however many scroll events). */
   const update = () => {
-    const r = el.current;
-    if (r) setMore(r.scrollLeft + r.clientWidth < r.scrollWidth - 2);
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
+      const r = el.current;
+      if (r) setMore(r.scrollLeft + r.clientWidth < r.scrollWidth - 2);
+    });
   };
   useEffect(() => {
     update();
     const r = el.current;
-    if (!r || typeof ResizeObserver !== 'function') return;
-    const ro = new ResizeObserver(update);
-    ro.observe(r);
-    for (const c of Array.from(r.children)) ro.observe(c);
-    return () => ro.disconnect();
-  });
+    let ro: ResizeObserver | null = null;
+    if (r && typeof ResizeObserver === 'function') {
+      // The row and its rails: a rail growing (a label changing) changes the fade too.
+      ro = new ResizeObserver(update);
+      ro.observe(r);
+      for (const c of Array.from(r.children)) ro.observe(c);
+    }
+    return () => {
+      ro?.disconnect();
+      cancelAnimationFrame(frame.current);
+      frame.current = 0;
+    };
+  }, []);
   return (
     <div
       ref={el}

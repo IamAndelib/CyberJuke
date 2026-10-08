@@ -46,20 +46,22 @@ export function FastScroller({
     letter: '',
     heads: [] as { top: number; letter: string }[],
     headsFor: -1,
+    /** Sizes, measured when the scroller or its content resizes (never per scroll frame). */
+    size: null as { head: number; client: number; scroll: number; trackH: number; thumbH: number } | null,
   });
 
   const headerHeight = (el: HTMLElement) => (el.querySelector(':scope > .topbar') as HTMLElement | null)?.offsetHeight ?? 0;
 
   /** Section letter at the top of the visible list. */
-  const currentLetter = (el: HTMLElement, head: number): string => {
+  const currentLetter = (el: HTMLElement, head: number, scroll: number): string => {
     const s = st.current;
-    if (s.headsFor !== el.scrollHeight) {
+    if (s.headsFor !== scroll) {
       const base = el.getBoundingClientRect().top - el.scrollTop;
       s.heads = Array.from(el.querySelectorAll<HTMLElement>('.az-head')).map((h) => ({
         top: h.getBoundingClientRect().top - base,
         letter: h.dataset.letter ?? '',
       }));
-      s.headsFor = el.scrollHeight;
+      s.headsFor = scroll;
     }
     const line = el.scrollTop + head + 8;
     let cur = s.heads[0]?.letter ?? '';
@@ -70,31 +72,46 @@ export function FastScroller({
     return cur;
   };
 
-  const layout = () => {
-    st.current.frame = 0;
+  /** Read every size and lay out the dock, track and thumb height (on resize only). */
+  const measure = () => {
+    const s = st.current;
     const el = scroller.current;
     const b = box.current;
     const tr = track.current;
     const th = thumb.current;
     if (!el || !b || !tr || !th) return;
     const head = headerHeight(el);
+    const client = el.clientHeight;
+    const scroll = el.scrollHeight;
     b.style.top = `${head}px`;
-    b.style.height = `${Math.max(0, el.clientHeight - head)}px`;
-    if (popup.current) popup.current.style.top = `${head + (el.clientHeight - head) / 2}px`;
-    const max = el.scrollHeight - el.clientHeight;
-    const scrollable = max > 1;
+    b.style.height = `${Math.max(0, client - head)}px`;
+    if (popup.current) popup.current.style.top = `${head + (client - head) / 2}px`;
+    const scrollable = scroll - client > 1;
     b.classList.toggle('none', !scrollable);
-    b.classList.toggle('draggable', el.scrollHeight > el.clientHeight * DRAG_SCREENS);
-    if (!scrollable) return;
-    const trackH = tr.clientHeight;
-    const thumbH = Math.min(trackH, Math.max(MIN_THUMB, (trackH * el.clientHeight) / el.scrollHeight));
-    const y = (Math.min(max, Math.max(0, el.scrollTop)) / max) * (trackH - thumbH);
+    b.classList.toggle('draggable', scroll > client * DRAG_SCREENS);
+    const trackH = scrollable ? tr.clientHeight : 0;
+    const thumbH = Math.min(trackH, Math.max(MIN_THUMB, (trackH * client) / scroll));
     th.style.height = `${thumbH}px`;
+    s.size = { head, client, scroll, trackH, thumbH };
+  };
+
+  /** Move the thumb (and the A–Z letter) for the current scrollTop, from the cached sizes. */
+  const layout = () => {
+    const s = st.current;
+    s.frame = 0;
+    const el = scroller.current;
+    const th = thumb.current;
+    if (!s.size) measure();
+    const z = s.size;
+    if (!el || !th || !z) return;
+    const max = z.scroll - z.client;
+    if (max <= 1) return;
+    const y = (Math.min(max, Math.max(0, el.scrollTop)) / max) * (z.trackH - z.thumbH);
     th.style.transform = `translateY(${y}px)`;
     if (azRef.current) {
-      const l = currentLetter(el, head);
-      if (l !== st.current.letter) {
-        st.current.letter = l;
+      const l = currentLetter(el, z.head, z.scroll);
+      if (l !== s.letter) {
+        s.letter = l;
         if (popup.current) popup.current.firstElementChild!.textContent = l;
       }
     }
@@ -137,11 +154,11 @@ export function FastScroller({
     if (typeof ResizeObserver === 'function') {
       ro = new ResizeObserver(() => {
         st.current.headsFor = -1;
+        st.current.size = null;
         schedule();
       });
       ro.observe(el);
-      const body = el.querySelector(':scope > .screen-body');
-      if (body) ro.observe(body);
+      for (const part of el.querySelectorAll(':scope > .screen-body, :scope > .topbar')) ro.observe(part);
     }
     schedule();
     return () => {

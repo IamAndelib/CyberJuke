@@ -33,16 +33,20 @@ function PlayPauseIcon({ size }: { size: number }) {
 // ---- Mini player -------------------------------------------------------------------
 
 /**
- * The thin progress line: written straight to the element's style on every sample
- * and tick, so playback re-renders nothing.
+ * The thin progress line: the fill's scaleX is written straight to its style on every
+ * sample and tick, so playback re-renders nothing and only the compositor works.
  */
 function MiniProgress() {
-  const ref = useRef<HTMLDivElement>(null);
+  const fill = useRef<HTMLDivElement>(null);
   useLiveProgress((pos, dur) => {
-    const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0;
-    ref.current?.style.setProperty('--progress', `${pct}%`);
+    const f = dur > 0 ? Math.min(1, Math.max(0, pos / dur)) : 0;
+    if (fill.current) fill.current.style.transform = `scaleX(${f.toFixed(4)})`;
   }, isAdvancing.value);
-  return <div class="mini-progress" ref={ref} aria-hidden="true" data-testid="mini-progress" />;
+  return (
+    <div class="mini-progress" aria-hidden="true" data-testid="mini-progress">
+      <div class="mini-progress-fill" ref={fill} />
+    </div>
+  );
 }
 
 function MiniToggle() {
