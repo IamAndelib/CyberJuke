@@ -31,7 +31,7 @@ import { ArtistPage } from '../features/artists/Artist';
 import { ArtistGrid } from '../features/artists/Artists';
 import { GenreDetail, GenreGrid } from '../features/genres/Genres';
 import { Home } from '../features/home/Home';
-import { Library } from './screens/Library';
+import { Library } from '../features/library/Library';
 import { ReleasesPage } from '../features/artists/Releases';
 import { Search } from '../features/search/Search';
 import { Settings } from './screens/Settings';

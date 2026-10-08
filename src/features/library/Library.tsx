@@ -2,12 +2,12 @@ import { signal } from '@preact/signals';
 import { history, liked, recent } from '../../stores/library';
 import { groupByDay } from '../../stores/history';
 import { clearHistoryWithUndo } from '../../stores/undo';
-import { Icon } from '../icons';
-import { EmptyState, PlayShuffle, Tracks, playFrom } from '../components/TrackList';
-import { TrackRow } from '../components/TrackRow';
-import { Screen } from '../components/Screen';
-import { askConfirm, selectTab, useSearchContext } from '../nav';
-import { list } from '../playAll';
+import { Icon } from '../../ui/icons';
+import { EmptyState, PlayShuffle, Tracks, playFrom } from '../../ui/components/TrackList';
+import { TrackRow } from '../../ui/components/TrackRow';
+import { Screen } from '../../ui/components/Screen';
+import { askConfirm, selectTab, useSearchContext } from '../../ui/nav';
+import { list } from '../../ui/playAll';
 
 const section = signal<'liked' | 'recent'>('liked');
 
