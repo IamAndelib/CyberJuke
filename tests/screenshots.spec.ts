@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { stubYouTube } from './stubs';
+import { stubMusic, stubYouTube } from './stubs';
 
 /**
  * Phone-size screenshots of every screen, saved to media/web-screenshots/.
@@ -23,7 +23,7 @@ async function shot(page: Page, name: string) {
 
 async function catalogReady(page: Page) {
   await page.getByTestId('search-fab').click();
-  await expect(page.getByTestId('search-hint')).toBeVisible();
+  await expect(page.getByTestId('search-latest')).toBeVisible();
   await page.getByTestId('search-close').click();
 }
 
@@ -34,6 +34,7 @@ async function openHome(page: Page, theme?: string) {
     }, theme);
   }
   await stubYouTube(page);
+  await stubMusic(page);
   await page.goto('/');
   await expect(page.getByTestId('track-row').first()).toBeVisible();
   await settle(page);
@@ -96,12 +97,73 @@ test('screens (dark)', async ({ page }) => {
   await shot(page, '07-genre-list');
 
   await page.getByTestId('search-fab').click();
+  await page.getByTestId('search-input').blur();
+  await expect(page.getByTestId('search-latest')).toBeVisible();
+  await settle(page);
+  await shot(page, '07a-search-latest');
   await page.getByTestId('search-input').fill('synth');
   await expect(page.getByTestId('search-results')).toBeVisible();
   await page.getByTestId('search-input').blur();
   await settle(page);
   await shot(page, '07b-search');
+  await page.getByTestId('search-input').fill('vaporwave sunset');
+  await expect(page.getByTestId('search-bridge')).toBeVisible();
+  await page.getByTestId('search-input').blur();
+  await settle(page);
+  await shot(page, '07c-search-bridge');
+  await page.getByTestId('search-bridge').click();
+  await expect(page.getByTestId('global-results')).toBeVisible();
+  await settle(page);
+  await shot(page, '07d-search-global-songs');
+  await page.getByTestId('filter-albums').click();
+  await expect(page.getByTestId('music-row').first()).toBeVisible();
+  await settle(page);
+  await shot(page, '07e-search-global-albums');
+  await page.getByTestId('filter-artists').click();
+  await expect(page.getByTestId('music-row').first()).toBeVisible();
+  await settle(page);
+  await shot(page, '07f-search-global-artists');
+  await page.getByTestId('filter-songs').click();
+  await page.getByTestId('global-results').getByTestId('track-play').nth(1).click();
   await page.getByTestId('search-close').click();
+  await page.getByTestId('mini-open').click();
+  await page.waitForTimeout(1200);
+  await shot(page, '07g-now-playing-global');
+  await page.getByTestId('np-close').click();
+
+  // Artists: two favorites, then an artist page and an album.
+  await page.getByTestId('tab-artists').click();
+  await expect(page.getByTestId('artist-grid')).toBeVisible();
+  for (const i of [4, 0]) await page.getByTestId('artist-grid').getByTestId('artist-fav').nth(i).click();
+  await expect(page.getByTestId('fav-artists').getByTestId('artist-tile')).toHaveCount(2);
+  await settle(page);
+  await shot(page, '11-artists');
+  await page.getByTestId('fav-artists').getByTestId('artist-tile').last().click();
+  await expect(page.getByTestId('album-card').first()).toBeVisible();
+  await settle(page);
+  await shot(page, '12-artist');
+  await page.getByTestId('screen-artist').evaluate((el) => {
+    const sec = el.querySelector('[data-testid="artist-more"]') as HTMLElement;
+    el.scrollTo(0, sec.offsetTop - (el.querySelector('.topbar') as HTMLElement).offsetHeight);
+  });
+  await page.waitForTimeout(300);
+  await shot(page, '12b-artist-more');
+  await page.getByTestId('album-card').first().click();
+  await expect(page.getByTestId('screen-album').getByTestId('track-row').first()).toBeVisible();
+  await settle(page);
+  await shot(page, '13-album');
+  await page.getByTestId('album-back').click();
+  await page.getByTestId('screen-artist').evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  await page.waitForTimeout(400);
+  await shot(page, '12c-artist-bottom');
+
+  // Back-to-top on a long list.
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('screen-home').evaluate((el) => el.scrollTo(0, el.clientHeight * 3));
+  await expect(page.locator('.totop.on')).toBeVisible();
+  await page.waitForTimeout(400);
+  await shot(page, '14-back-to-top');
+  await page.getByTestId('screen-home').evaluate((el) => el.scrollTo(0, 0));
 
   await page.getByTestId('tab-library').click();
   await settle(page);
@@ -129,4 +191,28 @@ test('now playing (brutalist)', async ({ page }) => {
   await page.getByTestId('mini-open').click();
   await page.waitForTimeout(1500);
   await shot(page, 'now-playing-brutalist');
+});
+
+test('narrow phone (360px): tabs, search modes, artist page', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await openHome(page);
+  await catalogReady(page);
+  await page.getByTestId('track-play').nth(0).click();
+  await page.getByTestId('search-fab').click();
+  await page.getByTestId('search-input').fill('qzxv nebulon');
+  await expect(page.getByTestId('search-bridge')).toBeVisible();
+  await page.getByTestId('search-bridge').click();
+  await expect(page.getByTestId('global-results')).toBeVisible();
+  await page.getByTestId('search-input').blur();
+  await settle(page);
+  await shot(page, 'narrow-search-global');
+  await page.getByTestId('search-close').click();
+  await page.getByTestId('tab-artists').click();
+  await page.getByTestId('artist-grid').getByTestId('artist-tile').first().click();
+  await expect(page.getByTestId('album-card').first()).toBeVisible();
+  await settle(page);
+  await shot(page, 'narrow-artist');
+  await page.getByTestId('mini-open').click();
+  await page.waitForTimeout(1000);
+  await shot(page, 'narrow-now-playing');
 });
