@@ -24,6 +24,44 @@ const { default: tseslint } = await import('typescript-eslint');
 const { default: reactHooks } = await import('eslint-plugin-react-hooks');
 const { default: globals } = await import('globals');
 
+/** `import … from '<relative path into one of these layers>'`. */
+const into = (layers) => `^(\\.\\./)+(${layers.join('|')})(/|$)`;
+const UP = 'Imports go down the layers only: app → features → ui → stores / player / data → core.';
+
+/** One no-restricted-imports block for the files of a layer. */
+function layer(files, layers, { allowTypeImports = false, extra = [] } = {}) {
+  return {
+    files,
+    ignores: ['src/**/*.test.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        { patterns: [{ regex: into(layers), message: UP, ...(allowTypeImports && { allowTypeImports }) }, ...extra] },
+      ],
+    },
+  };
+}
+
+function layerRules() {
+  const ts = (dir) => [`src/${dir}/**/*.{ts,tsx}`];
+  return [
+    layer(ts('core'), ['app', 'features', 'ui', 'stores', 'player', 'data']),
+    // The runtime guards check the shapes data and player define (types only).
+    layer(['src/core/guards.ts'], ['app', 'features', 'ui', 'stores', 'player', 'data'], { allowTypeImports: true }),
+    layer(ts('data'), ['app', 'features', 'ui', 'stores', 'player']),
+    // The source reads the NSFW setting.
+    layer(['src/data/index.ts'], ['app', 'features', 'ui', 'player']),
+    layer(ts('stores'), ['app', 'features', 'ui', 'player']),
+    // The block state uses the native plugin's event types.
+    layer(['src/stores/block.ts'], ['app', 'features', 'ui']),
+    layer(ts('player'), ['app', 'features', 'ui']),
+    layer(ts('ui'), ['app', 'features']),
+    layer(ts('features'), ['app'], {
+      extra: [{ regex: '^\\.\\./[^./]', message: 'A feature does not import another feature: move what they share to ui/ (or a lower layer).' }],
+    }),
+  ];
+}
+
 export default tseslint.config(
   {
     ignores: [
@@ -71,6 +109,11 @@ export default tseslint.config(
       'no-var': 'error',
     },
   },
+  // Layers (R1): app → features → ui → stores / player / data → core. Nothing imports
+  // upward; a feature doesn't import another feature; stores, player and data import each
+  // other only along the edges that exist (data/index.ts reads one setting from stores, and
+  // stores/block.ts the native plugin's types). Tests are exempt: they wire layers together.
+  ...layerRules(),
   {
     // Test doubles and fixtures may use `any` freely.
     files: ['tests/**/*.ts', 'src/**/*.test.ts', 'src/**/__fixtures__/**'],
