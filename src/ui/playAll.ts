@@ -7,22 +7,17 @@
  *    list in order, then similar ones.
  */
 import type { Track } from '../data/model';
-import { player } from '../player';
+import { player, type PlayContext } from '../player';
 
-/** Where a list was started from (C2). Mirrors `PlayContext` in player/types. */
-export interface PlayCtx {
-  label: string;
-  mode: 'radio' | 'list';
-}
+/** Where a list was started from (C2). */
+export type PlayCtx = PlayContext;
 
 export const radio = (label: string): PlayCtx => ({ label, mode: 'radio' });
 export const list = (label: string): PlayCtx => ({ label, mode: 'list' });
 
-type PlayList = (tracks: Track[], startIndex: number, ctx?: PlayCtx) => Promise<void>;
-
 /** Start `tracks` at `i`. */
 export function playFrom(tracks: Track[], i: number, ctx: PlayCtx): Promise<void> {
-  return (player.playList as PlayList)(tracks, i, ctx);
+  return player.playList(tracks, i, ctx);
 }
 
 /**
