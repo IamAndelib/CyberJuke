@@ -13,6 +13,8 @@
 # Phase 1 plays the latest live track (a YouTube bot check on the runner IP is only a warning).
 # Phase 2 plays a bundled test tone (debug builds) and must reach PLAYING and keep playing in
 # the background; otherwise the exit code is non-zero.
+# Phase 3 (soft, debug builds) runs one YouTube Music search through NewPipeExtractor via
+# `--es ci_music_search "<query>"` and reports the logged result count. It never fails the job.
 set -uo pipefail
 
 PKG="io.github.iamandelib.cyberjuke"
@@ -232,4 +234,49 @@ if [[ $background_ok -ne 1 ]]; then
   diagnostics
   finish 1 "Playback stopped after ${BACKGROUND_WAIT}s in the background"
 fi
-finish 0 "Pipeline: PLAYING and still PLAYING after ${BACKGROUND_WAIT}s in the background. Live YouTube: ${live}"
+# ---- Phase 3 (soft): YouTube Music search (MusicPlugin CI hook, debug builds only) ----------
+# Annotations only: a bot check, an error or a timeout is a warning, never a failure.
+MUSIC_QUERY="${SMOKE_MUSIC_QUERY:-daft punk}"
+MUSIC_TIMEOUT="${SMOKE_MUSIC_TIMEOUT:-30}"
+music="not verified"
+log "Phase 3 (soft): YouTube Music search '$MUSIC_QUERY'"
+adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
+sleep 2
+# adb shell re-parses the command on the device, so quote the query for the remote shell.
+adb shell am start -W -n "$PKG/.MainActivity" --es ci_music_search "\"$MUSIC_QUERY\"" >/dev/null 2>&1 || true
+music_line=""
+for ((i = 1; i <= MUSIC_TIMEOUT; i++)); do
+  music_logs="$(adb logcat -d -v brief -s CyberJukeMusic:V 2>/dev/null)"
+  music_line="$(grep -E "CI search '.*' (->|failed)" <<<"$music_logs" | tail -n 1)"
+  [[ -n "$music_line" ]] && break
+  sleep 1
+done
+music_line="${music_line//$'\r'/}"
+music_msg="${music_line#*CyberJukeMusic*: }"
+if [[ -z "$music_line" ]]; then
+  echo "::warning title=YouTube Music search not verified::No 'CI search' log line within ${MUSIC_TIMEOUT}s (is this a debug build?)"
+  summary "### :warning: YouTube Music search: no result within ${MUSIC_TIMEOUT}s"
+elif [[ "$music_line" =~ \-\>\ ([0-9]+)\ items ]]; then
+  n="${BASH_REMATCH[1]}"
+  if ((n > 0)); then
+    music="pass ($n items)"
+    echo "::notice title=YouTube Music search::$music_msg"
+    summary "### :white_check_mark: YouTube Music search: $n items"
+  else
+    music="0 items"
+    echo "::warning title=YouTube Music search returned nothing::$music_msg"
+    summary "### :warning: YouTube Music search returned 0 items"
+  fi
+elif [[ "$music_line" == *BOT_CHECK* ]]; then
+  music="bot-check"
+  echo "::warning title=YouTube Music search: bot check::$music_msg"
+  summary "### :robot: YouTube Music search: bot check (runner IP), not verified"
+else
+  music="failed"
+  echo "::warning title=YouTube Music search failed::$music_msg"
+  summary "### :warning: YouTube Music search failed"
+  summary "$music_msg"
+fi
+log "Phase 3: ${music}${music_line:+ ($music_line)}"
+
+finish 0 "Pipeline: PLAYING and still PLAYING after ${BACKGROUND_WAIT}s in the background. Live YouTube: ${live}. YouTube Music search: ${music}"
