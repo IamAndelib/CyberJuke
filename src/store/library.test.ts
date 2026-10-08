@@ -63,3 +63,24 @@ describe('favorite genres', () => {
     expect(lib.favoriteGenres.value).toEqual([]);
   });
 });
+
+describe('favorite artists', () => {
+  it('toggles by normalized name, keeps insertion order and persists under favArtists', async () => {
+    await lib.loadLibrary();
+    expect(lib.favoriteArtists.value).toEqual([]);
+    expect(lib.toggleFavoriteArtist('Björk')).toBe(true);
+    expect(lib.toggleFavoriteArtist('The Jesus and Mary Chain')).toBe(true);
+    expect(lib.isFavoriteArtist('bjork')).toBe(true);
+    expect(lib.favoriteArtists.value).toEqual(['Björk', 'The Jesus and Mary Chain']);
+    expect(lib.toggleFavoriteArtist('BJORK')).toBe(false);
+    expect(lib.favoriteArtists.value).toEqual(['The Jesus and Mary Chain']);
+    await flush();
+    expect(JSON.parse(store.get('favArtists')!)).toEqual(['The Jesus and Mary Chain']);
+  });
+
+  it('loads saved favorites, dropping junk and duplicate spellings', async () => {
+    store.set('favArtists', JSON.stringify(['Björk', 'bjork', 7, '', 'Aphex Twin']));
+    await lib.loadLibrary();
+    expect(lib.favoriteArtists.value).toEqual(['Björk', 'Aphex Twin']);
+  });
+});

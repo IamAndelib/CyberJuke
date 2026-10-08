@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { Track } from '../data/model';
 import type { Cursor, Page } from '../data/source';
 import { source } from '../data';
 import { recordTracks } from '../store/genres';
+import { feeds, type Feed, type FeedCache, type FeedError, type FeedLoader, type FeedOptions, type FeedSnapshot, type FeedStatus } from './feed';
 
-export type Status = 'loading' | 'ready' | 'error';
+export type Status = FeedStatus;
 
 export interface Paged {
   tracks: Track[];
   status: Status;
-  error: { message: string; offline: boolean } | null;
+  error: FeedError | null;
   hasMore: boolean;
   loadingMore: boolean;
   loadMore: () => void;
@@ -17,96 +18,46 @@ export interface Paged {
   retry: () => void;
 }
 
-/** Infinite, cursor-paged track list. `key` changes reset it. */
-export function usePaged(key: string, loader: (cursor: Cursor | null) => Promise<Page>): Paged {
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const [status, setStatus] = useState<Status>('loading');
-  const [error, setError] = useState<Paged['error']>(null);
-  const [cursor, setCursor] = useState<Cursor | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const gen = useRef(0);
-  const busy = useRef(false);
-  const loaderRef = useRef(loader);
-  loaderRef.current = loader;
-
-  const toErr = (e: unknown) => ({
-    message: e instanceof Error ? e.message : String(e),
-    offline: !!(e as { offline?: boolean })?.offline || (typeof navigator !== 'undefined' && navigator.onLine === false),
-  });
-
-  const loadFirst = useCallback(async (soft: boolean) => {
-    const g = ++gen.current;
-    busy.current = true;
-    if (!soft) {
-      setStatus('loading');
-      setTracks([]);
-    }
-    setError(null);
-    try {
-      const p = await loaderRef.current(null);
-      if (g !== gen.current) return;
-      recordTracks(p.tracks);
-      setTracks(dedupe(p.tracks));
-      setCursor(p.cursor);
-      setStatus('ready');
-    } catch (e) {
-      if (g !== gen.current) return;
-      setError(toErr(e));
-      // A failed refresh keeps showing what we had.
-      if (!soft) setStatus('error');
-    } finally {
-      if (g === gen.current) busy.current = false;
-    }
-  }, []);
-
+/** Subscribe to a cached Feed: re-render on changes, load the first page if needed. */
+export function useFeed<T, C, M = undefined>(
+  key: string,
+  loader: FeedLoader<T, C, M>,
+  opts?: FeedOptions<T>,
+  cache: FeedCache = feeds,
+): { feed: Feed<T, C, M>; snap: FeedSnapshot<T, M> } {
+  const feed = cache.get(key, loader, opts);
+  const [, force] = useState(0);
   useEffect(() => {
-    setCursor(null);
-    void loadFirst(false);
-  }, [key]);
-
-  const loadMore = useCallback(() => {
-    if (busy.current || !cursor) return;
-    const g = gen.current;
-    busy.current = true;
-    setLoadingMore(true);
-    loaderRef
-      .current(cursor)
-      .then((p) => {
-        if (g !== gen.current) return;
-        recordTracks(p.tracks);
-        setTracks((prev) => dedupe([...prev, ...p.tracks]));
-        setCursor(p.cursor);
-        setError(null);
-      })
-      .catch((e) => {
-        if (g === gen.current) setError(toErr(e));
-      })
-      .finally(() => {
-        if (g === gen.current) {
-          busy.current = false;
-          setLoadingMore(false);
-        }
-      });
-  }, [cursor]);
-
-  const refresh = useCallback(async () => {
-    source.invalidate?.();
-    await loadFirst(true);
-  }, []);
-
-  return {
-    tracks,
-    status,
-    error,
-    hasMore: !!cursor,
-    loadingMore,
-    loadMore,
-    refresh,
-    retry: () => void loadFirst(false),
-  };
+    const un = feed.subscribe(() => force((n) => n + 1));
+    feed.start();
+    return un;
+  }, [feed]);
+  return { feed, snap: feed.snapshot };
 }
 
-function dedupe(tracks: Track[]): Track[] {
-  const seen = new Set<string>();
-  return tracks.filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
+const TRACK_OPTS: FeedOptions<Track> = { onPage: recordTracks, id: (t) => t.id };
+
+/**
+ * Infinite, cursor-paged track list. Pages live in a module-level cache per `key`, so a
+ * remount (tab switch, back from a genre) shows everything already loaded at once.
+ */
+export function usePaged(key: string, loader: (cursor: Cursor | null) => Promise<Page>): Paged {
+  const { feed, snap } = useFeed<Track, Cursor>(
+    key,
+    (c) => loader(c).then((p) => ({ items: p.tracks, cursor: p.cursor })),
+    TRACK_OPTS,
+  );
+  return {
+    tracks: snap.items,
+    status: snap.status,
+    error: snap.error,
+    hasMore: snap.hasMore,
+    loadingMore: snap.loadingMore,
+    loadMore: () => feed.loadMore(),
+    refresh: async () => {
+      source.invalidate?.();
+      await feed.refresh();
+    },
+    retry: () => feed.retry(),
+  };
 }
