@@ -17,13 +17,15 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 ## Features
 
 - **Latest tracks** posted to the Jukebox, as an endless list.
-- **Shuffle the Jukebox**: one tap for a random mix of recent posts.
-- **Genres**: browse by genre and play or shuffle any of them.
+- **Most saved**: the tracks people saved most on Cyberspace, this month or all time.
+- **Search** every track on the Jukebox by title, artist, genre or @poster, with typo tolerance. It works offline once the catalog is cached.
+- **Shuffle the Jukebox**: one tap for a random mix from the whole Jukebox.
+- **Genres**: browse every genre, heart your favorites to pin them to the top and to Home's filters, and play or shuffle any genre.
 - **Library**: liked tracks and recently played, stored on your phone.
 - **Background playback**: the notification, lock screen and headset buttons all work, and the queue keeps going with the screen off.
 - **Now Playing**: seek, shuffle, repeat, like, and an Up Next queue you can reorder.
 - **"Posted by @user"** opens the original post on Cyberspace, so you can see what the poster wrote and reply.
-- **Cyberspace themes**: Dark, Light, C64, VT320, Matrix, Crypt, Bubblegum and GRiD.
+- **Cyberspace themes**: Dark, Light, C64, VT320, Matrix, Crypt, Bubblegum and Brutalist.
 - **NSFW** posts are hidden unless you turn them on.
 
 ## Install
