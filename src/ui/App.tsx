@@ -25,6 +25,7 @@ import { Toasts } from './components/Toasts';
 import { ConfirmSheet } from './ConfirmSheet';
 import { SearchFab } from './components/SearchFab';
 import { scrollToTop } from './scrollToTop';
+import { reducedMotion } from './motion';
 import { AlbumPage } from './screens/Album';
 import { ArtistPage } from './screens/Artist';
 import { ArtistGrid } from './screens/Artists';
@@ -47,10 +48,6 @@ const TAB_ITEMS: { id: Tab; label: string; icon: IconName }[] = [
 export const PAGE_ENTER_MS = 180;
 /** P5: a second tap on the active tab within this long pops to its root. */
 export const RETAP_MS = 700;
-
-function reducedMotion(): boolean {
-  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
 
 /** The scroller of the page showing on a tab. */
 function topScroller(t: Tab): HTMLElement | null {

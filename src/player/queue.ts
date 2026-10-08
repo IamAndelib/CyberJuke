@@ -105,11 +105,6 @@ export class Queue<T extends Identified> {
     return this.list[index]?.auto === true;
   }
 
-  /** The current track was added by autoplay. */
-  get currentIsAuto(): boolean {
-    return this.cur?.auto === true;
-  }
-
   /** Autoplay tracks still to come (after the current one in play order). */
   get autoAhead(): number {
     const p = this.cur ? this.order.indexOf(this.cur) : -1;
