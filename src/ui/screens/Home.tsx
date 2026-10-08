@@ -10,6 +10,8 @@ import { Icon } from '../icons';
 import { EmptyState, ErrorState, PagedTracks, Tracks } from '../components/TrackList';
 import { SkeletonRows } from '../components/TrackRow';
 import { Screen } from '../components/Screen';
+import { NewTracksPill } from '../components/NewTracksPill';
+import { Rail, RailRow, type RailItem } from '../components/Rail';
 import { usePaged } from '../usePaged';
 
 /** Selected genre chip on Home (null = All). Survives tab switches. */
@@ -93,51 +95,37 @@ export function GenreChips() {
   );
 }
 
-function SortTabs() {
-  const cur = homeSort.value;
-  const tabs = [
-    { id: 'latest', label: 'Latest' },
-    { id: 'saved', label: 'Most saved' },
-  ] as const;
-  return (
-    <div class="sort-tabs" role="tablist" aria-label="Sort" data-testid="home-sort">
-      {tabs.map((t) => (
-        <button
-          key={t.id}
-          role="tab"
-          class={'sort-tab' + (cur === t.id ? ' on' : '')}
-          aria-selected={cur === t.id}
-          onClick={() => (homeSort.value = t.id)}
-          data-testid={`sort-${t.id}`}
-        >
-          [{t.label}]
-        </button>
-      ))}
-    </div>
-  );
-}
+const SORTS: RailItem<'latest' | 'saved'>[] = [
+  { id: 'latest', label: 'Latest', testid: 'sort-latest' },
+  { id: 'saved', label: 'Most saved', testid: 'sort-saved' },
+];
+const RANGES: RailItem<SavedRange>[] = [
+  { id: 'month', label: 'this month', testid: 'range-month' },
+  { id: 'all', label: 'all time', testid: 'range-all' },
+];
 
-function RangeToggle() {
-  const cur = savedRange.value;
-  const opts = [
-    { id: 'month', label: 'This month' },
-    { id: 'all', label: 'All time' },
-  ] as const;
+/** Latest | Most saved on the shared Rail; under Most saved, its range as a filter rail. */
+function SortRail() {
+  const sort = homeSort.value;
   return (
-    <div class="segmented small range" role="radiogroup" aria-label="Time range" data-testid="saved-range">
-      {opts.map((o) => (
-        <button
-          key={o.id}
-          role="radio"
-          aria-checked={cur === o.id}
-          class={cur === o.id ? 'on' : ''}
-          onClick={() => (savedRange.value = o.id)}
-          data-testid={`range-${o.id}`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
+    <>
+      <RailRow ruled class="home-rail" testid="home-rail">
+        <Rail items={SORTS} value={sort} onChange={(v) => (homeSort.value = v)} label="Sort" testid="home-sort" />
+      </RailRow>
+      {sort === 'saved' && (
+        <RailRow class="range-rail">
+          <Rail
+            items={RANGES}
+            value={savedRange.value}
+            onChange={(v) => (savedRange.value = v)}
+            kind="radio"
+            variant="filter"
+            label="Time range"
+            testid="saved-range"
+          />
+        </RailRow>
+      )}
+    </>
   );
 }
 
@@ -191,16 +179,10 @@ export function Home() {
         else await paged.refresh();
       }}
     >
+      <NewTracksPill />
       <ShuffleHero />
       <GenreChips />
-      <div class="section-head sort-head">
-        <SortTabs />
-      </div>
-      {sort === 'saved' && (
-        <div class="range-row">
-          <RangeToggle />
-        </div>
-      )}
+      <SortRail />
       {sort === 'latest' ? <PagedTracks paged={paged} /> : <MostSaved genre={g} />}
     </Screen>
   );
