@@ -1,4 +1,12 @@
-import { THEME_LABELS, THEMES, settings, updateSettings, type ThemeId } from '../../store/library';
+import {
+  CHECK_EVERY_LABELS,
+  CHECK_EVERY_OPTIONS,
+  THEME_LABELS,
+  THEMES,
+  settings,
+  updateSettings,
+  type ThemeId,
+} from '../../store/library';
 import { Screen } from '../components/Screen';
 import { openPost } from '../nav';
 
@@ -47,6 +55,46 @@ function A({ href, children }: { href: string; children: string }) {
   );
 }
 
+/** "Check for new tracks": how often Home asks whether anything new was posted. */
+function CheckEvery() {
+  const cur = settings.value.checkEvery;
+  const onKey = (e: KeyboardEvent) => {
+    const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    const i = CHECK_EVERY_OPTIONS.indexOf(cur);
+    const next = CHECK_EVERY_OPTIONS[(i + d + CHECK_EVERY_OPTIONS.length) % CHECK_EVERY_OPTIONS.length];
+    updateSettings({ checkEvery: next });
+    (e.currentTarget as HTMLElement).querySelector<HTMLElement>(`[data-value="${next}"]`)?.focus();
+  };
+  return (
+    <div class="setting stack">
+      <div class="setting-text">
+        <div class="setting-name" id="check-every-label">
+          Check for new tracks
+        </div>
+        <div class="setting-desc">While the app is open, Home shows a "new tracks" button when something new is posted. The list never changes by itself.</div>
+      </div>
+      <div class="seg-grid" role="radiogroup" aria-labelledby="check-every-label" onKeyDown={onKey} data-testid="check-every">
+        {CHECK_EVERY_OPTIONS.map((v) => (
+          <button
+            key={v}
+            role="radio"
+            aria-checked={cur === v}
+            tabIndex={cur === v ? 0 : -1}
+            class={(cur === v ? 'on' : '') + (v === 0 ? ' wide' : '')}
+            onClick={() => updateSettings({ checkEvery: v })}
+            data-value={v}
+            data-testid={`check-every-${v}`}
+          >
+            {CHECK_EVERY_LABELS[v]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Settings() {
   const s = settings.value;
   return (
@@ -61,7 +109,7 @@ export function Settings() {
       </section>
 
       <section class="card">
-        <h2 class="card-title">Playback</h2>
+        <h2 class="card-title">Playback &amp; data</h2>
         <div class="setting">
           <div class="setting-text">
             <div class="setting-name">Show NSFW tracks</div>
@@ -89,6 +137,7 @@ export function Settings() {
             ))}
           </div>
         </div>
+        <CheckEvery />
       </section>
 
       <section class="card prose" data-testid="about">

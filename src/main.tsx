@@ -1,6 +1,7 @@
 import './styles/fonts.css';
 import './styles/themes.css';
 import './styles/app.css';
+import './styles/ui-b.css';
 import './styles/ui-a.css';
 import { render } from 'preact';
 import { effect } from '@preact/signals';
@@ -10,6 +11,7 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import { loadLibrary, settings } from './store/library';
 import { online, watchNetwork } from './store/network';
 import { catalog } from './store/catalog';
+import { startFreshness } from './store/newTracks';
 import { goBack } from './ui/nav';
 import { JukePlayer } from './player/native';
 import { player } from './player';
@@ -92,6 +94,7 @@ async function boot(): Promise<void> {
     root,
   );
   startCatalog();
+  startFreshness();
   maybeAutoplay().catch((e) => console.warn('autoplay failed', e));
 }
 

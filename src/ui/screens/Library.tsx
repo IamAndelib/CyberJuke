@@ -1,16 +1,19 @@
 import { signal } from '@preact/signals';
 import { player } from '../../player';
-import { clearRecent, liked, recent } from '../../store/library';
+import { clearRecent, history, liked, recent } from '../../store/library';
+import { groupByDay } from '../../store/history';
 import { Icon } from '../icons';
-import { EmptyState, Tracks } from '../components/TrackList';
+import { EmptyState, Tracks, playFrom } from '../components/TrackList';
+import { TrackRow } from '../components/TrackRow';
 import { Screen } from '../components/Screen';
-import { tab } from '../nav';
+import { tab, useSearchContext } from '../nav';
 
 const section = signal<'liked' | 'recent'>('liked');
 
 export function Library() {
   const sel = section.value;
   const tracks = sel === 'liked' ? liked.value : recent.value;
+  useSearchContext(sel === 'liked' ? { label: 'Liked', tracks: () => liked.value } : { label: 'Recently played', tracks: () => recent.value });
   return (
     <Screen testid="screen-library" title="Library" subtitle="Saved on this device" scrollKey={`library:${sel}`}>
       <div class="segmented" role="tablist" aria-label="Library section">
@@ -58,7 +61,7 @@ export function Library() {
 
       <div data-testid={sel === 'liked' ? 'liked-list' : 'recent-list'}>
         {tracks.length ? (
-          <Tracks tracks={tracks} />
+          sel === 'liked' ? <Tracks tracks={tracks} /> : <HistoryDays />
         ) : sel === 'liked' ? (
           <EmptyState title="No liked tracks yet">
             Tap <Icon name="heartOutline" size={16} /> in the player, or Like in a track's ⋯ menu, to keep it here.
@@ -73,5 +76,37 @@ export function Library() {
         )}
       </div>
     </Screen>
+  );
+}
+
+/**
+ * Recently played, grouped by day (Today, Yesterday, Mon 6 Oct). A track appears once
+ * per day; tapping one plays the whole history from there.
+ */
+function HistoryDays() {
+  const days = groupByDay(history.value, Date.now());
+  const all = days.flatMap((d) => d.tracks);
+  let offset = 0;
+  return (
+    <>
+      {days.map((d) => {
+        const start = offset;
+        offset += d.tracks.length;
+        return (
+          <section key={d.key} class="day-group" data-testid="history-day" data-day={d.key}>
+            <h3 class="day-head" data-testid="history-day-label">
+              <span>{d.label}</span>
+              <span class="day-count">{d.tracks.length}</span>
+            </h3>
+            <ul class="list" data-testid="track-list">
+              {d.tracks.map((t, i) => (
+                <TrackRow key={t.id} track={t} index={start + i} onPlay={() => playFrom(all, start + i)} />
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+      <div class="list-foot end">— end of tape —</div>
+    </>
   );
 }
