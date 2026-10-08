@@ -1,0 +1,337 @@
+import type { Page } from '@playwright/test';
+import { expect, test } from '../fixtures';
+import { expectStable, musicCalls, openNowPlaying, playAndOpen, playerCalls, setLyricsMode, start, touchDrag } from '../helpers';
+
+/** Mini player, Now Playing (controls, swipe, links), the queue, lyrics and Share. */
+
+test('tapping a track shows the mini player, which opens Now Playing', async ({ page }) => {
+  await start(page);
+  const title = (await page.getByTestId('track-title').nth(1).textContent())!.trim();
+  await page.getByTestId('track-play').nth(1).click();
+  await expect(page.getByTestId('mini-player')).toBeVisible();
+  await expect(page.getByTestId('mini-title')).toHaveText(title);
+  await expect(page.getByTestId('track-row').nth(1)).toHaveClass(/is-current/);
+
+  await openNowPlaying(page);
+  await expect(page.getByTestId('np-title')).toHaveText(title);
+  await expect(page.getByTestId('np-post')).toContainText('Posted by @');
+  await expect(page.getByTestId('upnext-row').first()).toBeVisible();
+
+  const before = await page.getByTestId('upnext-row').count();
+  await page.getByTestId('upnext-remove').first().click();
+  await expect(page.getByTestId('upnext-row')).toHaveCount(before - 1);
+
+  await page.getByTestId('np-repeat').click();
+  await expect(page.getByTestId('np-repeat')).toHaveAttribute('data-mode', 'all');
+  await page.getByTestId('np-shuffle').click();
+  await expect(page.getByTestId('np-shuffle')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.getByTestId('np-close').click();
+  await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
+  // Closed, the sheet's contents go away (nothing renders or fetches behind it).
+  await expect(page.getByTestId('np-title')).toHaveCount(0);
+});
+
+test('the play icon is optically centred in its round button', async ({ page }) => {
+  await start(page);
+  await playAndOpen(page, 0);
+  const btn = page.getByTestId('np-toggle');
+  await expect(btn).toHaveAttribute('aria-label', 'Pause');
+  await btn.click();
+  await expect(btn).toHaveAttribute('aria-label', 'Play');
+
+  for (const id of ['np-toggle', 'mini-toggle']) {
+    if (id === 'mini-toggle') await page.getByTestId('np-close').click();
+    const b = page.getByTestId(id);
+    const icon = b.locator('svg[data-icon="play"]');
+    await expect(icon).toHaveAttribute('shape-rendering', 'geometricPrecision');
+    const m = await b.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const p = el.querySelector('svg path')!.getBoundingClientRect();
+      return { bx: r.left + r.width / 2, by: r.top + r.height / 2, left: p.left, top: p.top, w: p.width, h: p.height };
+    });
+    // Right-pointing triangle: centroid is a third of the way in from the flat side.
+    expect(Math.abs(m.left + m.w / 3 - m.bx)).toBeLessThanOrEqual(1.5);
+    expect(Math.abs(m.top + m.h / 2 - m.by)).toBeLessThanOrEqual(1);
+    const lean = m.left + m.w / 2 - m.bx;
+    expect(lean).toBeGreaterThan(0);
+    expect(lean).toBeLessThan(m.w / 6 + 1);
+  }
+});
+
+test('Now Playing: a swipe down closes it, a short drag springs back, the seek bar is ignored', async ({ page }) => {
+  await start(page);
+  await playAndOpen(page);
+  const np = page.getByTestId('now-playing');
+  await expect(page.getByTestId('np-grab')).toBeVisible();
+  const h = page.viewportSize()!.height;
+
+  // Short, slow drag: springs back.
+  await touchDrag(page, 200, 200, 260, 600);
+  await expect(np).toHaveClass(/open/);
+  await expect.poll(() => np.evaluate((el) => (el as HTMLElement).style.transform)).toBe('');
+
+  // A drag on the seek bar never moves the sheet.
+  const seek = (await page.getByTestId('seek').boundingBox())!;
+  await touchDrag(page, seek.x + 20, seek.y + seek.height / 2, seek.y + seek.height / 2 + h * 0.4, 400);
+  await expect(np).toHaveClass(/open/);
+
+  // Horizontal drag (right to left: headless Chrome turns left-to-right into "back"): nothing.
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 320, y: 300, id: 1 }] });
+  for (let i = 1; i <= 8; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 320 - i * 30, y: 300 + i * 4, id: 1 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+  await expect(np).toHaveClass(/open/);
+
+  // Past 25% of the height: closes.
+  await touchDrag(page, 200, 150, 150 + h * 0.35, 500);
+  await expect(np).not.toHaveClass(/open/);
+
+  // A quick flick closes too, even when short (no waits between moves: CDP round trips
+  // alone are slow enough on a busy machine). 100px < 25%.
+  await openNowPlaying(page);
+  await touchDrag(page, 200, 150, 250, 0, 4);
+  await expect(np).not.toHaveClass(/open/);
+
+  // Scrolled down: dragging down scrolls the content instead of closing.
+  await openNowPlaying(page);
+  await np.locator('.np-scroll').evaluate((el) => el.scrollTo(0, 300));
+  await touchDrag(page, 200, 300, 300 + h * 0.4, 500);
+  await expect(np).toHaveClass(/open/);
+});
+
+test('in Now Playing, the genre opens its genre page and the artist opens the artist page', async ({ page }) => {
+  await start(page);
+  const row = page.getByTestId('track-row').filter({ has: page.locator('.tag') }).first();
+  const genre = (await row.locator('.tag').textContent())!.trim();
+  await row.getByTestId('track-play').click();
+  await openNowPlaying(page);
+  await page.getByTestId('np-genre').click();
+  await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
+  await expect(page.getByTestId('screen-genre')).toBeVisible();
+  await expect(page.locator('.topbar-title')).toHaveText(genre);
+  await expect(page.getByTestId('tab-genres')).toHaveAttribute('aria-current', 'page');
+
+  await page.getByTestId('mini-open').click();
+  await page.getByTestId('np-artist').click();
+  if (await page.getByTestId('artist-chooser').isVisible()) await page.getByTestId('chooser-artist').first().click();
+  await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
+  await expect(page.getByTestId('screen-artist')).toBeVisible();
+  await expect(page.getByTestId('tab-artists')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('artist-jukebox').getByTestId('track-row').first()).toBeVisible();
+  await page.getByTestId('artist-jukebox').getByTestId('track-more').first().click();
+  await expect(page.getByTestId('menu-more-by').first()).toContainText('More by ');
+});
+
+test('several credited artists open a chooser from Now Playing', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('search-fab').click();
+  await page.getByTestId('mode-global').click();
+  await page.getByTestId('search-input').fill('Lumen');
+  const results = page.getByTestId('global-results');
+  // The stub credits its second song to "Lumen, Tycho".
+  const row = results.getByTestId('track-row').filter({ hasText: 'Lumen, Tycho' }).first();
+  await row.getByTestId('track-play').click();
+  await page.getByTestId('search-close').click();
+  await openNowPlaying(page);
+  await page.getByTestId('np-artist').click();
+  const chooser = page.getByTestId('artist-chooser');
+  await expect(chooser).toBeVisible();
+  await expect(chooser.getByTestId('chooser-artist')).toHaveText(['Lumen', 'Tycho']);
+  await chooser.getByTestId('chooser-artist').nth(1).click();
+  await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
+  await expect(page.getByTestId('screen-artist')).toBeVisible();
+  await expect(page.locator('.topbar-title')).toHaveText('Tycho');
+  await expect(chooser).toBeHidden();
+});
+
+// ---- Queue ---------------------------------------------------------------------------
+
+async function queue(page: Page, i: number) {
+  await page.getByTestId('track-more').nth(i).click();
+  await page.getByTestId('menu-add-queue').click();
+}
+
+test('Add to queue plays next in the order added, under "Queued by you"', async ({ page }) => {
+  await start(page);
+  const titles = (await page.getByTestId('track-title').allTextContents()).map((t) => t.trim());
+  await page.getByTestId('track-play').nth(0).click();
+  await expect(page.getByTestId('mini-player')).toBeVisible();
+  for (const i of [5, 6]) {
+    await page.getByTestId('track-more').nth(i).click();
+    await expect(page.getByTestId('menu-play-next')).toHaveCount(0); // merged into Add to queue
+    await page.getByTestId('menu-add-queue').click();
+  }
+  await openNowPlaying(page);
+  const rows = page.getByTestId('upnext-row');
+  await expect(rows.nth(0).locator('.row-title')).toHaveText(titles[5]);
+  await expect(rows.nth(1).locator('.row-title')).toHaveText(titles[6]);
+  await expect(rows.nth(2).locator('.row-title')).toHaveText(titles[1]);
+  await expect(page.getByTestId('upnext-queued-label')).toHaveText('Queued by you');
+  await expect(page.locator('[data-testid="upnext-row"][data-queued="true"]')).toHaveCount(2);
+  expect((await playerCalls(page)).filter((c) => c[0] === 'queueNext')).toHaveLength(2);
+
+  // With shuffle on, queued tracks still play next.
+  await page.getByTestId('np-shuffle').click();
+  await expect(rows.nth(0).locator('.row-title')).toHaveText(titles[5]);
+  await expect(rows.nth(1).locator('.row-title')).toHaveText(titles[6]);
+  // Playing one removes it from "Queued by you".
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).toHaveText(titles[5]);
+  await expect(page.locator('[data-testid="upnext-row"][data-queued="true"]')).toHaveCount(1);
+});
+
+test('skipping past queued tracks keeps them next (tests/spec/queue-rules.json)', async ({ page }) => {
+  await start(page);
+  const titles = (await page.getByTestId('track-title').allTextContents()).map((t) => t.trim());
+  await page.getByTestId('track-play').nth(0).click();
+  await queue(page, 7);
+  await queue(page, 8);
+  await openNowPlaying(page);
+  // Jump to a track further down the list (not a queued one).
+  const target = page.getByTestId('upnext-row').filter({ has: page.locator('.row-title', { hasText: titles[4] }) }).first();
+  await target.locator('.row-main').click();
+  await expect(page.getByTestId('np-title')).toHaveText(titles[4]);
+  const rows = page.getByTestId('upnext-row');
+  await expect(rows.nth(0).locator('.row-title')).toHaveText(titles[7]);
+  await expect(rows.nth(1).locator('.row-title')).toHaveText(titles[8]);
+  await expect(page.locator('[data-testid="upnext-row"][data-queued="true"]')).toHaveCount(2);
+  await expect(page.getByTestId('upnext-queued-label')).toBeVisible();
+});
+
+// ---- Lyrics --------------------------------------------------------------------------
+
+test('lyrics replace the art: synced lines follow the position, a tap seeks, other scripts and states', async ({ page }) => {
+  await start(page);
+  await setLyricsMode(page, 'greek');
+  await playAndOpen(page, 0);
+  const artBox = (await page.locator('.np-art .dos-frame').boundingBox())!;
+  await page.getByTestId('np-art').click();
+  const panel = page.getByTestId('np-lyrics');
+  await expect(panel).toHaveAttribute('data-kind', 'synced');
+  const lyrBox = (await page.locator('.np-art .dos-frame').boundingBox())!;
+  expect(Math.abs(lyrBox.width - artBox.width)).toBeLessThanOrEqual(1);
+  expect(Math.abs(lyrBox.height - artBox.height)).toBeLessThanOrEqual(1);
+  await expect(page.getByTestId('lyrics-credit')).toHaveText('Lyrics: LRCLIB');
+  await expect(panel).toContainText('Το φεγγάρι λάμπει');
+
+  // The fake player starts at 71 s: lines are 4 s apart.
+  const synced = page.getByTestId('lyrics-synced');
+  await expect.poll(async () => Number(await synced.getAttribute('data-current'))).toBeGreaterThanOrEqual(17);
+  const current = page.locator('.lyr-line.on');
+  if (await current.count()) await expect(current).toBeInViewport();
+
+  // Tap a line: seeks there.
+  const line = page.locator('.lyr-line[data-i="40"]');
+  await line.click();
+  await expect.poll(async () => Number(await synced.getAttribute('data-current'))).toBeGreaterThanOrEqual(40);
+  await expect(line).toHaveClass(/\bon\b/);
+  await expect(page.getByTestId('time-pos')).toHaveText(/^2:4\d$/);
+  for (const d of await page.getByTestId('lyric-line').evaluateAll((els) => els.slice(0, 5).map((e) => e.getAttribute('dir')))) expect(d).toBe('auto');
+
+  // Arabic (right to left) on the next track; the panel stays open.
+  await setLyricsMode(page, 'arabic');
+  await page.getByTestId('np-next').click();
+  await expect(panel).toContainText('القمر يضيء فوق البحر');
+  const rtl = await page.getByTestId('lyric-line').first().evaluate((el) => el.matches(':dir(rtl)') && getComputedStyle(el).direction === 'rtl');
+  expect(rtl).toBe(true);
+
+  await setLyricsMode(page, 'japanese');
+  await page.getByTestId('np-next').click();
+  await expect(panel).toContainText('夜の街に光が揺れる');
+  await expect(page.getByTestId('lyrics-credit')).toHaveText('Source: LyricFind');
+
+  await setLyricsMode(page, 'spanish');
+  await page.getByTestId('np-next').click();
+  await expect(panel).toContainText('Bajo la luna bailamos');
+
+  await setLyricsMode(page, 'plain');
+  await page.getByTestId('np-next').click();
+  await expect(panel).toHaveAttribute('data-kind', 'plain');
+  await expect(panel).toContainText('Hold the tape and press rewind');
+
+  await setLyricsMode(page, 'none');
+  await page.getByTestId('np-next').click();
+  await expect(panel).toHaveAttribute('data-kind', 'none');
+  await expect(page.getByTestId('lyrics-state')).toHaveText('No lyrics found');
+
+  await setLyricsMode(page, 'instrumental');
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('lyrics-state')).toContainText('Instrumental');
+
+  const req = (await musicCalls(page)).filter((c) => c[0] === 'lyrics').map((c) => c[1] as { ytId: string; title: string });
+  expect(req.length).toBeGreaterThanOrEqual(7);
+  for (const r of req) {
+    expect(r.ytId).toMatch(/^[A-Za-z0-9_-]{11}$/);
+    expect(r.title).not.toMatch(/official (music )?video/i);
+  }
+
+  await page.getByTestId('np-lyrics-toggle').click();
+  await expect(page.getByTestId('np-lyrics')).toHaveCount(0);
+  await expect(page.getByTestId('np-art')).toBeVisible();
+  expect(await page.getByTestId('now-playing').innerText()).not.toMatch(/youtube/i);
+});
+
+test('lyrics are fetched only while the lyrics panel shows', async ({ page }) => {
+  await start(page);
+  await setLyricsMode(page, 'spanish');
+  await playAndOpen(page, 0);
+  await page.getByTestId('np-lyrics-toggle').click();
+  await expect(page.getByTestId('lyrics-synced')).toBeVisible();
+  const lyricsCalls = async () => (await musicCalls(page)).filter((c) => c[0] === 'lyrics').length;
+  const n = await lyricsCalls();
+  expect(n).toBe(1);
+  // Closed sheet (lyrics still chosen): skipping tracks looks nothing up.
+  await page.getByTestId('np-close').click();
+  await expect(page.getByTestId('np-lyrics')).toHaveCount(0);
+  const title = await page.getByTestId('mini-title').textContent();
+  await page.getByTestId('mini-next').click();
+  await expect(page.getByTestId('mini-title')).not.toHaveText(title!);
+  await page.getByTestId('mini-next').click();
+  expect(await lyricsCalls()).toBe(n);
+  // Opening it again fetches the current track's.
+  await openNowPlaying(page);
+  await expect(page.getByTestId('np-lyrics')).toHaveAttribute('data-kind', 'synced');
+  expect(await lyricsCalls()).toBe(n + 1);
+});
+
+test('scrolling the lyrics by hand pauses the auto-scroll', async ({ page }) => {
+  await start(page);
+  await setLyricsMode(page, 'spanish');
+  await playAndOpen(page, 0);
+  await page.getByTestId('np-lyrics-toggle').click();
+  const synced = page.getByTestId('lyrics-synced');
+  await expect(synced).toBeVisible();
+  // Auto-scroll has centred the current line.
+  await expect.poll(() => synced.evaluate((el) => el.scrollTop)).toBeGreaterThan(50);
+  await synced.hover();
+  await page.mouse.wheel(0, -2000);
+  await expect.poll(() => synced.evaluate((el) => el.scrollTop)).toBe(0);
+  // For most of the 4 s pause (lines change every 4 s), the panel stays where the user put it.
+  await expectStable(() => synced.evaluate((el) => el.scrollTop), 2500);
+  // After the pause it centres the current line again.
+  await expect.poll(() => synced.evaluate((el) => el.scrollTop), { timeout: 8000 }).toBeGreaterThan(50);
+});
+
+// ---- Share ---------------------------------------------------------------------------
+
+test('Share in the ⋯ menu shares the track title, artist and music.youtube.com link', async ({ page }) => {
+  await start(page);
+  await playAndOpen(page, 0);
+  const src = (await page.locator('.np-art img').getAttribute('src'))!;
+  const ytId = /\/vi\/([^/]+)\//.exec(src)![1];
+  const title = (await page.getByTestId('np-title').innerText()).trim();
+  await page.getByTestId('np-more').click();
+  await expect(page.getByTestId('menu-share')).toHaveText('Share');
+  await page.getByTestId('menu-share').click();
+  await expect(page.getByTestId('track-menu')).not.toBeVisible();
+  const shares = (await musicCalls(page)).filter((c) => c[0] === 'share').map((c) => c[1] as { title: string; text: string; url: string });
+  expect(shares).toHaveLength(1);
+  expect(shares[0].url).toBe(`https://music.youtube.com/watch?v=${ytId}`);
+  expect(shares[0].title.startsWith(title)).toBe(true);
+  expect(shares[0].text).toBe(shares[0].title);
+  await page.getByTestId('np-close').click();
+  await page.getByTestId('track-more').nth(3).click();
+  await expect(page.getByTestId('menu-share')).toBeVisible();
+});

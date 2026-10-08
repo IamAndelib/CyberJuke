@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { FileBackend, KV } from './storage';
 
 vi.mock('@capacitor/preferences', () => ({ Preferences: {} }));
 
 const { jsonFile, textFile, localFiles, filePath, LOCAL_FILE_PREFIX } = await import('./storage');
-type KV = import('./storage').KV;
-type FileBackend = import('./storage').FileBackend;
 
 function memKV(init: Record<string, string> = {}) {
   const data = new Map(Object.entries(init));
