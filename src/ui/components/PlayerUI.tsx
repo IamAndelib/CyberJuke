@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'preact/hooks';
+import { Fragment } from 'preact';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { player, livePosition, type PlayerState } from '../../player';
 import { isLiked, liked, toggleLike } from '../../store/library';
 import { toast, toasts } from '../../store/toast';
@@ -7,6 +8,8 @@ import { artistChoice, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage,
 import { splitArtists } from '../../data/artists';
 import { isGlobal, type Track } from '../../data/model';
 import { Art } from './Art';
+import { LyricsPanel, lyricsOpen } from './Lyrics';
+import { shareTrack } from '../share';
 
 /** Re-render ~4x/s while playing so progress moves smoothly between samples. */
 function useLivePosition(s: PlayerState): number {
@@ -100,6 +103,96 @@ function SeekBar({ s }: { s: PlayerState }) {
   );
 }
 
+/** Close when dragged this share of the sheet's height, or flicked faster than this. */
+export const SWIPE_CLOSE_FRACTION = 0.25;
+export const SWIPE_CLOSE_VELOCITY = 0.5; // px/ms
+
+/**
+ * Swipe down to close Now Playing. A downward drag that starts while the sheet is
+ * scrolled to the top (or on the grab handle) moves the sheet with the finger; release
+ * past 25% of its height or with a flick closes it, otherwise it springs back.
+ * The seek bar, the lyrics panel and horizontal drags are left alone.
+ */
+function useSwipeToClose(ref: { current: HTMLDivElement | null }): void {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let start: { x: number; y: number } | null = null;
+    let dragging = false;
+    let samples: { y: number; t: number }[] = [];
+    let dy = 0;
+    const scroller = () => el.querySelector<HTMLElement>('.np-scroll');
+    const reset = () => {
+      el.style.transform = '';
+      el.style.transition = '';
+      el.style.opacity = '';
+    };
+    const onStart = (e: TouchEvent) => {
+      start = null;
+      dragging = false;
+      if (!nowPlayingOpen.value || e.touches.length !== 1) return;
+      const target = e.target as HTMLElement;
+      const onHandle = !!target.closest('.np-grab');
+      if (!onHandle && target.closest('.seek, input, .lyr-scroll')) return;
+      if (!onHandle && (scroller()?.scrollTop ?? 0) > 0) return;
+      const p = e.touches[0];
+      start = { x: p.clientX, y: p.clientY };
+      samples = [{ y: p.clientY, t: e.timeStamp || performance.now() }];
+      dy = 0;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!start) return;
+      const p = e.touches[0];
+      const dx = p.clientX - start.x;
+      const d = p.clientY - start.y;
+      if (!dragging) {
+        if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(d)) return void (start = null); // horizontal
+        if (d < -4) return void (start = null); // scrolling the content up
+        if (d < 8) return;
+        dragging = true;
+        el.classList.add('dragging');
+      }
+      e.preventDefault();
+      dy = Math.max(0, d);
+      const t = e.timeStamp || performance.now();
+      samples.push({ y: p.clientY, t });
+      while (samples.length > 2 && t - samples[0].t > 100) samples.shift();
+      el.style.transition = 'none';
+      el.style.transform = `translateY(${dy}px)`;
+      el.style.opacity = String(1 - Math.min(0.25, (dy / (el.clientHeight || 1)) * 0.4));
+    };
+    const onEnd = () => {
+      if (!start) return;
+      start = null;
+      if (!dragging) return;
+      dragging = false;
+      el.classList.remove('dragging');
+      const a = samples[0];
+      const b = samples[samples.length - 1];
+      const v = b && a && b.t > a.t ? (b.y - a.y) / (b.t - a.t) : 0;
+      const close = dy > (el.clientHeight || 1) * SWIPE_CLOSE_FRACTION || v > SWIPE_CLOSE_VELOCITY;
+      if (close) {
+        const instant = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+        el.style.transition = instant ? 'none' : '';
+        el.style.transform = '';
+        el.style.opacity = '';
+        nowPlayingOpen.value = false;
+        if (instant) requestAnimationFrame(() => (el.style.transition = ''));
+      } else reset();
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, []);
+}
+
 const NEXT_REPEAT = { off: 'all', all: 'one', one: 'off' } as const;
 const REPEAT_LABEL = { off: 'Repeat off', all: 'Repeat all', one: 'Repeat one' } as const;
 
@@ -113,9 +206,13 @@ export function NowPlaying() {
   }, [t, open]);
   void liked.value; // subscribe to like changes
   const isFav = t ? isLiked(t.id) : false;
+  const sheet = useRef<HTMLDivElement>(null);
+  useSwipeToClose(sheet);
+  const showLyrics = lyricsOpen.value;
 
   return (
     <div
+      ref={sheet}
       class={'np' + (open ? ' open' : '')}
       role="dialog"
       aria-modal="true"
@@ -126,6 +223,9 @@ export function NowPlaying() {
     >
       {t && (
         <div class="np-scroll">
+          <div class="np-grab" aria-hidden="true" data-testid="np-grab">
+            <span />
+          </div>
           <header class="np-head">
             <button class="icon-btn" onClick={() => (nowPlayingOpen.value = false)} aria-label="Close player" data-testid="np-close">
               <Icon name="down" />
@@ -139,9 +239,24 @@ export function NowPlaying() {
             </button>
           </header>
 
-          <div class="np-art dos">
+          <div class={'np-art dos' + (showLyrics ? ' lyrics' : '')}>
             <div class="dos-frame">
-              <Art track={t} size="fill" />
+              {showLyrics ? (
+                <LyricsPanel track={t} s={s} />
+              ) : (
+                <button class="np-art-btn" onClick={() => (lyricsOpen.value = true)} aria-label="Show lyrics" data-testid="np-art">
+                  <Art track={t} size="fill" />
+                </button>
+              )}
+              <button
+                class="np-flip"
+                onClick={() => (lyricsOpen.value = !showLyrics)}
+                aria-pressed={showLyrics}
+                aria-label={showLyrics ? 'Show album art' : 'Show lyrics'}
+                data-testid="np-lyrics-toggle"
+              >
+                {showLyrics ? '[art]' : '[lyrics]'}
+              </button>
             </div>
             <div class="dos-shadow" aria-hidden="true" />
           </div>
@@ -280,46 +395,58 @@ function UpNext({ s }: { s: PlayerState }) {
         <span class="dim small">{s.shuffle ? 'Shuffled · turn shuffle off to reorder' : `${items.length} track${items.length === 1 ? '' : 's'}`}</span>
       </div>
       {items.length === 0 ? (
-        <div class="dim small upnext-empty">{s.repeat === 'all' ? 'Queue repeats from the top.' : 'Nothing queued. Add tracks with ⋯ → Add to queue.'}</div>
+        <div class="dim small upnext-empty">{s.repeat === 'all' ? 'Queue repeats from the top.' : 'Nothing queued. ⋯ → Add to queue plays a track next.'}</div>
       ) : (
         <ol class="list compact">
-          {items.map(({ track, index }, k) => (
-            <li class="row" key={`${track.id}:${index}`} data-testid="upnext-row">
-              <button class="row-main" onClick={() => player.skipTo(index)} aria-label={`Play ${track.title}`}>
-                <div class="row-art">
-                  <Art track={track} size="sm" />
-                </div>
-                <div class="row-text">
-                  <div class="row-title">{track.title}</div>
-                  <div class="row-artist">{track.artist}</div>
-                </div>
-              </button>
-              {canReorder && (
-                <>
-                  <button
-                    class="icon-btn sm"
-                    aria-label={`Move ${track.title} up`}
-                    disabled={k === 0}
-                    onClick={() => player.move(index, items[k - 1].index)}
-                    data-testid="upnext-up"
-                  >
-                    <Icon name="up" size={20} />
-                  </button>
-                  <button
-                    class="icon-btn sm"
-                    aria-label={`Move ${track.title} down`}
-                    disabled={k === items.length - 1}
-                    onClick={() => player.move(index, items[k + 1].index)}
-                    data-testid="upnext-down"
-                  >
-                    <Icon name="down" size={20} />
-                  </button>
-                </>
+          {items.map(({ track, index, queued }, k) => (
+            <Fragment key={`${track.id}:${index}`}>
+              {k === 0 && queued && (
+                <li class="upnext-label" data-testid="upnext-queued-label" aria-hidden="true">
+                  Queued by you
+                </li>
               )}
-              <button class="icon-btn sm" aria-label={`Remove ${track.title} from queue`} onClick={() => player.remove(index)} data-testid="upnext-remove">
-                <Icon name="close" size={20} />
-              </button>
-            </li>
+              {!queued && k > 0 && items[k - 1].queued && (
+                <li class="upnext-label" aria-hidden="true">
+                  Next from the list
+                </li>
+              )}
+              <li class={'row' + (queued ? ' queued' : '')} data-testid="upnext-row" data-queued={queued ? 'true' : undefined}>
+                <button class="row-main" onClick={() => player.skipTo(index)} aria-label={`Play ${track.title}${queued ? ', queued by you' : ''}`}>
+                  <div class="row-art">
+                    <Art track={track} size="sm" />
+                  </div>
+                  <div class="row-text">
+                    <div class="row-title">{track.title}</div>
+                    <div class="row-artist">{track.artist}</div>
+                  </div>
+                </button>
+                {canReorder && (
+                  <>
+                    <button
+                      class="icon-btn sm"
+                      aria-label={`Move ${track.title} up`}
+                      disabled={k === 0}
+                      onClick={() => player.move(index, items[k - 1].index)}
+                      data-testid="upnext-up"
+                    >
+                      <Icon name="up" size={20} />
+                    </button>
+                    <button
+                      class="icon-btn sm"
+                      aria-label={`Move ${track.title} down`}
+                      disabled={k === items.length - 1}
+                      onClick={() => player.move(index, items[k + 1].index)}
+                      data-testid="upnext-down"
+                    >
+                      <Icon name="down" size={20} />
+                    </button>
+                  </>
+                )}
+                <button class="icon-btn sm" aria-label={`Remove ${track.title} from queue`} onClick={() => player.remove(index)} data-testid="upnext-remove">
+                  <Icon name="close" size={20} />
+                </button>
+              </li>
+            </Fragment>
           ))}
         </ol>
       )}
@@ -350,24 +477,24 @@ export function TrackMenu() {
             <button
               class="sheet-item"
               onClick={() => {
-                void player.playNext([t]);
-                toast('Playing next');
-                close();
-              }}
-              data-testid="menu-play-next"
-            >
-              <Icon name="playNext" size={20} /> Play next
-            </button>
-            <button
-              class="sheet-item"
-              onClick={() => {
+                const playing = !!player.state.value.current;
                 void player.addToQueue([t]);
-                toast('Added to queue');
+                toast(playing ? 'Added to queue · plays next' : 'Playing');
                 close();
               }}
               data-testid="menu-add-queue"
             >
-              <Icon name="plus" size={20} /> Add to queue
+              <Icon name="playNext" size={20} /> Add to queue
+            </button>
+            <button
+              class="sheet-item"
+              onClick={() => {
+                close();
+                void shareTrack(t);
+              }}
+              data-testid="menu-share"
+            >
+              <Icon name="share" size={20} /> Share
             </button>
             <button
               class="sheet-item"
