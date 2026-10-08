@@ -1,8 +1,8 @@
-package io.github.iamandelib.cyberjuke.player
+package io.github.iamandelib.cyberjuke.playback
 
 import androidx.media3.common.Player
-import io.github.iamandelib.cyberjuke.player.SessionPolicy.Access
-import io.github.iamandelib.cyberjuke.player.SessionPolicy.Controller
+import io.github.iamandelib.cyberjuke.playback.SessionPolicy.Access
+import io.github.iamandelib.cyberjuke.playback.SessionPolicy.Controller
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

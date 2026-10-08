@@ -1,4 +1,4 @@
-package io.github.iamandelib.cyberjuke.player
+package io.github.iamandelib.cyberjuke.playback
 
 import androidx.media3.common.Player
 import java.net.URI

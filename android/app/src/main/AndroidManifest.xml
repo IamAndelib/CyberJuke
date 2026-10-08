@@ -31,7 +31,7 @@
              controllers can bind to the session; PlaybackService.onConnectAsync gives other
              apps transport commands only (SessionPolicy). -->
         <service
-            android:name=".player.PlaybackService"
+            android:name=".playback.PlaybackService"
             android:foregroundServiceType="mediaPlayback"
             android:exported="true">
             <intent-filter>

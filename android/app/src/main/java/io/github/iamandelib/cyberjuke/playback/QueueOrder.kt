@@ -1,4 +1,4 @@
-package io.github.iamandelib.cyberjuke.player
+package io.github.iamandelib.cyberjuke.playback
 
 /**
  * Pure helpers for "Add to queue" (play next, FIFO) and autoplay. No Android or Media3 types,

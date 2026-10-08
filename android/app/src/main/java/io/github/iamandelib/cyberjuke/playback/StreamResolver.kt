@@ -1,4 +1,4 @@
-package io.github.iamandelib.cyberjuke.player
+package io.github.iamandelib.cyberjuke.playback
 
 import android.util.Log
 import androidx.media3.common.MimeTypes

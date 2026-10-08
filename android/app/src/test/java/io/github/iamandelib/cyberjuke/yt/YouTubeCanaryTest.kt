@@ -4,9 +4,9 @@ import io.github.iamandelib.cyberjuke.lyrics.Lyrics
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.net.Hosts
 import io.github.iamandelib.cyberjuke.net.Http
-import io.github.iamandelib.cyberjuke.player.SessionPolicy
-import io.github.iamandelib.cyberjuke.player.StreamResolver
-import io.github.iamandelib.cyberjuke.player.StreamUrls
+import io.github.iamandelib.cyberjuke.playback.SessionPolicy
+import io.github.iamandelib.cyberjuke.playback.StreamResolver
+import io.github.iamandelib.cyberjuke.playback.StreamUrls
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody

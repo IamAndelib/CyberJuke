@@ -1,7 +1,7 @@
 package io.github.iamandelib.cyberjuke.yt
 
 import io.github.iamandelib.cyberjuke.net.FailureKind
-import io.github.iamandelib.cyberjuke.player.SessionPolicy
+import io.github.iamandelib.cyberjuke.playback.SessionPolicy
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

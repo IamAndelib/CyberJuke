@@ -1,4 +1,4 @@
-package io.github.iamandelib.cyberjuke.player
+package io.github.iamandelib.cyberjuke.playback
 
 import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.FailureKind

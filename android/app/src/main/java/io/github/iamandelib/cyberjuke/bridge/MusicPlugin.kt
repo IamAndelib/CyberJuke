@@ -12,9 +12,9 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import io.github.iamandelib.cyberjuke.lyrics.Lyrics
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.net.NetBlock
-import io.github.iamandelib.cyberjuke.player.PlayerBus
-import io.github.iamandelib.cyberjuke.player.SessionPolicy
-import io.github.iamandelib.cyberjuke.player.isDebuggable
+import io.github.iamandelib.cyberjuke.playback.PlayerBus
+import io.github.iamandelib.cyberjuke.playback.SessionPolicy
+import io.github.iamandelib.cyberjuke.playback.isDebuggable
 import io.github.iamandelib.cyberjuke.yt.ArtistPage
 import io.github.iamandelib.cyberjuke.yt.YtCompat
 import io.github.iamandelib.cyberjuke.yt.YtMusic
