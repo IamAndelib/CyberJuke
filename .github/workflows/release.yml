@@ -1,7 +1,13 @@
 name: Release
 
-# Manual release: builds a signed APK and publishes a GitHub release. The tag v<version>
-# is created by the release action itself (pushing tags from the dev proxy is not possible).
+# Manual release, in three jobs:
+#   prepare           checks the version and CHANGELOG.md, and commits the version bump
+#                     (android/app/build.gradle, package.json) to main
+#   build             builds an unsigned release APK from that commit (read-only token, no
+#                     secrets, no dependency install scripts)
+#   sign-and-publish  signs it with apksigner in the protected "release" environment and
+#                     publishes the GitHub release, tagging the bump commit v<version>
+# F-Droid builds the same tagged commit and, with reproducible builds, ships this signed APK.
 on:
   workflow_dispatch:
     inputs:
@@ -15,42 +21,43 @@ on:
         type: boolean
         default: false
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: release
   cancel-in-progress: false
 
+env:
+  NODE_VERSION: '22'
+  JAVA_VERSION: '21'
+  VERSION: ${{ inputs.version }}
+
 jobs:
-  release:
-    name: Build and publish v${{ inputs.version }}
+  prepare:
+    name: Check and bump to v${{ inputs.version }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      VERSION: ${{ inputs.version }}
+    timeout-minutes: 10
+    permissions:
+      contents: write # push the version bump commit to main
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+      code: ${{ steps.ver.outputs.code }}
     steps:
-      - name: Check inputs and signing secrets
-        env:
-          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      - name: Check inputs
         run: |
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "::error title=Wrong branch::Run the release from main (got $GITHUB_REF)."; exit 1
+          fi
           if [[ ! "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "::error title=Invalid version::'$VERSION' is not semver like 0.1.0 or 0.2.0-beta.1 (no leading v)"
             exit 1
           fi
-          missing=()
-          for name in KEYSTORE_FILE KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
-            if [[ -z "${!name}" ]]; then missing+=("$name"); fi
-          done
-          if (( ${#missing[@]} > 0 )); then
-            echo "::error title=Missing signing secrets::Add these repository secrets (Settings > Secrets and variables > Actions): ${missing[*]}. KEYSTORE_FILE is the base64 of the .jks file (base64 -w0 release.jks)."
-            exit 1
-          fi
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: main
+          # This job pushes the bump commit; the build job checks out without credentials.
+          persist-credentials: true
 
       - name: Fail if the tag already exists
         run: |
@@ -59,68 +66,212 @@ jobs:
             exit 1
           fi
 
-      - name: Compute versionCode
+      - name: Compute versionCode and compare with the current one
         id: ver
         run: |
           [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]]
           major=${BASH_REMATCH[1]}; minor=${BASH_REMATCH[2]}; patch=${BASH_REMATCH[3]}
-          if (( minor > 999 || patch > 999 )); then
+          if (( 10#$minor > 999 || 10#$patch > 999 )); then
             echo "::error::minor and patch must be < 1000 for the versionCode scheme"; exit 1
           fi
           # MAJOR*1000000 + MINOR*1000 + PATCH  (0.1.0 -> 1000, 1.2.3 -> 1002003)
-          code=$(( major * 1000000 + minor * 1000 + patch ))
-          if (( code < 1 )); then code=1; fi
+          code=$(( 10#$major * 1000000 + 10#$minor * 1000 + 10#$patch ))
+          current_code=$(sed -nE 's/^\s*versionCode\s+([0-9]+)\s*$/\1/p' android/app/build.gradle)
+          current_name=$(sed -nE 's/^\s*versionName\s+"([^"]+)"\s*$/\1/p' android/app/build.gradle)
+          if [[ -z "$current_code" || -z "$current_name" ]]; then
+            echo "::error::Could not read the literal versionCode/versionName from android/app/build.gradle"; exit 1
+          fi
+          echo "current: $current_name ($current_code), requested: $VERSION ($code)"
+          # Equal is allowed only for the version already in the tree (first release, or a
+          # retry after the bump commit landed but publishing failed: its tag doesn't exist),
+          # and for a final release after its own pre-release (0.2.0-beta.1 -> 0.2.0), which
+          # shares the versionCode.
+          if (( code < current_code )) || { (( code == current_code )) && [[ "$VERSION" != "$current_name" && "$current_name" != "$VERSION"-* ]]; }; then
+            echo "::error title=Version not higher::$VERSION ($code) must be higher than the current $current_name ($current_code)."
+            exit 1
+          fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
-          echo "versionName=$VERSION versionCode=$code"
 
-      - uses: actions/setup-java@v5
+      - name: Check CHANGELOG.md
+        run: |
+          # Needs a section headed "## [0.1.0]", "## 0.1.0" or "## v0.1.0".
+          esc="${VERSION//./\\.}"
+          if ! grep -Eq "^## \[?v?${esc}([] ]|$)" CHANGELOG.md; then
+            echo "::error title=No changelog entry::Add a '## [$VERSION] - $(date +%F)' section to CHANGELOG.md on main first."
+            exit 1
+          fi
+
+      - name: Bump versions
+        env:
+          CODE: ${{ steps.ver.outputs.code }}
+        run: |
+          sed -i -E "s/^(\s*versionCode\s+)[0-9]+\s*$/\1${CODE}/; s/^(\s*versionName\s+)\"[^\"]+\"\s*$/\1\"${VERSION}\"/" android/app/build.gradle
+          npm version "$VERSION" --no-git-tag-version --allow-same-version >/dev/null
+          # F-Droid shows fastlane/metadata/android/en-US/changelogs/<versionCode>.txt.
+          # Write it from the CHANGELOG section if it is missing (F-Droid's limit is 500 chars).
+          cl="fastlane/metadata/android/en-US/changelogs/${CODE}.txt"
+          if [[ ! -f "$cl" ]]; then
+            awk -v v="$VERSION" '
+              BEGIN { esc = v; gsub(/\./, "\\.", esc) }
+              /^## / { if (insec) exit; if ($0 ~ ("^## \\[?v?" esc "([] ]|$)")) { insec = 1; next } }
+              insec { print }
+            ' CHANGELOG.md | sed -e '/./,$!d' > "$RUNNER_TEMP/cl.txt"
+            if (( $(wc -c < "$RUNNER_TEMP/cl.txt") > 500 )); then
+              head -c 440 "$RUNNER_TEMP/cl.txt" | sed '$d' > "$cl"
+              printf '\nFull notes: https://github.com/%s/releases/tag/v%s\n' "$GITHUB_REPOSITORY" "$VERSION" >> "$cl"
+            else
+              cp "$RUNNER_TEMP/cl.txt" "$cl"
+            fi
+          fi
+          git diff --stat
+
+      - name: Commit and push the bump
+        id: commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add android/app/build.gradle package.json package-lock.json fastlane/metadata/android/en-US/changelogs
+          if git diff --cached --quiet; then
+            echo "Nothing to bump: the tree is already at $VERSION."
+          else
+            git commit -q -m "Release v$VERSION"
+            git push origin HEAD:main
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Release commit: $(git rev-parse HEAD)"
+
+  build:
+    name: Build unsigned APK
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+
+      - uses: gradle/actions/wrapper-validation@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: ${{ env.JAVA_VERSION }}
 
-      - uses: gradle/actions/setup-gradle@v4
-
-      - uses: actions/setup-node@v5
+      # No caches for release builds: every dependency comes fresh from its repository.
+      - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
         with:
-          node-version: '22'
-          cache: npm
+          cache-disabled: true
 
-      - run: npm ci
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: npm ci --ignore-scripts
       - run: npm run build
-      - run: npx cap sync android
+      - run: npx cap sync android --deployment
+
+      - name: Build unsigned release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Collect the APK
+        run: |
+          shopt -s nullglob
+          apks=(android/app/build/outputs/apk/release/*.apk)
+          if (( ${#apks[@]} != 1 )); then
+            echo "::error::Expected one release APK, found ${#apks[@]}"; ls -la android/app/build/outputs/apk/release || true; exit 1
+          fi
+          mkdir -p out
+          cp "${apks[0]}" "out/CyberJuke-$VERSION-unsigned.apk"
+          sha256sum "out/CyberJuke-$VERSION-unsigned.apk"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: unsigned-apk
+          path: out/CyberJuke-${{ inputs.version }}-unsigned.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  sign-and-publish:
+    name: Sign and publish v${{ inputs.version }}
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write # create the tag and the release
+    steps:
+      - name: Check signing secrets
+        env:
+          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          missing=()
+          for name in KEYSTORE_FILE KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then missing+=("$name"); fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            echo "::error title=Missing signing secrets::Add these secrets to the 'release' environment (Settings > Environments > release): ${missing[*]}. KEYSTORE_FILE is the base64 of the .jks file (base64 -w0 release.jks). Then re-run with the same version."
+            exit 1
+          fi
+
+      # Only CHANGELOG.md is needed (for the release notes); no code from the repo runs here.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+          sparse-checkout: CHANGELOG.md
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: unsigned-apk
+          path: unsigned
 
       - name: Decode keystore
         env:
           KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
         run: |
+          umask 077
           printf '%s' "$KEYSTORE_FILE" | base64 -d > "$RUNNER_TEMP/release.jks"
           if [[ ! -s "$RUNNER_TEMP/release.jks" ]]; then
             echo "::error::KEYSTORE_FILE did not decode to a keystore (expected base64)"; exit 1
           fi
 
-      - name: Build signed release APK
-        working-directory: android
+      - name: Align, sign and verify
         env:
-          CYBERJUKE_KEYSTORE: ${{ runner.temp }}/release.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease --stacktrace \
-            -PversionName="$VERSION" -PversionCode="${{ steps.ver.outputs.code }}"
-
-      - name: Verify signature and write checksum
-        run: |
-          src="android/app/build/outputs/apk/release/CyberJuke-$VERSION-release.apk"
-          if [[ ! -f "$src" ]]; then
-            echo "::error::Expected $src"; ls -la android/app/build/outputs/apk/release || true; exit 1
-          fi
+          bt="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)/"
+          in="unsigned/CyberJuke-$VERSION-unsigned.apk"
           mkdir -p out
-          cp "$src" "out/CyberJuke-$VERSION.apk"
-          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)apksigner"
-          "$apksigner" verify --verbose --print-certs "out/CyberJuke-$VERSION.apk"
+          # AGP already aligns its output. Re-align only if needed: rewriting an aligned APK
+          # could change its layout and break F-Droid's reproducible-build comparison.
+          if "${bt}zipalign" -c -p 4 "$in"; then
+            cp "$in" "$RUNNER_TEMP/aligned.apk"
+          else
+            "${bt}zipalign" -p -f 4 "$in" "$RUNNER_TEMP/aligned.apk"
+          fi
+          "${bt}apksigner" sign \
+            --ks "$RUNNER_TEMP/release.jks" \
+            --ks-pass env:KEYSTORE_PASSWORD \
+            --ks-key-alias "$KEY_ALIAS" \
+            --key-pass env:KEY_PASSWORD \
+            --out "out/CyberJuke-$VERSION.apk" \
+            "$RUNNER_TEMP/aligned.apk"
+          "${bt}apksigner" verify --verbose --print-certs "out/CyberJuke-$VERSION.apk"
           (cd out && sha256sum "CyberJuke-$VERSION.apk" > "CyberJuke-$VERSION.apk.sha256" && cat "CyberJuke-$VERSION.apk.sha256")
+
+      - name: Remove keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" "$RUNNER_TEMP/aligned.apk"
 
       - name: Release notes from CHANGELOG.md
         id: notes
@@ -142,10 +293,10 @@ jobs:
           echo "Changelog section found: $found"
 
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: v${{ inputs.version }}
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ needs.prepare.outputs.sha }}
           name: CyberJuke v${{ inputs.version }}
           body_path: ${{ steps.notes.outputs.found == 'true' && 'release-notes.md' || '' }}
           generate_release_notes: ${{ steps.notes.outputs.found != 'true' }}
@@ -154,7 +305,3 @@ jobs:
           files: |
             out/CyberJuke-${{ inputs.version }}.apk
             out/CyberJuke-${{ inputs.version }}.apk.sha256
-
-      - name: Remove keystore
-        if: always()
-        run: rm -f "$RUNNER_TEMP/release.jks"
