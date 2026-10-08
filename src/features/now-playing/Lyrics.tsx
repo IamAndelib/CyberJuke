@@ -13,9 +13,9 @@ import { activeLine, lyrics as client, type Lyrics, type LyricsOutcome } from '.
 import type { Track } from '../../data/model';
 import { livePosition, player, type PlayerState } from '../../player';
 import { online } from '../../core/network';
-import { smoothScrolling } from '../clickGuard';
+import { smoothScrolling } from '../../ui/clickGuard';
 import { reducedMotion } from '../../core/motion';
-import { useTickValue } from '../useTick';
+import { useTickValue } from '../../ui/useTick';
 
 export const MANUAL_PAUSE_MS = 4000;
 

@@ -31,7 +31,7 @@ import { App, Overlays } from './ui/App';
 import { BootError } from './ui/BootError';
 import { Home } from './ui/screens/Home';
 import { TrackRow } from './ui/components/TrackRow';
-import { MiniPlayer, NowPlaying } from './ui/components/PlayerUI';
+import { MiniPlayer, NowPlaying } from './features/now-playing/PlayerUI';
 
 const native = Capacitor.isNativePlatform();
 

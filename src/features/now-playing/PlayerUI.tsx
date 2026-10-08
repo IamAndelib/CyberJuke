@@ -4,19 +4,19 @@ import { block } from '../../stores/block';
 import { isLiked, liked } from '../../stores/library';
 import { toggleLikeWithUndo } from '../../stores/undo';
 import { toast } from '../../stores/toast';
-import { Icon } from '../icons';
-import { artistChoice, lyricsOpen, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage } from '../nav';
-import { openExternal, openPost, youtubeUrl } from '../links';
-import { positionNow, useLiveProgress, useTickValue } from '../useTick';
+import { Icon } from '../../ui/icons';
+import { artistChoice, lyricsOpen, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage } from '../../ui/nav';
+import { openExternal, openPost, youtubeUrl } from '../../ui/links';
+import { positionNow, useLiveProgress, useTickValue } from '../../ui/useTick';
 import { splitArtists } from '../../data/artists';
 import { isGlobal, type Track } from '../../data/model';
 import { reducedMotion } from '../../core/motion';
-import { Art } from './Art';
+import { Art } from '../../ui/components/Art';
 import { Marquee } from './Marquee';
-import { MembersTag } from './TrackRow';
+import { MembersTag } from '../../ui/components/TrackRow';
 import { LyricsPanel } from './Lyrics';
 import { UpNext } from './UpNext';
-import { canSharePost, sharePost, shareTrack } from '../share';
+import { canSharePost, sharePost, shareTrack } from '../../ui/share';
 
 export function fmt(ms: number): string {
   if (!isFinite(ms) || ms < 0) ms = 0;

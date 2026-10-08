@@ -1,8 +1,8 @@
 import { useRef } from 'preact/hooks';
 import { player, playContext, upNextSections, type PlayerState, type UpItem } from '../../player';
 import { toast } from '../../stores/toast';
-import { Icon } from '../icons';
-import { Art } from './Art';
+import { Icon } from '../../ui/icons';
+import { Art } from '../../ui/components/Art';
 
 type Kind = 'queued' | 'list' | 'autoplay';
 

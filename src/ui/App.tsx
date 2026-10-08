@@ -20,7 +20,7 @@ import {
   type StackEntry,
   type Tab,
 } from './nav';
-import { ArtistChooser, MiniPlayer, NowPlaying, TrackMenu } from './components/PlayerUI';
+import { ArtistChooser, MiniPlayer, NowPlaying, TrackMenu } from '../features/now-playing/PlayerUI';
 import { Toasts } from './components/Toasts';
 import { ConfirmSheet } from './ConfirmSheet';
 import { SearchFab } from './components/SearchFab';
