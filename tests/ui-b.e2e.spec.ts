@@ -12,9 +12,9 @@ async function waitForTracks(page: Page) {
   await expect(page.getByTestId('skeleton')).toHaveCount(0);
 }
 
-async function start(page: Page) {
+async function start(page: Page, opts: Parameters<typeof stubMusic>[1] = {}) {
   await stubYouTube(page);
-  await stubMusic(page);
+  await stubMusic(page, opts);
   await page.goto('/');
   await waitForTracks(page);
 }
@@ -90,9 +90,9 @@ test('Now Playing: a swipe down closes it, a short drag springs back, the seek b
 
 // ---- 4. Exact artists ----------------------------------------------------------------
 
-test('"More by Queen" lists only Queen-channel items: no Ivy Queen, no Queen Butterfly', async ({ page }) => {
+test('"More by Queen" (fallback) lists only Queen-channel items: no Ivy Queen, no Queen Butterfly', async ({ page }) => {
   await stubYouTube(page);
-  await stubMusic(page);
+  await stubMusic(page, { noArtistPage: true });
   await page.goto('/');
   await page.getByTestId('search-fab').click();
   await page.getByTestId('mode-global').click();
@@ -123,7 +123,7 @@ test('"More by Queen" lists only Queen-channel items: no Ivy Queen, no Queen But
 });
 
 test('an artist opened from the Artists tab is resolved by exact name', async ({ page }) => {
-  await start(page);
+  await start(page, { noArtistPage: true });
   await page.getByTestId('tab-artists').click();
   const tile = page.getByTestId('artist-grid').getByTestId('artist-tile').first();
   const artist = (await tile.getAttribute('data-artist'))!;

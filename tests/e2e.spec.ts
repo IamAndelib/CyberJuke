@@ -510,9 +510,9 @@ test('Artists tab lists artists; a heart adds Favorite artists, which survive a 
   await expect(page.getByTestId('fav-artists')).toHaveCount(0);
 });
 
-test('an artist page puts the Jukebox first, then More by and Albums; an album opens and plays', async ({ page }) => {
+test('without the artist page, an artist page falls back to the Jukebox, More by and Albums; an album opens and plays', async ({ page }) => {
   await stubYouTube(page);
-  await stubMusic(page);
+  await stubMusic(page, { noArtistPage: true });
   await page.goto('/');
   await page.getByTestId('tab-artists').click();
   const tile = page.getByTestId('artist-grid').getByTestId('artist-tile').first();

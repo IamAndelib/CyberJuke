@@ -287,7 +287,7 @@ test('Here: search from an album page searches the album, above it', async ({ pa
   await page.goto('/');
   await page.getByTestId('tab-artists').click();
   await page.getByTestId('artist-grid').getByTestId('artist-tile').first().click();
-  await page.getByTestId('artist-albums').getByTestId('album-card').first().click();
+  await page.getByTestId('artist-albums').getByTestId('release-card').first().click();
   const album = page.getByTestId('screen-album');
   await expect(album.getByTestId('track-row').first()).toBeVisible();
   const title = (await page.getByTestId('album-title').innerText()).trim();

@@ -34,7 +34,8 @@ async function openHome(page: Page, theme?: string) {
     }, theme);
   }
   await stubYouTube(page);
-  await stubMusic(page);
+  // These shots show the search-based artist page (the fallback); see members.screenshots for the artist's own page.
+  await stubMusic(page, { noArtistPage: true });
   await page.goto('/');
   await expect(page.getByTestId('track-row').first()).toBeVisible();
   await settle(page);
