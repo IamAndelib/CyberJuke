@@ -6,6 +6,14 @@
  * Terms (mirroring the native plugin contract):
  *  - "list": the queue in list order (what setQueue/addItems/moveItem index into);
  *  - "play order": the order tracks will actually play (differs when shuffled).
+ *
+ * The "Add to queue" rule (shared with the native queue; the cases both must pass
+ * are in tests/spec/queue-rules.json):
+ *  - queued tracks play right after the current track, first in first out, shuffle
+ *    or not, until each one plays or is removed;
+ *  - a manual jump (skipTo, or prev moving back) to a track that isn't one of them
+ *    keeps them next: they move to just after the new current track, in the order
+ *    they were going to play. Jumping to one of them plays it; the others stay next.
  */
 
 export type RepeatMode = 'off' | 'all' | 'one';
@@ -127,22 +135,25 @@ export class Queue<T extends Identified> {
     if (p > 0) {
       this.cur = this.order[p - 1];
       this.settle();
+      this.keepQueuedNext();
       return 'moved';
     }
     if (this.repeat === 'all' && this.order.length > 1) {
       this.cur = this.order[this.order.length - 1];
       this.settle();
+      this.keepQueuedNext();
       return 'moved';
     }
     return 'restart';
   }
 
-  /** Jump to a list index. */
+  /** Jump to a list index. Tracks still queued stay next (see the rule above). */
   skipTo(index: number): T | null {
     const e = this.list[index];
     if (!e) return null;
     this.cur = e;
     this.settle();
+    this.keepQueuedNext();
     return e.item;
   }
 
@@ -234,6 +245,18 @@ export class Queue<T extends Identified> {
   /** The current entry changed: a queued track that starts playing is no longer "queued". */
   private settle(): void {
     if (this.cur) this.queued.delete(this.cur);
+  }
+
+  /** Move the still-queued tracks to just after the current one, keeping their play order. */
+  private keepQueuedNext(): void {
+    const cur = this.cur;
+    if (!cur || !this.queued.size) return;
+    const pending = this.order.filter((e) => this.queued.has(e));
+    const isPending = (e: Entry<T>) => this.queued.has(e);
+    this.list = this.list.filter((e) => !isPending(e));
+    this.order = this.order.filter((e) => !isPending(e));
+    this.list.splice(this.list.indexOf(cur) + 1, 0, ...pending);
+    this.order.splice(this.order.indexOf(cur) + 1, 0, ...pending);
   }
 
   private entry(item: T): Entry<T> {

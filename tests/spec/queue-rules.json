@@ -1,0 +1,150 @@
+{
+  "about": "The 'Add to queue' rule, shared by the web Queue (src/player/queue.ts) and the native queue. Every case starts from `list` with `start` current (list index), shuffle and repeat as given, then runs `steps` in order. Ids are track ids; ids are unique within a case. Ops: setList {ids, start}; queueNext {ids}; skipTo {id} (the list index of that id); next (a user skip); nextAuto (the track ended by itself); prev {positionMs} (go back: moves when positionMs <= 3000, else restarts the current track); remove {id}; move {id, to} (list index); setShuffle {on}; setRepeat {mode}. An expect step checks: current (id); upNext (the whole play order after the current track); upNextStartsWith (its first ids, for shuffled cases); queued (how many leading upNext tracks are 'Queued by you'); list (list order).",
+  "rule": "Queued tracks play right after the current track, first in first out, shuffle or not, until each one plays or is removed. A manual jump (skipTo, or prev moving back) keeps the still-queued tracks next: they move to just after the new current track, in the order they were going to play. Jumping to a queued track plays it; the others stay next.",
+  "cases": [
+    {
+      "name": "queued tracks play next, first in first out",
+      "list": ["a", "b", "c", "d", "e"],
+      "start": 0,
+      "steps": [
+        { "op": "queueNext", "ids": ["X"] },
+        { "op": "queueNext", "ids": ["Y"] },
+        { "op": "expect", "current": "a", "upNext": ["X", "Y", "b", "c", "d", "e"], "queued": 2, "list": ["a", "X", "Y", "b", "c", "d", "e"] },
+        { "op": "next" },
+        { "op": "expect", "current": "X", "upNext": ["Y", "b", "c", "d", "e"], "queued": 1 },
+        { "op": "queueNext", "ids": ["Z"] },
+        { "op": "expect", "current": "X", "upNext": ["Y", "Z", "b", "c", "d", "e"], "queued": 2 }
+      ]
+    },
+    {
+      "name": "a manual skip past queued tracks keeps them next",
+      "list": ["a", "b", "c", "d", "e"],
+      "start": 0,
+      "steps": [
+        { "op": "queueNext", "ids": ["X", "Y"] },
+        { "op": "skipTo", "id": "d" },
+        { "op": "expect", "current": "d", "upNext": ["X", "Y", "e"], "queued": 2, "list": ["a", "b", "c", "d", "X", "Y", "e"] },
+        { "op": "next" },
+        { "op": "expect", "current": "X", "upNext": ["Y", "e"], "queued": 1 },
+        { "op": "next" },
+        { "op": "expect", "current": "Y", "upNext": ["e"], "queued": 0 }
+      ]
+    },
+    {
+      "name": "jumping to a queued track plays it; the earlier ones stay next",
+      "list": ["a", "b", "c", "d", "e"],
+      "start": 0,
+      "steps": [
+        { "op": "queueNext", "ids": ["X", "Y", "Z"] },
+        { "op": "skipTo", "id": "Y" },
+        { "op": "expect", "current": "Y", "upNext": ["X", "Z", "b", "c", "d", "e"], "queued": 2 }
+      ]
+    },
+    {
+      "name": "a skip backwards keeps them next too",
+      "list": ["a", "b", "c", "d", "e"],
+      "start": 2,
+      "steps": [
+        { "op": "queueNext", "ids": ["X"] },
+        { "op": "skipTo", "id": "a" },
+        { "op": "expect", "current": "a", "upNext": ["X", "b", "c", "d", "e"], "queued": 1, "list": ["a", "X", "b", "c", "d", "e"] }
+      ]
+    },
+    {
+      "name": "prev moving back keeps them next; prev restarting changes nothing",
+      "list": ["a", "b", "c", "d", "e"],
+      "start": 2,
+      "steps": [
+        { "op": "queueNext", "ids": ["X"] },
+        { "op": "prev", "positionMs": 5000 },
+        { "op": "expect", "current": "c", "upNext": ["X", "d", "e"], "queued": 1 },
+        { "op": "prev", "positionMs": 0 },
+        { "op": "expect", "current": "b", "upNext": ["X", "c", "d", "e"], "queued": 1 }
+      ]
+    },
+    {
+      "name": "the track ending plays the queued ones first",
+      "list": ["a", "b", "c"],
+      "start": 0,
+      "steps": [
+        { "op": "queueNext", "ids": ["X"] },
+        { "op": "nextAuto" },
+        { "op": "expect", "current": "X", "upNext": ["b", "c"], "queued": 0 }
+      ]
+    },
+    {
+      "name": "repeat one replays the track when it ends; a user skip plays the queued one",
+      "list": ["a", "b", "c"],
+      "start": 0,
+      "repeat": "one",
+      "steps": [
+        { "op": "queueNext", "ids": ["X"] },
+        { "op": "nextAuto" },
+        { "op": "expect", "current": "a", "upNext": ["X", "b", "c"], "queued": 1 },
+        { "op": "next" },
+        { "op": "expect", "current": "X", "upNext": ["b", "c"], "queued": 0 }
+      ]
+    },
+    {
+      "name": "shuffled: queued tracks still play next, before and after a skip",
+      "list": ["a", "b", "c", "d", "e", "f"],
+      "start": 0,
+      "shuffle": true,
+      "steps": [
+        { "op": "queueNext", "ids": ["X", "Y"] },
+        { "op": "expect", "current": "a", "upNextStartsWith": ["X", "Y"], "queued": 2 },
+        { "op": "skipTo", "id": "e" },
+        { "op": "expect", "current": "e", "upNextStartsWith": ["X", "Y"], "queued": 2 },
+        { "op": "setShuffle", "on": false },
+        { "op": "expect", "current": "e", "upNextStartsWith": ["X", "Y"], "queued": 2 },
+        { "op": "setShuffle", "on": true },
+        { "op": "expect", "current": "e", "upNextStartsWith": ["X", "Y"], "queued": 2 }
+      ]
+    },
+    {
+      "name": "a removed queued track is forgotten; the rest stay next",
+      "list": ["a", "b", "c", "d", "e"],
+      "start": 0,
+      "steps": [
+        { "op": "queueNext", "ids": ["X", "Y"] },
+        { "op": "remove", "id": "X" },
+        { "op": "expect", "current": "a", "upNext": ["Y", "b", "c", "d", "e"], "queued": 1 },
+        { "op": "skipTo", "id": "d" },
+        { "op": "expect", "current": "d", "upNext": ["Y", "e"], "queued": 1 }
+      ]
+    },
+    {
+      "name": "a new list forgets everything queued",
+      "list": ["a", "b", "c"],
+      "start": 0,
+      "steps": [
+        { "op": "queueNext", "ids": ["X"] },
+        { "op": "setList", "ids": ["p", "q", "r"], "start": 1 },
+        { "op": "expect", "current": "q", "upNext": ["r"], "queued": 0 },
+        { "op": "skipTo", "id": "p" },
+        { "op": "expect", "current": "p", "upNext": ["q", "r"], "queued": 0 }
+      ]
+    },
+    {
+      "name": "a queued track moved by hand keeps its new place on a skip",
+      "list": ["a", "b", "c", "d"],
+      "start": 0,
+      "steps": [
+        { "op": "queueNext", "ids": ["X", "Y"] },
+        { "op": "move", "id": "Y", "to": 1 },
+        { "op": "expect", "current": "a", "upNext": ["Y", "X", "b", "c", "d"], "queued": 2 },
+        { "op": "skipTo", "id": "c" },
+        { "op": "expect", "current": "c", "upNext": ["Y", "X", "d"], "queued": 2 }
+      ]
+    },
+    {
+      "name": "with nothing playing, the first queued track plays and the rest follow",
+      "list": [],
+      "start": 0,
+      "steps": [
+        { "op": "queueNext", "ids": ["X", "Y"] },
+        { "op": "expect", "current": "X", "upNext": ["Y"], "queued": 1 }
+      ]
+    }
+  ]
+}
