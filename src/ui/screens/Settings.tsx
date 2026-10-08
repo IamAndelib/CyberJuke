@@ -129,7 +129,7 @@ function SignInForm() {
     <form class="signin" onSubmit={submit} noValidate data-testid="signin-form">
       <div class="setting-name">Sign in with Cyberspace</div>
       <p class="setting-desc signin-lead">
-        Optional. Signed in, the Jukebox also shows members-only posts, marked <span class="mtag">[members]</span>.
+        Optional. Signed in, the Jukebox also shows members-only shared tracks, marked <span class="mtag">[members]</span>.
       </p>
       <div class="field">
         <label class="field-label" for="signin-email">
@@ -210,7 +210,7 @@ function SignedIn({ name }: { name: string }) {
           Signed in as <span data-testid="account-name">{name}</span>
         </div>
         <div class="setting-desc">
-          Members-only posts show on Home, Genres, Artists and Search, marked <span class="mtag">[members]</span>.
+          Members-only shared tracks show on Home, Genres, Artists and Search, marked <span class="mtag">[members]</span>.
         </div>
       </div>
       <button
@@ -247,6 +247,8 @@ export function Settings() {
   const s = settings.value;
   return (
     <Screen testid="screen-settings" title="Settings" subtitle={`CyberJuke v${__APP_VERSION__}`} scrollKey="settings" backToTop={false}>
+      <Account />
+
       <section class="card">
         <h2 class="card-title">Theme</h2>
         <div class="swatches" data-testid="theme-picker">
@@ -255,8 +257,6 @@ export function Settings() {
           ))}
         </div>
       </section>
-
-      <Account />
 
       <section class="card">
         <h2 class="card-title">Playback &amp; data</h2>
@@ -300,7 +300,7 @@ export function Settings() {
         <p>
           <b>Data:</b> public posts with music attachments, read from Cyberspace's public database exactly as the
           website shows them. Nothing is posted and no account is needed. Signing in with Cyberspace (optional)
-          adds the members-only posts the site shows its members.
+          adds the members-only shared tracks the site shows its members.
         </p>
         <p>
           <b>Audio:</b> tracks are the videos posters link to, streamed from where they are hosted. Availability depends
