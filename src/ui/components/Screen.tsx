@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../icons';
+import { FastScroller } from './FastScroller';
 
 const THRESHOLD = 64;
 /** Back-to-top shows past this many screen-heights. */
@@ -42,6 +43,7 @@ export function Screen({
   class: cls,
   role,
   label,
+  azScroller = false,
 }: {
   title?: ComponentChildren;
   subtitle?: ComponentChildren;
@@ -57,6 +59,8 @@ export function Screen({
   class?: string;
   role?: 'dialog' | 'region';
   label?: string;
+  /** A–Z sections (`.az-head`): show the section letter while scrolling. */
+  azScroller?: boolean;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
@@ -171,6 +175,7 @@ export function Screen({
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchEnd}
     >
+      <FastScroller scroller={scroller} az={azScroller} />
       {bar ?? (
         <header class="topbar">
           {left && <div class="topbar-left">{left}</div>}

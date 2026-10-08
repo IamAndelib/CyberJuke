@@ -1,12 +1,16 @@
+import type { Track } from '../../data/model';
 import { source } from '../../data';
 import { player } from '../../player';
 import { catalog } from '../../store/catalog';
 import { genres, genresComplete } from '../../store/genres';
 import { favoriteGenres, settings, toggleFavoriteGenre } from '../../store/library';
 import { Icon } from '../icons';
-import { openGenre } from '../nav';
+import { openGenre, useSearchContext } from '../nav';
 import { ErrorState, PagedTracks } from '../components/TrackList';
 import { Screen } from '../components/Screen';
+import { AZHead, GridSortRail } from '../components/GridSort';
+import { groupAZ } from '../azSections';
+import { genresSort } from '../../store/prefs';
 import { usePaged } from '../usePaged';
 
 export function Genres() {
@@ -38,6 +42,7 @@ function GenreGrid() {
   const favs = favoriteGenres.value;
   const status = catalog.status.value;
   const complete = genresComplete.value;
+  const sort = genresSort.value;
 
   return (
     <Screen
@@ -45,7 +50,9 @@ function GenreGrid() {
       title="Genres"
       subtitle={complete ? `${list.length} genres on the Jukebox` : 'Browse by genre'}
       onRefresh={() => catalog.refresh({ force: true })}
-      scrollKey="genres"
+      scrollKey={`genres:${sort}`}
+      right={<GridSortRail sort={genresSort} testid="genres-sort" />}
+      azScroller={sort === 'az' && list.length > 0}
     >
       {favs.length > 0 && (
         <section data-testid="fav-genres">
@@ -76,8 +83,21 @@ function GenreGrid() {
             <div class="genre-tile skel-block" key={i} />
           ))}
         </div>
+      ) : sort === 'az' ? (
+        <div data-testid="genre-grid" data-sort="az">
+          {groupAZ(list, (g) => g.name).map((sec) => (
+            <section class="az-section" key={sec.letter} data-testid="az-section" data-letter={sec.letter}>
+              <AZHead letter={sec.letter} />
+              <div class="genre-grid">
+                {sec.items.map((g) => (
+                  <GenreTile key={g.name} name={g.name} fav={favs.includes(g.name)} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       ) : (
-        <div class="genre-grid" data-testid="genre-grid">
+        <div class="genre-grid" data-testid="genre-grid" data-sort="popular">
           {list.map((g) => (
             <GenreTile key={g.name} name={g.name} fav={favs.includes(g.name)} />
           ))}
@@ -86,6 +106,16 @@ function GenreGrid() {
       <p class="fineprint">Genres are free text chosen by each poster. Tap the heart to pin a genre to the top.</p>
     </Screen>
   );
+}
+
+/** Catalog tracks of one genre, recomputed only when the catalog changes. */
+let genreMemo: { src: Track[]; genre: string; out: Track[] } | null = null;
+function catalogGenre(genre: string): Track[] {
+  const src = catalog.tracks.value;
+  if (genreMemo?.src !== src || genreMemo.genre !== genre) {
+    genreMemo = { src, genre, out: src.filter((t) => t.genre === genre) };
+  }
+  return genreMemo.out;
 }
 
 function GenreDetail({ genre }: { genre: string }) {
@@ -98,6 +128,15 @@ function GenreDetail({ genre }: { genre: string }) {
     return p;
   });
   const has = paged.tracks.length > 0;
+  // Here: every catalog track in this genre (what the page pages through), or the
+  // pages loaded so far while the catalog is still loading.
+  useSearchContext({
+    label: genre,
+    tracks: () => {
+      const all = catalogGenre(genre);
+      return all.length >= paged.tracks.length ? all : paged.tracks;
+    },
+  });
   return (
     <Screen
       testid="screen-genre"

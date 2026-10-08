@@ -1,0 +1,230 @@
+import type { RefObject } from 'preact';
+import { useEffect, useRef } from 'preact/hooks';
+
+/** The thumb fades this long after scrolling stops. */
+export const SCROLLBAR_HIDE_MS = 1200;
+/** The A–Z letter popup fades this long after scrolling or dragging stops. */
+export const LETTER_HIDE_MS = 600;
+/** Lists longer than this many screens get a draggable thumb. */
+export const DRAG_SCREENS = 3;
+const MIN_THUMB = 48;
+
+/**
+ * Overlay scrollbar for a `Screen` (the native one is hidden): a thin thumb on the right
+ * edge that shows while scrolling and fades after. On long lists the thumb can be
+ * dragged (44px-wide touch area). With `az`, the letter of the `.az-head` section at
+ * the top of the list shows in a centred box while scrolling or dragging, and beside
+ * the thumb while dragging.
+ *
+ * Lives in a zero-height sticky dock at the top of the scroller, so it stays put while
+ * the content scrolls; everything is updated directly in a requestAnimationFrame.
+ */
+export function FastScroller({ scroller, az }: { scroller: RefObject<HTMLDivElement | null>; az: boolean }) {
+  const box = useRef<HTMLDivElement>(null);
+  const track = useRef<HTMLDivElement>(null);
+  const thumb = useRef<HTMLDivElement>(null);
+  const label = useRef<HTMLSpanElement>(null);
+  const popup = useRef<HTMLDivElement>(null);
+  const azRef = useRef(az);
+  azRef.current = az;
+  const st = useRef({
+    frame: 0,
+    hideT: 0 as ReturnType<typeof setTimeout> | 0,
+    popT: 0 as ReturnType<typeof setTimeout> | 0,
+    dragging: false,
+    grab: 0,
+    letter: '',
+    heads: [] as { top: number; letter: string }[],
+    headsFor: -1,
+  });
+
+  const headerHeight = (el: HTMLElement) => (el.querySelector(':scope > .topbar') as HTMLElement | null)?.offsetHeight ?? 0;
+
+  /** Section letter at the top of the visible list. */
+  const currentLetter = (el: HTMLElement, head: number): string => {
+    const s = st.current;
+    if (s.headsFor !== el.scrollHeight) {
+      const base = el.getBoundingClientRect().top - el.scrollTop;
+      s.heads = Array.from(el.querySelectorAll<HTMLElement>('.az-head')).map((h) => ({
+        top: h.getBoundingClientRect().top - base,
+        letter: h.dataset.letter ?? '',
+      }));
+      s.headsFor = el.scrollHeight;
+    }
+    const line = el.scrollTop + head + 8;
+    let cur = s.heads[0]?.letter ?? '';
+    for (const h of s.heads) {
+      if (h.top <= line) cur = h.letter;
+      else break;
+    }
+    return cur;
+  };
+
+  const layout = () => {
+    st.current.frame = 0;
+    const el = scroller.current;
+    const b = box.current;
+    const tr = track.current;
+    const th = thumb.current;
+    if (!el || !b || !tr || !th) return;
+    const head = headerHeight(el);
+    b.style.top = `${head}px`;
+    b.style.height = `${Math.max(0, el.clientHeight - head)}px`;
+    if (popup.current) popup.current.style.top = `${head + (el.clientHeight - head) / 2}px`;
+    const max = el.scrollHeight - el.clientHeight;
+    const scrollable = max > 1;
+    b.classList.toggle('none', !scrollable);
+    b.classList.toggle('draggable', el.scrollHeight > el.clientHeight * DRAG_SCREENS);
+    if (!scrollable) return;
+    const trackH = tr.clientHeight;
+    const thumbH = Math.min(trackH, Math.max(MIN_THUMB, (trackH * el.clientHeight) / el.scrollHeight));
+    const y = (Math.min(max, Math.max(0, el.scrollTop)) / max) * (trackH - thumbH);
+    th.style.height = `${thumbH}px`;
+    th.style.transform = `translateY(${y}px)`;
+    if (azRef.current) {
+      const l = currentLetter(el, head);
+      if (l !== st.current.letter) {
+        st.current.letter = l;
+        if (popup.current) popup.current.firstElementChild!.textContent = l;
+        if (label.current) label.current.textContent = l;
+      }
+    }
+  };
+
+  const schedule = () => {
+    if (!st.current.frame) st.current.frame = requestAnimationFrame(layout);
+  };
+
+  /** Show the thumb (and, in A–Z, the letter popup), then fade them after a pause. */
+  const wake = () => {
+    const s = st.current;
+    box.current?.classList.add('on');
+    clearTimeout(s.hideT);
+    s.hideT = setTimeout(() => {
+      if (!s.dragging) box.current?.classList.remove('on');
+    }, SCROLLBAR_HIDE_MS);
+    if (azRef.current && popup.current) {
+      popup.current.classList.add('on');
+      clearTimeout(s.popT);
+      s.popT = setTimeout(() => {
+        if (!s.dragging) popup.current?.classList.remove('on');
+      }, LETTER_HIDE_MS);
+    }
+  };
+
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const onScroll = () => {
+      schedule();
+      wake();
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver === 'function') {
+      ro = new ResizeObserver(() => {
+        st.current.headsFor = -1;
+        schedule();
+      });
+      ro.observe(el);
+      const body = el.querySelector(':scope > .screen-body');
+      if (body) ro.observe(body);
+    }
+    schedule();
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      ro?.disconnect();
+      const s = st.current;
+      cancelAnimationFrame(s.frame);
+      s.frame = 0;
+      clearTimeout(s.hideT);
+      clearTimeout(s.popT);
+    };
+  }, []);
+
+  useEffect(() => {
+    st.current.headsFor = -1;
+    st.current.letter = '';
+    if (!az) popup.current?.classList.remove('on');
+    schedule();
+  }, [az]);
+
+  const scrollToPointer = (clientY: number) => {
+    const el = scroller.current;
+    const tr = track.current;
+    const th = thumb.current;
+    if (!el || !tr || !th) return;
+    const r = tr.getBoundingClientRect();
+    const span = r.height - th.offsetHeight;
+    if (span <= 0) return;
+    const frac = Math.min(1, Math.max(0, (clientY - r.top - st.current.grab) / span));
+    el.scrollTop = frac * (el.scrollHeight - el.clientHeight);
+    schedule();
+    wake();
+  };
+
+  const onPointerDown = (e: PointerEvent) => {
+    const b = box.current;
+    const th = thumb.current;
+    if (!b?.classList.contains('draggable') || !th) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const s = st.current;
+    const tr = th.getBoundingClientRect();
+    const inThumb = e.clientY >= tr.top && e.clientY <= tr.bottom;
+    s.grab = inThumb ? e.clientY - tr.top : th.offsetHeight / 2;
+    s.dragging = true;
+    b.classList.add('dragging');
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    // A pending scroll-memory restore must not fight the drag.
+    scroller.current?.dispatchEvent(new Event('wheel'));
+    scrollToPointer(e.clientY);
+  };
+  const onPointerMove = (e: PointerEvent) => {
+    if (!st.current.dragging) return;
+    e.preventDefault();
+    scrollToPointer(e.clientY);
+  };
+  const onPointerUp = (e: PointerEvent) => {
+    const s = st.current;
+    if (!s.dragging) return;
+    s.dragging = false;
+    box.current?.classList.remove('dragging');
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    wake();
+  };
+  // Keep pull-to-refresh (touch handlers on the scroller) out of a drag.
+  const stop = (e: Event) => {
+    if (box.current?.classList.contains('draggable')) e.stopPropagation();
+  };
+
+  return (
+    <div class="sb-dock" aria-hidden="true">
+      <div class="sb none" ref={box} data-testid="scrollbar">
+        <div class="sb-track" ref={track}>
+          <div
+            class="sb-thumb"
+            ref={thumb}
+            data-testid="scroll-thumb"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            onTouchStart={stop}
+            onTouchMove={stop}
+            onTouchEnd={stop}
+          >
+            <span class="sb-bar" />
+            {az && <span class="sb-label" ref={label} data-testid="scroll-label" />}
+          </div>
+        </div>
+      </div>
+      {az && (
+        <div class="az-pop" ref={popup} data-testid="az-popup">
+          <span class="az-pop-letter" />
+          <span class="az-pop-shadow" />
+        </div>
+      )}
+    </div>
+  );
+}
