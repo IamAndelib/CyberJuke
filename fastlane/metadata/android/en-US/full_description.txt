@@ -1,0 +1,33 @@
+<p>CyberJuke turns the <a href="https://beta.cyberspace.online">Cyberspace</a> Jukebox into a music-streaming app. The Jukebox is where people on Cyberspace share the music they love, posted alongside what they write. CyberJuke keeps Cyberspace's retro look and adds a music app's playback.</p>
+
+<p><b>Unofficial.</b> CyberJuke is a fan-made app. It is not made, endorsed or supported by Cyberspace or its creator, and it is not affiliated with YouTube.</p>
+
+<p><b>Features</b></p>
+<ul>
+<li><b>Latest tracks</b> posted to the Jukebox as an endless list, and <b>Most saved</b> this month or all time.</li>
+<li><b>Search</b> every Jukebox track by title, artist, genre or @poster, with typo tolerance. It works offline once the catalog is cached.</li>
+<li><b>Shuffle the Jukebox:</b> one tap for a random mix.</li>
+<li><b>Genres</b> and <b>artists</b> in A–Z or popular order, with favorites. An artist page shows what Cyberspace people shared, then the artist's top songs, albums, EPs and singles.</li>
+<li><b>Background playback:</b> notification, lock screen and headset controls; the queue keeps going with the screen off.</li>
+<li><b>Now Playing</b> with seek, shuffle, repeat, like, synced lyrics and an Up Next queue you can reorder.</li>
+<li><b>Library:</b> liked tracks and recently played, stored on your phone.</li>
+<li><b>Global search</b> (optional): any song, album, artist or playlist beyond the Jukebox, using YouTube Music data.</li>
+<li>"Posted by @user" opens the original post on Cyberspace.</li>
+<li>Cyberspace themes: Dark, Light, C64, VT320, Matrix, Crypt, Bubblegum and Brutalist. NSFW posts are hidden unless you turn them on.</li>
+</ul>
+
+<p><b>Optional sign-in</b></p>
+<p>Without an account, CyberJuke shows the Jukebox's public posts. Signing in with your Cyberspace account also shows the members-only shared tracks. Your password goes only to Cyberspace's own login service (Firebase Auth, the same one the website uses) and is never stored. The login token is encrypted on the phone with an Android Keystore key, is excluded from backups, and is deleted when you sign out.</p>
+
+<p><b>Privacy</b></p>
+<p>No analytics, no tracking, no ads. CyberJuke talks only to Cyberspace's backend (the track list, and the login if you sign in), YouTube and YouTube Music (audio, artwork, Global search and artist pages) and LRCLIB (lrclib.net) when you open lyrics. Your library, history and settings stay on the phone.</p>
+
+<p><b>YouTube and NewPipe</b></p>
+<p>Every Jukebox track is a YouTube link. CyberJuke plays the audio with NewPipeExtractor, the library behind NewPipe, and Media3/ExoPlayer. This is why it has the NonFreeNet anti-feature, and it means:</p>
+<ul>
+<li>When YouTube changes something, playback can stop working for everyone until NewPipeExtractor and CyberJuke are updated.</li>
+<li>YouTube sometimes limits requests from a network (VPNs, Tor and some mobile networks more often). CyberJuke then pauses instead of skipping, waits before trying again, and tells you; switching between Wi-Fi and mobile data usually helps. A "Prefer IPv4" setting can also help on some networks.</li>
+<li>Some videos can't be played (removed, private, age-restricted or region-blocked); they are skipped.</li>
+</ul>
+
+<p>CyberJuke is free software under the GPL-3.0. The music belongs to its artists, and the posts belong to the people who wrote them.</p>

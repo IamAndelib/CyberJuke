@@ -1,0 +1,8 @@
+First release.
+
+- The Cyberspace Jukebox as a music app: latest tracks, most saved, search, genres and artists
+- Background playback with notification, lock screen and headset controls
+- Now Playing with lyrics and an Up Next queue you can reorder
+- Optional sign-in for members-only shared tracks
+- Global search with YouTube Music data
+- Eight Cyberspace themes
