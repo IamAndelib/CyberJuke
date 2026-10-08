@@ -2,7 +2,7 @@ import { useEffect } from 'preact/hooks';
 import { player } from '../player';
 import { online } from '../store/network';
 import { Icon, type IconName } from './icons';
-import { goBack, nowPlayingOpen, openAlbum, openArtist, openGenre, searchOpen, tab, type Tab } from './nav';
+import { goBack, nowPlayingOpen, openAlbum, openArtist, openGenre, searchOpen, searchOverAlbum, tab, type Tab } from './nav';
 import { ArtistChooser, MiniPlayer, NowPlaying, Toasts, TrackMenu } from './components/PlayerUI';
 import { SearchFab } from './components/SearchFab';
 import { AlbumPage } from './screens/Album';
@@ -36,6 +36,7 @@ function TabBar() {
             if (t.id === 'genres' && cur === 'genres' && !onTop) openGenre.value = null;
             if (t.id === 'artists' && cur === 'artists' && !onTop) openArtist.value = null;
             searchOpen.value = false;
+            searchOverAlbum.value = false;
             openAlbum.value = null;
             tab.value = t.id;
           }}
@@ -55,7 +56,10 @@ export function App() {
   const searching = searchOpen.value;
   const album = openAlbum.value;
   const covered = searching || !!album;
-  const showFab = cur !== 'settings' && !covered;
+  // Search over an album page sits on top of it; otherwise an album sits over search.
+  const searchTop = searching && searchOverAlbum.value;
+  // The search button also shows on an album page (searching it is "Here").
+  const showFab = !searching && (!!album || cur !== 'settings');
 
   // Escape closes overlays on the web (Android back is wired in main.tsx).
   useEffect(() => {
@@ -81,17 +85,21 @@ export function App() {
           {cur === 'library' && <Library />}
           {cur === 'settings' && <Settings />}
         </div>
-        {showFab && <SearchFab />}
         {searching && (
-          <div class="layer" inert={album ? true : undefined} aria-hidden={album ? true : undefined}>
+          <div
+            class={'layer' + (searchTop ? ' search-top' : '')}
+            inert={album && !searchTop ? true : undefined}
+            aria-hidden={album && !searchTop ? true : undefined}
+          >
             <Search />
           </div>
         )}
         {album && (
-          <div class="layer album-layer">
+          <div class="layer album-layer" inert={searchTop ? true : undefined} aria-hidden={searchTop ? true : undefined}>
             <AlbumPage key={album.url} album={album} />
           </div>
         )}
+        {showFab && <SearchFab />}
       </main>
       <MiniPlayer />
       <TabBar />

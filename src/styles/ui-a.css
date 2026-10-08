@@ -1,0 +1,343 @@
+/* CyberJuke UI, part A: the shared Rail, the lean search header, A–Z sections, the
+   overlay scrollbar and the A–Z letter popup. Theme tokens only. */
+
+/* ---- Rail: a slim text row, the current item underlined ---------------------------- */
+
+.rail-row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  height: 44px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.rail-row::-webkit-scrollbar {
+  display: none;
+}
+/* More to the right: fade the edge. */
+.rail-row.more {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+}
+/* Outside a top bar, the rail draws the rule its underline sits on. */
+.rail-row.ruled {
+  background: linear-gradient(var(--color-border), var(--color-border)) bottom / 100% var(--border-w) no-repeat;
+}
+.rail {
+  display: flex;
+  flex: none;
+  align-items: stretch;
+}
+.rail-item {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 10px;
+  white-space: nowrap;
+  color: var(--color-fg-dim);
+  border-radius: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.rail-item::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: var(--border-w);
+}
+.rail-item.on {
+  color: var(--color-fg);
+}
+.rail-item:active:not(.on) {
+  color: var(--color-fg);
+}
+.rail-item:focus-visible {
+  outline: 2px dashed var(--color-fg);
+  outline-offset: -6px;
+}
+
+/* tab: the primary choice. Display font, uppercase, solid underline, "|" between. */
+.rail-tab .rail-item {
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.rail-tab .rail-item.on::after {
+  background: var(--color-fg);
+}
+.rail-tab .rail-item + .rail-item::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 50%;
+  width: 2px;
+  height: 14px;
+  margin-top: -7px;
+  background: var(--color-border);
+}
+
+/* filter: a secondary choice. UI font, lowercase, dithered underline. */
+.rail-filter .rail-item {
+  padding: 0 8px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  text-transform: lowercase;
+}
+.rail-filter .rail-item::after {
+  left: 8px;
+  right: 8px;
+}
+.rail-filter .rail-item.on::after {
+  background-color: transparent;
+  background-image: repeating-conic-gradient(var(--color-fg) 0 25%, transparent 0 50%);
+  background-size: 4px 4px;
+}
+
+/* ┊ between two rails in one row. */
+.rail-sep {
+  flex: none;
+  align-self: center;
+  width: 2px;
+  height: 18px;
+  margin: 0 6px;
+  background: linear-gradient(var(--color-border) 50%, transparent 0) 0 0 / 2px 4px;
+}
+
+/* ---- Search header: field, then the scope rail on the header rule ------------------ */
+
+.search-rail {
+  /* Overlap the header rule so the underline sits on it. */
+  margin: 0 calc(var(--gutter) * -1) calc(var(--border-w) * -1);
+  padding: 0 calc(var(--gutter) - 10px);
+  z-index: 1;
+}
+
+/* ---- Home: LATEST | MOST SAVED, then (Most saved) this month  all time ------------ */
+
+.home-rail {
+  margin: 6px 0 0;
+  padding: 0 calc(var(--gutter) - 10px);
+}
+.range-rail {
+  padding: 0 calc(var(--gutter) - 8px);
+}
+
+/* ---- Top bar right slot: POPULAR | A–Z on the header rule -------------------------- */
+
+.topbar-right:has(> .rail-slot) {
+  align-self: stretch;
+  display: flex;
+  align-items: flex-end;
+  margin: 0 -6px calc(-10px - var(--border-w)) 0;
+  flex: none;
+}
+.rail-slot .rail-item {
+  padding: 0 8px;
+  font-size: 14px;
+}
+.rail-slot .rail-item::after {
+  left: 8px;
+  right: 8px;
+}
+.topbar-sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- A–Z sections ------------------------------------------------------------------ */
+
+.az-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px var(--gutter) 0;
+}
+.az-letter {
+  flex: none;
+  min-width: 1ch;
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1;
+  color: var(--color-fg);
+}
+.az-rule {
+  flex: 1;
+  height: var(--border-w);
+  background: var(--color-border);
+}
+.az-section .genre-grid {
+  padding-top: 10px;
+}
+
+/* ---- Overlay scrollbar (the native one is hidden) ---------------------------------- */
+
+.screen {
+  scrollbar-width: none;
+}
+.screen::-webkit-scrollbar {
+  display: none;
+}
+/* Zero-height sticky dock at the top of the scroller: its children stay in view. */
+.sb-dock {
+  position: sticky;
+  top: 0;
+  height: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+.sb {
+  --sb-bottom: 8px;
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  padding: 6px 0 var(--sb-bottom);
+  opacity: 0;
+  transition: opacity 0.3s steps(3);
+}
+.has-fab .sb {
+  /* end above the search button */
+  --sb-bottom: calc(var(--fab) + 30px);
+}
+.sb.none {
+  display: none;
+}
+.sb.on,
+.sb.dragging {
+  opacity: 1;
+  transition: opacity 0.08s steps(2);
+}
+.sb-track {
+  position: relative;
+  height: 100%;
+}
+.sb-thumb {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  min-height: 48px;
+  touch-action: none;
+}
+.sb.draggable.on .sb-thumb,
+.sb.dragging .sb-thumb {
+  pointer-events: auto;
+  cursor: grab;
+}
+.sb-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 3px;
+  width: 4px;
+  background: var(--color-fg-dim);
+  box-shadow: 0 0 0 1px var(--color-bg);
+}
+.sb.draggable .sb-bar {
+  width: 6px;
+  border-radius: 1px;
+}
+.sb.dragging .sb-bar {
+  background: var(--color-fg);
+}
+.sb-label {
+  position: absolute;
+  top: 50%;
+  right: 48px;
+  display: none;
+  min-width: 32px;
+  padding: 4px 8px;
+  transform: translateY(-50%);
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1;
+  text-align: center;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+  border-radius: var(--radius);
+}
+.sb.dragging .sb-label:not(:empty) {
+  display: block;
+}
+
+/* ---- A–Z letter popup: centred, framed, checkered hard shadow ---------------------- */
+
+.az-pop {
+  --pop: 96px;
+  --pop-shadow: 6px;
+  position: absolute;
+  left: 50%;
+  top: 50vh;
+  width: var(--pop);
+  height: var(--pop);
+  margin: calc(var(--pop) / -2) 0 0 calc(var(--pop) / -2 - var(--pop-shadow) / 2);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s steps(3),
+    visibility 0s linear 0.2s;
+}
+.az-pop.on {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 0.08s steps(2),
+    visibility 0s;
+}
+.az-pop-letter {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg);
+  border: var(--border-w) solid var(--color-fg);
+  border-radius: var(--radius);
+  box-shadow:
+    0 0 0 var(--border-w) var(--color-bg),
+    0 0 0 calc(var(--border-w) * 2) var(--color-fg);
+  font-family: var(--font-display);
+  font-size: 56px;
+  line-height: 1;
+  color: var(--color-fg);
+}
+.az-pop-shadow {
+  position: absolute;
+  inset: calc(var(--border-w) * -2);
+  transform: translate(var(--pop-shadow), var(--pop-shadow));
+  border-radius: var(--radius);
+  background-color: var(--color-bg);
+  background-image: var(--dither);
+  background-size: 4px 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb,
+  .sb.on,
+  .az-pop,
+  .az-pop.on {
+    transition: none;
+  }
+}
+
+/* ---- Layers: the search button also shows over an album page; Search opened from an
+   album sits above it. ---------------------------------------------------------------- */
+
+.fab {
+  z-index: 10;
+}
+.layer.search-top {
+  z-index: 10;
+}

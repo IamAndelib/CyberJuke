@@ -1,5 +1,6 @@
 /** App navigation state: which tab, sub-pages, and overlays are open. */
-import { signal } from '@preact/signals';
+import { computed, signal } from '@preact/signals';
+import { useEffect, useRef } from 'preact/hooks';
 import type { Track } from '../data/model';
 
 export type Tab = 'home' | 'genres' | 'artists' | 'library' | 'settings';
@@ -29,6 +30,59 @@ export const menuTrack = signal<Track | null>(null);
 /** Artist chooser (a track credits several artists), opened from Now Playing. */
 export const artistChoice = signal<string[] | null>(null);
 
+/**
+ * "Here" scope for Search: the place Search was opened from (a genre, an artist, an
+ * album, Liked, Recently played). `tracks` is read when Search needs the list.
+ */
+export interface SearchContext {
+  /** Shown as "Search in <label>". */
+  label: string;
+  tracks: () => Track[];
+}
+
+/** Contexts of mounted screens, innermost (topmost) last. */
+const contextStack = signal<SearchContext[]>([]);
+/** Context of the topmost screen showing (set by `useSearchContext`), used by the search button. */
+export const pageSearchContext = computed<SearchContext | null>(() => contextStack.value.at(-1) ?? null);
+/** Context of the open Search (null: no Here scope). Set by `openSearch`. */
+export const searchContext = signal<SearchContext | null>(null);
+/** Search was opened over an album page, so it sits on top of it. */
+export const searchOverAlbum = signal(false);
+export type SearchMode = 'here' | 'jukebox' | 'global';
+/** Search scope; set on every open (Here when there is a context, else Jukebox). */
+export const searchMode = signal<SearchMode>('jukebox');
+
+/**
+ * Open Search. With a context, Search adds the Here scope and opens on it;
+ * without one (Home, the Genres/Artists grids, Settings) it opens on Jukebox.
+ */
+export function openSearch(ctx: SearchContext | null = pageSearchContext.value): void {
+  searchContext.value = ctx;
+  searchMode.value = ctx ? 'here' : 'jukebox';
+  searchOverAlbum.value = !!openAlbum.value;
+  menuTrack.value = null;
+  searchOpen.value = true;
+}
+
+/**
+ * Register the screen's Here context while it is mounted: the search button then opens
+ * Search scoped to it. Pass null when the screen has nothing to scope to (yet).
+ * The latest `ctx` is used, so `tracks` may close over current render values.
+ */
+export function useSearchContext(ctx: SearchContext | null): void {
+  const latest = useRef(ctx);
+  latest.current = ctx;
+  const label = ctx?.label ?? null;
+  useEffect(() => {
+    if (label == null) return;
+    const mine: SearchContext = { label, tracks: () => latest.current?.tracks() ?? [] };
+    contextStack.value = [...contextStack.value, mine];
+    return () => {
+      contextStack.value = contextStack.value.filter((c) => c !== mine);
+    };
+  }, [label]);
+}
+
 function closeOverlays(): void {
   menuTrack.value = null;
   artistChoice.value = null;
@@ -53,6 +107,7 @@ export function openGenrePage(name: string): void {
 
 export function openAlbumPage(ref: AlbumRef): void {
   menuTrack.value = null;
+  searchOverAlbum.value = false;
   nowPlayingOpen.value = false;
   openAlbum.value = ref;
 }
@@ -72,6 +127,11 @@ export function goBack(switchTab = true): boolean {
   }
   if (nowPlayingOpen.value) {
     nowPlayingOpen.value = false;
+    return true;
+  }
+  if (searchOpen.value && searchOverAlbum.value) {
+    searchOpen.value = false;
+    searchOverAlbum.value = false;
     return true;
   }
   if (openAlbum.value) {

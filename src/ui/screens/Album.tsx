@@ -1,7 +1,7 @@
 import type { Track } from '../../data/model';
 import { music, musicTracks } from '../../data/ytmusic';
 import { Icon } from '../icons';
-import { openAlbum, openArtistPage, type AlbumRef } from '../nav';
+import { openAlbum, openArtistPage, useSearchContext, type AlbumRef } from '../nav';
 import { Tracks } from '../components/TrackList';
 import { SkeletonRows } from '../components/TrackRow';
 import { Screen } from '../components/Screen';
@@ -38,6 +38,7 @@ export function AlbumPage({ album }: { album: AlbumRef }) {
   const meta: AlbumMeta = snap.meta ?? album;
   const kindLabel = album.kind === 'album' ? 'Album' : 'Playlist';
   const tracks = snap.items;
+  useSearchContext({ label: meta.title, tracks: () => tracks });
 
   return (
     <Screen

@@ -421,47 +421,6 @@ h3 {
   color: var(--color-fg-dim);
 }
 
-/* Home sort: [Latest] [Most saved], a DOS menu bar with the current item inverted. */
-.sort-tabs {
-  display: flex;
-  gap: 4px;
-  margin-left: -6px;
-  min-width: 0;
-}
-.sort-tab {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0 6px;
-  font-family: var(--font-display);
-  font-size: 15px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  white-space: nowrap;
-  color: var(--color-fg-dim);
-  border-radius: var(--radius);
-}
-.sort-tab.on {
-  background: var(--color-fg);
-  color: var(--color-bg);
-  text-shadow: none;
-}
-.sort-tab:active:not(.on) {
-  background: var(--color-surface);
-  color: var(--color-fg);
-}
-.range-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px var(--gutter) 6px;
-}
-.range-row .segmented.small button {
-  min-width: 0;
-  padding: 0 14px;
-  font-size: 13px;
-}
-
 /* Saves count in Most saved rows. */
 .saves {
   flex: none;
@@ -1214,14 +1173,13 @@ h3 {
   align-items: center;
   height: 44px;
   padding-left: 10px;
-  border: var(--border-w) solid var(--color-fg);
+  border: var(--border-w) solid var(--color-fg-dim);
   border-radius: var(--radius);
   background: var(--color-bg);
-  box-shadow: 3px 3px 0 var(--color-border);
   cursor: text;
 }
 .search-field:focus-within {
-  box-shadow: 3px 3px 0 var(--color-fg-dim);
+  border-color: var(--color-fg);
 }
 .search-prompt {
   flex: none;
@@ -1281,20 +1239,19 @@ h3 {
   padding-top: 4px;
 }
 
-/* Search: input row, then [Jukebox] [Global] under it. */
+/* Search: input row, then the scope rail under it (Rail styles in ui-a.css). */
 .search-bar {
   flex-direction: column;
   align-items: stretch;
-  gap: 2px;
-  padding-bottom: 2px;
+  gap: 0;
+  min-height: 0;
+  padding-top: calc(4px + var(--safe-top));
+  padding-bottom: 0;
 }
 .search-row {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-.search-modes {
-  margin-left: 42px;
 }
 .bridge {
   display: flex;

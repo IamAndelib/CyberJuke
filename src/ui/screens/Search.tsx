@@ -1,11 +1,13 @@
 import { computed, signal } from '@preact/signals';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import type { Track } from '../../data/model';
 import { buildIndex, searchGenres, searchTracks } from '../../data/search';
 import { musicTracks, type MusicFilter, type MusicItem } from '../../data/ytmusic';
 import { catalog } from '../../store/catalog';
 import { genres } from '../../store/genres';
 import { Icon } from '../icons';
-import { openGenrePage, searchOpen } from '../nav';
+import { openGenrePage, searchContext, searchOpen, searchMode, searchOverAlbum, type SearchContext, type SearchMode } from '../nav';
+import { Rail, RailRow, RailSep, type RailItem } from '../components/Rail';
 import { ChunkedTracks, EmptyState, ErrorState, Tracks } from '../components/TrackList';
 import { SkeletonRows } from '../components/TrackRow';
 import { Screen } from '../components/Screen';
@@ -14,26 +16,22 @@ import { useFeed } from '../usePaged';
 
 export const DEBOUNCE_MS = 120;
 export const GLOBAL_DEBOUNCE_MS = 400;
-export const GLOBAL_MIN_CHARS = 2;
 /** Fewer Jukebox results than this shows the "Search globally" line. */
 export const BRIDGE_BELOW = 5;
 
-export type SearchMode = 'jukebox' | 'global';
+export { searchMode, type SearchMode };
 
 /** Last query; kept so reopening search shows where you left off. */
 const query = signal('');
-/** Search always opens on Jukebox (reset on every open). */
-export const searchMode = signal<SearchMode>('jukebox');
 const globalFilter = signal<MusicFilter>('songs');
 /** Rebuilt only when the catalog (or the NSFW filter) changes. */
 const index = computed(() => buildIndex(catalog.tracks.value));
 
-const FILTERS: { id: MusicFilter; label: string }[] = [
-  { id: 'songs', label: 'Songs' },
-  { id: 'albums', label: 'Albums' },
-  { id: 'artists', label: 'Artists' },
-  { id: 'playlists', label: 'Playlists' },
-];
+const FILTERS: RailItem<MusicFilter>[] = (['songs', 'albums', 'artists', 'playlists'] as const).map((id) => ({
+  id,
+  label: id,
+  testid: `filter-${id}`,
+}));
 
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value);
@@ -44,13 +42,52 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
-/** The one place Global is suggested: under few or no Jukebox results. */
-function Bridge({ q }: { q: string }) {
+/** The one place a wider scope is suggested: under few or no results. */
+function Bridge({ q, to = 'global' }: { q: string; to?: 'jukebox' | 'global' }) {
   return (
     <div class="bridge">
-      <button class="link-btn bridge-btn" onClick={() => (searchMode.value = 'global')} data-testid="search-bridge">
-        Search globally for “{q.trim()}” →
+      <button class="link-btn bridge-btn" onClick={() => (searchMode.value = to)} data-testid={to === 'global' ? 'search-bridge' : 'here-bridge'}>
+        {to === 'global' ? 'Search globally' : 'Search the whole Jukebox'} for “{q.trim()}” →
       </button>
+    </div>
+  );
+}
+
+/** Here: the tracks of the place Search was opened from, filtered like Jukebox. */
+function HereResults({ q, ctx }: { q: string; ctx: SearchContext }) {
+  const tracks = ctx.tracks();
+  const idx = useMemo(() => buildIndex(tracks), [tracks]);
+  if (!q.trim()) {
+    if (!tracks.length) {
+      return (
+        <EmptyState title="Nothing here yet" testid="here-empty">
+          No tracks in {ctx.label} to search.
+        </EmptyState>
+      );
+    }
+    return <ChunkedTracks tracks={tracks} chunkKey={`search:here:${ctx.label}:`} testid="here-list" />;
+  }
+  const hits: Track[] = searchTracks(idx, q);
+  if (!hits.length) {
+    return (
+      <>
+        <EmptyState title="No matches" testid="here-empty">
+          Nothing in {ctx.label} matches “{q.trim()}”.
+        </EmptyState>
+        <Bridge q={q} to="jukebox" />
+      </>
+    );
+  }
+  return (
+    <div data-testid="here-results">
+      <div class="section-head">
+        <h2 class="section-title">In {ctx.label}</h2>
+        <span class="dim small" data-testid="search-count">
+          {hits.length === 100 ? 'top 100' : `${hits.length} match${hits.length === 1 ? '' : 'es'}`}
+        </span>
+      </div>
+      <Tracks tracks={hits} />
+      {hits.length < BRIDGE_BELOW && <Bridge q={q} to="jukebox" />}
     </div>
   );
 }
@@ -117,26 +154,6 @@ function JukeboxResults({ q }: { q: string }) {
   );
 }
 
-function FilterChips() {
-  const cur = globalFilter.value;
-  return (
-    <div class="chips" role="radiogroup" aria-label="Global search filter" data-testid="global-filters">
-      {FILTERS.map((f) => (
-        <button
-          key={f.id}
-          role="radio"
-          aria-checked={cur === f.id}
-          class={'chip' + (cur === f.id ? ' on' : '')}
-          onClick={() => (globalFilter.value = f.id)}
-          data-testid={`filter-${f.id}`}
-        >
-          {f.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function GlobalList({ q, filter }: { q: string; filter: MusicFilter }) {
   const norm = q.trim().toLowerCase();
   const { feed, snap } = useFeed<MusicItem, string>(`global:${filter}:${norm}`, searchLoader(q, filter), MUSIC_ITEM_OPTS);
@@ -173,69 +190,57 @@ function GlobalList({ q, filter }: { q: string; filter: MusicFilter }) {
 }
 
 function GlobalResults({ q }: { q: string }) {
-  const filter = globalFilter.value;
-  const ready = q.trim().length >= GLOBAL_MIN_CHARS;
+  // From the first letter: the debounce already waits for a pause in typing, each query
+  // has its own feed (so a late answer to an older query never shows), and results are
+  // cached for 10 minutes.
+  if (q.trim()) return <GlobalList q={q} filter={globalFilter.value} />;
   return (
-    <>
-      <FilterChips />
-      {ready ? (
-        <GlobalList q={q} filter={filter} />
-      ) : (
-        <div class="state" data-testid="global-idle">
-          <div class="state-glyph" aria-hidden="true">
-            [ GLOBAL ]
-          </div>
-          <div class="state-title">Search beyond the Jukebox</div>
-          <div class="state-body">Any song, album, artist or playlist. Type at least {GLOBAL_MIN_CHARS} letters.</div>
-        </div>
-      )}
-    </>
+    <div class="state" data-testid="global-idle">
+      <div class="state-glyph" aria-hidden="true">
+        [ GLOBAL ]
+      </div>
+      <div class="state-title">Search beyond the Jukebox</div>
+      <div class="state-body">Any song, album, artist or playlist.</div>
+    </div>
   );
 }
 
-function ModeTabs() {
-  const cur = searchMode.value;
-  const modes = [
-    { id: 'jukebox', label: 'Jukebox' },
-    { id: 'global', label: 'Global' },
-  ] as const;
-  return (
-    <div class="sort-tabs search-modes" role="tablist" aria-label="Search in" data-testid="search-modes">
-      {modes.map((m) => (
-        <button
-          key={m.id}
-          role="tab"
-          class={'sort-tab' + (cur === m.id ? ' on' : '')}
-          aria-selected={cur === m.id}
-          onClick={() => (searchMode.value = m.id)}
-          data-testid={`mode-${m.id}`}
-        >
-          [{m.label}]
-        </button>
-      ))}
-    </div>
-  );
+function placeholder(mode: SearchMode, ctx: SearchContext | null): string {
+  if (mode === 'here' && ctx) return `Search in ${ctx.label}`;
+  return mode === 'global' ? 'Songs, albums, artists…' : 'Search the Jukebox';
 }
 
 export function Search() {
   const input = useRef<HTMLInputElement>(null);
   const q = query.value;
-  const mode = searchMode.value;
+  const ctx = searchContext.value;
+  // Here only exists with a context.
+  const mode: SearchMode = searchMode.value === 'here' && !ctx ? 'jukebox' : searchMode.value;
   const debounced = useDebounced(q, mode === 'global' ? GLOBAL_DEBOUNCE_MS : DEBOUNCE_MS);
-  const label = mode === 'global' ? 'Search globally' : 'Search the Jukebox';
+  const label = mode === 'global' ? 'Search globally' : placeholder(mode, ctx);
 
   useEffect(() => {
-    searchMode.value = 'jukebox';
     input.current?.focus();
     // Make sure the index is (being) built even if startup loading failed.
     void catalog.refresh();
   }, []);
 
+  const modes: RailItem<SearchMode>[] = [
+    ...(ctx ? [{ id: 'here' as const, label: 'Here', testid: 'mode-here' }] : []),
+    { id: 'jukebox', label: 'Jukebox', testid: 'mode-jukebox' },
+    { id: 'global', label: 'Global', testid: 'mode-global' },
+  ];
+
+  const close = () => {
+    searchOpen.value = false;
+    searchOverAlbum.value = false;
+  };
+
   const bar = (
     <header class="topbar search-bar">
       <div class="search-row">
         <div class="topbar-left">
-          <button class="icon-btn" aria-label="Close search" onClick={() => (searchOpen.value = false)} data-testid="search-close">
+          <button class="icon-btn" aria-label="Close search" onClick={close} data-testid="search-close">
             <Icon name="back" />
           </button>
         </div>
@@ -247,7 +252,7 @@ export function Search() {
             ref={input}
             type="search"
             class="search-input"
-            placeholder={mode === 'global' ? 'Songs, albums, artists…' : 'Search the Jukebox'}
+            placeholder={placeholder(mode, ctx)}
             aria-label={label}
             autocomplete="off"
             autocapitalize="off"
@@ -265,6 +270,7 @@ export function Search() {
               type="button"
               class="search-clear"
               aria-label="Clear search"
+              onPointerDown={(e) => e.preventDefault()}
               onClick={() => {
                 query.value = '';
                 input.current?.focus();
@@ -276,14 +282,49 @@ export function Search() {
           )}
         </label>
       </div>
-      <ModeTabs />
+      <RailRow class="search-rail" testid="search-rail">
+        <Rail
+          items={modes}
+          value={mode}
+          onChange={(m) => (searchMode.value = m)}
+          label="Search in"
+          testid="search-modes"
+          keepFocus
+        />
+        {mode === 'global' && (
+          <>
+            <RailSep />
+            <Rail
+              items={FILTERS}
+              value={globalFilter.value}
+              onChange={(f) => (globalFilter.value = f)}
+              kind="radio"
+              variant="filter"
+              label="Global search filter"
+              testid="global-filters"
+              keepFocus
+            />
+          </>
+        )}
+      </RailRow>
     </header>
   );
 
-  const key = mode === 'global' ? `search:global:${globalFilter.value}:${debounced.trim().toLowerCase()}` : `search:jukebox:${debounced.trim()}`;
+  const key =
+    mode === 'global'
+      ? `search:global:${globalFilter.value}:${debounced.trim().toLowerCase()}`
+      : mode === 'here'
+        ? `search:here:${ctx?.label}:${debounced.trim()}`
+        : `search:jukebox:${debounced.trim()}`;
   return (
     <Screen class="search" role="dialog" label="Search" testid="search" bar={bar} scrollKey={key}>
-      {mode === 'global' ? <GlobalResults q={debounced} /> : <JukeboxResults q={debounced} />}
+      {mode === 'global' ? (
+        <GlobalResults q={debounced} />
+      ) : mode === 'here' && ctx ? (
+        <HereResults q={debounced} ctx={ctx} />
+      ) : (
+        <JukeboxResults q={debounced} />
+      )}
     </Screen>
   );
 }

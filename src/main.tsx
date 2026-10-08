@@ -1,6 +1,7 @@
 import './styles/fonts.css';
 import './styles/themes.css';
 import './styles/app.css';
+import './styles/ui-a.css';
 import { render } from 'preact';
 import { effect } from '@preact/signals';
 import { Capacitor } from '@capacitor/core';
