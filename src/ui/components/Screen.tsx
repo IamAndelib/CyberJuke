@@ -9,8 +9,6 @@ const THRESHOLD = 64;
 export const TOTOP_SCREENS = 1.5;
 /** How long a restore keeps waiting for the content to grow tall enough. */
 export const RESTORE_WAIT_MS = 1000;
-/** A click this soon after back-to-top's pointerdown is that tap's own click: ignored. */
-export const TOTOP_CLICK_MS = 1000;
 
 /** scrollTop per scrollKey, for the whole app session. */
 const positions = new Map<string, number>();
@@ -82,8 +80,8 @@ export function Screen({
   const frame = useRef(0);
   /** Cancels a running back-to-top animation. */
   const stopTop = useRef<(() => void) | null>(null);
-  /** When back-to-top last fired on pointerdown (its click is then ignored). */
-  const topDownAt = useRef(-Infinity);
+  /** Back-to-top fired on pointerdown: that tap's own click is then ignored. */
+  const topArmed = useRef(false);
 
   const updateTop = () => {
     frame.current = 0;
@@ -195,15 +193,14 @@ export function Screen({
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     // No focus move or compatibility mouse events; the jump starts now.
     e.preventDefault();
-    topDownAt.current = performance.now();
+    topArmed.current = true;
     toTop();
   };
-  const onTopClick = () => {
-    if (performance.now() - topDownAt.current < TOTOP_CLICK_MS) {
-      topDownAt.current = -Infinity;
-      return;
-    }
-    toTop(); // keyboard (Enter/Space) or assistive tech
+  const onTopClick = (e: MouseEvent) => {
+    const tapClick = topArmed.current && e.detail > 0;
+    topArmed.current = false;
+    // A keyboard click (Enter/Space, detail 0) or one with no pointerdown before it.
+    if (!tapClick) toTop();
   };
 
   const shown = refreshing ? THRESHOLD * 0.75 : pull;
