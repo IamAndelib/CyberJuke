@@ -5,11 +5,8 @@ import android.util.Log
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.json.JSONArray
-import org.json.JSONException
 import org.json.JSONObject
-import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
 import java.io.IOException
-import java.nio.charset.StandardCharsets
 
 /**
  * Lyrics lookup: LRCLIB first (open, time-synced), then YouTube Music's own lyrics tab via
@@ -23,7 +20,6 @@ import java.nio.charset.StandardCharsets
 internal object Lyrics {
     private const val TAG = "CyberJukeLyrics"
     private const val LRCLIB = "https://lrclib.net/api"
-    private const val YTM = "https://music.youtube.com/youtubei/v1"
     private const val DURATION_TOLERANCE_SEC = 3.0
 
     data class Result(
@@ -149,38 +145,8 @@ internal object Lyrics {
         return Result(found = true, source = footer, plain = plain)
     }
 
-    /** POST /youtubei/v1/<endpoint>; parsed JSON on 200, null on 404, throws otherwise. */
-    private fun innertube(endpoint: String, payload: JSONObject): JSONObject? {
-        val version = YoutubeParsingHelper.getYoutubeMusicClientVersion()
-        val client = JSONObject()
-            .put("clientName", "WEB_REMIX")
-            .put("clientVersion", version)
-            .put("hl", "en")
-            .put("gl", "US")
-            .put("platform", "DESKTOP")
-            .put("utcOffsetMinutes", 0)
-        val context = JSONObject()
-            .put("client", client)
-            .put("request", JSONObject().put("internalExperimentFlags", JSONArray()).put("useSsl", true))
-            .put("user", JSONObject().put("lockedSafetyMode", false))
-        payload.put("context", context)
-        val url = "$YTM/$endpoint?${YoutubeParsingHelper.DISABLE_PRETTY_PRINT_PARAMETER}"
-        // DownloaderImpl adds the consent cookie and maps HTTP 429 to ReCaptchaException.
-        val response = DownloaderImpl.get().postWithContentTypeJson(
-            url,
-            YoutubeParsingHelper.getYoutubeMusicHeaders(),
-            payload.toString().toByteArray(StandardCharsets.UTF_8),
-        )
-        return when (response.responseCode()) {
-            200 -> try {
-                JSONObject(response.responseBody())
-            } catch (e: JSONException) {
-                throw IOException("YouTube Music $endpoint: invalid JSON", e)
-            }
-            404 -> null
-            else -> throw IllegalStateException("YouTube Music $endpoint: HTTP ${response.responseCode()}")
-        }
-    }
+    private fun innertube(endpoint: String, payload: JSONObject): JSONObject? =
+        InnerTube.post(endpoint, payload)
 
     /** The lyrics tab's browse id (MPLYt…): absent when YouTube Music has no lyrics. */
     private fun findLyricsBrowseId(root: Any?): String? {
