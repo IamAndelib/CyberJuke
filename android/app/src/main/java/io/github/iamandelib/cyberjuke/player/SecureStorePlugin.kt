@@ -2,7 +2,9 @@ package io.github.iamandelib.cyberjuke.player
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import android.util.Log
@@ -15,8 +17,10 @@ import org.json.JSONObject
 import java.nio.charset.StandardCharsets
 import java.security.GeneralSecurityException
 import java.security.KeyStore
+import java.security.UnrecoverableKeyException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -32,9 +36,14 @@ import javax.crypto.spec.GCMParameterSpec
  * Values are encrypted with AES-256-GCM under an Android Keystore key (alias
  * "cyberjuke_secure", no user authentication); ciphertext and IV are stored as base64 in the
  * private SharedPreferences file "cyberjuke_secure". The entry's key name is bound as GCM
- * associated data. A value that can no longer be decrypted (key invalidated or missing, e.g.
- * after a backup restore to another phone) is deleted and reads as null. `set` rejects
- * UNAVAILABLE if the Keystore cannot encrypt.
+ * associated data. The key is only usable while the device is unlocked (API 28+).
+ *
+ * A stored value is deleted (and reads as null) only when it can never be decrypted again:
+ * tampered or mismatched data (AEADBadTagException), an invalidated or unrecoverable key, a
+ * missing key (e.g. after a restore to another phone; the file is also excluded from backups)
+ * or bad base64. Any other Keystore error (busy, locked device, transient failure) is retried a
+ * few times and then rejects UNAVAILABLE, keeping the value, so a hiccup never signs the user
+ * out. `set` behaves the same; it only replaces the key if the key itself is invalid.
  */
 @CapacitorPlugin(name = "SecureStore")
 class SecureStorePlugin : Plugin() {
@@ -116,48 +125,101 @@ internal object SecureBox {
     private const val KEYSTORE = "AndroidKeyStore"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
     private const val TAG_BITS = 128
+    private const val ATTEMPTS = 3
+    private const val RETRY_DELAY_MS = 150L
 
     @Synchronized
     fun get(context: Context, key: String): String? {
         val prefs = prefs(context)
-        val ct = prefs.getString("v_$key", null) ?: return null
-        val iv = prefs.getString("iv_$key", null)
-        return try {
-            val secret = existingKey() ?: throw GeneralSecurityException("keystore key missing")
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, secret, GCMParameterSpec(TAG_BITS, decode(iv)))
-            cipher.updateAAD(key.toByteArray(StandardCharsets.UTF_8))
-            String(cipher.doFinal(decode(ct)), StandardCharsets.UTF_8)
-        } catch (e: java.security.KeyStoreException) {
-            Log.w(TAG, "keystore unavailable reading '$key': ${e.message}")
-            null // transient: keep the value
-        } catch (e: Exception) {
-            // Invalidated / missing key, tampered or truncated data: the value is unrecoverable.
-            Log.w(TAG, "dropping undecryptable '$key': ${e.javaClass.simpleName}")
-            removeEntry(prefs, key)
-            if (e is java.security.UnrecoverableKeyException ||
-                e is android.security.keystore.KeyPermanentlyInvalidatedException
-            ) {
-                deleteKey()
-            }
-            null
+        val ctText = prefs.getString("v_$key", null) ?: return null
+        val (iv, ct) = try {
+            decode(prefs.getString("iv_$key", null)) to decode(ctText)
+        } catch (e: IllegalArgumentException) { // missing IV or bad base64
+            drop(prefs, key, "bad data")
+            return null
         }
+        var last: Exception? = null
+        for (attempt in 0 until ATTEMPTS) {
+            try {
+                val secret = existingKey()
+                if (secret == null) {
+                    drop(prefs, key, "keystore key missing")
+                    return null
+                }
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                cipher.init(Cipher.DECRYPT_MODE, secret, GCMParameterSpec(TAG_BITS, iv))
+                cipher.updateAAD(key.toByteArray(StandardCharsets.UTF_8))
+                return String(cipher.doFinal(ct), StandardCharsets.UTF_8)
+            } catch (e: Exception) {
+                if (isKeyInvalid(e)) {
+                    drop(prefs, key, e.javaClass.simpleName)
+                    deleteKey()
+                    return null
+                }
+                if (e.hasCause<AEADBadTagException>()) {
+                    drop(prefs, key, "AEADBadTagException")
+                    return null
+                }
+                last = e
+                Log.w(TAG, "keystore error reading '$key' (attempt ${attempt + 1}): ${e.javaClass.simpleName}")
+                pause(attempt)
+            }
+        }
+        throw last ?: GeneralSecurityException("keystore unavailable")
     }
 
     @Synchronized
     fun set(context: Context, key: String, value: String) {
-        val (iv, ct) = try {
-            encrypt(getOrCreateKey(), key, value)
-        } catch (e: GeneralSecurityException) {
-            // A broken key (e.g. invalidated): start over with a fresh one, once.
-            Log.w(TAG, "re-creating keystore key: ${e.javaClass.simpleName}")
-            deleteKey()
-            encrypt(getOrCreateKey(), key, value)
+        var last: Exception? = null
+        for (attempt in 0 until ATTEMPTS) {
+            try {
+                val (iv, ct) = encrypt(getOrCreateKey(), key, value)
+                prefs(context).edit()
+                    .putString("v_$key", Base64.encodeToString(ct, Base64.NO_WRAP))
+                    .putString("iv_$key", Base64.encodeToString(iv, Base64.NO_WRAP))
+                    .commit()
+                return
+            } catch (e: Exception) {
+                last = e
+                if (isKeyInvalid(e)) {
+                    // A broken key can never encrypt again: start over with a fresh one.
+                    Log.w(TAG, "re-creating keystore key: ${e.javaClass.simpleName}")
+                    deleteKey()
+                } else {
+                    Log.w(TAG, "keystore error writing '$key' (attempt ${attempt + 1}): ${e.javaClass.simpleName}")
+                    pause(attempt)
+                }
+            }
         }
-        prefs(context).edit()
-            .putString("v_$key", Base64.encodeToString(ct, Base64.NO_WRAP))
-            .putString("iv_$key", Base64.encodeToString(iv, Base64.NO_WRAP))
-            .commit()
+        throw last ?: GeneralSecurityException("keystore unavailable")
+    }
+
+    private fun isKeyInvalid(e: Throwable): Boolean =
+        e.hasCause<KeyPermanentlyInvalidatedException>() || e.hasCause<UnrecoverableKeyException>()
+
+    private inline fun <reified T : Throwable> Throwable.hasCause(): Boolean {
+        var t: Throwable? = this
+        var depth = 0
+        while (t != null && depth < 8) {
+            if (t is T) return true
+            t = t.cause
+            depth++
+        }
+        return false
+    }
+
+    private fun pause(attempt: Int) {
+        if (attempt + 1 >= ATTEMPTS) return
+        try {
+            Thread.sleep(RETRY_DELAY_MS * (attempt + 1))
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+    }
+
+    private fun drop(prefs: SharedPreferences, key: String, why: String) {
+        Log.w(TAG, "dropping undecryptable '$key': $why")
+        removeEntry(prefs, key)
     }
 
     @Synchronized
@@ -173,6 +235,7 @@ internal object SecureBox {
         return cipher.iv to ct
     }
 
+    /** Throws IllegalArgumentException on missing data or bad base64. */
     private fun decode(s: String?): ByteArray {
         if (s.isNullOrEmpty()) throw IllegalArgumentException("missing data")
         return Base64.decode(s, Base64.NO_WRAP)
@@ -191,16 +254,29 @@ internal object SecureBox {
 
     private fun getOrCreateKey(): SecretKey {
         existingKey()?.let { return it }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            try {
+                return generateKey(unlockedDeviceRequired = true)
+            } catch (e: Exception) {
+                // Some devices refuse the flag (e.g. no secure lock screen): fall back.
+                Log.w(TAG, "unlocked-device key unavailable: ${e.javaClass.simpleName}")
+            }
+        }
+        return generateKey(unlockedDeviceRequired = false)
+    }
+
+    private fun generateKey(unlockedDeviceRequired: Boolean): SecretKey {
+        val spec = KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setKeySize(256)
+            .setUserAuthenticationRequired(false)
+            .setRandomizedEncryptionRequired(true)
+        if (unlockedDeviceRequired && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            spec.setUnlockedDeviceRequired(true)
+        }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE)
-        generator.init(
-            KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .setKeySize(256)
-                .setUserAuthenticationRequired(false)
-                .setRandomizedEncryptionRequired(true)
-                .build(),
-        )
+        generator.init(spec.build())
         return generator.generateKey()
     }
 
