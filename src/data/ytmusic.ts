@@ -10,7 +10,7 @@
  */
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { artworkUrl, type Track } from './model';
-import { cleanCredit } from './artists';
+import { artistKey, cleanCredit, splitArtists } from './artists';
 
 // ---- Plugin contract (keep in sync with MusicPlugin.kt) ------------------------------
 
@@ -23,6 +23,10 @@ export interface MusicItem {
   durationSec?: number;
   thumbnailUrl?: string;
   itemCount?: number;
+  /** Songs and albums: the first credited artist's channel URL. */
+  artistUrl?: string;
+  /** Songs and albums: the first credited artist's channel id; artists: their own. */
+  channelId?: string;
 }
 export interface MusicPage {
   items: MusicItem[];
@@ -33,6 +37,26 @@ export interface JukeMusicPlugin {
   search(o: { query: string; filter: MusicFilter }): Promise<MusicPage>;
   more(o: { next: string }): Promise<MusicPage>;
   playlist(o: { url: string }): Promise<{ title: string; subtitle: string; thumbnailUrl?: string } & MusicPage>; // albums too
+  /** Artist candidates for a name (kind 'artist', channelId set), best match first. */
+  artist(o: { name: string }): Promise<{ items: MusicItem[] }>;
+  lyrics(o: LyricsRequest): Promise<LyricsResult>;
+}
+
+export interface LyricsRequest {
+  ytId: string;
+  title: string;
+  artist: string;
+  album?: string;
+  durationSec?: number;
+}
+export interface LyricsResult {
+  /** e.g. 'LRCLIB' or 'LyricFind'. */
+  source?: string;
+  /** Time-synced lines, t in ms. */
+  synced?: { t: number; text: string }[];
+  plain?: string;
+  instrumental?: boolean;
+  found: boolean;
 }
 
 export const JukeMusic = registerPlugin<JukeMusicPlugin>('JukeMusic');
@@ -134,6 +158,49 @@ export function musicTracks(items: MusicItem[], fallbackArtist = ''): Track[] {
   return out;
 }
 
+// ---- Exact artist identity (channel ids) ---------------------------------------------
+
+const CHANNEL_ID = /\/channel\/(UC[A-Za-z0-9_-]{10,})/;
+
+/** "UC…" from a channel URL, or undefined. */
+export function channelIdFromUrl(url: string | undefined): string | undefined {
+  return url ? CHANNEL_ID.exec(url)?.[1] : undefined;
+}
+
+/** The channel an item belongs to: an artist's own, or a song's/album's first credited artist. */
+export function itemChannelId(item: MusicItem): string | undefined {
+  if (item.channelId) return item.channelId;
+  return channelIdFromUrl(item.artistUrl) ?? (item.kind === 'artist' ? channelIdFromUrl(item.url) : undefined);
+}
+
+/**
+ * The channel of the artist named `name` among `candidates`: the first artist result
+ * whose normalized name equals it (results are best-first), or null when none is
+ * exact ("Ivy Queen" and "Queen Butterfly" are not "Queen").
+ */
+export function resolveArtistChannel(candidates: MusicItem[], name: string): string | null {
+  const key = artistKey(name);
+  if (!key) return null;
+  for (const c of candidates) {
+    if (c.kind !== 'artist') continue;
+    const id = itemChannelId(c);
+    if (id && artistKey(c.title) === key) return id;
+  }
+  return null;
+}
+
+/**
+ * Whether an item is by the artist with channel `channelId`: its channel matches (the
+ * first credited artist is this artist). Items without a channel link are kept only
+ * when one of their split credits is exactly the artist's name, never a substring.
+ */
+export function isByArtist(item: MusicItem, channelId: string, name: string, credit = item.subtitle): boolean {
+  const id = itemChannelId(item);
+  if (id) return id === channelId;
+  const key = artistKey(name);
+  return !!key && splitArtists(cleanCredit(credit ?? '')).some((a) => artistKey(a) === key);
+}
+
 // ---- Client with a 10-minute cache ----------------------------------------------------
 
 export const MUSIC_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -145,6 +212,8 @@ export interface MusicClient {
   search(query: string, filter: MusicFilter): Promise<MusicPage>;
   more(next: string): Promise<MusicPage>;
   playlist(url: string): Promise<AlbumPage>;
+  /** Artist candidates for a name. */
+  artist(name: string): Promise<MusicItem[]>;
   /** A cached, still-fresh search result, if any (lets screens render instantly on remount). */
   peekSearch(query: string, filter: MusicFilter): MusicPage | undefined;
   clear(): void;
@@ -201,12 +270,13 @@ export function createMusicClient(deps: MusicClientDeps): MusicClient {
     search: (query, filter) => call(sKey(query, filter), (p) => p.search({ query: query.trim(), filter })),
     more: (next) => call(`m|${next}`, (p) => p.more({ next })),
     playlist: (url) => call(`p|${url}`, (p) => p.playlist({ url })),
+    artist: (name) => call(`a|${artistKey(name)}`, (p) => p.artist({ name: name.trim() }).then((r) => r.items ?? [])),
     peekSearch: (query, filter) => fresh<MusicPage>(sKey(query, filter)),
     clear: () => cache.clear(),
   };
 }
 
-function appPlugin(): JukeMusicPlugin | null {
+export function appPlugin(): JukeMusicPlugin | null {
   if (typeof window !== 'undefined' && window.__cyberjukeMusicStub) return window.__cyberjukeMusicStub;
   return Capacitor.isNativePlatform() ? JukeMusic : null;
 }

@@ -80,6 +80,8 @@ describe('client', () => {
       search: vi.fn(async ({ query }) => ({ items: [song('abcdefghijk', { title: query })], next: 'tok1' })),
       more: vi.fn(async () => ({ items: [song('bcdefghijkl')] })),
       playlist: vi.fn(async () => ({ title: 'Album', subtitle: '', items: [] })),
+      artist: vi.fn(async () => ({ items: [] })),
+      lyrics: vi.fn(async () => ({ found: false })),
     };
     const c = m.createMusicClient({ plugin: () => plugin, now: () => now });
     return { c, plugin, tick: (ms: number) => (now += ms) };
@@ -117,6 +119,8 @@ describe('client', () => {
       search: vi.fn().mockRejectedValueOnce({ code: 'BOT_CHECK', message: 'BOT_CHECK: confirm' }).mockResolvedValue({ items: [] }),
       more: vi.fn(),
       playlist: vi.fn(),
+      artist: vi.fn(),
+      lyrics: vi.fn(),
     };
     const c = m.createMusicClient({ plugin: () => plugin });
     await expect(c.search('x', 'songs')).rejects.toMatchObject({ code: 'BOT_CHECK' });
@@ -127,5 +131,52 @@ describe('client', () => {
     const c = m.createMusicClient({ plugin: () => null });
     await expect(c.search('x', 'songs')).rejects.toMatchObject({ code: 'UNAVAILABLE' });
     await expect(m.music.search('x', 'songs')).rejects.toBeInstanceOf(m.MusicError);
+  });
+});
+
+describe('exact artist identity', () => {
+  const QUEEN = 'UCiMhD4jzUqG-IgPzUmmytRQ';
+  const IVY = 'UCivyqueen000000000000a';
+  const BUTTERFLY = 'UCqueenbutterfly000000b';
+  const artist = (title: string, channelId?: string, url = '') => ({ kind: 'artist' as const, title, subtitle: '', url, ...(channelId && { channelId }) });
+
+  it('reads channel ids from items and URLs', () => {
+    expect(m.channelIdFromUrl('https://music.youtube.com/channel/' + QUEEN)).toBe(QUEEN);
+    expect(m.channelIdFromUrl('https://music.youtube.com/browse/MPREb_x')).toBeUndefined();
+    expect(m.itemChannelId(song('abcdefghijk', { artistUrl: 'https://www.youtube.com/channel/' + QUEEN }))).toBe(QUEEN);
+    expect(m.itemChannelId(artist('Queen', undefined, 'https://music.youtube.com/channel/' + QUEEN))).toBe(QUEEN);
+    expect(m.itemChannelId(song('abcdefghijk', { channelId: IVY, artistUrl: 'https://x/channel/' + QUEEN }))).toBe(IVY);
+  });
+
+  it('resolves only an exact name: Ivy Queen and Queen Butterfly are not Queen', () => {
+    const cands = [artist('Ivy Queen', IVY), artist('Queen Butterfly', BUTTERFLY), artist('Queen', QUEEN), artist('QUEEN', 'UCsecond000000000000000')];
+    expect(m.resolveArtistChannel(cands, 'Queen')).toBe(QUEEN);
+    expect(m.resolveArtistChannel(cands, 'queen')).toBe(QUEEN);
+    expect(m.resolveArtistChannel([artist('Ivy Queen', IVY), artist('Queen Butterfly', BUTTERFLY)], 'Queen')).toBeNull();
+    expect(m.resolveArtistChannel([artist('Queen')], 'Queen')).toBeNull(); // no channel, no identity
+    expect(m.resolveArtistChannel([{ ...song('abcdefghijk', { channelId: QUEEN }), title: 'Queen' }], 'Queen')).toBeNull();
+    expect(m.resolveArtistChannel([artist('Björk', 'UCbjork00000000000000000')], 'bjork')).toBe('UCbjork00000000000000000');
+  });
+
+  it('filters by channel, with an exact-credit fallback when an item has no channel', () => {
+    expect(m.isByArtist(song('a', { subtitle: 'Queen', channelId: QUEEN }), QUEEN, 'Queen')).toBe(true);
+    expect(m.isByArtist(song('a', { subtitle: 'Ivy Queen', channelId: IVY }), QUEEN, 'Queen')).toBe(false);
+    // A channel mismatch wins over a matching credit (first credited artist is someone else).
+    expect(m.isByArtist(song('a', { subtitle: 'X, Queen', channelId: IVY }), QUEEN, 'Queen')).toBe(false);
+    // Fallback: whole split credits only.
+    expect(m.isByArtist(song('a', { subtitle: 'Queen' }), QUEEN, 'Queen')).toBe(true);
+    expect(m.isByArtist(song('a', { subtitle: 'Queen & David Bowie' }), QUEEN, 'Queen')).toBe(false);
+    expect(m.isByArtist(song('a', { subtitle: 'David Bowie, Queen' }), QUEEN, 'Queen')).toBe(true);
+    expect(m.isByArtist(song('a', { subtitle: 'Ivy Queen' }), QUEEN, 'Queen')).toBe(false);
+    expect(m.isByArtist(song('a', { subtitle: 'Queen Butterfly - Topic' }), QUEEN, 'Queen')).toBe(false);
+    expect(m.isByArtist(song('a', { subtitle: 'Queen - Topic' }), QUEEN, 'Queen')).toBe(true);
+  });
+
+  it('caches artist lookups by normalized name', async () => {
+    const plugin = { search: vi.fn(), more: vi.fn(), playlist: vi.fn(), artist: vi.fn(async () => ({ items: [artist('Queen', QUEEN)] })), lyrics: vi.fn() };
+    const c = m.createMusicClient({ plugin: () => plugin as unknown as Plugin });
+    expect(await c.artist('Queen')).toHaveLength(1);
+    await c.artist(' queen ');
+    expect(plugin.artist).toHaveBeenCalledTimes(1);
   });
 });

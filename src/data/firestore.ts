@@ -5,7 +5,9 @@
  *  - only query shapes that have composite indexes (latest, latest-by-genre, and the
  *    catalog: latest with a field mask, optionally `createdAt > since`);
  *  - results cached in memory for ~5 minutes; in-flight requests are de-duplicated;
- *  - no polling: requests only happen in response to the user.
+ *  - no polling of the feed itself: the only periodic request is the freshness check
+ *    (`newerThan`: a createdAt-only field mask, at most FRESHNESS_LIMIT rows), run in
+ *    the foreground at the user's chosen interval.
  */
 import { tracksFromRows, type FsRunQueryRow, type Track, ts } from './model';
 import type { Cursor, Page, TrackSource } from './source';
@@ -36,6 +38,11 @@ export const CATALOG_FIELDS = [
   'bookmarksCount',
   'repliesCount',
 ] as const;
+
+/** Most rows the freshness check asks for ("25+ new tracks"). */
+export const FRESHNESS_LIMIT = 25;
+/** Field mask for the freshness check: only the timestamp. */
+export const FRESHNESS_FIELDS = ['createdAt'] as const;
 
 type Filter = {
   fieldFilter: { field: { fieldPath: string }; op: 'EQUAL' | 'GREATER_THAN'; value: Record<string, unknown> };
@@ -122,6 +129,8 @@ export interface FirestoreSourceOptions {
   showNsfw?: () => boolean;
   fetch?: typeof fetch;
   now?: () => number;
+  /** Called with the newest createdAt of every first Latest page fetched from the network. */
+  onLatest?: (newest: string) => void;
 }
 
 export class FirestoreSource implements TrackSource {
@@ -130,8 +139,11 @@ export class FirestoreSource implements TrackSource {
   private readonly showNsfw: () => boolean;
   private readonly fetchFn: typeof fetch;
   private readonly now: () => number;
+  /** Observer for the newest post shown on the Latest feed (freshness baseline). */
+  onLatest: ((newest: string) => void) | undefined;
 
   constructor(opts: FirestoreSourceOptions = {}) {
+    this.onLatest = opts.onLatest;
     this.showNsfw = opts.showNsfw ?? (() => false);
     this.fetchFn = opts.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
     this.now = opts.now ?? (() => Date.now());
@@ -183,6 +195,30 @@ export class FirestoreSource implements TrackSource {
     return out;
   }
 
+  /**
+   * The freshness check: how many posts are newer than `since` (an ISO timestamp), at
+   * most FRESHNESS_LIMIT, and the newest one's timestamp. NSFW included (the mask has
+   * only createdAt). Never cached.
+   */
+  async newerThan(since: string): Promise<{ count: number; newest: string | null }> {
+    const body = JSON.stringify(buildQuery({ select: FRESHNESS_FIELDS, limit: FRESHNESS_LIMIT, since }));
+    const rows = await this.rows(body);
+    let newest: string | null = null;
+    let count = 0;
+    for (const r of rows) {
+      if (!r.document) continue;
+      count++;
+      const t = ts(r.document.fields?.createdAt);
+      if (t && (!newest || t > newest)) newest = t;
+    }
+    return { count, newest };
+  }
+
+  /** Drop every cached page (the new-tracks pill: the next Latest load is fresh). */
+  invalidateAll(): void {
+    this.cache.clear();
+  }
+
   invalidate(): void {
     const cutoff = this.now() - MIN_REFRESH_AGE_MS;
     for (const [k, e] of this.cache) if (e.at < cutoff) this.cache.delete(k);
@@ -206,6 +242,7 @@ export class FirestoreSource implements TrackSource {
     const req = this.request(body)
       .then((page) => {
         this.cache.set(body, { at: this.now(), page });
+        if (genre == null && cursor == null && page.tracks[0]?.createdAt) this.onLatest?.(page.tracks[0].createdAt);
         return page;
       })
       .finally(() => this.inflight.delete(body));
@@ -214,6 +251,11 @@ export class FirestoreSource implements TrackSource {
   }
 
   private async request(body: string, limit = PAGE_SIZE): Promise<RawPage> {
+    const rows = await this.rows(body);
+    return { tracks: tracksFromRows(rows), cursor: nextCursor(rows, limit) };
+  }
+
+  private async rows(body: string): Promise<FsRunQueryRow[]> {
     let res: Response;
     try {
       res = await this.fetchFn(RUN_QUERY_URL, {
@@ -234,8 +276,7 @@ export class FirestoreSource implements TrackSource {
       const err = Array.isArray(json) ? json[0]?.error : (json as { error?: { message?: string } })?.error;
       throw new FirestoreError(err?.message || `Request failed (${res.status})`, res.status);
     }
-    const rows = json as FsRunQueryRow[];
-    return { tracks: tracksFromRows(rows), cursor: nextCursor(rows, limit) };
+    return json as FsRunQueryRow[];
   }
 }
 

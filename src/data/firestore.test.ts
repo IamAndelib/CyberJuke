@@ -259,3 +259,46 @@ describe('FirestoreSource', () => {
     expect(a).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
   });
 });
+
+describe('freshness check (newerThan)', () => {
+  it('sends the createdAt-only, createdAt > since, limit 25 query and counts rows', async () => {
+    const bodies: any[] = [];
+    const fetchFn = vi.fn(async (_u: unknown, init?: { body?: unknown }) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response(
+        JSON.stringify([
+          { document: { name: 'a', fields: { createdAt: { timestampValue: '2026-10-08T12:00:00Z' } } } },
+          { document: { name: 'b', fields: { createdAt: { timestampValue: '2026-10-08T13:00:00Z' } } } },
+          { readTime: 'x' },
+        ]),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+    const src = new FirestoreSource({ fetch: fetchFn });
+    expect(await src.newerThan('2026-10-08T11:00:00Z')).toEqual({ count: 2, newest: '2026-10-08T13:00:00Z' });
+    const q = bodies[0].structuredQuery;
+    expect(q.select).toEqual({ fields: [{ fieldPath: 'createdAt' }] });
+    expect(q.limit).toBe(25);
+    expect(q.where.compositeFilter.filters.at(-1)).toEqual({
+      fieldFilter: { field: { fieldPath: 'createdAt' }, op: 'GREATER_THAN', value: { timestampValue: '2026-10-08T11:00:00Z' } },
+    });
+    // Never cached.
+    await src.newerThan('2026-10-08T11:00:00Z');
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports the newest first Latest page and drops every cached page on invalidateAll', async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify(rows), { status: 200 })) as unknown as typeof fetch;
+    const seen: string[] = [];
+    const src = new FirestoreSource({ fetch: fetchFn, onLatest: (n) => seen.push(n) });
+    const p = await src.latest();
+    expect(seen).toEqual([p.tracks[0].createdAt]);
+    await src.byGenre('x');
+    expect(seen).toHaveLength(1);
+    await src.latest();
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    src.invalidateAll();
+    await src.latest();
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+  });
+});
