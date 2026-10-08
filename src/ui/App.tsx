@@ -30,7 +30,7 @@ import { AlbumPage } from './screens/Album';
 import { ArtistPage } from './screens/Artist';
 import { ArtistGrid } from './screens/Artists';
 import { GenreDetail, GenreGrid } from './screens/Genres';
-import { Home } from './screens/Home';
+import { Home } from '../features/home/Home';
 import { Library } from './screens/Library';
 import { ReleasesPage } from './screens/Releases';
 import { Search } from './screens/Search';

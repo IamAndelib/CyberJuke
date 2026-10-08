@@ -5,16 +5,16 @@ import { catalog, mostSaved, type SavedRange } from '../../stores/catalog';
 import { catalogGenre, chipGenres } from '../../stores/genres';
 import { favoriteGenres, showNsfw } from '../../stores/library';
 import { toast } from '../../stores/toast';
-import { Icon } from '../icons';
-import { EmptyState, ErrorState, PagedTracks, Tracks } from '../components/TrackList';
-import { SkeletonRows } from '../components/TrackRow';
-import { Screen } from '../components/Screen';
-import { NewTracksPill } from '../components/NewTracksPill';
-import { Rail, RailRow, type RailItem } from '../components/Rail';
-import { usePaged } from '../usePaged';
+import { Icon } from '../../ui/icons';
+import { EmptyState, ErrorState, PagedTracks, Tracks } from '../../ui/components/TrackList';
+import { SkeletonRows } from '../../ui/components/TrackRow';
+import { Screen } from '../../ui/components/Screen';
+import { NewTracksPill } from './NewTracksPill';
+import { Rail, RailRow, type RailItem } from '../../ui/components/Rail';
+import { usePaged } from '../../ui/usePaged';
 import { authScope } from '../../stores/feed';
 import { auth } from '../../data/auth';
-import { list as listCtx, playAll, radio, withRest } from '../playAll';
+import { list as listCtx, playAll, radio, withRest } from '../../ui/playAll';
 
 /** Selected genre chip on Home (null = All). Survives tab switches. */
 export const homeGenre = signal<string | null>(null);

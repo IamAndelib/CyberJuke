@@ -8,8 +8,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { freshness, refreshLatest } from '../../stores/newTracks';
 import { FRESHNESS_LIMIT } from '../../data/firestore';
-import { SMOOTH_SCROLL_MS, scrollAnimating } from '../clickGuard';
-import { Icon } from '../icons';
+import { SMOOTH_SCROLL_MS, scrollAnimating } from '../../ui/clickGuard';
+import { Icon } from '../../ui/icons';
 import { reducedMotion } from '../../core/motion';
 
 /** The fade-out; the pill unmounts after it (or after this long without a transitionend). */

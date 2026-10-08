@@ -29,7 +29,7 @@ import { startBlockEvents } from './player/blockEvents';
 import { source } from './data';
 import { App, Overlays } from './ui/App';
 import { BootError } from './ui/BootError';
-import { Home } from './ui/screens/Home';
+import { Home } from './features/home/Home';
 import { TrackRow } from './ui/components/TrackRow';
 import { MiniPlayer, NowPlaying } from './features/now-playing/PlayerUI';
 
