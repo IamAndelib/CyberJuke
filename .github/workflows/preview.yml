@@ -67,6 +67,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run build
       - run: npx cap sync android
+      - name: Wait for JitPack to build the pinned NewPipeExtractor
+        run: bash scripts/jitpack-warm.sh
 
       - name: Decode preview keystore
         env:

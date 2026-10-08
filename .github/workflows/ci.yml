@@ -131,6 +131,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run build
       - run: npx cap sync android
+      - name: Wait for JitPack to build the pinned NewPipeExtractor
+        run: bash scripts/jitpack-warm.sh
 
       - name: Unit tests
         working-directory: android
@@ -188,6 +190,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run build
       - run: npx cap sync android
+      - name: Wait for JitPack to build the pinned NewPipeExtractor
+        run: bash scripts/jitpack-warm.sh
 
       # The preview is built unsigned here (no PREVIEW_* secrets in CI): this checks that the
       # build type compiles and passes R8.
