@@ -19,10 +19,6 @@ export const TOTOP_MOVE_PX = 10;
 /** scrollTop per scrollKey, for the whole app session. */
 const positions = new Map<string, number>();
 
-export function savedScroll(key: string): number | undefined {
-  return positions.get(key);
-}
-
 const PTR_LABEL = { pull: '[ pull to refresh ]', release: '[ release to refresh ]', busy: '[ refreshing… ]' } as const;
 
 /**

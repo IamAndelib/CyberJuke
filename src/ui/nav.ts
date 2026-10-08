@@ -65,8 +65,6 @@ export const stacks = signal<Record<Tab, StackEntry[]>>(EMPTY_STACKS);
 export const stack = computed(() => stacks.value[tab.value]);
 /** The page showing on the current tab (null: its root). */
 export const topEntry = computed<StackEntry | null>(() => stack.value.at(-1) ?? null);
-/** Search is the page showing. */
-export const searchOpen = computed(() => topEntry.value?.page.kind === 'search');
 
 export const nowPlayingOpen = signal(false);
 /** Track whose ⋯ menu is open. */
@@ -178,14 +176,6 @@ export function popPage(): boolean {
   if (!cur.length) return false;
   setStack(tab.value, cur.slice(0, -1));
   return true;
-}
-
-/** Remove one page (its own Back or Close button), wherever it is in the stack. */
-export function closePage(id: number): void {
-  for (const k of TABS) {
-    const list = stacks.value[k];
-    if (list.some((e) => e.id === id)) setStack(k, list.filter((e) => e.id !== id));
-  }
 }
 
 /** Back to the tab's root screen. */
@@ -352,5 +342,3 @@ export function goBack(switchTab = true): boolean {
   }
   return false;
 }
-
-export { openPost, openExternal } from './links';

@@ -9,6 +9,3 @@ import { showNsfw } from '../store/library';
 import { auth } from './auth';
 
 export const source: TrackSource = new FirestoreSource({ showNsfw: () => showNsfw.value, auth });
-
-export type { Track } from './model';
-export type { Cursor, Page, TrackSource } from './source';

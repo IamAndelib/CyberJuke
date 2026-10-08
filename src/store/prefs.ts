@@ -2,9 +2,6 @@
 import { signal, type Signal } from '@preact/signals';
 import { Preferences } from '@capacitor/preferences';
 
-/** The app settings (theme, NSFW, quality, autoplay…) live with the library; re-exported here. */
-export { settings, updateSettings, type Settings } from './library';
-
 export type GridSort = 'popular' | 'az';
 export const GRID_SORTS: readonly GridSort[] = ['popular', 'az'];
 
@@ -16,7 +13,7 @@ export const genresSort = signal<GridSort>('popular');
 /** Artists grid order. */
 export const artistsSort = signal<GridSort>('popular');
 
-function bind<T extends string>(sig: Signal<T>, key: string, allowed: readonly T[]): Promise<void> {
+function bind<T extends string>(sig: Signal<T>, key: string, allowed: readonly T[]): void {
   let first = true;
   let applying = false;
   sig.subscribe((v) => {
@@ -28,7 +25,7 @@ function bind<T extends string>(sig: Signal<T>, key: string, allowed: readonly T
   });
   // A choice made before loading finished wins over the stored one.
   const before = sig.value;
-  return Preferences.get({ key })
+  Preferences.get({ key })
     .then(({ value }) => {
       if (sig.value !== before || !value || !(allowed as readonly string[]).includes(value)) return;
       applying = true;
@@ -38,8 +35,5 @@ function bind<T extends string>(sig: Signal<T>, key: string, allowed: readonly T
     .catch(() => {});
 }
 
-/** Resolves when stored preferences have been read. */
-export const prefsReady: Promise<void> = Promise.all([
-  bind(genresSort, K_GENRES_SORT, GRID_SORTS),
-  bind(artistsSort, K_ARTISTS_SORT, GRID_SORTS),
-]).then(() => {});
+bind(genresSort, K_GENRES_SORT, GRID_SORTS);
+bind(artistsSort, K_ARTISTS_SORT, GRID_SORTS);
