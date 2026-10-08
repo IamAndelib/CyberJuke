@@ -16,7 +16,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(JukePlayerPlugin.class);
         registerPlugin(MusicPlugin.class);
         registerPlugin(SecureStorePlugin.class);
-        LaunchOptions.updateFrom(getIntent());
+        LaunchOptions.updateFrom(this, getIntent());
         super.onCreate(savedInstanceState);
         // CI only (debuggable builds): ci_music_search / ci_artist / ci_lyrics / ci_artist_page extras log one check each.
         MusicPlugin.maybeRunCiChecks(this, getIntent());
@@ -24,8 +24,8 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onNewIntent(Intent intent) {
-        // e.g. `am start ... --es autoplay latest` while the app is already running
-        LaunchOptions.updateFrom(intent);
+        // e.g. `am start ... --es autoplay latest` while the app is already running (debuggable only)
+        LaunchOptions.updateFrom(this, intent);
         super.onNewIntent(intent);
         MusicPlugin.maybeRunCiChecks(this, intent);
     }

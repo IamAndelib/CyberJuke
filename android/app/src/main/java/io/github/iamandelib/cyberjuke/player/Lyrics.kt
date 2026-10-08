@@ -53,14 +53,14 @@ internal object Lyrics {
         try {
             lrclib(title, artist, album, durationSec)?.let { return it }
         } catch (t: Throwable) {
-            Log.w(TAG, "LRCLIB failed: ${t.message}")
+            Log.w(TAG, "LRCLIB failed: ${t.javaClass.simpleName}")
             failure = t
         }
         if (!ytId.isNullOrBlank()) {
             try {
                 ytMusic(ytId)?.let { return it }
             } catch (t: Throwable) {
-                Log.w(TAG, "YouTube Music lyrics failed: ${YtCompat.describe(t)}")
+                Log.w(TAG, "YouTube Music lyrics failed: ${YtCompat.classify(t)} ${t.javaClass.simpleName}")
                 // A YouTube bot check is the more useful reason to report.
                 failure = t
             }
@@ -71,7 +71,11 @@ internal object Lyrics {
 
     // ---- LRCLIB ---------------------------------------------------------------------------
 
-    private fun lrclib(title: String, artist: String, album: String?, durationSec: Double?): Result? {
+    /**
+     * LRCLIB only (no Android logging, so the JVM canary can call it): a result, null when
+     * not found, or an exception.
+     */
+    internal fun lrclib(title: String, artist: String, album: String?, durationSec: Double?): Result? {
         val get = "$LRCLIB/get".toHttpUrl().newBuilder()
             .addQueryParameter("track_name", title)
             .addQueryParameter("artist_name", artist)

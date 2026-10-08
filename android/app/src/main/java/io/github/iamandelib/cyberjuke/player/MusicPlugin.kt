@@ -2,7 +2,6 @@ package io.github.iamandelib.cyberjuke.player
 
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.util.Log
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
@@ -194,13 +193,26 @@ class MusicPlugin : Plugin() {
                 } catch (t: Throwable) {
                     val code = YtMusic.errorCode(t)
                     val msg = YtMusic.describe(t)
-                    Log.w(TAG, "$what failed [$code]: $msg")
+                    // [what] holds the query / ids: info level only (R8 strips it in release).
+                    Log.i(TAG, "$what failed [$code]: $msg")
+                    Log.w(TAG, "${what.substringBefore(' ')} failed [$code]: ${t.javaClass.simpleName}")
+                    reportFailure(t)
                     call.reject(msg, code)
                 }
             }
         } catch (t: Throwable) { // RejectedExecutionException after destroy
             call.reject("music service stopped", "UNAVAILABLE")
         }
+    }
+
+    /**
+     * A bot check or rate limit is network-wide: it starts the player's back-off too (Y1). A
+     * parse failure means YouTube changed something (the JukePlayer `extractorBroken` event).
+     */
+    private fun reportFailure(t: Throwable) {
+        val kind = YtCompat.classify(t)
+        kind.blockReason?.let { NetBlock.trip(it) }
+        if (kind == FailureKind.BROKEN) PlayerBus.emitExtractorBroken(YtMusic.describe(t))
     }
 
     private fun pageToJs(r: YtMusic.Result): JSObject = itemsToJs(r.items, r.next)
@@ -298,7 +310,7 @@ class MusicPlugin : Plugin() {
         @JvmStatic
         fun maybeRunCiChecks(context: Context, intent: Intent?) {
             if (intent == null) return
-            if ((context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) == 0) return
+            if (!context.isDebuggable()) return
             val search = intent.getStringExtra(CI_EXTRA)?.trim()
             val artist = intent.getStringExtra(CI_ARTIST)?.trim()
             val lyrics = intent.getStringExtra(CI_LYRICS)?.trim()
@@ -320,7 +332,7 @@ class MusicPlugin : Plugin() {
                 val r = YtMusic.search(q, YtMusic.Filter.SONGS)
                 Log.i(TAG, "CI search '$q' -> ${r.items.size} items")
             } catch (t: Throwable) {
-                Log.w(TAG, "CI search '$q' failed: ${YtMusic.describe(t)}")
+                Log.i(TAG, "CI search '$q' failed: ${YtMusic.describe(t)}")
             }
         }
 
@@ -330,7 +342,7 @@ class MusicPlugin : Plugin() {
                 val list = items.take(8).joinToString("; ") { "${it.title}=${it.channelId}" }
                 Log.i(TAG, "CI artist '$name' -> ${items.size} candidates: $list")
             } catch (t: Throwable) {
-                Log.w(TAG, "CI artist '$name' failed: ${YtMusic.describe(t)}")
+                Log.i(TAG, "CI artist '$name' failed: ${YtMusic.describe(t)}")
             }
         }
 
@@ -359,7 +371,7 @@ class MusicPlugin : Plugin() {
                         "firstRelease=$open source=${a.source}",
                 )
             } catch (t: Throwable) {
-                Log.w(TAG, "CI artistPage '$channelId' failed: [${YtMusic.errorCode(t)}] ${YtMusic.describe(t)}")
+                Log.i(TAG, "CI artistPage '$channelId' failed: [${YtMusic.errorCode(t)}] ${YtMusic.describe(t)}")
             }
         }
 
@@ -381,7 +393,7 @@ class MusicPlugin : Plugin() {
                     Log.i(TAG, "CI lyrics '$spec' -> not found")
                 }
             } catch (t: Throwable) {
-                Log.w(TAG, "CI lyrics '$spec' failed: [${YtMusic.errorCode(t)}] ${YtMusic.describe(t)}")
+                Log.i(TAG, "CI lyrics '$spec' failed: [${YtMusic.errorCode(t)}] ${YtMusic.describe(t)}")
             }
         }
     }

@@ -1,6 +1,8 @@
 package io.github.iamandelib.cyberjuke.player
 
+import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Bundle
 import androidx.media3.common.MediaItem
@@ -15,8 +17,6 @@ internal object JukeUris {
     const val SCHEME = "cyberjuke"
     private const val HOST_YT = "yt"
     const val EXTRA_YT_ID = "ytId"
-    const val EXTRA_BY = "by"
-    const val EXTRA_POST_URL = "postUrl"
 
     fun forYt(ytId: String): Uri = Uri.parse("$SCHEME://$HOST_YT/${Uri.encode(ytId)}")
 
@@ -33,6 +33,29 @@ internal object JukeUris {
     }
 }
 
+/**
+ * Per-track data the web gave us that other apps must not see (S1): the poster (`by`) and the
+ * post URL. MediaMetadata extras are readable by every connected controller, so these live
+ * here, keyed by mediaId, instead. Bounded LRU; nothing reads it back yet (the web keeps its
+ * own copy), but native features that need them should use [get].
+ */
+internal object TrackExtras {
+    data class Extra(val by: String?, val postUrl: String?)
+
+    private const val MAX = 2000
+    private val map = object : LinkedHashMap<String, Extra>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Extra>?) = size > MAX
+    }
+
+    fun put(mediaId: String, by: String?, postUrl: String?) {
+        synchronized(map) {
+            if (by == null && postUrl == null) map.remove(mediaId) else map[mediaId] = Extra(by, postUrl)
+        }
+    }
+
+    fun get(mediaId: String): Extra? = synchronized(map) { map[mediaId] }
+}
+
 /** NativeTrack JSON (the TS contract) to MediaItems; used by the plugin and the service. */
 internal object JukeTracks {
     fun parse(arr: JSONArray?): List<MediaItem> {
@@ -47,15 +70,13 @@ internal object JukeTracks {
     fun toMediaItem(o: JSONObject): MediaItem {
         val id = o.str("id") ?: throw IllegalArgumentException("track.id missing")
         val ytId = o.str("ytId") ?: throw IllegalArgumentException("track.ytId missing ($id)")
-        val extras = Bundle().apply {
-            putString(JukeUris.EXTRA_YT_ID, ytId)
-            o.str("by")?.let { putString(JukeUris.EXTRA_BY, it) }
-            o.str("postUrl")?.let { putString(JukeUris.EXTRA_POST_URL, it) }
-        }
+        if (!SessionPolicy.isValidYtId(ytId)) throw IllegalArgumentException("track.ytId invalid ($id)")
+        TrackExtras.put(id, o.str("by"), o.str("postUrl"))
+        val extras = Bundle().apply { putString(JukeUris.EXTRA_YT_ID, ytId) }
         val metadata = MediaMetadata.Builder()
             .setTitle(o.str("title"))
             .setArtist(o.str("artist"))
-            .setArtworkUri(o.str("artworkUrl")?.let { Uri.parse(it) })
+            .setArtworkUri(o.str("artworkUrl")?.takeIf { SessionPolicy.isAllowedArtwork(it) }?.let { Uri.parse(it) })
             .setExtras(extras)
             .build()
         return MediaItem.Builder()
@@ -93,7 +114,13 @@ internal object PlayerBus {
         fun onTrackError(trackId: String, message: String, skipped: Boolean)
     }
 
+    /** NewPipe could not parse YouTube's answer (YouTube changed something). Any thread. */
+    fun interface ExtractorBrokenListener {
+        fun onExtractorBroken(message: String)
+    }
+
     private val listeners = CopyOnWriteArraySet<TrackErrorListener>()
+    private val brokenListeners = CopyOnWriteArraySet<ExtractorBrokenListener>()
 
     fun add(l: TrackErrorListener) {
         listeners.add(l)
@@ -103,20 +130,57 @@ internal object PlayerBus {
         listeners.remove(l)
     }
 
+    fun addBroken(l: ExtractorBrokenListener) {
+        brokenListeners.add(l)
+    }
+
+    fun removeBroken(l: ExtractorBrokenListener) {
+        brokenListeners.remove(l)
+    }
+
     fun emitTrackError(trackId: String, message: String, skipped: Boolean) {
         listeners.forEach { it.onTrackError(trackId, message, skipped) }
     }
+
+    fun emitExtractorBroken(message: String) {
+        brokenListeners.forEach { it.onExtractorBroken(message) }
+    }
 }
 
-/** Launch options from the activity intent (`--es autoplay latest`), read by getLaunchOptions(). */
+/** Persists [NetPrefs] (SharedPreferences "cyberjuke_player"); applied at service start. */
+internal object NetPrefsStore {
+    private const val PREFS = "cyberjuke_player"
+    private const val KEY_PREFER_IPV4 = "prefer_ipv4"
+
+    fun load(context: Context) {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (NetPrefs.setPreferIpv4(prefs.getBoolean(KEY_PREFER_IPV4, false))) StreamResolver.clear()
+    }
+
+    fun setPreferIpv4(context: Context, value: Boolean) {
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_PREFER_IPV4, value).apply()
+        if (NetPrefs.setPreferIpv4(value)) StreamResolver.clear()
+    }
+}
+
+internal fun Context.isDebuggable(): Boolean =
+    (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+/** Launch options from the activity intent (`--es autoplay latest`, debuggable builds), read by getLaunchOptions(). */
 object LaunchOptions {
     @Volatile
     @JvmStatic
     var autoplay: String? = null
 
+    /** The `autoplay` extra is a CI hook: honoured on debuggable builds only (S2). */
     @JvmStatic
-    fun updateFrom(intent: Intent?) {
-        autoplay = intent?.getStringExtra("autoplay")?.takeIf { it == "latest" || it == CI_TONE }
+    fun updateFrom(context: Context, intent: Intent?) {
+        autoplay = if (context.isDebuggable()) {
+            intent?.getStringExtra("autoplay")?.takeIf { it == "latest" || it == CI_TONE }
+        } else {
+            null
+        }
         ciToneConsumed = false
     }
 
