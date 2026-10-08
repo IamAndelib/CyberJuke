@@ -116,6 +116,11 @@ export interface Player {
    * (first in, first out), shuffle or not. With nothing playing, plays them.
    */
   addToQueue(tracks: Track[]): Promise<void>;
+  /**
+   * Undo a remove: put `track` back. A list track goes back at list `index`; a queued
+   * one at the end of "Queued by you"; an autoplay one at the end of autoplay.
+   */
+  restore(track: Track, index: number, kind: 'queued' | 'list' | 'autoplay'): Promise<void>;
   /** Autoplay tracks computed for `seedId`; ignored if the seed changed meanwhile. */
   addAutoplay(tracks: Track[], seedId: string): Promise<void>;
   /** The Autoplay setting (C3). Off drops the autoplay tracks still to come. */

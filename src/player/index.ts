@@ -16,6 +16,7 @@ import { toast } from '../store/toast';
 import { auth } from '../data/auth';
 import { music, musicTracks } from '../data/ytmusic';
 import { logError } from '../core/log';
+import { exposeForTests } from '../core/testHooks';
 import { createAutoplay, type Autoplay } from './autoplay';
 import { NativePlayer } from './nativePlayer';
 import { safePlayer } from './safePlayer';
@@ -78,6 +79,16 @@ function sameItems(a: UpItem[], b: UpItem[]): boolean {
 function sameSections(a: UpNextSections, b: UpNextSections): boolean {
   return a.seed === b.seed && sameItems(a.queued, b.queued) && sameItems(a.list, b.list) && sameItems(a.autoplay, b.autoplay);
 }
+
+// e2e: what Up next holds, with the fields similarity works on.
+exposeForTests('__cyberjukeQueue', () => {
+  const s = state.peek();
+  const sec = upNextSections.peek();
+  const t = (x: { id: string; title: string; artist: string; genre: string; by: string; source?: string } | null) =>
+    x && { id: x.id, title: x.title, artist: x.artist, genre: x.genre, by: x.by, source: x.source ?? 'jukebox' };
+  const items = (xs: UpItem[]) => xs.map((u) => t(u.track));
+  return { context: s.context, current: t(s.current), seed: t(sec.seed), queued: items(sec.queued), list: items(sec.list), autoplay: items(sec.autoplay) };
+});
 
 export interface PositionSample {
   positionMs: number;

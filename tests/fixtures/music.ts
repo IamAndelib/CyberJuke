@@ -29,6 +29,10 @@ function hash(s: string): number {
  * call rejects UNAVAILABLE, like an evicted token), topSongPages (the songs playlist
  * gets that many pages: after the first, more() gives 10 "<Name> Rarity <k>" songs a
  * page, the last page ending with "Moonlit Rarity"; songPageDelay slows those pages).
+ *
+ * radio({ ytId, next }) gives a song's radio: 25 songs a page titled "Radio <n>" by
+ * "Radio Artist <k>" (never the seed), with a `next` token for 4 more pages; botCheck
+ * rejects it.
  */
 const FAKE_MUSIC = `
 (() => {
@@ -193,6 +197,19 @@ const FAKE_MUSIC = `
       if (opts.evictToken && releaseCalls === 1) return fail('UNAVAILABLE', 'unknown or expired token');
       const [, which, name] = token.split('|');
       return wait({ releases: releasesFor(name, which, true) });
+    },
+    radio({ ytId, next }) {
+      calls.push(['radio', ytId, next ?? null]);
+      if (opts.botCheck) return fail('BOT_CHECK', 'Sign in to confirm you are not a bot');
+      const n = next ? Number(next.split('|')[2]) : 0;
+      const items = [];
+      for (let i = 0; i < 25; i++) {
+        const k = n * 25 + i;
+        items.push(song('Radio ' + (k + 1), 'Radio Artist ' + (k % 7), 'radio|' + ytId + '|' + k));
+      }
+      const res = { items };
+      if (n < 4) res.next = 'radio|' + ytId + '|' + (n + 1);
+      return wait(res);
     },
     lyrics(o) {
       calls.push(['lyrics', o]);

@@ -242,6 +242,14 @@ export class NativePlayer implements Player {
     await JukePlayer.queueNext({ tracks: tracks.map(toNative) });
   }
 
+  async restore(track: Track, index: number, kind: 'queued' | 'list' | 'autoplay'): Promise<void> {
+    if (!YT_ID_RE.test(track.ytId)) return;
+    if (kind === 'queued') return this.addToQueue([track]);
+    if (kind === 'autoplay') return this.addAutoplay([track], this.s.value.seed?.id ?? '');
+    this.remember([track]);
+    await JukePlayer.addItems({ tracks: [toNative(track)], index });
+  }
+
   async addAutoplay(all: Track[], seedId: string): Promise<void> {
     const tracks = playable(all);
     if (!tracks.length) return;

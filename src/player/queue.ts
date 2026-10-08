@@ -313,6 +313,28 @@ export class Queue<T extends Identified> {
     return gone.size;
   }
 
+  /**
+   * Insert list tracks at a list index (Undo of a remove). In play order they go where the
+   * item now at that index is, or after the list when it is at the end.
+   */
+  insertAt(index: number, items: T[]): void {
+    if (!items.length) return;
+    if (!this.cur) return this.add(items);
+    const at = clamp(index, 0, this.list.length);
+    const entries = items.map((i) => this.entry(i));
+    const after = this.list[at];
+    this.list.splice(at, 0, ...entries);
+    if (!this.shuffle) {
+      this.order = this.list.slice();
+      return;
+    }
+    let p = after ? this.order.indexOf(after) : this.order.findIndex((e) => e.auto && e !== this.cur && this.order.indexOf(e) > this.order.indexOf(this.cur!));
+    if (p < 0) p = this.order.length;
+    // Never before the current track: it plays next then.
+    p = Math.max(p, this.order.indexOf(this.cur) + 1);
+    this.order.splice(p, 0, ...entries);
+  }
+
   /** Append tracks to the end of the queue (in list and play order). */
   add(items: T[]): void {
     if (!items.length) return;

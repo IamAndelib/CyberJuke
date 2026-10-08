@@ -251,6 +251,22 @@ describe('Queue: editing', () => {
     expect(ids(q.upNext(2))).toEqual(['y', 'b']);
   });
 
+  it('insertAt puts a removed list track back where it was (Undo)', () => {
+    const q = new Queue();
+    q.setList(abc(), 0);
+    q.addAuto([t('s1')]);
+    q.remove(2);
+    q.insertAt(2, [t('c')]);
+    expect(ids(q.upNext())).toEqual(['b', 'c', 'd', 'e', 's1']);
+    const r = new Queue(seeded(3));
+    r.setList(abc(), 0);
+    r.setShuffle(true);
+    r.addAuto([t('s1')]);
+    r.insertAt(5, [t('z')]);
+    expect(ids(r.upNext()).at(-1)).toBe('s1');
+    expect(ids(r.upNext())).toContain('z');
+  });
+
   it('add appends to list and play order', () => {
     const q = new Queue(seeded(5));
     q.setList(abc(), 0);

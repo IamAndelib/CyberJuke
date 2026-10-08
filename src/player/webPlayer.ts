@@ -353,6 +353,13 @@ export class WebPlayer implements Player {
     if (wasEmpty) await this.loadCurrent(true, true);
   }
 
+  async restore(track: Track, index: number, kind: 'queued' | 'list' | 'autoplay'): Promise<void> {
+    if (kind === 'queued') return this.addToQueue([track]);
+    if (kind === 'autoplay') return this.addAutoplay([track], this.seed?.id ?? '');
+    this.q.insertAt(index, [track]);
+    this.publish();
+  }
+
   async addAutoplay(tracks: Track[], seedId: string): Promise<void> {
     if (!tracks.length || !this.autoplayOn || this.q.repeat !== 'off' || this.seed?.id !== seedId) return;
     if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['addAutoplay', tracks.map((t) => t.id)]);
