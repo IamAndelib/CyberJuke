@@ -398,14 +398,51 @@ function NpArtist({ track }: { track: Track }) {
   );
 }
 
+/** Longest a closing sheet keeps its content if no transitionend comes (hidden page, no transition). */
+const SHEET_CLEAR_MS = 400;
+
+/**
+ * What a bottom sheet shows: `value` while open, and the last one while it slides away,
+ * until the sheet's transform transition ends. So it never collapses to an empty strip
+ * on the way out.
+ */
+function useSheetContent<T>(value: T | null, sheet: { current: HTMLElement | null }): T | null {
+  const last = useRef(value);
+  const [, force] = useState(0);
+  if (value != null) last.current = value;
+  useEffect(() => {
+    const el = sheet.current;
+    if (value != null || last.current == null || !el) return;
+    const clear = () => {
+      if (last.current == null) return;
+      last.current = null;
+      force((n) => n + 1);
+    };
+    const onEnd = (e: TransitionEvent) => {
+      if (e.target === el && e.propertyName === 'transform') clear();
+    };
+    el.addEventListener('transitionend', onEnd);
+    const timer = setTimeout(clear, SHEET_CLEAR_MS);
+    return () => {
+      el.removeEventListener('transitionend', onEnd);
+      clearTimeout(timer);
+    };
+    // `sheet` is a stable ref; only opening and closing matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+  return value ?? last.current;
+}
+
 /** Small sheet listing a track's credited artists (from Now Playing). */
 export function ArtistChooser() {
-  const names = artistChoice.value;
+  const open = artistChoice.value;
+  const sheet = useRef<HTMLDivElement>(null);
+  const names = useSheetContent(open, sheet);
   const close = () => (artistChoice.value = null);
   return (
-    <div class={'sheet-wrap' + (names ? ' open' : '')} aria-hidden={!names} inert={!names}>
+    <div class={'sheet-wrap' + (open ? ' open' : '')} aria-hidden={!open} inert={!open}>
       <div class="scrim" onClick={close} />
-      <div class="sheet" role="dialog" aria-modal="true" aria-label="Choose an artist" data-testid="artist-chooser">
+      <div class="sheet" ref={sheet} role="dialog" aria-modal="true" aria-label="Choose an artist" data-testid="artist-chooser">
         {names && (
           <>
             <div class="sheet-head">
@@ -429,14 +466,16 @@ export function ArtistChooser() {
 // ---- Track ⋯ menu ------------------------------------------------------------------
 
 export function TrackMenu() {
-  const t = menuTrack.value;
+  const open = menuTrack.value;
+  const sheet = useRef<HTMLDivElement>(null);
+  const t = useSheetContent(open, sheet);
   void liked.value;
   const close = () => (menuTrack.value = null);
   const fav = t ? isLiked(t.id) : false;
   return (
-    <div class={'sheet-wrap' + (t ? ' open' : '')} aria-hidden={!t} inert={!t}>
+    <div class={'sheet-wrap' + (open ? ' open' : '')} aria-hidden={!open} inert={!open}>
       <div class="scrim" onClick={close} />
-      <div class="sheet" role="dialog" aria-modal="true" aria-label="Track options" data-testid="track-menu">
+      <div class="sheet" ref={sheet} role="dialog" aria-modal="true" aria-label="Track options" data-testid="track-menu">
         {t && (
           <>
             <div class="sheet-head">
