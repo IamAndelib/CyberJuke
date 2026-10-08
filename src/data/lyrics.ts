@@ -13,6 +13,7 @@
 import { cleanCredit, splitArtists } from './artists';
 import type { Track } from './model';
 import { appPlugin, toMusicError, type JukeMusicPlugin, type LyricsResult } from './ytmusic';
+import { Cache, InFlight } from '../core/cache';
 import { textFile } from '../core/storage';
 import { online } from '../core/network';
 
@@ -190,92 +191,82 @@ export interface LyricsDeps {
 export function createLyricsClient(deps: LyricsDeps): LyricsClient {
   const now = deps.now ?? (() => Date.now());
   const max = deps.max ?? LYRICS_CACHE_MAX;
-  /** Insertion order = recency (oldest first). */
-  let map: Map<string, CacheEntry> | null = null;
-  let loading: Promise<Map<string, CacheEntry>> | null = null;
-  const inflight = new Map<string, Promise<LyricsOutcome>>();
+  /** Least recently used first; "not found" is stale after NOT_FOUND_TTL_MS, found lyrics never are. */
+  let cache: Cache<string, CacheEntry> | null = null;
+  let loading: Promise<Cache<string, CacheEntry>> | null = null;
+  const inflight = new InFlight<string, LyricsOutcome>();
   // Requests go one at a time (LRCLIB rate-limits).
   let chain: Promise<unknown> = Promise.resolve();
 
   const ready = () =>
-    map
-      ? Promise.resolve(map)
+    cache
+      ? Promise.resolve(cache)
       : (loading ??= deps.storage
           .get(LYRICS_CACHE_KEY)
           .catch(() => null)
           .then((raw) => {
-            const m = new Map<string, CacheEntry>();
+            const c = new Cache<string, CacheEntry>({ max, now, ttlMs: (e) => (e.l.found ? Infinity : NOT_FOUND_TTL_MS) });
             try {
               const o = raw ? (JSON.parse(raw) as [string, CacheEntry][]) : [];
-              if (Array.isArray(o)) for (const [k, v] of o) if (v && typeof v.at === 'number' && v.l) m.set(k, v);
+              if (Array.isArray(o)) for (const [k, v] of o) if (v && typeof v.at === 'number' && v.l) c.restore(k, v, v.at);
             } catch {
               /* corrupt cache: start over */
             }
-            return (map = m);
+            return (cache = c);
           }));
 
   const persist = () => {
-    if (map) deps.storage.set(LYRICS_CACHE_KEY, JSON.stringify([...map])).catch(() => {});
+    if (cache) deps.storage.set(LYRICS_CACHE_KEY, JSON.stringify(cache.pairs())).catch(() => {});
   };
-
-  const fresh = (e: CacheEntry | undefined) => !!e && (e.l.found || now() - e.at < NOT_FOUND_TTL_MS);
-
-  function touch(id: string, e: CacheEntry): void {
-    map!.delete(id);
-    map!.set(id, e);
-    while (map!.size > max) map!.delete(map!.keys().next().value!);
-  }
 
   return {
     peek(id) {
-      const e = map?.get(id);
-      return fresh(e) ? e!.l : undefined;
+      return cache?.get(id)?.l;
     },
     async dropMembersOnly() {
-      const m = await ready();
+      const c = await ready();
       let changed = false;
-      for (const [k, v] of [...m]) {
+      for (const [k, v] of c.pairs()) {
         if (v.m) {
-          m.delete(k);
+          c.delete(k);
           changed = true;
         }
       }
       if (changed) persist();
     },
     async get(track, durationMs) {
-      const m = await ready();
-      const hit = m.get(track.id);
-      if (fresh(hit)) {
-        touch(track.id, hit!);
-        return { status: 'ok', lyrics: hit!.l };
-      }
+      const c = await ready();
+      const hit = c.touch(track.id);
+      if (hit) return { status: 'ok', lyrics: hit.l };
       const pending = inflight.get(track.id);
       if (pending) return pending;
       const p = deps.plugin();
       if (!p) return { status: 'error', offline: false };
-      const req: Promise<LyricsOutcome> = chain
-        .catch(() => {})
-        .then(() =>
-          p.lyrics({
-            ytId: track.ytId,
-            title: cleanTitle(track.title, track.artist),
-            artist: cleanArtist(track.artist),
-            ...(durationMs && durationMs > 0 && { durationSec: Math.round(durationMs / 1000) }),
+      const req: Promise<LyricsOutcome> = inflight.track(
+        track.id,
+        chain
+          .catch(() => {})
+          .then(() =>
+            p.lyrics({
+              ytId: track.ytId,
+              title: cleanTitle(track.title, track.artist),
+              artist: cleanArtist(track.artist),
+              ...(durationMs && durationMs > 0 && { durationSec: Math.round(durationMs / 1000) }),
+            }),
+          )
+          .then((r): LyricsOutcome => {
+            const lyrics = normalizeLyrics(r);
+            const e: CacheEntry = { at: now(), l: lyrics, ...(track.membersOnly && { m: true as const }) };
+            c.set(track.id, e, e.at);
+            persist();
+            return { status: 'ok', lyrics };
+          })
+          .catch((e): LyricsOutcome => {
+            const code = toMusicError(e).code;
+            return { status: 'error', offline: code === 'NETWORK' || !!deps.isOffline?.() };
           }),
-        )
-        .then((r): LyricsOutcome => {
-          const lyrics = normalizeLyrics(r);
-          touch(track.id, { at: now(), l: lyrics, ...(track.membersOnly && { m: true as const }) });
-          persist();
-          return { status: 'ok', lyrics };
-        })
-        .catch((e): LyricsOutcome => {
-          const code = toMusicError(e).code;
-          return { status: 'error', offline: code === 'NETWORK' || !!deps.isOffline?.() };
-        })
-        .finally(() => inflight.delete(track.id));
+      );
       chain = req;
-      inflight.set(track.id, req);
       return req;
     },
   };
