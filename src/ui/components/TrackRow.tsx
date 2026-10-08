@@ -1,5 +1,4 @@
 import { useComputed } from '@preact/signals';
-import { useRef } from 'preact/hooks';
 import type { Track } from '../../data/model';
 import { currentId, isPlaying, player } from '../../player';
 import { Icon } from '../icons';
@@ -65,38 +64,59 @@ function swallowNextClick(): void {
   document.addEventListener('pointerup', up, true);
 }
 
+/** The press in progress (one finger, one row at a time). */
+let press: { x: number; y: number; timer: ReturnType<typeof setTimeout> } | null = null;
+
+function cancelPress(): void {
+  if (press) clearTimeout(press.timer);
+  press = null;
+}
+
+function movedTooFar(x: number, y: number): boolean {
+  return !!press && Math.hypot(x - press.x, y - press.y) > PRESS_SLOP;
+}
+
+/**
+ * A press ends when the finger moves (pointer or touch events: during a pull-to-refresh
+ * or a pan, Chrome may send only touch events) or anything scrolls. Passive, installed once.
+ */
+if (typeof document !== 'undefined') {
+  const opts = { capture: true, passive: true } as const;
+  document.addEventListener(
+    'touchmove',
+    (e) => {
+      const t = e.touches[0];
+      if (!t || e.touches.length > 1 || movedTooFar(t.clientX, t.clientY)) cancelPress();
+    },
+    opts,
+  );
+  document.addEventListener('pointermove', (e) => movedTooFar(e.clientX, e.clientY) && cancelPress(), opts);
+  document.addEventListener('scroll', cancelPress, opts);
+}
+
 /**
  * P10: long-press opens the row's ⋯ menu (with a short haptic tick), and the click that
  * ends the press is swallowed. Moving the finger (a scroll) cancels it. No re-renders.
  */
-function useLongPress(track: Track) {
-  const press = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null);
-  const cancel = () => {
-    if (press.current) clearTimeout(press.current.timer);
-    press.current = null;
-  };
+function longPress(track: Track) {
   return {
     onPointerDown: (e: PointerEvent) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
-      cancel();
-      press.current = {
+      cancelPress();
+      press = {
         x: e.clientX,
         y: e.clientY,
         timer: setTimeout(() => {
-          press.current = null;
+          press = null;
           swallowNextClick();
           buzz();
           menuTrack.value = track;
         }, LONG_PRESS_MS),
       };
     },
-    onPointerMove: (e: PointerEvent) => {
-      const p = press.current;
-      if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > PRESS_SLOP) cancel();
-    },
-    onPointerUp: cancel,
-    onPointerCancel: cancel,
-    onPointerLeave: cancel,
+    onPointerUp: cancelPress,
+    onPointerCancel: cancelPress,
+    onPointerLeave: cancelPress,
     onContextMenu: (e: Event) => e.preventDefault(),
   };
 }
@@ -138,7 +158,7 @@ export function TrackRow({
   // and only the current row follows play/pause.
   const current = useComputed(() => currentId.value === track.id);
   const isCurrent = current.value;
-  const press = useLongPress(track);
+  const press = longPress(track);
   return (
     <li class={'row' + (isCurrent ? ' is-current' : '')} data-testid="track-row" data-track-id={track.id}>
       <button
