@@ -22,7 +22,7 @@ import {
 } from './nav';
 import { ArtistChooser, MiniPlayer, NowPlaying, TrackMenu } from '../features/now-playing/PlayerUI';
 import { Toasts } from './components/Toasts';
-import { ConfirmSheet } from './ConfirmSheet';
+import { ConfirmSheet } from './components/ConfirmSheet';
 import { SearchFab } from '../features/search/SearchFab';
 import { scrollToTop } from './scrollToTop';
 import { reducedMotion } from '../core/motion';

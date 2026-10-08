@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { confirmRequest, type ConfirmRequest } from './nav';
+import { confirmRequest, type ConfirmRequest } from '../nav';
 
 /** How long a closing sheet keeps its content while it slides away (the sheet's 0.2s). */
 const CLOSE_MS = 220;
