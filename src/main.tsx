@@ -4,6 +4,8 @@ import './styles/app.css';
 import './styles/ui-b.css';
 import './styles/ui-a.css';
 import './styles/ui-c.css';
+import './styles/interaction.css';
+import './styles/queue.css';
 import { render } from 'preact';
 import { effect } from '@preact/signals';
 import { Capacitor } from '@capacitor/core';
