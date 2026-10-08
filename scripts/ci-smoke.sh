@@ -17,6 +17,8 @@
 # `--es ci_music_search "<query>"` and reports the logged result count. It never fails the job.
 # Phase 4 (soft, debug builds) resolves artist candidates (`--es ci_artist`) and looks up one
 # song's lyrics (`--es ci_lyrics "artist|title|durationSec"`). Annotations only, never fails.
+# Phase 5 (soft, debug builds) loads one YouTube Music artist page (`--es ci_artist_page
+# "<channel id>"`) and reports its counts per shelf (songs, albums, live, EPs, singles).
 set -uo pipefail
 
 PKG="io.github.iamandelib.cyberjuke"
@@ -339,4 +341,33 @@ else
 fi
 log "Phase 4 lyrics: ${lyrics_res}${lyrics_line:+ ($lyrics_line)}"
 
-finish 0 "Pipeline: PLAYING and still PLAYING after ${BACKGROUND_WAIT}s in the background. Live YouTube: ${live}. YouTube Music search: ${music}. Artist: ${artist_res}. Lyrics: ${lyrics_res}"
+# ---- Phase 5 (soft): artist page (InnerTube browse, MusicPlugin CI hook) ------------------
+# Annotations only: ::notice when the page has songs or releases, ::warning otherwise.
+ARTIST_PAGE_ID="${SMOKE_ARTIST_PAGE_ID:-UCEPMVbUzImPl4p8k4LkGevA}"
+artist_page_res="not verified"
+log "Phase 5 (soft): artist page '$ARTIST_PAGE_ID'"
+adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
+sleep 2
+adb shell am start -W -n "$PKG/.MainActivity" --es ci_artist_page "\"$ARTIST_PAGE_ID\"" >/dev/null 2>&1 || true
+
+page_line="$(ci_hook_line artistPage "$SOFT_TIMEOUT")"
+page_msg="${page_line#*CyberJukeMusic*: }"
+page_total=0
+for k in songs album live ep single; do
+  if [[ "$page_line" =~ [[:space:]]$k=([0-9]+) ]]; then page_total=$((page_total + BASH_REMATCH[1])); fi
+done
+if [[ -z "$page_line" ]]; then
+  echo "::warning title=Artist page not verified::No 'CI artistPage' log line within ${SOFT_TIMEOUT}s (is this a debug build?)"
+  summary "### :warning: Artist page: no result within ${SOFT_TIMEOUT}s"
+elif [[ "$page_line" == *"' -> "* ]] && ((page_total > 0)); then
+  artist_page_res="pass"
+  echo "::notice title=Artist page::$page_msg"
+  summary "### :white_check_mark: Artist page: $page_msg"
+else
+  artist_page_res="failed"
+  echo "::warning title=Artist page not verified::$page_msg"
+  summary "### :warning: Artist page: $page_msg"
+fi
+log "Phase 5 artist page: ${artist_page_res}${page_line:+ ($page_line)}"
+
+finish 0 "Pipeline: PLAYING and still PLAYING after ${BACKGROUND_WAIT}s in the background. Live YouTube: ${live}. YouTube Music search: ${music}. Artist: ${artist_res}. Lyrics: ${lyrics_res}. Artist page: ${artist_page_res}"
