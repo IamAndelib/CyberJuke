@@ -657,14 +657,14 @@ class JukePlayerPlugin : Plugin() {
                 call.resolve()
                 return@post
             }
-            if (clear || width!! <= 0.0 || height!! <= 0.0) {
+            if (clear || width <= 0.0 || height <= 0.0) {
                 view.systemGestureExclusionRects = emptyList()
             } else {
                 val density = view.resources.displayMetrics.density
                 val maxH = MAX_EXCLUSION_DP * density
                 val h = (height * density).coerceAtMost(maxH.toDouble())
-                val centreY = (top!! + height / 2.0) * density
-                val l = (left!! * density).roundToInt()
+                val centreY = (top + height / 2.0) * density
+                val l = (left * density).roundToInt()
                 val t = (centreY - h / 2.0).roundToInt()
                 val r = ((left + width) * density).roundToInt()
                 val b = (centreY + h / 2.0).roundToInt()

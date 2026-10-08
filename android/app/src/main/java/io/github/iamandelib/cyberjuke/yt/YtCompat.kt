@@ -32,17 +32,13 @@ internal object YtCompat {
         val itag: Int,             // YouTube format id; -1 if unknown
         val bitrate: Int,          // bits per second-ish; -1 if unknown
         val mimeType: String?,     // e.g. audio/mp4, audio/webm
-        val kind: Kind,
         val originalTrack: Boolean, // false for dubbed/descriptive audio tracks
     )
-
-    enum class Kind { AUDIO_PROGRESSIVE, MUXED_PROGRESSIVE }
 
     data class Extracted(
         val audio: List<Candidate>,
         val muxed: List<Candidate>,
         val hlsUrl: String?,
-        val dashMpdUrl: String?,
         val durationSec: Long,
     )
 
@@ -75,7 +71,6 @@ internal object YtCompat {
                     itag = it.itag,
                     bitrate = bitrate,
                     mimeType = it.format?.mimeType,
-                    kind = Kind.AUDIO_PROGRESSIVE,
                     originalTrack = it.audioTrackType == null ||
                         it.audioTrackType == AudioTrackType.ORIGINAL,
                 )
@@ -90,7 +85,6 @@ internal object YtCompat {
                     // Rank muxed streams by height: lowest first is what we want.
                     bitrate = it.height,
                     mimeType = it.format?.mimeType,
-                    kind = Kind.MUXED_PROGRESSIVE,
                     originalTrack = true,
                 )
             }
@@ -99,7 +93,6 @@ internal object YtCompat {
             audio = audio,
             muxed = muxed,
             hlsUrl = info.hlsUrl?.takeIf { it.isNotBlank() },
-            dashMpdUrl = info.dashMpdUrl?.takeIf { it.isNotBlank() },
             durationSec = info.duration,
         )
     }
@@ -179,9 +172,6 @@ internal object YtCompat {
         }
         return false
     }
-
-    /** True if retrying the same video soon is pointless. */
-    fun isPermanent(t: Throwable): Boolean = classify(t) != FailureKind.NETWORK
 }
 
 /**
