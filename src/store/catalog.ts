@@ -8,15 +8,26 @@
  *  - at most one fetch at a time; no polling (refreshes are triggered by app start,
  *    app resume, coming back online, or a pull-to-refresh).
  * The cache holds NSFW tracks too; `tracks` applies the setting so toggling it is instant.
+ *
+ * Signed in with Cyberspace the catalog also holds members-only posts, so it is kept
+ * under its own key (CATALOG_MEMBERS_KEY). Signing in or out calls `reset`: both
+ * saved catalogs are dropped and the next refresh is a full one.
  */
 import { computed, signal, type ReadonlySignal } from '@preact/signals';
 import { Preferences } from '@capacitor/preferences';
 import type { Track } from '../data/model';
 import type { TrackSource } from '../data/source';
 import { source } from '../data';
+import { auth } from '../data/auth';
 import { settings } from './library';
 
 export const CATALOG_KEY = 'catalog.v1';
+/** The signed-in catalog (members-only posts included). */
+export const CATALOG_MEMBERS_KEY = 'catalog.v1.members';
+/** Storage key for the catalog of one sign-in state. */
+export function catalogKey(signedIn: boolean): string {
+  return signedIn ? CATALOG_MEMBERS_KEY : CATALOG_KEY;
+}
 export const INCREMENTAL_AFTER_MS = 60 * 60 * 1000;
 export const FULL_AFTER_MS = 24 * 60 * 60 * 1000;
 
@@ -25,6 +36,7 @@ export type CatalogStatus = 'idle' | 'loading' | 'ready' | 'error';
 export interface CatalogStorage {
   get(key: string): Promise<string | null>;
   set(key: string, value: string): Promise<void>;
+  remove?(key: string): Promise<void>;
 }
 
 export interface CatalogDeps {
@@ -32,6 +44,8 @@ export interface CatalogDeps {
   storage: CatalogStorage;
   showNsfw: () => boolean;
   now?: () => number;
+  /** Storage key, read on every restore/save (per sign-in state). Default CATALOG_KEY. */
+  storageKey?: () => string;
 }
 
 interface Persisted {
@@ -56,6 +70,11 @@ export interface Catalog {
    * Never rejects; failures land in `error`/`status`.
    */
   refresh(opts?: { force?: boolean }): Promise<void>;
+  /**
+   * Sign-in state changed: forget everything (memory and both saved catalogs), drop
+   * the result of any fetch still running, and do a full refresh.
+   */
+  reset(): Promise<void>;
 }
 
 function byNewest(a: Track, b: Track): number {
@@ -102,14 +121,18 @@ export function createCatalog(deps: CatalogDeps): Catalog {
   let checkedAt = 0;
   let restored: Promise<void> | null = null;
   let inflight: Promise<void> | null = null;
+  /** Bumped by reset(): a fetch from before it is thrown away. */
+  let gen = 0;
+  const key = deps.storageKey ?? (() => CATALOG_KEY);
 
   function restore(): Promise<void> {
+    const g = gen;
     restored ??= deps.storage
-      .get(CATALOG_KEY)
+      .get(key())
       .catch(() => null)
       .then((raw) => {
         const p = parsePersisted(raw);
-        if (!p || !p.tracks.length || all.value.length) return;
+        if (g !== gen || !p || !p.tracks.length || all.value.length) return;
         all.value = p.tracks.slice().sort(byNewest);
         fullAt = p.fullAt;
         checkedAt = p.checkedAt;
@@ -120,22 +143,27 @@ export function createCatalog(deps: CatalogDeps): Catalog {
 
   function persist(): void {
     const p: Persisted = { v: 1, fullAt, checkedAt, tracks: all.value };
-    deps.storage.set(CATALOG_KEY, JSON.stringify(p)).catch(() => {});
+    deps.storage.set(key(), JSON.stringify(p)).catch(() => {});
   }
 
   async function run(force: boolean): Promise<void> {
+    const g = gen;
     await restore();
+    if (g !== gen) return;
     const have = all.value.length > 0;
     const age = now() - fullAt;
     const mode = !have || age >= FULL_AFTER_MS ? 'full' : force || now() - checkedAt >= INCREMENTAL_AFTER_MS ? 'incremental' : null;
     if (!mode) return;
     try {
       if (mode === 'full') {
-        all.value = mergeTracks([], await deps.source.catalog());
+        const fetched = await deps.source.catalog();
+        if (g !== gen) return;
+        all.value = mergeTracks([], fetched);
         fullAt = checkedAt = now();
       } else {
         const since = new Date(all.value[0].createdAt);
         const fresh = await deps.source.catalog(isNaN(since.getTime()) ? undefined : since);
+        if (g !== gen) return;
         if (fresh.length) all.value = mergeTracks(all.value, fresh);
         checkedAt = now();
       }
@@ -143,6 +171,7 @@ export function createCatalog(deps: CatalogDeps): Catalog {
       status.value = 'ready';
       persist();
     } catch (e) {
+      if (g !== gen) return;
       error.value = {
         message: e instanceof Error ? e.message : String(e),
         offline: !!(e as { offline?: boolean })?.offline,
@@ -152,7 +181,7 @@ export function createCatalog(deps: CatalogDeps): Catalog {
     }
   }
 
-  return {
+  const api: Catalog = {
     tracks,
     all,
     status,
@@ -160,10 +189,27 @@ export function createCatalog(deps: CatalogDeps): Catalog {
     refresh(opts = {}) {
       if (inflight) return inflight;
       if (!all.value.length) status.value = 'loading';
-      inflight = run(!!opts.force).finally(() => (inflight = null));
-      return inflight;
+      const mine = run(!!opts.force).finally(() => {
+        if (inflight === mine) inflight = null;
+      });
+      inflight = mine;
+      return mine;
+    },
+    async reset() {
+      gen++;
+      inflight = null;
+      restored = Promise.resolve();
+      all.value = [];
+      fullAt = checkedAt = 0;
+      error.value = null;
+      status.value = 'idle';
+      await Promise.all(
+        [CATALOG_KEY, CATALOG_MEMBERS_KEY].map((k) => (deps.storage.remove ? deps.storage.remove(k) : deps.storage.set(k, '')).catch(() => {})),
+      );
+      await api.refresh();
     },
   };
+  return api;
 }
 
 // ---- Ranking helpers -----------------------------------------------------------------
@@ -198,7 +244,15 @@ const prefsStorage: CatalogStorage = {
   set: async (key, value) => {
     await Preferences.set({ key, value });
   },
+  remove: async (key) => {
+    await Preferences.remove({ key });
+  },
 };
 
 /** The app's catalog. */
-export const catalog = createCatalog({ source, storage: prefsStorage, showNsfw: () => settings.value.showNsfw });
+export const catalog = createCatalog({
+  source,
+  storage: prefsStorage,
+  showNsfw: () => settings.value.showNsfw,
+  storageKey: () => catalogKey(auth.signedIn()),
+});

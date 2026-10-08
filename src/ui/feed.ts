@@ -214,6 +214,11 @@ export class FeedCache {
     this.map.delete(key);
   }
 
+  /** Drop every feed whose key starts with one of `prefixes`. */
+  deletePrefix(...prefixes: string[]): void {
+    for (const k of [...this.map.keys()]) if (prefixes.some((p) => k.startsWith(p))) this.map.delete(k);
+  }
+
   get size(): number {
     return this.map.size;
   }
@@ -222,6 +227,17 @@ export class FeedCache {
     this.map.clear();
   }
 }
+
+/**
+ * Key part for lists of Jukebox posts, which differ by sign-in state: 'm' (members,
+ * signed in with Cyberspace) or 'p' (public). Feeds of the other state are never shown.
+ */
+export function authScope(signedIn: boolean): 'm' | 'p' {
+  return signedIn ? 'm' : 'p';
+}
+
+/** Prefixes of every feed of Jukebox posts (Home, genre pages). */
+export const JUKEBOX_FEED_PREFIXES = ['home:', 'genre:'] as const;
 
 /** The app-wide cache. */
 export const feeds = new FeedCache();

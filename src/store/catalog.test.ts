@@ -6,7 +6,8 @@ vi.mock('@capacitor/preferences', () => ({
   Preferences: { get: async () => ({ value: null }), set: async () => {} },
 }));
 
-const { CATALOG_KEY, FULL_AFTER_MS, INCREMENTAL_AFTER_MS, createCatalog, genreCounts, mergeTracks, mostSaved } = await import('./catalog');
+const { CATALOG_KEY, CATALOG_MEMBERS_KEY, FULL_AFTER_MS, INCREMENTAL_AFTER_MS, catalogKey, createCatalog, genreCounts, mergeTracks, mostSaved } =
+  await import('./catalog');
 
 function t(id: string, createdAt: string, p: Partial<Track> = {}): Track {
   return {
@@ -236,5 +237,93 @@ describe('genreCounts', () => {
       { name: 'pop', count: 2 },
       { name: 'rock', count: 1 },
     ]);
+  });
+});
+
+describe('catalog per sign-in state', () => {
+  function signedSetup(initialSignedIn: boolean, stored: Record<string, string> = {}) {
+    let signedIn = initialSignedIn;
+    let clock = Date.UTC(2026, 9, 8);
+    const data = new Map(Object.entries(stored));
+    const storage = {
+      data,
+      get: vi.fn(async (k: string) => data.get(k) ?? null),
+      set: vi.fn(async (k: string, v: string) => void data.set(k, v)),
+      remove: vi.fn(async (k: string) => void data.delete(k)),
+    };
+    let release: (() => void) | null = null;
+    let hold = false;
+    const source = {
+      catalog: vi.fn(async (since?: Date) => {
+        const mode = signedIn;
+        if (hold) await new Promise<void>((r) => (release = r));
+        return mode ? [t('pub', D(1)), t('mem', D(2), { membersOnly: true })].filter((x) => !since || new Date(x.createdAt) > since) : [t('pub', D(1))];
+      }),
+    };
+    const cat = createCatalog({ source, storage, showNsfw: () => false, now: () => clock, storageKey: () => catalogKey(signedIn) });
+    return {
+      cat,
+      storage,
+      source,
+      setSignedIn: (v: boolean) => (signedIn = v),
+      hold: () => (hold = true),
+      release: () => {
+        hold = false;
+        release?.();
+      },
+      tick: (ms: number) => (clock += ms),
+    };
+  }
+
+  it('keys the saved catalog by sign-in state', async () => {
+    expect(catalogKey(false)).toBe(CATALOG_KEY);
+    expect(catalogKey(true)).toBe(CATALOG_MEMBERS_KEY);
+    const s = signedSetup(true);
+    await s.cat.refresh();
+    expect(s.storage.data.has(CATALOG_MEMBERS_KEY)).toBe(true);
+    expect(s.storage.data.has(CATALOG_KEY)).toBe(false);
+    expect(s.cat.all.value.map((x) => x.id)).toEqual(['mem', 'pub']);
+  });
+
+  it('restores only the catalog of the current state', async () => {
+    const saved = (ids: string[]) => JSON.stringify({ v: 1, fullAt: Date.UTC(2026, 9, 8), checkedAt: Date.UTC(2026, 9, 8), tracks: ids.map((id) => t(id, D(1))) });
+    const s = signedSetup(false, { [CATALOG_KEY]: saved(['public-one']), [CATALOG_MEMBERS_KEY]: saved(['members-one']) });
+    await s.cat.refresh();
+    expect(s.cat.all.value.map((x) => x.id)).toEqual(['public-one']);
+    expect(s.source.catalog).not.toHaveBeenCalled();
+  });
+
+  it('reset (sign in or out) clears memory and both saved catalogs, then does a full refresh', async () => {
+    const s = signedSetup(false);
+    await s.cat.refresh();
+    expect(s.cat.all.value.map((x) => x.id)).toEqual(['pub']);
+    s.setSignedIn(true);
+    await s.cat.reset();
+    expect(s.storage.remove).toHaveBeenCalledWith(CATALOG_KEY);
+    expect(s.storage.remove).toHaveBeenCalledWith(CATALOG_MEMBERS_KEY);
+    expect(s.source.catalog).toHaveBeenCalledTimes(2);
+    expect(s.source.catalog.mock.calls[1][0]).toBeUndefined(); // full, not incremental
+    expect(s.cat.all.value.map((x) => x.id)).toEqual(['mem', 'pub']);
+    expect(s.storage.data.has(CATALOG_KEY)).toBe(false);
+    expect(JSON.parse(s.storage.data.get(CATALOG_MEMBERS_KEY)!).tracks).toHaveLength(2);
+    // Signing out drops the members-only posts from the phone.
+    s.setSignedIn(false);
+    await s.cat.reset();
+    expect(s.storage.data.has(CATALOG_MEMBERS_KEY)).toBe(false);
+    expect(s.cat.all.value.map((x) => x.id)).toEqual(['pub']);
+  });
+
+  it('a fetch still running when the state changes is thrown away', async () => {
+    const s = signedSetup(true);
+    s.hold();
+    const old = s.cat.refresh(); // members fetch, held
+    await Promise.resolve();
+    s.setSignedIn(false);
+    const reset = s.cat.reset();
+    await Promise.resolve();
+    s.release();
+    await Promise.all([old, reset]);
+    expect(s.cat.all.value.map((x) => x.id)).toEqual(['pub']);
+    expect(s.storage.data.has(CATALOG_MEMBERS_KEY)).toBe(false);
   });
 });

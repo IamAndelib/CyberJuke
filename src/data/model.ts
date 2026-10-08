@@ -30,6 +30,11 @@ export interface Track {
    * id `ytm:<ytId>`, and genre, poster and post URL are empty.
    */
   source?: TrackOrigin;
+  /**
+   * A members-only post (isPublic false): only seen when signed in with Cyberspace,
+   * and its post link needs a login on the site. Missing means public.
+   */
+  membersOnly?: boolean;
 }
 
 export type TrackOrigin = 'jukebox' | 'ytmusic';
@@ -161,9 +166,26 @@ function arrayValues(v: FsValue | undefined): FsValue[] {
   return [];
 }
 
+/**
+ * A post the site hides from everyone: by a banned or shadow-banned author. The public
+ * query filters these out on the server; the members query doesn't, so we do.
+ */
+export function isHiddenDoc(doc: FsDocument): boolean {
+  const f = doc.fields ?? {};
+  return bool(f.isBanned) || bool(f.isShadowBanned);
+}
+
+/** Members-only: isPublic is present and false (public-query rows never have it false). */
+export function isMembersOnlyDoc(doc: FsDocument): boolean {
+  const v = doc.fields?.isPublic;
+  return !!v && 'booleanValue' in v && v.booleanValue === false;
+}
+
 /** Turn one post document into zero or more Tracks (one per playable YouTube audio attachment). */
 export function tracksFromDocument(doc: FsDocument): Track[] {
+  if (isHiddenDoc(doc)) return [];
   const f = doc.fields ?? {};
+  const membersOnly = isMembersOnlyDoc(doc);
   const id = docId(doc.name);
   const by = str(f.authorUsername);
   const slug = str(f.slug);
@@ -202,6 +224,7 @@ export function tracksFromDocument(doc: FsDocument): Track[] {
       artworkUrl: artworkUrl(ytId),
       ...(saves !== undefined && { saves }),
       ...(replies !== undefined && { replies }),
+      ...(membersOnly && { membersOnly: true }),
     });
   }
   return out;

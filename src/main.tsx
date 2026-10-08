@@ -3,6 +3,7 @@ import './styles/themes.css';
 import './styles/app.css';
 import './styles/ui-b.css';
 import './styles/ui-a.css';
+import './styles/ui-c.css';
 import { render } from 'preact';
 import { effect } from '@preact/signals';
 import { Capacitor } from '@capacitor/core';
@@ -12,6 +13,8 @@ import { loadLibrary, settings } from './store/library';
 import { online, watchNetwork } from './store/network';
 import { catalog } from './store/catalog';
 import { startFreshness } from './store/newTracks';
+import { startAccount } from './store/account';
+import { auth } from './data/auth';
 import { goBack } from './ui/nav';
 import { JukePlayer } from './player/native';
 import { player } from './player';
@@ -81,7 +84,9 @@ function startCatalog(): void {
 }
 
 async function boot(): Promise<void> {
-  await loadLibrary().catch(() => {});
+  // A saved Cyberspace login decides which query the first requests use.
+  await Promise.all([loadLibrary().catch(() => {}), auth.restore()]);
+  startAccount();
   applyTheme();
   watchNetwork();
   wireBackButton();

@@ -26,7 +26,7 @@ export const freshness = createFreshness({
 
 if (fs) fs.onLatest = (newest) => freshness.seen(newest);
 
-/** Home feeds share this key prefix (Home.tsx: `home:<genre>:<nsfw>`). */
+/** Home feeds share this key prefix (Home.tsx: `home:<m|p>:<genre>:<nsfw>`). */
 export const HOME_FEED_PREFIX = 'home:';
 
 /**

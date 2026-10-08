@@ -7,6 +7,8 @@ import {
   CATALOG_PAGE_SIZE,
   FirestoreError,
   FirestoreSource,
+  MEMBERS_CATALOG_FIELDS,
+  MEMBERS_FRESHNESS_FIELDS,
   nextCursor,
   PAGE_SIZE,
   RUN_QUERY_URL,
@@ -300,5 +302,159 @@ describe('freshness check (newerThan)', () => {
     src.invalidateAll();
     await src.latest();
     expect(fetchFn).toHaveBeenCalledTimes(3);
+  });
+});
+
+// ---- Signed in with Cyberspace: the members query ------------------------------------
+
+const MEMBERS_FILTERS = [
+  ['deleted', { booleanValue: false }],
+  ['hasAudioAttachment', { booleanValue: true }],
+].map(([fieldPath, value]) => ({ fieldFilter: { field: { fieldPath }, op: 'EQUAL', value } }));
+
+/** A post doc built from the fixture's first post, with overrides. */
+function post(id: string, createdAt: string, extra: Record<string, unknown> = {}) {
+  const d = structuredClone(rows[0].document!);
+  d.name = d.name.replace(/[^/]+$/, id);
+  d.fields = { ...d.fields, createdAt: { timestampValue: createdAt }, isNSFW: { booleanValue: false }, ...(extra as object) };
+  return { document: d };
+}
+
+function fakeAuth(tokens = ['tok-1', 'tok-2', 'tok-3']) {
+  let i = 0;
+  let signedIn = true;
+  return {
+    signedIn: () => signedIn,
+    setSignedIn: (v: boolean) => (signedIn = v),
+    token: vi.fn(async () => (signedIn ? tokens[i] : null)),
+    refreshNow: vi.fn(async () => (signedIn ? tokens[++i] : null)),
+  };
+}
+
+describe('buildQuery (members)', () => {
+  it('is the site\'s logged-in query: deleted==false, hasAudioAttachment==true, newest first', () => {
+    const q = buildQuery({ members: true }).structuredQuery as any;
+    expect(q.where.compositeFilter.filters).toEqual(MEMBERS_FILTERS);
+    const s = JSON.stringify(q);
+    expect(s).not.toContain('isPublic');
+    expect(s).not.toContain('isBanned');
+    expect(s).not.toContain('isShadowBanned');
+    expect(q.orderBy.map((o: any) => [o.field.fieldPath, o.direction])).toEqual([
+      ['createdAt', 'DESCENDING'],
+      ['__name__', 'DESCENDING'],
+    ]);
+  });
+
+  it('keeps the field mask and createdAt > since variants', () => {
+    const q = buildQuery({ members: true, select: MEMBERS_CATALOG_FIELDS, since: 't', limit: 300 }).structuredQuery as any;
+    expect(q.where.compositeFilter.filters).toEqual([
+      ...MEMBERS_FILTERS,
+      { fieldFilter: { field: { fieldPath: 'createdAt' }, op: 'GREATER_THAN', value: { timestampValue: 't' } } },
+    ]);
+    expect(q.select.fields.map((f: any) => f.fieldPath)).toEqual(expect.arrayContaining(['isPublic', 'isBanned', 'isShadowBanned', 'attachments']));
+  });
+
+  it('has no genre variant (no guaranteed index)', () => {
+    expect(() => buildQuery({ members: true, genre: 'x' })).toThrow();
+  });
+});
+
+describe('FirestoreSource (members)', () => {
+  it('sends the members query with the ID token; signed out it is the public query with no header', async () => {
+    const f = mockFetch(rows);
+    const auth = fakeAuth();
+    const src = new FirestoreSource({ fetch: f as any, auth });
+    await src.latest();
+    expect(JSON.parse(f.mock.calls[0][1].body as string)).toEqual(buildQuery({ members: true }));
+    expect((f.mock.calls[0][1].headers as Record<string, string>).Authorization).toBe('Bearer tok-1');
+    auth.setSignedIn(false);
+    src.invalidateAll();
+    await src.latest();
+    expect(JSON.parse(f.mock.calls[1][1].body as string)).toEqual(buildQuery({}));
+    expect((f.mock.calls[1][1].headers as Record<string, string>).Authorization).toBeUndefined();
+  });
+
+  it('drops banned and shadow-banned posts on the phone and marks members-only posts', async () => {
+    const f = mockFetch([
+      post('pub', '2026-10-08T12:05:00Z', { isPublic: { booleanValue: true } }),
+      post('mem', '2026-10-08T12:04:00Z', { isPublic: { booleanValue: false } }),
+      post('ban', '2026-10-08T12:03:00Z', { isPublic: { booleanValue: true }, isBanned: { booleanValue: true } }),
+      post('shadow', '2026-10-08T12:02:00Z', { isPublic: { booleanValue: false }, isShadowBanned: { booleanValue: true } }),
+    ]);
+    const src = new FirestoreSource({ fetch: f as any, auth: fakeAuth() });
+    const page = await src.latest();
+    expect(page.tracks.map((t) => [t.id, !!t.membersOnly])).toEqual([
+      ['pub', false],
+      ['mem', true],
+    ]);
+  });
+
+  it('pages on past hidden posts: the cursor is the last row, banned or not', async () => {
+    const docs = Array.from({ length: 24 }, (_, i) =>
+      post(`d${i}`, new Date(Date.UTC(2026, 9, 8) - i * 1000).toISOString(), i === 23 ? { isBanned: { booleanValue: true } } : {}),
+    );
+    const src = new FirestoreSource({ fetch: mockFetch(docs) as any, auth: fakeAuth() });
+    const page = await src.latest();
+    expect(page.tracks).toHaveLength(23);
+    expect(page.cursor?.name).toMatch(/d23$/);
+  });
+
+  it('on 401 refreshes the token and retries once', async () => {
+    const auth = fakeAuth();
+    const f = vi.fn(async (_u: string, init: RequestInit) => {
+      const h = (init.headers as Record<string, string>).Authorization;
+      return h === 'Bearer tok-1'
+        ? new Response(JSON.stringify([{ error: { code: 401, status: 'UNAUTHENTICATED' } }]), { status: 401 })
+        : new Response(JSON.stringify(rows), { status: 200 });
+    });
+    const src = new FirestoreSource({ fetch: f as any, auth });
+    const page = await src.latest();
+    expect(page.tracks.length).toBeGreaterThan(0);
+    expect(auth.refreshNow).toHaveBeenCalledTimes(1);
+    expect(f).toHaveBeenCalledTimes(2);
+    expect((f.mock.calls[1][1].headers as Record<string, string>).Authorization).toBe('Bearer tok-2');
+  });
+
+  it('a second 401 is an error (only one retry)', async () => {
+    const auth = fakeAuth();
+    const f = mockFetch([{ error: { code: 401, message: 'Request had invalid authentication credentials.' } }], 401);
+    const src = new FirestoreSource({ fetch: f as any, auth });
+    await expect(src.latest()).rejects.toMatchObject({ status: 401 });
+    expect(f).toHaveBeenCalledTimes(2);
+    expect(auth.refreshNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('catalog() and newerThan() use the members masks; newerThan skips banned rows', async () => {
+    const bodies: any[] = [];
+    const f = vi.fn(async (_u: string, init: RequestInit) => {
+      bodies.push(JSON.parse(init.body as string));
+      return new Response(
+        JSON.stringify([
+          { document: { name: 'a', fields: { createdAt: { timestampValue: '2026-10-08T12:00:00Z' } } } },
+          { document: { name: 'b', fields: { createdAt: { timestampValue: '2026-10-08T13:00:00Z' }, isBanned: { booleanValue: true } } } },
+        ]),
+        { status: 200 },
+      );
+    });
+    const src = new FirestoreSource({ fetch: f as any, auth: fakeAuth() });
+    expect(await src.newerThan('2026-10-08T11:00:00Z')).toEqual({ count: 1, newest: '2026-10-08T12:00:00Z' });
+    expect(bodies[0].structuredQuery.select.fields.map((x: any) => x.fieldPath)).toEqual([...MEMBERS_FRESHNESS_FIELDS]);
+    expect(bodies[0].structuredQuery.where.compositeFilter.filters.slice(0, 2)).toEqual(MEMBERS_FILTERS);
+    await src.catalog();
+    expect(bodies[1]).toEqual(buildQuery({ members: true, select: MEMBERS_CATALOG_FIELDS, limit: CATALOG_PAGE_SIZE }));
+  });
+
+  it('byGenre() reads the catalog (exact genre) instead of querying', async () => {
+    const f = mockFetch(rows);
+    const src = new FirestoreSource({ fetch: f as any, auth: fakeAuth() });
+    const all = (await new FirestoreSource({ fetch: mockFetch(rows) as any, showNsfw: () => true }).latest()).tracks;
+    src.genreTracks = vi.fn(async (g: string) => all.filter((t) => t.genre === g));
+    const g = all[0].genre;
+    const page = await src.byGenre(g);
+    expect(f).not.toHaveBeenCalled();
+    expect(page.cursor).toBeNull();
+    expect(page.tracks.length).toBeGreaterThan(0);
+    expect(page.tracks.every((t) => t.genre === g && !t.nsfw)).toBe(true);
+    expect((await src.byGenre(g, { createdAt: 't', name: 'n' })).tracks).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Feed, FeedCache, type FeedPage } from './feed';
+import { Feed, FeedCache, JUKEBOX_FEED_PREFIXES, authScope, type FeedPage } from './feed';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
@@ -108,5 +108,17 @@ describe('FeedCache (usePaged cache)', () => {
     f.loadMore();
     await flush();
     expect(fn).not.toHaveBeenCalled();
+  });
+});
+
+describe('feed keys per sign-in state', () => {
+  it('scopes Jukebox lists by sign-in state and drops them all on a change', () => {
+    expect(authScope(true)).toBe('m');
+    expect(authScope(false)).toBe('p');
+    const cache = new FeedCache();
+    const loader = pages();
+    for (const k of ['home:p::false', 'home:m:rock:false', 'genre:p:rock:false', 'artistpage:queen', 'album:x']) cache.get(k, loader);
+    cache.deletePrefix(...JUKEBOX_FEED_PREFIXES);
+    expect(cache.entries().map(([k]) => k)).toEqual(['artistpage:queen', 'album:x']);
   });
 });

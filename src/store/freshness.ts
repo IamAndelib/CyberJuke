@@ -55,6 +55,11 @@ export interface Freshness {
   pause(): void;
   /** The interval setting changed. */
   reschedule(): void;
+  /**
+   * Sign-in state changed: forget the baseline and hide the pill (the other state sees
+   * different posts). The next Latest page sets a new baseline.
+   */
+  reset(): void;
   readonly lastCheckAt: number;
 }
 
@@ -143,6 +148,10 @@ export function createFreshness(deps: FreshnessDeps): Freshness {
     },
     reschedule() {
       schedule();
+    },
+    reset() {
+      shown = null;
+      pending.value = null;
     },
     get lastCheckAt() {
       return lastCheckAt;

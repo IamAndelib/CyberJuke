@@ -155,3 +155,19 @@ describe('freshness results', () => {
     expect(h.f.pending.value).toBeNull();
   });
 });
+
+describe('freshness reset (sign in or out)', () => {
+  it('forgets the baseline and hides the pill', async () => {
+    const h = harness();
+    h.newerThan.mockResolvedValue({ count: 2, newest: '2026-10-08T12:00:00Z' });
+    h.f.seen('2026-10-08T11:00:00Z');
+    await h.f.check();
+    expect(h.f.pending.value).not.toBeNull();
+    h.f.reset();
+    expect(h.f.pending.value).toBeNull();
+    // Back on the fallback baseline until the next Latest page.
+    h.newerThan.mockClear();
+    await h.f.check();
+    expect(h.newerThan).toHaveBeenCalledWith('2026-10-08T10:00:00Z');
+  });
+});

@@ -8,8 +8,14 @@
  *  - no polling of the feed itself: the only periodic request is the freshness check
  *    (`newerThan`: a createdAt-only field mask, at most FRESHNESS_LIMIT rows), run in
  *    the foreground at the user's chosen interval.
+ *
+ * Signed in with Cyberspace (optional, see ./auth), requests carry the ID token and use
+ * the site's own members query instead: `deleted==false, hasAudioAttachment==true`,
+ * no `isPublic`, ban flags filtered on the phone, members-only posts marked. Genre
+ * pages then filter the catalog (`genreTracks`), since only the members query shapes
+ * the site itself sends are sure to have an index. Signed out, nothing changes.
  */
-import { tracksFromRows, type FsRunQueryRow, type Track, ts } from './model';
+import { isHiddenDoc, tracksFromRows, type FsRunQueryRow, type Track, ts } from './model';
 import type { Cursor, Page, TrackSource } from './source';
 
 export const PROJECT = 'cyberspace-cyberspace';
@@ -43,6 +49,10 @@ export const CATALOG_FIELDS = [
 export const FRESHNESS_LIMIT = 25;
 /** Field mask for the freshness check: only the timestamp. */
 export const FRESHNESS_FIELDS = ['createdAt'] as const;
+/** Extra fields members requests ask for: the ban flags (filtered here) and isPublic. */
+export const MEMBERS_EXTRA_FIELDS = ['isPublic', 'isBanned', 'isShadowBanned'] as const;
+export const MEMBERS_CATALOG_FIELDS = [...CATALOG_FIELDS, ...MEMBERS_EXTRA_FIELDS] as const;
+export const MEMBERS_FRESHNESS_FIELDS = ['createdAt', 'isBanned', 'isShadowBanned'] as const;
 
 type Filter = {
   fieldFilter: { field: { fieldPath: string }; op: 'EQUAL' | 'GREATER_THAN'; value: Record<string, unknown> };
@@ -61,15 +71,22 @@ export function buildQuery(opts: {
   select?: readonly string[];
   /** Only posts created strictly after this ISO timestamp (incremental catalog). */
   since?: string | null;
+  /** Signed in: the site's members query (no isPublic or ban filters, no genre). */
+  members?: boolean;
 }) {
-  const filters: Filter[] = [
-    eq('isPublic', { booleanValue: true }),
-    eq('deleted', { booleanValue: false }),
-    eq('isBanned', { booleanValue: false }),
-    eq('isShadowBanned', { booleanValue: false }),
-    eq('hasAudioAttachment', { booleanValue: true }),
-  ];
-  if (opts.genre != null) filters.push(eq('audioAttachmentGenre', { stringValue: opts.genre }));
+  const filters: Filter[] = opts.members
+    ? [eq('deleted', { booleanValue: false }), eq('hasAudioAttachment', { booleanValue: true })]
+    : [
+        eq('isPublic', { booleanValue: true }),
+        eq('deleted', { booleanValue: false }),
+        eq('isBanned', { booleanValue: false }),
+        eq('isShadowBanned', { booleanValue: false }),
+        eq('hasAudioAttachment', { booleanValue: true }),
+      ];
+  if (opts.genre != null) {
+    if (opts.members) throw new Error('members queries have no genre filter');
+    filters.push(eq('audioAttachmentGenre', { stringValue: opts.genre }));
+  }
   if (opts.since) {
     filters.push({ fieldFilter: { field: { fieldPath: 'createdAt' }, op: 'GREATER_THAN', value: { timestampValue: opts.since } } });
   }
@@ -124,6 +141,13 @@ interface CacheEntry {
   page: RawPage;
 }
 
+/** What the source needs from the Cyberspace login (./auth). */
+export interface SourceAuth {
+  signedIn(): boolean;
+  token(): Promise<string | null>;
+  refreshNow(): Promise<string | null>;
+}
+
 export interface FirestoreSourceOptions {
   /** Whether NSFW tracks should be returned. Read on every call. Default: hide. */
   showNsfw?: () => boolean;
@@ -131,6 +155,8 @@ export interface FirestoreSourceOptions {
   now?: () => number;
   /** Called with the newest createdAt of every first Latest page fetched from the network. */
   onLatest?: (newest: string) => void;
+  /** The Cyberspace login; without one (or signed out) every request is the public one. */
+  auth?: SourceAuth;
 }
 
 export class FirestoreSource implements TrackSource {
@@ -139,11 +165,18 @@ export class FirestoreSource implements TrackSource {
   private readonly showNsfw: () => boolean;
   private readonly fetchFn: typeof fetch;
   private readonly now: () => number;
+  private readonly auth: SourceAuth | undefined;
   /** Observer for the newest post shown on the Latest feed (freshness baseline). */
   onLatest: ((newest: string) => void) | undefined;
+  /**
+   * Signed in: one genre's tracks, NSFW included (the catalog filtered for an exact
+   * genre match). Wired by the app (store/account.ts); without it a genre is empty.
+   */
+  genreTracks: ((genre: string) => Promise<Track[]>) | undefined;
 
   constructor(opts: FirestoreSourceOptions = {}) {
     this.onLatest = opts.onLatest;
+    this.auth = opts.auth;
     this.showNsfw = opts.showNsfw ?? (() => false);
     this.fetchFn = opts.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
     this.now = opts.now ?? (() => Date.now());
@@ -154,7 +187,16 @@ export class FirestoreSource implements TrackSource {
   }
 
   byGenre(genre: string, cursor?: Cursor | null): Promise<Page> {
+    if (this.members()) {
+      if (cursor) return Promise.resolve({ tracks: [], cursor: null });
+      return (this.genreTracks?.(genre) ?? Promise.resolve([])).then((tracks) => ({ tracks: this.filter(tracks), cursor: null }));
+    }
     return this.page(genre, cursor ?? null);
+  }
+
+  /** Whether requests use the members query (signed in). */
+  members(): boolean {
+    return !!this.auth?.signedIn();
   }
 
   async shuffle(n: number): Promise<Track[]> {
@@ -183,11 +225,18 @@ export class FirestoreSource implements TrackSource {
   async catalog(since?: Date): Promise<Track[]> {
     const out: Track[] = [];
     let cursor: Cursor | null = null;
+    const members = this.members();
     for (let i = 0; i < CATALOG_MAX_PAGES; i++) {
       const body = JSON.stringify(
-        buildQuery({ select: CATALOG_FIELDS, limit: CATALOG_PAGE_SIZE, cursor, since: since ? since.toISOString() : null }),
+        buildQuery({
+          select: members ? MEMBERS_CATALOG_FIELDS : CATALOG_FIELDS,
+          limit: CATALOG_PAGE_SIZE,
+          cursor,
+          since: since ? since.toISOString() : null,
+          members,
+        }),
       );
-      const p = await this.request(body, CATALOG_PAGE_SIZE);
+      const p = await this.request(body, members, CATALOG_PAGE_SIZE);
       out.push(...p.tracks);
       cursor = p.cursor;
       if (!cursor) break;
@@ -201,12 +250,15 @@ export class FirestoreSource implements TrackSource {
    * only createdAt). Never cached.
    */
   async newerThan(since: string): Promise<{ count: number; newest: string | null }> {
-    const body = JSON.stringify(buildQuery({ select: FRESHNESS_FIELDS, limit: FRESHNESS_LIMIT, since }));
-    const rows = await this.rows(body);
+    const members = this.members();
+    const body = JSON.stringify(
+      buildQuery({ select: members ? MEMBERS_FRESHNESS_FIELDS : FRESHNESS_FIELDS, limit: FRESHNESS_LIMIT, since, members }),
+    );
+    const rows = await this.rows(body, members);
     let newest: string | null = null;
     let count = 0;
     for (const r of rows) {
-      if (!r.document) continue;
+      if (!r.document || isHiddenDoc(r.document)) continue;
       count++;
       const t = ts(r.document.fields?.createdAt);
       if (t && (!newest || t > newest)) newest = t;
@@ -234,12 +286,13 @@ export class FirestoreSource implements TrackSource {
   }
 
   private raw(genre: string | null, cursor: Cursor | null): Promise<RawPage> {
-    const body = JSON.stringify(buildQuery({ genre, cursor }));
+    const members = this.members();
+    const body = JSON.stringify(buildQuery({ genre, cursor, members }));
     const hit = this.cache.get(body);
     if (hit && this.now() - hit.at < CACHE_TTL_MS) return Promise.resolve(hit.page);
     const pending = this.inflight.get(body);
     if (pending) return pending;
-    const req = this.request(body)
+    const req = this.request(body, members)
       .then((page) => {
         this.cache.set(body, { at: this.now(), page });
         if (genre == null && cursor == null && page.tracks[0]?.createdAt) this.onLatest?.(page.tracks[0].createdAt);
@@ -250,21 +303,43 @@ export class FirestoreSource implements TrackSource {
     return req;
   }
 
-  private async request(body: string, limit = PAGE_SIZE): Promise<RawPage> {
-    const rows = await this.rows(body);
+  private async request(body: string, members: boolean, limit = PAGE_SIZE): Promise<RawPage> {
+    const rows = await this.rows(body, members);
+    // The cursor comes from every row, so hidden (banned) posts don't end paging early.
     return { tracks: tracksFromRows(rows), cursor: nextCursor(rows, limit) };
   }
 
-  private async rows(body: string): Promise<FsRunQueryRow[]> {
-    let res: Response;
+  private async post(body: string, token: string | null): Promise<Response> {
     try {
-      res = await this.fetchFn(RUN_QUERY_URL, {
+      return await this.fetchFn(RUN_QUERY_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
         body,
       });
-    } catch (e) {
+    } catch {
       throw new FirestoreError('Network unavailable', 0, true);
+    }
+  }
+
+  private async token(get: () => Promise<string | null>): Promise<string> {
+    let t: string | null;
+    try {
+      t = await get();
+    } catch (e) {
+      throw new FirestoreError(e instanceof Error ? e.message : 'Network unavailable', 0, !!(e as { offline?: boolean })?.offline);
+    }
+    if (!t) throw new FirestoreError('Signed out of Cyberspace', 401);
+    return t;
+  }
+
+  private async rows(body: string, members = false): Promise<FsRunQueryRow[]> {
+    let res: Response;
+    if (members && this.auth) {
+      res = await this.post(body, await this.token(() => this.auth!.token()));
+      // An ID token the server no longer accepts: refresh once and retry once.
+      if (res.status === 401) res = await this.post(body, await this.token(() => this.auth!.refreshNow()));
+    } else {
+      res = await this.post(body, null);
     }
     let json: unknown;
     try {

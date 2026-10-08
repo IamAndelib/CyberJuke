@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fixture from './__fixtures__/runquery-sample.json';
-import { parseYouTubeId, tracksFromDocument, tracksFromRows, type FsDocument, type FsRunQueryRow } from './model';
+import { isHiddenDoc, isMembersOnlyDoc, parseYouTubeId, tracksFromDocument, tracksFromRows, type FsDocument, type FsRunQueryRow } from './model';
 
 const rows = fixture as unknown as FsRunQueryRow[];
 
@@ -171,5 +171,24 @@ describe('tracksFromDocument edge cases', () => {
     const [t] = tracksFromDocument(withAttachments([att('https://youtu.be/ccccccccccc', { title: ' ', artist: '' })]));
     expect(t.title).toBe('Untitled');
     expect(t.artist).toBe('Unknown artist');
+  });
+});
+
+describe('members-only and hidden posts', () => {
+  const base = (fields: Record<string, unknown>): FsDocument => {
+    const d = structuredClone((fixture as unknown as FsRunQueryRow[])[0].document!);
+    d.fields = { ...d.fields, ...(fields as object) };
+    return d;
+  };
+  it('marks isPublic == false as members-only; public and unknown are not', () => {
+    expect(tracksFromDocument(base({ isPublic: { booleanValue: false } }))[0].membersOnly).toBe(true);
+    expect(tracksFromDocument(base({ isPublic: { booleanValue: true } }))[0].membersOnly).toBeUndefined();
+    expect(isMembersOnlyDoc(base({}))).toBe(false);
+  });
+  it('drops posts by banned or shadow-banned authors', () => {
+    expect(isHiddenDoc(base({ isBanned: { booleanValue: true } }))).toBe(true);
+    expect(tracksFromDocument(base({ isBanned: { booleanValue: true } }))).toEqual([]);
+    expect(tracksFromDocument(base({ isShadowBanned: { booleanValue: true } }))).toEqual([]);
+    expect(tracksFromDocument(base({ isBanned: { booleanValue: false }, isShadowBanned: { booleanValue: false } }))).not.toEqual([]);
   });
 });
