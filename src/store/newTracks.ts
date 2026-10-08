@@ -3,19 +3,20 @@
  * catalog, the Home feeds and the "Check for new tracks" setting.
  */
 import { effect } from '@preact/signals';
-import { Capacitor } from '@capacitor/core';
+import { exposeForTests } from '../core/testHooks';
 import { source } from '../data';
 import { FirestoreSource } from '../data/firestore';
 import { feeds } from '../ui/feed';
 import { catalog } from './catalog';
 import { createFreshness } from './freshness';
-import { settings } from './library';
-import { online } from './network';
+import { settings, showNsfw } from './library';
+import { online, onReconnect } from './network';
 
 const fs = source instanceof FirestoreSource ? source : null;
 
 export const freshness = createFreshness({
-  newerThan: (since) => (fs ? fs.newerThan(since) : Promise.resolve({ count: 0, newest: null })),
+  // While NSFW is hidden, NSFW posts don't count as new.
+  newerThan: (since) => (fs ? fs.newerThan(since, { includeNsfw: showNsfw.value }) : Promise.resolve({ count: 0, newest: null })),
   fallbackBaseline: () => catalog.all.value[0]?.createdAt ?? null,
   // New posts show up everywhere: the catalog (search, Artists, Most saved) adds them.
   onFound: () => void catalog.refresh({ force: true }),
@@ -51,12 +52,7 @@ export function startFreshness(): void {
     if (document.visibilityState === 'visible') freshness.resume();
     else freshness.pause();
   });
-  let wasOnline = online.value;
-  effect(() => {
-    const now = online.value;
-    if (now && !wasOnline) freshness.resume();
-    wasOnline = now;
-  });
+  onReconnect(() => freshness.resume());
   let last = settings.value.checkEvery;
   effect(() => {
     const v = settings.value.checkEvery;
@@ -65,8 +61,6 @@ export function startFreshness(): void {
       freshness.reschedule();
     }
   });
-  if (!Capacitor.isNativePlatform()) {
-    // Dev/e2e hook: run a check without waiting for the timer.
-    (window as unknown as { __cyberjukeFreshness: unknown }).__cyberjukeFreshness = { check: () => freshness.check(), refreshLatest };
-  }
+  // Dev/e2e hook: run a check without waiting for the timer.
+  exposeForTests('__cyberjukeFreshness', { check: () => freshness.check(), refreshLatest });
 }

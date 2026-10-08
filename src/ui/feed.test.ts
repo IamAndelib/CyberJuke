@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Feed, FeedCache, JUKEBOX_FEED_PREFIXES, authScope, fillFeed, isFilling, type FeedPage } from './feed';
+import { Feed, FeedCache, JUKEBOX_FEED_PREFIXES, authScope, fillFeed, isFilling, retryWatchedFeeds, type FeedPage } from './feed';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
@@ -194,5 +194,63 @@ describe('fillFeed (an artist\'s whole song list for Here search)', () => {
     await settle();
     expect(feed.snapshot.items).toHaveLength(20);
     expect(loader).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('FeedCache eviction (W4)', () => {
+  const page = (n: number) => () => Promise.resolve({ items: [n], cursor: null });
+
+  it('never evicts a feed on screen, loading, or being filled', async () => {
+    const cache = new FeedCache(2);
+    const watched = cache.get('w', page(1));
+    const un = watched.subscribe(() => {});
+    let release!: () => void;
+    const slow = cache.get('slow', () => new Promise<FeedPage<number, null>>((r) => (release = () => r({ items: [2], cursor: null }))));
+    slow.start();
+    cache.get('a', page(3));
+    cache.get('b', page(4));
+    expect(cache.has('w')).toBe(true);
+    expect(cache.has('slow')).toBe(true);
+    expect(cache.has('a')).toBe(false);
+    release();
+    await new Promise((r) => setTimeout(r, 0));
+    cache.get('c', page(5));
+    expect(cache.has('slow')).toBe(false);
+    expect(cache.has('w')).toBe(true);
+    un();
+    cache.get('d', page(6));
+    expect(cache.has('w')).toBe(false);
+  });
+
+  it('obtain creates without reordering or evicting; touch does both', () => {
+    const cache = new FeedCache(1);
+    cache.get('a', page(1));
+    const b = cache.obtain('b', page(2));
+    expect(cache.has('a')).toBe(true);
+    expect(cache.obtain('b', page(3))).toBe(b);
+    cache.touch('b');
+    expect(cache.has('a')).toBe(false);
+    expect(cache.has('b')).toBe(true);
+  });
+});
+
+describe('retryWatchedFeeds (W6)', () => {
+  it('retries failed feeds that are on screen, and only those', async () => {
+    const cache = new FeedCache();
+    let fail = true;
+    const loader = vi.fn(() => (fail ? Promise.reject(Object.assign(new Error('offline'), { offline: true })) : Promise.resolve({ items: [1], cursor: null })));
+    const shown = cache.get('shown', loader);
+    const hidden = cache.get('hidden', loader);
+    const un = shown.subscribe(() => {});
+    shown.start();
+    hidden.start();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(shown.snapshot.status).toBe('error');
+    fail = false;
+    retryWatchedFeeds([cache]);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(shown.snapshot.status).toBe('ready');
+    expect(hidden.snapshot.status).toBe('error');
+    un();
   });
 });

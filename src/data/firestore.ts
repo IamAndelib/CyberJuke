@@ -15,7 +15,8 @@
  * pages then filter the catalog (`genreTracks`), since only the members query shapes
  * the site itself sends are sure to have an index. Signed out, nothing changes.
  */
-import { isHiddenDoc, tracksFromRows, type FsRunQueryRow, type Track, ts } from './model';
+import { bool, isHiddenDoc, tracksFromRows, type FsRunQueryRow, type Track, ts } from './model';
+import { parseRunQueryRows } from '../core/guards';
 import type { Cursor, Page, TrackSource } from './source';
 
 export const PROJECT = 'cyberspace-cyberspace';
@@ -53,6 +54,12 @@ export const FRESHNESS_FIELDS = ['createdAt'] as const;
 export const MEMBERS_EXTRA_FIELDS = ['isPublic', 'isBanned', 'isShadowBanned'] as const;
 export const MEMBERS_CATALOG_FIELDS = [...CATALOG_FIELDS, ...MEMBERS_EXTRA_FIELDS] as const;
 export const MEMBERS_FRESHNESS_FIELDS = ['createdAt', 'isBanned', 'isShadowBanned'] as const;
+
+/** The freshness check's field mask: NSFW hidden adds isNSFW, so NSFW posts aren't counted. */
+export function freshnessFields(members: boolean, includeNsfw: boolean): readonly string[] {
+  const base: readonly string[] = members ? MEMBERS_FRESHNESS_FIELDS : FRESHNESS_FIELDS;
+  return includeNsfw ? base : [...base, 'isNSFW'];
+}
 
 type Filter = {
   fieldFilter: { field: { fieldPath: string }; op: 'EQUAL' | 'GREATER_THAN'; value: Record<string, unknown> };
@@ -246,19 +253,19 @@ export class FirestoreSource implements TrackSource {
 
   /**
    * The freshness check: how many posts are newer than `since` (an ISO timestamp), at
-   * most FRESHNESS_LIMIT, and the newest one's timestamp. NSFW included (the mask has
-   * only createdAt). Never cached.
+   * most FRESHNESS_LIMIT, and the newest one's timestamp. With `includeNsfw` false
+   * (the setting hides them) NSFW posts don't count. Never cached.
    */
-  async newerThan(since: string): Promise<{ count: number; newest: string | null }> {
+  async newerThan(since: string, opts: { includeNsfw?: boolean } = {}): Promise<{ count: number; newest: string | null }> {
     const members = this.members();
-    const body = JSON.stringify(
-      buildQuery({ select: members ? MEMBERS_FRESHNESS_FIELDS : FRESHNESS_FIELDS, limit: FRESHNESS_LIMIT, since, members }),
-    );
+    const includeNsfw = opts.includeNsfw ?? this.showNsfw();
+    const body = JSON.stringify(buildQuery({ select: freshnessFields(members, includeNsfw), limit: FRESHNESS_LIMIT, since, members }));
     const rows = await this.rows(body, members);
     let newest: string | null = null;
     let count = 0;
     for (const r of rows) {
       if (!r.document || isHiddenDoc(r.document)) continue;
+      if (!includeNsfw && bool(r.document.fields?.isNSFW)) continue;
       count++;
       const t = ts(r.document.fields?.createdAt);
       if (t && (!newest || t > newest)) newest = t;
@@ -347,11 +354,12 @@ export class FirestoreSource implements TrackSource {
     } catch {
       throw new FirestoreError(`Bad response (${res.status})`, res.status);
     }
-    if (!res.ok || !Array.isArray(json)) {
+    const rows = res.ok ? parseRunQueryRows(json) : null;
+    if (!rows) {
       const err = Array.isArray(json) ? json[0]?.error : (json as { error?: { message?: string } })?.error;
-      throw new FirestoreError(err?.message || `Request failed (${res.status})`, res.status);
+      throw new FirestoreError((typeof err?.message === 'string' && err.message) || `Request failed (${res.status})`, res.status);
     }
-    return json as FsRunQueryRow[];
+    return rows;
   }
 }
 

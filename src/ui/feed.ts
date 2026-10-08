@@ -4,6 +4,7 @@
  * module-level cache, so leaving a screen and coming back gets everything already
  * loaded instantly, with no refetch. Pure TS, no Preact: hooks subscribe to it.
  */
+import { online } from '../store/network';
 
 export type FeedStatus = 'loading' | 'ready' | 'error';
 
@@ -44,7 +45,7 @@ export function toFeedError(e: unknown): FeedError {
   const x = e as { offline?: boolean; code?: unknown } | null;
   return {
     message: e instanceof Error ? e.message : String(e),
-    offline: !!x?.offline || (typeof navigator !== 'undefined' && navigator.onLine === false),
+    offline: !!x?.offline || !online.peek(),
     ...(typeof x?.code === 'string' && { code: x.code }),
   };
 }
@@ -78,6 +79,11 @@ export class Feed<T, C, M = undefined> {
     });
   }
 
+  /** A page request is out. */
+  get busyLoading(): boolean {
+    return this.busy;
+  }
+
   /** Whether a mounted component is subscribed (the list is on screen). */
   get watched(): boolean {
     return this.listeners.size > 0;
@@ -104,6 +110,13 @@ export class Feed<T, C, M = undefined> {
   retry(): void {
     this.started = true;
     void this.loadFirst(false);
+  }
+
+  /** Back online: reload a first page that failed, or retry a page that failed to load more. */
+  retryFailed(): void {
+    const s = this.snapshot;
+    if (s.status === 'error') this.retry();
+    else if (s.status === 'ready' && s.error && s.hasMore && !s.loadingMore) this.loadMore();
   }
 
   loadMore(): void {
@@ -186,6 +199,11 @@ export class Feed<T, C, M = undefined> {
 /** Feeds being filled by `fillFeed`. */
 const filling = new WeakSet<Feed<unknown, unknown, unknown>>();
 
+/** Whether `fillFeed` is loading this feed's pages right now. */
+export function isBeingFilled(feed: Feed<unknown, unknown, unknown>): boolean {
+  return filling.has(feed);
+}
+
 /**
  * Whether a feed being filled up to `max` items still has pages to come: loading,
  * or loaded with more pages, no error and fewer than `max` items.
@@ -228,21 +246,52 @@ export function fillFeed<T, C, M>(feed: Feed<T, C, M>, max: number): void {
 /** Most feeds kept; the least recently used ones beyond this are dropped. */
 export const FEED_CACHE_MAX = 40;
 
+/**
+ * Feeds by key, least recently used first. A feed on screen (watched), loading a
+ * page, or being filled is never evicted, so the cache can briefly hold more than `max`.
+ */
 export class FeedCache {
   private map = new Map<string, Feed<unknown, unknown, unknown>>();
   constructor(readonly max = FEED_CACHE_MAX) {}
 
+  /** Get or create, mark as most recently used, and evict beyond `max`. */
   get<T, C, M = undefined>(key: string, loader: FeedLoader<T, C, M>, opts?: FeedOptions<T>): Feed<T, C, M> {
-    let f = this.map.get(key) as Feed<T, C, M> | undefined;
-    if (f) {
-      this.map.delete(key);
-      f.loader = loader; // latest closure (same key = same request)
-    } else {
-      f = new Feed<T, C, M>(loader, opts);
-    }
-    this.map.set(key, f as Feed<unknown, unknown, unknown>);
-    while (this.map.size > this.max) this.map.delete(this.map.keys().next().value!);
+    const f = this.obtain(key, loader, opts);
+    f.loader = loader; // latest closure (same key = same request)
+    this.touch(key);
     return f;
+  }
+
+  /**
+   * Get or create without reordering or evicting (safe to call while rendering).
+   * Call `touch` from an effect once the feed is in use.
+   */
+  obtain<T, C, M = undefined>(key: string, loader: FeedLoader<T, C, M>, opts?: FeedOptions<T>): Feed<T, C, M> {
+    let f = this.map.get(key) as Feed<T, C, M> | undefined;
+    if (!f) {
+      f = new Feed<T, C, M>(loader, opts);
+      this.map.set(key, f as Feed<unknown, unknown, unknown>);
+    }
+    return f;
+  }
+
+  /** Mark a feed as just used and evict the least recently used idle ones beyond `max`. */
+  touch(key: string): void {
+    const f = this.map.get(key);
+    if (!f) return;
+    this.map.delete(key);
+    this.map.set(key, f);
+    if (this.map.size <= this.max) return;
+    for (const [k, feed] of this.map) {
+      if (this.map.size <= this.max) break;
+      if (k === key || feed.watched || feed.busyLoading || isBeingFilled(feed)) continue;
+      this.map.delete(k);
+    }
+  }
+
+  /** Every feed in the cache (no LRU touch). */
+  all(): Feed<unknown, unknown, unknown>[] {
+    return [...this.map.values()];
   }
 
   has(key: string): boolean {
@@ -285,3 +334,10 @@ export const JUKEBOX_FEED_PREFIXES = ['home:', 'genre:'] as const;
 
 /** The app-wide cache. */
 export const feeds = new FeedCache();
+/** Global search results, kept apart so typing many queries doesn't push out pages and albums. */
+export const globalFeeds = new FeedCache(20);
+
+/** Back online: every feed on screen whose load failed tries again. */
+export function retryWatchedFeeds(caches: FeedCache[] = [feeds, globalFeeds]): void {
+  for (const c of caches) for (const f of c.all()) if (f.watched) f.retryFailed();
+}

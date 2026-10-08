@@ -13,6 +13,7 @@ import { SkeletonRows } from '../components/TrackRow';
 import { Screen } from '../components/Screen';
 import { CoverRow, GlobalError, LoadMore, MUSIC_ITEM_OPTS, MusicRow, searchLoader } from '../components/Music';
 import { useFeed } from '../usePaged';
+import { globalFeeds } from '../feed';
 
 export const DEBOUNCE_MS = 120;
 export const GLOBAL_DEBOUNCE_MS = 400;
@@ -197,7 +198,7 @@ function JukeboxResults({ q }: { q: string }) {
 
 function GlobalList({ q, filter }: { q: string; filter: MusicFilter }) {
   const norm = q.trim().toLowerCase();
-  const { feed, snap } = useFeed<MusicItem, string>(`global:${filter}:${norm}`, searchLoader(q, filter), MUSIC_ITEM_OPTS);
+  const { feed, snap } = useFeed<MusicItem, string>(`global:${filter}:${norm}`, searchLoader(q, filter), MUSIC_ITEM_OPTS, globalFeeds);
   if (snap.status === 'loading') return <SkeletonRows n={6} />;
   if (snap.status === 'error' && snap.error) return <GlobalError error={snap.error} onRetry={() => feed.retry()} />;
   const items = snap.items;

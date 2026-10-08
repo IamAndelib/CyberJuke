@@ -276,7 +276,7 @@ describe('freshness check (newerThan)', () => {
         { status: 200 },
       );
     }) as unknown as typeof fetch;
-    const src = new FirestoreSource({ fetch: fetchFn });
+    const src = new FirestoreSource({ fetch: fetchFn, showNsfw: () => true });
     expect(await src.newerThan('2026-10-08T11:00:00Z')).toEqual({ count: 2, newest: '2026-10-08T13:00:00Z' });
     const q = bodies[0].structuredQuery;
     expect(q.select).toEqual({ fields: [{ fieldPath: 'createdAt' }] });
@@ -287,6 +287,32 @@ describe('freshness check (newerThan)', () => {
     // Never cached.
     await src.newerThan('2026-10-08T11:00:00Z');
     expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('with NSFW hidden, asks for isNSFW too and doesn\'t count NSFW posts', async () => {
+    const bodies: any[] = [];
+    const fetchFn = vi.fn(async (_u: unknown, init?: { body?: unknown }) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response(
+        JSON.stringify([
+          { document: { name: 'a', fields: { createdAt: { timestampValue: '2026-10-08T12:00:00Z' } } } },
+          { document: { name: 'b', fields: { createdAt: { timestampValue: '2026-10-08T13:00:00Z' }, isNSFW: { booleanValue: true } } } },
+        ]),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+    const src = new FirestoreSource({ fetch: fetchFn });
+    expect(await src.newerThan('2026-10-08T11:00:00Z')).toEqual({ count: 1, newest: '2026-10-08T12:00:00Z' });
+    expect(bodies[0].structuredQuery.select.fields.map((x: any) => x.fieldPath)).toEqual(['createdAt', 'isNSFW']);
+    expect(await src.newerThan('2026-10-08T11:00:00Z', { includeNsfw: true })).toEqual({ count: 2, newest: '2026-10-08T13:00:00Z' });
+    expect(bodies[1].structuredQuery.select.fields.map((x: any) => x.fieldPath)).toEqual(['createdAt']);
+  });
+
+  it('rejects a response that isn\'t a list of rows', async () => {
+    const src = new FirestoreSource({ fetch: (async () => new Response('{"x":1}', { status: 200 })) as unknown as typeof fetch });
+    await expect(src.latest()).rejects.toMatchObject({ name: 'FirestoreError' });
+    const junk = new FirestoreSource({ fetch: (async () => new Response(JSON.stringify([1, { document: 'nope' }, { document: { name: 5 } }]), { status: 200 })) as unknown as typeof fetch });
+    expect((await junk.latest()).tracks).toEqual([]);
   });
 
   it('reports the newest first Latest page and drops every cached page on invalidateAll', async () => {
@@ -436,7 +462,7 @@ describe('FirestoreSource (members)', () => {
         { status: 200 },
       );
     });
-    const src = new FirestoreSource({ fetch: f as any, auth: fakeAuth() });
+    const src = new FirestoreSource({ fetch: f as any, auth: fakeAuth(), showNsfw: () => true });
     expect(await src.newerThan('2026-10-08T11:00:00Z')).toEqual({ count: 1, newest: '2026-10-08T12:00:00Z' });
     expect(bodies[0].structuredQuery.select.fields.map((x: any) => x.fieldPath)).toEqual([...MEMBERS_FRESHNESS_FIELDS]);
     expect(bodies[0].structuredQuery.where.compositeFilter.filters.slice(0, 2)).toEqual(MEMBERS_FILTERS);

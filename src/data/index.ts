@@ -5,10 +5,10 @@
 import { FirestoreSource } from './firestore';
 export { shuffled } from './firestore';
 import type { TrackSource } from './source';
-import { settings } from '../store/library';
+import { showNsfw } from '../store/library';
 import { auth } from './auth';
 
-export const source: TrackSource = new FirestoreSource({ showNsfw: () => settings.value.showNsfw, auth });
+export const source: TrackSource = new FirestoreSource({ showNsfw: () => showNsfw.value, auth });
 
 export type { Track } from './model';
 export type { Cursor, Page, TrackSource } from './source';

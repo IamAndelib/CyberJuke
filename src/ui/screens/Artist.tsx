@@ -191,9 +191,11 @@ function useArtistHere(name: string, page: Feed<Track, TopCursor, ArtistPageMeta
   /** Search has shown Here at least once: the song list is wanted. */
   const wanted = useRef(false);
   const url = page.snapshot.meta?.songsUrl;
-  const songs = url ? feeds.get(`artistsongs:${key}`, artistSongsLoader(name, url), MUSIC_TRACK_OPTS) : null;
+  const songsKey = `artistsongs:${key}`;
+  const songs = url ? feeds.obtain(songsKey, artistSongsLoader(name, url), MUSIC_TRACK_OPTS) : null;
 
   useEffect(() => {
+    if (songs) feeds.touch(songsKey);
     const bump = () => rev.value++;
     const offPage = page.subscribe(bump);
     const offSongs = songs?.subscribe(bump);
