@@ -1,6 +1,6 @@
 import { artistKey } from '../../data/artists';
 import { SHELF_LABEL, musicErrorText, type MusicErrorCode, type Release } from '../../data/ytmusic';
-import { feeds } from '../feed';
+import { feeds } from '../../stores/feed';
 import { Icon } from '../icons';
 import { popPage, type ReleasesRef } from '../nav';
 import { Screen } from '../components/Screen';

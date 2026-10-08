@@ -30,7 +30,7 @@ import {
   type ArtistPageMeta,
   type TopCursor,
 } from '../components/Music';
-import { feeds, fillFeed, isFilling, type Feed } from '../feed';
+import { feeds, fillFeed, isFilling, type Feed } from '../../stores/feed';
 import { useFeed } from '../usePaged';
 
 function ShelfSkeleton() {

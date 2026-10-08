@@ -24,7 +24,7 @@ import { SkeletonRows } from '../components/TrackRow';
 import { Screen } from '../components/Screen';
 import { CoverRow, GlobalError, LoadMore, MUSIC_ITEM_OPTS, MusicRow, searchLoader } from '../components/Music';
 import { useFeed } from '../usePaged';
-import { globalFeeds } from '../feed';
+import { globalFeeds } from '../../stores/feed';
 import { list, radio } from '../playAll';
 
 export const DEBOUNCE_MS = 120;

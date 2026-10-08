@@ -14,7 +14,7 @@ import { groupAZ } from '../azSections';
 import type { GenreCount } from '../../stores/genres';
 import { genresSort } from '../../stores/prefs';
 import { usePaged } from '../usePaged';
-import { authScope } from '../feed';
+import { authScope } from '../../stores/feed';
 import { auth } from '../../data/auth';
 import { list as listCtx, withRest } from '../playAll';
 import { useSettled } from '../useSettled';

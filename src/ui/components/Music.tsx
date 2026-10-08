@@ -24,7 +24,7 @@ import {
 } from '../../data/ytmusic';
 import { artistChannels } from '../../stores/artistChannels';
 import type { Track } from '../../data/model';
-import type { FeedError, FeedLoader, FeedOptions } from '../feed';
+import type { FeedError, FeedLoader, FeedOptions } from '../../stores/feed';
 import { Icon } from '../icons';
 import { openAlbumPage, openArtistPage, openReleasesPage, type AlbumRef } from '../nav';
 

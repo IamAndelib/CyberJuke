@@ -21,7 +21,7 @@ import { startFreshness } from './stores/newTracks';
 import { startAccount } from './stores/account';
 import { auth } from './data/auth';
 import { goBack } from './ui/nav';
-import { retryWatchedFeeds } from './ui/feed';
+import { retryWatchedFeeds } from './stores/feed';
 import { JukePlayer } from './player/native';
 import { startPlayerPrefs } from './player';
 import { playFrom, radio } from './ui/playAll';

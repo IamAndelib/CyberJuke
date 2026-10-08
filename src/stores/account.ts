@@ -9,7 +9,7 @@ import { auth } from '../data/auth';
 import { source } from '../data';
 import { FirestoreError, FirestoreSource } from '../data/firestore';
 import type { Track } from '../data/model';
-import { feeds, JUKEBOX_FEED_PREFIXES } from '../ui/feed';
+import { feeds, JUKEBOX_FEED_PREFIXES } from './feed';
 import { lyrics } from '../data/lyrics';
 import { catalog } from './catalog';
 import { dropMembersOnly } from './library';

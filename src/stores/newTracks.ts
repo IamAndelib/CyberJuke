@@ -6,7 +6,7 @@ import { effect } from '@preact/signals';
 import { exposeForTests } from '../core/testHooks';
 import { source } from '../data';
 import { FirestoreSource } from '../data/firestore';
-import { feeds } from '../ui/feed';
+import { feeds } from './feed';
 import { catalog } from './catalog';
 import { createFreshness } from './freshness';
 import { settings, showNsfw } from './library';

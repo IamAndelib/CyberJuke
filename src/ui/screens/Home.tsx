@@ -12,7 +12,7 @@ import { Screen } from '../components/Screen';
 import { NewTracksPill } from '../components/NewTracksPill';
 import { Rail, RailRow, type RailItem } from '../components/Rail';
 import { usePaged } from '../usePaged';
-import { authScope } from '../feed';
+import { authScope } from '../../stores/feed';
 import { auth } from '../../data/auth';
 import { list as listCtx, playAll, radio, withRest } from '../playAll';
 
