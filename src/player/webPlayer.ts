@@ -65,7 +65,7 @@ function loadApi(): Promise<YTNamespace> {
     s.async = true;
     s.onerror = () => {
       apiPromise = null;
-      reject(new Error('YouTube API failed to load'));
+      reject(new Error('Player failed to load'));
     };
     document.head.appendChild(s);
   });
@@ -136,7 +136,7 @@ export class WebPlayer implements Player {
     this.ytReady.catch(() => {
       this.ytReady = null;
       this.publish({ isPlaying: false, isBuffering: false });
-      toast('YouTube player unavailable');
+      toast('Player unavailable');
     });
     return this.ytReady;
   }

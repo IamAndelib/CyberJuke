@@ -50,7 +50,7 @@ function A({ href, children }: { href: string; children: string }) {
 export function Settings() {
   const s = settings.value;
   return (
-    <Screen testid="screen-settings" title="Settings" subtitle={`CyberJuke v${__APP_VERSION__}`}>
+    <Screen testid="screen-settings" title="Settings" subtitle={`CyberJuke v${__APP_VERSION__}`} scrollKey="settings" backToTop={false}>
       <section class="card">
         <h2 class="card-title">Theme</h2>
         <div class="swatches" data-testid="theme-picker">
@@ -103,14 +103,18 @@ export function Settings() {
           website shows them. Nothing is posted and no account is needed.
         </p>
         <p>
-          <b>Audio:</b> tracks are YouTube videos linked by posters. CyberJuke streams them from YouTube; availability
-          depends on YouTube, and some tracks may be skipped.
+          <b>Audio:</b> tracks are the videos posters link to, streamed from where they are hosted. Availability depends
+          on that host, and some tracks may be skipped.
+        </p>
+        <p>
+          <b>Global:</b> Global search and "More by" on artist pages look beyond the Jukebox. What they find plays like
+          any track but is never added to the Jukebox, Genres or Most saved.
         </p>
         <p>
           <b>Credits:</b> Cyberspace and its creator <A href="https://beta.cyberspace.online/genghis_khan">@genghis_khan</A>
           {' '}for the Jukebox and the look this app borrows; every poster who shares music; and{' '}
           <A href="https://github.com/TeamNewPipe/NewPipeExtractor">NewPipeExtractor</A> (GPL-3.0), which powers
-          playback on Android.
+          playback and Global search on Android.
         </p>
       </section>
 

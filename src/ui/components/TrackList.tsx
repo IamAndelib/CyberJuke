@@ -3,6 +3,7 @@ import type { ComponentChildren } from 'preact';
 import type { Track } from '../../data/model';
 import { player } from '../../player';
 import type { Paged } from '../usePaged';
+import { useChunks } from '../useChunks';
 import { Icon } from '../icons';
 import { SkeletonRows, TrackRow } from './TrackRow';
 
@@ -18,6 +19,24 @@ export function Tracks({ tracks, hideGenre, showSaves }: { tracks: Track[]; hide
         <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} showSaves={showSaves} onPlay={() => playFrom(tracks, i)} />
       ))}
     </ul>
+  );
+}
+
+/**
+ * A long list rendered in chunks of 60 as you scroll; tapping a row plays the whole
+ * list from there. `chunkKey` remembers how many rows were shown (scroll memory).
+ */
+export function ChunkedTracks({ tracks, chunkKey, testid }: { tracks: Track[]; chunkKey: string; testid?: string }) {
+  const { shown, sentinel, more } = useChunks(tracks.length, chunkKey);
+  return (
+    <div data-testid={testid}>
+      <ul class="list" data-testid="track-list">
+        {tracks.slice(0, shown).map((t, i) => (
+          <TrackRow key={t.id} track={t} index={i} onPlay={() => playFrom(tracks, i)} />
+        ))}
+      </ul>
+      {more ? <div ref={sentinel} class="list-foot" aria-hidden="true" /> : <div class="list-foot end">— end of tape —</div>}
+    </div>
   );
 }
 

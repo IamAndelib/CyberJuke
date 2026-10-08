@@ -45,6 +45,7 @@ function GenreGrid() {
       title="Genres"
       subtitle={complete ? `${list.length} genres on the Jukebox` : 'Browse by genre'}
       onRefresh={() => catalog.refresh({ force: true })}
+      scrollKey="genres"
     >
       {favs.length > 0 && (
         <section data-testid="fav-genres">
@@ -89,7 +90,13 @@ function GenreGrid() {
 
 function GenreDetail({ genre }: { genre: string }) {
   const nsfw = settings.value.showNsfw;
-  const paged = usePaged(`genre:${genre}:${nsfw}`, (c) => source.byGenre(genre, c));
+  const paged = usePaged(`genre:${genre}:${nsfw}`, async (c) => {
+    const p = await source.byGenre(genre, c);
+    // Some posts only carry the genre on the attachment, which the query can't see:
+    // fall back to the local catalog rather than showing an empty genre.
+    if (!c && !p.tracks.length) return { tracks: catalog.tracks.value.filter((t) => t.genre === genre), cursor: null };
+    return p;
+  });
   const has = paged.tracks.length > 0;
   return (
     <Screen
@@ -102,6 +109,7 @@ function GenreDetail({ genre }: { genre: string }) {
         </button>
       }
       onRefresh={paged.refresh}
+      scrollKey={`genre:${genre}`}
     >
       <div class="actions">
         <button class="btn primary" disabled={!has} onClick={() => player.playList(paged.tracks, 0)} data-testid="genre-play-all">

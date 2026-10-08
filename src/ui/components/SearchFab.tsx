@@ -1,5 +1,6 @@
 import { Icon } from '../icons';
 import { searchOpen } from '../nav';
+import { searchMode } from '../screens/Search';
 
 /**
  * Square search button pinned to the bottom-right of the tab content, so it always sits
@@ -9,7 +10,10 @@ import { searchOpen } from '../nav';
 export function SearchFab() {
   return (
     <div class="fab">
-      <button class="fab-btn" aria-label="Search the Jukebox" onClick={() => (searchOpen.value = true)} data-testid="search-fab">
+      <button class="fab-btn" aria-label="Search the Jukebox" onClick={() => {
+          searchMode.value = 'jukebox';
+          searchOpen.value = true;
+        }} data-testid="search-fab">
         <Icon name="search" size={28} />
       </button>
       <div class="fab-shadow" aria-hidden="true" />

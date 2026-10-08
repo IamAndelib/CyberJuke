@@ -185,6 +185,7 @@ export function Home() {
       testid="screen-home"
       title={<span class="brand">CYBERJUKE</span>}
       subtitle="The Cyberspace Jukebox"
+      scrollKey={`home:${sort}:${sort === 'saved' ? savedRange.value : ''}:${g ?? ''}`}
       onRefresh={async () => {
         if (sort === 'saved') await catalog.refresh({ force: true });
         else await paged.refresh();

@@ -12,7 +12,7 @@ export function Library() {
   const sel = section.value;
   const tracks = sel === 'liked' ? liked.value : recent.value;
   return (
-    <Screen testid="screen-library" title="Library" subtitle="Saved on this device">
+    <Screen testid="screen-library" title="Library" subtitle="Saved on this device" scrollKey={`library:${sel}`}>
       <div class="segmented" role="tablist" aria-label="Library section">
         <button
           role="tab"

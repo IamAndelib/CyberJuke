@@ -1119,6 +1119,78 @@ h3 {
 .fab-btn:active {
   transform: translate(calc(var(--fab-shadow) / 2), calc(var(--fab-shadow) / 2));
 }
+/* Back-to-top: [^] bottom-centre, same hard checkered shadow as the search button.
+   A zero-height sticky dock at the end of the scroller pins it to the scrollport's
+   bottom edge (the top of the mini player or tab bar), centred, so it never meets the
+   bottom-right search button. */
+.totop-dock {
+  position: sticky;
+  bottom: 0;
+  height: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+.totop {
+  --fab-shadow: 4px;
+  --totop: 44px;
+  position: absolute;
+  left: 50%;
+  /* vertically centred on the search button */
+  bottom: calc(12px + 6px + (var(--fab) - var(--totop)) / 2);
+  width: var(--totop);
+  height: var(--totop);
+  margin-left: calc(var(--totop) / -2 - var(--fab-shadow) / 2);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px);
+  transition:
+    opacity 0.12s steps(3),
+    transform 0.12s steps(3),
+    visibility 0s linear 0.12s;
+}
+.totop.on {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  pointer-events: auto;
+  transition:
+    opacity 0.12s steps(3),
+    transform 0.12s steps(3),
+    visibility 0s;
+}
+.totop-btn {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+  border-radius: var(--radius);
+  box-shadow:
+    0 0 0 var(--border-w) var(--color-bg),
+    0 0 0 calc(var(--border-w) * 2) var(--color-fg);
+}
+.totop-shadow {
+  position: absolute;
+  inset: calc(var(--border-w) * -2);
+  transform: translate(var(--fab-shadow), var(--fab-shadow));
+  border-radius: var(--radius);
+  background-color: var(--color-bg);
+  background-image: var(--dither);
+  background-size: 4px 4px;
+}
+.totop-btn:active {
+  transform: translate(calc(var(--fab-shadow) / 2), calc(var(--fab-shadow) / 2));
+}
+/* Room under the last row for the back-to-top button. */
+.has-totop .screen-body {
+  padding-bottom: calc(24px + 12px + 6px + var(--fab));
+}
+
 /* Leave room under the last row so the button never hides its ⋯ for good. */
 .has-fab .screen-body {
   padding-bottom: calc(24px + 12px + var(--fab) + 18px);
@@ -1207,6 +1279,215 @@ h3 {
 }
 .search .chips {
   padding-top: 4px;
+}
+
+/* Search: input row, then [Jukebox] [Global] under it. */
+.search-bar {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding-bottom: 2px;
+}
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.search-modes {
+  margin-left: 42px;
+}
+.bridge {
+  display: flex;
+  justify-content: center;
+  padding: 8px var(--gutter) 4px;
+}
+.bridge-btn {
+  text-decoration: underline;
+  text-decoration-color: var(--color-border);
+  text-underline-offset: 4px;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+/* ---- Layers over the tab content (search, album) ---------------------------------- */
+
+.layer {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+}
+.album-layer {
+  z-index: 9;
+}
+.album-screen {
+  background: var(--color-bg);
+}
+
+/* ---- Global: covers, shelf, result rows, album header ------------------------------ */
+
+.art-cover img {
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: 0;
+}
+.art-round {
+  border-radius: 50%;
+}
+.art-cover.art-lg {
+  border-radius: calc(var(--radius-lg) - 2px);
+}
+.shelf {
+  list-style: none;
+  margin: 0;
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding: 8px var(--gutter) 14px;
+  scrollbar-width: none;
+  scroll-padding: 0 var(--gutter);
+}
+.shelf::-webkit-scrollbar {
+  display: none;
+}
+.shelf-item {
+  flex: none;
+  width: 128px;
+}
+.shelf-item .art-md {
+  width: 128px;
+}
+.shelf-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 0 0 6px;
+  border-radius: var(--radius);
+}
+.shelf-btn .art {
+  border: var(--border-w) solid var(--color-fg);
+  box-shadow: 4px 4px 0 var(--color-border);
+}
+.shelf-btn:active .art {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0 var(--color-border);
+}
+.shelf-title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.row-go {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  color: var(--color-fg-dim);
+}
+.icon.flip {
+  transform: scaleX(-1);
+}
+.section-note {
+  margin: 0;
+  padding: 6px var(--gutter) 10px;
+  font-size: 13px;
+}
+.state.compact {
+  padding: 20px 28px 24px;
+  gap: 8px;
+}
+.state.compact .state-glyph {
+  font-size: 16px;
+}
+.album-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  padding: 4px var(--gutter) 0 0;
+}
+.album-cover {
+  flex: none;
+  width: 132px;
+  margin: 16px 6px 16px var(--gutter);
+}
+.album-cover .dos-frame {
+  padding: 4px;
+}
+.album-info {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 14px;
+}
+.album-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.album-artist {
+  font-size: 14px;
+  margin: 2px 0;
+}
+.artist-name {
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+/* Tappable artist / genre in Now Playing (and album artist): subtle underline. */
+.np-link {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 0 4px;
+  margin-left: -4px;
+  border-radius: var(--radius);
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--color-border);
+  text-underline-offset: 4px;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.np-link:active {
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+}
+.np-genre {
+  position: relative;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--color-border);
+  text-underline-offset: 3px;
+}
+/* 44px hit area around the 20px tag. */
+.np-genre::after {
+  content: '';
+  position: absolute;
+  inset: -12px -6px;
+}
+.np-genre:active {
+  background: var(--color-fg);
+  color: var(--color-bg);
+  border-color: var(--color-fg);
+  text-shadow: none;
+}
+.np-global {
+  color: var(--color-fg-dim);
 }
 
 /* ---- Mini player ------------------------------------------------------------------ */
@@ -1379,7 +1660,7 @@ h3 {
 .np-artist {
   font-size: 15px;
   color: var(--color-fg-dim);
-  margin: 2px 0 8px;
+  margin: 0 0 12px;
 }
 .like.on {
   color: var(--color-accent);
@@ -1568,6 +1849,8 @@ h3 {
     0 0 0 var(--border-w) var(--color-bg),
     0 0 0 calc(var(--border-w) * 2) var(--color-fg);
   padding: 6px 0;
+  max-height: calc(100dvh - 16px - var(--safe-top) - var(--safe-bottom));
+  overflow-y: auto;
   transform: translateY(calc(100% + 40px));
   transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -1595,6 +1878,12 @@ h3 {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
+}
+.sheet-text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sheet-item.cancel {
   justify-content: center;

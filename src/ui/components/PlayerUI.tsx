@@ -3,7 +3,9 @@ import { player, livePosition, type PlayerState } from '../../player';
 import { isLiked, liked, toggleLike } from '../../store/library';
 import { toast, toasts } from '../../store/toast';
 import { Icon } from '../icons';
-import { menuTrack, nowPlayingOpen, openPost } from '../nav';
+import { artistChoice, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage, openPost } from '../nav';
+import { splitArtists } from '../../data/artists';
+import { isGlobal, type Track } from '../../data/model';
 import { Art } from './Art';
 
 /** Re-render ~4x/s while playing so progress moves smoothly between samples. */
@@ -149,8 +151,12 @@ export function NowPlaying() {
               <h2 class="np-title" data-testid="np-title">
                 {t.title}
               </h2>
-              <div class="np-artist">{t.artist}</div>
-              {t.genre && <span class="tag">{t.genre}</span>}
+              <NpArtist track={t} />
+              {t.genre && (
+                <button class="tag np-genre" onClick={() => openGenrePage(t.genre)} aria-label={`Open genre ${t.genre}`} data-testid="np-genre">
+                  {t.genre}
+                </button>
+              )}
             </div>
             <button
               class={'icon-btn like' + (isFav ? ' on' : '')}
@@ -195,7 +201,12 @@ export function NowPlaying() {
             </button>
           </div>
 
-          {t.by && (
+          {isGlobal(t) ? (
+            <div class="np-post np-global" data-testid="np-global">
+              <span>From Global search</span>
+              <Icon name="search" size={18} />
+            </div>
+          ) : t.by && (
             <button class="np-post" onClick={() => openPost(t.postUrl)} data-testid="np-post">
               <span>
                 Posted by <b>@{t.by}</b>
@@ -208,6 +219,53 @@ export function NowPlaying() {
           <UpNext s={s} />
         </div>
       )}
+    </div>
+  );
+}
+
+/** Artist line in Now Playing: tapping opens the artist page (or a chooser for several). */
+function NpArtist({ track }: { track: Track }) {
+  const names = splitArtists(track.artist);
+  if (!names.length) return <div class="np-artist">{track.artist}</div>;
+  return (
+    <div class="np-artist">
+      <button
+        class="np-link"
+        onClick={() => (names.length === 1 ? openArtistPage(names[0]) : (artistChoice.value = names))}
+        aria-label={names.length === 1 ? `Open artist ${names[0]}` : `Choose an artist: ${names.join(', ')}`}
+        aria-haspopup={names.length > 1 ? 'dialog' : undefined}
+        data-testid="np-artist"
+      >
+        {track.artist}
+      </button>
+    </div>
+  );
+}
+
+/** Small sheet listing a track's credited artists (from Now Playing). */
+export function ArtistChooser() {
+  const names = artistChoice.value;
+  const close = () => (artistChoice.value = null);
+  return (
+    <div class={'sheet-wrap' + (names ? ' open' : '')} aria-hidden={!names} inert={!names}>
+      <div class="scrim" onClick={close} />
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="Choose an artist" data-testid="artist-chooser">
+        {names && (
+          <>
+            <div class="sheet-head">
+              <span class="section-title">Artists</span>
+            </div>
+            {names.map((n) => (
+              <button key={n} class="sheet-item" onClick={() => openArtistPage(n)} data-testid="chooser-artist">
+                <Icon name="artists" size={20} /> <span class="sheet-text">{n}</span>
+              </button>
+            ))}
+            <button class="sheet-item cancel" onClick={close}>
+              [Cancel]
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -321,16 +379,23 @@ export function TrackMenu() {
             >
               <Icon name={fav ? 'heart' : 'heartOutline'} size={20} /> {fav ? 'Unlike' : 'Like'}
             </button>
-            <button
-              class="sheet-item"
-              onClick={() => {
-                openPost(t.postUrl);
-                close();
-              }}
-              data-testid="menu-open-post"
-            >
-              <Icon name="external" size={20} /> Open post{t.by ? ` by @${t.by}` : ''}
-            </button>
+            {splitArtists(t.artist).map((n) => (
+              <button key={n} class="sheet-item" onClick={() => openArtistPage(n)} data-testid="menu-more-by">
+                <Icon name="artists" size={20} /> <span class="sheet-text">More by {n}</span>
+              </button>
+            ))}
+            {!isGlobal(t) && t.postUrl && (
+              <button
+                class="sheet-item"
+                onClick={() => {
+                  openPost(t.postUrl);
+                  close();
+                }}
+                data-testid="menu-open-post"
+              >
+                <Icon name="external" size={20} /> <span class="sheet-text">Open post{t.by ? ` by @${t.by}` : ''}</span>
+              </button>
+            )}
             <button class="sheet-item cancel" onClick={close}>
               [Cancel]
             </button>
