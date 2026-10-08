@@ -11,6 +11,7 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { artworkUrl, type Track } from './model';
 import { artistKey, cleanCredit, splitArtists } from './artists';
+import { Cache } from '../core/cache';
 import { TEST_HOOKS } from '../core/testHooks';
 import { isObj, parseMusicItems, parseMusicPage } from '../core/guards';
 
@@ -301,41 +302,16 @@ export interface MusicClientDeps {
 }
 
 export function createMusicClient(deps: MusicClientDeps): MusicClient {
-  const now = deps.now ?? (() => Date.now());
-  const ttl = deps.ttlMs ?? MUSIC_CACHE_TTL_MS;
-  const cache = new Map<string, { at: number; value: unknown }>();
-  const inflight = new Map<string, Promise<unknown>>();
-
-  function fresh<T>(key: string): T | undefined {
-    const hit = cache.get(key);
-    if (!hit) return undefined;
-    if (now() - hit.at >= ttl) {
-      cache.delete(key);
-      return undefined;
-    }
-    return hit.value as T;
-  }
+  // Oldest stored first past CACHE_MAX; a stale entry is dropped when found.
+  const cache = new Cache<string, unknown>({ ttlMs: deps.ttlMs ?? MUSIC_CACHE_TTL_MS, max: CACHE_MAX, dropStale: true, now: deps.now });
 
   function call<T>(key: string, run: (p: JukeMusicPlugin) => Promise<T>): Promise<T> {
-    const hit = fresh<T>(key);
-    if (hit !== undefined) return Promise.resolve(hit);
-    const pending = inflight.get(key);
-    if (pending) return pending as Promise<T>;
-    const p = deps.plugin();
-    if (!p) return Promise.reject(new MusicError('UNAVAILABLE', 'UNAVAILABLE: Global search needs the Android app'));
-    const req = Promise.resolve()
-      .then(() => run(p))
-      .then((value) => {
-        cache.set(key, { at: now(), value });
-        if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value!);
-        return value;
-      })
-      .catch((e) => {
-        throw toMusicError(e);
-      })
-      .finally(() => inflight.delete(key));
-    inflight.set(key, req);
-    return req;
+    const start = () => {
+      const p = deps.plugin();
+      if (!p) throw new MusicError('UNAVAILABLE', 'UNAVAILABLE: Global search needs the Android app');
+      return Promise.resolve().then(() => run(p));
+    };
+    return cache.load(key, start, { mapError: toMusicError }) as Promise<T>;
   }
 
   const sKey = (query: string, filter: MusicFilter) => `s|${filter}|${query.trim().toLowerCase()}`;
@@ -359,7 +335,7 @@ export function createMusicClient(deps: MusicClientDeps): MusicClient {
           throw toMusicError(e);
         });
     },
-    peekSearch: (query, filter) => fresh<MusicPage>(sKey(query, filter)),
+    peekSearch: (query, filter) => cache.get(sKey(query, filter)) as MusicPage | undefined,
     clear: () => cache.clear(),
   };
 }
