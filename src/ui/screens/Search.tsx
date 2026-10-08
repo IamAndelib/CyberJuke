@@ -5,8 +5,19 @@ import { buildIndex, searchGenres, searchTitles, searchTracks } from '../../data
 import { musicTracks, type MusicFilter, type MusicItem } from '../../data/ytmusic';
 import { catalog } from '../../store/catalog';
 import { genres } from '../../store/genres';
+import { addRecentSearch, loadRecentSearches, recentSearches, removeRecentSearch } from '../../store/searches';
 import { Icon } from '../icons';
-import { openGenrePage, read, searchContext, searchOpen, searchMode, searchOverAlbum, type AlbumRef, type SearchContext, type SearchMode } from '../nav';
+import {
+  openGenrePage,
+  popPage,
+  read,
+  searchContext,
+  searchMode,
+  searchQuery as query,
+  type AlbumRef,
+  type SearchContext,
+  type SearchMode,
+} from '../nav';
 import { Rail, RailRow, RailSep, type RailItem } from '../components/Rail';
 import { ChunkedTracks, EmptyState, ErrorState, Tracks } from '../components/TrackList';
 import { SkeletonRows } from '../components/TrackRow';
@@ -14,6 +25,7 @@ import { Screen } from '../components/Screen';
 import { CoverRow, GlobalError, LoadMore, MUSIC_ITEM_OPTS, MusicRow, searchLoader } from '../components/Music';
 import { useFeed } from '../usePaged';
 import { globalFeeds } from '../feed';
+import { list, radio } from '../playAll';
 
 export const DEBOUNCE_MS = 120;
 export const GLOBAL_DEBOUNCE_MS = 400;
@@ -22,8 +34,9 @@ export const BRIDGE_BELOW = 5;
 
 export { searchMode, type SearchMode };
 
-/** Last query; kept so reopening search shows where you left off. */
-const query = signal('');
+/** Results start a radio from the tapped track (C2). */
+const SEARCH_CTX = radio('Search');
+const GLOBAL_CTX = radio('Global');
 const globalFilter = signal<MusicFilter>('songs');
 /** Rebuilt only when the catalog (or the NSFW filter) changes. */
 const index = computed(() => buildIndex(catalog.tracks.value));
@@ -93,7 +106,7 @@ function HereResults({ q, ctx }: { q: string; ctx: SearchContext }) {
     return (
       <>
         {loading && <HereLoading />}
-        <ChunkedTracks tracks={tracks} chunkKey={`search:here:${ctx.label}:`} testid="here-list" />
+        <ChunkedTracks tracks={tracks} ctx={list(ctx.label)} chunkKey={`search:here:${ctx.label}:`} testid="here-list" />
       </>
     );
   }
@@ -127,7 +140,7 @@ function HereResults({ q, ctx }: { q: string; ctx: SearchContext }) {
             </span>
           </div>
           {loading && <HereLoading />}
-          <Tracks tracks={hits} />
+          <Tracks tracks={hits} ctx={SEARCH_CTX} />
         </>
       )}
       {!hits.length && loading && <HereLoading />}
@@ -157,7 +170,7 @@ function JukeboxResults({ q }: { q: string }) {
     );
   }
   // Empty query: the whole Jukebox, newest first.
-  if (!q.trim()) return <ChunkedTracks tracks={tracks} chunkKey="search:jukebox:" testid="search-latest" />;
+  if (!q.trim()) return <ChunkedTracks tracks={tracks} ctx={SEARCH_CTX} chunkKey="search:jukebox:" testid="search-latest" />;
 
   if (!hits.length && !gHits.length) {
     return (
@@ -193,7 +206,7 @@ function JukeboxResults({ q }: { q: string }) {
               {hits.length === 100 ? 'top 100' : `${hits.length} match${hits.length === 1 ? '' : 'es'}`}
             </span>
           </div>
-          <Tracks tracks={hits} />
+          <Tracks tracks={hits} ctx={SEARCH_CTX} />
         </>
       )}
       {hits.length < BRIDGE_BELOW && <Bridge q={q} />}
@@ -201,14 +214,43 @@ function JukeboxResults({ q }: { q: string }) {
   );
 }
 
+/** Global result rows (songs as tracks, the rest as album/artist/playlist rows). */
+function GlobalItems({ items, filter }: { items: MusicItem[]; filter: MusicFilter }) {
+  return filter === 'songs' ? (
+    <Tracks tracks={musicTracks(items)} ctx={GLOBAL_CTX} />
+  ) : (
+    <ul class="list" data-testid="music-list">
+      {items
+        .filter((i) => i.kind !== 'song')
+        .map((it) => (
+          <MusicRow key={it.kind + it.url} item={it} />
+        ))}
+    </ul>
+  );
+}
+
 function GlobalList({ q, filter }: { q: string; filter: MusicFilter }) {
   const norm = q.trim().toLowerCase();
   const { feed, snap } = useFeed<MusicItem, string>(`global:${filter}:${norm}`, searchLoader(q, filter), MUSIC_ITEM_OPTS, globalFeeds);
-  if (snap.status === 'loading') return <SkeletonRows n={6} />;
+  /** The last results shown, for the same filter: kept on screen while the next query loads (P7). */
+  const shown = useRef<{ filter: MusicFilter; items: MusicItem[] } | null>(null);
+  if (snap.status === 'loading') {
+    const prev = shown.current;
+    if (prev && prev.filter === filter && prev.items.length) {
+      return (
+        <div class="global-stale" aria-busy="true" data-testid="global-stale">
+          <div class="progress-line" role="progressbar" aria-label="Searching" data-testid="global-loading" />
+          <GlobalItems items={prev.items} filter={filter} />
+        </div>
+      );
+    }
+    return <SkeletonRows n={6} />;
+  }
   if (snap.status === 'error' && snap.error) return <GlobalError error={snap.error} onRetry={() => feed.retry()} />;
   const items = snap.items;
   const songs = filter === 'songs' ? musicTracks(items) : [];
   const rows = filter === 'songs' ? [] : items.filter((i) => i.kind !== 'song');
+  shown.current = songs.length || rows.length ? { filter, items } : null;
   if (!songs.length && !rows.length) {
     return (
       <EmptyState title="No matches" testid="global-empty">
@@ -219,7 +261,7 @@ function GlobalList({ q, filter }: { q: string; filter: MusicFilter }) {
   return (
     <div data-testid="global-results" data-filter={filter}>
       {filter === 'songs' ? (
-        <Tracks tracks={songs} />
+        <Tracks tracks={songs} ctx={GLOBAL_CTX} />
       ) : (
         <ul class="list" data-testid="music-list">
           {rows.map((it) => (
@@ -257,6 +299,40 @@ function placeholder(mode: SearchMode, ctx: SearchContext | null): string {
   return mode === 'global' ? 'Songs, albums, artists…' : 'Search the Jukebox';
 }
 
+/** P9: the last few searches, while the field is empty; each with its own clear button. */
+function RecentSearches({ onPick }: { onPick: (q: string) => void }) {
+  const items = recentSearches.value;
+  if (!items.length) return null;
+  return (
+    <section class="recent-searches" data-testid="recent-searches">
+      <div class="section-head">
+        <h2 class="section-title">Recent searches</h2>
+      </div>
+      <ul class="recent-list">
+        {items.map((q) => (
+          <li key={q} class="recent-item">
+            <button type="button" class="recent-q" onClick={() => onPick(q)} data-testid="recent-search">
+              <span class="search-prompt" aria-hidden="true">
+                &gt;
+              </span>
+              <span class="recent-text">{q}</span>
+            </button>
+            <button
+              type="button"
+              class="icon-btn recent-x"
+              aria-label={`Remove “${q}” from recent searches`}
+              onClick={() => removeRecentSearch(q)}
+              data-testid="recent-search-remove"
+            >
+              <Icon name="close" size={18} />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function Search() {
   const input = useRef<HTMLInputElement>(null);
   const q = query.value;
@@ -267,7 +343,11 @@ export function Search() {
   const label = mode === 'global' ? 'Search globally' : placeholder(mode, ctx);
 
   useEffect(() => {
-    input.current?.focus();
+    const el = input.current;
+    el?.focus();
+    // P9: the last query is selected, so typing replaces it.
+    el?.select();
+    void loadRecentSearches();
     // Make sure the index is (being) built even if startup loading failed.
     void catalog.refresh();
   }, []);
@@ -278,16 +358,16 @@ export function Search() {
     { id: 'global', label: 'Global', testid: 'mode-global' },
   ];
 
-  const close = () => {
-    searchOpen.value = false;
-    searchOverAlbum.value = false;
+  const pick = (v: string) => {
+    query.value = v;
+    input.current?.focus();
   };
 
   const bar = (
     <header class="topbar search-bar">
       <div class="search-row">
         <div class="topbar-left">
-          <button class="icon-btn" aria-label="Close search" onClick={close} data-testid="search-close">
+          <button class="icon-btn" aria-label="Close search" onClick={popPage} data-testid="search-close">
             <Icon name="back" />
           </button>
         </div>
@@ -308,7 +388,9 @@ export function Search() {
             value={q}
             onInput={(e) => (query.value = (e.target as HTMLInputElement).value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+              if (e.key !== 'Enter') return;
+              addRecentSearch(query.value);
+              (e.target as HTMLInputElement).blur();
             }}
             data-testid="search-input"
           />
@@ -365,13 +447,21 @@ export function Search() {
         : `search:jukebox:${debounced.trim()}`;
   return (
     <Screen class="search" role="dialog" label="Search" testid="search" bar={bar} scrollKey={key}>
-      {mode === 'global' ? (
-        <GlobalResults q={debounced} />
-      ) : mode === 'here' && ctx ? (
-        <HereResults q={debounced} ctx={ctx} />
-      ) : (
-        <JukeboxResults q={debounced} />
-      )}
+      {!q.trim() && <RecentSearches onPick={pick} />}
+      <div
+        // A tap on a result means the query found something: remember it (P9).
+        onClickCapture={(e) => {
+          if ((e.target as Element | null)?.closest?.('button') && query.value.trim()) addRecentSearch(query.value);
+        }}
+      >
+        {mode === 'global' ? (
+          <GlobalResults q={debounced} />
+        ) : mode === 'here' && ctx ? (
+          <HereResults q={debounced} ctx={ctx} />
+        ) : (
+          <JukeboxResults q={debounced} />
+        )}
+      </div>
     </Screen>
   );
 }

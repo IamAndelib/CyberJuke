@@ -13,7 +13,7 @@ test('the Genres tab lists genres and opens a genre list', async ({ page }) => {
   await expect(page.getByTestId('screen-genre')).toBeVisible();
   await waitForTracks(page);
   await expect(page.getByTestId('genre-play-all')).toBeEnabled();
-  await expect(page.locator('.topbar-title')).toHaveText(genre);
+  await expect(page.getByTestId('screen-genre').locator('.topbar-title')).toHaveText(genre);
   for (const t of await page.getByTestId('screen-genre').locator('.tag').allTextContents()) expect(t).toBe(genre);
   await page.getByTestId('genre-back').click();
   await expect(page.getByTestId('genre-grid')).toBeVisible();
@@ -26,7 +26,7 @@ test('hearting a genre adds Favorite genres, which survive a reload and lead Hom
   await expect(grid).toBeVisible();
   await expect(page.getByTestId('fav-genres')).toHaveCount(0);
   await expect(page.locator('.genre-count')).toHaveCount(0);
-  await expect(page.locator('.topbar-sub')).toContainText(/\d+ genres/);
+  await expect(page.getByTestId('screen-genres').locator('.topbar-sub')).toContainText(/\d+ genres/);
   // Rendered in chunks: the rest of the grid follows in idle time.
   await expect.poll(() => grid.getByTestId('genre-tile').count()).toBeGreaterThan(100);
 
@@ -36,6 +36,12 @@ test('hearting a genre adds Favorite genres, which survive a reload and lead Hom
   await expect(heart).toHaveAttribute('aria-pressed', 'false');
   await heart.click();
   await expect(heart).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('toast').last()).toContainText(`${genre}: added to ★ Favourites`);
+  // M8: the grid doesn't move under the finger; Favourites shows it on the next visit.
+  await expect(page.getByTestId('fav-genres')).toHaveCount(0);
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('tab-genres').click();
+  await expect(page.getByTestId('fav-genres').locator('.section-title')).toHaveText('★ Favourites');
   await expect(page.getByTestId('fav-genres').getByTestId('genre-tile')).toHaveText([genre]);
 
   await page.reload();
@@ -44,7 +50,11 @@ test('hearting a genre adds Favorite genres, which survive a reload and lead Hom
   await page.getByTestId('tab-home').click();
   await expect(page.getByTestId('genre-chip').first()).toHaveAttribute('data-genre', genre);
   await page.getByTestId('tab-genres').click();
-  await page.getByTestId('fav-genres').getByTestId('genre-fav').click();
+  const favHeart = page.getByTestId('fav-genres').getByTestId('genre-fav');
+  await favHeart.click();
+  await expect(favHeart).toHaveAttribute('aria-pressed', 'false');
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('tab-genres').click();
   await expect(page.getByTestId('fav-genres')).toHaveCount(0);
 });
 
@@ -84,7 +94,7 @@ for (const kind of ['genres', 'artists'] as const) {
     await expect.poll(() => heads.count()).toBeGreaterThan(5);
     const tile = kind === 'genres' ? 'genre-tile' : 'artist-tile';
     const attr = kind === 'genres' ? 'data-genre' : 'data-artist';
-    const total = kind === 'genres' ? page.locator('.topbar-sub') : page.locator('.topbar-sub');
+    const total = page.getByTestId(`screen-${kind}`).locator('.topbar-sub');
     const n = Number(/\d+/.exec((await total.textContent())!)![0]);
     await expect(grid.getByTestId(tile)).toHaveCount(n); // every chunk rendered
     const letters = await heads.evaluateAll((els) => els.map((e) => e.getAttribute('data-letter')!));

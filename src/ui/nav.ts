@@ -1,15 +1,21 @@
-/** App navigation state: which tab, sub-pages, and overlays are open. */
-import { computed, signal, type ReadonlySignal } from '@preact/signals';
-import { useEffect, useRef } from 'preact/hooks';
+/**
+ * App navigation: which tab is showing, each tab's own stack of pages, and the overlays
+ * (Now Playing, the ⋯ menu, the artist chooser, confirm sheets).
+ *
+ * Every tab has a root screen (Home, the Genres and Artists grids, Library, Settings)
+ * and a stack of pages pushed on top of it: artist, genre, album, "See all" and Search.
+ * A page opens in place on the current tab, from anywhere (Home, Search, Now Playing,
+ * another artist), and Back pops it, returning exactly where you were. Visited tabs
+ * stay mounted (App), so their scroll and artwork survive a tab switch.
+ */
+import { computed, signal, useComputed, type ReadonlySignal } from '@preact/signals';
+import { createContext } from 'preact';
+import { useContext, useEffect, useRef } from 'preact/hooks';
 import type { Track } from '../data/model';
+import { lyricsOpen } from './components/Lyrics';
 
 export type Tab = 'home' | 'genres' | 'artists' | 'library' | 'settings';
-
-export const tab = signal<Tab>('home');
-/** Genre detail page open on top of the Genres tab, if any. */
-export const openGenre = signal<string | null>(null);
-/** Artist page open on top of the Artists tab, if any (a display name). */
-export const openArtist = signal<string | null>(null);
+export const TABS: readonly Tab[] = ['home', 'genres', 'artists', 'library', 'settings'];
 
 /** An album or playlist from Global search. What we know before it loads is shown at once. */
 export interface AlbumRef {
@@ -21,8 +27,6 @@ export interface AlbumRef {
   /** What to call it instead of "Album" (Single, EP, Live album). */
   label?: string;
 }
-/** Album/playlist page, shown over the current tab (and over search). */
-export const openAlbum = signal<AlbumRef | null>(null);
 
 /** "See all" of one discography shelf on an artist page. */
 export interface ReleasesRef {
@@ -33,16 +37,188 @@ export interface ReleasesRef {
   /** Opaque, and may expire native-side (then the grid offers Retry). */
   token: string;
 }
-/** The full-grid page of one shelf, over the artist page on the Artists tab. */
-export const openReleases = signal<ReleasesRef | null>(null);
+
+/** A page pushed onto a tab's stack. */
+export type Page =
+  | { kind: 'genre'; name: string }
+  | { kind: 'artist'; name: string }
+  | { kind: 'album'; album: AlbumRef }
+  | { kind: 'releases'; release: ReleasesRef }
+  | { kind: 'search' };
+
+export interface StackEntry {
+  /** Unique for the app session (the page's key). */
+  id: number;
+  page: Page;
+  /** performance.now() when it was pushed. */
+  openedAt: number;
+  /** Where the tap that opened it went down (for the double-tap guard), if it was a tap. */
+  tap: { x: number; y: number } | null;
+}
+
+const EMPTY_STACKS: Record<Tab, StackEntry[]> = { home: [], genres: [], artists: [], library: [], settings: [] };
+
+export const tab = signal<Tab>('home');
+/** Each tab's pages above its root, bottom first. */
+export const stacks = signal<Record<Tab, StackEntry[]>>(EMPTY_STACKS);
+/** The current tab's pages. */
+export const stack = computed(() => stacks.value[tab.value]);
+/** The page showing on the current tab (null: its root). */
+export const topEntry = computed<StackEntry | null>(() => stack.value.at(-1) ?? null);
+/** Search is the page showing. */
+export const searchOpen = computed(() => topEntry.value?.page.kind === 'search');
 
 export const nowPlayingOpen = signal(false);
-/** Search overlay (covers the tab content; mini player and tab bar stay visible). */
-export const searchOpen = signal(false);
 /** Track whose ⋯ menu is open. */
 export const menuTrack = signal<Track | null>(null);
 /** Artist chooser (a track credits several artists), opened from Now Playing. */
 export const artistChoice = signal<string[] | null>(null);
+
+/** A question in a confirm sheet (M3): Clear history, Sign out. */
+export interface ConfirmRequest {
+  title: string;
+  body?: string;
+  /** The confirming button's label, e.g. "Clear 12 plays". */
+  confirm: string;
+  run: () => void | Promise<void>;
+  testid?: string;
+}
+export const confirmRequest = signal<ConfirmRequest | null>(null);
+
+/** Ask before doing something that can't easily be taken back. */
+export function askConfirm(req: ConfirmRequest): void {
+  menuTrack.value = null;
+  confirmRequest.value = req;
+}
+
+// ---- Taps --------------------------------------------------------------------------
+
+/** M9: taps on a just-opened page are ignored this long when they land where the opening tap did. */
+export const OPEN_GUARD_MS = 300;
+/** How close (px) a tap must be to the opening tap to count as its double. */
+const OPEN_GUARD_PX = 48;
+
+let lastDown: { x: number; y: number; t: number } | null = null;
+if (typeof document !== 'undefined') {
+  document.addEventListener(
+    'pointerdown',
+    (e) => {
+      lastDown = { x: e.clientX, y: e.clientY, t: performance.now() };
+    },
+    { capture: true, passive: true },
+  );
+}
+
+/**
+ * The second half of a double tap on a tile must not hit what the new page shows in
+ * the same spot (Play). True for a click within OPEN_GUARD_MS of `entry` opening, near
+ * the tap that opened it. Keyboard clicks (detail 0) always go through.
+ */
+export function isOpeningDoubleTap(entry: StackEntry, e: MouseEvent, now = performance.now()): boolean {
+  if (!entry.tap || e.detail === 0 || now - entry.openedAt >= OPEN_GUARD_MS) return false;
+  return Math.hypot(e.clientX - entry.tap.x, e.clientY - entry.tap.y) < OPEN_GUARD_PX;
+}
+
+// ---- Stacks ------------------------------------------------------------------------
+
+let nextEntryId = 1;
+
+function setStack(t: Tab, entries: StackEntry[]): void {
+  stacks.value = { ...stacks.value, [t]: entries };
+}
+
+function samePage(a: Page, b: Page): boolean {
+  if (a.kind !== b.kind) return false;
+  switch (a.kind) {
+    case 'genre':
+    case 'artist':
+      return a.name === (b as typeof a).name;
+    case 'album':
+      return a.album.url === (b as typeof a).album.url;
+    case 'releases': {
+      const r = (b as typeof a).release;
+      return a.release.token === r.token && a.release.kind === r.kind;
+    }
+    case 'search':
+      return true;
+  }
+}
+
+function closeOverlays(): void {
+  menuTrack.value = null;
+  artistChoice.value = null;
+  confirmRequest.value = null;
+  nowPlayingOpen.value = false;
+}
+
+/** Open a page on top of the current tab (closing Now Playing and menus first). */
+export function pushPage(page: Page): void {
+  closeOverlays();
+  const t = tab.value;
+  let cur = stacks.value[t];
+  const top = cur.at(-1);
+  if (top && samePage(top.page, page)) return;
+  const now = performance.now();
+  const tap = lastDown && now - lastDown.t < 1000 ? { x: lastDown.x, y: lastDown.y } : null;
+  if (page.kind === 'search') {
+    // One Search at a time: a Search lower down (or on another tab) gives way.
+    let next = stacks.value;
+    for (const k of TABS) {
+      if (next[k].some((e) => e.page.kind === 'search')) next = { ...next, [k]: next[k].filter((e) => e.page.kind !== 'search') };
+    }
+    stacks.value = next;
+    cur = next[t];
+  }
+  setStack(t, [...cur, { id: nextEntryId++, page, openedAt: now, tap }]);
+}
+
+/** Close the page on top of the current tab. Returns false at the tab's root. */
+export function popPage(): boolean {
+  const cur = stack.value;
+  if (!cur.length) return false;
+  setStack(tab.value, cur.slice(0, -1));
+  return true;
+}
+
+/** Remove one page (its own Back or Close button), wherever it is in the stack. */
+export function closePage(id: number): void {
+  for (const k of TABS) {
+    const list = stacks.value[k];
+    if (list.some((e) => e.id === id)) setStack(k, list.filter((e) => e.id !== id));
+  }
+}
+
+/** Back to the tab's root screen. */
+export function popToRoot(t: Tab = tab.value): void {
+  if (stacks.value[t].length) setStack(t, []);
+}
+
+/** Switch tab; that tab's pages stay as they were. */
+export function selectTab(t: Tab): void {
+  tab.value = t;
+}
+
+/** Artist page on the current tab. */
+export function openArtistPage(name: string): void {
+  pushPage({ kind: 'artist', name });
+}
+
+/** Genre page on the current tab. */
+export function openGenrePage(name: string): void {
+  pushPage({ kind: 'genre', name });
+}
+
+/** Album or playlist page on the current tab. */
+export function openAlbumPage(album: AlbumRef): void {
+  pushPage({ kind: 'album', album });
+}
+
+/** "See all" grid of one shelf, over the artist page. */
+export function openReleasesPage(release: ReleasesRef): void {
+  pushPage({ kind: 'releases', release });
+}
+
+// ---- Search ------------------------------------------------------------------------
 
 /** A value Search reads while it renders: a signal, or a getter (that may read signals). */
 export type Source<T> = ReadonlySignal<T> | (() => T);
@@ -69,28 +245,49 @@ export interface SearchContext {
   albums?: Source<AlbumRef[]>;
 }
 
-/** Contexts of mounted screens, innermost (topmost) last. */
-const contextStack = signal<SearchContext[]>([]);
-/** Context of the topmost screen showing (set by `useSearchContext`), used by the search button. */
-export const pageSearchContext = computed<SearchContext | null>(() => contextStack.value.at(-1) ?? null);
+/** Which mounted page a component belongs to (`<tab>:root` or `<tab>:<entry id>`); set by App. */
+export const PageKey = createContext<string>('');
+
+export function pageKey(t: Tab, entry: StackEntry | null): string {
+  return `${t}:${entry ? entry.id : 'root'}`;
+}
+
+/** Key of the page showing now. */
+export const activePageKey = computed(() => pageKey(tab.value, topEntry.value));
+
+/** Whether the page this component sits in is the one showing (re-renders only when that flips). */
+export function usePageActive(): boolean {
+  const key = useContext(PageKey);
+  return useComputed(() => !key || activePageKey.value === key).value;
+}
+
+/** Here contexts of mounted pages, by page key. */
+const contexts = signal<Record<string, SearchContext>>({});
+/** Context of the page showing (set by `useSearchContext`), used by the search button. */
+export const pageSearchContext = computed<SearchContext | null>(() => contexts.value[activePageKey.value] ?? null);
 /** Context of the open Search (null: no Here scope). Set by `openSearch`. */
 export const searchContext = signal<SearchContext | null>(null);
-/** Search was opened over an album page, so it sits on top of it. */
-export const searchOverAlbum = signal(false);
 export type SearchMode = 'here' | 'jukebox' | 'global';
 /** Search scope; set on every open (Here when there is a context, else Jukebox). */
 export const searchMode = signal<SearchMode>('jukebox');
 
+/** What's typed in Search; kept so reopening Search shows (and selects) the last query. */
+export const searchQuery = signal('');
+/** The last Here scope Search was opened on. */
+let lastHereLabel: string | null = null;
+
 /**
- * Open Search. With a context, Search adds the Here scope and opens on it;
- * without one (Home, the Genres/Artists grids, Settings) it opens on Jukebox.
+ * Open Search on top of the current page. With a context, Search adds the Here scope
+ * and opens on it; without one (Home, the Genres/Artists grids, Settings) it opens on
+ * Jukebox. P9: the last query comes back (selected, so typing replaces it), except
+ * that a Here scope other than the last one starts empty.
  */
 export function openSearch(ctx: SearchContext | null = pageSearchContext.value): void {
+  if (ctx && ctx.label !== lastHereLabel) searchQuery.value = '';
+  if (ctx) lastHereLabel = ctx.label;
   searchContext.value = ctx;
   searchMode.value = ctx ? 'here' : 'jukebox';
-  searchOverAlbum.value = !!openAlbum.value;
-  menuTrack.value = null;
-  searchOpen.value = true;
+  pushPage({ kind: 'search' });
 }
 
 /**
@@ -100,6 +297,7 @@ export function openSearch(ctx: SearchContext | null = pageSearchContext.value):
  * a signal or a getter reading signals keeps an open Search up to date as it grows.
  */
 export function useSearchContext(ctx: SearchContext | null): void {
+  const key = useContext(PageKey);
   const latest = useRef(ctx);
   latest.current = ctx;
   const label = ctx?.label ?? null;
@@ -112,48 +310,28 @@ export function useSearchContext(ctx: SearchContext | null): void {
       loading: () => (latest.current?.loading ? read(latest.current.loading) : false),
       albums: () => (latest.current?.albums ? read(latest.current.albums) : []),
     };
-    contextStack.value = [...contextStack.value, mine];
+    contexts.value = { ...contexts.value, [key]: mine };
     return () => {
-      contextStack.value = contextStack.value.filter((c) => c !== mine);
+      if (contexts.value[key] !== mine) return;
+      const next = { ...contexts.value };
+      delete next[key];
+      contexts.value = next;
     };
-  }, [label]);
+  }, [label, key]);
 }
 
-function closeOverlays(): void {
-  menuTrack.value = null;
-  artistChoice.value = null;
-  nowPlayingOpen.value = false;
-  searchOpen.value = false;
-  openAlbum.value = null;
-}
-
-/** Go to an artist page on the Artists tab, closing whatever is on top. */
-export function openArtistPage(name: string): void {
-  closeOverlays();
-  tab.value = 'artists';
-  openReleases.value = null;
-  openArtist.value = name;
-}
-
-/** Go to a genre page on the Genres tab, closing whatever is on top. */
-export function openGenrePage(name: string): void {
-  closeOverlays();
-  tab.value = 'genres';
-  openGenre.value = name;
-}
-
-export function openAlbumPage(ref: AlbumRef): void {
-  menuTrack.value = null;
-  searchOverAlbum.value = false;
-  nowPlayingOpen.value = false;
-  openAlbum.value = ref;
-}
+// ---- Back --------------------------------------------------------------------------
 
 /**
- * Close the topmost layer. With `switchTab` (Android back), a top-level tab other than
- * Home goes back to Home. Returns false when there is nothing left to close.
+ * Close the topmost thing: a sheet, then lyrics, then Now Playing, then the page on top
+ * of the current tab. With `switchTab` (Android back), a tab's root other than Home
+ * goes back to Home. Returns false when there is nothing left to close.
  */
 export function goBack(switchTab = true): boolean {
+  if (confirmRequest.value) {
+    confirmRequest.value = null;
+    return true;
+  }
   if (menuTrack.value) {
     menuTrack.value = null;
     return true;
@@ -163,34 +341,11 @@ export function goBack(switchTab = true): boolean {
     return true;
   }
   if (nowPlayingOpen.value) {
-    nowPlayingOpen.value = false;
+    if (lyricsOpen.value) lyricsOpen.value = false;
+    else nowPlayingOpen.value = false;
     return true;
   }
-  if (searchOpen.value && searchOverAlbum.value) {
-    searchOpen.value = false;
-    searchOverAlbum.value = false;
-    return true;
-  }
-  if (openAlbum.value) {
-    openAlbum.value = null;
-    return true;
-  }
-  if (searchOpen.value) {
-    searchOpen.value = false;
-    return true;
-  }
-  if (tab.value === 'genres' && openGenre.value) {
-    openGenre.value = null;
-    return true;
-  }
-  if (tab.value === 'artists' && openReleases.value) {
-    openReleases.value = null;
-    return true;
-  }
-  if (tab.value === 'artists' && openArtist.value) {
-    openArtist.value = null;
-    return true;
-  }
+  if (popPage()) return true;
   if (switchTab && tab.value !== 'home') {
     tab.value = 'home';
     return true;

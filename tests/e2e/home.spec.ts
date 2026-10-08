@@ -22,15 +22,17 @@ test('a genre chip filters the list', async ({ page }) => {
   const chip = page.getByTestId('genre-chip').first();
   const genre = (await chip.getAttribute('data-genre'))!;
   expect(genre).toBeTruthy();
+  // Toggle buttons (aria-pressed), not tabs.
+  await expect(page.getByTestId('genre-chips')).not.toHaveAttribute('role', 'tablist');
   await chip.click();
-  await expect(chip).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByTestId('chip-all')).toHaveAttribute('aria-selected', 'false');
+  await expect(chip).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('chip-all')).toHaveAttribute('aria-pressed', 'false');
   await waitForTracks(page);
   const tags = await page.getByTestId('track-list').locator('.tag').allTextContents();
   expect(tags.length).toBeGreaterThan(0);
   for (const t of tags) expect(t.trim()).toBe(genre);
   await page.getByTestId('chip-all').click();
-  await expect(page.getByTestId('chip-all')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('chip-all')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('?autoplay=latest starts the newest track (CI hook, test builds only)', async ({ page }) => {

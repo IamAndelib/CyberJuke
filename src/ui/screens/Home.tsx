@@ -1,9 +1,8 @@
 import { signal } from '@preact/signals';
 import { useMemo, useState } from 'preact/hooks';
 import { shuffled, source } from '../../data';
-import { player } from '../../player';
 import { catalog, mostSaved, type SavedRange } from '../../store/catalog';
-import { chipGenres } from '../../store/genres';
+import { catalogGenre, chipGenres } from '../../store/genres';
 import { favoriteGenres, showNsfw } from '../../store/library';
 import { toast } from '../../store/toast';
 import { Icon } from '../icons';
@@ -15,6 +14,7 @@ import { Rail, RailRow, type RailItem } from '../components/Rail';
 import { usePaged } from '../usePaged';
 import { authScope } from '../feed';
 import { auth } from '../../data/auth';
+import { list as listCtx, playAll, radio, withRest } from '../playAll';
 
 /** Selected genre chip on Home (null = All). Survives tab switches. */
 export const homeGenre = signal<string | null>(null);
@@ -24,13 +24,13 @@ export const savedRange = signal<SavedRange>('month');
 
 /** Most-saved list length; beyond this it's mostly single-save noise. */
 const SAVED_MAX = 100;
+const SAVED_CTX = radio('Most saved');
 
 export async function shuffleJukebox(): Promise<void> {
   const all = catalog.tracks.value;
   const tracks = all.length ? shuffled(all).slice(0, 50) : await source.shuffle(50);
   if (!tracks.length) throw new Error('No tracks found');
-  await player.setShuffle(false);
-  await player.playList(tracks, 0);
+  await playAll(tracks, { shuffle: true, ctx: listCtx('Jukebox shuffle') });
 }
 
 export function ShuffleHero() {
@@ -69,12 +69,12 @@ export function GenreChips() {
   const names = chipGenres(24);
   // Keep a selected genre visible even if it's not in the top slice.
   if (sel && !names.includes(sel)) names.unshift(sel);
+  // P12: a row of toggles (aria-pressed), not tabs: tapping the selected one clears it.
   return (
-    <div class="chips" role="tablist" aria-label="Filter by genre" data-testid="genre-chips">
+    <div class="chips" role="group" aria-label="Filter by genre" data-testid="genre-chips">
       <button
         class={'chip' + (sel == null ? ' on' : '')}
-        role="tab"
-        aria-selected={sel == null}
+        aria-pressed={sel == null}
         onClick={() => (homeGenre.value = null)}
         data-testid="chip-all"
       >
@@ -84,8 +84,7 @@ export function GenreChips() {
         <button
           key={name}
           class={'chip' + (sel === name ? ' on' : '')}
-          role="tab"
-          aria-selected={sel === name}
+          aria-pressed={sel === name}
           onClick={() => (homeGenre.value = sel === name ? null : name)}
           data-testid="genre-chip"
           data-genre={name}
@@ -158,7 +157,7 @@ function MostSaved({ genre }: { genre: string | null }) {
   }
   return (
     <div data-testid="saved-list">
-      <Tracks tracks={list} showSaves hideGenre={genre != null} />
+      <Tracks tracks={list} ctx={SAVED_CTX} showSaves hideGenre={genre != null} />
       <div class="list-foot end">— {list.length === SAVED_MAX ? `top ${SAVED_MAX}` : 'end of tape'} —</div>
     </div>
   );
@@ -172,6 +171,8 @@ export function Home() {
   const scope = authScope(auth.state.value.status === 'signedIn');
   const feedKey = `home:${scope}:${g ?? ''}:${nsfw}`;
   const paged = usePaged(feedKey, (c) => (g == null ? source.latest(c) : source.byGenre(g, c)));
+  // P2: a tap plays from the whole list (the cached catalog), not only the loaded pages.
+  const queue = () => withRest(paged.tracks, g == null ? catalog.tracks.value : catalogGenre(g));
   return (
     <Screen
       testid="screen-home"
@@ -187,7 +188,7 @@ export function Home() {
       <ShuffleHero />
       <GenreChips />
       <SortRail />
-      {sort === 'latest' ? <PagedTracks paged={paged} chunkKey={feedKey} /> : <MostSaved genre={g} />}
+      {sort === 'latest' ? <PagedTracks paged={paged} ctx={radio(g == null ? 'Home · Latest' : `Home · ${g}`)} queue={queue} chunkKey={feedKey} /> : <MostSaved genre={g} />}
     </Screen>
   );
 }

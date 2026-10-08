@@ -50,9 +50,12 @@ test('search tolerates a typo and offers genre chips', async ({ page }) => {
   await expect(page.getByTestId('search-genre').first()).toBeVisible();
   const genre = (await page.getByTestId('search-genre').first().getAttribute('data-genre'))!;
   await page.getByTestId('search-genre').first().click();
-  await expect(page.getByTestId('search')).toHaveCount(0);
+  // The genre opens in place, over Search; Back returns to the results.
   await expect(page.getByTestId('screen-genre')).toBeVisible();
-  await expect(page.locator('.topbar-title')).toHaveText(genre);
+  await expect(page.getByTestId('search')).toBeHidden();
+  await expect(page.getByTestId('screen-genre').locator('.topbar-title')).toHaveText(genre);
+  await page.getByTestId('genre-back').click();
+  await expect(page.getByTestId('search-genre').first()).toBeVisible();
 });
 
 test('search header: lean, same height in both modes, underline on the rule, 44px targets', async ({ page }) => {
@@ -131,16 +134,22 @@ test('Search opens on Jukebox; Global shows every filter; the bridge appears for
   await page.getByTestId('filter-artists').click();
   await page.getByTestId('music-open').first().click();
   await expect(page.getByTestId('screen-artist')).toBeVisible();
-  await expect(page.locator('.topbar-title')).toHaveText('qzxv nebulon');
+  await expect(page.getByTestId('screen-artist').locator('.topbar-title')).toHaveText('qzxv nebulon');
   await openSearch(page);
   await expect(page.getByTestId('mode-here')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('search-input')).toHaveAttribute('placeholder', 'Search in qzxv nebulon');
+  // P9: a new Here scope starts empty; the last searches are offered under the field.
+  await expect(page.getByTestId('search-input')).toHaveValue('');
+  await expect(page.getByTestId('recent-search').first()).toHaveText(/qzxv nebulon/);
   await page.getByTestId('search-close').click();
+  // P5: tapping Home (the tab you're on) twice goes back to its root.
   await page.getByTestId('tab-home').click();
+  await page.getByTestId('tab-home').click();
+  await expect(page.getByTestId('screen-home')).toBeVisible();
   await openSearch(page);
   await expect(page.getByTestId('mode-here')).toHaveCount(0);
   await expect(page.getByTestId('mode-jukebox')).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByTestId('search-empty')).toBeVisible();
+  await expect(page.getByTestId('search-latest')).toBeVisible();
 });
 
 test('Global search runs from the first letter, debounced; no "at least 2 letters" text', async ({ page }) => {

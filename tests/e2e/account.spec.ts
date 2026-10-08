@@ -20,7 +20,7 @@ test('signed out: the Account card offers sign-in; nothing is members-only', asy
   await page.getByTestId('tab-settings').click();
   const card = page.getByTestId('account');
   await expect(card).toContainText('Sign in with Cyberspace');
-  await expect(page.getByTestId('signin-note')).toHaveText("Your password goes only to Cyberspace's login. CyberJuke keeps only a login token, encrypted on this phone.");
+  await expect(page.getByTestId('signin-note')).toHaveText('Your password goes only to Cyberspace.');
   await expect(card.getByRole('link', { name: 'Create one on cyberspace.online' })).toBeVisible();
   for (const id of ['signin-email', 'signin-password', 'signin-submit', 'signin-reveal']) {
     expect((await page.getByTestId(id).boundingBox())!.height).toBeGreaterThanOrEqual(44);
@@ -96,7 +96,12 @@ test('signing in shows [members] posts in Latest, search and Now Playing; signin
 
   // Sign out: members posts are gone from Home, search, Liked, history, the lyrics cache and storage.
   await page.getByTestId('tab-settings').click();
+  // Sign out asks first (M3).
   await page.getByTestId('signout').click();
+  const confirm = page.getByTestId('confirm-sheet');
+  await expect(confirm).toBeVisible();
+  await expect(confirm).toContainText('Members-only tracks will be hidden');
+  await page.getByTestId('confirm-ok').click();
   await expect(page.getByTestId('signin-form')).toBeVisible();
   const before = backend.calls.members;
   await page.getByTestId('tab-home').click();

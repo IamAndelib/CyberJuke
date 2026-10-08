@@ -1,14 +1,13 @@
-import type { Track } from '../../data/model';
 import { source } from '../../data';
-import { player } from '../../player';
 import { catalog } from '../../store/catalog';
-import { genres, genresComplete } from '../../store/genres';
-import { favoriteGenres, showNsfw, toggleFavoriteGenre } from '../../store/library';
+import { catalogGenre, genres, genresComplete } from '../../store/genres';
+import { favoriteGenres, showNsfw } from '../../store/library';
+import { toggleFavoriteGenreWithUndo } from '../../store/undo';
 import { useMemo } from 'preact/hooks';
 import { takeSections, useChunks } from '../useChunks';
 import { Icon } from '../icons';
-import { openGenre, useSearchContext } from '../nav';
-import { ErrorState, PagedTracks } from '../components/TrackList';
+import { openGenrePage, popPage, useSearchContext } from '../nav';
+import { ErrorState, PagedTracks, PlayShuffle } from '../components/TrackList';
 import { Screen } from '../components/Screen';
 import { AZHead, GridSortRail } from '../components/GridSort';
 import { groupAZ } from '../azSections';
@@ -17,34 +16,34 @@ import { genresSort } from '../../store/prefs';
 import { usePaged } from '../usePaged';
 import { authScope } from '../feed';
 import { auth } from '../../data/auth';
-
-export function Genres() {
-  if (openGenre.value) return <GenreDetail genre={openGenre.value} />;
-  return <GenreGrid />;
-}
+import { list as listCtx, withRest } from '../playAll';
+import { useSettled } from '../useSettled';
 
 function GenreTile({ name, fav }: { name: string; fav: boolean }) {
   return (
     <div class={'genre-cell' + (fav ? ' fav' : '')} data-testid="genre-cell" data-genre={name}>
-      <button class="genre-tile" onClick={() => (openGenre.value = name)} data-testid="genre-tile" data-genre={name}>
+      <button class="genre-tile" onClick={() => openGenrePage(name)} data-testid="genre-tile" data-genre={name}>
         <span class="genre-name">{name}</span>
       </button>
       <button
         class={'genre-fav' + (fav ? ' on' : '')}
         aria-pressed={fav}
-        aria-label={fav ? `Remove ${name} from favorite genres` : `Add ${name} to favorite genres`}
-        onClick={() => toggleFavoriteGenre(name)}
+        aria-label={fav ? `Remove ${name} from favourites` : `Add ${name} to favourites`}
+        onClick={() => toggleFavoriteGenreWithUndo(name)}
         data-testid="genre-fav"
       >
-        <Icon name={fav ? 'heart' : 'heartOutline'} size={20} />
+        <Icon name={fav ? 'star' : 'starOutline'} size={20} />
       </button>
     </div>
   );
 }
 
-function GenreGrid() {
+/** The Genres tab's root: Favourites, then every genre (Popular or A–Z). */
+export function GenreGrid() {
   const list = genres.value;
   const favs = favoriteGenres.value;
+  // M8: the Favourites section changes on the next visit or after a scroll, never under the finger.
+  const [favSection, anchor] = useSettled(favs);
   const status = catalog.status.value;
   const complete = genresComplete.value;
   const sort = genresSort.value;
@@ -59,19 +58,20 @@ function GenreGrid() {
       right={<GridSortRail sort={genresSort} testid="genres-sort" />}
       azScroller={sort === 'az' && list.length > 0}
     >
-      {favs.length > 0 && (
+      <div ref={anchor} />
+      {favSection.length > 0 && (
         <section data-testid="fav-genres">
           <div class="section-head">
-            <h2 class="section-title">Favorite genres</h2>
+            <h2 class="section-title">★ Favourites</h2>
           </div>
           <div class="genre-grid">
-            {favs.map((name) => (
-              <GenreTile key={name} name={name} fav />
+            {favSection.map((name) => (
+              <GenreTile key={name} name={name} fav={favs.includes(name)} />
             ))}
           </div>
         </section>
       )}
-      {favs.length > 0 && (
+      {favSection.length > 0 && (
         <div class="section-head">
           <h2 class="section-title">All genres</h2>
         </div>
@@ -91,7 +91,7 @@ function GenreGrid() {
       ) : (
         <GenreTiles list={list} sort={sort} favs={favs} />
       )}
-      <p class="fineprint">Genres are free text chosen by each poster. Tap the heart to pin a genre to the top.</p>
+      <p class="fineprint">Genres are free text chosen by each poster. Tap ☆ to pin a genre to the top.</p>
     </Screen>
   );
 }
@@ -128,17 +128,8 @@ function GenreTiles({ list, sort, favs }: { list: GenreCount[]; sort: 'popular' 
   );
 }
 
-/** Catalog tracks of one genre, recomputed only when the catalog changes. */
-let genreMemo: { src: Track[]; genre: string; out: Track[] } | null = null;
-function catalogGenre(genre: string): Track[] {
-  const src = catalog.tracks.value;
-  if (genreMemo?.src !== src || genreMemo.genre !== genre) {
-    genreMemo = { src, genre, out: src.filter((t) => t.genre === genre) };
-  }
-  return genreMemo.out;
-}
-
-function GenreDetail({ genre }: { genre: string }) {
+/** One genre's tracks, opened in place on the current tab. */
+export function GenreDetail({ genre }: { genre: string }) {
   const nsfw = showNsfw.value;
   const scope = authScope(auth.state.value.status === 'signedIn');
   const feedKey = `genre:${scope}:${genre}:${nsfw}`;
@@ -154,46 +145,41 @@ function GenreDetail({ genre }: { genre: string }) {
     return p;
   });
   const has = paged.tracks.length > 0;
+  const all = catalogGenre(genre);
+  // P2: the whole genre (every catalog track in it), of which the pages are the start.
+  const full = () => withRest(paged.tracks, catalogGenre(genre));
+  const count = all.length >= paged.tracks.length ? all.length : null;
+  const ctx = listCtx(genre);
   // Here: every catalog track in this genre (what the page pages through), or the
   // pages loaded so far while the catalog is still loading.
   useSearchContext({
     label: genre,
     tracks: () => {
-      const all = catalogGenre(genre);
-      return all.length >= paged.tracks.length ? all : paged.tracks;
+      const cat = catalogGenre(genre);
+      return cat.length >= paged.tracks.length ? cat : paged.tracks;
     },
   });
   return (
     <Screen
       testid="screen-genre"
       title={genre}
-      subtitle={has ? `${paged.tracks.length}${paged.hasMore ? '+' : ''} tracks` : 'Genre'}
+      subtitle={
+        count != null && count > 0
+          ? `${count} track${count === 1 ? '' : 's'}`
+          : has
+            ? `${paged.tracks.length}${paged.hasMore ? '+' : ''} tracks`
+            : 'Genre'
+      }
       left={
-        <button class="icon-btn" aria-label="Back to genres" onClick={() => (openGenre.value = null)} data-testid="genre-back">
+        <button class="icon-btn" aria-label="Back" onClick={popPage} data-testid="genre-back">
           <Icon name="back" />
         </button>
       }
       onRefresh={paged.refresh}
       scrollKey={`genre:${genre}`}
     >
-      <div class="actions">
-        <button class="btn primary" disabled={!has} onClick={() => player.playList(paged.tracks, 0)} data-testid="genre-play-all">
-          <Icon name="play" size={18} /> Play all
-        </button>
-        <button
-          class="btn"
-          disabled={!has}
-          onClick={async () => {
-            const n = paged.tracks.length;
-            await player.playList(paged.tracks, Math.floor(Math.random() * n));
-            await player.setShuffle(true);
-          }}
-          data-testid="genre-shuffle"
-        >
-          <Icon name="shuffle" size={18} /> Shuffle
-        </button>
-      </div>
-      <PagedTracks paged={paged} hideGenre chunkKey={feedKey} />
+      <PlayShuffle tracks={full} ctx={ctx} testid="genre" disabled={!has} playTestid="genre-play-all" shuffleTestid="genre-shuffle" />
+      <PagedTracks paged={paged} ctx={ctx} queue={full} hideGenre chunkKey={feedKey} />
     </Screen>
   );
 }

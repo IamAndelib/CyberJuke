@@ -90,5 +90,5 @@ test('Account is the first card and says "members-only shared tracks"', async ({
   expect((await account.boundingBox())!.y).toBeLessThan((await page.getByTestId('theme-picker').boundingBox())!.y);
   await expect(account.locator('.signin-lead')).toHaveText('Optional. Signed in, the Jukebox also shows members-only shared tracks, marked [members].');
   await expect(settings).not.toContainText('members-only posts');
-  await expect(page.getByTestId('about')).toContainText('adds the members-only shared tracks the site shows its members');
+  await expect(page.getByTestId('about')).toContainText('Signing in adds members-only tracks.');
 });

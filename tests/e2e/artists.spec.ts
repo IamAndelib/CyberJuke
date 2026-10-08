@@ -20,7 +20,7 @@ async function openFirstArtist(page: Page): Promise<string> {
 test('the Artists tab lists artists; a heart adds Favorite artists, which survive a reload', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('tab-artists').click();
-  await expect(page.locator('.topbar-sub')).toContainText(/\d{3} artists on the Jukebox/);
+  await expect(page.getByTestId('screen-artists').locator('.topbar-sub')).toContainText(/\d{3} artists on the Jukebox/);
   const grid = page.getByTestId('artist-grid');
   await expect.poll(() => grid.getByTestId('artist-tile').count()).toBeGreaterThan(300);
   await expect(page.getByTestId('fav-artists')).toHaveCount(0);
@@ -33,11 +33,14 @@ test('the Artists tab lists artists; a heart adds Favorite artists, which surviv
   const artist = (await second.getAttribute('data-artist'))!;
   await second.getByTestId('artist-fav').click();
   await expect(second.getByTestId('artist-fav')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByTestId('fav-artists').getByTestId('artist-tile')).toHaveText([artist]);
+  // M8: Favourites shows it on the next visit, so the grid doesn't move under the finger.
+  await expect(page.getByTestId('fav-artists')).toHaveCount(0);
   await page.reload();
   await page.getByTestId('tab-artists').click();
   await expect(page.getByTestId('fav-artists').getByTestId('artist-tile')).toHaveText([artist]);
   await page.getByTestId('fav-artists').getByTestId('artist-fav').click();
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('tab-artists').click();
   await expect(page.getByTestId('fav-artists')).toHaveCount(0);
 });
 
@@ -128,7 +131,7 @@ test.describe('without the artist page', () => {
 
   test('the page falls back to the Jukebox, More by and Albums; an album opens and plays; scroll is remembered', async ({ page }) => {
     const artist = await openFirstArtist(page);
-    await expect(page.locator('.topbar-title')).toHaveText(artist);
+    await expect(page.getByTestId('screen-artist').locator('.topbar-title')).toHaveText(artist);
     const jukebox = page.getByTestId('artist-jukebox');
     const more = page.getByTestId('artist-more');
     const albums = page.getByTestId('artist-albums');
@@ -177,7 +180,7 @@ test.describe('without the artist page', () => {
     await page.getByTestId('filter-artists').click();
     await expect(page.getByTestId('music-row').first()).toBeVisible();
     await page.getByTestId('music-open').first().click();
-    await expect(page.locator('.topbar-title')).toHaveText('Queen');
+    await expect(page.getByTestId('screen-artist').locator('.topbar-title')).toHaveText('Queen');
     const more = page.getByTestId('artist-more');
     await expect(more.getByTestId('track-row').first()).toBeVisible();
     const artists = await more.locator('.row-artist').allTextContents();

@@ -1,13 +1,13 @@
 import type { Track } from '../../data/model';
 import { music, musicTracks } from '../../data/ytmusic';
 import { Icon } from '../icons';
-import { openAlbum, openArtistPage, useSearchContext, type AlbumRef } from '../nav';
-import { Tracks } from '../components/TrackList';
+import { openArtistPage, popPage, useSearchContext, type AlbumRef } from '../nav';
+import { PlayShuffle, Tracks } from '../components/TrackList';
 import { SkeletonRows } from '../components/TrackRow';
 import { Screen } from '../components/Screen';
 import { Cover, GlobalError, LoadMore, MUSIC_TRACK_OPTS } from '../components/Music';
 import { useFeed } from '../usePaged';
-import { PlayShuffle } from './Artist';
+import { list } from '../playAll';
 
 interface AlbumMeta {
   title: string;
@@ -39,6 +39,7 @@ export function AlbumPage({ album }: { album: AlbumRef }) {
   const kindLabel = album.label ?? (album.kind === 'album' ? 'Album' : 'Playlist');
   const tracks = snap.items;
   useSearchContext({ label: meta.title, tracks: () => tracks });
+  const ctx = list(meta.title);
 
   return (
     <Screen
@@ -50,7 +51,7 @@ export function AlbumPage({ album }: { album: AlbumRef }) {
       role="dialog"
       label={`${kindLabel}: ${meta.title}`}
       left={
-        <button class="icon-btn" aria-label="Back" onClick={() => (openAlbum.value = null)} data-testid="album-back">
+        <button class="icon-btn" aria-label="Back" onClick={popPage} data-testid="album-back">
           <Icon name="back" />
         </button>
       }
@@ -78,14 +79,14 @@ export function AlbumPage({ album }: { album: AlbumRef }) {
           </div>
         </div>
       </div>
-      <PlayShuffle tracks={tracks} testid="album" />
+      <PlayShuffle tracks={tracks} ctx={ctx} testid="album" />
       {snap.status === 'loading' ? (
         <SkeletonRows n={6} />
       ) : snap.status === 'error' && snap.error ? (
         <GlobalError error={snap.error} onRetry={() => feed.retry()} />
       ) : (
         <>
-          <Tracks tracks={tracks} />
+          <Tracks tracks={tracks} ctx={ctx} />
           {snap.hasMore ? (
             <LoadMore busy={snap.loadingMore} error={!!snap.error} onClick={() => feed.loadMore()} />
           ) : (

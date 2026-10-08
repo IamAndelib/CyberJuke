@@ -26,7 +26,7 @@ import { artistChannels } from '../../store/artistChannels';
 import type { Track } from '../../data/model';
 import type { FeedError, FeedLoader, FeedOptions } from '../feed';
 import { Icon } from '../icons';
-import { openAlbumPage, openArtistPage, openReleases, type AlbumRef } from '../nav';
+import { openAlbumPage, openArtistPage, openReleasesPage, type AlbumRef } from '../nav';
 
 /** Square cover art (albums, playlists, artists) with the same pixel treatment as track art. */
 export function Cover({ url, size = 'md', round, class: cls }: { url?: string; size?: 'sm' | 'md' | 'lg'; round?: boolean; class?: string }) {
@@ -129,7 +129,7 @@ export function ReleaseShelf({
         {token && channelId && (
           <button
             class="link-btn see-all"
-            onClick={() => (openReleases.value = { artist, channelId, kind, token })}
+            onClick={() => openReleasesPage({ artist, channelId, kind, token })}
             aria-label={`See all ${title.toLowerCase()} by ${artist}`}
             data-testid="see-all"
           >

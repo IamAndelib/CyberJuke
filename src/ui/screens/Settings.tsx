@@ -12,6 +12,7 @@ import { AuthError, SIGN_UP_URL, auth, authErrorText } from '../../data/auth';
 import { toast } from '../../store/toast';
 import { Screen } from '../components/Screen';
 import { openExternal } from '../links';
+import { askConfirm } from '../nav';
 
 function Swatch({ id }: { id: ThemeId }) {
   const on = settings.value.theme === id;
@@ -76,7 +77,7 @@ function CheckEvery() {
         <div class="setting-name" id="check-every-label">
           Check for new tracks
         </div>
-        <div class="setting-desc">While the app is open, Home shows a "new tracks" button when something new is posted. The list never changes by itself.</div>
+        <div class="setting-desc">Shows a button on Home when new tracks are posted.</div>
       </div>
       <div class="seg-grid" role="radiogroup" aria-labelledby="check-every-label" onKeyDown={onKey} data-testid="check-every">
         {CHECK_EVERY_OPTIONS.map((v) => (
@@ -191,7 +192,7 @@ function SignInForm() {
         {busy ? 'Signing in…' : 'Sign in'}
       </button>
       <p class="setting-desc signin-note" data-testid="signin-note">
-        Your password goes only to Cyberspace's login. CyberJuke keeps only a login token, encrypted on this phone.
+        Your password goes only to Cyberspace.
       </p>
       <p class="setting-desc signin-note">
         No account? <A href={SIGN_UP_URL}>Create one on cyberspace.online</A>
@@ -200,9 +201,18 @@ function SignInForm() {
   );
 }
 
-/** Settings → Account, signed in. */
+/** Settings → Account, signed in. Signing out asks first (M3). */
 function SignedIn({ name }: { name: string }) {
   const [busy, setBusy] = useState(false);
+  const signOut = async () => {
+    setBusy(true);
+    try {
+      await auth.signOut();
+      toast('Signed out of Cyberspace', 2000);
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <div class="setting stack account-in" data-testid="signed-in">
       <div class="setting-text">
@@ -210,21 +220,21 @@ function SignedIn({ name }: { name: string }) {
           Signed in as <span data-testid="account-name">{name}</span>
         </div>
         <div class="setting-desc">
-          Members-only shared tracks show on Home, Genres, Artists and Search, marked <span class="mtag">[members]</span>.
+          Members-only tracks are marked <span class="mtag">[members]</span>.
         </div>
       </div>
       <button
         class="btn"
         disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            await auth.signOut();
-            toast('Signed out of Cyberspace', 2000);
-          } finally {
-            setBusy(false);
-          }
-        }}
+        onClick={() =>
+          askConfirm({
+            title: 'Sign out of Cyberspace?',
+            body: 'Members-only tracks will be hidden.',
+            confirm: 'Sign out',
+            run: signOut,
+            testid: 'confirm-signout',
+          })
+        }
         data-testid="signout"
       >
         Sign out
@@ -263,14 +273,14 @@ export function Settings() {
         <div class="setting">
           <div class="setting-text">
             <div class="setting-name">Show NSFW tracks</div>
-            <div class="setting-desc">Posts marked NSFW on Cyberspace are hidden by default.</div>
+            <div class="setting-desc">Hidden by default.</div>
           </div>
           <Toggle on={s.showNsfw} onChange={(v) => updateSettings({ showNsfw: v })} label="Show NSFW tracks" testid="nsfw-toggle" />
         </div>
         <div class="setting">
           <div class="setting-text">
             <div class="setting-name">Audio quality</div>
-            <div class="setting-desc">Low uses less mobile data.</div>
+            <div class="setting-desc">Low saves data.</div>
           </div>
           <div class="segmented small" role="radiogroup" aria-label="Audio quality">
             {(['high', 'low'] as const).map((q) => (
@@ -294,6 +304,13 @@ export function Settings() {
           </div>
           <Toggle on={s.preferIpv4} onChange={(v) => updateSettings({ preferIpv4: v })} label="Prefer IPv4" testid="ipv4-toggle" />
         </div>
+        <div class="setting">
+          <div class="setting-text">
+            <div class="setting-name">Autoplay</div>
+            <div class="setting-desc">Plays similar songs when your list ends.</div>
+          </div>
+          <Toggle on={s.autoplay} onChange={(v) => updateSettings({ autoplay: v })} label="Autoplay" testid="autoplay-toggle" />
+        </div>
         <CheckEvery />
       </section>
 
@@ -301,27 +318,23 @@ export function Settings() {
         <h2 class="card-title">About</h2>
         <p>
           <b>CyberJuke</b> v{__APP_VERSION__} is an <b>unofficial</b> player for the{' '}
-          <A href="https://beta.cyberspace.online/jukebox">Cyberspace Jukebox</A>. It is not made or endorsed by
-          Cyberspace.
+          <A href="https://beta.cyberspace.online/jukebox">Cyberspace Jukebox</A>, not made or endorsed by Cyberspace.
         </p>
         <p>
-          <b>Data:</b> public posts with music attachments, read from Cyberspace's public database exactly as the
-          website shows them. Nothing is posted and no account is needed. Signing in with Cyberspace (optional)
-          adds the members-only shared tracks the site shows its members.
+          <b>Data:</b> public posts with music, read as the site shows them. Nothing is posted. Signing in adds
+          members-only tracks.
         </p>
         <p>
-          <b>Audio:</b> tracks are the videos posters link to, streamed from where they are hosted. Availability depends
-          on that host, and some tracks may be skipped.
+          <b>Audio:</b> streamed from where each poster linked it, so some tracks may be skipped.
         </p>
         <p>
-          <b>Global:</b> Global search and the top songs and discography on artist pages look beyond the Jukebox. What they find plays like
-          any track but is never added to the Jukebox, Genres or Most saved.
+          <b>Global:</b> Global search and artist pages look beyond the Jukebox. What they find is never added to it.
         </p>
         <p>
-          <b>Credits:</b> Cyberspace and its creator <A href="https://beta.cyberspace.online/genghis_khan">@genghis_khan</A>
-          {' '}for the Jukebox and the look this app borrows; every poster who shares music; and{' '}
-          <A href="https://github.com/TeamNewPipe/NewPipeExtractor">NewPipeExtractor</A> (GPL-3.0), which powers
-          playback and Global search on Android.
+          <b>Credits:</b> Cyberspace and <A href="https://beta.cyberspace.online/genghis_khan">@genghis_khan</A> for the
+          Jukebox and its look; everyone who shares music; and{' '}
+          <A href="https://github.com/TeamNewPipe/NewPipeExtractor">NewPipeExtractor</A> (GPL-3.0) for playback and
+          Global search.
         </p>
       </section>
 

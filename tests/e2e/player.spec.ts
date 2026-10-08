@@ -17,9 +17,10 @@ test('tapping a track shows the mini player, which opens Now Playing', async ({ 
   await expect(page.getByTestId('np-post')).toContainText('Posted by @');
   await expect(page.getByTestId('upnext-row').first()).toBeVisible();
 
-  const before = await page.getByTestId('upnext-row').count();
+  // Remove the first one: it leaves Up next (the list may hold more than is shown).
+  const removed = (await page.getByTestId('upnext-row').first().locator('.row-title').textContent())!;
   await page.getByTestId('upnext-remove').first().click();
-  await expect(page.getByTestId('upnext-row')).toHaveCount(before - 1);
+  await expect(page.getByTestId('upnext-row').first().locator('.row-title')).not.toHaveText(removed);
 
   await page.getByTestId('np-repeat').click();
   await expect(page.getByTestId('np-repeat')).toHaveAttribute('data-mode', 'all');
@@ -110,15 +111,16 @@ test('in Now Playing, the genre opens its genre page and the artist opens the ar
   await page.getByTestId('np-genre').click();
   await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
   await expect(page.getByTestId('screen-genre')).toBeVisible();
-  await expect(page.locator('.topbar-title')).toHaveText(genre);
-  await expect(page.getByTestId('tab-genres')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('screen-genre').locator('.topbar-title')).toHaveText(genre);
+  // P4: it opens in place, on the tab you were on.
+  await expect(page.getByTestId('tab-home')).toHaveAttribute('aria-current', 'page');
 
   await page.getByTestId('mini-open').click();
   await page.getByTestId('np-artist').click();
   if (await page.getByTestId('artist-chooser').isVisible()) await page.getByTestId('chooser-artist').first().click();
   await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
   await expect(page.getByTestId('screen-artist')).toBeVisible();
-  await expect(page.getByTestId('tab-artists')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('tab-home')).toHaveAttribute('aria-current', 'page');
   await expect(page.getByTestId('artist-jukebox').getByTestId('track-row').first()).toBeVisible();
   await page.getByTestId('artist-jukebox').getByTestId('track-more').first().click();
   await expect(page.getByTestId('menu-more-by').first()).toContainText('More by ');
@@ -142,7 +144,7 @@ test('several credited artists open a chooser from Now Playing', async ({ page }
   await chooser.getByTestId('chooser-artist').nth(1).click();
   await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
   await expect(page.getByTestId('screen-artist')).toBeVisible();
-  await expect(page.locator('.topbar-title')).toHaveText('Tycho');
+  await expect(page.getByTestId('screen-artist').locator('.topbar-title')).toHaveText('Tycho');
   await expect(chooser).toBeHidden();
 });
 

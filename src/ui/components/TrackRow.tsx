@@ -1,9 +1,87 @@
 import { useComputed } from '@preact/signals';
+import { useRef } from 'preact/hooks';
 import type { Track } from '../../data/model';
-import { currentId, isPlaying } from '../../player';
+import { currentId, isPlaying, player } from '../../player';
 import { Icon } from '../icons';
-import { menuTrack } from '../nav';
+import { menuTrack, nowPlayingOpen } from '../nav';
 import { Art } from './Art';
+
+/** M9: a second tap on the same row this soon is the tail of a double tap. */
+export const ROW_DOUBLE_TAP_MS = 500;
+/** P10: holding a row this long opens its ⋯ menu. */
+export const LONG_PRESS_MS = 500;
+/** A finger that moves this far (px) is scrolling, not pressing. */
+const PRESS_SLOP = 10;
+
+let lastRowTap = { id: '', at: 0 };
+
+/**
+ * A tap on a row: ignored right after a tap on the same row; on the track that's
+ * already current it resumes (paused) or opens Now Playing (playing), never restarts;
+ * otherwise it plays.
+ */
+export function tapRow(track: Track, play: () => void, now = performance.now()): void {
+  if (lastRowTap.id === track.id && now - lastRowTap.at < ROW_DOUBLE_TAP_MS) return;
+  lastRowTap = { id: track.id, at: now };
+  if (currentId.peek() === track.id) {
+    if (isPlaying.peek()) nowPlayingOpen.value = true;
+    else void player.play();
+    return;
+  }
+  play();
+}
+
+function buzz(): void {
+  try {
+    if (typeof navigator.vibrate === 'function') navigator.vibrate(10);
+  } catch {
+    /* no haptics */
+  }
+}
+
+/**
+ * P10: long-press opens the row's ⋯ menu (with a short haptic tick), and the click that
+ * ends the press is swallowed. Moving the finger (a scroll) cancels it. No re-renders.
+ */
+function useLongPress(track: Track) {
+  const press = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const fired = useRef(false);
+  const cancel = () => {
+    if (press.current) clearTimeout(press.current.timer);
+    press.current = null;
+  };
+  return {
+    onPointerDown: (e: PointerEvent) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      cancel();
+      fired.current = false;
+      press.current = {
+        x: e.clientX,
+        y: e.clientY,
+        timer: setTimeout(() => {
+          press.current = null;
+          fired.current = true;
+          buzz();
+          menuTrack.value = track;
+        }, LONG_PRESS_MS),
+      };
+    },
+    onPointerMove: (e: PointerEvent) => {
+      const p = press.current;
+      if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > PRESS_SLOP) cancel();
+    },
+    onPointerUp: cancel,
+    onPointerCancel: cancel,
+    onPointerLeave: cancel,
+    onContextMenu: (e: Event) => e.preventDefault(),
+    /** True (once) when this click ends a long-press. */
+    swallow: () => {
+      const f = fired.current;
+      fired.current = false;
+      return f;
+    },
+  };
+}
 
 export function Bars() {
   return (
@@ -42,11 +120,15 @@ export function TrackRow({
   // and only the current row follows play/pause.
   const current = useComputed(() => currentId.value === track.id);
   const isCurrent = current.value;
+  const { swallow, ...press } = useLongPress(track);
   return (
     <li class={'row' + (isCurrent ? ' is-current' : '')} data-testid="track-row" data-track-id={track.id}>
       <button
         class="row-main"
-        onClick={onPlay}
+        {...press}
+        onClick={() => {
+          if (!swallow()) tapRow(track, onPlay);
+        }}
         aria-label={`Play ${track.title} by ${track.artist}`}
         data-testid="track-play"
         data-index={index}
@@ -65,7 +147,7 @@ export function TrackRow({
           <div class="row-meta">
             {showSaves && (
               <span class="saves" data-testid="track-saves" data-saves={track.saves ?? 0} aria-label={`${track.saves ?? 0} saves`}>
-                <Icon name="heart" size={12} />
+                <Icon name="bookmark" size={12} />
                 {track.saves ?? 0}
               </span>
             )}

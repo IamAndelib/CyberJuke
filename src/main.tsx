@@ -23,7 +23,8 @@ import { auth } from './data/auth';
 import { goBack } from './ui/nav';
 import { retryWatchedFeeds } from './ui/feed';
 import { JukePlayer } from './player/native';
-import { player, startPlayerPrefs } from './player';
+import { startPlayerPrefs } from './player';
+import { playFrom, radio } from './ui/playAll';
 import { startBlockEvents } from './player/blockEvents';
 import { source } from './data';
 import { App, Overlays } from './ui/App';
@@ -83,7 +84,7 @@ async function maybeAutoplay(): Promise<void> {
   }
   if (want !== 'latest') return;
   const page = await source.latest();
-  if (page.tracks.length) await player.playList(page.tracks, 0);
+  if (page.tracks.length) await playFrom(page.tracks, 0, radio('Home · Latest'));
 }
 
 /**

@@ -4,14 +4,14 @@ import { artistKey } from '../../data/artists';
 import type { Track } from '../../data/model';
 import { mergeTracks } from '../../data/search';
 import { SHELF_LABEL, SHELF_ORDER, shelfToken, type MusicItem, type ReleaseKind } from '../../data/ytmusic';
-import { player } from '../../player';
 import { catalog } from '../../store/catalog';
 import { displayArtist, jukeboxTracksBy } from '../../store/artists';
-import { favoriteArtists, isFavoriteArtist, toggleFavoriteArtist } from '../../store/library';
-import { toast } from '../../store/toast';
+import { favoriteArtists, isFavoriteArtist } from '../../store/library';
+import { toggleFavoriteArtistWithUndo } from '../../store/undo';
 import { Icon } from '../icons';
-import { openArtist, useSearchContext, type AlbumRef } from '../nav';
-import { Tracks } from '../components/TrackList';
+import { popPage, useSearchContext, type AlbumRef } from '../nav';
+import { ErrorState, PlayShuffle, Tracks } from '../components/TrackList';
+import { list as listCtx } from '../playAll';
 import { SkeletonRows } from '../components/TrackRow';
 import { Screen } from '../components/Screen';
 import {
@@ -32,26 +32,6 @@ import {
 } from '../components/Music';
 import { feeds, fillFeed, isFilling, type Feed } from '../feed';
 import { useFeed } from '../usePaged';
-
-export async function playAll(tracks: Track[], shuffle: boolean): Promise<void> {
-  if (!tracks.length) return;
-  await player.playList(tracks, shuffle ? Math.floor(Math.random() * tracks.length) : 0);
-  await player.setShuffle(shuffle);
-}
-
-export function PlayShuffle({ tracks, testid }: { tracks: Track[]; testid: string }) {
-  const none = !tracks.length;
-  return (
-    <div class="actions">
-      <button class="btn primary" disabled={none} onClick={() => playAll(tracks, false)} data-testid={`${testid}-play`}>
-        <Icon name="play" size={18} /> Play
-      </button>
-      <button class="btn" disabled={none} onClick={() => playAll(tracks, true)} data-testid={`${testid}-shuffle`}>
-        <Icon name="shuffle" size={18} /> Shuffle
-      </button>
-    </div>
-  );
-}
 
 function ShelfSkeleton() {
   return (
@@ -81,6 +61,8 @@ export function ArtistPage({ name: raw }: { name: string }) {
   const fav = isFavoriteArtist(name);
   const jukebox = jukeboxTracksBy(name);
   const catalogReady = catalog.tracks.value.length > 0;
+  const catalogFailed = !catalogReady && catalog.status.value === 'error';
+  const ctx = listCtx(name);
 
   const page = useFeed(`artistpage:${key}`, artistPageLoader(name), MUSIC_TRACK_OPTS);
   useArtistHere(name, page.feed);
@@ -94,7 +76,7 @@ export function ArtistPage({ name: raw }: { name: string }) {
       subtitle="Artist"
       scrollKey={`artist:${key}`}
       left={
-        <button class="icon-btn" aria-label="Back to artists" onClick={() => (openArtist.value = null)} data-testid="artist-back">
+        <button class="icon-btn" aria-label="Back" onClick={popPage} data-testid="artist-back">
           <Icon name="back" />
         </button>
       }
@@ -102,11 +84,11 @@ export function ArtistPage({ name: raw }: { name: string }) {
         <button
           class={'icon-btn like' + (fav ? ' on' : '')}
           aria-pressed={fav}
-          aria-label={fav ? `Remove ${name} from favorite artists` : `Add ${name} to favorite artists`}
-          onClick={() => toast(toggleFavoriteArtist(name) ? 'Added to Favorite artists' : 'Removed from Favorite artists', 1800)}
+          aria-label={fav ? `Remove ${name} from favourites` : `Add ${name} to favourites`}
+          onClick={() => toggleFavoriteArtistWithUndo(name)}
           data-testid="artist-page-fav"
         >
-          <Icon name={fav ? 'heart' : 'heartOutline'} size={26} />
+          <Icon name={fav ? 'star' : 'starOutline'} size={26} />
         </button>
       }
       onRefresh={() => catalog.refresh({ force: true })}
@@ -116,12 +98,19 @@ export function ArtistPage({ name: raw }: { name: string }) {
           <h2 class="section-title">Shared on the Jukebox</h2>
           {jukebox.length > 0 && <span class="dim small">{`${jukebox.length} track${jukebox.length === 1 ? '' : 's'}`}</span>}
         </div>
-        {!catalogReady ? (
+        {catalogFailed ? (
+          // P7: a failed catalog says so and offers Retry, instead of an endless skeleton.
+          <ErrorState
+            offline={!!catalog.error.value?.offline}
+            message="Couldn't load the Jukebox."
+            onRetry={() => void catalog.refresh()}
+          />
+        ) : !catalogReady ? (
           <SkeletonRows n={3} />
         ) : jukebox.length ? (
           <>
-            <PlayShuffle tracks={jukebox} testid="artist-jukebox" />
-            <Tracks tracks={jukebox} />
+            <PlayShuffle tracks={jukebox} ctx={ctx} testid="artist-jukebox" />
+            <Tracks tracks={jukebox} ctx={ctx} />
           </>
         ) : (
           <p class="section-note dim">Nothing by {name} has been shared on the Jukebox yet.</p>
@@ -152,8 +141,8 @@ export function ArtistPage({ name: raw }: { name: string }) {
               <div class="section-head">
                 <h2 class="section-title">Top songs</h2>
               </div>
-              <PlayShuffle tracks={page.snap.items} testid="artist-top" />
-              <Tracks tracks={page.snap.items} />
+              <PlayShuffle tracks={page.snap.items} ctx={ctx} testid="artist-top" />
+              <Tracks tracks={page.snap.items} ctx={ctx} />
               {page.snap.hasMore && (
                 <LoadMore busy={page.snap.loadingMore} error={!!page.snap.error} onClick={() => page.feed.loadMore()} testid="top-load-more" />
               )}
@@ -264,8 +253,8 @@ function SearchSections({ name }: { name: string }) {
             <GlobalError error={more.snap.error} onRetry={() => more.feed.retry()} />
           ) : moreTracks.length ? (
             <>
-              <PlayShuffle tracks={moreTracks} testid="artist-more" />
-              <Tracks tracks={moreTracks} />
+              <PlayShuffle tracks={moreTracks} ctx={listCtx(name)} testid="artist-more" />
+              <Tracks tracks={moreTracks} ctx={listCtx(name)} />
               {more.snap.hasMore && <LoadMore busy={more.snap.loadingMore} error={!!more.snap.error} onClick={() => more.feed.loadMore()} />}
             </>
           ) : (

@@ -2,7 +2,7 @@ import { artistKey } from '../../data/artists';
 import { SHELF_LABEL, musicErrorText, type MusicErrorCode, type Release } from '../../data/ytmusic';
 import { feeds } from '../feed';
 import { Icon } from '../icons';
-import { openReleases, type ReleasesRef } from '../nav';
+import { popPage, type ReleasesRef } from '../nav';
 import { Screen } from '../components/Screen';
 import { ReleaseGrid, releasesLoader } from '../components/Music';
 import { EmptyState } from '../components/TrackList';
@@ -38,7 +38,7 @@ export function ReleasesPage({ release }: { release: ReleasesRef }) {
       subtitle={snap.status === 'ready' && n ? `${artist} · ${n}` : artist}
       scrollKey={`releases:${token}:${kind}`}
       left={
-        <button class="icon-btn" aria-label={`Back to ${artist}`} onClick={() => (openReleases.value = null)} data-testid="releases-back">
+        <button class="icon-btn" aria-label={`Back to ${artist}`} onClick={popPage} data-testid="releases-back">
           <Icon name="back" />
         </button>
       }

@@ -6,7 +6,7 @@ import { expectStable, nextFrame, openSearch, scrollTo, scrollTopOf, start, wait
 test('Genres remembers the grid position across a genre page, and each genre list too', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('tab-genres').click();
-  await expect(page.locator('.topbar-sub')).toContainText(/\d+ genres/);
+  await expect(page.getByTestId('screen-genres').locator('.topbar-sub')).toContainText(/\d+ genres/);
   await scrollTo(page, 'screen-genres', 1500);
   const y = await scrollTopOf(page, 'screen-genres');
   expect(y).toBeGreaterThan(1400);
@@ -214,7 +214,7 @@ test('scrollbar: appears while scrolling, fades, and drags on a long list; A–Z
   const screen = page.getByTestId('screen-artists');
   await expect(screen.getByTestId('az-head').first()).toBeVisible();
   // Every chunk rendered: the list has its full height.
-  const n = Number(/\d+/.exec((await page.locator('.topbar-sub').textContent())!)![0]);
+  const n = Number(/\d+/.exec((await screen.locator('.topbar-sub').textContent())!)![0]);
   await expect(screen.getByTestId('artist-tile')).toHaveCount(n);
   const sb = screen.getByTestId('scrollbar');
   expect(await screen.evaluate((el) => (el as HTMLElement).offsetWidth - el.clientWidth)).toBe(0);

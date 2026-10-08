@@ -1,14 +1,20 @@
 import { useEffect, useRef } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import type { Track } from '../../data/model';
-import { player } from '../../player';
 import type { Paged } from '../usePaged';
 import { useChunks } from '../useChunks';
 import { Icon } from '../icons';
+import { playAll, playFrom, type PlayCtx } from '../playAll';
 import { SkeletonRows, TrackRow } from './TrackRow';
 
-export function playFrom(tracks: Track[], i: number): void {
-  void player.playList(tracks, i);
+export { playFrom };
+
+/**
+ * What a row tap plays: `queue()` when given (P2: a feed's whole list, of which the
+ * shown rows are the start, so row i is item i), else the rows themselves.
+ */
+function rowPlayer(tracks: Track[], ctx: PlayCtx, queue?: () => Track[]) {
+  return (i: number) => () => void playFrom(queue ? queue() : tracks, i, ctx);
 }
 
 /**
@@ -17,21 +23,26 @@ export function playFrom(tracks: Track[], i: number): void {
  */
 export function Tracks({
   tracks,
+  ctx,
+  queue,
   hideGenre,
   showSaves,
   chunkKey = null,
 }: {
   tracks: Track[];
+  ctx: PlayCtx;
+  queue?: () => Track[];
   hideGenre?: boolean;
   showSaves?: boolean;
   chunkKey?: string | null;
 }) {
   const { shown, sentinel, more } = useChunks(tracks.length, chunkKey);
+  const play = rowPlayer(tracks, ctx, queue);
   return (
     <>
       <ul class="list" data-testid="track-list">
         {tracks.slice(0, shown).map((t, i) => (
-          <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} showSaves={showSaves} onPlay={() => playFrom(tracks, i)} />
+          <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} showSaves={showSaves} onPlay={play(i)} />
         ))}
       </ul>
       {more && <div ref={sentinel} class="list-foot" aria-hidden="true" />}
@@ -43,13 +54,14 @@ export function Tracks({
  * A long list rendered in chunks of 60 as you scroll; tapping a row plays the whole
  * list from there. `chunkKey` remembers how many rows were shown (scroll memory).
  */
-export function ChunkedTracks({ tracks, chunkKey, testid }: { tracks: Track[]; chunkKey: string; testid?: string }) {
+export function ChunkedTracks({ tracks, ctx, chunkKey, testid }: { tracks: Track[]; ctx: PlayCtx; chunkKey: string; testid?: string }) {
   const { shown, sentinel, more } = useChunks(tracks.length, chunkKey);
+  const play = rowPlayer(tracks, ctx);
   return (
     <div data-testid={testid}>
       <ul class="list" data-testid="track-list">
         {tracks.slice(0, shown).map((t, i) => (
-          <TrackRow key={t.id} track={t} index={i} onPlay={() => playFrom(tracks, i)} />
+          <TrackRow key={t.id} track={t} index={i} onPlay={play(i)} />
         ))}
       </ul>
       {more ? <div ref={sentinel} class="list-foot" aria-hidden="true" /> : <div class="list-foot end">— end of tape —</div>}
@@ -89,10 +101,25 @@ export function ErrorState({ offline, message, onRetry }: { offline: boolean; me
  * pages render in chunks (`chunkKey` remembers how many rows were shown); the next
  * page is asked for only once every loaded row is on the page.
  */
-export function PagedTracks({ paged, empty, hideGenre, chunkKey = null }: { paged: Paged; empty?: ComponentChildren; hideGenre?: boolean; chunkKey?: string | null }) {
+export function PagedTracks({
+  paged,
+  ctx,
+  queue,
+  empty,
+  hideGenre,
+  chunkKey = null,
+}: {
+  paged: Paged;
+  ctx: PlayCtx;
+  queue?: () => Track[];
+  empty?: ComponentChildren;
+  hideGenre?: boolean;
+  chunkKey?: string | null;
+}) {
   const sentinel = useRef<HTMLDivElement>(null);
   const { tracks, status, error, hasMore, loadingMore, loadMore } = paged;
   const chunks = useChunks(tracks.length, chunkKey);
+  const play = rowPlayer(tracks, ctx, queue);
 
   useEffect(() => {
     const el = sentinel.current;
@@ -111,7 +138,7 @@ export function PagedTracks({ paged, empty, hideGenre, chunkKey = null }: { page
     <>
       <ul class="list" data-testid="track-list">
         {tracks.slice(0, chunks.shown).map((t, i) => (
-          <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} onPlay={() => playFrom(tracks, i)} />
+          <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} onPlay={play(i)} />
         ))}
       </ul>
       {chunks.more && <div ref={chunks.sentinel} class="list-foot" aria-hidden="true" />}
@@ -130,5 +157,39 @@ export function PagedTracks({ paged, empty, hideGenre, chunkKey = null }: { page
       )}
       {!hasMore && !chunks.more && tracks.length > 0 && <div class="list-foot end">— end of tape —</div>}
     </>
+  );
+}
+
+/**
+ * P3: the one Play / Shuffle pair, same labels everywhere. Play plays in order with
+ * shuffle off; Shuffle turns shuffle on. `tracks` may be a getter (the whole list,
+ * read at the tap).
+ */
+export function PlayShuffle({
+  tracks,
+  ctx,
+  testid,
+  disabled,
+  playTestid = `${testid}-play`,
+  shuffleTestid = `${testid}-shuffle`,
+}: {
+  tracks: Track[] | (() => Track[]);
+  ctx: PlayCtx;
+  testid: string;
+  disabled?: boolean;
+  playTestid?: string;
+  shuffleTestid?: string;
+}) {
+  const get = () => (typeof tracks === 'function' ? tracks() : tracks);
+  const none = disabled ?? !get().length;
+  return (
+    <div class="actions">
+      <button class="btn primary" disabled={none} onClick={() => playAll(get(), { shuffle: false, ctx })} data-testid={playTestid}>
+        <Icon name="play" size={18} /> Play
+      </button>
+      <button class="btn" disabled={none} onClick={() => playAll(get(), { shuffle: true, ctx })} data-testid={shuffleTestid}>
+        <Icon name="shuffle" size={18} /> Shuffle
+      </button>
+    </div>
   );
 }

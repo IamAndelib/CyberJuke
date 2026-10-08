@@ -22,7 +22,7 @@ const selection = (page: Page) => page.evaluate(() => getSelection()?.toString()
 test('a long-press or double tap selects no text; inputs still can', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('tab-genres').click();
-  const title = page.locator('.topbar-title');
+  const title = page.getByTestId('screen-genres').locator('.topbar-title');
   await expect(title).toHaveText(/genres/i);
   const b = (await title.boundingBox())!;
   await longPress(page, b.x + 20, b.y + b.height / 2);

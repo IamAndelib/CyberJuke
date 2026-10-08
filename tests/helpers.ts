@@ -1,9 +1,13 @@
 /** Shared steps and waits for the e2e specs. No fixed sleeps: every wait is on a condition. */
 import { expect, type Locator, type Page } from '@playwright/test';
 
+/**
+ * The screen showing has its rows. Visited tabs and covered pages stay mounted (hidden),
+ * so only what's visible counts.
+ */
 export async function waitForTracks(page: Page): Promise<void> {
-  await expect(page.getByTestId('track-row').first()).toBeVisible();
-  await expect(page.getByTestId('skeleton')).toHaveCount(0);
+  await expect(page.locator('[data-testid="track-row"]:visible').first()).toBeVisible();
+  await expect(page.locator('[data-testid="skeleton"]:visible')).toHaveCount(0);
 }
 
 /** Load the app and wait for Home's first page. */

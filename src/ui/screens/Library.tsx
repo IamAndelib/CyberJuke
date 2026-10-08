@@ -1,21 +1,51 @@
 import { signal } from '@preact/signals';
-import { player } from '../../player';
-import { clearRecent, history, liked, recent } from '../../store/library';
+import { history, liked, recent } from '../../store/library';
 import { groupByDay } from '../../store/history';
+import { clearHistoryWithUndo } from '../../store/undo';
 import { Icon } from '../icons';
-import { EmptyState, Tracks, playFrom } from '../components/TrackList';
+import { EmptyState, PlayShuffle, Tracks, playFrom } from '../components/TrackList';
 import { TrackRow } from '../components/TrackRow';
 import { Screen } from '../components/Screen';
-import { tab, useSearchContext } from '../nav';
+import { askConfirm, selectTab, useSearchContext } from '../nav';
+import { list } from '../playAll';
 
 const section = signal<'liked' | 'recent'>('liked');
+
+const LIKED_CTX = list('Liked');
+const RECENT_CTX = list('Recently played');
+
+/** M3: clearing history asks first, and can still be undone from the toast. */
+function confirmClear(): void {
+  const n = history.value.length;
+  askConfirm({
+    title: 'Clear listening history?',
+    body: 'Everything under Recently played goes.',
+    confirm: `Clear ${n} play${n === 1 ? '' : 's'}`,
+    run: clearHistoryWithUndo,
+    testid: 'confirm-clear',
+  });
+}
 
 export function Library() {
   const sel = section.value;
   const tracks = sel === 'liked' ? liked.value : recent.value;
+  const ctx = sel === 'liked' ? LIKED_CTX : RECENT_CTX;
   useSearchContext(sel === 'liked' ? { label: 'Liked', tracks: () => liked.value } : { label: 'Recently played', tracks: () => recent.value });
   return (
-    <Screen testid="screen-library" title="Library" subtitle="Saved on this device" scrollKey={`library:${sel}`}>
+    <Screen
+      testid="screen-library"
+      title="Library"
+      subtitle="On this device"
+      scrollKey={`library:${sel}`}
+      right={
+        sel === 'recent' && tracks.length > 0 ? (
+          // Away from Play / Shuffle, so it can't be hit by accident.
+          <button class="link-btn lib-clear" onClick={confirmClear} data-testid="lib-clear">
+            [Clear]
+          </button>
+        ) : undefined
+      }
+    >
       <div class="segmented" role="tablist" aria-label="Library section">
         <button
           role="tab"
@@ -37,36 +67,16 @@ export function Library() {
         </button>
       </div>
 
-      {tracks.length > 0 && (
-        <div class="actions">
-          <button class="btn primary" onClick={() => player.playList(tracks, 0)} data-testid="lib-play-all">
-            <Icon name="play" size={18} /> Play all
-          </button>
-          <button
-            class="btn"
-            onClick={async () => {
-              await player.playList(tracks, Math.floor(Math.random() * tracks.length));
-              await player.setShuffle(true);
-            }}
-          >
-            <Icon name="shuffle" size={18} /> Shuffle
-          </button>
-          {sel === 'recent' && (
-            <button class="link-btn push-right" onClick={clearRecent}>
-              [Clear]
-            </button>
-          )}
-        </div>
-      )}
+      {tracks.length > 0 && <PlayShuffle tracks={tracks} ctx={ctx} testid="lib" playTestid="lib-play-all" />}
 
       <div data-testid={sel === 'liked' ? 'liked-list' : 'recent-list'}>
         {tracks.length ? (
-          sel === 'liked' ? <Tracks tracks={tracks} /> : <HistoryDays />
+          sel === 'liked' ? <Tracks tracks={tracks} ctx={LIKED_CTX} /> : <HistoryDays />
         ) : sel === 'liked' ? (
           <EmptyState title="No liked tracks yet">
             Tap <Icon name="heartOutline" size={16} /> in the player, or Like in a track's ⋯ menu, to keep it here.
             <div>
-              <button class="link-btn" onClick={() => (tab.value = 'home')}>
+              <button class="link-btn" onClick={() => selectTab('home')}>
                 [Browse the Jukebox]
               </button>
             </div>
@@ -100,7 +110,7 @@ function HistoryDays() {
             </h3>
             <ul class="list" data-testid="track-list">
               {d.tracks.map((t, i) => (
-                <TrackRow key={t.id} track={t} index={start + i} onPlay={() => playFrom(all, start + i)} />
+                <TrackRow key={t.id} track={t} index={start + i} onPlay={() => void playFrom(all, start + i, RECENT_CTX)} />
               ))}
             </ul>
           </section>
