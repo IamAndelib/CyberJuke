@@ -40,6 +40,29 @@ export interface JukeMusicPlugin {
   /** Artist candidates for a name (kind 'artist', channelId set), best match first. */
   artist(o: { name: string }): Promise<{ items: MusicItem[] }>;
   lyrics(o: LyricsRequest): Promise<LyricsResult>;
+  /** The artist's own page: top songs and every release shelf, exactly that artist's. */
+  artistPage(o: { channelId: string }): Promise<ArtistPageResult>;
+  /** A "See all" token from `artistPage().more`: the full list of that shelf. */
+  artistReleases(o: { token: string }): Promise<{ releases: Release[] }>;
+}
+
+export type ReleaseKind = 'album' | 'ep' | 'single' | 'live';
+export interface Release {
+  kind: ReleaseKind;
+  title: string;
+  year?: string;
+  url: string;
+  thumbnailUrl?: string;
+}
+export interface ArtistPageResult {
+  name: string;
+  thumbnailUrl?: string;
+  topSongs: MusicItem[];
+  /** "See all" songs: a playlist URL the existing playlist() reads. */
+  topSongsPlaylistUrl?: string;
+  releases: Release[];
+  /** Opaque tokens for artistReleases(): albums (albums and live albums), singles (singles and EPs). */
+  more?: { albums?: string; singles?: string };
 }
 
 export interface LyricsRequest {
@@ -201,6 +224,45 @@ export function isByArtist(item: MusicItem, channelId: string, name: string, cre
   return !!key && splitArtists(cleanCredit(credit ?? '')).some((a) => artistKey(a) === key);
 }
 
+// ---- Discography shelves --------------------------------------------------------------
+
+/** Shelves on the artist page, in order. */
+export const SHELF_ORDER: readonly ReleaseKind[] = ['album', 'live', 'ep', 'single'];
+export const SHELF_LABEL: Record<ReleaseKind, string> = { album: 'Albums', live: 'Live albums', ep: 'EPs', single: 'Singles' };
+/** What one release is called (the album page's subtitle). */
+export const RELEASE_LABEL: Record<ReleaseKind, string> = { album: 'Album', live: 'Live album', ep: 'EP', single: 'Single' };
+
+/** Titles that make an album a live album (same rule as the native side). */
+export const LIVE_TITLE = /\blive\b|unplugged|in concert|live at|live from/i;
+
+/**
+ * The shelf a release goes on. The native side classifies already; this keeps the
+ * same rule on the phone too (an album or EP whose title says it's live is a live
+ * album; a live single stays a single) and puts unknown kinds on Albums.
+ */
+export function releaseShelf(r: Pick<Release, 'kind' | 'title'>): ReleaseKind {
+  const kind = SHELF_ORDER.includes(r.kind) ? r.kind : 'album';
+  if ((kind === 'album' || kind === 'ep') && LIVE_TITLE.test(r.title ?? '')) return 'live';
+  return kind;
+}
+
+/** Releases by shelf, each once (by URL), in the order given. */
+export function groupReleases(releases: Release[]): Record<ReleaseKind, Release[]> {
+  const out: Record<ReleaseKind, Release[]> = { album: [], live: [], ep: [], single: [] };
+  const seen = new Set<string>();
+  for (const r of releases ?? []) {
+    if (!r?.url || seen.has(r.url)) continue;
+    seen.add(r.url);
+    out[releaseShelf(r)].push(r);
+  }
+  return out;
+}
+
+/** The "See all" token behind a shelf: Albums and Live albums share one, EPs and Singles the other. */
+export function shelfToken(kind: ReleaseKind, more: ArtistPageResult['more']): string | undefined {
+  return kind === 'album' || kind === 'live' ? more?.albums : more?.singles;
+}
+
 // ---- Client with a 10-minute cache ----------------------------------------------------
 
 export const MUSIC_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -214,6 +276,9 @@ export interface MusicClient {
   playlist(url: string): Promise<AlbumPage>;
   /** Artist candidates for a name. */
   artist(name: string): Promise<MusicItem[]>;
+  /** `fresh`: skip the cache (a "See all" token was evicted native-side; get new ones). */
+  artistPage(channelId: string, fresh?: boolean): Promise<ArtistPageResult>;
+  artistReleases(token: string): Promise<Release[]>;
   /** A cached, still-fresh search result, if any (lets screens render instantly on remount). */
   peekSearch(query: string, filter: MusicFilter): MusicPage | undefined;
   clear(): void;
@@ -271,6 +336,12 @@ export function createMusicClient(deps: MusicClientDeps): MusicClient {
     more: (next) => call(`m|${next}`, (p) => p.more({ next })),
     playlist: (url) => call(`p|${url}`, (p) => p.playlist({ url })),
     artist: (name) => call(`a|${artistKey(name)}`, (p) => p.artist({ name: name.trim() }).then((r) => r.items ?? [])),
+    artistPage: (channelId, fresh) =>
+      (fresh && cache.delete(`ap|${channelId}`),
+      call(`ap|${channelId}`, (p) =>
+        p.artistPage({ channelId }).then((r) => ({ ...r, topSongs: r?.topSongs ?? [], releases: r?.releases ?? [] })),
+      )),
+    artistReleases: (token) => call(`ar|${token}`, (p) => p.artistReleases({ token }).then((r) => r?.releases ?? [])),
     peekSearch: (query, filter) => fresh<MusicPage>(sKey(query, filter)),
     clear: () => cache.clear(),
   };

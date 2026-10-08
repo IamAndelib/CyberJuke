@@ -2,7 +2,7 @@ import { useEffect } from 'preact/hooks';
 import { player } from '../player';
 import { online } from '../store/network';
 import { Icon, type IconName } from './icons';
-import { goBack, nowPlayingOpen, openAlbum, openArtist, openGenre, searchOpen, searchOverAlbum, tab, type Tab } from './nav';
+import { goBack, nowPlayingOpen, openAlbum, openArtist, openGenre, openReleases, searchOpen, searchOverAlbum, tab, type Tab } from './nav';
 import { ArtistChooser, MiniPlayer, NowPlaying, Toasts, TrackMenu } from './components/PlayerUI';
 import { SearchFab } from './components/SearchFab';
 import { AlbumPage } from './screens/Album';
@@ -34,7 +34,10 @@ function TabBar() {
             // Re-tapping Genres/Artists goes back to the grid.
             const onTop = searchOpen.value || openAlbum.value;
             if (t.id === 'genres' && cur === 'genres' && !onTop) openGenre.value = null;
-            if (t.id === 'artists' && cur === 'artists' && !onTop) openArtist.value = null;
+            if (t.id === 'artists' && cur === 'artists' && !onTop) {
+              openArtist.value = null;
+              openReleases.value = null;
+            }
             searchOpen.value = false;
             searchOverAlbum.value = false;
             openAlbum.value = null;

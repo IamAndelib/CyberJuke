@@ -1,10 +1,14 @@
 /**
- * Pieces for Global (YouTube Music) content: square covers, the albums shelf,
- * album/playlist/artist result rows, and the error box. Never names the provider.
+ * Pieces for Global (YouTube Music) content: square covers, the albums shelf, the
+ * artist page's discography shelves and grid, album/playlist/artist result rows, and
+ * the error box. Never names the provider.
  */
 import { useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import {
+  RELEASE_LABEL,
+  groupReleases,
+  shelfToken,
   isByArtist,
   isEndOfList,
   itemChannelId,
@@ -15,12 +19,14 @@ import {
   type MusicItem,
   type MusicErrorCode,
   type MusicPage,
+  type Release,
+  type ReleaseKind,
 } from '../../data/ytmusic';
 import { artistChannels } from '../../store/artistChannels';
 import type { Track } from '../../data/model';
 import type { FeedError, FeedLoader, FeedOptions } from '../feed';
 import { Icon } from '../icons';
-import { openAlbumPage, openArtistPage, type AlbumRef } from '../nav';
+import { openAlbumPage, openArtistPage, openReleases, type AlbumRef } from '../nav';
 
 /** Square cover art (albums, playlists, artists) with the same pixel treatment as track art. */
 export function Cover({ url, size = 'md', round, class: cls }: { url?: string; size?: 'sm' | 'md' | 'lg'; round?: boolean; class?: string }) {
@@ -59,6 +65,96 @@ export function AlbumShelf({ items, fallbackArtist, testid = 'album-shelf' }: { 
             <Cover url={it.thumbnailUrl} size="md" />
             <span class="shelf-title">{it.title}</span>
           </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function releaseRef(r: Release, artist: string, kind: ReleaseKind = r.kind): AlbumRef {
+  return { url: r.url, title: r.title, subtitle: artist, thumbnailUrl: r.thumbnailUrl, kind: 'album', label: RELEASE_LABEL[kind] };
+}
+
+/** One release: square cover, title, year. Opens the album page. */
+export function ReleaseCard({ release, artist, kind }: { release: Release; artist: string; kind: ReleaseKind }) {
+  const label = RELEASE_LABEL[kind];
+  return (
+    <button
+      class="shelf-btn release-btn"
+      onClick={() => openAlbumPage(releaseRef(release, artist, kind))}
+      data-testid="release-card"
+      data-kind={kind}
+      aria-label={`Open ${label.toLowerCase()} ${release.title}${release.year ? `, ${release.year}` : ''}`}
+    >
+      <Cover url={release.thumbnailUrl} size="md" />
+      <span class="shelf-title" data-testid="release-title">
+        {release.title}
+      </span>
+      {release.year && (
+        <span class="shelf-year" data-testid="release-year">
+          {release.year}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/**
+ * One discography shelf on the artist page (Albums, Live albums, EPs, Singles): a
+ * horizontal row of covers, and "See all" when the artist page offers the full list.
+ * Hidden when empty.
+ */
+export function ReleaseShelf({
+  kind,
+  title,
+  releases,
+  artist,
+  token,
+  channelId,
+  testid,
+}: {
+  kind: ReleaseKind;
+  title: string;
+  releases: Release[];
+  artist: string;
+  token?: string;
+  channelId?: string;
+  testid: string;
+}) {
+  if (!releases.length) return null;
+  return (
+    <section data-testid={testid} data-kind={kind}>
+      <div class="section-head">
+        <h2 class="section-title">{title}</h2>
+        {token && channelId && (
+          <button
+            class="link-btn see-all"
+            onClick={() => (openReleases.value = { artist, channelId, kind, token })}
+            aria-label={`See all ${title.toLowerCase()} by ${artist}`}
+            data-testid="see-all"
+          >
+            [See all]
+          </button>
+        )}
+      </div>
+      <ul class="shelf" data-testid="release-shelf">
+        {releases.map((r) => (
+          <li key={r.url} class="shelf-item">
+            <ReleaseCard release={r} artist={artist} kind={kind} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Every release of one shelf as a grid ("See all"). */
+export function ReleaseGrid({ releases, artist, kind }: { releases: Release[]; artist: string; kind: ReleaseKind }) {
+  return (
+    <ul class="release-grid" data-testid="release-grid">
+      {releases.map((r) => (
+        <li key={r.url}>
+          <ReleaseCard release={r} artist={artist} kind={kind} />
         </li>
       ))}
     </ul>
@@ -178,6 +274,69 @@ export function moreByLoader(artist: string): FeedLoader<Track, ByCursor, MoreBy
     return { items: musicTracks(found, artist), cursor: next ? { next, channel } : null, meta: { resolved: true } };
   };
 }
+
+// ---- The artist's own page -------------------------------------------------------------
+
+/** Top songs page through the artist's songs playlist, then that playlist's own pages. */
+export type TopCursor = { playlist: string } | { next: string };
+
+export interface ArtistPageMeta {
+  /** false: no artist matched the name exactly (nothing but the Jukebox is shown). */
+  resolved: boolean;
+  channelId?: string;
+  releases: Record<ReleaseKind, Release[]>;
+  more: { albums?: string; singles?: string };
+}
+
+const NO_RELEASES = (): Record<ReleaseKind, Release[]> => ({ album: [], live: [], ep: [], single: [] });
+
+/**
+ * The artist page: Top songs as Tracks (exactly the artist's, from their own page) with
+ * "Load more" through the songs playlist, and the releases by shelf in meta. Rejects
+ * when the page can't be read, so the caller falls back to channel-filtered search.
+ */
+export function artistPageLoader(artist: string): FeedLoader<Track, TopCursor, ArtistPageMeta> {
+  return async (c) => {
+    if (c) {
+      const p = 'playlist' in c ? await music.playlist(c.playlist) : await music.more(c.next);
+      return { items: musicTracks(p.items, artist), cursor: p.next ? { next: p.next } : null };
+    }
+    const channel = await artistChannels.get(artist);
+    if (!channel) return { items: [], cursor: null, meta: { resolved: false, releases: NO_RELEASES(), more: {} } };
+    const page = await music.artistPage(channel);
+    return {
+      items: musicTracks(page.topSongs, artist),
+      cursor: page.topSongsPlaylistUrl ? { playlist: page.topSongsPlaylistUrl } : null,
+      meta: { resolved: true, channelId: channel, releases: groupReleases(page.releases), more: page.more ?? {} },
+    };
+  };
+}
+
+/**
+ * "See all": one shelf's releases from the full list behind its token. Tokens are
+ * opaque and can be evicted native-side (UNAVAILABLE), so every load after the first
+ * (a Retry) reloads the artist page first for a fresh token; without one, the
+ * shelf's releases from the page itself are shown.
+ */
+export function releasesLoader(ref: { channelId: string; kind: ReleaseKind; token: string }, onFreshPage?: () => void): FeedLoader<Release, never> {
+  // Kept outside the closure: the feed gets a new loader on every render.
+  const k = `${ref.token}|${ref.kind}`;
+  return async () => {
+    const n = releaseLoads.get(k) ?? 0;
+    releaseLoads.set(k, n + 1);
+    if (releaseLoads.size > 50) releaseLoads.delete(releaseLoads.keys().next().value!);
+    let token: string | undefined = ref.token;
+    if (n > 0) {
+      const page = await music.artistPage(ref.channelId, true);
+      onFreshPage?.();
+      token = shelfToken(ref.kind, page.more);
+      if (!token) return { items: groupReleases(page.releases)[ref.kind], cursor: null };
+    }
+    const all = await music.artistReleases(token);
+    return { items: groupReleases(all)[ref.kind], cursor: null };
+  };
+}
+const releaseLoads = new Map<string, number>();
 
 /** Albums by the artist's channel (first page only); empty when the artist isn't resolved. */
 export function albumsLoader(artist: string): FeedLoader<MusicItem, never> {

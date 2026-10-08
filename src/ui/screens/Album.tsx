@@ -36,7 +36,7 @@ export function AlbumPage({ album }: { album: AlbumRef }) {
     MUSIC_TRACK_OPTS,
   );
   const meta: AlbumMeta = snap.meta ?? album;
-  const kindLabel = album.kind === 'album' ? 'Album' : 'Playlist';
+  const kindLabel = album.label ?? (album.kind === 'album' ? 'Album' : 'Playlist');
   const tracks = snap.items;
   useSearchContext({ label: meta.title, tracks: () => tracks });
 

@@ -1,6 +1,6 @@
 import { artistKey } from '../../data/artists';
 import type { Track } from '../../data/model';
-import type { MusicItem } from '../../data/ytmusic';
+import { SHELF_LABEL, SHELF_ORDER, shelfToken, type MusicItem, type ReleaseKind } from '../../data/ytmusic';
 import { player } from '../../player';
 import { catalog } from '../../store/catalog';
 import { displayArtist, jukeboxTracksBy } from '../../store/artists';
@@ -11,7 +11,17 @@ import { openArtist, useSearchContext } from '../nav';
 import { Tracks } from '../components/TrackList';
 import { SkeletonRows } from '../components/TrackRow';
 import { Screen } from '../components/Screen';
-import { AlbumShelf, GlobalError, LoadMore, MUSIC_ITEM_OPTS, MUSIC_TRACK_OPTS, albumsLoader, moreByLoader } from '../components/Music';
+import {
+  AlbumShelf,
+  GlobalError,
+  LoadMore,
+  MUSIC_ITEM_OPTS,
+  MUSIC_TRACK_OPTS,
+  ReleaseShelf,
+  albumsLoader,
+  artistPageLoader,
+  moreByLoader,
+} from '../components/Music';
 import { useFeed } from '../usePaged';
 
 export async function playAll(tracks: Track[], shuffle: boolean): Promise<void> {
@@ -47,6 +57,14 @@ function ShelfSkeleton() {
   );
 }
 
+/** Section test ids per shelf. */
+const SHELF_TESTID: Record<ReleaseKind, string> = { album: 'artist-albums', live: 'artist-live', ep: 'artist-eps', single: 'artist-singles' };
+
+/**
+ * Artist page, in order: Shared on the Jukebox; then from the artist's own page Top
+ * songs, Albums, Live albums, EPs and Singles (empty shelves hidden). When the artist
+ * page can't be read, the channel-filtered "More by" and Albums from search instead.
+ */
 export function ArtistPage({ name: raw }: { name: string }) {
   const name = displayArtist(raw);
   const key = artistKey(name);
@@ -56,10 +74,9 @@ export function ArtistPage({ name: raw }: { name: string }) {
   useSearchContext({ label: name, tracks: () => jukeboxTracksBy(name) });
   const catalogReady = catalog.tracks.value.length > 0;
 
-  const more = useFeed(`moreby:${key}`, moreByLoader(name), MUSIC_TRACK_OPTS);
-  const albums = useFeed<MusicItem, never>(`albums:${key}`, albumsLoader(name), MUSIC_ITEM_OPTS);
-  const shared = new Set(jukebox.map((t) => t.ytId));
-  const moreTracks = more.snap.items.filter((t) => !shared.has(t.ytId));
+  const page = useFeed(`artistpage:${key}`, artistPageLoader(name), MUSIC_TRACK_OPTS);
+  const meta = page.snap.meta;
+  const failed = page.snap.status === 'error';
 
   return (
     <Screen
@@ -102,6 +119,66 @@ export function ArtistPage({ name: raw }: { name: string }) {
         )}
       </section>
 
+      {failed ? (
+        <SearchSections name={name} />
+      ) : page.snap.status === 'loading' ? (
+        <div data-testid="artist-page-loading">
+          <section>
+            <div class="section-head">
+              <h2 class="section-title">Top songs</h2>
+            </div>
+            <SkeletonRows n={4} />
+          </section>
+          <section>
+            <div class="section-head">
+              <h2 class="section-title">Albums</h2>
+            </div>
+            <ShelfSkeleton />
+          </section>
+        </div>
+      ) : meta?.resolved === false ? null : (
+        <>
+          {page.snap.items.length > 0 && (
+            <section data-testid="artist-top">
+              <div class="section-head">
+                <h2 class="section-title">Top songs</h2>
+              </div>
+              <PlayShuffle tracks={page.snap.items} testid="artist-top" />
+              <Tracks tracks={page.snap.items} />
+              {page.snap.hasMore && (
+                <LoadMore busy={page.snap.loadingMore} error={!!page.snap.error} onClick={() => page.feed.loadMore()} testid="top-load-more" />
+              )}
+            </section>
+          )}
+          {meta &&
+            SHELF_ORDER.map((kind) => (
+              <ReleaseShelf
+                key={kind}
+                kind={kind}
+                title={SHELF_LABEL[kind]}
+                releases={meta.releases[kind]}
+                artist={name}
+                token={shelfToken(kind, meta.more)}
+                channelId={meta.channelId}
+                testid={SHELF_TESTID[kind]}
+              />
+            ))}
+        </>
+      )}
+    </Screen>
+  );
+}
+
+/** Fallback when the artist page can't be read: "More by" and Albums from channel-filtered search. */
+function SearchSections({ name }: { name: string }) {
+  const key = artistKey(name);
+  const jukebox = jukeboxTracksBy(name);
+  const more = useFeed(`moreby:${key}`, moreByLoader(name), MUSIC_TRACK_OPTS);
+  const albums = useFeed<MusicItem, never>(`albums:${key}`, albumsLoader(name), MUSIC_ITEM_OPTS);
+  const shared = new Set(jukebox.map((t) => t.ytId));
+  const moreTracks = more.snap.items.filter((t) => !shared.has(t.ytId));
+  return (
+    <>
       {more.snap.meta?.resolved === false ? null : (
         <section data-testid="artist-more">
           <div class="section-head">
@@ -137,6 +214,6 @@ export function ArtistPage({ name: raw }: { name: string }) {
           <p class="section-note dim">No albums found.</p>
         )}
       </section>
-    </Screen>
+    </>
   );
 }

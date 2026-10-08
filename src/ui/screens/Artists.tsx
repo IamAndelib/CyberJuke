@@ -3,15 +3,18 @@ import { catalog } from '../../store/catalog';
 import { artistIndex, displayArtist } from '../../store/artists';
 import { favoriteArtists, toggleFavoriteArtist } from '../../store/library';
 import { Icon } from '../icons';
-import { openArtist } from '../nav';
+import { openArtist, openReleases } from '../nav';
 import { ErrorState } from '../components/TrackList';
 import { Screen } from '../components/Screen';
 import { AZHead, GridSortRail } from '../components/GridSort';
 import { groupAZ } from '../azSections';
 import { artistsSort } from '../../store/prefs';
 import { ArtistPage } from './Artist';
+import { ReleasesPage } from './Releases';
 
 export function Artists() {
+  const rel = openReleases.value;
+  if (openArtist.value && rel) return <ReleasesPage key={rel.token + '|' + rel.kind} release={rel} />;
   if (openArtist.value) return <ArtistPage name={openArtist.value} />;
   return <ArtistGrid />;
 }

@@ -18,9 +18,23 @@ export interface AlbumRef {
   subtitle: string;
   thumbnailUrl?: string;
   kind: 'album' | 'playlist';
+  /** What to call it instead of "Album" (Single, EP, Live album). */
+  label?: string;
 }
 /** Album/playlist page, shown over the current tab (and over search). */
 export const openAlbum = signal<AlbumRef | null>(null);
+
+/** "See all" of one discography shelf on an artist page. */
+export interface ReleasesRef {
+  artist: string;
+  /** The artist's channel: a Retry reloads their page for fresh tokens. */
+  channelId: string;
+  kind: 'album' | 'ep' | 'single' | 'live';
+  /** Opaque, and may expire native-side (then the grid offers Retry). */
+  token: string;
+}
+/** The full-grid page of one shelf, over the artist page on the Artists tab. */
+export const openReleases = signal<ReleasesRef | null>(null);
 
 export const nowPlayingOpen = signal(false);
 /** Search overlay (covers the tab content; mini player and tab bar stay visible). */
@@ -95,6 +109,7 @@ function closeOverlays(): void {
 export function openArtistPage(name: string): void {
   closeOverlays();
   tab.value = 'artists';
+  openReleases.value = null;
   openArtist.value = name;
 }
 
@@ -144,6 +159,10 @@ export function goBack(switchTab = true): boolean {
   }
   if (tab.value === 'genres' && openGenre.value) {
     openGenre.value = null;
+    return true;
+  }
+  if (tab.value === 'artists' && openReleases.value) {
+    openReleases.value = null;
     return true;
   }
   if (tab.value === 'artists' && openArtist.value) {

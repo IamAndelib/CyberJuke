@@ -146,3 +146,7 @@
 .release-grid .art-md {
   width: 100%;
 }
+/* Release shelves sit closer together (rows already reserve two title lines). */
+section[data-kind] > .shelf {
+  padding-bottom: 4px;
+}

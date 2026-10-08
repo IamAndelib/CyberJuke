@@ -82,6 +82,8 @@ describe('client', () => {
       playlist: vi.fn(async () => ({ title: 'Album', subtitle: '', items: [] })),
       artist: vi.fn(async () => ({ items: [] })),
       lyrics: vi.fn(async () => ({ found: false })),
+      artistPage: vi.fn(async () => ({ name: 'A', topSongs: [], releases: [] })),
+      artistReleases: vi.fn(async () => ({ releases: [] })),
     };
     const c = m.createMusicClient({ plugin: () => plugin, now: () => now });
     return { c, plugin, tick: (ms: number) => (now += ms) };
@@ -121,6 +123,8 @@ describe('client', () => {
       playlist: vi.fn(),
       artist: vi.fn(),
       lyrics: vi.fn(),
+      artistPage: vi.fn(),
+      artistReleases: vi.fn(),
     };
     const c = m.createMusicClient({ plugin: () => plugin });
     await expect(c.search('x', 'songs')).rejects.toMatchObject({ code: 'BOT_CHECK' });
@@ -178,5 +182,84 @@ describe('exact artist identity', () => {
     expect(await c.artist('Queen')).toHaveLength(1);
     await c.artist(' queen ');
     expect(plugin.artist).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('discography shelves', () => {
+  const r = (kind: import('./ytmusic').ReleaseKind, title: string, url = title): import('./ytmusic').Release => ({ kind, title, url });
+
+  it('classifies albums, EPs, singles and live albums, with tricky titles', () => {
+    const cases: [import('./ytmusic').ReleaseKind, string, import('./ytmusic').ReleaseKind][] = [
+      ['album', 'A Night at the Opera', 'album'],
+      ['album', 'Live Killers', 'live'],
+      ['album', 'Live at Wembley ’86', 'live'],
+      ['album', 'MTV Unplugged in New York', 'live'],
+      ['album', 'Queen Rock Montreal (Live)', 'live'],
+      ['album', 'In Concert 1972', 'live'],
+      ['album', 'Recorded Live From the Roxy', 'live'],
+      ['album', 'LIVE', 'live'],
+      // Not live: "live" inside a word.
+      ['album', 'Alive', 'album'],
+      ['album', 'Deliverance', 'album'],
+      ['album', 'Olive Grove', 'album'],
+      ['album', 'Livestock', 'album'],
+      ['album', 'Oliver’s Army', 'album'],
+      // Native kinds are kept; a live EP is a live album, a live single stays a single.
+      ['ep', 'Five Live Yardbirds EP', 'live'],
+      ['ep', 'Under Pressure EP', 'ep'],
+      ['single', 'Bohemian Rhapsody (Live Aid)', 'single'],
+      ['single', 'Live Forever', 'single'],
+      ['live', 'Wembley Stadium', 'live'],
+      // Unknown kinds land on Albums.
+      ['mixtape' as never, 'Tape One', 'album'],
+    ];
+    for (const [kind, title, want] of cases) expect([title, m.releaseShelf(r(kind, title))]).toEqual([title, want]);
+  });
+
+  it('groups releases by shelf in order, each once by URL', () => {
+    const g = m.groupReleases([
+      r('album', 'A', 'u1'),
+      r('single', 'S', 'u2'),
+      r('album', 'Live at X', 'u3'),
+      r('ep', 'E', 'u4'),
+      r('album', 'A again', 'u1'),
+      r('album', 'B', 'u5'),
+      { kind: 'album', title: 'no url', url: '' },
+    ]);
+    expect(Object.fromEntries(Object.entries(g).map(([k, v]) => [k, v.map((x) => x.title)]))).toEqual({
+      album: ['A', 'B'],
+      live: ['Live at X'],
+      ep: ['E'],
+      single: ['S'],
+    });
+    expect(m.SHELF_ORDER).toEqual(['album', 'live', 'ep', 'single']);
+    expect(Object.values(m.SHELF_LABEL)).toEqual(['Albums', 'Live albums', 'EPs', 'Singles']);
+  });
+
+  it('"See all" tokens: Albums and Live albums share albums, EPs and Singles share singles', () => {
+    const more = { albums: 'A', singles: 'S' };
+    expect(m.shelfToken('album', more)).toBe('A');
+    expect(m.shelfToken('live', more)).toBe('A');
+    expect(m.shelfToken('ep', more)).toBe('S');
+    expect(m.shelfToken('single', more)).toBe('S');
+    expect(m.shelfToken('album', undefined)).toBeUndefined();
+  });
+
+  it('caches artistPage and artistReleases; fresh skips the cache', async () => {
+    const plugin = {
+      artistPage: vi.fn(async () => ({ name: '', topSongs: undefined as never, releases: undefined as never })),
+      artistReleases: vi.fn(async () => ({ releases: [r('album', 'A')] })),
+    } as unknown as Plugin;
+    const c = m.createMusicClient({ plugin: () => plugin });
+    const p = await c.artistPage('UC1');
+    expect(p.topSongs).toEqual([]);
+    expect(p.releases).toEqual([]);
+    await c.artistPage('UC1');
+    expect(plugin.artistPage).toHaveBeenCalledTimes(1);
+    await c.artistPage('UC1', true);
+    expect(plugin.artistPage).toHaveBeenCalledTimes(2);
+    expect(await c.artistReleases('tok')).toHaveLength(1);
+    await c.artistReleases('tok');
+    expect(plugin.artistReleases).toHaveBeenCalledTimes(1);
   });
 });
