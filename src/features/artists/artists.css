@@ -41,7 +41,8 @@
 }
 .artist-name {
   font-family: var(--font-display);
-  font-size: clamp(14px, 4.2vw, 16px);
+  font-size: clamp(13px, 4.2vw, 16px);
+  font-size: clamp(13px, var(--tile-fit), 16px);
   line-height: 1.15;
   overflow-wrap: break-word;
   hyphens: auto;

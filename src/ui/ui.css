@@ -493,6 +493,12 @@
 .genre-cell {
   position: relative;
   min-width: 0;
+  /* A tile's name is sized to the tile, so a 12-letter word ("experimental") fits on one
+     line beside the star: the text box is the tile less 56px (padding, star, borders), and
+     a letter of the display font is about 0.67em wide. Older WebViews without container
+     units keep the vw size before it. */
+  container-type: inline-size;
+  --tile-fit: calc((100cqi - 56px) / 8);
 }
 .genre-tile {
   position: relative;
