@@ -69,7 +69,7 @@
 .ntp-dock {
   position: sticky;
   top: calc(var(--safe-top) + 72px);
-  z-index: 4;
+  z-index: var(--z-pill);
   height: 0;
   display: flex;
   justify-content: center;

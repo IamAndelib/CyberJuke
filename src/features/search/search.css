@@ -11,7 +11,7 @@
   bottom: calc(12px + var(--fab-shadow));
   width: var(--fab);
   height: var(--fab);
-  z-index: 10;
+  z-index: var(--z-fab);
   transition:
     transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
     visibility 0s;
@@ -66,7 +66,7 @@
 .search {
   position: absolute;
   inset: 0;
-  z-index: 8;
+  z-index: var(--z-search);
   background: var(--color-bg);
 }
 .search-bar {

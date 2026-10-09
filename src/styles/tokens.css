@@ -20,4 +20,16 @@
   --ease-in: cubic-bezier(0.05, 0.7, 0.1, 1);
   --ease-out-ms: 200ms;
   --ease-out: cubic-bezier(0.3, 0, 0.8, 0.15);
+
+  /* ---- Layers, bottom to top -------------------------------------------------------------
+     Inside a component, 0–3 only order its own parts (art texture, a frame over its
+     shadow) and stay plain numbers. */
+  --z-pill: 4; /* the new-tracks pill, under the top bar */
+  --z-topbar: 5;
+  --z-dock: 6; /* back-to-top, the overlay scrollbar */
+  --z-search: 8; /* the search screen over its tab */
+  --z-fab: 10; /* the search button, over pages */
+  --z-now-playing: 20;
+  --z-sheet: 30;
+  --z-toast: 40;
 }
