@@ -1,17 +1,14 @@
 package io.github.iamandelib.cyberjuke.bridge
 
-import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -57,10 +54,10 @@ import kotlin.math.roundToInt
  * Capacitor bridge to PlaybackService. Contract (TS side):
  *   setQueue, queueNext, removeItem, moveItem, play, pause, seekTo, skipToNext,
  *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, getState,
- *   getLaunchOptions, getBlockState, setNetworkPrefs, retryNow, getNetStatus,
- *   setGestureExclusion, addAutoplay,
- *   setAutoplay, restore, removeIds; events 'state', 'trackError', 'blocked', 'unblocked', 'extractorBroken',
- *   'queueLow', 'tracks'.
+ *   getAppInfo, getLaunchOptions, getBlockState, setNetworkPrefs, retryNow, getNetStatus,
+ *   setGestureExclusion, addAutoplay, setAutoplay, restore, removeIds; events 'state',
+ *   'trackError', 'blocked', 'unblocked', 'extractorBroken', 'queueLow', 'tracks',
+ *   'openNowPlaying'.
  *
  * - setQueue keeps the tracks queued with queueNext next (P1) and starts autoplay over from
  *   the started track (a Global one gets its radio natively, refilled in the service).
@@ -425,7 +422,6 @@ class JukePlayerPlugin : Plugin() {
                 } else {
                     it.playWhenReady = playWhenReady
                     it.prepare()
-                    if (playWhenReady) maybeRequestNotificationPermission()
                 }
                 call.resolve()
             }
@@ -611,7 +607,6 @@ class JukePlayerPlugin : Plugin() {
                     else -> Unit
                 }
                 c.play()
-                maybeRequestNotificationPermission()
             }
             call.resolve()
         }
@@ -767,7 +762,7 @@ class JukePlayerPlugin : Plugin() {
     }
 
     /**
-     * `setNetworkPrefs({ ipv4: 'auto' | 'always' | 'off' })` (or the pre-1.0 `{ preferIpv4 }`):
+     * `setNetworkPrefs({ ipv4: 'auto' | 'always' | 'off' })`:
      * applies to the shared OkHttp client (NewPipe and streaming) right away and is persisted
      * natively, so it also applies at the next service start before the web side loads. A
      * change lifts a running back-off: the next request goes out the new way.
@@ -778,11 +773,7 @@ class JukePlayerPlugin : Plugin() {
             "auto" -> Ipv4Mode.AUTO
             "always" -> Ipv4Mode.ALWAYS
             "off" -> Ipv4Mode.OFF
-            null -> when (call.getBoolean("preferIpv4")) {
-                true -> Ipv4Mode.ALWAYS
-                false -> Ipv4Mode.AUTO
-                null -> return call.reject("ipv4 is required")
-            }
+            null -> return call.reject("ipv4 is required")
             else -> return call.reject("ipv4 must be 'auto', 'always' or 'off'")
         }
         val changed = mode != NetPrefs.mode
@@ -999,26 +990,6 @@ class JukePlayerPlugin : Plugin() {
 
     private fun longArg(call: PluginCall, key: String): Long? = numArg(call, key)?.toLong()
 
-    /** Ask once (API 33+) the first time playback starts; never blocks playback. */
-    private fun maybeRequestNotificationPermission() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        val ctx: Context = getContext() ?: return
-        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            return
-        }
-        val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (prefs.getBoolean(PREF_NOTIF_ASKED, false)) return
-        val hostActivity = getActivity() ?: return
-        prefs.edit().putBoolean(PREF_NOTIF_ASKED, true).apply()
-        ActivityCompat.requestPermissions(
-            hostActivity,
-            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-            REQUEST_NOTIFICATIONS,
-        )
-    }
-
     companion object {
         private const val TAG = "CyberJukePlugin"
         private const val TICK_TAG = "CyberJukeTick"
@@ -1027,8 +998,5 @@ class JukePlayerPlugin : Plugin() {
         /** Android ignores gesture exclusion beyond 200dp per edge. */
         private const val MAX_EXCLUSION_DP = 200f
         private const val MAX_ANNOUNCED = 5000
-        private const val PREFS = "cyberjuke_player"
-        private const val PREF_NOTIF_ASKED = "notification_permission_asked"
-        private const val REQUEST_NOTIFICATIONS = 0x4A55 // arbitrary, not a Capacitor plugin code
     }
 }

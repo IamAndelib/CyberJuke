@@ -5,13 +5,11 @@ import io.github.iamandelib.cyberjuke.net.Ipv4Mode
 import io.github.iamandelib.cyberjuke.net.NetPrefs
 
 /**
- * Persists [NetPrefs] (SharedPreferences "cyberjuke_player"): the IPv4 setting and the AUTO
+ * Persists [NetPrefs] (SharedPreferences [PlayerPrefsStore.PREFS]): the IPv4 setting and the AUTO
  * memory (which kinds of network were switched to IPv4, until when). Loaded once, at service
  * or plugin start, before anything touches the network.
  */
 internal object NetPrefsStore {
-    private const val PREFS = "cyberjuke_player"
-
     /** Before 1.0.0 the setting was an on/off "Prefer IPv4": on is ALWAYS, off is the new AUTO. */
     private const val KEY_PREFER_IPV4 = "prefer_ipv4"
     private const val KEY_MODE = "ipv4_mode"
@@ -22,7 +20,7 @@ internal object NetPrefsStore {
     @Synchronized
     fun load(context: Context) {
         if (loaded) return
-        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val prefs = context.applicationContext.getSharedPreferences(PlayerPrefsStore.PREFS, Context.MODE_PRIVATE)
         val mode = prefs.getString(KEY_MODE, null)?.let { runCatching { Ipv4Mode.valueOf(it) }.getOrNull() }
             ?: if (prefs.getBoolean(KEY_PREFER_IPV4, false)) Ipv4Mode.ALWAYS else Ipv4Mode.AUTO
         if (NetPrefs.load(mode, NetPrefs.decodeMemory(prefs.getString(KEY_AUTO, null)))) StreamResolver.clear()

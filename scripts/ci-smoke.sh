@@ -3,7 +3,7 @@
 #
 # Usage: scripts/ci-smoke.sh <apk file or directory containing it> [output dir]
 #
-# 1. installs the APK and grants POST_NOTIFICATIONS
+# 1. installs the APK (no POST_NOTIFICATIONS: the media notification doesn't need it)
 # 2. launches MainActivity with `--es autoplay latest` (web UI plays the latest track)
 # 3. waits up to SMOKE_TIMEOUT seconds for the media session to report PLAYING (state=3)
 # 4. screenshots, presses HOME, waits 30s, checks it is still PLAYING, screenshots the
@@ -172,7 +172,6 @@ log "Installing $APK"
 if ! adb install -r -g "$APK"; then
   finish 1 "adb install failed for $APK"
 fi
-adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
 
 wait_playing() { # $1 = timeout seconds; returns 0 once PLAYING
   local t=$1 i

@@ -16,6 +16,9 @@ internal object TrackErrorPolicy {
 
     const val MAX_CONSECUTIVE_FAILURES = 5
 
+    /** Outage pauses on one item in a row (nothing played between) that still resume by themselves. */
+    const val MAX_OUTAGE_RESUMES = 3
+
     data class Facts(
         /** From the resolver ([ResolveException.kind]) or null for a stream (HTTP) failure. */
         val kind: FailureKind?,
@@ -41,6 +44,8 @@ internal object TrackErrorPolicy {
         val hasNext: Boolean = true,
         /** Per-video failures in a row before this one. */
         val consecutiveFailures: Int = 0,
+        /** Outage pauses ([Action.Pause] with resume) in a row before this one, nothing played between. */
+        val outagePauses: Int = 0,
     )
 
     sealed class Action {
@@ -56,8 +61,12 @@ internal object TrackErrorPolicy {
         /** Refused over IPv6 with the IPv4 setting on Auto: switch to IPv4, then [ReResolve]. */
         object SwitchToIpv4 : Action()
 
-        /** Pause on the item without skipping (offline, or [broken] extractor). */
-        data class Pause(val broken: Boolean) : Action()
+        /**
+         * Pause on the item without skipping. [resume]: an outage, so it plays on by itself once
+         * the network is back (not for a broken extractor, nor an outage that keeps coming back).
+         * [freshLink]: the stream's server failed, so that resume must not reuse its URL.
+         */
+        data class Pause(val resume: Boolean, val freshLink: Boolean = false) : Action()
 
         /** Per-video failure: skip the current item (or drop an upcoming one). */
         object Skip : Action()
@@ -73,8 +82,8 @@ internal object TrackErrorPolicy {
         if (f.blocked) return Action.WaitBlocked
         f.kind?.blockReason?.let { return Action.Block(it) }
         when (f.kind) {
-            FailureKind.NETWORK -> return Action.Pause(broken = false)
-            FailureKind.BROKEN -> return Action.Pause(broken = true)
+            FailureKind.NETWORK -> return outage(f)
+            FailureKind.BROKEN -> return Action.Pause(resume = false)
             else -> Unit
         }
         f.httpCode?.let { code ->
@@ -93,15 +102,19 @@ internal object TrackErrorPolicy {
                 // fresh link, even a second time (the network changed again meanwhile).
                 (code == 403 || code == 410) && (stale || !f.alreadyReResolved) -> return Action.ReResolve
                 fresh403 -> return Action.Block(BlockReason.STREAM_FORBIDDEN)
-                code >= 500 -> return Action.Pause(broken = false)
+                code >= 500 -> return outage(f, freshLink = true)
                 else -> Unit
             }
         }
-        if (f.kind == null && f.httpCode == null && f.ioNetwork) return Action.Pause(broken = false)
+        if (f.kind == null && f.httpCode == null && f.ioNetwork) return outage(f)
         return perVideo(f)
     }
 
-    private fun perVideo(f: Facts): Action = when {
+    private fun outage(f: Facts, freshLink: Boolean = false) =
+        Action.Pause(resume = f.outagePauses + 1 < MAX_OUTAGE_RESUMES, freshLink = freshLink)
+
+    /** Skip, PauseAtEnd or Stop: what a real per-video failure does. */
+    fun perVideo(f: Facts): Action = when {
         f.consecutiveFailures + 1 >= MAX_CONSECUTIVE_FAILURES -> Action.Stop
         !f.isCurrent || f.hasNext -> Action.Skip
         else -> Action.PauseAtEnd

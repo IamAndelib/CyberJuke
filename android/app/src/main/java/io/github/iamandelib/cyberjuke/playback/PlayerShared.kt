@@ -34,14 +34,15 @@ internal object JukeUris {
 /**
  * Per-track data the web gave us that other apps must not see (S1): the poster (`by`) and the
  * post URL. MediaMetadata extras are readable by every connected controller, so these live
- * here, keyed by mediaId, instead. Bounded LRU; nothing reads it back yet (the web keeps its
- * own copy), but native features that need them should use [get].
+ * here, keyed by mediaId, instead. Read back for the last session and the `tracks` event
+ * (membersOnly must survive both, or a sign-out could miss a restored members-only track).
  */
 internal object TrackExtras {
     /** [restored]: from the last session, not (yet) from the page, which may not know it. */
     data class Extra(val by: String?, val postUrl: String?, val membersOnly: Boolean = false, val restored: Boolean = false)
 
-    private const val MAX = 2000
+    /** A bounded LRU, far above what one session holds (a 2000-track list, plus queued and autoplay tracks). */
+    private const val MAX = 20_000
     private val map = object : LinkedHashMap<String, Extra>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Extra>?) = size > MAX
     }

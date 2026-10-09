@@ -1,4 +1,4 @@
-package io.github.iamandelib.cyberjuke.playback
+package io.github.iamandelib.cyberjuke
 
 /** The first [T] in this throwable's cause chain (itself included), at most 16 deep. */
 internal inline fun <reified T : Throwable> Throwable.findCause(): T? {

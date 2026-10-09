@@ -4,11 +4,12 @@ import android.content.Context
 
 /**
  * The page's player settings (Autoplay, audio quality), kept here too (SharedPreferences
- * "cyberjuke_player", beside [NetPrefsStore]): after Android stopped the app, a media key or
- * Bluetooth resumes the last session before the page has loaded to send them.
+ * [PREFS], beside [NetPrefsStore]) and read when the service starts: it can start, and play,
+ * before the page has loaded to send them.
  */
 internal object PlayerPrefsStore {
-    private const val PREFS = "cyberjuke_player"
+    /** The native side's SharedPreferences file (also [NetPrefsStore]'s). */
+    const val PREFS = "cyberjuke_player"
     private const val KEY_AUTOPLAY = "autoplay"
     private const val KEY_QUALITY = "quality"
 

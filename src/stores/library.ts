@@ -1,7 +1,9 @@
 /**
  * User library: liked tracks, recently played, favorite genres and settings.
- * Small keys live in Preferences (localStorage on the web); history is a file,
- * `cyberjuke/history.json` (see core/storage), migrated once from Preferences.
+ * Small keys live in Preferences (localStorage on the web). Liked and history are files,
+ * `cyberjuke/liked.json` and `cyberjuke/history.json` (see core/storage), migrated once from
+ * Preferences: they can hold members-only tracks, and that folder is kept out of backups
+ * (android/app/src/main/res/xml/data_extraction_rules.xml), unlike Preferences.
  */
 import { computed, signal } from '@preact/signals';
 import type { Track } from '../data/model';
@@ -59,7 +61,8 @@ export const IPV4_MODES: readonly Ipv4Mode[] = ['auto', 'always', 'off'];
 
 const DEFAULT_SETTINGS: Settings = { theme: 'dark', showNsfw: false, quality: 'high', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: true };
 
-const K_LIKED = 'liked';
+/** The old Preferences key of Liked, migrated into its file. */
+const LIKED_LEGACY_KEYS = ['liked'] as const;
 /** Old Preferences keys of history, migrated into the history file: timed entries, then the untimed list. */
 const HISTORY_LEGACY_KEYS = ['history', 'recent'] as const;
 const K_SETTINGS = 'settings';
@@ -93,11 +96,13 @@ export const likedIds = computed(() => new Set(liked.value.map((t) => t.id)));
 
 let store: KV = kv;
 let historyFile: JsonFile<unknown> = jsonFile('data', 'history', (raw) => raw, { legacyKeys: HISTORY_LEGACY_KEYS });
+let likedFile: JsonFile<unknown> = jsonFile('data', 'liked', (raw) => raw, { legacyKeys: LIKED_LEGACY_KEYS });
 
 /** Tests: use other storage. */
-export function setLibraryStorage(s: KV, history: JsonFile<unknown>): void {
+export function setLibraryStorage(s: KV, history: JsonFile<unknown>, likes: JsonFile<unknown> = likedFile): void {
   store = s;
   historyFile = history;
+  likedFile = likes;
 }
 
 function write(key: string, value: unknown): void {
@@ -106,6 +111,11 @@ function write(key: string, value: unknown): void {
 
 /** loadLibrary ran: history may be written, and later loads replace the library outright. */
 let loadedOnce = false;
+
+/** Like saveHistory: not before the file was first read (that load replaces Liked anyway). */
+function saveLiked(tracks: Track[]): void {
+  if (loadedOnce) void likedFile.save(tracks);
+}
 
 function saveHistory(entries: HistoryEntry[]): void {
   // Before the file was first read, a write would replace the history in it: loadLibrary
@@ -116,7 +126,7 @@ function saveHistory(entries: HistoryEntry[]): void {
 
 export async function loadLibrary(): Promise<void> {
   const [l, h, s, g, a] = await Promise.all([
-    readJson<unknown>(store, K_LIKED, []),
+    likedFile.load().catch(() => null),
     historyFile.load().catch(() => null),
     readJson<Partial<Settings>>(store, K_SETTINGS, {}),
     readJson<unknown>(store, K_FAV_GENRES, []),
@@ -299,7 +309,7 @@ export function isLiked(id: string): boolean {
 export function toggleLike(track: Track): boolean {
   const was = isLiked(track.id);
   liked.value = was ? liked.value.filter((t) => t.id !== track.id) : [track, ...liked.value];
-  write(K_LIKED, liked.value);
+  saveLiked(liked.value);
   return !was;
 }
 
@@ -309,7 +319,7 @@ export function unlike(id: string): Removed<Track> | null {
   if (index < 0) return null;
   const r = removedFrom(liked.value, index, trackId);
   liked.value = liked.value.filter((t) => t.id !== id);
-  write(K_LIKED, liked.value);
+  saveLiked(liked.value);
   return r;
 }
 
@@ -317,7 +327,7 @@ export function unlike(id: string): Removed<Track> | null {
 export function restoreLike(r: Removed<Track>): void {
   if (isLiked(r.item.id) || (r.item.membersOnly && !auth.signedIn())) return;
   liked.value = putBack(liked.value, r, trackId);
-  write(K_LIKED, liked.value);
+  saveLiked(liked.value);
 }
 
 export function addRecent(track: Track, now = Date.now()): void {
@@ -354,7 +364,7 @@ export function restoreHistory(old: HistoryEntry[], now = Date.now()): void {
 export function dropMembersOnly(): void {
   if (liked.value.some((t) => t.membersOnly)) {
     liked.value = liked.value.filter((t) => !t.membersOnly);
-    write(K_LIKED, liked.value);
+    saveLiked(liked.value);
   }
   if (history.value.some((e) => e.track.membersOnly)) {
     history.value = history.value.filter((e) => !e.track.membersOnly);

@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.yt
 
+import io.github.iamandelib.cyberjuke.findCause
 import io.github.iamandelib.cyberjuke.net.BlockedException
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import org.schabi.newpipe.extractor.MediaFormat
@@ -217,11 +218,11 @@ internal object YtCompat {
         // YouTube swaps in another video's player response when it rate-limits an IP (the
         // extractor's own note on isPlayerResponseNotValid): a limit, not a broken parser.
         is ExtractionException -> when {
-            hasIoCause(t) -> FailureKind.NETWORK
+            t.cause?.findCause<IOException>() != null -> FailureKind.NETWORK
             isSwappedPlayerResponse(t) -> FailureKind.RATE_LIMIT
             else -> FailureKind.BROKEN
         }
-        else -> if (hasIoCause(t)) FailureKind.NETWORK else FailureKind.OTHER
+        else -> if (t.cause?.findCause<IOException>() != null) FailureKind.NETWORK else FailureKind.OTHER
     }
 
     private fun isSwappedPlayerResponse(t: Throwable): Boolean =
@@ -229,17 +230,6 @@ internal object YtCompat {
 
     private fun isTryAgainLater(t: Throwable): Boolean =
         t.message?.contains("try again later", ignoreCase = true) == true
-
-    private fun hasIoCause(t: Throwable): Boolean {
-        var c: Throwable? = t.cause
-        var depth = 0
-        while (c != null && depth < 8) {
-            if (c is IOException) return true
-            c = c.cause
-            depth++
-        }
-        return false
-    }
 }
 
 /**

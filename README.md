@@ -57,7 +57,7 @@ Eight Cyberspace themes, switchable any time in Settings:
 2. Optional: verify it (see [Verifying a release APK](#verifying-a-release-apk)).
 3. Open the APK on your phone and allow installing from this source when Android asks.
 
-Requires Android 7.0 (API 24) or newer. Android 13+ asks for notification permission the first time you play something. The permission is only used for the playback controls.
+Requires Android 7.0 (API 24) or newer. It asks for no permissions: the playback controls in the notification don't need one.
 
 CyberJuke is not on the Play Store and won't be (see [YouTube](#youtube)). It is being prepared for [F-Droid](#f-droid).
 
@@ -104,7 +104,8 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 
 | What | Where |
 |---|---|
-| Liked tracks, recently played, settings, favorite genres and artists, recent searches | App data (Capacitor Preferences and app files). Android may include these in your own Google backup; members-only tracks are removed whenever the app starts signed out, so a restored backup never brings them back. |
+| Liked tracks and recently played | App files, excluded from backups (they can hold members-only tracks); signing out removes members-only tracks from them |
+| Settings, favorite genres and artists, recent searches | App data (Capacitor Preferences). Android may include these in your own Google backup |
 | The cached Jukebox catalog and lyrics | App data and cache; cleared on sign-out |
 | What was playing last (the queue and where in it), so the app reopens on it | App files, excluded from backups; signing out removes members-only tracks from it |
 | Login token, user id and @username (only if you sign in) | Encrypted with an Android Keystore key; excluded from Android cloud and device-transfer backups |

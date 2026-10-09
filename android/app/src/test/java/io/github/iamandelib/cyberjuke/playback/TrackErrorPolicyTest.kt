@@ -77,12 +77,23 @@ class TrackErrorPolicyTest {
     @Test
     fun brokenExtractorAndNetworkPauseWithoutSkipping() {
         assertEquals(FailureKind.BROKEN, YtCompat.classify(ParsingException("Could not get name")))
-        assertEquals(Action.Pause(broken = true), decideFor(ParsingException("Could not get name")))
+        assertEquals(Action.Pause(resume = false), decideFor(ParsingException("Could not get name")))
         assertEquals(FailureKind.NETWORK, YtCompat.classify(SocketTimeoutException()))
         assertEquals(FailureKind.NETWORK, YtCompat.classify(ExtractionException("wrapped", IOException("reset"))))
-        assertEquals(Action.Pause(broken = false), decideFor(IOException("offline")))
-        assertEquals(Action.Pause(broken = false), TrackErrorPolicy.decide(Facts(kind = null, ioNetwork = true)))
-        assertEquals(Action.Pause(broken = false), TrackErrorPolicy.decide(Facts(kind = null, httpCode = 503)))
+        assertEquals(Action.Pause(resume = true), decideFor(IOException("offline")))
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(Facts(kind = null, ioNetwork = true)))
+        // A server error: the resume asks for a fresh link (another server), not the dead URL.
+        assertEquals(Action.Pause(resume = true, freshLink = true), TrackErrorPolicy.decide(Facts(kind = null, httpCode = 503)))
+    }
+
+    @Test
+    fun anOutageThatKeepsFailingStopsResumingByItself() {
+        // Online again, failing again: a few tries, then it waits for Play (no endless loop).
+        val last = TrackErrorPolicy.MAX_OUTAGE_RESUMES - 1
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(Facts(kind = null, ioNetwork = true, outagePauses = last - 1)))
+        assertEquals(Action.Pause(resume = false), TrackErrorPolicy.decide(Facts(kind = null, ioNetwork = true, outagePauses = last)))
+        assertEquals(Action.Pause(resume = false, freshLink = true), TrackErrorPolicy.decide(Facts(kind = null, httpCode = 502, outagePauses = last)))
+        assertEquals(Action.Pause(resume = false), TrackErrorPolicy.decide(Facts(kind = FailureKind.NETWORK, outagePauses = last)))
     }
 
     @Test

@@ -17,6 +17,7 @@ const files = new Map<string, string>();
   removeItem: (k: string) => void files.delete(k),
 };
 const HISTORY_FILE = 'cyberjuke.file:data/cyberjuke/history.json';
+const LIKED_FILE = 'cyberjuke.file:data/cyberjuke/liked.json';
 
 const lib = await import('./library');
 const flush = () => new Promise((r) => setTimeout(r, 0));
@@ -168,6 +169,20 @@ describe('history in the library', () => {
     expect(lib.history.value.map((e) => e.track.id)).toEqual(['a', 'b', 'a']);
   });
 
+  it('keeps Liked in its file, out of Preferences (and so out of cloud backups), moved there once', async () => {
+    store.set('liked', JSON.stringify([tr('old')]));
+    await lib.loadLibrary();
+    expect(lib.liked.value.map((t) => t.id)).toEqual(['old']);
+    await flush();
+    expect(store.has('liked')).toBe(false);
+    lib.toggleLike(tr('new'));
+    await flush();
+    expect(store.has('liked')).toBe(false);
+    expect(JSON.parse(files.get(LIKED_FILE)!).map((t: { id: string }) => t.id)).toEqual(['new', 'old']);
+    await lib.loadLibrary();
+    expect(lib.liked.value.map((t) => t.id)).toEqual(['new', 'old']);
+  });
+
   it('drops members-only tracks from Liked and history', async () => {
     await lib.loadLibrary();
     lib.toggleLike(tr('a', { membersOnly: true }));
@@ -178,7 +193,7 @@ describe('history in the library', () => {
     expect(lib.liked.value.map((t) => t.id)).toEqual(['b']);
     expect(lib.recent.value.map((t) => t.id)).toEqual(['d']);
     await flush();
-    expect(JSON.parse(store.get('liked')!).map((t: { id: string }) => t.id)).toEqual(['b']);
+    expect(JSON.parse(files.get(LIKED_FILE)!).map((t: { id: string }) => t.id)).toEqual(['b']);
     expect(Object.keys(JSON.parse(files.get(HISTORY_FILE)!).tracks)).toEqual(['d']);
   });
 

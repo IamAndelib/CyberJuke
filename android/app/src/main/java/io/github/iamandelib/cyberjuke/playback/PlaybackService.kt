@@ -46,6 +46,7 @@ import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import io.github.iamandelib.cyberjuke.MainActivity
+import io.github.iamandelib.cyberjuke.findCause
 import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.BlockedException
 import io.github.iamandelib.cyberjuke.net.Http
@@ -67,6 +68,8 @@ class PlaybackService : MediaSessionService() {
 
     /** Per-video failures in a row without reaching STATE_READY; guards against skip loops. */
     private var consecutiveFailures = 0
+    /** Outage pauses in a row with nothing played between ([TrackErrorPolicy.Facts.outagePauses]). */
+    private var outagePauses = 0
 
     /** mediaIds already re-resolved once after an HTTP 403/410 (expired stream URL). */
     private val expiredRetried = HashSet<String>()
@@ -473,6 +476,7 @@ class PlaybackService : MediaSessionService() {
             }
             if (playbackState == Player.STATE_READY) {
                 consecutiveFailures = 0
+                outagePauses = 0
                 player?.currentMediaItem?.mediaId?.let { expiredRetried.remove(it) }
                 // No NetBlock.success() here: READY from a cached URL or buffered bytes proves
                 // nothing about YouTube; a successful extraction or InnerTube request does (M1).
@@ -655,6 +659,7 @@ class PlaybackService : MediaSessionService() {
 
     private fun resetFailures() {
         consecutiveFailures = 0
+        outagePauses = 0
         expiredRetried.clear()
     }
 
@@ -867,6 +872,7 @@ class PlaybackService : MediaSessionService() {
             isCurrent = index == p.currentMediaItemIndex,
             hasNext = p.hasNextMediaItem(),
             consecutiveFailures = consecutiveFailures,
+            outagePauses = outagePauses,
         )
         val message = resolve?.message
             ?: http?.let { "HTTP ${it.responseCode}: ${error.errorCodeName}" }
@@ -892,7 +898,7 @@ class PlaybackService : MediaSessionService() {
             }
             TrackErrorPolicy.Action.SwitchToIpv4 -> {
                 if (ytId == null) {
-                    perVideoFailure(p, index, trackId, ytId, message, error)
+                    perVideoFailure(p, index, trackId, ytId, message, error, TrackErrorPolicy.perVideo(facts))
                     return
                 }
                 // Refused over IPv6: IPv4 for this network from now on (drops cached URLs),
@@ -903,7 +909,7 @@ class PlaybackService : MediaSessionService() {
             }
             TrackErrorPolicy.Action.ReResolve -> {
                 if (ytId == null) {
-                    perVideoFailure(p, index, trackId, ytId, message, error)
+                    perVideoFailure(p, index, trackId, ytId, message, error, TrackErrorPolicy.perVideo(facts))
                     return
                 }
                 // Expired URL (or a new network address, or a refusal): same itag, same position.
@@ -912,10 +918,17 @@ class PlaybackService : MediaSessionService() {
             }
             is TrackErrorPolicy.Action.Pause -> {
                 Log.i(TAG, "TRACK_ERROR $trackId (yt=$ytId), pausing: $message")
-                if (action.broken) p.pause() else pauseToResume(p) // offline: back when the network is
+                if (action.freshLink) ytId?.let { StreamResolver.reResolve(it) }
+                if (action.resume) {
+                    outagePauses++
+                    pauseToResume(p) // back when the network is
+                } else {
+                    p.pause()
+                }
                 PlayerBus.emitTrackError(trackId, message, false)
             }
-            else -> perVideoFailure(p, index, trackId, ytId, message, error)
+            TrackErrorPolicy.Action.Skip, TrackErrorPolicy.Action.PauseAtEnd, TrackErrorPolicy.Action.Stop ->
+                perVideoFailure(p, index, trackId, ytId, message, error, action)
         }
     }
 
@@ -948,7 +961,7 @@ class PlaybackService : MediaSessionService() {
         if (until > 0L) scheduleResume(until) else handler.post { resumeAfterBlock() }
     }
 
-    /** A real per-video failure: skip it (with the [TrackErrorPolicy.MAX_CONSECUTIVE_FAILURES] guard). */
+    /** A real per-video failure: [action] is TrackErrorPolicy's Skip, PauseAtEnd or Stop. */
     private fun perVideoFailure(
         p: ExoPlayer,
         index: Int,
@@ -956,6 +969,7 @@ class PlaybackService : MediaSessionService() {
         ytId: String?,
         message: String,
         error: PlaybackException,
+        action: TrackErrorPolicy.Action,
     ) {
         consecutiveFailures++
         // Ids only at info level (stripped from release builds); the warning has none.
@@ -963,36 +977,36 @@ class PlaybackService : MediaSessionService() {
         Log.w(TAG, "Track failed (#$consecutiveFailures): ${error.errorCodeName}")
         expiredRetried.remove(trackId)
 
-        if (consecutiveFailures >= TrackErrorPolicy.MAX_CONSECUTIVE_FAILURES) {
-            Log.w(TAG, "Stopping after $consecutiveFailures consecutive failures")
-            consecutiveFailures = 0
-            PlayerBus.emitTrackError(
-                trackId,
-                "Stopped after ${TrackErrorPolicy.MAX_CONSECUTIVE_FAILURES} tracks failed in a row. Last error: $message",
-                false,
-            )
-            p.pause()
-            return
-        }
-
-        if (index == p.currentMediaItemIndex) {
-            // Normal case (ExoPlayer reports load errors for the playing item): skip it and
-            // keep the list unchanged, so indices on the web side stay valid.
-            if (p.hasNextMediaItem()) {
-                p.seekToNextMediaItem()
-                p.prepare()
-                PlayerBus.emitTrackError(trackId, message, true)
-            } else {
+        when {
+            action == TrackErrorPolicy.Action.Stop -> {
+                Log.w(TAG, "Stopping after $consecutiveFailures consecutive failures")
+                consecutiveFailures = 0
+                PlayerBus.emitTrackError(
+                    trackId,
+                    "Stopped after ${TrackErrorPolicy.MAX_CONSECUTIVE_FAILURES} tracks failed in a row. Last error: $message",
+                    false,
+                )
+                p.pause()
+            }
+            action == TrackErrorPolicy.Action.PauseAtEnd -> {
                 // Nothing after it: stay on the failed item, paused. play() retries it.
                 p.pause()
                 PlayerBus.emitTrackError(trackId, message, false)
             }
-        } else {
-            // A different (upcoming) item failed: drop it, otherwise re-preparing would hit
-            // the same error again while the current item plays.
-            p.removeMediaItem(index)
-            p.prepare()
-            PlayerBus.emitTrackError(trackId, message, true)
+            index == p.currentMediaItemIndex -> {
+                // Normal case (ExoPlayer reports load errors for the playing item): skip it and
+                // keep the list unchanged, so indices on the web side stay valid.
+                p.seekToNextMediaItem()
+                p.prepare()
+                PlayerBus.emitTrackError(trackId, message, true)
+            }
+            else -> {
+                // A different (upcoming) item failed: drop it, otherwise re-preparing would hit
+                // the same error again while the current item plays.
+                p.removeMediaItem(index)
+                p.prepare()
+                PlayerBus.emitTrackError(trackId, message, true)
+            }
         }
     }
 

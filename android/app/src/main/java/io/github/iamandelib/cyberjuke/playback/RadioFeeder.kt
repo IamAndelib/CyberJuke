@@ -38,7 +38,8 @@ internal class RadioFeeder(private val handler: Handler, private val host: Host)
         fun recheckLow(delayMs: Long?)
     }
 
-    private data class State(val ytId: String, val next: String?)
+    /** The radio of [ytId], at its page token [next] (null: the first page). */
+    data class State(val ytId: String, val next: String?)
 
     private var state: State? = null
 
@@ -142,12 +143,7 @@ internal class RadioFeeder(private val handler: Handler, private val host: Host)
                 )
             }.getOrNull()
         }
-        // At the end of a radio, start a new one from its last song.
-        state = when {
-            page.next != null -> r.copy(next = page.next)
-            items.isNotEmpty() -> JukeUris.ytIdOf(items.last())?.let { State(it, null) }
-            else -> null
-        }
+        state = afterPage(r, page.next, items.lastOrNull()?.let { JukeUris.ytIdOf(it) }, page.items.lastOrNull()?.ytId)
         Log.i(TAG, "Radio: ${items.size} new of ${page.items.size}, more=${page.next != null}")
         if (items.isNotEmpty()) {
             if (host.addRadioItems(items)) retries = 0
@@ -168,9 +164,19 @@ internal class RadioFeeder(private val handler: Handler, private val host: Host)
         host.recheckLow(delayMs)
     }
 
-    private companion object {
-        const val TAG = "CyberJukeRadio"
-        const val MAX_RETRIES = 3
-        const val RETRY_MS = 15_000L
+    companion object {
+        private const val TAG = "CyberJukeRadio"
+        private const val MAX_RETRIES = 3
+        private const val RETRY_MS = 15_000L
+
+        /**
+         * Where the radio goes after a page of [r]: its next page, or at its end a new radio from
+         * the last song added ([newLast]), else the page's last song even though the player has
+         * it ([pageLast]); null when there is none (or it is [r]'s own seed, which would repeat).
+         */
+        internal fun afterPage(r: State, next: String?, newLast: String?, pageLast: String?): State? = when {
+            next != null -> r.copy(next = next)
+            else -> (newLast ?: pageLast?.takeIf { it != r.ytId })?.let { State(it, null) }
+        }
     }
 }

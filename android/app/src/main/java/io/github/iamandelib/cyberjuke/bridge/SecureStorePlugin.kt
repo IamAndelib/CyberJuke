@@ -14,6 +14,7 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import io.github.iamandelib.cyberjuke.findCause
 import org.json.JSONObject
 import java.io.IOException
 import java.nio.charset.StandardCharsets
@@ -121,13 +122,13 @@ class SecureStorePlugin : Plugin() {
     }
 
     private companion object {
-        const val TAG = "CyberJukeSecure"
+        const val TAG = SecureBox.TAG
     }
 }
 
 /** The Keystore + SharedPreferences part of [SecureStorePlugin]; synchronized, blocking. */
 internal object SecureBox {
-    private const val TAG = "CyberJukeSecure"
+    const val TAG = "CyberJukeSecure"
     private const val ALIAS = "cyberjuke_secure"
     private const val PREFS = "cyberjuke_secure"
     private const val KEYSTORE = "AndroidKeyStore"
@@ -275,7 +276,7 @@ internal object SecureBox {
     /** What a Keystore or cipher failure means ([KeyErrors]), with Android 13's own verdict. */
     private fun classify(e: Throwable): KeyErrors.Kind {
         val keystore = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            e.causeOf<android.security.KeyStoreException>()
+            e.findCause<android.security.KeyStoreException>()
         } else {
             null
         }
@@ -286,24 +287,13 @@ internal object SecureBox {
         }
         return KeyErrors.classify(
             KeyErrors.Facts(
-                invalidated = e.causeOf<KeyPermanentlyInvalidatedException>() != null,
-                badTag = e.causeOf<AEADBadTagException>() != null,
-                notAuthenticated = e.causeOf<UserNotAuthenticatedException>() != null,
+                invalidated = e.findCause<KeyPermanentlyInvalidatedException>() != null,
+                badTag = e.findCause<AEADBadTagException>() != null,
+                notAuthenticated = e.findCause<UserNotAuthenticatedException>() != null,
                 keystoreTransient = transient,
                 keystoreNeedsAuth = needsAuth,
             ),
         )
-    }
-
-    private inline fun <reified T : Throwable> Throwable.causeOf(): T? {
-        var t: Throwable? = this
-        var depth = 0
-        while (t != null && depth < 8) {
-            if (t is T) return t
-            t = t.cause
-            depth++
-        }
-        return null
     }
 
     private fun pause(attempt: Int) {
