@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'preact/hooks';
 import { reducedMotion } from '../../core/motion';
-import { dismissToast, holdToast, releaseToast, runToastAction, toasts } from '../../stores/toast';
+import { dismissAllToasts, dismissToast, holdToast, releaseToast, runToastAction, toasts } from '../../stores/toast';
 
 /** A drag shorter than this, or more vertical than sideways, isn't a swipe. */
 const SWIPE_SLOP_PX = 8;
@@ -11,6 +11,22 @@ const SWIPE_FLICK_PX_PER_MS = 0.5;
 const SWIPE_ANIM_MS = 150;
 
 export function Toasts() {
+  // A toast goes as soon as the user does something else: a finger (or click) anywhere but on
+  // a toast, or a wheel scroll. Only the user's own input counts; the app's own scrolling
+  // (lyrics following the song, back-to-top) doesn't.
+  useEffect(() => {
+    const away = (e: Event) => {
+      if (!toasts.peek().length) return;
+      if (e.target instanceof Element && e.target.closest('.toast')) return;
+      dismissAllToasts();
+    };
+    window.addEventListener('pointerdown', away, { capture: true, passive: true });
+    window.addEventListener('wheel', away, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', away, { capture: true });
+      window.removeEventListener('wheel', away, { capture: true });
+    };
+  }, []);
   return (
     <div class="toasts" aria-live="polite" data-testid="toasts">
       {toasts.value.map((t) => (

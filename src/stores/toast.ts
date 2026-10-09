@@ -90,6 +90,11 @@ function startTimer(id: number, ms: number): void {
   );
 }
 
+/** The user has moved on (touched or scrolled elsewhere): no toast lingers. */
+export function dismissAllToasts(): void {
+  for (const t of toasts.peek()) dismissToast(t.id);
+}
+
 /** A finger is dragging the toast: it doesn't time out meanwhile. */
 export function holdToast(id: number): void {
   if (held.has(id) || !timers.has(id)) return;
