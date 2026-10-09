@@ -79,7 +79,7 @@ Later versions work the same way: add a CHANGELOG section, then run Release with
 
 ## 7. Submit to F-Droid
 
-1. Send me the release certificate fingerprint: the last line of `CyberJuke-secrets.txt`, or `~/cyberjuke-keys/release-cert-sha256.txt` with the script. I'll fill in [`docs/fdroid/io.github.iamandelib.cyberjuke.yml`](fdroid/io.github.iamandelib.cyberjuke.yml) with it and the `v1.0.0` commit, and check that the build is reproducible (**Actions → Reproducible build check**, tag `v1.0.0`).
+1. Send me the release certificate fingerprint: the last line of `CyberJuke-secrets.txt`, or `~/cyberjuke-keys/release-cert-sha256.txt` with the script. I'll fill in [`docs/fdroid/io.github.iamandelib.cyberjuke.yml`](fdroid/io.github.iamandelib.cyberjuke.yml) with it and the release commit, and check that the build is reproducible (**Actions → Reproducible build check**, tag `v1.0.1`: the first release signed reproducibly).
 2. Create a free account on <https://gitlab.com> and **fork** <https://gitlab.com/fdroid/fdroiddata>.
 3. In your fork, add the file as `metadata/io.github.iamandelib.cyberjuke.yml`.
 4. Open a **merge request** using the "App inclusion" template. [`docs/fdroid/README.md`](fdroid/README.md) lists what to mention.
