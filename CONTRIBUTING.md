@@ -59,7 +59,7 @@ No signing key is committed to this repository.
 
 versionCode is `major × 1,000,000 + minor × 1,000 + patch` (0.1.0 → 1000).
 
-The signing keys live in two protected environments: `release` (`KEYSTORE_FILE` as base64, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`; main only, with a required reviewer) and `preview` (the same four names with a `PREVIEW_` prefix; main only). [`scripts/setup-publishing.sh`](scripts/setup-publishing.sh) creates the keys on the maintainer's computer and sets all of this up; [`docs/PUBLISHING.md`](docs/PUBLISHING.md) is the step-by-step guide. The `main` branch must accept pushes from GitHub Actions for the bump commit.
+The release key secrets are `KEYSTORE_FILE` (base64), `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`; the preview key uses the same four names with a `PREVIEW_` prefix. They can be repository secrets, or live in the `release` and `preview` environments for extra protection (main only, a required reviewer for releases). Only the signing jobs read them. [`scripts/setup-publishing.sh`](scripts/setup-publishing.sh) can create the keys on the maintainer's computer and set the environments up; [`docs/PUBLISHING.md`](docs/PUBLISHING.md) is the step-by-step guide. The `main` branch must accept pushes from GitHub Actions for the bump commit.
 
 ### Preview builds
 

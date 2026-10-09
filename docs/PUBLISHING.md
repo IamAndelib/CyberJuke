@@ -1,50 +1,54 @@
 # Publishing CyberJuke: the maintainer's steps
 
-What you do on your side, in order. Steps 1–3 are once only. You don't need a copy of the code: just a terminal (on Windows, Git Bash).
+What you do on your side, in order. Steps 1–3 are once only.
 
-## 1. Install the two tools (once)
+## 1. Get the signing keys (once)
 
-You need Java's `keytool` (any JDK 17 or newer) and the GitHub CLI `gh`.
+The app is signed with two keys: `preview.jks` for test builds and `release.jks` for the real app. There are two ways to get them:
+
+- **Simple route (what was used for CyberJuke):** the keys are generated for you and you receive three files: `preview.jks`, `release.jks` and `CyberJuke-secrets.txt`. The text file holds the 8 secret values and both passwords.
+- **Own-computer route:** generate the keys yourself with the setup script, so they never leave your computer. See [Alternative: the setup script](#alternative-the-setup-script) below.
+
+## 2. Add the 8 secrets to GitHub (once)
+
+1. Open <https://github.com/IamAndelib/CyberJuke/settings/secrets/actions>.
+2. For each of the 8 entries in `CyberJuke-secrets.txt`, click **New repository secret**. Put the NAME in "Name" and paste the value under it into "Secret". If a name already exists, click its pencil and replace the value.
+3. When all 8 are in (`PREVIEW_KEYSTORE_FILE`, `PREVIEW_KEYSTORE_PASSWORD`, `PREVIEW_KEY_ALIAS`, `PREVIEW_KEY_PASSWORD`, `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`), run **Actions → Preview → Run workflow** to make a test build.
+
+**Optional hardening:** under Settings → Environments, open `release` (it appears after the first release run), add yourself as a **required reviewer** and limit it to the `main` branch. Every release then waits for your click.
+
+### Alternative: the setup script
+
+For keys made on your own computer instead. You need Java's `keytool` (any JDK 17 or newer) and the GitHub CLI `gh`:
 
 | Your computer | Command |
 |---|---|
 | Ubuntu / Debian / WSL | `sudo apt install openjdk-21-jdk-headless gh` (if `gh` isn't found: <https://github.com/cli/cli/blob/trunk/docs/install_linux.md>) |
-| Fedora | `sudo dnf install java-21-openjdk-devel gh` |
+| Fedora | `sudo dnf install gh java-latest-openjdk-headless` |
 | Mac (Homebrew) | `brew install openjdk@21 gh` |
-| Windows | `winget install EclipseAdoptium.Temurin.21.JDK GitHub.cli`, then use **Git Bash** for the next steps |
+| Windows | `winget install EclipseAdoptium.Temurin.21.JDK GitHub.cli`, then use **Git Bash** |
 
-Then log in to GitHub as the repository owner:
+Then, in a terminal in any folder:
 
 ```bash
 gh auth login        # GitHub.com → HTTPS → log in with a web browser
-```
-
-## 2. Run the setup script (once)
-
-Open a terminal in any folder (for example the one you made for CyberJuke) and run:
-
-```bash
 curl -fsSLO https://raw.githubusercontent.com/IamAndelib/CyberJuke/main/scripts/setup-publishing.sh
 bash setup-publishing.sh
 ```
 
-The first line downloads the script into that folder; the second runs it. (If you have the repository cloned, `bash scripts/setup-publishing.sh` does the same.)
+The script asks before every change. It:
 
-It asks before every change. In order, it:
+1. Creates the two keys in `~/cyberjuke-keys/`. You choose a password for each; a generated one stored in a password manager is best.
+2. Sets up the protected `preview` and `release` environments: main only, and every release waits for your approval.
+3. Stores the keys there as secrets.
+4. Prints the release certificate fingerprint F-Droid needs.
+5. Starts the test build.
 
-1. Creates two signing keys in `~/cyberjuke-keys/`: `preview.jks` for test builds and `release.jks` for the real app. It asks you for a password for each. The keys never leave your computer, apart from the encrypted GitHub secrets.
-2. Sets up two protected **environments** on GitHub:
-   - `preview`, which can only run from `main`.
-   - `release`, which can only run from `main` and waits for **your approval** every time.
-3. Stores each key and its password as secrets in its environment, and removes any old copies stored at repository level.
-4. Prints the **release certificate fingerprint** and saves it to `~/cyberjuke-keys/release-cert-sha256.txt`. F-Droid needs it; send it to me when we get to step 7. It isn't secret.
-5. Starts the **CyberJuke Preview** test build, waits for it (about 15 minutes), and prints the download link.
-
-Running it again is safe: it skips everything that's already set up. If a key file is missing but GitHub already has that key, it stops rather than make a new one, because a new key would force everyone to reinstall.
+Running it again is safe. If a key file is missing but GitHub already has that key, it stops rather than make a new one.
 
 ## 3. Back up the keys (once, right away)
 
-Copy **both** `.jks` files and **both** passwords to two safe places, for example a password manager and an offline USB drive.
+Copy **both** `.jks` files and **both** passwords (with the simple route: the three files you received) to two safe places, for example a password manager and an offline USB drive. Then delete any loose copies, such as the ones in Downloads.
 
 - If you lose `release.jks` or its password, nobody can install an update over the existing app any more. They'd have to uninstall it and lose their likes and history.
 - If you lose `preview.jks`, testers have to reinstall the preview. That's annoying but not serious.
@@ -68,14 +72,14 @@ When the preview has passed testing:
 
 1. Tell me, and I'll move the CHANGELOG's "Unreleased" notes into the 0.1.0 section.
 2. On GitHub go to **Actions → Release → Run workflow**, type `0.1.0`, then **Run**.
-3. When the run pauses at **Sign and publish**, open it, click **Review deployments**, tick `release` and **Approve**. This is the protection from step 2.
+3. If you added yourself as a required reviewer (step 2, optional), the run pauses at **Sign and publish**: open it, click **Review deployments**, tick `release` and **Approve**. Otherwise it simply carries on.
 4. A few minutes later, **Releases** shows **CyberJuke v0.1.0** with `CyberJuke-0.1.0.apk`. That's the real app, signed with your release key.
 
 Later versions work the same way: add a CHANGELOG section, then run Release with the new number (for example `0.1.1`).
 
 ## 7. Submit to F-Droid
 
-1. Send me the fingerprint from `~/cyberjuke-keys/release-cert-sha256.txt`. I'll fill in [`docs/fdroid/io.github.iamandelib.cyberjuke.yml`](fdroid/io.github.iamandelib.cyberjuke.yml) with it and the `v0.1.0` commit, and check that the build is reproducible.
+1. Send me the release certificate fingerprint: the last line of `CyberJuke-secrets.txt`, or `~/cyberjuke-keys/release-cert-sha256.txt` with the script. I'll fill in [`docs/fdroid/io.github.iamandelib.cyberjuke.yml`](fdroid/io.github.iamandelib.cyberjuke.yml) with it and the `v0.1.0` commit, and check that the build is reproducible.
 2. Create a free account on <https://gitlab.com> and **fork** <https://gitlab.com/fdroid/fdroiddata>.
 3. In your fork, add the file as `metadata/io.github.iamandelib.cyberjuke.yml`.
 4. Open a **merge request** using the "App inclusion" template. [`docs/fdroid/README.md`](fdroid/README.md) lists what to mention.
@@ -93,6 +97,6 @@ Later versions work the same way: add a CHANGELOG section, then run Release with
 |---|---|
 | `gh: command not found` / `keytool: command not found` | Step 1. On Windows, use Git Bash, not PowerShell. |
 | "is not an admin of IamAndelib/CyberJuke" | Run `gh auth logout`, then `gh auth login` with the owner account. |
-| Preview run fails at "Check signing secrets" | Run the script again; it adds what's missing. |
+| Preview or Release run fails at "Check signing secrets" | The error lists the missing names: add them (step 2), or rerun the script. |
 | Release run stops at "prepare" with a push error | `main` has a branch rule. Add `github-actions[bot]` to its bypass list (the script warns about this). |
 | Lost a key | Restore it from your backup into `~/cyberjuke-keys/` and run the script again. |
