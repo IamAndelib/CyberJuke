@@ -3,7 +3,7 @@
  * Android, online/offline events in the browser). `onReconnect` runs callbacks when
  * the connection comes back.
  */
-import { effect, signal } from '@preact/signals';
+import { effect, signal, untracked } from '@preact/signals';
 import { Network } from '@capacitor/network';
 import { logError } from './log';
 
@@ -30,13 +30,16 @@ export function watchNetwork(): void {
   effect(() => {
     const now = online.value;
     if (now && !was) {
-      for (const fn of [...reconnect]) {
-        try {
-          fn();
-        } catch (e) {
-          logError('onReconnect', e);
+      // Only `online` is followed, not whatever the callbacks read.
+      untracked(() => {
+        for (const fn of [...reconnect]) {
+          try {
+            fn();
+          } catch (e) {
+            logError('onReconnect', e);
+          }
         }
-      }
+      });
     }
     was = now;
   });
