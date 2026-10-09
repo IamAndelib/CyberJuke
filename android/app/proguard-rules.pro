@@ -1,25 +1,3 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
-
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
-
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
-
 # ---------------------------------------------------------------------------------------
 # CyberJuke release rules (R8). Correctness over size: keep anything reached by reflection.
 # ---------------------------------------------------------------------------------------
@@ -65,9 +43,7 @@
 }
 
 # Rhino + Rhino engine (JS signature/throttling deobfuscation; heavy reflection)
--keep class org.mozilla.javascript.* { *; }
 -keep class org.mozilla.javascript.** { *; }
--keep class org.mozilla.javascript.engine.** { *; }
 -keep class org.mozilla.classfile.ClassFileWriter
 -keep class javax.script.** { *; }
 -keep class jdk.dynalink.** { *; }
@@ -100,5 +76,4 @@
 -dontwarn org.openjsse.**
 
 # ---- Media3: ships its own consumer rules (including the reflective HLS factory), so no
-# blanket -dontwarn: a missing Media3 class should fail the release build.
--keep class androidx.media3.exoplayer.hls.HlsMediaSource$Factory { <init>(...); }
+# keep and no blanket -dontwarn here: a missing Media3 class should fail the release build.

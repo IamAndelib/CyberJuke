@@ -6,10 +6,14 @@ import java.util.concurrent.CopyOnWriteArraySet
 
 /**
  * Custom session commands for the queue model (P1, autoplay) between JukePlayerPlugin and
- * PlaybackService. Custom commands because the queue bookkeeping ([NativeQueue]) and the radio
- * state live in the service, next to its ExoPlayer.
+ * PlaybackService. Custom commands because the queue bookkeeping ([NativeQueue]), the shuffle
+ * order and the radio state live in the service, next to its ExoPlayer (a MediaController
+ * can't set them).
  */
 internal object QueueCommands {
+    /** Add to queue: [ARG_TRACKS], played after the current one and earlier queued ones. */
+    const val ACTION_QUEUE_NEXT = "io.github.iamandelib.cyberjuke.QUEUE_NEXT"
+
     /** A new list: [ARG_TRACKS], [ARG_START], [ARG_POSITION], [ARG_LABEL], [ARG_MODE]. Queued items stay next. */
     const val ACTION_SET_LIST = "io.github.iamandelib.cyberjuke.SET_LIST"
 
@@ -37,7 +41,8 @@ internal object QueueCommands {
     /** Undo of a removal (K3): one track in [ARG_TRACKS], [ARG_KIND], [ARG_BEFORE]. */
     const val ACTION_RESTORE = "io.github.iamandelib.cyberjuke.RESTORE"
 
-    const val ARG_TRACKS = JukeCommands.ARG_TRACKS
+    /** The NativeTrack[] JSON. */
+    const val ARG_TRACKS = "tracks"
     const val ARG_START = "startIndex"
     const val ARG_POSITION = "positionMs"
     const val ARG_LABEL = "label"
@@ -61,6 +66,7 @@ internal object QueueCommands {
     /** Over a bridge size cap (K6, [BridgeLimits]). */
     const val TOO_LARGE = "TOO_LARGE"
 
+    val QUEUE_NEXT = SessionCommand(ACTION_QUEUE_NEXT, Bundle.EMPTY)
     val SET_LIST = SessionCommand(ACTION_SET_LIST, Bundle.EMPTY)
     val ADD_AUTOPLAY = SessionCommand(ACTION_ADD_AUTOPLAY, Bundle.EMPTY)
     val SET_AUTOPLAY = SessionCommand(ACTION_SET_AUTOPLAY, Bundle.EMPTY)
@@ -69,10 +75,13 @@ internal object QueueCommands {
     val MOVE = SessionCommand(ACTION_MOVE, Bundle.EMPTY)
     val REMOVE_IDS = SessionCommand(ACTION_REMOVE_IDS, Bundle.EMPTY)
     val RESTORE = SessionCommand(ACTION_RESTORE, Bundle.EMPTY)
-    val ALL = listOf(SET_LIST, ADD_AUTOPLAY, SET_AUTOPLAY, SKIP_TO, REMOVE, MOVE, REMOVE_IDS, RESTORE)
+    val ALL = listOf(QUEUE_NEXT, SET_LIST, ADD_AUTOPLAY, SET_AUTOPLAY, SKIP_TO, REMOVE, MOVE, REMOVE_IDS, RESTORE)
 
     /** Played autoplay items kept behind the current one (older ones are trimmed). */
     const val KEEP_PLAYED_AUTO = 50
+
+    /** MediaMetadata extra (Long) marking a user-queued item; unique per queueNext insert. */
+    const val EXTRA_QUEUE_SERIAL = "cyberjukeQueueSerial"
 
     /** MediaMetadata extra (Boolean) marking an item added by autoplay. */
     const val EXTRA_AUTOPLAY = "cyberjukeAutoplay"
@@ -110,17 +119,14 @@ internal object QueueInfo {
 
     /**
      * The last "running low" not answered yet (left, seedId). The service only says it once per
-     * state; if nobody was listening then (the app swiped away, the WebView reloading), a new
-     * listener hears it again, so autoplay doesn't run dry.
+     * state; if nobody was listening then (the app swiped away, the WebView reloading), the
+     * plugin repeats it to the page's new `queueLow` listener, so autoplay doesn't run dry.
      */
     @Volatile
     var lastLow: Pair<Int, String?>? = null
         private set
 
-    fun addLow(l: QueueLowListener) {
-        lowListeners.add(l)
-        lastLow?.let { (left, seed) -> l.onQueueLow(left, seed) }
-    }
+    fun addLow(l: QueueLowListener) = lowListeners.add(l)
 
     fun removeLow(l: QueueLowListener) = lowListeners.remove(l)
 

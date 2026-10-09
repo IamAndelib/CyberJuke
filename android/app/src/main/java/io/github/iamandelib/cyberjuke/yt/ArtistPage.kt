@@ -306,82 +306,13 @@ internal object ArtistPage {
     /**
      * A thumbnail URL from anything holding a `thumbnails` array. Small: the smallest height
      * >= 240 nearest 300 (album covers, song rows); large: the smallest height >= 540
-     * (artist headers). Otherwise the largest.
+     * (artist headers). Otherwise the largest. https only.
      */
     private fun thumbnailOf(holder: JSONObject?, large: Boolean): String? {
-        val arr = holder?.optJSONArray("thumbnails") ?: findFirstArray(holder, "thumbnails") ?: return null
-        data class T(val url: String, val h: Int)
-        val list = (0 until arr.length()).mapNotNull { i ->
-            val o = arr.optJSONObject(i) ?: return@mapNotNull null
-            val u = o.optStr("url") ?: return@mapNotNull null
-            T(if (u.startsWith("//")) "https:$u" else u, o.optInt("height", 0))
-        }
-        if (list.isEmpty()) return null
+        val list = thumbnailsOf(holder?.optJSONArray("thumbnails") ?: findFirstArray(holder, "thumbnails"))
         val min = if (large) 540 else 240
-        val pick = list.filter { it.h >= min }.minByOrNull { if (large) it.h else kotlin.math.abs(it.h - 300) }
-            ?: list.maxByOrNull { it.h }
+        val pick = list.filter { it.height >= min }.minByOrNull { if (large) it.height else kotlin.math.abs(it.height - 300) }
+            ?: list.maxByOrNull { it.height }
         return pick?.url
     }
-
-    // ---- JSON tree helpers ------------------------------------------------------------------
-
-    /** Every object stored under [key], depth-first in document order. */
-    fun findAll(root: Any?, key: String): List<JSONObject> {
-        val out = ArrayList<JSONObject>()
-        collect(root, key, out)
-        return out
-    }
-
-    private fun collect(node: Any?, key: String, out: MutableList<JSONObject>) {
-        when (node) {
-            is JSONObject -> {
-                val keys = node.keys()
-                while (keys.hasNext()) {
-                    val k = keys.next()
-                    val v = node.opt(k)
-                    if (k == key && v is JSONObject) out.add(v)
-                    collect(v, key, out)
-                }
-            }
-            is JSONArray -> for (i in 0 until node.length()) collect(node.opt(i), key, out)
-        }
-    }
-
-    /** First object stored under [key], depth-first (direct child first). */
-    fun findFirst(root: Any?, key: String): JSONObject? {
-        when (root) {
-            is JSONObject -> {
-                root.optJSONObject(key)?.let { return it }
-                val keys = root.keys()
-                while (keys.hasNext()) findFirst(root.opt(keys.next()), key)?.let { return it }
-            }
-            is JSONArray -> for (i in 0 until root.length()) findFirst(root.opt(i), key)?.let { return it }
-        }
-        return null
-    }
-
-    private fun findFirstArray(root: Any?, key: String): JSONArray? {
-        when (root) {
-            is JSONObject -> {
-                root.optJSONArray(key)?.let { return it }
-                val keys = root.keys()
-                while (keys.hasNext()) findFirstArray(root.opt(keys.next()), key)?.let { return it }
-            }
-            is JSONArray -> for (i in 0 until root.length()) findFirstArray(root.opt(i), key)?.let { return it }
-        }
-        return null
-    }
-
-    /** InnerTube text: `{runs:[{text}]}` or `{simpleText}`; null when absent or empty. */
-    fun textOf(o: JSONObject?): String? {
-        if (o == null) return null
-        o.optStr("simpleText")?.let { return it }
-        val runs = o.optJSONArray("runs") ?: return null
-        val sb = StringBuilder()
-        for (i in 0 until runs.length()) sb.append(runs.optJSONObject(i)?.optString("text") ?: "")
-        return sb.toString().takeIf { it.isNotEmpty() }
-    }
-
-    private fun JSONObject.optStr(key: String): String? =
-        if (!has(key) || isNull(key)) null else (opt(key) as? String)?.takeIf { it.isNotEmpty() }
 }

@@ -23,11 +23,10 @@ ext {
     // for streams. YtCompat.kt and YtMusic.kt are checked against this commit.
     // YouTube breaks old extractor versions: bump this first when playback starts failing.
     newPipeExtractorVersion = '65cabc2ba5216ee871ace4a9963c08bdbf5d5dc0'
-    // https://github.com/androidx/media/releases - 1.11.1 is the newest stable tag
-    // (Google Maven was not reachable to double-check the artifact; TODO verify on CI).
+    // https://github.com/androidx/media/releases (stable).
     media3Version = '1.11.1'
     // OkHttp 5.x (okhttp-android) needs compileSdk 37, unsupported by AGP 8.13; stay on 4.x.
     okhttpVersion = '4.12.0'
-    // NIO flavour is required by NewPipeExtractor. TODO verify latest (Google Maven only).
+    // NIO flavour is required by NewPipeExtractor.
     desugarJdkLibsVersion = '2.1.5'
 }

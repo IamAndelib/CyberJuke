@@ -5,6 +5,9 @@ import android.util.Log
 import io.github.iamandelib.cyberjuke.net.Http
 import io.github.iamandelib.cyberjuke.yt.InnerTube
 import io.github.iamandelib.cyberjuke.yt.YtCompat
+import io.github.iamandelib.cyberjuke.yt.findFirst
+import io.github.iamandelib.cyberjuke.yt.optStr
+import io.github.iamandelib.cyberjuke.yt.textOf
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.json.JSONArray
@@ -122,12 +125,12 @@ internal object Lyrics {
     }
 
     private fun entryOf(o: JSONObject) = Lrc.LrclibEntry(
-        trackName = o.optStringOrNull("trackName") ?: "",
-        artistName = o.optStringOrNull("artistName") ?: "",
+        trackName = o.optStr("trackName") ?: "",
+        artistName = o.optStr("artistName") ?: "",
         durationSec = if (o.has("duration") && !o.isNull("duration")) o.optDouble("duration") else null,
         instrumental = o.optBoolean("instrumental", false),
-        plain = o.optStringOrNull("plainLyrics"),
-        synced = o.optStringOrNull("syncedLyrics"),
+        plain = o.optStr("plainLyrics"),
+        synced = o.optStr("syncedLyrics"),
     )
 
     private fun resultOf(e: Lrc.LrclibEntry): Result {
@@ -142,24 +145,21 @@ internal object Lyrics {
 
     private fun ytMusic(ytId: String): Result? {
         YtCompat.ensureInit()
-        val next = innertube("next", JSONObject().put("videoId", ytId).put("isAudioOnly", true))
+        val next = InnerTube.post("next", JSONObject().put("videoId", ytId).put("isAudioOnly", true))
             ?: return null
         val browseId = findLyricsBrowseId(next) ?: return null
-        val browse = innertube("browse", JSONObject().put("browseId", browseId)) ?: return null
-        val shelf = findObject(browse, "musicDescriptionShelfRenderer") ?: return null
+        val browse = InnerTube.post("browse", JSONObject().put("browseId", browseId)) ?: return null
+        val shelf = findFirst(browse, "musicDescriptionShelfRenderer") ?: return null
         val plain = textOf(shelf.optJSONObject("description"))?.takeIf { it.isNotBlank() } ?: return null
         val footer = textOf(shelf.optJSONObject("footer"))?.trim()?.takeIf { it.isNotEmpty() }
         return Result(found = true, source = footer, plain = plain)
     }
 
-    private fun innertube(endpoint: String, payload: JSONObject): JSONObject? =
-        InnerTube.post(endpoint, payload)
-
     /** The lyrics tab's browse id (MPLYt…): absent when YouTube Music has no lyrics. */
     private fun findLyricsBrowseId(root: Any?): String? {
         when (root) {
             is JSONObject -> {
-                root.optJSONObject("browseEndpoint")?.optStringOrNull("browseId")
+                root.optJSONObject("browseEndpoint")?.optStr("browseId")
                     ?.takeIf { it.startsWith("MPLYt") }?.let { return it }
                 for (key in root.keys()) findLyricsBrowseId(root.opt(key))?.let { return it }
             }
@@ -167,29 +167,4 @@ internal object Lyrics {
         }
         return null
     }
-
-    /** First object stored under [key], depth-first (the response layout shifts over time). */
-    private fun findObject(root: Any?, key: String): JSONObject? {
-        when (root) {
-            is JSONObject -> {
-                root.optJSONObject(key)?.let { return it }
-                for (k in root.keys()) findObject(root.opt(k), key)?.let { return it }
-            }
-            is JSONArray -> for (i in 0 until root.length()) findObject(root.opt(i), key)?.let { return it }
-        }
-        return null
-    }
-
-    /** InnerTube text: `{runs:[{text}]}` or `{simpleText}`. */
-    private fun textOf(o: JSONObject?): String? {
-        if (o == null) return null
-        o.optStringOrNull("simpleText")?.let { return it }
-        val runs = o.optJSONArray("runs") ?: return null
-        val sb = StringBuilder()
-        for (i in 0 until runs.length()) sb.append(runs.optJSONObject(i)?.optString("text") ?: "")
-        return sb.toString()
-    }
-
-    private fun JSONObject.optStringOrNull(key: String): String? =
-        if (!has(key) || isNull(key)) null else optString(key).takeIf { it.isNotEmpty() }
 }

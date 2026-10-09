@@ -38,8 +38,8 @@ internal object Radio {
      * [ParsingException] when no playlist panel is found: YouTube changed the layout.
      */
     fun parse(root: JSONObject, skipId: String?): Page {
-        val panel = ArtistPage.findFirst(root.optJSONObject("continuationContents"), "playlistPanelContinuation")
-            ?: ArtistPage.findFirst(root.optJSONObject("contents"), "playlistPanelRenderer")
+        val panel = findFirst(root.optJSONObject("continuationContents"), "playlistPanelContinuation")
+            ?: findFirst(root.optJSONObject("contents"), "playlistPanelRenderer")
             ?: throw ParsingException("radio: no playlist panel in the response")
         val out = ArrayList<YtMusic.Item>()
         val seen = HashSet<String>()
@@ -62,7 +62,7 @@ internal object Radio {
             ?: r.optJSONObject("navigationEndpoint")?.optJSONObject("watchEndpoint")?.optStr("videoId")
             ?: return null
         if (!SessionPolicy.isValidYtId(id)) return null
-        val title = ArtistPage.textOf(r.optJSONObject("title"))?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val title = textOf(r.optJSONObject("title"))?.trim()?.takeIf { it.isNotEmpty() } ?: return null
         val runs = r.optJSONObject("longBylineText")?.optJSONArray("runs")
             ?: r.optJSONObject("shortBylineText")?.optJSONArray("runs")
         val (artist, channelId) = artistOf(runs)
@@ -72,7 +72,7 @@ internal object Radio {
             subtitle = artist,
             url = "https://music.youtube.com/watch?v=$id",
             ytId = id,
-            durationSec = ArtistPage.durationOf(ArtistPage.textOf(r.optJSONObject("lengthText"))),
+            durationSec = ArtistPage.durationOf(textOf(r.optJSONObject("lengthText"))),
             thumbnailUrl = thumbnailOf(r.optJSONObject("thumbnail")),
             artistUrl = channelId?.let { "https://www.youtube.com/channel/$it" },
             channelId = channelId,
@@ -112,26 +112,12 @@ internal object Radio {
 
     /** The smallest thumbnail at least 240px high (else the largest), https only. */
     private fun thumbnailOf(holder: JSONObject?): String? {
-        val arr = holder?.optJSONArray("thumbnails") ?: return null
-        var best: Pair<String, Int>? = null
-        var largest: Pair<String, Int>? = null
-        for (i in 0 until arr.length()) {
-            val o = arr.optJSONObject(i) ?: continue
-            val raw = o.optStr("url") ?: continue
-            val url = if (raw.startsWith("//")) "https:$raw" else raw
-            if (!url.startsWith("https://")) continue
-            val h = o.optInt("height", 0)
-            if (h >= 240 && (best == null || h < best.second)) best = url to h
-            if (largest == null || h > largest.second) largest = url to h
-        }
-        return (best ?: largest)?.first
+        val list = thumbnailsOf(holder?.optJSONArray("thumbnails"))
+        return (list.filter { it.height >= 240 }.minByOrNull { it.height } ?: list.maxByOrNull { it.height })?.url
     }
 
     private val TOPIC = Regex("""\s+-\s+Topic$""", RegexOption.IGNORE_CASE)
 
     /** A credit without YouTube's " - Topic" channel suffix (like cleanCredit on the web side). */
     fun cleanCredit(credit: String): String = credit.replace(TOPIC, "").trim()
-
-    private fun JSONObject.optStr(key: String): String? =
-        if (!has(key) || isNull(key)) null else (opt(key) as? String)?.takeIf { it.isNotEmpty() }
 }

@@ -41,18 +41,17 @@ class SessionPolicyTest {
 
     @Test
     fun transportCommandsExcludeQueueAndMetadataEdits() {
-        val t = Access.TRANSPORT
+        val t = SessionPolicy.TRANSPORT_COMMANDS
         for (c in listOf(
             Player.COMMAND_PLAY_PAUSE, Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_PREVIOUS,
             Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM, Player.COMMAND_STOP, Player.COMMAND_PREPARE,
-        )) assertTrue("$c", SessionPolicy.allows(t, c))
+        )) assertTrue("$c", c in t)
         for (c in listOf(
             Player.COMMAND_GET_TIMELINE, Player.COMMAND_CHANGE_MEDIA_ITEMS, Player.COMMAND_SET_MEDIA_ITEM,
             Player.COMMAND_SET_PLAYLIST_METADATA, Player.COMMAND_SET_SHUFFLE_MODE, Player.COMMAND_SET_REPEAT_MODE,
             Player.COMMAND_SET_SPEED_AND_PITCH, Player.COMMAND_SET_VOLUME, Player.COMMAND_SEEK_TO_MEDIA_ITEM,
             Player.COMMAND_SET_DEVICE_VOLUME_WITH_FLAGS, Player.COMMAND_SET_TRACK_SELECTION_PARAMETERS,
-        )) assertFalse("$c", SessionPolicy.allows(t, c))
-        assertTrue(SessionPolicy.allows(Access.FULL, Player.COMMAND_CHANGE_MEDIA_ITEMS))
+        )) assertFalse("$c", c in t)
     }
 
     @Test

@@ -355,8 +355,7 @@ class PlaybackService : MediaSessionService() {
         }
         YtDataSpecResolver.allowCiTone = isDebuggable()
         try {
-            (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
-                .registerDefaultNetworkCallback(networkCallback)
+            connectivity().registerDefaultNetworkCallback(networkCallback)
             networkCallbackRegistered = true
         } catch (e: Exception) { // SecurityException without ACCESS_NETWORK_STATE, or too many callbacks
             Log.w(TAG, "No network callback: ${e.javaClass.simpleName}")
@@ -449,8 +448,7 @@ class PlaybackService : MediaSessionService() {
         StreamResolver.cancelPrefetch()
         if (networkCallbackRegistered) {
             try {
-                (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
-                    .unregisterNetworkCallback(networkCallback)
+                connectivity().unregisterNetworkCallback(networkCallback)
             } catch (_: Exception) {
             }
             networkCallbackRegistered = false
@@ -788,7 +786,7 @@ class PlaybackService : MediaSessionService() {
         for (i in 0 until n) {
             val item = p.getMediaItemAt(i)
             val extras = item.mediaMetadata.extras
-            val serial = extras?.getLong(JukeCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L
+            val serial = extras?.getLong(QueueCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L
             val extra = TrackExtras.get(item.mediaId)
             entries.add(
                 LastSession.Entry(
@@ -1071,7 +1069,6 @@ class PlaybackService : MediaSessionService() {
             when (grant) {
                 SessionPolicy.Grant.PLUGIN -> builder.setAvailableSessionCommands(
                     MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
-                        .add(JukeCommands.QUEUE_NEXT)
                         .apply { QueueCommands.ALL.forEach { add(it) } }
                         .build(),
                 )
@@ -1100,13 +1097,13 @@ class PlaybackService : MediaSessionService() {
             args: Bundle,
         ): ListenableFuture<SessionResult> {
             val action = customCommand.customAction
-            val ours = action == JukeCommands.ACTION_QUEUE_NEXT || QueueCommands.ALL.any { it.customAction == action }
+            val ours = QueueCommands.ALL.any { it.customAction == action }
             if (!ours || !isPlugin(session, controller)) {
                 return super.onCustomCommand(session, controller, customCommand, args)
             }
             val p = player ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
             fun tracks(): List<MediaItem>? = try {
-                JukeTracks.parse(JSONArray(args.getString(JukeCommands.ARG_TRACKS) ?: "[]"))
+                JukeTracks.parse(JSONArray(args.getString(QueueCommands.ARG_TRACKS) ?: "[]"))
             } catch (e: TooLargeException) {
                 throw e
             } catch (e: Exception) {
@@ -1122,7 +1119,7 @@ class PlaybackService : MediaSessionService() {
             }
             try {
                 when (action) {
-                    JukeCommands.ACTION_QUEUE_NEXT -> queueNext(p, tracks() ?: return bad)
+                    QueueCommands.ACTION_QUEUE_NEXT -> queueNext(p, tracks() ?: return bad)
                     QueueCommands.ACTION_SET_LIST -> setList(
                         tracks() ?: return bad,
                         args.getInt(QueueCommands.ARG_START, 0),

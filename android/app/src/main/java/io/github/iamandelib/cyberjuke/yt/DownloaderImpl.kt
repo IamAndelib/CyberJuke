@@ -106,7 +106,7 @@ internal object LeanRequests {
         }
     }
 
-    /** What to skip, by URL and body (pure; DownloaderTest). */
+    /** What to skip, by URL and body (pure; LeanResolverTest). */
     enum class Skip { NONE, REFUSE, EMPTY_JSON }
 
     fun classify(url: String, body: ByteArray?): Skip {

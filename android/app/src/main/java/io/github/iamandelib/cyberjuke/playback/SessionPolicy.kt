@@ -19,7 +19,7 @@ import java.security.MessageDigest
  * shuffle/repeat/speed/volume changes and no custom commands.
  *
  * Within FULL, [grant] narrows two controllers further:
- * - The private queue commands (QueueCommands, QUEUE_NEXT) go only to the JukePlayer plugin's
+ * - The private queue commands ([QueueCommands]) go only to the JukePlayer plugin's
  *   controller, which proves itself with a random per-process token in its connection hints
  *   ([ControllerKey]). The media notification controller has our package and uid too, and any
  *   app can make it send a custom command (Media3's CUSTOM_NOTIFICATION_ACTION intent).
@@ -88,7 +88,7 @@ internal object SessionPolicy {
         return Grant.FULL
     }
 
-    /** Only the plugin's controller may send QueueCommands and QUEUE_NEXT. */
+    /** Only the plugin's controller may send [QueueCommands]. */
     fun mayUseQueueCommands(c: Controller, ownPackage: String, processToken: String): Boolean =
         grant(c, ownPackage, processToken) == Grant.PLUGIN
 
@@ -119,9 +119,6 @@ internal object SessionPolicy {
         Player.COMMAND_GET_AUDIO_ATTRIBUTES,
         Player.COMMAND_RELEASE,
     )
-
-    fun allows(access: Access, command: Int): Boolean =
-        access == Access.FULL || command in TRANSPORT_COMMANDS
 
     // ---- media items coming in from a controller (onAddMediaItems / onSetMediaItems) ----------
 

@@ -2,7 +2,7 @@ package io.github.iamandelib.cyberjuke.net
 
 /**
  * What to do when YouTube limits a request (a bot check or rate limit), before calling it a
- * block. Pure (LimitPolicyTest); [io.github.iamandelib.cyberjuke.yt.YtGuard] carries it out.
+ * block. Pure (NetTest); [io.github.iamandelib.cyberjuke.yt.YtGuard] carries it out.
  *
  * 1. It went out over IPv6 and the IPv4 setting is Auto: switch to IPv4 and retry at once.
  *    YouTube judges IPv6 in large blocks, so IPv4 usually just works.

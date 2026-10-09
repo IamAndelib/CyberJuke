@@ -45,6 +45,7 @@ internal object YtCompat {
         val audio: List<Candidate>,
         val muxed: List<Candidate>,
         val hlsUrl: String?,
+        /** Not used for playback; the canary tests check it to tell a real extraction. */
         val durationSec: Long,
     )
 

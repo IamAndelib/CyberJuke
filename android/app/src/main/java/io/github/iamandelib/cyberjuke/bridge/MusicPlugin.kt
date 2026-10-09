@@ -202,14 +202,10 @@ class MusicPlugin : Plugin() {
         if (title.isNullOrEmpty()) {
             call.reject("title is required", "UNAVAILABLE"); return
         }
-        val ytId = call.getString("ytId")?.trim()
+        // Optional (only the YouTube fallback uses it): an invalid one is left out.
+        val ytId = call.getString("ytId")?.trim()?.takeIf { SessionPolicy.isValidYtId(it) }
         val album = call.getString("album")?.trim()?.takeIf { it.isNotEmpty() }
-        val data = call.data
-        val duration = if (data.has("durationSec") && !data.isNull("durationSec")) {
-            (data.opt("durationSec") as? Number)?.toDouble()?.takeIf { it > 0 }
-        } else {
-            null
-        }
+        val duration = call.numArg("durationSec")?.toDouble()?.takeIf { it > 0 }
         // Not guarded: LRCLIB answers during a back-off; only the YouTube fallback is refused.
         run(call, "lyrics '$artist - $title'", lyricsExecutor, guarded = false) {
             lyricsToJs(Lyrics.fetch(ytId, title, artist, album, duration))

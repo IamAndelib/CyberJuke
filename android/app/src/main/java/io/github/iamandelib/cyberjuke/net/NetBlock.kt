@@ -41,16 +41,16 @@ internal class BlockedException(
  * Pure: the clock is passed in, so the state machine is unit-tested (NetBlockTest). Thread-safe.
  */
 internal class BlockState {
-    data class Snapshot(val until: Long, val reason: BlockReason?, val level: Int, val lastTripAt: Long)
+    data class Snapshot(val until: Long, val reason: BlockReason?, val level: Int)
 
     private var level = 0          // steps up the ladder; 0 = at the bottom
     private var until = 0L         // the end of the last back-off (in the past once it ran out)
     private var reason: BlockReason? = null
-    private var lastTripAt = 0L
     private var unproven = false   // tripped, and nothing succeeded since
 
+    /** Tests only. */
     @Synchronized
-    fun snapshot(): Snapshot = Snapshot(until, reason, level, lastTripAt)
+    fun snapshot(): Snapshot = Snapshot(until, reason, level)
 
     @Synchronized
     fun isBlocked(now: Long): Boolean = now < until
@@ -77,7 +77,6 @@ internal class BlockState {
         level = minOf(level + 1, LADDER_MIN.size - 1)
         until = now + step * 60_000L
         this.reason = reason
-        lastTripAt = now
         unproven = true
         return until
     }
@@ -109,7 +108,6 @@ internal class BlockState {
         level = 0
         until = 0L
         reason = null
-        lastTripAt = 0L
         unproven = false
     }
 

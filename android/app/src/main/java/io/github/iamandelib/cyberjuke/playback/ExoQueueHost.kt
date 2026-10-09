@@ -19,7 +19,7 @@ internal class ExoQueueHost(private val p: ExoPlayer) : QueueHost<MediaItem> {
     override val shuffleEnabled: Boolean get() = p.shuffleModeEnabled
 
     override fun serialAt(index: Int): Long =
-        p.getMediaItemAt(index).mediaMetadata.extras?.getLong(JukeCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L
+        p.getMediaItemAt(index).mediaMetadata.extras?.getLong(QueueCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L
 
     override fun shuffleOrder(): IntArray? {
         val n = p.mediaItemCount
@@ -42,7 +42,7 @@ internal class ExoQueueHost(private val p: ExoPlayer) : QueueHost<MediaItem> {
     override fun moveItem(from: Int, to: Int) = p.moveMediaItem(from, to)
 
     override fun insertTagged(at: Int?, items: List<MediaItem>, serials: List<Long>) {
-        val tagged = items.mapIndexed { k, item -> tag(item) { putLong(JukeCommands.EXTRA_QUEUE_SERIAL, serials[k]) } }
+        val tagged = items.mapIndexed { k, item -> tag(item) { putLong(QueueCommands.EXTRA_QUEUE_SERIAL, serials[k]) } }
         if (at == null) p.addMediaItems(tagged) else p.addMediaItems(at, tagged)
     }
 
@@ -60,7 +60,7 @@ internal class ExoQueueHost(private val p: ExoPlayer) : QueueHost<MediaItem> {
         }
         val tagged = items.mapIndexed { k, item ->
             when {
-                serials[k] != 0L -> tag(item) { putLong(JukeCommands.EXTRA_QUEUE_SERIAL, serials[k]) }
+                serials[k] != 0L -> tag(item) { putLong(QueueCommands.EXTRA_QUEUE_SERIAL, serials[k]) }
                 auto.getOrElse(k) { false } -> tag(item) { putBoolean(QueueCommands.EXTRA_AUTOPLAY, true) }
                 else -> item
             }

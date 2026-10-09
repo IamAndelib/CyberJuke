@@ -32,7 +32,6 @@ import io.github.iamandelib.cyberjuke.net.NetBlock
 import io.github.iamandelib.cyberjuke.net.NetPrefs
 import io.github.iamandelib.cyberjuke.playback.BridgeLimits
 import io.github.iamandelib.cyberjuke.playback.ControllerKey
-import io.github.iamandelib.cyberjuke.playback.JukeCommands
 import io.github.iamandelib.cyberjuke.playback.JukeTracks
 import io.github.iamandelib.cyberjuke.playback.JukeUris
 import io.github.iamandelib.cyberjuke.playback.LaunchOptions
@@ -181,6 +180,7 @@ class JukePlayerPlugin : Plugin() {
         }
     }
 
+    /** Already on the main thread (PlayerBus): notified at once, before the state it led to. */
     private val trackErrorListener = PlayerBus.TrackErrorListener { trackId, message, skipped ->
         val data = JSObject()
         data.put("trackId", trackId)
@@ -196,8 +196,9 @@ class JukePlayerPlugin : Plugin() {
         NetBlock.add(blockListener)
         QueueInfo.addLow(queueLowListener)
         main.post {
+            // No page listens yet (it asks getBlockState): armed, so the block's end still is.
             val (until, reason) = NetBlock.active()
-            if (reason != null) announceBlocked(until, reason)
+            if (reason != null) armBlock(until)
             connect()
         }
         openNowPlayingFor(activity?.intent, "page start")
@@ -399,8 +400,8 @@ class JukePlayerPlugin : Plugin() {
     fun setQueue(call: PluginCall) {
         val tracks = call.getArray("tracks") ?: return call.reject("tracks is required")
         val items = parseTracksOrReject(call, tracks) ?: return
-        val startIndex = intArg(call, "startIndex") ?: 0
-        val positionMs = longArg(call, "positionMs") ?: 0L
+        val startIndex = call.intArg("startIndex") ?: 0
+        val positionMs = call.longArg("positionMs") ?: 0L
         val playWhenReady = call.getBoolean("playWhenReady", true) ?: true
         val ctx = call.getObject("context")
         val label = stringArg(call, ctx?.getString("label"), "context.label") ?: return
@@ -490,7 +491,7 @@ class JukePlayerPlugin : Plugin() {
     /**
      * "Add to queue": plays [tracks] right after the current item and after tracks queued
      * earlier (FIFO), then the original queue continues, also with shuffle on. Handled in
-     * PlaybackService as a custom session command (see [JukeCommands.QUEUE_NEXT]).
+     * PlaybackService as a custom session command (see [QueueCommands.QUEUE_NEXT]).
      */
     @PluginMethod
     fun queueNext(call: PluginCall) {
@@ -501,14 +502,14 @@ class JukePlayerPlugin : Plugin() {
             call.resolve()
             return
         }
-        val args = Bundle().apply { putString(JukeCommands.ARG_TRACKS, tracks.toString()) }
-        withController(call) { c -> sendCommand(call, c, JukeCommands.QUEUE_NEXT, args) }
+        val args = Bundle().apply { putString(QueueCommands.ARG_TRACKS, tracks.toString()) }
+        withController(call) { c -> sendCommand(call, c, QueueCommands.QUEUE_NEXT, args) }
     }
 
     /** `removeItem({ index, expectId? })`: done in the service, which checks `expectId` (K2). */
     @PluginMethod
     fun removeItem(call: PluginCall) {
-        val index = intArg(call, "index") ?: return call.reject("index is required")
+        val index = call.intArg("index") ?: return call.reject("index is required")
         val expectId = stringArg(call, call.getString("expectId"), "expectId") ?: return
         withController(call) { c ->
             if (index !in 0 until c.mediaItemCount) {
@@ -526,8 +527,8 @@ class JukePlayerPlugin : Plugin() {
     /** `moveItem({ from, to, expectId? })`: `expectId` is the id at `from` (K2). */
     @PluginMethod
     fun moveItem(call: PluginCall) {
-        val from = intArg(call, "from") ?: return call.reject("from is required")
-        val to = intArg(call, "to") ?: return call.reject("to is required")
+        val from = call.intArg("from") ?: return call.reject("from is required")
+        val to = call.intArg("to") ?: return call.reject("to is required")
         val expectId = stringArg(call, call.getString("expectId"), "expectId") ?: return
         withController(call) { c ->
             val n = c.mediaItemCount
@@ -624,7 +625,7 @@ class JukePlayerPlugin : Plugin() {
 
     @PluginMethod
     fun seekTo(call: PluginCall) {
-        val positionMs = longArg(call, "positionMs") ?: return call.reject("positionMs is required")
+        val positionMs = call.longArg("positionMs") ?: return call.reject("positionMs is required")
         withController(call) { c ->
             c.seekTo(positionMs.coerceAtLeast(0L))
             call.resolve()
@@ -655,7 +656,7 @@ class JukePlayerPlugin : Plugin() {
     /** `skipToIndex({ index, expectId? })`; the service checks `expectId` (K2). */
     @PluginMethod
     fun skipToIndex(call: PluginCall) {
-        val index = intArg(call, "index") ?: return call.reject("index is required")
+        val index = call.intArg("index") ?: return call.reject("index is required")
         val expectId = stringArg(call, call.getString("expectId"), "expectId") ?: return
         withController(call) { c ->
             if (index !in 0 until c.mediaItemCount) {
@@ -817,13 +818,10 @@ class JukePlayerPlugin : Plugin() {
      */
     @PluginMethod
     fun setGestureExclusion(call: PluginCall) {
-        val data = call.data
-        fun num(key: String): Double? =
-            if (data.has(key) && !data.isNull(key)) (data.opt(key) as? Number)?.toDouble() else null
-        val left = num("left")
-        val top = num("top")
-        val width = num("width")
-        val height = num("height")
+        val left = call.numArg("left")?.toDouble()
+        val top = call.numArg("top")?.toDouble()
+        val width = call.numArg("width")?.toDouble()
+        val height = call.numArg("height")?.toDouble()
         val clear = left == null || top == null || width == null || height == null
         main.post {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
@@ -871,12 +869,18 @@ class JukePlayerPlugin : Plugin() {
     private fun announceBlocked(until: Long, reason: BlockReason, force: Boolean = false) {
         if (until <= System.currentTimeMillis()) return
         if (announcedBlock && !force && lastBlockUntil == until) return
-        announcedBlock = true
-        lastBlockUntil = until
+        armBlock(until)
         val data = JSObject()
         data.put("until", until)
         data.put("reason", reason.name)
         notifyListeners("blocked", data)
+    }
+
+    /** A block the page knows of (or will ask about): its end gets announced. */
+    private fun armBlock(until: Long) {
+        if (until <= System.currentTimeMillis()) return
+        announcedBlock = true
+        lastBlockUntil = until
         main.removeCallbacks(unblockTimer)
         main.postDelayed(unblockTimer, (until - System.currentTimeMillis()).coerceAtLeast(0L) + 100L)
     }
@@ -978,17 +982,6 @@ class JukePlayerPlugin : Plugin() {
     private fun Bundle.putExpect(expectId: String) {
         if (expectId.isNotEmpty()) putString(QueueCommands.ARG_EXPECT, expectId)
     }
-
-    /** JS numbers arrive as Integer, Long or Double; PluginCall.getInt/getLong are type-strict. */
-    private fun numArg(call: PluginCall, key: String): Number? {
-        val data = call.data
-        if (!data.has(key) || data.isNull(key)) return null
-        return data.opt(key) as? Number
-    }
-
-    private fun intArg(call: PluginCall, key: String): Int? = numArg(call, key)?.toInt()
-
-    private fun longArg(call: PluginCall, key: String): Long? = numArg(call, key)?.toLong()
 
     companion object {
         private const val TAG = "CyberJukePlugin"

@@ -4,7 +4,6 @@ import androidx.media3.common.C
 import androidx.media3.common.Player
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
-import io.github.iamandelib.cyberjuke.playback.JukeCommands
 import io.github.iamandelib.cyberjuke.playback.QueueCommands
 import io.github.iamandelib.cyberjuke.playback.QueueInfo
 import org.json.JSONObject
@@ -46,7 +45,7 @@ internal object StateEncoder {
                 val extras = item.mediaMetadata.extras
                 kinds.append(
                     when {
-                        (extras?.getLong(JukeCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L).let { it != 0L && it in pending } -> 'q'
+                        (extras?.getLong(QueueCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L).let { it != 0L && it in pending } -> 'q'
                         extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) == true -> 'a'
                         else -> 'l'
                     },

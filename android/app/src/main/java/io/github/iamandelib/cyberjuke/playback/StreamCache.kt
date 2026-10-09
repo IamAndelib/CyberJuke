@@ -92,6 +92,7 @@ internal class TtlLru<K, V>(private val maxEntries: Int) {
     @Synchronized
     fun clear() = map.clear()
 
+    /** Tests only. */
     @Synchronized
     fun size(): Int = map.size
 }
@@ -123,6 +124,7 @@ internal class LatestTaskRunner(private val executor: ExecutorService) {
         key = null
     }
 
+    /** Tests only. */
     @Synchronized
     fun pendingKey(): String? = key?.takeIf { future?.isDone == false }
 }

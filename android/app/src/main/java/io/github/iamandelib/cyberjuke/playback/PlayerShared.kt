@@ -164,21 +164,6 @@ internal object ControllerKey {
     fun of(hints: Bundle?): String? = hints?.getString(HINT)
 }
 
-/** Custom session commands between JukePlayerPlugin and PlaybackService. */
-internal object JukeCommands {
-    /**
-     * queueNext: args [ARG_TRACKS] = the NativeTrack[] JSON. A custom command because the
-     * shuffle order can only be set on the service's ExoPlayer, not through a MediaController.
-     */
-    const val ACTION_QUEUE_NEXT = "io.github.iamandelib.cyberjuke.QUEUE_NEXT"
-    const val ARG_TRACKS = "tracks"
-
-    val QUEUE_NEXT = SessionCommand(ACTION_QUEUE_NEXT, Bundle.EMPTY)
-
-    /** MediaMetadata extra (Long) marking a user-queued item; unique per queueNext insert. */
-    const val EXTRA_QUEUE_SERIAL = "cyberjukeQueueSerial"
-}
-
 /**
  * In-process bridge from PlaybackService to JukePlayerPlugin (both live in the app process).
  * Listeners are invoked on the main thread.
