@@ -1,5 +1,20 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { canSkipNext, currentTrack, hasCurrent, isAdvancing, isBuffering, isPlaying, livePosition, playContext, player, upNextSections, type PlayerState } from '../../player';
+import {
+  canSkipNext,
+  currentId,
+  currentTrack,
+  durationMs,
+  hasCurrent,
+  isAdvancing,
+  isBuffering,
+  isPlaying,
+  playContext,
+  player,
+  queuePlace,
+  repeatMode,
+  shuffleOn,
+  upNextSections,
+} from '../../player';
 import { block } from '../../stores/block';
 import { toggleLikeWithUndo } from '../../stores/undo';
 import { toast } from '../../stores/toast';
@@ -168,16 +183,16 @@ interface SeekDrag {
   ms: number;
 }
 
-function SeekBar({ s }: { s: PlayerState }) {
-  // Re-renders once a second while playing (the time shown), not every frame.
-  useTickValue(s.isPlaying && !s.isBuffering, () => Math.floor(positionNow() / 1000));
-  const live = livePosition(s);
+function SeekBar() {
+  // Re-renders once a second while playing (the time shown), and on a seek: not every frame.
+  useTickValue(isAdvancing.value, () => Math.floor(positionNow() / 1000));
+  const live = positionNow();
   const [drag, setDrag] = useState<SeekDrag | null>(null);
   // The drag in progress, read by whichever event ends it first.
   const dragRef = useRef<SeekDrag | null>(null);
   const input = useRef<HTMLInputElement>(null);
-  const id = s.current?.id;
-  const dur = s.durationMs;
+  const id = currentId.value ?? undefined;
+  const dur = durationMs.value;
   // A drag left over from another track (it changed mid-drag) shows nothing.
   const pos = drag && drag.id === id ? drag.ms : live;
   const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0;
@@ -390,9 +405,9 @@ export function NowPlaying() {
   );
 }
 
+/** The sheet's contents. Reads only the track and the lyrics toggle: the clock re-renders the seek bar alone. */
 function NowPlayingContent() {
-  const s = player.state.value;
-  const t = s.current;
+  const t = currentTrack.value;
   const showLyrics = lyricsOpen.value;
   return (
     <>
@@ -407,7 +422,7 @@ function NowPlayingContent() {
             </button>
             <div class="np-head-title">
               <span class="np-kicker">Now playing</span>
-              <NpFrom s={s} />
+              <NpFrom />
             </div>
             <button class="icon-btn" onClick={() => (menuTrack.value = t)} aria-label="More options" data-testid="np-more">
               <Icon name="more" />
@@ -417,7 +432,7 @@ function NowPlayingContent() {
           <div class={'np-art dos' + (showLyrics ? ' lyrics' : '')}>
             <div class="dos-frame">
               {showLyrics ? (
-                <LyricsPanel track={t} s={s} />
+                <LyricsPanel track={t} />
               ) : (
                 <button class="np-art-btn" onClick={() => (lyricsOpen.value = true)} aria-label="Show lyrics" data-testid="np-art">
                   <Art track={t} size="fill" />
@@ -459,36 +474,8 @@ function NowPlayingContent() {
             )}
           </div>
 
-          <SeekBar s={s} />
-
-          <div class="np-controls">
-            <button
-              class={'icon-btn toggle-icon' + (s.shuffle ? ' on' : '')}
-              aria-pressed={s.shuffle}
-              aria-label={s.shuffle ? 'Shuffle on' : 'Shuffle off'}
-              onClick={() => player.setShuffle(!s.shuffle)}
-              data-testid="np-shuffle"
-            >
-              <Icon name="shuffle" />
-            </button>
-            <button class="icon-btn big" aria-label="Previous track" onClick={() => player.prev()} data-testid="np-prev">
-              <Icon name="prev" size={36} />
-            </button>
-            <button class="play-btn" aria-label={s.isPlaying ? 'Pause' : 'Play'} onClick={() => player.toggle()} data-testid="np-toggle">
-              <PlayPauseIcon size={40} />
-            </button>
-            <NextButton size={36} class="icon-btn big" testid="np-next" />
-            <button
-              class={'icon-btn toggle-icon' + (s.repeat !== 'off' ? ' on' : '')}
-              aria-pressed={s.repeat !== 'off'}
-              aria-label={REPEAT_LABEL[s.repeat]}
-              onClick={() => player.setRepeat(NEXT_REPEAT[s.repeat])}
-              data-testid="np-repeat"
-              data-mode={s.repeat}
-            >
-              <Icon name={s.repeat === 'one' ? 'repeatOne' : 'repeat'} />
-            </button>
-          </div>
+          <SeekBar />
+          <NpControls />
 
           {isGlobal(t) ? (
             <div class="np-post np-global" data-testid="np-global">
@@ -505,10 +492,46 @@ function NowPlayingContent() {
             </button>
           )}
 
-          <UpNext s={s} />
+          <UpNext />
         </div>
       )}
     </>
+  );
+}
+
+/** Shuffle, Previous, Play/Pause, Next, Repeat. */
+function NpControls() {
+  const shuffle = shuffleOn.value;
+  const repeat = repeatMode.value;
+  return (
+    <div class="np-controls">
+      <button
+        class={'icon-btn toggle-icon' + (shuffle ? ' on' : '')}
+        aria-pressed={shuffle}
+        aria-label={shuffle ? 'Shuffle on' : 'Shuffle off'}
+        onClick={() => player.setShuffle(!shuffle)}
+        data-testid="np-shuffle"
+      >
+        <Icon name="shuffle" />
+      </button>
+      <button class="icon-btn big" aria-label="Previous track" onClick={() => player.prev()} data-testid="np-prev">
+        <Icon name="prev" size={36} />
+      </button>
+      <button class="play-btn" aria-label={isPlaying.value ? 'Pause' : 'Play'} onClick={() => player.toggle()} data-testid="np-toggle">
+        <PlayPauseIcon size={40} />
+      </button>
+      <NextButton size={36} class="icon-btn big" testid="np-next" />
+      <button
+        class={'icon-btn toggle-icon' + (repeat !== 'off' ? ' on' : '')}
+        aria-pressed={repeat !== 'off'}
+        aria-label={REPEAT_LABEL[repeat]}
+        onClick={() => player.setRepeat(NEXT_REPEAT[repeat])}
+        data-testid="np-repeat"
+        data-mode={repeat}
+      >
+        <Icon name={repeat === 'one' ? 'repeatOne' : 'repeat'} />
+      </button>
+    </div>
   );
 }
 
@@ -517,12 +540,12 @@ function NowPlayingContent() {
  * or "Radio · <seed>" for a radio. Without shuffle the position ("3 of 50") comes
  * first; under shuffle the position means little, so only the source shows.
  */
-function NpFrom({ s }: { s: PlayerState }) {
+function NpFrom() {
   const ctx = playContext.value;
   const seed = upNextSections.value.seed;
   const from = !ctx?.label ? '' : ctx.mode === 'radio' ? `Radio · ${seed?.title || ctx.label}` : `Playing from ${ctx.label}`;
-  const pos = s.queue.length > 1 ? `${s.index + 1} of ${s.queue.length}` : 'Single track';
-  const text = s.shuffle && from ? from : from ? `${pos} · ${from}` : pos;
+  const pos = queuePlace.value;
+  const text = shuffleOn.value && from ? from : from ? `${pos} · ${from}` : pos;
   return (
     <span class="np-from" data-testid="np-from">
       <Marquee text={text} />

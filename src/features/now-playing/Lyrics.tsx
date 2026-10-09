@@ -11,7 +11,7 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { activeLine, lyrics as client, type Lyrics, type LyricsOutcome } from '../../data/lyrics';
 import type { Track } from '../../data/model';
-import { livePosition, player, type PlayerState } from '../../player';
+import { durationMs, isAdvancing, livePosition, player, type PlayerState } from '../../player';
 import { online } from '../../core/network';
 import { smoothScrolling } from '../../ui/clickGuard';
 import { reducedMotion } from '../../core/motion';
@@ -66,8 +66,8 @@ function useLyrics(track: Track, durationMs: number): [LyricsOutcome | null, () 
   return [state.id === track.id ? state.outcome : null, () => setAttempt((n) => n + 1)];
 }
 
-export function LyricsPanel({ track, s }: { track: Track; s: PlayerState }) {
-  const [outcome, retry] = useLyrics(track, s.durationMs);
+export function LyricsPanel({ track }: { track: Track }) {
+  const [outcome, retry] = useLyrics(track, durationMs.value);
   const isOnline = online.value;
   const failed = outcome?.status === 'error';
   // Back online after a failure: try again by itself.
@@ -91,7 +91,7 @@ export function LyricsPanel({ track, s }: { track: Track; s: PlayerState }) {
         </LyricsState>
       );
   else if (!outcome.lyrics.found) body = <LyricsState text="No lyrics found" />;
-  else if (outcome.lyrics.synced) body = <SyncedLyrics key={track.id} lyrics={outcome.lyrics} s={s} />;
+  else if (outcome.lyrics.synced) body = <SyncedLyrics key={track.id} lyrics={outcome.lyrics} />;
   else if (outcome.lyrics.plain) body = <PlainLyrics key={track.id} text={outcome.lyrics.plain} />;
   else body = <LyricsState text="♪ Instrumental ♪" />;
   const credit = outcome?.status === 'ok' && outcome.lyrics.found ? creditFor(outcome.lyrics.source) : '';
@@ -139,11 +139,11 @@ function PlainLyrics({ text }: { text: string }) {
   );
 }
 
-function SyncedLyrics({ lyrics, s }: { lyrics: Lyrics; s: PlayerState }) {
+function SyncedLyrics({ lyrics }: { lyrics: Lyrics }) {
   const lines = lyrics.synced!;
   // A little early reads better. Re-renders only when the line changes.
   const lineAt = (st: PlayerState) => activeLine(lines, livePosition(st) + 150);
-  const cur = useTickValue(s.isPlaying && !s.isBuffering, () => lineAt(player.state.peek()));
+  const cur = useTickValue(isAdvancing.value, () => lineAt(player.state.peek()));
   const box = useRef<HTMLDivElement>(null);
   const pausedUntil = useRef(0);
   const first = useRef(true);

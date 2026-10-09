@@ -40,6 +40,35 @@ test('playback with the sheet closed re-renders (almost) nothing', async ({ page
 });
 
 /**
+ * With Now Playing open, the clock ticking re-renders the clock and the seek bar, not the
+ * sheet. Before this was fixed, the whole sheet (Up next, every row's art) re-rendered every
+ * second: about 120 component renders a second with a full Up next.
+ */
+test('playback with Now Playing open re-renders the clock, not the sheet', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('track-play').first().click();
+  await page.getByTestId('mini-open').click();
+  await expect(page.getByTestId('upnext-row').first()).toBeVisible();
+  const time = page.getByTestId('time-pos');
+  const t1 = await time.textContent();
+  await expect(time).not.toHaveText(t1!);
+  await page.evaluate(() => (window as unknown as { __cyberjukeRenders: Renders }).__cyberjukeRenders.reset());
+  const t0 = Date.now();
+  const t2 = await time.textContent();
+  // Four ticks of the clock.
+  for (let i = 0; i < 4; i++) {
+    const t = await time.textContent();
+    await expect(time).not.toHaveText(t!);
+  }
+  const secs = (Date.now() - t0) / 1000;
+  const counts = await page.evaluate(() => ({ ...(window as unknown as { __cyberjukeRenders: Renders }).__cyberjukeRenders.counts }));
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  console.info(`Now Playing open, ${t2} on, renders over ${secs.toFixed(1)} s: ${JSON.stringify(counts)} (${(total / secs).toFixed(2)}/s)`);
+  expect(counts.NowPlaying ?? 0).toBe(0);
+  expect(total / secs, 'component renders per second').toBeLessThan(3);
+});
+
+/**
  * A star tap re-renders the star (and its tile), never the grid or page around it. Before
  * this was fixed, the favourites were read at the top of the grids and pages: one tap
  * re-rendered every tile of the Artists grid, even from an artist page on top of it.

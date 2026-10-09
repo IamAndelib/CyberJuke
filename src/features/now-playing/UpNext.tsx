@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'preact/hooks';
-import { currentId, player, playContext, upNextSections, type PlayerState, type UpItem, type UpNextKind } from '../../player';
+import { currentId, player, playContext, repeatMode, shuffleOn, upNextSections, type UpItem, type UpNextKind } from '../../player';
 import { toast } from '../../stores/toast';
 import { Icon } from '../../ui/icons';
 import { Art } from '../../ui/components/Art';
@@ -47,8 +47,9 @@ function focusRow(root: HTMLElement, r: Refocus): boolean {
  * ("Next from: <source>"), then autoplay ("Autoplay · similar to <seed>"). Up and Down
  * move a queued or list track within its section; Remove (every row) offers Undo.
  */
-export function UpNext({ s }: { s: PlayerState }) {
+export function UpNext() {
   const sec = upNextSections.value;
+  const shuffle = shuffleOn.value;
   const ctx = playContext.value;
   const total = sec.queued.length + sec.list.length + sec.autoplay.length;
   const guardUntil = useRef(0);
@@ -119,7 +120,7 @@ export function UpNext({ s }: { s: PlayerState }) {
             </button>
             <div class="upnext-actions">
               {/* Reorder within each section (with shuffle on the order is random, so no arrows). */}
-              {!s.shuffle ? (
+              {!shuffle ? (
                 <>
                   <button
                     class="icon-btn"
@@ -164,10 +165,10 @@ export function UpNext({ s }: { s: PlayerState }) {
     <section ref={root} class="upnext" data-testid="up-next">
       <div class="section-head">
         <h3 class="section-title">Up next</h3>
-        <span class="dim small">{s.shuffle ? 'Shuffled · turn shuffle off to reorder' : `${total} track${total === 1 ? '' : 's'}`}</span>
+        <span class="dim small">{shuffle ? 'Shuffled · turn shuffle off to reorder' : `${total} track${total === 1 ? '' : 's'}`}</span>
       </div>
       {total === 0 ? (
-        <div class="dim small upnext-empty">{s.repeat === 'all' ? 'Queue repeats from the top.' : 'Nothing queued. ⋯ → Add to queue plays a track next.'}</div>
+        <div class="dim small upnext-empty">{repeatMode.value === 'all' ? 'Queue repeats from the top.' : 'Nothing queued. ⋯ → Add to queue plays a track next.'}</div>
       ) : (
         <ol class="list compact">
           {section('queued', 'Queued by you', sec.queued)}

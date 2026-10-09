@@ -50,17 +50,22 @@ function useTicker(active: boolean, fn: () => void): void {
 }
 
 /**
- * `read()` now; while `active`, re-render only when what it returns changes (e.g.
- * the second shown, or the lyric line being sung).
+ * `read()` now; re-render only when what it returns changes (e.g. the second shown, or the
+ * lyric line being sung): checked every tick while `active`, and on every position sample
+ * (a seek, a pause, a new track).
  */
 export function useTickValue<T>(active: boolean, read: () => T): T {
   const [, force] = useState(0);
   const value = read();
   const shown = useRef(value);
   shown.current = value;
-  useTicker(active, () => {
+  const check = () => {
     if (!Object.is(read(), shown.current)) force((n) => n + 1);
-  });
+  };
+  useTicker(active, check);
+  const latest = useRef(check);
+  latest.current = check;
+  useEffect(() => positionSample.subscribe(() => latest.current()), []);
   return value;
 }
 
