@@ -5,9 +5,13 @@ import { buildIndex, searchGenres, searchTitles, searchTracks } from '../../data
 import { musicTracks, type MusicFilter, type MusicItem } from '../../data/ytmusic';
 import { catalog } from '../../stores/catalog';
 import { genres } from '../../stores/genres';
-import { addRecentSearch, loadRecentSearches, recentSearches, removeRecentSearch } from '../../stores/searches';
+import { addRecentSearch, clearRecentSearches, loadRecentSearches, recentSearches, removeRecentSearch, restoreRecentSearches } from '../../stores/searches';
+import { toast } from '../../stores/toast';
+import { isFavoriteArtist, isFavoriteGenre } from '../../stores/library';
+import { useChunks } from '../../ui/useChunks';
 import { Icon } from '../../ui/icons';
 import {
+  openArtistPage,
   openGenrePage,
   popPage,
   read,
@@ -15,6 +19,7 @@ import {
   searchMode,
   searchQuery as query,
   type AlbumRef,
+  type Place,
   type SearchContext,
   type SearchMode,
 } from '../../ui/nav';
@@ -47,13 +52,16 @@ const FILTERS: RailItem<MusicFilter>[] = (['songs', 'albums', 'artists', 'playli
   testid: `filter-${id}`,
 }));
 
-function useDebounced<T>(value: T, ms: number): T {
+/** The query after a pause in typing; clearing the field takes effect at once. */
+function useDebounced(value: string, ms: number): string {
   const [v, setV] = useState(value);
+  const cleared = !value.trim();
   useEffect(() => {
+    if (cleared) return setV(value);
     const id = setTimeout(() => setV(value), ms);
     return () => clearTimeout(id);
-  }, [value, ms]);
-  return v;
+  }, [value, ms, cleared]);
+  return cleared ? value : v;
 }
 
 /** The one place a wider scope is suggested: under few or no results. */
@@ -84,7 +92,87 @@ function HereLoading() {
  */
 const NO_ALBUMS: AlbumRef[] = [];
 
+/** How many name matches Here shows at most. */
+const MAX_PLACES = 100;
+
+/** One genre or artist found by name; a tap opens its page. */
+function PlaceRow({ place }: { place: Place }) {
+  const fav = place.kind === 'genre' ? isFavoriteGenre(place.name) : isFavoriteArtist(place.name);
+  return (
+    <li>
+      <button
+        type="button"
+        class="place-row"
+        onClick={() => (place.kind === 'genre' ? openGenrePage(place.name) : openArtistPage(place.name))}
+        data-testid="here-place"
+        data-place={place.name}
+      >
+        <span class="place-name">
+          {fav && (
+            <span class="place-fav" aria-label="favourite">
+              ★{' '}
+            </span>
+          )}
+          {place.name}
+        </span>
+        {place.count != null && (
+          <span class="dim small">
+            {place.count} track{place.count === 1 ? '' : 's'}
+          </span>
+        )}
+        <span class="place-go" aria-hidden="true">
+          &gt;
+        </span>
+      </button>
+    </li>
+  );
+}
+
+/**
+ * Here on the Genres and Artists tabs: the genres or artists themselves, found by name
+ * (typo-tolerant, like every search). An empty query lists them all, A to Z.
+ */
+function PlaceResults({ q, ctx, places }: { q: string; ctx: SearchContext; places: Place[] }) {
+  const all = useMemo(() => [...places].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })), [places]);
+  const hits = useMemo(() => (q.trim() ? searchTitles(places, (p) => p.name, q, MAX_PLACES) : all), [places, all, q]);
+  const { shown, sentinel, more } = useChunks(hits.length, q.trim() ? null : `search:places:${ctx.label}`);
+  const what = ctx.label.toLowerCase();
+  if (!places.length) return <HereLoading />;
+  if (!hits.length) {
+    return (
+      <>
+        <EmptyState title="No matches" testid="here-empty">
+          No {what} match “{q.trim()}”.
+        </EmptyState>
+        <Bridge q={q} to="jukebox" />
+      </>
+    );
+  }
+  return (
+    <div data-testid="here-places">
+      <div class="section-head">
+        <h2 class="section-title">{ctx.label}</h2>
+        <span class="dim small" data-testid="search-count">
+          {q.trim() ? `${hits.length} match${hits.length === 1 ? '' : 'es'}` : `${hits.length} ${what}`}
+        </span>
+      </div>
+      <ul class="place-list">
+        {hits.slice(0, shown).map((p) => (
+          <PlaceRow key={p.kind + ':' + p.name} place={p} />
+        ))}
+      </ul>
+      {more && <div ref={sentinel} class="list-foot" aria-hidden="true" />}
+      {q.trim() && hits.length < BRIDGE_BELOW && <Bridge q={q} to="jukebox" />}
+    </div>
+  );
+}
+
 function HereResults({ q, ctx }: { q: string; ctx: SearchContext }) {
+  if (ctx.places) return <PlaceResults q={q} ctx={ctx} places={read(ctx.places)} />;
+  return <TrackHereResults q={q} ctx={ctx} />;
+}
+
+function TrackHereResults({ q, ctx }: { q: string; ctx: SearchContext }) {
   const tracks = read(ctx.tracks);
   const loading = ctx.loading ? read(ctx.loading) : false;
   const albums = ctx.albums ? read(ctx.albums) : NO_ALBUMS;
@@ -307,6 +395,17 @@ function RecentSearches({ onPick }: { onPick: (q: string) => void }) {
     <section class="recent-searches" data-testid="recent-searches">
       <div class="section-head">
         <h2 class="section-title">Recent searches</h2>
+        <button
+          type="button"
+          class="link-btn recent-clear"
+          onClick={() => {
+            const old = clearRecentSearches();
+            toast('Recent searches cleared', 4000, { label: 'Undo', run: () => restoreRecentSearches(old) });
+          }}
+          data-testid="recent-clear"
+        >
+          [Clear all]
+        </button>
       </div>
       <ul class="recent-list">
         {items.map((q) => (

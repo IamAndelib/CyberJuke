@@ -234,6 +234,19 @@ export interface SearchContext {
   loading?: Source<boolean>;
   /** Releases whose titles Here also matches, shown as a cover row above the tracks. */
   albums?: Source<AlbumRef[]>;
+  /**
+   * Genres or artists to find by name (the Genres and Artists tabs): Here then lists
+   * these instead of tracks, and a tap opens the genre or artist page.
+   */
+  places?: Source<Place[]>;
+}
+
+/** A genre or an artist that Here can find by name. */
+export interface Place {
+  name: string;
+  kind: 'genre' | 'artist';
+  /** Tracks in it, shown for genres. */
+  count?: number;
 }
 
 /** Which mounted page a component belongs to (`<tab>:root` or `<tab>:<entry id>`); set by App. */
@@ -300,6 +313,7 @@ export function useSearchContext(ctx: SearchContext | null): void {
       load: () => latest.current?.load?.(),
       loading: () => (latest.current?.loading ? read(latest.current.loading) : false),
       albums: () => (latest.current?.albums ? read(latest.current.albums) : []),
+      ...(latest.current?.places ? { places: () => (latest.current?.places ? read(latest.current.places) : []) } : {}),
     };
     contexts.value = { ...contexts.value, [key]: mine };
     return () => {

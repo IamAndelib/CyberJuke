@@ -224,7 +224,7 @@ test.describe('Global behind a bot check', () => {
   });
 });
 
-test('Here: search from a genre page is scoped to it; Home and the grids have no Here', async ({ page }) => {
+test('Here: search from a genre page is scoped to it; Home has no Here', async ({ page }) => {
   await page.goto('/');
   await openSearch(page);
   await expect(page.getByTestId('mode-here')).toHaveCount(0);
@@ -232,9 +232,6 @@ test('Here: search from a genre page is scoped to it; Home and the grids have no
   await expect(page.getByTestId('search-latest')).toBeVisible();
   await page.getByTestId('search-close').click();
   await page.getByTestId('tab-genres').click();
-  await openSearch(page);
-  await expect(page.getByTestId('mode-here')).toHaveCount(0);
-  await page.getByTestId('search-close').click();
 
   const tile = page.getByTestId('genre-grid').locator('[data-testid="genre-tile"][data-genre="pop"]');
   await tile.click();
@@ -288,4 +285,82 @@ test('the members-only and banned posts never show signed out', async ({ page })
   }
   await page.getByTestId('search-close').click();
   await waitForTracks(page);
+});
+
+test('Here on the Genres tab finds genres by name, typos included; a tap opens the genre', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('tab-genres').click();
+  await expect(page.getByTestId('genre-grid').getByTestId('genre-tile').first()).toBeVisible();
+  await openSearch(page);
+  await expect(page.getByTestId('mode-here')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('search-input')).toHaveAttribute('placeholder', 'Search in Genres');
+  // Empty: every genre, A to Z.
+  const places = page.getByTestId('here-places').getByTestId('here-place');
+  await expect(places.first()).toBeVisible();
+  const names = await places.evaluateAll((els) => els.map((e) => e.getAttribute('data-place')!));
+  expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
+  // A typo still finds it.
+  await page.getByTestId('search-input').fill('synthwav');
+  await expect(places.first()).toHaveAttribute('data-place', 'synthwave');
+  await places.first().click();
+  await expect(page.getByTestId('screen-genre').locator('.topbar-title')).toHaveText(/synthwave/i);
+  // Back returns to Search, query kept.
+  await page.getByTestId('genre-back').click();
+  await expect(page.getByTestId('search-input')).toHaveValue('synthwav');
+});
+
+test('Here on the Artists tab finds artists by name and opens the artist page', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('tab-artists').click();
+  const tile = page.getByTestId('artist-grid').getByTestId('artist-tile').first();
+  await expect(tile).toBeVisible();
+  const name = (await tile.getAttribute('data-artist'))!;
+  await openSearch(page);
+  await expect(page.getByTestId('search-input')).toHaveAttribute('placeholder', 'Search in Artists');
+  await page.getByTestId('search-input').fill(name.slice(0, Math.max(3, name.length - 1)));
+  const hit = page.getByTestId('here-places').locator(`[data-testid="here-place"][data-place="${name}"]`);
+  await expect(hit).toBeVisible();
+  await hit.click();
+  await expect(page.getByTestId('screen-artist')).toBeVisible();
+  // Nothing matching: a way on to the whole Jukebox.
+  await page.getByTestId('artist-back').click();
+  await page.getByTestId('search-input').fill('zzqqxx');
+  await expect(page.getByTestId('here-empty')).toBeVisible();
+});
+
+test('Recent searches: [Clear all] empties the list, Undo brings it back', async ({ page }) => {
+  await page.goto('/');
+  for (const q of ['neon', 'drive']) {
+    await openSearch(page);
+    await page.getByTestId('search-input').fill(q);
+    await page.getByTestId('search-input').press('Enter');
+    await page.getByTestId('search-close').click();
+  }
+  await openSearch(page);
+  await page.getByTestId('search-input').fill('');
+  const items = page.getByTestId('recent-search');
+  await expect(items).toHaveText([/drive/, /neon/]);
+  await page.getByTestId('recent-clear').click();
+  await expect(page.getByTestId('recent-searches')).toHaveCount(0);
+  const t = page.getByTestId('toast').filter({ hasText: 'Recent searches cleared' });
+  await t.getByTestId('toast-action').click();
+  await expect(items).toHaveText([/drive/, /neon/]);
+});
+
+test('clearing the field shows the empty-query view at once, never results for the old query', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('tab-genres').click();
+  await expect(page.getByTestId('genre-grid').getByTestId('genre-tile').first()).toBeVisible();
+  await openSearch(page);
+  await page.getByTestId('search-input').fill('zzqqxx');
+  await expect(page.getByTestId('here-empty')).toBeVisible();
+  // Clear and look in the same task: no debounce wait in between.
+  const stale = await page.getByTestId('search-input').evaluate(async (el: HTMLInputElement) => {
+    el.value = '';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+    return !!document.querySelector('[data-testid="here-empty"]');
+  });
+  expect(stale).toBe(false);
+  await expect(page.getByTestId('here-places')).toBeVisible();
 });

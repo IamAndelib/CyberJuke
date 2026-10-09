@@ -256,3 +256,56 @@
     opacity: 0.6;
   }
 }
+
+/* "[Clear all]" on the right of the Recent searches heading, a full-size touch target. */
+.recent-clear {
+  min-height: 48px;
+  padding: 0 8px;
+  margin-right: -8px;
+}
+
+/* Here on the Genres and Artists tabs: genres or artists found by name. */
+.place-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.place-list > li {
+  border-bottom: 1px dashed var(--color-border);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 52px;
+}
+.place-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 var(--gutter);
+  text-align: left;
+}
+.place-row:active {
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+}
+.place-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.place-fav {
+  color: var(--color-accent);
+}
+.place-row:active .place-fav,
+.place-row:active .dim {
+  color: inherit;
+}
+.place-go {
+  flex: none;
+  font-family: var(--font-display);
+  color: var(--color-fg-dim);
+}

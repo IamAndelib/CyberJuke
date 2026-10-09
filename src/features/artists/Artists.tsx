@@ -1,10 +1,11 @@
+import { computed } from '@preact/signals';
 import { artistKey } from '../../data/artists';
 import { catalog } from '../../stores/catalog';
 import { artistIndex, displayArtist } from '../../stores/artists';
 import { favoriteArtists } from '../../stores/library';
 import { toggleFavoriteArtistWithUndo } from '../../stores/undo';
 import { Icon } from '../../ui/icons';
-import { openArtistPage } from '../../ui/nav';
+import { openArtistPage, useSearchContext, type Place } from '../../ui/nav';
 import { ErrorState } from '../../ui/components/TrackList';
 import { Screen } from '../../ui/components/Screen';
 import { AZHead, GridSortRail } from '../../ui/components/GridSort';
@@ -67,8 +68,18 @@ function ArtistTiles({ list, sort, favKeys }: { list: Artist[]; sort: 'popular' 
 }
 
 /** The Artists tab's root: Favourites, then everyone on the Jukebox (Popular or A–Z). */
+const NO_TRACKS: never[] = [];
+/** Here on the Artists tab: every artist, found by name (one array per catalog change). */
+const artistPlaces = computed(() => artistIndex.value.artists.map((a): Place => ({ name: a.name, kind: 'artist' })));
+
 export function ArtistGrid() {
   const list = artistIndex.value.artists;
+  // Here on this tab finds artists by name.
+  useSearchContext({
+    label: 'Artists',
+    tracks: () => NO_TRACKS,
+    places: artistPlaces,
+  });
   const favs = favoriteArtists.value;
   // M8: the Favourites section changes on the next visit or after a scroll, never under the finger.
   const [favSection, anchor] = useSettled(favs);

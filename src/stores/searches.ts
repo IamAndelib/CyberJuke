@@ -68,3 +68,19 @@ export function removeRecentSearch(q: string): void {
   recentSearches.value = next;
   save();
 }
+
+/** Empties the list; returns what it held, for Undo (restoreRecentSearches). */
+export function clearRecentSearches(): string[] {
+  const old = recentSearches.value;
+  if (!old.length) return old;
+  recentSearches.value = [];
+  save();
+  return old;
+}
+
+/** Undo of a clear: the old searches come back, after any made since. */
+export function restoreRecentSearches(old: string[]): void {
+  const next = clean([...recentSearches.value, ...old]);
+  recentSearches.value = next;
+  save();
+}

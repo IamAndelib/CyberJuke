@@ -1,3 +1,4 @@
+import { computed } from '@preact/signals';
 import { source } from '../../data';
 import { catalog } from '../../stores/catalog';
 import { catalogGenre, genres, genresComplete } from '../../stores/genres';
@@ -6,7 +7,7 @@ import { toggleFavoriteGenreWithUndo } from '../../stores/undo';
 import { useMemo } from 'preact/hooks';
 import { takeSections, useChunks } from '../../ui/useChunks';
 import { Icon } from '../../ui/icons';
-import { openGenrePage, popPage, useSearchContext } from '../../ui/nav';
+import { openGenrePage, popPage, useSearchContext, type Place } from '../../ui/nav';
 import { ErrorState, PagedTracks, PlayShuffle } from '../../ui/components/TrackList';
 import { Screen } from '../../ui/components/Screen';
 import { AZHead, GridSortRail } from '../../ui/components/GridSort';
@@ -39,8 +40,18 @@ function GenreTile({ name, fav }: { name: string; fav: boolean }) {
 }
 
 /** The Genres tab's root: Favourites, then every genre (Popular or A–Z). */
+const NO_TRACKS: never[] = [];
+/** Here on the Genres tab: every genre, found by name (one array per catalog change). */
+const genrePlaces = computed(() => genres.value.map((g): Place => ({ name: g.name, kind: 'genre', count: g.count })));
+
 export function GenreGrid() {
   const list = genres.value;
+  // Here on this tab finds genres by name.
+  useSearchContext({
+    label: 'Genres',
+    tracks: () => NO_TRACKS,
+    places: genrePlaces,
+  });
   const favs = favoriteGenres.value;
   // M8: the Favourites section changes on the next visit or after a scroll, never under the finger.
   const [favSection, anchor] = useSettled(favs);
