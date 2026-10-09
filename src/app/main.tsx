@@ -13,6 +13,8 @@ import '../features/search/search.css';
 import '../features/library/library.css';
 import '../features/settings/settings.css';
 import '../features/now-playing/now-playing.css';
+// Buttons in the app's chrome act on a tap even while a list is still gliding.
+import '../ui/tapThrough';
 import { render } from 'preact';
 import { effect } from '@preact/signals';
 import { Capacitor } from '@capacitor/core';

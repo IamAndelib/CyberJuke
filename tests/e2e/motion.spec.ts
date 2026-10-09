@@ -239,10 +239,11 @@ test('the back-to-top and search buttons show their press, and the search button
   await start(page);
   const screen = page.getByTestId('screen-home');
   const fab = page.getByTestId('search-fab');
-  // A quick tap still shows the press for a moment (released at once, kept ~120 ms).
+  // A quick press still shows for a moment (released at once, kept ~120 ms). The finger
+  // drifts past the tap slop, so it shows the press without opening Search (tapThrough).
   const held = await fab.evaluate(async (el) => {
-    el.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', isPrimary: true, bubbles: true }));
-    el.dispatchEvent(new PointerEvent('pointerup', { pointerType: 'touch', isPrimary: true, bubbles: true }));
+    el.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', isPrimary: true, bubbles: true, clientX: 0 }));
+    el.dispatchEvent(new PointerEvent('pointerup', { pointerType: 'touch', isPrimary: true, bubbles: true, clientX: 40 }));
     const at = performance.now();
     const on = el.classList.contains('pressed');
     await new Promise<void>((r) => {
@@ -253,6 +254,7 @@ test('the back-to-top and search buttons show their press, and the search button
   });
   expect(held.on).toBe(true);
   expect(held.ms).toBeGreaterThanOrEqual(100);
+  await expect(page.getByTestId('search')).toHaveCount(0);
 
   // Scrolling down hides it; up brings it back; the top always shows it.
   const dock = page.locator('.fab');
@@ -282,9 +284,9 @@ test('the back-to-top and search buttons show their press, and the search button
 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const reduced = await fab.evaluate((el) => {
-    el.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', isPrimary: true, bubbles: true }));
+    el.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', isPrimary: true, bubbles: true, clientX: 0 }));
     const on = el.classList.contains('pressed');
-    el.dispatchEvent(new PointerEvent('pointerup', { pointerType: 'touch', isPrimary: true, bubbles: true }));
+    el.dispatchEvent(new PointerEvent('pointerup', { pointerType: 'touch', isPrimary: true, bubbles: true, clientX: 40 }));
     return on;
   });
   expect(reduced).toBe(false);

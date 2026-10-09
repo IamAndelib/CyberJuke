@@ -3,8 +3,10 @@
  * animation (back-to-top, the new-tracks pill, the lyrics following the song), a finger
  * that lands inside it is taken as "stop", not "tap": the click that follows is
  * swallowed in the capture phase, so the row or lyric line under the finger isn't
- * activated. Keyboard clicks (detail 0) always go through.
+ * activated. Keyboard clicks (detail 0) always go through, and so do taps on the app's
+ * chrome controls (see tapThrough.ts).
  */
+import { tapThroughControl } from './tapThrough';
 
 /** Longest a smooth scroll counts as running when no `scrollend` arrives (older WebViews). */
 export const SMOOTH_SCROLL_MS = 700;
@@ -54,7 +56,8 @@ if (typeof window !== 'undefined') {
   window.addEventListener(
     'pointerdown',
     (e) => {
-      armedAt = e.isPrimary && scrollRunningUnder(e.target) ? e.timeStamp || performance.now() : 0;
+      // The app's chrome (search button, top bars, tab bar…) always takes its tap (tapThrough.ts).
+      armedAt = e.isPrimary && scrollRunningUnder(e.target) && !tapThroughControl(e.target) ? e.timeStamp || performance.now() : 0;
     },
     { capture: true, passive: true },
   );
