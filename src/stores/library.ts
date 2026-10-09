@@ -6,6 +6,7 @@
 import { computed, signal } from '@preact/signals';
 import type { Track } from '../data/model';
 import { artistKey } from '../data/artists';
+import { auth } from '../data/auth';
 import { asTracks } from '../core/guards';
 import { jsonFile, kv, readJson, type JsonFile, type KV } from '../core/storage';
 import { addPlay, dayKey, decodeHistory, encodeHistory, pruneHistory, uniqueTracks, type HistoryEntry } from './history';
@@ -101,6 +102,9 @@ export async function loadLibrary(): Promise<void> {
   history.value = decodeHistory(h, Date.now());
   // Rewrites a migrated (old-shape) history in the current one; skipped when unchanged.
   if (h != null) saveHistory(history.value);
+  // There but unreadable (not missing): what's played now is kept in memory, and the
+  // file is read again later and merged, never replaced.
+  if (historyFile.unreadable) retryHistory(0);
   favoriteGenres.value = Array.isArray(g)
     ? [...new Set(g.filter((x): x is string => typeof x === 'string' && x.trim() !== ''))]
     : [];
@@ -127,6 +131,42 @@ export async function loadLibrary(): Promise<void> {
   if (migrated) write(K_SETTINGS, merged);
 }
 
+/** Waits before each new attempt at reading a history file that couldn't be read. */
+export const HISTORY_RETRY_MS = [5_000, 30_000, 120_000, 600_000];
+let historyRetry: ReturnType<typeof setTimeout> | null = null;
+
+function retryHistory(attempt: number): void {
+  if (historyRetry) clearTimeout(historyRetry);
+  historyRetry = null;
+  if (attempt >= HISTORY_RETRY_MS.length) return;
+  historyRetry = setTimeout(() => {
+    historyRetry = null;
+    void historyFile
+      .load()
+      .catch(() => null)
+      .then((h) => {
+        if (historyFile.unreadable) return retryHistory(attempt + 1);
+        const now = Date.now();
+        let merged = mergeHistory(history.value, decodeHistory(h, now), now);
+        if (!auth.signedIn()) merged = merged.filter((e) => !e.track.membersOnly);
+        history.value = merged;
+        saveHistory(merged);
+      });
+  }, HISTORY_RETRY_MS[attempt]);
+}
+
+/** Both lists of plays, newest first; a track played twice on one day is listed once, at its newest play. */
+function mergeHistory(a: HistoryEntry[], b: HistoryEntry[], now: number): HistoryEntry[] {
+  const seen = new Set<string>();
+  const merged = [...a, ...b]
+    .sort((x, y) => y.playedAt - x.playedAt)
+    .filter((e) => {
+      const k = e.track.id + '|' + dayKey(e.playedAt);
+      return seen.has(k) ? false : (seen.add(k), true);
+    });
+  return pruneHistory(merged, now);
+}
+
 export function isFavoriteGenre(name: string): boolean {
   return favoriteGenres.value.includes(name);
 }
@@ -139,29 +179,52 @@ export function toggleFavoriteGenre(name: string): boolean {
   return !was;
 }
 
-/** Where an item sat in a list before it was removed, so Undo can put it back there. */
+/**
+ * Where an item sat in a list before it was removed, so Undo can put it back there:
+ * before the item that followed it (`next`), else after the one before it (`prev`),
+ * else at `index`. Neighbours are matched by key, so other changes meanwhile (another
+ * removal, a new like on top) don't shift it.
+ */
 export interface Removed<T> {
   item: T;
   index: number;
+  next?: string;
+  prev?: string;
 }
 
-function insertAt<T>(list: T[], item: T, index: number): T[] {
-  const i = Math.max(0, Math.min(index, list.length));
-  return [...list.slice(0, i), item, ...list.slice(i)];
+function removedFrom<T>(list: T[], index: number, key: (x: T) => string): Removed<T> {
+  const r: Removed<T> = { item: list[index], index };
+  if (index + 1 < list.length) r.next = key(list[index + 1]);
+  if (index > 0) r.prev = key(list[index - 1]);
+  return r;
 }
+
+function putBack<T>(list: T[], r: Removed<T>, key: (x: T) => string): T[] {
+  let i = r.next != null ? list.findIndex((x) => key(x) === r.next) : -1;
+  if (i < 0 && r.prev != null) {
+    const p = list.findIndex((x) => key(x) === r.prev);
+    if (p >= 0) i = p + 1;
+  }
+  if (i < 0) i = Math.max(0, Math.min(r.index, list.length));
+  return [...list.slice(0, i), r.item, ...list.slice(i)];
+}
+
+const sameText = (x: string) => x;
+const trackId = (t: Track) => t.id;
 
 /** Remove a favorite genre; returns what Undo needs (null if it wasn't one). */
 export function removeFavoriteGenre(name: string): Removed<string> | null {
   const index = favoriteGenres.value.indexOf(name);
   if (index < 0) return null;
+  const r = removedFrom(favoriteGenres.value, index, sameText);
   toggleFavoriteGenre(name);
-  return { item: name, index };
+  return r;
 }
 
 /** Undo: put a removed favorite genre back where it was. */
 export function restoreFavoriteGenre(r: Removed<string>): void {
   if (isFavoriteGenre(r.item)) return;
-  favoriteGenres.value = insertAt(favoriteGenres.value, r.item, r.index);
+  favoriteGenres.value = putBack(favoriteGenres.value, r, sameText);
   write(K_FAV_GENRES, favoriteGenres.value);
 }
 
@@ -185,15 +248,15 @@ export function removeFavoriteArtist(name: string): Removed<string> | null {
   const k = artistKey(name);
   const index = k ? favoriteArtists.value.findIndex((x) => artistKey(x) === k) : -1;
   if (index < 0) return null;
-  const item = favoriteArtists.value[index];
+  const r = removedFrom(favoriteArtists.value, index, artistKey);
   toggleFavoriteArtist(name);
-  return { item, index };
+  return r;
 }
 
 /** Undo: put a removed favorite artist back where they were. */
 export function restoreFavoriteArtist(r: Removed<string>): void {
   if (isFavoriteArtist(r.item)) return;
-  favoriteArtists.value = insertAt(favoriteArtists.value, r.item, r.index);
+  favoriteArtists.value = putBack(favoriteArtists.value, r, artistKey);
   write(K_FAV_ARTISTS, favoriteArtists.value);
 }
 
@@ -213,16 +276,16 @@ export function toggleLike(track: Track): boolean {
 export function unlike(id: string): Removed<Track> | null {
   const index = liked.value.findIndex((t) => t.id === id);
   if (index < 0) return null;
-  const item = liked.value[index];
+  const r = removedFrom(liked.value, index, trackId);
   liked.value = liked.value.filter((t) => t.id !== id);
   write(K_LIKED, liked.value);
-  return { item, index };
+  return r;
 }
 
-/** Undo an unlike: the track goes back where it was in Liked. */
+/** Undo an unlike: the track goes back where it was in Liked (not a members-only one after signing out). */
 export function restoreLike(r: Removed<Track>): void {
-  if (isLiked(r.item.id)) return;
-  liked.value = insertAt(liked.value, r.item, r.index);
+  if (isLiked(r.item.id) || (r.item.membersOnly && !auth.signedIn())) return;
+  liked.value = putBack(liked.value, r, trackId);
   write(K_LIKED, liked.value);
 }
 
@@ -246,15 +309,10 @@ export function clearRecent(): HistoryEntry[] {
  * track played again today is listed once, at its newest play).
  */
 export function restoreHistory(old: HistoryEntry[], now = Date.now()): void {
+  // Signed out since: members-only plays don't come back (S8).
+  if (!auth.signedIn()) old = old.filter((e) => !e.track.membersOnly);
   if (!old.length) return;
-  const seen = new Set<string>();
-  const merged = [...history.value, ...old]
-    .sort((a, b) => b.playedAt - a.playedAt)
-    .filter((e) => {
-      const k = e.track.id + '|' + dayKey(e.playedAt);
-      return seen.has(k) ? false : (seen.add(k), true);
-    });
-  history.value = pruneHistory(merged, now);
+  history.value = mergeHistory(history.value, old, now);
   saveHistory(history.value);
 }
 

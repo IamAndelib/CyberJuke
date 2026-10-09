@@ -176,3 +176,99 @@ describe('history in the library', () => {
     expect(lib.recent.value).toEqual([]);
   });
 });
+
+describe('Undo puts an item back next to its neighbour', () => {
+  const tr = (id: string, extra: Record<string, unknown> = {}) => ({ ...extra, id, ytId: 'abcdefghij' + id.slice(-1), title: id, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '' });
+  const likedIds = () => lib.liked.value.map((t) => t.id);
+
+  it('two unlikes undone in order: each goes back before the track that followed it', async () => {
+    await lib.loadLibrary();
+    lib.liked.value = ['A', 'X', 'B', 'C'].map((id) => tr(id));
+    const ra = lib.unlike('A')!;
+    const rb = lib.unlike('B')!;
+    lib.restoreLike(ra);
+    lib.restoreLike(rb);
+    expect(likedIds()).toEqual(['A', 'X', 'B', 'C']);
+  });
+
+  it('a like in between does not shift it', async () => {
+    await lib.loadLibrary();
+    lib.liked.value = ['A', 'B', 'C'].map((id) => tr(id));
+    const rc = lib.unlike('C')!;
+    lib.toggleLike(tr('Z'));
+    lib.restoreLike(rc);
+    expect(likedIds()).toEqual(['Z', 'A', 'B', 'C']);
+  });
+
+  it('falls back to the index when both neighbours are gone', async () => {
+    await lib.loadLibrary();
+    lib.liked.value = ['A', 'B', 'C', 'D'].map((id) => tr(id));
+    const rb = lib.unlike('B')!;
+    lib.unlike('A');
+    lib.unlike('C');
+    lib.restoreLike(rb);
+    expect(likedIds()).toEqual(['D', 'B']);
+  });
+
+  it('a members-only track is not liked again after signing out', async () => {
+    await lib.loadLibrary();
+    lib.liked.value = [tr('M', { membersOnly: true }), tr('P')];
+    const r = lib.unlike('M')!;
+    lib.restoreLike(r);
+    expect(likedIds()).toEqual(['P']);
+  });
+
+  it('favourite genres and artists too', async () => {
+    await lib.loadLibrary();
+    for (const g of ['jazz', 'house', 'ambient']) lib.toggleFavoriteGenre(g);
+    const rj = lib.removeFavoriteGenre('jazz')!;
+    const rh = lib.removeFavoriteGenre('house')!;
+    lib.restoreFavoriteGenre(rj);
+    lib.restoreFavoriteGenre(rh);
+    expect(lib.favoriteGenres.value).toEqual(['jazz', 'house', 'ambient']);
+    for (const a of ['Aphex Twin', 'Boards of Canada', 'Caribou']) lib.toggleFavoriteArtist(a);
+    const rc = lib.removeFavoriteArtist('caribou')!;
+    lib.toggleFavoriteArtist('Daft Punk');
+    lib.removeFavoriteArtist('Aphex Twin');
+    lib.restoreFavoriteArtist(rc);
+    expect(lib.favoriteArtists.value).toEqual(['Boards of Canada', 'Caribou', 'Daft Punk']);
+  });
+});
+
+describe('a history file that cannot be read', () => {
+  const tr = (id: string, extra: Record<string, unknown> = {}) => ({ ...extra, id, ytId: 'abcdefghij' + id.slice(-1), title: id, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '' });
+
+  it('is not overwritten: plays are kept in memory, and the file is read again later and merged', async () => {
+    vi.useFakeTimers();
+    try {
+      const now = Date.now();
+      const stored = { v: 2, plays: [{ id: 'old', playedAt: now - 60_000 }, { id: 'm', playedAt: now - 120_000 }], tracks: { old: tr('old'), m: tr('m', { membersOnly: true }) } };
+      let failing = true;
+      const saves: unknown[] = [];
+      const file = {
+        path: 'h',
+        get unreadable() {
+          return failing;
+        },
+        load: vi.fn(async () => (failing ? null : stored)),
+        save: vi.fn(async (v: unknown) => void (failing || saves.push(v))),
+        remove: async () => {},
+      };
+      lib.setLibraryStorage({ get: async () => null, set: async () => {}, remove: async () => {} }, file);
+      await lib.loadLibrary();
+      lib.addRecent(tr('new'), now);
+      expect(lib.recent.value.map((t) => t.id)).toEqual(['new']);
+      expect(saves).toEqual([]);
+      // Still failing at the first retry: it tries again later.
+      await vi.advanceTimersByTimeAsync(lib.HISTORY_RETRY_MS[0]);
+      expect(file.load).toHaveBeenCalledTimes(2);
+      failing = false;
+      await vi.advanceTimersByTimeAsync(lib.HISTORY_RETRY_MS[1]);
+      // Merged, newest first; signed out, the members-only play stays out.
+      expect(lib.recent.value.map((t) => t.id)).toEqual(['new', 'old']);
+      expect(saves).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
