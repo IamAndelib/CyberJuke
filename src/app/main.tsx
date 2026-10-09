@@ -31,7 +31,7 @@ import { auth } from '../data/auth';
 import { goBack } from '../ui/nav';
 import { retryWatchedFeeds } from '../stores/feed';
 import { JukePlayer } from '../player/native';
-import { startPlayerPrefs } from '../player';
+import { startPlayerPrefs, startQueuePurge } from '../player';
 import { playFrom, radio } from '../ui/playAll';
 import { startBlockEvents } from '../player/blockEvents';
 import { source } from '../data';
@@ -118,6 +118,7 @@ async function boot(): Promise<void> {
   // A saved Cyberspace login decides which query the first requests use.
   await Promise.all([loadLibrary().catch((e) => logError('loadLibrary', e)), auth.restore()]);
   startAccount();
+  startQueuePurge();
   startPlayerPrefs();
   applyTheme();
   watchNetwork();

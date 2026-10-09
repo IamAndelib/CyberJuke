@@ -8,7 +8,7 @@
  * the position.
  */
 import { Capacitor } from '@capacitor/core';
-import { computed, effect } from '@preact/signals';
+import { computed, effect, untracked } from '@preact/signals';
 import { addRecent, recent, settings, showNsfw } from '../stores/library';
 import { block } from '../stores/block';
 import { catalog } from '../stores/catalog';
@@ -148,17 +148,37 @@ export function startPlayerPrefs(): void {
   effect(() => {
     const { quality, preferIpv4 } = settings.value;
     const auto = autoplayEnabled();
-    if (quality !== lastQuality) {
-      lastQuality = quality;
-      void player.setQuality(quality);
-    }
-    if (preferIpv4 !== lastIpv4) {
-      lastIpv4 = preferIpv4;
-      void player.setNetworkPrefs({ preferIpv4 });
-    }
-    if (auto !== lastAutoplay) {
-      lastAutoplay = auto;
-      void player.setAutoplay(auto);
-    }
+    // Only the settings are followed: what the player calls read (its state) isn't.
+    untracked(() => {
+      if (quality !== lastQuality) {
+        lastQuality = quality;
+        void player.setQuality(quality);
+      }
+      if (preferIpv4 !== lastIpv4) {
+        lastIpv4 = preferIpv4;
+        void player.setNetworkPrefs({ preferIpv4 });
+      }
+      if (auto !== lastAutoplay) {
+        lastAutoplay = auto;
+        void player.setAutoplay(auto);
+      }
+    });
+  });
+}
+
+/** Signed out: members-only tracks leave the queue (K5, S8). */
+export function dropMembersFromQueue(): Promise<void> {
+  const ids = [...new Set(state.peek().queue.filter((t) => t.membersOnly).map((t) => t.id))];
+  return ids.length ? player.removeIds(ids) : Promise.resolve();
+}
+
+let purging = false;
+
+/** Follow sign-outs for the queue (call once at startup). */
+export function startQueuePurge(): void {
+  if (purging) return;
+  purging = true;
+  auth.onChange((signedIn) => {
+    if (!signedIn) void dropMembersFromQueue();
   });
 }

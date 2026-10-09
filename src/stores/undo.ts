@@ -31,7 +31,7 @@ export function toggleLikeWithUndo(track: Track): boolean {
     return true;
   }
   const r = unlike(track.id);
-  if (r) toast('Removed from Liked', undefined, { label: UNDO, run: () => restoreLike(r) });
+  if (r) toast('Removed from Liked', undefined, { label: UNDO, run: () => restoreLike(r), ...(r.item.membersOnly && { membersOnly: true }) });
   return false;
 }
 
@@ -63,5 +63,9 @@ export function toggleFavoriteArtistWithUndo(name: string): boolean {
 export function clearHistoryWithUndo(): void {
   const old = clearRecent();
   if (!old.length) return;
-  toast(`Cleared ${old.length} play${old.length === 1 ? '' : 's'}`, undefined, { label: UNDO, run: () => restoreHistory(old) });
+  toast(`Cleared ${old.length} play${old.length === 1 ? '' : 's'}`, undefined, {
+    label: UNDO,
+    run: () => restoreHistory(old),
+    ...(old.some((e) => e.track.membersOnly) && { membersOnly: true }),
+  });
 }

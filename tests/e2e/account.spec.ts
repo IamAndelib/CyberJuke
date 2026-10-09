@@ -1,6 +1,6 @@
 import { AUTH_USER, BANNED_POST, expect, MEMBERS_POSTS, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { start, toastsGone, waitForTracks } from '../helpers';
+import { playerCalls, seedStorage, start, toastsGone, waitForTracks } from '../helpers';
 
 /** Optional "Sign in with Cyberspace": members-only posts, errors, token refresh, sign-out. */
 
@@ -103,6 +103,9 @@ test('signing in shows [members] posts in Latest, search and Now Playing; signin
   await expect(confirm).toContainText('Members-only tracks will be hidden');
   await page.getByTestId('confirm-ok').click();
   await expect(page.getByTestId('signin-form')).toBeVisible();
+  // The members-only track that was playing left the queue too (K5).
+  await expect.poll(async () => (await playerCalls(page)).some((c) => c[0] === 'removeIds' && JSON.stringify(c[1]).includes(MEMBERS_POSTS[0].id))).toBe(true);
+  await expect(page.getByTestId('mini-player')).not.toContainText(MEMBERS_POSTS[0].title);
   const before = backend.calls.members;
   await page.getByTestId('tab-home').click();
   await waitForTracks(page);
@@ -125,6 +128,36 @@ test('signing in shows [members] posts in Latest, search and Now Playing; signin
     .toBe(false);
   expect(backend.calls.members).toBe(before);
   await toastsGone(page);
+});
+
+test('signed out at startup: members-only tracks restored from a backup are dropped', async ({ page }) => {
+  const tr = (id: string, title: string, membersOnly = false) => ({
+    id,
+    ytId: 'abcdefghij' + id.slice(-1),
+    title,
+    artist: 'Seeded Artist',
+    genre: 'test',
+    by: 'someone',
+    postTitle: '',
+    postUrl: '',
+    createdAt: '2026-01-01T00:00:00Z',
+    nsfw: false,
+    artworkUrl: '',
+    ...(membersOnly && { membersOnly: true }),
+  });
+  await seedStorage(page, {
+    'CapacitorStorage.liked': [tr('m1', 'Members Liked', true), tr('p2', 'Public Liked')],
+    'CapacitorStorage.history': [
+      { track: tr('m3', 'Members Played', true), playedAt: Date.now() - 60_000 },
+      { track: tr('p4', 'Public Played'), playedAt: Date.now() - 120_000 },
+    ],
+  });
+  await page.goto('/');
+  await page.getByTestId('tab-library').click();
+  await expect(page.getByTestId('liked-list').getByTestId('track-title')).toHaveText(['Public Liked']);
+  await page.getByTestId('lib-recent').click();
+  await expect(page.getByTestId('recent-list').getByTestId('track-title')).toHaveText(['Public Played']);
+  await expect.poll(() => page.evaluate(() => /Members (Liked|Played)/.test(JSON.stringify({ ...localStorage })))).toBe(false);
 });
 
 test('sign-in errors: wrong password, too many attempts, no network', async ({ page }) => {
