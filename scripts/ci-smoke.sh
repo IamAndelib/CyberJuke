@@ -309,9 +309,11 @@ fi
 
 # ---- Phase 2b: the page's renderer goes while music plays (must keep playing) ----------------
 # The log ring buffer rotates, so look only at the lines since a step began.
-device_now() { adb shell date +'%m-%d %H:%M:%S.000' 2>/dev/null | tr -d '\r'; }
+# One argument for the device's shell, so its quotes survive (adb joins the arguments).
+device_now() { adb shell "date '+%m-%d %H:%M:%S.000'" 2>/dev/null | tr -d '\r'; }
 logged_since() { # $1 = time from device_now, $2 = tag, $3 = text
   local t
+  [[ -n "$1" ]] || { log "no device time: can't check the log"; return 1; }
   t="$(adb logcat -d -v brief -T "$1" -s "$2:V" 2>/dev/null)"
   grep -q "$3" <<<"$t"
 }

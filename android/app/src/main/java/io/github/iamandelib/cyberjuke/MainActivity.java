@@ -29,6 +29,9 @@ public class MainActivity extends BridgeActivity {
 
     private boolean resumed = false;
 
+    /** Inside onCreate: Capacitor replays the launch intent through onNewIntent there. */
+    private boolean creating = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         // Custom plugins must be registered before super.onCreate() creates the bridge.
@@ -36,7 +39,12 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MusicPlugin.class);
         registerPlugin(SecureStorePlugin.class);
         LaunchOptions.updateFrom(this, getIntent());
-        super.onCreate(savedInstanceState);
+        creating = true;
+        try {
+            super.onCreate(savedInstanceState);
+        } finally {
+            creating = false;
+        }
         getBridge().addWebViewListener(new RendererWatch());
         // CI only (debuggable builds): ci_music_search / ci_artist / ci_lyrics / ci_artist_page extras log one check each.
         MusicPlugin.maybeRunCiChecks(this, getIntent());
@@ -44,6 +52,12 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onNewIntent(Intent intent) {
+        // BridgeActivity.load() passes the launch intent through here during onCreate, which
+        // has handled it already: only Capacitor's own handling then.
+        if (creating) {
+            super.onNewIntent(intent);
+            return;
+        }
         // e.g. `am start ... --es autoplay latest` while the app is already running (debuggable only)
         LaunchOptions.updateFrom(this, intent);
         // The latest intent is the activity's: a recreated activity (a new page) starts from it,
@@ -105,7 +119,9 @@ public class MainActivity extends BridgeActivity {
     /** CI only (debuggable builds): `--es ci_renderer kill|crash` ends the page's renderer. */
     private void maybeCrashRendererForCi(Intent intent) {
         String url = LaunchOptions.ciRendererUrl(this, intent);
+        if (url == null) return;
+        intent.removeExtra("ci_renderer"); // once: not again for the recreated activity
         WebView webView = getBridge().getWebView();
-        if (url != null && webView != null) webView.loadUrl(url);
+        if (webView != null) webView.loadUrl(url);
     }
 }
