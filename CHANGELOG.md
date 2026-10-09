@@ -2,24 +2,24 @@
 
 ## [Unreleased]
 
-### The app
-- Starring a genre or artist, or liking a track, now responds at once. One tap used to redraw the whole Artists or Genres grid (every tile, even behind another tab) or the whole page around the star; now only the star changes.
-- On the Genres and Artists tabs, a starred tile moves up into ★ Favourites the moment you tap (no copy stays in the grid below); unstarring puts it back in its place. This used to wait for a scroll or the next visit.
-- Adding shows a short "‹name› added to Favourites" / "Added to Liked songs" message without Undo; removing still offers Undo.
-- Messages at the bottom can be swiped away, left or right, and only one shows at a time: a new one replaces the last (quick taps no longer stack "Added" and "Removed"). A message also goes as soon as you touch or scroll anywhere else; Undo stays a tap on the message itself.
-- Settings → Updates: CyberJuke checks GitHub for a newer release (once a day at most; can be turned off, or checked on request). A new release shows at the top of Settings with a Download link, and as a dot on the Settings tab. Installs from F-Droid update through F-Droid and never check.
+## [1.1.0] - 2026-10-09
 
-### Fixes
+### The app
+- Starring a genre or artist, or liking a track, responds at once (one tap used to redraw the whole grid or page around it).
+- On the Genres and Artists tabs, a starred tile moves straight up into ★ Favourites (no copy stays in the grid); unstarring puts it back in its place.
+- Adding shows a short "‹name› added to Favourites" / "Added to Liked songs" message without Undo; removing still offers Undo.
+- One message at a time at the bottom: a new one replaces the last. Swipe it away left or right, or just carry on: it goes as soon as you touch or scroll anywhere else. A message without Undo lets your tap through to what's under it, and messages stay clear of back-to-top, the YouTube banner and, in Now Playing, Up next.
+- Settings → Updates: installs from GitHub can check for a newer release (automatically at most once a day, or with Check now) and show it at the top of Settings and as a dot on the Settings tab. Installs from F-Droid update through F-Droid and never ask GitHub.
+- Now Playing, the Library and Recently played do much less work while music plays (Now Playing redrew itself every second); a long history loads as you scroll.
+
+### Fixed
 - A scroll that starts on the seek bar scrolls Now Playing and no longer seeks.
-- Messages at the bottom no longer cover back-to-top or the YouTube banner's [Try now]; a message without Undo lets a tap through to what's under it.
 - A quick second tap where a starred tile was no longer stars the tile that slid into its place.
 - Genre and artist names fit their tiles on narrow phones instead of breaking mid-word.
 - The A–Z letter while fast-scrolling skips a letter whose tiles are all in Favourites.
-- Keyboard and screen-reader focus stays put when a star moves its tile, when Up next rows move or go, and after Clear history.
-- Settings → Updates shows the time of the last check.
-- Now Playing, the Library and Recently played do much less work while music plays (Now Playing redrew itself every second); long histories load as you scroll.
-- After Android stopped the app: a tap on the music notification opens Now Playing even if the page had to reload; a list of over 500 tracks comes back at the right place; Autoplay and audio quality settings apply to a media-key resume; a restored session keeps which tracks are members-only (and drops them when signed out).
-- Playback that YouTube paused resumes only where it was playing (not on the speaker once headphones are gone), keeps the phone awake for it when Play was pressed meanwhile, and a pause key cancels it.
+- Keyboard and screen-reader focus follows a starred tile, moved or removed Up next rows, and stays on the page after Clear history.
+- After Android stopped the app: a tap on the music notification opens Now Playing even if the page had to reload; a list of over 500 tracks comes back at the right place; restored tracks are named (not "Unknown track"), keep whether they are members-only, and those go when signed out; Autoplay and audio quality apply to a media-key resume; Recently played records a track when it plays, not when the app reopens on it.
+- Playback that YouTube paused comes back only where it was playing (not on the speaker once headphones are gone) and only while the app may start playback; Play pressed meanwhile keeps the phone awake for it; Pause, or a pause key, cancels it.
 
 ## [1.0.2] - 2026-10-09
 

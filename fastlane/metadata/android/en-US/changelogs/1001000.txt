@@ -1,0 +1,4 @@
+- Stars and likes respond at once; a starred genre or artist moves straight up into Favourites
+- One message at a time: swipe it away, or just carry on and it goes
+- Now Playing and Library do much less work while music plays
+- Fixes: seek bar during scrolls, double taps on stars, long genre names, notification taps after a reload, sessions over 500 tracks, resuming after headphones are unplugged, focus for keyboard and screen readers
