@@ -55,6 +55,21 @@ No signing key is committed to this repository.
 
 ## Releases (maintainers)
 
+### Before every stable release
+
+A stable release gets a review of the **whole** app, not only of what changed since the last one:
+
+- **UI/UX and function:** every screen and flow, all 8 themes at 360 px and 412 px, accessibility (labels, focus, 48 px targets).
+- **Native and lifecycle:** playback service, plugins, process and renderer death, Android 7–15 differences, R8.
+- **Code quality:** dead code (unused exports, files, CSS, icons, resources, dependencies), redundancy (duplicated logic worth merging, repeated literals), clean code (stale or misplaced comments, needless `eslint-disable`, casts, layering).
+- **Release files and docs:** README, privacy tables, `docs/`, the F-Droid recipe.
+
+Every finding is checked before it is acted on; a confirmed bug gets a fix and a test that fails without it. Then all gates pass (`npm run check`, the full Playwright suite twice, the JVM tests), CI is green including the emulator smoke test, and a Preview has been tried on a phone.
+
+After publishing: verify the APK's checksum, signing certificate and version, run **Actions → Reproducible build check** on the tag, and move the F-Droid recipe to the new version.
+
+### Publishing
+
 1. Add a `## [x.y.z] - YYYY-MM-DD` section to `CHANGELOG.md` on `main` (move the Unreleased items into it).
 2. Run **Actions → Release** with the version. It checks the version is higher than the one in `android/app/build.gradle` (or equal to it, for a version the tree already carries that has no tag yet), commits the bump (Gradle, `package.json`, and `fastlane/.../changelogs/<versionCode>.txt` if missing), builds an unsigned APK from that commit, then signs and publishes it in the protected `release` environment, tagging the commit `v<version>`.
 
