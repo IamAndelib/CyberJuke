@@ -18,6 +18,22 @@ test('like from the track menu adds it to Library, and it survives a reload', as
   await page.reload();
   await page.getByTestId('tab-library').click();
   await expect(page.getByTestId('liked-list').getByTestId('track-title')).toHaveText([title]);
+
+  // Its ⋯ menu knows it is liked: Unlike (not Like), and that unlikes it.
+  await page.getByTestId('liked-list').getByTestId('track-more').first().click();
+  const like = page.getByTestId('menu-like');
+  await expect(like).toHaveText('Unlike');
+  // Another track's menu right after: Like.
+  await page.getByTestId('track-menu').getByRole('button', { name: /cancel/i }).click();
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('track-more').nth(1).click();
+  await expect(like).toHaveText('Like');
+  await page.getByTestId('track-menu').getByRole('button', { name: /cancel/i }).click();
+  await page.getByTestId('tab-library').click();
+  await page.getByTestId('liked-list').getByTestId('track-more').first().click();
+  await expect(like).toHaveText('Unlike');
+  await like.click();
+  await expect(page.getByTestId('liked-list').getByTestId('track-title')).toHaveCount(0);
 });
 
 const tr = (id: string, title: string) => ({

@@ -213,6 +213,24 @@ test('a seek-bar drag held still before release still seeks, and the bar follows
   await expect.poll(async () => Number(await page.getByTestId('seek').inputValue())).toBeLessThan(80_000);
 });
 
+test('the Now Playing heart follows the track: liked on one, empty on the next, liked again back', async ({ page }) => {
+  await start(page);
+  await playAndOpen(page);
+  const heart = page.getByTestId('np-like');
+  const title = page.getByTestId('np-title');
+  const first = (await title.textContent())!.trim();
+  await heart.click();
+  await expect(heart).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('np-next').click();
+  await expect(title).not.toHaveText(first);
+  await expect(heart).toHaveAttribute('aria-pressed', 'false');
+  // Previous restarts a track past its first seconds; the second one goes back.
+  await page.getByTestId('np-prev').click();
+  await page.getByTestId('np-prev').click();
+  await expect(title).toHaveText(first);
+  await expect(heart).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('quick taps on the Now Playing heart leave one toast, about the last tap', async ({ page }) => {
   await start(page);
   await playAndOpen(page);

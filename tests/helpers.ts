@@ -126,6 +126,16 @@ export async function touchSwipe(page: Page, x0: number, x1: number, y: number, 
   await cdp.detach();
 }
 
+/** A finger tap (touch events, not a mouse click) at the middle of `l`. */
+export async function touchTap(page: Page, l: Locator): Promise<void> {
+  const b = (await l.boundingBox())!;
+  const pt = [{ x: b.x + b.width / 2, y: b.y + b.height / 2, id: 1 }];
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+}
+
 export const box = async (l: Locator) => (await l.boundingBox())!;
 
 export const cssVar = (page: Page, name: string) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);

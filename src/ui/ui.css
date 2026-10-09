@@ -892,9 +892,11 @@
   font-size: 13px;
   box-shadow: 4px 4px 0 var(--color-border);
   animation: toast-in 0.18s steps(3);
-  /* Swiped away sideways (Toasts.tsx); vertical moves stay the page's. */
+  /* Swiped away sideways (Toasts.tsx). The browser takes no part in a touch on a toast:
+     no pan, so no fling for the next tap to stop (Android drops that tap). A toast sits
+     outside every scroller, so a vertical drag on it never scrolled anything anyway. */
   pointer-events: auto;
-  touch-action: pan-y;
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }

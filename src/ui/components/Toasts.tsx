@@ -1,4 +1,4 @@
-import { useRef } from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
 import { reducedMotion } from '../../core/motion';
 import { dismissToast, holdToast, releaseToast, runToastAction, toasts } from '../../stores/toast';
 
@@ -39,6 +39,18 @@ function ToastItem({ id, text, action }: { id: number; text: string; action?: st
   const drag = useRef<Drag | null>(null);
   // A swipe that began on the button must not also press it.
   const swiped = useRef(false);
+
+  // Older WebViews may still pan a touch on it despite touch-action: once the swipe is
+  // ours, its moves are cancelled for the browser (Preact's own touch listeners are passive).
+  useEffect(() => {
+    const node = el.current;
+    if (!node) return;
+    const cancel = (e: TouchEvent) => {
+      if (drag.current?.on && e.cancelable) e.preventDefault();
+    };
+    node.addEventListener('touchmove', cancel, { passive: false });
+    return () => node.removeEventListener('touchmove', cancel);
+  }, []);
 
   const place = (dx: number, animate: boolean) => {
     const node = el.current;
@@ -83,6 +95,8 @@ function ToastItem({ id, text, action }: { id: number; text: string; action?: st
     drag.current = null;
     if (!d.on) return;
     swiped.current = true;
+    // Let go of the finger now, not when the toast leaves the page.
+    if (el.current?.hasPointerCapture(e.pointerId)) el.current.releasePointerCapture(e.pointerId);
     const width = el.current?.offsetWidth ?? 1;
     const flick = Math.abs(d.vx) > SWIPE_FLICK_PX_PER_MS && Math.sign(d.vx) === Math.sign(d.dx);
     if (e.type === 'pointerup' && (Math.abs(d.dx) > width * SWIPE_AWAY_FRACTION || flick)) {

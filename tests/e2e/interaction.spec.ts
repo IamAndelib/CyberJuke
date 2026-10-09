@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { box, openNowPlaying, openSearch, playerCalls, scrollTo, scrollTopOf, seedStorage, start, toastsGone, touchSwipe, waitForTracks } from '../helpers';
+import { box, openNowPlaying, openSearch, playerCalls, scrollTo, scrollTopOf, seedStorage, start, toastsGone, touchSwipe, touchTap, waitForTracks } from '../helpers';
 
 /**
  * Wave 1c interaction: navigation in place (P4, P5, SM7, M10), undo toasts and confirm
@@ -249,6 +249,32 @@ test('a toast swiped left or right goes; a short drag springs back; a swipe from
   await touchSwipe(page, undo.x + undo.width / 2, undo.x + undo.width / 2 - b.width * 0.6, undo.y + undo.height / 2, 200);
   await expect(page.getByTestId('toast')).toHaveCount(0);
   await expect(star).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('after swiping a toast away, the next tap on the heart works the first time', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('track-play').first().click();
+  await openNowPlaying(page);
+  const heart = page.getByTestId('np-like');
+  for (const how of ['flick', 'slow'] as const) {
+    await heart.click();
+    await heart.click();
+    await expect(heart).toHaveAttribute('aria-pressed', 'false');
+    const toast = page.getByTestId('toast').last();
+    await expect(toast).toContainText('Removed from Liked');
+    const b = await box(toast);
+    const x = b.x + b.width / 3;
+    await touchSwipe(page, x, x + b.width * 0.7, b.y + b.height / 2, how === 'flick' ? 90 : 500, how === 'flick' ? 4 : 12);
+    await expect(page.getByTestId('toast')).toHaveCount(0);
+    // One finger tap, straight after: it likes the song.
+    await touchTap(page, heart);
+    await expect(heart, `after a ${how} swipe`).toHaveAttribute('aria-pressed', 'true');
+    await heart.click();
+    await expect(heart).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('toast')).toHaveCount(1);
+    await page.getByTestId('toast').last().getByTestId('toast-action').click();
+    await heart.click();
+  }
 });
 
 test('Clear history asks first, away from Play; Undo brings the plays back (M3, M1)', async ({ page }) => {
