@@ -10,7 +10,10 @@
  */
 import { isGlobal, type Track } from '../data/model';
 import { similarTracks } from '../data/similar';
-import { AUTOPLAY_FIRST, AUTOPLAY_MORE, type Player, type QueueLow } from './types';
+import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, type Player, type QueueLow } from './types';
+
+/** How long a batch just added counts as ahead even before the player's state shows it (native's lags the call). */
+export const BATCH_LAG_MS = 5000;
 
 export interface AutoplayDeps {
   player: Player;
@@ -26,6 +29,7 @@ export interface AutoplayDeps {
   radio: (ytId: string, next?: string) => Promise<{ tracks: Track[]; next?: string }>;
   rng?: () => number;
   log?: (where: string, e: unknown) => void;
+  now?: () => number;
 }
 
 export interface Autoplay {
@@ -37,16 +41,30 @@ export interface Autoplay {
 export function createAutoplay(deps: AutoplayDeps): Autoplay {
   const { player } = deps;
   let inflight: Promise<void> | null = null;
+  const now = deps.now ?? (() => Date.now());
   /** The web player's Global radio: where the next page starts. */
   let radio: { seedId: string; ytId: string; next?: string } | null = null;
+  /** The last batch added, until the player's state shows it. */
+  let batch: { seedId: string; ids: string[]; at: number } | null = null;
 
   async function run(e: QueueLow): Promise<void> {
     const s = player.state.peek();
     const seed = s.seed ?? s.current;
     if (!seed || !s.current || s.repeat !== 'off') return;
     if (e.seedId && e.seedId !== seed.id) return; // a signal for an older seed
-    const count = e.left <= 0 ? AUTOPLAY_FIRST : AUTOPLAY_MORE;
     const inQueue = new Set(s.queue.flatMap((t) => [t.id, t.ytId]));
+    // The signal may be older than the last refill (one that came in during it): count
+    // again. A batch the state doesn't show yet is ahead too, and not picked again.
+    if (batch && (batch.seedId !== seed.id || now() - batch.at > BATCH_LAG_MS || batch.ids.some((id) => inQueue.has(id)))) batch = null;
+    const lagging = batch?.ids ?? [];
+    for (const id of lagging) inQueue.add(id);
+    const left = Math.max(e.left, s.upNext.filter((u) => u.auto).length) + lagging.length;
+    if (left > AUTOPLAY_LOW) return;
+    const count = left <= 0 ? AUTOPLAY_FIRST : AUTOPLAY_MORE;
+    const add = async (tracks: Track[]) => {
+      batch = { seedId: seed.id, ids: tracks.map((t) => t.id), at: now() };
+      await player.addAutoplay(tracks, seed.id);
+    };
 
     if (isGlobal(seed)) {
       if (player.kind === 'native' || deps.blocked()) return;
@@ -55,12 +73,16 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       const tracks = page.tracks.filter((t) => !inQueue.has(t.ytId) && !inQueue.has(t.id));
       // At the end of a radio, the next one starts from its last song.
       radio = page.next ? { ...from, next: page.next } : { seedId: seed.id, ytId: tracks.at(-1)?.ytId ?? from.ytId };
-      if (tracks.length) await player.addAutoplay(tracks, seed.id);
+      if (tracks.length) await add(tracks);
       return;
     }
 
+    // What played since this seed started steers it (Jukebox tracks only: similarTracks skips Global ones).
+    const played = s.index >= 0 ? s.queue.slice(0, s.index + 1) : [];
+    const from = played.map((t) => t.id).lastIndexOf(seed.id);
     const picks = similarTracks(deps.catalog(), {
       seed,
+      played: from < 0 ? [] : played.slice(from + 1).reverse(),
       recent: deps.history(),
       exclude: inQueue,
       before: [s.current, ...s.upNext.map((u) => u.track)],
@@ -69,7 +91,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       signedIn: deps.signedIn(),
       rng: deps.rng,
     });
-    if (picks.length) await player.addAutoplay(picks, seed.id);
+    if (picks.length) await add(picks);
   }
 
   /** A signal that came in during a refill: handled right after it (the latest only). */

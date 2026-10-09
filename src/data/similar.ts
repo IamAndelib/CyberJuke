@@ -178,8 +178,13 @@ function pairScore(idx: SimilarIndex, a: Feat, b: Feat): number {
 
 export interface SimilarOptions {
   seed: Track;
-  /** Recently played, newest first: the first DRIFT_TRACKS steer the seed, the first EXCLUDE_RECENT are left out. */
+  /** Recently played, newest first: the first EXCLUDE_RECENT are left out. */
   recent?: readonly Track[];
+  /**
+   * Played since this seed started (the radio or list), newest first: the first
+   * DRIFT_TRACKS Jukebox ones steer the seed. Plays from before it don't.
+   */
+  played?: readonly Track[];
   /** Ids or video ids to leave out (everything already in the queue). */
   exclude?: Iterable<string>;
   /** What plays just before the picks, oldest first (the variety rules look at it). */
@@ -218,8 +223,8 @@ export function similarTracks(catalog: readonly Track[], o: SimilarOptions): Tra
   }
 
   const seed = featOf(o.seed);
-  const drift = recent
-    .filter((t) => t.id !== o.seed.id)
+  const drift = (o.played ?? [])
+    .filter((t) => t.id !== o.seed.id && !isGlobal(t))
     .slice(0, DRIFT_TRACKS)
     .map(featOf);
 

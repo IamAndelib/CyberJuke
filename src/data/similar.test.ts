@@ -96,16 +96,28 @@ describe('similarTracks: ranking', () => {
     expect(picks.map((t) => t.id).indexOf('gamma')).toBeGreaterThan(0);
   });
 
-  it('drifts toward the last played tracks', () => {
+  it('drifts toward what played since the seed started', () => {
     const { seed, tracks } = catalog();
     // The last three played were techno: techno now beats jazz, though neither matches the seed.
-    const recent = tracks.filter((t) => t.id.startsWith('tech')).slice(0, 3);
-    const picks = similarTracks(tracks, opts(seed, { count: 16, recent }));
+    const played = tracks.filter((t) => t.id.startsWith('tech')).slice(0, 3);
+    const picks = similarTracks(tracks, opts(seed, { count: 16, played, recent: played }));
     const ids = picks.map((t) => t.id);
     const firstTech = ids.findIndex((id) => id.startsWith('tech'));
     const firstJazz = ids.findIndex((id) => id.startsWith('jazz'));
     expect(firstTech).toBeGreaterThanOrEqual(0);
     expect(firstJazz === -1 || firstTech < firstJazz).toBe(true);
+  });
+
+  it('plays from before the seed started, and Global ones, do not steer it', () => {
+    const { seed, tracks } = catalog();
+    const ids = (xs: Track[]) => xs.map((t) => t.id);
+    // Played earlier (another list): only left out, not followed.
+    const recent = tracks.filter((t) => t.id.startsWith('tech')).slice(0, 3);
+    const left = similarTracks(tracks, opts(seed, { count: 16, exclude: ids(recent) }));
+    expect(ids(similarTracks(tracks, opts(seed, { count: 16, recent })))).toEqual(ids(left));
+    const plain = similarTracks(tracks, opts(seed, { count: 16 }));
+    const global = track({ id: 'ytm:x', artist: 'Techno Act 0', genre: '', source: 'ytmusic' });
+    expect(ids(similarTracks(tracks, opts(seed, { count: 16, played: [global] })))).toEqual(ids(plain));
   });
 
   it('when matches run out it widens to popular tracks, never Global ones', () => {
