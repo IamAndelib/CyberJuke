@@ -1,7 +1,7 @@
 {
   "name": "cyberjuke",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Unofficial music-streaming Android app for the Cyberspace Jukebox",
   "license": "GPL-3.0-only",
   "type": "module",
