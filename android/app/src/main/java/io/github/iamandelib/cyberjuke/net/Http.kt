@@ -20,6 +20,8 @@ internal object Http {
             .dns(NetPrefs.dns)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
+            // Everything we fetch is https: never follow a redirect down to http (L5).
+            .followSslRedirects(false)
             .build()
     }
 }
