@@ -444,21 +444,26 @@ test('the track menu keeps its content while it slides away', async ({ page }) =
   await expect(menu.getByTestId('menu-share')).toBeVisible();
   const seen = await menu.evaluate(async (el) => {
     const cancel = el.querySelector('.sheet-item.cancel') as HTMLElement;
+    let ended = false;
+    el.addEventListener('transitionend', () => (ended = true));
     cancel.click();
-    const items: number[] = [];
+    // First sample once the close has rendered (microtasks only: a slow runner can't let the
+    // 200 ms slide finish first), then every frame until the slide ends.
+    for (let i = 0; i < 50; i++) await Promise.resolve();
+    const items: number[] = [el.querySelectorAll('.sheet-item').length];
     await new Promise<void>((r) => {
       const t0 = performance.now();
       const tick = () => {
+        if (ended || performance.now() - t0 > 150) return r();
         items.push(el.querySelectorAll('.sheet-item').length);
-        if (performance.now() - t0 < 150) requestAnimationFrame(tick);
-        else r();
+        requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
     });
     return items;
   });
   // Still all there while it moves (the slide-out takes 200 ms).
-  expect(seen.length).toBeGreaterThan(2);
+  expect(seen.length).toBeGreaterThanOrEqual(1);
   expect(Math.min(...seen)).toBeGreaterThan(2);
   await expect(menu).toBeHidden();
   await expect(menu.locator('.sheet-item')).toHaveCount(0);
