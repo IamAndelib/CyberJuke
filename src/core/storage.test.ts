@@ -3,7 +3,7 @@ import type { FileBackend, KV } from './storage';
 
 vi.mock('@capacitor/preferences', () => ({ Preferences: {} }));
 
-const { jsonFile, textFile, localFiles, filePath, LOCAL_FILE_PREFIX } = await import('./storage');
+const { jsonFile, textFile, localFiles, filePath, isMissingFile, LOCAL_FILE_PREFIX } = await import('./storage');
 
 function memKV(init: Record<string, string> = {}) {
   const data = new Map(Object.entries(init));
@@ -107,8 +107,75 @@ describe('writes', () => {
     const f = textFile('data', 'x', { backend: fs, kv: memKV() });
     const p = [f.write('1'), f.write('2'), f.write('3')];
     await Promise.all(p);
-    expect(fs.writes).toEqual(['1', '3']);
+    // Writes asked for while one is queued or going collapse into the latest.
+    expect(fs.writes).toEqual(['3']);
     expect(fs.data.get('data:cyberjuke/x.json')).toBe('3');
+    await f.write('4');
+    const late = [f.write('5'), f.write('6')];
+    await Promise.all(late);
+    expect(fs.writes).toEqual(['3', '4', '6']);
+  });
+
+  it('remove waits for a write still going: the file does not come back', async () => {
+    const fs = memFiles();
+    const f = textFile('data', 'catalog-members', { backend: fs, kv: memKV() });
+    const w = f.write('MEMBERS');
+    await Promise.resolve();
+    await f.remove();
+    await w;
+    expect(fs.data.has('data:cyberjuke/catalog-members.json')).toBe(false);
+    // A write after the remove lands after it.
+    void f.write('A');
+    const r = f.remove();
+    const w2 = f.write('B');
+    await Promise.all([r, w2]);
+    expect(fs.data.get('data:cyberjuke/catalog-members.json')).toBe('B');
+  });
+
+  it('a read while a write is queued sees that write, and a later save of the read text is not skipped', async () => {
+    const fs = memFiles();
+    fs.data.set('data:cyberjuke/history.json', 'FULL');
+    const f = textFile('data', 'history', { backend: fs, kv: memKV() });
+    const w = f.write('ONE');
+    expect(await f.read()).toBe('ONE');
+    await f.write('FULL');
+    await w;
+    expect(fs.data.get('data:cyberjuke/history.json')).toBe('FULL');
+  });
+
+  it('the migration write goes through the same queue as other writes', async () => {
+    const kv = memKV({ old: 'OLD' });
+    const fs = memFiles();
+    const f = textFile('data', 'h', { backend: fs, kv, legacyKeys: ['old'] });
+    const r = f.read();
+    const w = f.write('NEW');
+    expect(await r).toBe('OLD');
+    await w;
+    expect(fs.writes).toEqual(['OLD', 'NEW']);
+    expect(fs.data.get('data:cyberjuke/h.json')).toBe('NEW');
+  });
+
+  it('a file that is there but cannot be read is not overwritten until a read works', async () => {
+    const fs = memFiles();
+    fs.data.set('data:cyberjuke/history.json', '["real"]');
+    vi.mocked(fs.read).mockRejectedValueOnce(new Error('EIO'));
+    const f = jsonFile('data', 'history', (r) => r, { backend: fs, kv: memKV() });
+    expect(await f.load()).toBeNull();
+    expect(f.unreadable).toBe(true);
+    await f.save(['one']);
+    expect(fs.data.get('data:cyberjuke/history.json')).toBe('["real"]');
+    // Retried later: the read works, and writes go through again.
+    expect(await f.load()).toEqual(['real']);
+    expect(f.unreadable).toBe(false);
+    await f.save(['one']);
+    expect(fs.data.get('data:cyberjuke/history.json')).toBe('["one"]');
+  });
+
+  it('a missing file is not a read error', async () => {
+    const fs = memFiles();
+    const f = textFile('data', 'x', { backend: fs, kv: memKV() });
+    expect(await f.read()).toBeNull();
+    expect(f.unreadable).toBe(false);
   });
 
   it('retries a failed write the next time, even with the same text', async () => {
@@ -137,6 +204,15 @@ describe('writes', () => {
     expect(kv.data.size).toBe(0);
     await f.write('2');
     expect(fs.writes).toEqual(['2', '2']);
+  });
+});
+
+describe('native files', () => {
+  it('tells a missing file from a read error', () => {
+    expect(isMissingFile({ code: 'OS-PLUG-FILE-0008', message: "'readFile' failed because file at 'x' does not exist." })).toBe(true);
+    expect(isMissingFile(new Error('File does not exist'))).toBe(true);
+    expect(isMissingFile({ code: 'OS-PLUG-FILE-0013', message: "'readFile' failed with: I/O error" })).toBe(false);
+    expect(isMissingFile(null)).toBe(false);
   });
 });
 

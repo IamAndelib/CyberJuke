@@ -9,9 +9,11 @@
  *   to localStorage (`cyberjuke.file:<path>`).
  *
  * A file write is skipped when the text is the same as what was last read or
- * written, writes to one file never overlap (the latest one wins), and a native
- * write goes to `<path>.tmp` first and is renamed over the file, so a crash can't
- * leave half a catalog behind.
+ * written. Reads, writes and removes of one file run one at a time, in call order
+ * (of writes queued meanwhile, the latest wins), so a remove can't be undone by a
+ * write still going. A native write goes to `<path>.tmp` first and is renamed over
+ * the file, so a crash can't leave half a catalog behind. A file that is there but
+ * can't be read isn't overwritten until a read works again.
  *
  * Migration: a file made from data that used to live in Preferences names its old
  * keys. When the file doesn't exist yet, the first old key found is copied into it
@@ -58,10 +60,17 @@ export function filePath(area: Area, name: string): string {
 
 /** Where file text lives: the device filesystem, or localStorage in the browser. */
 export interface FileBackend {
-  /** The file's text, or null when there is none. */
+  /** The file's text, or null when there is none. Rejects when it exists but can't be read. */
   read(area: Area, path: string): Promise<string | null>;
   write(area: Area, path: string, text: string): Promise<void>;
   remove(area: Area, path: string): Promise<void>;
+}
+
+/** The plugin's "does not exist" error (OS-PLUG-FILE-0008), as opposed to a failed read. */
+export function isMissingFile(e: unknown): boolean {
+  const o = (e ?? {}) as { code?: unknown; message?: unknown };
+  if (o.code === 'OS-PLUG-FILE-0008') return true;
+  return typeof o.message === 'string' && /does not exist|no such file|ENOENT/i.test(o.message);
 }
 
 /** @capacitor/filesystem, Directory.Data / Directory.Cache. */
@@ -77,8 +86,9 @@ export function nativeFiles(): FileBackend {
       try {
         const r = await Filesystem.readFile({ path, directory: await dir(area), encoding: Encoding.UTF8 });
         return typeof r.data === 'string' ? r.data : await r.data.text();
-      } catch {
-        return null; // missing (or unreadable: treated the same)
+      } catch (e) {
+        if (isMissingFile(e)) return null;
+        throw e; // there, but unreadable right now: the caller mustn't take it for empty
       }
     },
     async write(area, path, text) {
@@ -126,11 +136,22 @@ export interface TextFileOptions {
 
 export interface TextFile {
   readonly path: string;
-  /** The text (migrating old keys on first use), or null. Never rejects. */
+  /**
+   * The text (migrating old keys on first use), or null when there is none. Never
+   * rejects: a read that fails (the file is there but can't be read) returns null and
+   * sets `unreadable`.
+   */
   read(): Promise<string | null>;
-  /** Write unless it's what the file already holds. Never rejects (failures are logged). */
+  /**
+   * Write unless it's what the file already holds. Never rejects (failures are logged).
+   * Skipped while `unreadable`: a file we couldn't read isn't replaced by what we have
+   * without it. A later read() that works lifts that.
+   */
   write(text: string): Promise<void>;
+  /** Delete the file, after any write still going (it can't come back). */
   remove(): Promise<void>;
+  /** The last read failed for a reason other than a missing file. */
+  readonly unreadable: boolean;
 }
 
 export function textFile(area: Area, name: string, opts: TextFileOptions = {}): TextFile {
@@ -142,9 +163,19 @@ export function textFile(area: Area, name: string, opts: TextFileOptions = {}): 
   let last: string | null | undefined;
   let pending: string | null = null;
   let writing: Promise<void> | null = null;
+  let unreadable = false;
+  /** Bumped by remove(): a write loop from before it stops. */
+  let gen = 0;
+  /** Every write, remove and read of the file, in call order: none of them overlap. */
+  let chain: Promise<unknown> = Promise.resolve();
+  const queue = <T>(job: () => Promise<T>): Promise<T> => {
+    const p = chain.then(job);
+    chain = p.catch(() => {});
+    return p;
+  };
 
-  async function drain(): Promise<void> {
-    while (pending != null) {
+  async function drain(g: number): Promise<void> {
+    while (pending != null && g === gen) {
       const text = pending;
       pending = null;
       try {
@@ -154,7 +185,7 @@ export function textFile(area: Area, name: string, opts: TextFileOptions = {}): 
         if (last === text) last = undefined; // retry next time, even with the same text
       }
     }
-    writing = null;
+    if (g === gen) writing = null;
   }
 
   async function dropLegacy(): Promise<void> {
@@ -163,48 +194,67 @@ export function textFile(area: Area, name: string, opts: TextFileOptions = {}): 
 
   return {
     path,
-    async read() {
-      let text: string | null = null;
-      try {
-        text = await backend().read(area, path);
-      } catch (e) {
-        logError(`storage.read ${path}`, e);
-      }
-      if (text != null) {
-        last = text;
-        // A previous migration may have stopped before removing the old keys.
-        if (legacy.length) void dropLegacy();
-        return text;
-      }
-      for (const key of legacy) {
-        const old = await store.get(key).catch(() => null);
-        if (!old) continue;
+    get unreadable() {
+      return unreadable;
+    },
+    read() {
+      // After the writes already asked for, so it sees what they wrote.
+      return queue(async () => {
+        let text: string | null;
         try {
-          await backend().write(area, path, old);
-          last = old;
-          await dropLegacy();
+          text = await backend().read(area, path);
         } catch (e) {
-          // Keep the old keys: the migration runs again next start.
-          logError(`storage.migrate ${path}`, e);
+          logError(`storage.read ${path}`, e);
+          unreadable = true;
+          return null;
         }
-        return old;
-      }
-      last = null;
-      return null;
+        unreadable = false;
+        if (text != null) {
+          // A write asked for meanwhile is newer than what's on disk.
+          if (!writing) last = text;
+          // A previous migration may have stopped before removing the old keys.
+          if (legacy.length) void dropLegacy();
+          return text;
+        }
+        for (const key of legacy) {
+          const old = await store.get(key).catch(() => null);
+          if (!old) continue;
+          try {
+            await backend().write(area, path, old);
+            if (!writing) last = old;
+            await dropLegacy();
+          } catch (e) {
+            // Keep the old keys: the migration runs again next start.
+            logError(`storage.migrate ${path}`, e);
+          }
+          return old;
+        }
+        if (!writing) last = null;
+        return null;
+      });
     },
     write(text) {
+      if (unreadable) {
+        logError(`storage.write ${path}`, new Error('skipped: the file could not be read'));
+        return Promise.resolve();
+      }
       if (text === last || text === pending) return writing ?? Promise.resolve();
       last = text;
       pending = text;
-      return (writing ??= drain());
+      const g = gen;
+      return (writing ??= queue(() => drain(g)));
     },
-    async remove() {
+    remove() {
+      gen++;
       pending = null;
+      writing = null;
       last = null;
-      await backend()
-        .remove(area, path)
-        .catch((e) => logError(`storage.remove ${path}`, e));
-      await dropLegacy();
+      return queue(async () => {
+        await backend()
+          .remove(area, path)
+          .catch((e) => logError(`storage.remove ${path}`, e));
+        await dropLegacy();
+      });
     },
   };
 }
@@ -215,12 +265,17 @@ export interface JsonFile<T> {
   load(): Promise<T | null>;
   save(value: T): Promise<void>;
   remove(): Promise<void>;
+  /** The last load failed for a reason other than a missing file (see TextFile.unreadable). */
+  readonly unreadable?: boolean;
 }
 
 export function jsonFile<T>(area: Area, name: string, parse: (raw: unknown) => T | null, opts: TextFileOptions = {}): JsonFile<T> {
   const file = textFile(area, name, opts);
   return {
     path: file.path,
+    get unreadable() {
+      return file.unreadable;
+    },
     async load() {
       const text = await file.read();
       if (text == null) return null;
