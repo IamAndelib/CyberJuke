@@ -66,8 +66,8 @@ export function UpNext({ s }: { s: PlayerState }) {
               </div>
             </button>
             <div class="upnext-actions">
-              {/* Autoplay rows are suggestions: no reordering, only Remove. */}
-              {!s.shuffle && kind !== 'autoplay' ? (
+              {/* Reorder within each section (with shuffle on the order is random, so no arrows). */}
+              {!s.shuffle ? (
                 <>
                   <button
                     class="icon-btn"

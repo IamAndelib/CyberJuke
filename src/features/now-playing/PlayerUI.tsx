@@ -16,6 +16,7 @@ import { Marquee } from './Marquee';
 import { MembersTag } from '../../ui/components/TrackRow';
 import { LyricsPanel } from './Lyrics';
 import { UpNext } from './UpNext';
+import { useModal } from '../../ui/useModal';
 import { shareTrack } from '../../ui/share';
 
 function fmt(ms: number): string {
@@ -299,6 +300,9 @@ export function NowPlaying() {
   }, [has, open]);
   const sheet = useRef<HTMLDivElement>(null);
   useSwipeToClose(sheet);
+  // Focus goes in when it opens and back to what opened it (the app behind is made inert
+  // by App once the slide-in ends).
+  useModal(open, sheet, { inertBehind: false });
 
   return (
     <div
@@ -388,7 +392,7 @@ function NowPlayingContent() {
                 {t.membersOnly && <MembersTag class="np-members" />}
                 {t.genre && (
                   <button class="tag np-genre" onClick={() => openGenrePage(t.genre)} aria-label={`Open genre ${t.genre}`} data-testid="np-genre">
-                    {t.genre}
+                    <span class="np-genre-text">{t.genre}</span>
                   </button>
                 )}
               </div>
@@ -530,6 +534,7 @@ export function ArtistChooser() {
   const open = artistChoice.value;
   const sheet = useRef<HTMLDivElement>(null);
   const names = useSheetContent(open, sheet);
+  useModal(open != null, sheet);
   const close = () => (artistChoice.value = null);
   return (
     <div class={'sheet-wrap' + (open ? ' open' : '')} aria-hidden={!open} inert={!open}>
@@ -561,6 +566,7 @@ export function TrackMenu() {
   const open = menuTrack.value;
   const sheet = useRef<HTMLDivElement>(null);
   const t = useSheetContent(open, sheet);
+  useModal(open != null, sheet);
   void liked.value;
   const close = () => (menuTrack.value = null);
   const fav = t ? isLiked(t.id) : false;

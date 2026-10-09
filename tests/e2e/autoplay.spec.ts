@@ -87,22 +87,33 @@ test('a Home row starts a radio: Up next is similar Jukebox tracks', async ({ pa
   expect(Number(await rows.first().locator('.row-main').evaluate((el) => getComputedStyle(el).opacity))).toBeLessThan(1);
 });
 
-test('Up next: autoplay rows have only a 48px Remove, which offers Undo', async ({ page }) => {
+test('Up next: autoplay rows reorder like the others (not with shuffle), and Remove offers Undo', async ({ page }) => {
   await start(page);
   await visible(page, 'track-play').first().click();
   const q = await withAutoplay(page);
   await openNowPlaying(page);
   const row = page.locator('[data-testid="upnext-row"][data-section="autoplay"]').nth(1);
-  await expect(page.locator('[data-section="autoplay"] [data-testid="upnext-up"]')).toHaveCount(0);
-  await expect(page.locator('[data-section="autoplay"] [data-testid="upnext-down"]')).toHaveCount(0);
+  const autoRows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
+  // ▲/▼ within the section: the first can't go up, the last can't go down.
+  await expect(autoRows.first().getByTestId('upnext-up')).toBeDisabled();
+  await expect(autoRows.last().getByTestId('upnext-down')).toBeDisabled();
+  const first = (await autoRows.nth(0).getAttribute('data-track-id'))!;
+  const second = (await autoRows.nth(1).getAttribute('data-track-id'))!;
+  await autoRows.first().getByTestId('upnext-down').click();
+  await expect(autoRows.nth(0)).toHaveAttribute('data-track-id', second);
+  await expect(autoRows.nth(1)).toHaveAttribute('data-track-id', first);
+  // Still autoplay picks after the move.
+  expect((await queueState(page)).autoplay.slice(0, 2).map((t) => t.id)).toEqual([second, first]);
+  await page.waitForTimeout(350); // past the double-tap guard
   const rb = await row.getByTestId('upnext-remove').boundingBox();
   expect(rb!.width).toBeCloseTo(48, 1);
   expect(rb!.height).toBeCloseTo(48, 1);
 
   const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
   const before = await rows.count();
-  // By id: two picks can share a title.
-  const gone = q.autoplay[1].id;
+  // By id: two picks can share a title (read off the row: the move above reordered them).
+  const gone = (await row.getAttribute('data-track-id'))!;
+  void q;
   // Two taps in a row: the second lands on the next row, which moved under the finger,
   // and is ignored (300 ms). It goes in as soon as the list has re-rendered (microtasks,
   // no timer), so a slow runner can't stretch the gap past the guard.

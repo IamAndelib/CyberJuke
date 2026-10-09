@@ -4,10 +4,17 @@
 
 .np-genre {
   position: relative;
+  /* The 44px hit area below reaches past the tag: the ellipsis moves to the inner text. */
+  overflow: visible;
   cursor: pointer;
   text-decoration: underline;
   text-decoration-color: var(--color-border);
   text-underline-offset: 3px;
+}
+.np-genre-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* 44px hit area around the 20px tag. */
 .np-genre::after {

@@ -357,3 +357,36 @@ test('saved settings without the Autoplay key keep it on', async ({ page }) => {
   await expect(page.getByTestId('autoplay-toggle')).toHaveAttribute('aria-checked', 'true');
   await toastsGone(page);
 });
+
+test('a sheet is modal: what is behind it is inert and takes no pan, focus goes in and comes back', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('track-play').first().click();
+  await openNowPlaying(page);
+  const np = page.getByTestId('now-playing');
+  const more = page.getByTestId('np-more');
+  await more.click();
+  const menu = page.getByTestId('track-menu');
+  await expect(menu).toBeVisible();
+  // Now Playing (and the app under it) can't be touched or scrolled from under the sheet.
+  await expect.poll(() => np.evaluate((el) => (el as HTMLElement).inert)).toBe(true);
+  expect(await page.locator('.app').evaluate((el) => (el as HTMLElement).inert)).toBe(true);
+  expect(await menu.evaluate((el) => getComputedStyle(el).touchAction)).toBe('none');
+  expect(await page.locator('.sheet-wrap.open').evaluate((el) => getComputedStyle(el).touchAction)).toBe('none');
+  // Focus is in the sheet; Cancel gives it back to the ⋯ button, and Now Playing is live again.
+  await expect.poll(() => menu.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+  await menu.getByRole('button', { name: '[Cancel]' }).click();
+  await expect.poll(() => np.evaluate((el) => (el as HTMLElement).inert)).toBe(false);
+  await expect(more).toBeFocused();
+  expect(await page.locator('.app').evaluate((el) => (el as HTMLElement).inert)).toBe(true); // still behind Now Playing
+
+  // From a row: the app is inert while the menu is up, and comes back after.
+  await page.getByTestId('np-close').click();
+  await expect.poll(() => page.locator('.app').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
+  const rowMore = page.getByTestId('track-more').nth(1);
+  await rowMore.click();
+  await expect.poll(() => page.locator('.app').evaluate((el) => (el as HTMLElement).inert)).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect.poll(() => page.locator('.app').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
+  await expect(rowMore).toBeFocused();
+});

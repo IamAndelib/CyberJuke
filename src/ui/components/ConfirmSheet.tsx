@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { useModal } from '../useModal';
 import { confirmRequest, type ConfirmRequest } from '../nav';
 
 /** How long a closing sheet keeps its content while it slides away (the sheet's 0.2s). */
@@ -19,10 +20,12 @@ export function ConfirmSheet() {
   }, [req]);
   const r = req ?? shown;
   const close = () => (confirmRequest.value = null);
+  const sheet = useRef<HTMLDivElement>(null);
+  useModal(req != null, sheet);
   return (
     <div class={'sheet-wrap' + (req ? ' open' : '')} aria-hidden={!req} inert={!req}>
       <div class="scrim" onClick={close} />
-      <div class="sheet confirm-sheet" role="alertdialog" aria-modal="true" aria-label={r?.title ?? 'Confirm'} data-testid="confirm-sheet">
+      <div class="sheet confirm-sheet" ref={sheet} role="alertdialog" aria-modal="true" aria-label={r?.title ?? 'Confirm'} data-testid="confirm-sheet">
         {r && (
           <>
             <div class="sheet-head confirm-head">

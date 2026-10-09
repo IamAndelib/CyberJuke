@@ -781,6 +781,9 @@
   position: fixed;
   inset: 0;
   z-index: var(--z-sheet);
+  /* No pan may start on the scrim or a short sheet: on Android it would scroll the page
+     behind (useModal turns `scrolls` on for a sheet taller than the screen). */
+  touch-action: none;
   visibility: hidden;
   transition: visibility 0s linear var(--ease-out-ms);
 }
@@ -815,8 +818,14 @@
   padding: 6px 0;
   max-height: calc(100dvh - 16px - var(--safe-top) - var(--safe-bottom));
   overflow-y: auto;
+  /* A scroll container, so .sheet-wrap's rule stops here: no pan unless it really scrolls. */
+  touch-action: none;
   transform: translateY(calc(100% + 40px));
   transition: transform var(--ease-out-ms) var(--ease-out);
+}
+.sheet.scrolls {
+  touch-action: pan-y;
+  overscroll-behavior: contain;
 }
 .sheet-wrap.open .sheet {
   transform: none;

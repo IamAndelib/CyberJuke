@@ -33,7 +33,7 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 - **Autoplay**: when a list ends, similar songs keep playing. A Jukebox song leads to Jukebox songs picked by artist, genre and what the same people share; a Global song leads to that song's radio. Tracks you add with "Add to queue" always stay next.
 - **Search** every track on the Jukebox by title, artist or genre, with typo tolerance and recent searches. **Here** searches only the page you're on: a genre, an artist, an album, your library, or the Genres and Artists lists themselves.
 - **Genres** and **Artists**: browse everything shared on the Jukebox, A–Z or by popularity, and ★ your favourites to pin them to the top. An artist page puts what Cyberspace people shared first, then the artist's top songs, albums, live albums, EPs and singles from the artist's own page.
-- **Global search** (optional): a separate Global mode for any song, album or artist beyond the Jukebox. Global tracks play, like and queue like any other, but never show up on Home, Genres, Most saved or Shuffle.
+- **Global search** (optional): a separate Global mode for any song, album, artist or playlist beyond the Jukebox. Global tracks play, like and queue like any other, but never show up on Home, Genres, Most saved or Shuffle.
 - **Sign in with Cyberspace** (optional): the Jukebox also shows the members-only shared tracks, marked `[members]`. See [Signing in](#signing-in).
 - **Library**: liked tracks and recently played, stored on your phone.
 - **Background playback**: the notification, lock screen and headset buttons all work, and the queue keeps going with the screen off.
@@ -133,13 +133,13 @@ Signing in is optional. Without it, CyberJuke shows the Jukebox's public posts. 
 
 ### Unofficial data access
 
-CyberJuke reads Cyberspace's public post data directly, because the official API needs supporter access. This can break if the site changes, and Cyberspace may ask for it to stop. Requests are kept light: 24 posts per page, a 5-minute cache, and no background polling. If the official API becomes available to CyberJuke, it will switch.
+CyberJuke reads Cyberspace's public post data directly, because the official API needs supporter access. This can break if the site changes, and Cyberspace may ask for it to stop. Requests are kept light: lists load 24 posts a page with a 5-minute cache; the full catalog behind search, genres and artists is read in 300-post pages, kept on the phone and only topped up (new posts hourly at most, a full re-read daily); the new-tracks check runs every 15 minutes only while the app is open (adjustable, or off); nothing runs in the background. If the official API becomes available to CyberJuke, it will switch.
 
 ### YouTube
 
 Playing audio without the official YouTube player goes against YouTube's Terms of Service, which is why CyberJuke is not on the Play Store. Three things can go wrong:
 
-- **YouTube changes something.** Every user fails until NewPipeExtractor is updated; this has happened every few months. CyberJuke pins the extractor commit that the NewPipe app itself ships, a daily [canary](.github/workflows/canary.yml) checks it against YouTube and opens a `youtube-breakage` issue when parsing fails, and the app says "YouTube changed something. Update CyberJuke." when it sees one.
+- **YouTube changes something.** Every user fails until NewPipeExtractor is updated; this has happened every few months. CyberJuke pins the extractor commit that the NewPipe app itself ships, a daily [canary](.github/workflows/canary.yml) checks it against YouTube and opens a `youtube-breakage` issue when parsing fails, and the app says "YouTube changed something. Update CyberJuke when a new version is out." when it sees one.
 - **YouTube limits your network** ("confirm you're not a bot"). This mostly depends on your IP address: VPNs, Tor and datacenter networks get it most, some mobile networks now and then. YouTube flags IPv6 addresses much more readily, so with **Settings → IPv4: Auto** (the default) CyberJuke switches that network to IPv4 and retries straight away, and retries once more before giving up. If YouTube still refuses, it pauses instead of skipping through the queue, waits (1, 3, 10, then 30 minutes), shows how long, and resumes by itself after a short wait. Switching between Wi-Fi and mobile data, or **[Try now]** on the banner, tries again at once. Search, artist pages and lyrics wait on their own, so a refused search never stops the music. "Open in YouTube" is offered for the track.
 - **A video can't be played** (removed, private, age-restricted or region-blocked). It is skipped, up to five in a row.
 

@@ -1,8 +1,9 @@
 /**
  * One shared ticker for everything that follows the playback position (the mini
- * player's bar, the seek bar, synced lyrics). It runs on requestAnimationFrame, at
- * most every TICK_MS, only while something subscribes, and never while the page is
- * hidden (it resumes when the page shows again).
+ * player's bar, the seek bar, synced lyrics). A timer every TICK_MS, only while
+ * something subscribes, and never while the page is hidden (it resumes when the page
+ * shows again). Not requestAnimationFrame: a frame callback that mostly does nothing
+ * still makes the page draw 60 frames a second while music plays.
  */
 import { effect } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -11,23 +12,19 @@ import { livePosition, player, positionSample } from '../player';
 const TICK_MS = 250;
 
 const subs = new Set<() => void>();
-let raf = 0;
-let last = 0;
+let timer: ReturnType<typeof setTimeout> | 0 = 0;
 
 const hidden = () => typeof document !== 'undefined' && document.hidden;
 
-function frame(t: number): void {
-  raf = 0;
+function tick(): void {
+  timer = 0;
   if (!subs.size || hidden()) return;
-  if (t - last >= TICK_MS) {
-    last = t;
-    for (const fn of [...subs]) fn();
-  }
-  raf = requestAnimationFrame(frame);
+  for (const fn of [...subs]) fn();
+  kick();
 }
 
 function kick(): void {
-  if (!raf && subs.size && !hidden()) raf = requestAnimationFrame(frame);
+  if (!timer && subs.size && !hidden()) timer = setTimeout(tick, TICK_MS);
 }
 
 if (typeof document !== 'undefined') document.addEventListener('visibilitychange', kick);
@@ -38,9 +35,9 @@ function onTick(fn: () => void): () => void {
   kick();
   return () => {
     subs.delete(fn);
-    if (!subs.size && raf) {
-      cancelAnimationFrame(raf);
-      raf = 0;
+    if (!subs.size && timer) {
+      clearTimeout(timer);
+      timer = 0;
     }
   };
 }

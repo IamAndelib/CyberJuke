@@ -160,12 +160,12 @@ test('Licenses: every bundled library is listed and the full texts open in the a
   await page.goto('/');
   await page.getByTestId('tab-settings').click();
   await page.getByText('Libraries', { exact: true }).click();
-  for (const name of ['NewPipeExtractor', 'Media3', 'OkHttp', 'Kotlin', 'Rhino', 'jsoup', 'Protocol Buffers', 'desugar_jdk_libs']) {
+  for (const name of ['NewPipeExtractor', 'Media3', 'OkHttp', 'Kotlin', 'kotlinx.coroutines', 'Apache Cordova', 'Ionic filesystem', 'Rhino', 'jsoup', 'Protocol Buffers', 'desugar_jdk_libs']) {
     await expect(page.getByTestId('libraries')).toContainText(name);
   }
   await page.getByTestId('license-texts').locator('summary').click();
   const text = page.getByTestId('license-texts').locator('pre');
-  for (const t of ['Apache License', 'Mozilla Public License Version 2.0', 'GNU GENERAL PUBLIC LICENSE', 'CLASSPATH', 'Copyright (c) 2015-present Jason Miller', 'Copyright 2008 Google Inc.']) {
+  for (const t of ['Apache License', 'Mozilla Public License Version 2.0', 'GNU GENERAL PUBLIC LICENSE', 'Version 3, 29 June 2007', 'CLASSPATH', 'Copyright (c) 2015-present Jason Miller', 'Copyright (c) 2025 Ionic', 'Copyright 2008 Google Inc.']) {
     await expect(text).toContainText(t);
   }
 });

@@ -16,6 +16,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
@@ -132,7 +133,11 @@ class PlaybackService : MediaSessionService() {
             // The IPv4 setting's Auto memory is per kind of network.
             if (NetPrefs.onNetwork(networkKey(caps))) StreamResolver.clear()
             // Online again (validated): playback an outage stopped picks up again.
-            if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) && NetBlock.resumePending()) {
+            // (Validated fires again and again on a network that's up: at most every few seconds.)
+            if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) && NetBlock.resumePending() &&
+                SystemClock.elapsedRealtime() - lastNetResumeAt > NET_RESUME_GAP_MS
+            ) {
+                lastNetResumeAt = SystemClock.elapsedRealtime()
                 handler.post { resumeAfterBlock() }
             }
         }
@@ -184,6 +189,15 @@ class PlaybackService : MediaSessionService() {
      * for a resume that can still happen (within [NetBlock.RESUME_WINDOW_MS]); timed.
      */
     private var resumeWakeLock: PowerManager.WakeLock? = null
+
+    /** pauseToResume's pause is on its way to the listener (it isn't the user's). */
+    private var ownPause = false
+
+    /** When the list last played to its end (elapsedRealtime). */
+    private var endedAt = 0L
+
+    /** The last network-triggered resume (elapsedRealtime). */
+    private var lastNetResumeAt = 0L
 
     private fun scheduleResume(until: Long) {
         handler.removeCallbacks(blockEnded)
@@ -294,6 +308,12 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
+        // Audio only: a muxed or HLS fallback stream must not start a video (or text) decoder.
+        exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .setTrackTypeDisabled(C.TRACK_TYPE_IMAGE, true)
+            .build()
         queue = NativeQueue(ExoQueueHost(exo))
         exo.addListener(PlayerListener())
         player = exo
@@ -366,6 +386,7 @@ class PlaybackService : MediaSessionService() {
 
     private inner class PlayerListener : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_ENDED) endedAt = SystemClock.elapsedRealtime()
             if (playbackState == Player.STATE_READY) {
                 consecutiveFailures = 0
                 player?.currentMediaItem?.mediaId?.let { expiredRetried.remove(it) }
@@ -377,9 +398,18 @@ class PlaybackService : MediaSessionService() {
         override fun onIsPlayingChanged(isPlaying: Boolean) = schedulePrefetch()
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            // Our own pause (pauseToResume) arrives here after it returned (Media3 queues events
+            // raised inside onPlayerError): it must not cancel the resume it asked for.
+            if (!playWhenReady && ownPause) {
+                ownPause = false
+                return
+            }
             // A pause outside a back-off is the user's: nothing to resume later. (During one,
-            // the pause is ours, or a refused play the plugin turned into a pause.)
-            if (!playWhenReady && !NetBlock.isBlocked()) NetBlock.cancelResume()
+            // a refused play the plugin turned into a pause keeps its resume.)
+            if (!playWhenReady && !NetBlock.isBlocked()) {
+                NetBlock.cancelResume()
+                releaseResumeWakeLock()
+            }
         }
 
         override fun onPositionDiscontinuity(
@@ -412,8 +442,12 @@ class PlaybackService : MediaSessionService() {
             schedulePrefetch()
             // Something was added after the list had played to its end (late autoplay, Add to
             // queue, Undo): ExoPlayer stays ENDED, so go on to it.
+            // Only soon after the end: a batch arriving much later (after a long back-off, or on
+            // reopening the app) must not start music by itself.
             val p = player ?: return
-            if (p.playbackState == Player.STATE_ENDED && p.playWhenReady && p.hasNextMediaItem()) {
+            if (p.playbackState == Player.STATE_ENDED && p.playWhenReady && p.hasNextMediaItem() &&
+                SystemClock.elapsedRealtime() - endedAt < CONTINUE_AFTER_END_MS
+            ) {
                 Log.i(TAG, "Items added after the end: continuing")
                 p.seekToNextMediaItem()
             }
@@ -640,17 +674,19 @@ class PlaybackService : MediaSessionService() {
 
         when (action) {
             TrackErrorPolicy.Action.WaitBlocked -> {
-                // A back-off is running: stay here, paused, without a request. Playback resumes
-                // by itself once it ends (resumeAfterBlock).
-                pauseToResume(p)
+                // A back-off is running (or was, when this load failed): stay here, paused,
+                // without a request. Playback resumes by itself once it ends.
+                pauseToResume(p, afterBlock = true)
             }
             is TrackErrorPolicy.Action.Block -> {
                 Log.i(TAG, "BLOCKED ${action.reason} on $trackId: $message")
-                NetBlock.trip(action.reason)
+                // An extraction's limit was counted already, when YtGuard tripped (this error may
+                // surface much later, at a track change): only a stream's refusal counts here.
+                if (resolve == null) NetBlock.trip(action.reason)
                 StreamResolver.cancelPrefetch()
                 // The rejected URL must not be tried again from the cache (L1).
                 ytId?.let { StreamResolver.reResolve(it) }
-                pauseToResume(p)
+                pauseToResume(p, afterBlock = true)
             }
             TrackErrorPolicy.Action.SwitchToIpv4 -> {
                 if (ytId == null) {
@@ -697,11 +733,17 @@ class PlaybackService : MediaSessionService() {
      * Pauses for a back-off or an outage; if it was playing, it resumes once the back-off ends
      * or the network is back (within [NetBlock.RESUME_WINDOW_MS]).
      */
-    private fun pauseToResume(p: ExoPlayer) {
+    private fun pauseToResume(p: ExoPlayer, afterBlock: Boolean = false) {
         val wasPlaying = p.playWhenReady
+        if (wasPlaying) ownPause = true
         p.pause()
-        // After pause(): its listener call cancels a pending resume.
-        if (wasPlaying) NetBlock.wantResume()
+        if (!wasPlaying) return
+        NetBlock.wantResume()
+        if (!afterBlock) return // an outage: back when the network is validated again
+        // The resume's timer and wake lock, now that it is wanted. A back-off that already
+        // ran out by the time its error surfaced (at a track change): try again at once.
+        val until = NetBlock.active().first
+        if (until > 0L) scheduleResume(until) else handler.post { resumeAfterBlock() }
     }
 
     /** A real per-video failure: skip it (with the [TrackErrorPolicy.MAX_CONSECUTIVE_FAILURES] guard). */
@@ -961,5 +1003,11 @@ class PlaybackService : MediaSessionService() {
 
         /** The resume wake lock outlasts the wait by this much (then it times out by itself). */
         private const val WAKE_SLACK_MS = 15_000L
+
+        /** Items added this soon after the list ended play on; later ones wait for Play. */
+        private const val CONTINUE_AFTER_END_MS = 2L * 60_000L
+
+        /** At most one network-triggered resume per this long. */
+        private const val NET_RESUME_GAP_MS = 10_000L
     }
 }

@@ -16,3 +16,10 @@ android/app/src/main/assets/capacitor.plugins.json
 android/capacitor-cordova-android-plugins/
 *.keystore
 *.jks
+*.p12
+*.idsig
+google-services.json
+# Signing kits made by scripts/setup-publishing.sh or handed over in chat: never commit
+CyberJuke-secrets.txt
+*-secrets.txt
+cyberjuke-keys/

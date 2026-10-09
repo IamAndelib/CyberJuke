@@ -26,7 +26,10 @@ const UNDO = 'Undo';
 /** Like or unlike; an unlike can be undone. Returns the new liked state. */
 export function toggleLikeWithUndo(track: Track): boolean {
   // A track not known yet (a placeholder while the player's list resolves) can't be saved.
-  if (!track.ytId && !isLiked(track.id)) return false;
+  if (!track.ytId && !isLiked(track.id)) {
+    toast('Still loading this track. Try again in a moment.', 1800);
+    return false;
+  }
   if (!isLiked(track.id)) {
     toggleLike(track);
     toast('Added to Liked', 1800);

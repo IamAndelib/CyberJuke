@@ -34,6 +34,11 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] Let autoplay run for an hour or more: it keeps going without repeating the same songs.
 
 ## Browsing and gestures
+- [ ] Open a genre page and tap ★ in the top bar: the genre shows under ★ Favourites on the Genres tab. Same on an artist page.
+- [ ] Now Playing: the ♥ sits beside the title and artist; a long title scrolls without running under it.
+- [ ] Open the ⋯ menu in Now Playing and drag on the menu and on the dark area above it: nothing behind it scrolls.
+- [ ] Search for a poster's @name: nothing. Search for an artist or a song: found.
+- [ ] Settings → Licenses → Full license texts opens and scrolls.
 - [ ] Pull down on Home to refresh: smooth, with no jumping.
 - [ ] Tap an artist or a genre (from Home, Search or Now Playing): it opens on the tab you're on, and **Back** returns exactly where you were, at the same scroll position.
 - [ ] Tap the tab you're already on: it scrolls to the top. Tap again: it goes back to that tab's first page.

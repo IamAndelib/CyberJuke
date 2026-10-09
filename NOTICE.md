@@ -20,10 +20,12 @@ CyberJuke is copyright © 2026 IamAndelib and is licensed under the GNU General 
 | [AndroidX Media3 / ExoPlayer](https://github.com/androidx/media) | Apache-2.0 | Playback, media session, notification |
 | [OkHttp](https://github.com/square/okhttp) | Apache-2.0 | HTTP client |
 | [Capacitor](https://github.com/ionic-team/capacitor) and its official plugins | MIT | Native app shell |
+| [Ionic filesystem library](https://github.com/ionic-team/ion-android-filesystem) (`ionfilesystem-android`) | MIT | File storage (used by Capacitor's Filesystem plugin) |
+| [Apache Cordova](https://cordova.apache.org) framework | Apache-2.0 | Capacitor's plugin bridge |
 | [Preact](https://github.com/preactjs/preact), [@preact/signals](https://github.com/preactjs/signals) | MIT | UI |
 | [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) | SIL OFL 1.1 | Font (`public/fonts/`, license in `public/fonts/OFL.txt`) |
 | [Departure Mono](https://departuremono.com) | SIL OFL 1.1 | Font (`public/fonts/`, license in `public/fonts/OFL.txt`) |
-| AndroidX libraries, Kotlin standard library, Guava, Okio | Apache-2.0 | Android runtime |
+| AndroidX libraries, Kotlin standard library, kotlinx.coroutines, Guava, Okio | Apache-2.0 | Android runtime |
 | [desugar_jdk_libs](https://github.com/google/desugar_jdk_libs) | GPL-2.0 with the Classpath Exception | Newer Java APIs on older Android (needed by NewPipeExtractor) |
 | [nanojson](https://github.com/TeamNewPipe/nanojson) | Apache-2.0 | JSON parsing (NewPipeExtractor) |
 | [jsoup](https://jsoup.org) | MIT | HTML parsing (NewPipeExtractor) |

@@ -186,7 +186,9 @@ test('back-to-top: finger down stops a fling, finger up jumps to the top, with n
   });
   expect(run.prevented).toBe(true);
   expect(run.held[0]).toBeGreaterThan(run.start);
-  expect(new Set(run.held).size).toBe(1);
+  // Stopped: one frame of momentum already on its way may still land, then nothing moves.
+  expect(run.held.length).toBeGreaterThan(5);
+  expect(new Set(run.held.slice(2)).size).toBe(1);
   expect(run.clicks).toBe(0);
   expect(run.end).toBe(0);
   expect(new Set(run.seen).size).toBeGreaterThanOrEqual(4);

@@ -366,3 +366,14 @@ test('Share in the ⋯ menu shares the track title, artist and music.youtube.com
   await page.getByTestId('track-more').nth(3).click();
   await expect(page.getByTestId('menu-share')).toBeVisible();
 });
+
+test('the Now Playing genre tag takes a tap a little above or below it (44px target)', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('track-play').first().click();
+  await openNowPlaying(page);
+  const tag = page.getByTestId('np-genre');
+  const b = (await tag.boundingBox())!;
+  const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('[data-testid="np-genre"]') != null, [b.x + b.width / 2, b.y - 10]);
+  expect(hit).toBe(true);
+  expect(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('[data-testid="np-genre"]') != null, [b.x + b.width / 2, b.y + b.height + 10])).toBe(true);
+});

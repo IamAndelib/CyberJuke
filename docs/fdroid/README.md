@@ -1,6 +1,6 @@
 # Submitting CyberJuke to F-Droid
 
-`io.github.iamandelib.cyberjuke.yml` is a draft recipe for [fdroiddata](https://gitlab.com/fdroid/fdroiddata). It is modelled on Voyager's Capacitor recipe: F-Droid installs Node, builds the web app, runs `cap sync`, then builds `android/app` with Gradle.
+[`io.github.iamandelib.cyberjuke.yml`](io.github.iamandelib.cyberjuke.yml) is the recipe for [fdroiddata](https://gitlab.com/fdroid/fdroiddata), in the field order `fdroid rewritemeta` writes and without comments, so it can be pasted as is. It is modelled on Voyager's Capacitor recipe: F-Droid installs JDK 21 and Node 22.22.0 (the tarball checksum is pinned; GitHub's workflows use the same Node), builds the web app, runs `cap sync`, then builds `android/app` with Gradle. `Binaries` and `AllowedAPKSigningKeys` let F-Droid ship the GitHub-signed APK when its own build matches it.
 
 The store listing (title, descriptions, icon, feature graphic, screenshots, per-version changelogs) comes from [`fastlane/metadata/android/en-US/`](../../fastlane/metadata/android/en-US) in this repository. F-Droid reads it from the tagged commit, so nothing about the listing goes in the recipe.
 

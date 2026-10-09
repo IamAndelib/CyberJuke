@@ -15,7 +15,7 @@ concurrency:
 permissions: {}
 
 env:
-  NODE_VERSION: '22'
+  NODE_VERSION: '22.22.0' # exact: the F-Droid recipe pins the same build (reproducible APKs)
   JAVA_VERSION: '21'
 
 jobs:
