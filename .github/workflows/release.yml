@@ -106,7 +106,7 @@ jobs:
           CODE: ${{ steps.ver.outputs.code }}
         run: |
           sed -i -E "s/^(\s*versionCode\s+)[0-9]+\s*$/\1${CODE}/; s/^(\s*versionName\s+)\"[^\"]+\"\s*$/\1\"${VERSION}\"/" android/app/build.gradle
-          npm version "$VERSION" --no-git-tag-version --allow-same-version >/dev/null
+          npm version "$VERSION" --no-git-tag-version --allow-same-version --ignore-scripts >/dev/null
           # F-Droid shows fastlane/metadata/android/en-US/changelogs/<versionCode>.txt.
           # Write it from the CHANGELOG section if it is missing (F-Droid's limit is 500 chars).
           cl="fastlane/metadata/android/en-US/changelogs/${CODE}.txt"
@@ -177,7 +177,7 @@ jobs:
 
       - name: Build unsigned release APK
         working-directory: android
-        run: ./gradlew assembleRelease --stacktrace
+        run: bash ../scripts/gradlew-retry.sh assembleRelease --stacktrace
 
       - name: Collect the APK
         run: |
