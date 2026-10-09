@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-09
+
+### Fixed
+- A scroll that starts on the seek bar no longer makes the thumb jump to your finger and back: the bar now waits to see which way the finger moves. Sideways drags the thumb, up or down scrolls Now Playing; a tap still seeks to that spot.
+- Swiping Now Playing down closes it in one smooth motion, on from where your finger let go (it paused briefly, then sped off).
+
 ## [1.1.0] - 2026-10-09
 
 ### The app

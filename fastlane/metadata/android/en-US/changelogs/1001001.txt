@@ -1,0 +1,2 @@
+- The seek bar no longer jumps when a scroll starts on it: sideways drags the thumb, up or down scrolls, a tap still seeks there
+- Swiping Now Playing down closes it in one smooth motion
