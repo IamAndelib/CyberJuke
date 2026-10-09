@@ -49,12 +49,18 @@ async function holdThumb(page: Page, screen: string) {
   const s = page.getByTestId(screen);
   await s.evaluate((el) => el.scrollTo(0, el.scrollHeight * 0.45));
   const thumb = s.getByTestId('scroll-thumb');
-  await expect(thumb).toBeVisible();
-  const b = (await thumb.boundingBox())!;
-  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2 + 40, { steps: 4 });
-  await expect(s.getByTestId('az-popup')).toHaveClass(/\bon\b/);
+  // The thumb moves to the new scroll position (and the grid may still be growing): grab it
+  // once it has settled, and again if the grab missed.
+  await expect(async () => {
+    await page.mouse.up();
+    await settle(page);
+    await expect(thumb).toBeVisible();
+    const b = (await thumb.boundingBox())!;
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2 + 40, { steps: 4 });
+    await expect(s.getByTestId('az-popup')).toHaveClass(/\bon\b/, { timeout: 1000 });
+  }).toPass({ timeout: 10_000 });
   await settle(page);
 }
 
