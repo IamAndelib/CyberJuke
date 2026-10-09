@@ -16,9 +16,9 @@ Repo: https://github.com/IamAndelib/CyberJuke.git
 Binaries: https://github.com/IamAndelib/CyberJuke/releases/download/v%v/CyberJuke-%v.apk
 
 Builds:
-  - versionName: 1.0.0
-    versionCode: 1000000
-    commit: 63b0bb47d199b1e88e0cb72777836b99530f462e
+  - versionName: 1.0.1
+    versionCode: 1000001
+    commit: e1202316c5b05cfeca60e91f7f0bada38a18108a
     subdir: android/app
     sudo:
       - echo 'deb https://deb.debian.org/debian trixie main' > /etc/apt/sources.list.d/trixie.list
@@ -44,5 +44,5 @@ AllowedAPKSigningKeys: 1c007729638d095f68160456af0fb9799d75ba4682faf18ca520a5842
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$
-CurrentVersion: 1.0.0
-CurrentVersionCode: 1000000
+CurrentVersion: 1.0.1
+CurrentVersionCode: 1000001
