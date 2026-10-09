@@ -89,7 +89,6 @@
   background: var(--color-fg);
   transform: scaleX(0);
   transform-origin: left;
-  transition: transform 0.25s linear;
   will-change: transform;
 }
 /* Play/Pause and Next: 48px targets, 8px apart. */

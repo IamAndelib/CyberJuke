@@ -1,3 +1,4 @@
+import { effect } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import {
   canSkipNext,
@@ -8,8 +9,10 @@ import {
   isAdvancing,
   isBuffering,
   isPlaying,
+  livePosition,
   playContext,
   player,
+  positionSample,
   queuePlace,
   repeatMode,
   shuffleOn,
@@ -21,7 +24,7 @@ import { toast } from '../../stores/toast';
 import { Icon } from '../../ui/icons';
 import { artistChoice, lyricsOpen, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage } from '../../ui/nav';
 import { openExternal, openPost, youtubeUrl } from '../../ui/links';
-import { positionNow, useLiveProgress, useTickValue } from '../../ui/useTick';
+import { positionNow, useTickValue } from '../../ui/useTick';
 import { splitArtists } from '../../data/artists';
 import { isGlobal, type Track } from '../../data/model';
 import { reducedMotion } from '../../core/motion';
@@ -52,15 +55,33 @@ function PlayPauseIcon({ size }: { size: number }) {
 // ---- Mini player -------------------------------------------------------------------
 
 /**
- * The thin progress line: the fill's scaleX is written straight to its style on every
- * sample and tick, so playback re-renders nothing and only the compositor works.
+ * The thin progress line. On each position sample (about once a second) the fill's scaleX is
+ * set, and while playing an animation carries it on to the end of the track: the compositor
+ * moves it, so playback re-renders nothing and runs no script between samples.
  */
 function MiniProgress() {
   const fill = useRef<HTMLDivElement>(null);
-  useLiveProgress((pos, dur) => {
-    const f = dur > 0 ? Math.min(1, Math.max(0, pos / dur)) : 0;
-    if (fill.current) fill.current.style.transform = `scaleX(${f.toFixed(4)})`;
-  }, isAdvancing.value);
+  useEffect(() => {
+    let run: Animation | null = null;
+    const stop = effect(() => {
+      const s = positionSample.value;
+      const el = fill.current;
+      if (!el) return;
+      const pos = livePosition({ ...player.state.peek(), ...s });
+      const dur = s.durationMs;
+      const f = dur > 0 ? Math.min(1, Math.max(0, pos / dur)) : 0;
+      el.style.transform = `scaleX(${f.toFixed(4)})`;
+      run?.cancel();
+      run = null;
+      if (s.isPlaying && !s.isBuffering && dur > pos && typeof el.animate === 'function') {
+        run = el.animate([{ transform: `scaleX(${f})` }, { transform: 'scaleX(1)' }], { duration: dur - pos, easing: 'linear' });
+      }
+    });
+    return () => {
+      stop();
+      run?.cancel();
+    };
+  }, []);
   return (
     <div class="mini-progress" aria-hidden="true" data-testid="mini-progress">
       <div class="mini-progress-fill" ref={fill} />

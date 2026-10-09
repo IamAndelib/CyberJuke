@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { start } from '../helpers';
+import { seedStorage, start } from '../helpers';
 
 /**
  * Playback must not re-render the screen. Counts Preact renders through the dev/test
@@ -145,4 +145,40 @@ test('a favourite star tap re-renders the star, not the grid or page around it',
   // The tapped tile, and its copy in ★ Favourites.
   expect(grid.ArtistTile ?? 0).toBeLessThanOrEqual(2);
   expect(artistPage.ArtistTile ?? 0).toBeLessThanOrEqual(2);
+});
+
+/**
+ * A track change re-renders the rows it concerns (the one that stops and the one that
+ * starts being current), not the lists around them. Before this was fixed, the Library
+ * re-rendered on every track change (its Recently played count), and every row with it;
+ * Recently played rendered its whole history (up to 1000 rows) at once.
+ */
+test('a track change re-renders the current rows, not the lists; history renders in chunks', async ({ page }) => {
+  const tr = (i: number) => ({ id: `seed${i}`, ytId: `abcdefg${String(i).padStart(4, '0')}`, title: `Seeded ${i}`, artist: 'Seeded Artist', genre: 'test', by: 'someone' });
+  const now = Date.now();
+  await seedStorage(page, {
+    'CapacitorStorage.liked': Array.from({ length: 200 }, (_, i) => tr(i)),
+    'CapacitorStorage.history': Array.from({ length: 400 }, (_, i) => ({ track: tr(1000 + i), playedAt: now - i * 60_000 })),
+  });
+  await start(page);
+  await page.getByTestId('track-play').first().click();
+  await page.getByTestId('tab-library').click();
+  await expect(page.getByTestId('liked-list').getByTestId('track-row').first()).toBeVisible();
+  const renders = () => page.evaluate(() => ({ ...(window as unknown as { __cyberjukeRenders: Renders }).__cyberjukeRenders.counts }));
+  const reset = () => page.evaluate(() => (window as unknown as { __cyberjukeRenders: Renders }).__cyberjukeRenders.reset());
+  await reset();
+  for (let i = 0; i < 3; i++) {
+    const title = await page.getByTestId('mini-title').textContent();
+    await page.getByTestId('mini-next').click();
+    await expect(page.getByTestId('mini-title')).not.toHaveText(title!);
+  }
+  const liked = await renders();
+  console.info(`3 track changes on Liked: ${JSON.stringify(liked)}`);
+  expect(liked.Library ?? 0).toBe(0);
+  expect(liked.TrackRow ?? 0).toBeLessThanOrEqual(6);
+
+  await page.getByTestId('lib-recent').click();
+  await expect(page.getByTestId('recent-list').getByTestId('track-row').first()).toBeVisible();
+  // The first chunk, not all 400 plays.
+  expect(await page.getByTestId('recent-list').getByTestId('track-row').count()).toBeLessThan(150);
 });

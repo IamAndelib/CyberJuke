@@ -1,4 +1,5 @@
 import { useComputed } from '@preact/signals';
+import { memo } from 'preact/compat';
 import type { Track } from '../../data/model';
 import { currentId, isPlaying, player } from '../../player';
 import { Icon } from '../icons';
@@ -134,7 +135,11 @@ export function MembersTag({ class: cls }: { class?: string }) {
   );
 }
 
-export function TrackRow({
+/**
+ * A track in a list. Memoised: a list re-rendering (a page loading more, a like) leaves its
+ * rows alone unless their own props change, so `onPlay` must be one function per list.
+ */
+export const TrackRow = memo(function TrackRow({
   track,
   onPlay,
   index,
@@ -142,8 +147,9 @@ export function TrackRow({
   showSaves,
 }: {
   track: Track;
-  onPlay: () => void;
-  index?: number;
+  /** Plays the list from row `index`. */
+  onPlay: (index: number) => void;
+  index: number;
   hideGenre?: boolean;
   /** Show the post's save count (Most saved). */
   showSaves?: boolean;
@@ -158,7 +164,7 @@ export function TrackRow({
       <button
         class="row-main"
         {...press}
-        onClick={() => tapRow(track, onPlay)}
+        onClick={() => tapRow(track, () => onPlay(index))}
         aria-label={`Play ${track.title} by ${track.artist}`}
         data-testid="track-play"
         data-index={index}
@@ -198,7 +204,7 @@ export function TrackRow({
       </button>
     </li>
   );
-}
+});
 
 export function SkeletonRows({ n = 8 }: { n?: number }) {
   return (

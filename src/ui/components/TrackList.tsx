@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'preact/hooks';
+import { useCallback, useEffect, useRef } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import type { Track } from '../../data/model';
 import { catalog } from '../../stores/catalog';
@@ -12,10 +12,16 @@ export { playFrom };
 
 /**
  * What a row tap plays: `queue()` when given (P2: a feed's whole list, of which the
- * shown rows are the start, so row i is item i), else the rows themselves.
+ * shown rows are the start, so row i is item i), else the rows themselves. One function
+ * for the list's lifetime (it reads the latest props), so the rows' memo holds.
  */
-function rowPlayer(tracks: Track[], ctx: PlayCtx, queue?: () => Track[]) {
-  return (i: number) => () => void playFrom(queue ? queue() : tracks, i, ctx);
+function useRowPlayer(tracks: Track[], ctx: PlayCtx, queue?: () => Track[]): (i: number) => void {
+  const latest = useRef({ tracks, ctx, queue });
+  latest.current = { tracks, ctx, queue };
+  return useCallback((i: number) => {
+    const l = latest.current;
+    void playFrom(l.queue ? l.queue() : l.tracks, i, l.ctx);
+  }, []);
 }
 
 /**
@@ -38,12 +44,12 @@ export function Tracks({
   chunkKey?: string | null;
 }) {
   const { shown, sentinel, more } = useChunks(tracks.length, chunkKey);
-  const play = rowPlayer(tracks, ctx, queue);
+  const play = useRowPlayer(tracks, ctx, queue);
   return (
     <>
       <ul class="list" data-testid="track-list">
         {tracks.slice(0, shown).map((t, i) => (
-          <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} showSaves={showSaves} onPlay={play(i)} />
+          <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} showSaves={showSaves} onPlay={play} />
         ))}
       </ul>
       {more && <div ref={sentinel} class="list-foot" aria-hidden="true" />}
@@ -57,12 +63,12 @@ export function Tracks({
  */
 export function ChunkedTracks({ tracks, ctx, chunkKey, testid }: { tracks: Track[]; ctx: PlayCtx; chunkKey: string; testid?: string }) {
   const { shown, sentinel, more } = useChunks(tracks.length, chunkKey);
-  const play = rowPlayer(tracks, ctx);
+  const play = useRowPlayer(tracks, ctx);
   return (
     <div data-testid={testid}>
       <ul class="list" data-testid="track-list">
         {tracks.slice(0, shown).map((t, i) => (
-          <TrackRow key={t.id} track={t} index={i} onPlay={play(i)} />
+          <TrackRow key={t.id} track={t} index={i} onPlay={play} />
         ))}
       </ul>
       {more ? <div ref={sentinel} class="list-foot" aria-hidden="true" /> : <div class="list-foot end">— end of tape —</div>}
@@ -126,7 +132,7 @@ export function PagedTracks({
   const sentinel = useRef<HTMLDivElement>(null);
   const { tracks, status, error, hasMore, loadingMore, loadMore } = paged;
   const chunks = useChunks(tracks.length, chunkKey);
-  const play = rowPlayer(tracks, ctx, queue);
+  const play = useRowPlayer(tracks, ctx, queue);
 
   useEffect(() => {
     const el = sentinel.current;
@@ -145,7 +151,7 @@ export function PagedTracks({
     <>
       <ul class="list" data-testid="track-list">
         {tracks.slice(0, chunks.shown).map((t, i) => (
-          <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} onPlay={play(i)} />
+          <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} onPlay={play} />
         ))}
       </ul>
       {chunks.more && <div ref={chunks.sentinel} class="list-foot" aria-hidden="true" />}

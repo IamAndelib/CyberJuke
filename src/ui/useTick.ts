@@ -1,11 +1,10 @@
 /**
- * One shared ticker for everything that follows the playback position (the mini
- * player's bar, the seek bar, synced lyrics). A timer every TICK_MS, only while
+ * One shared ticker for what follows the playback position in Now Playing (the
+ * seek bar, synced lyrics). A timer every TICK_MS, only while
  * something subscribes, and never while the page is hidden (it resumes when the page
  * shows again). Not requestAnimationFrame: a frame callback that mostly does nothing
  * still makes the page draw 60 frames a second while music plays.
  */
-import { effect } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { livePosition, player, positionSample } from '../player';
 
@@ -74,23 +73,3 @@ export function positionNow(): number {
   return livePosition(player.state.peek());
 }
 
-/**
- * Write the live position somewhere directly (a CSS variable, a text node) on every
- * sample and every tick while playing, without re-rendering the component.
- */
-export function useLiveProgress(write: (positionMs: number, durationMs: number) => void, active: boolean): void {
-  const ref = useRef(write);
-  ref.current = write;
-  useEffect(
-    () =>
-      effect(() => {
-        const s = positionSample.value;
-        ref.current(livePosition({ ...player.state.peek(), ...s }), s.durationMs);
-      }),
-    [],
-  );
-  useTicker(active, () => {
-    const s = player.state.peek();
-    ref.current(livePosition(s), s.durationMs);
-  });
-}

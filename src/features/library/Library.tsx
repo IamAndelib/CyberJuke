@@ -1,6 +1,9 @@
-import { signal } from '@preact/signals';
+import { signal, type ReadonlySignal } from '@preact/signals';
+import { useCallback, useMemo } from 'preact/hooks';
+import type { Track } from '../../data/model';
 import { history, liked, recent } from '../../stores/library';
-import { groupByDay } from '../../stores/history';
+import { dayKey, groupByDay } from '../../stores/history';
+import { useChunks } from '../../ui/useChunks';
 import { clearHistoryWithUndo } from '../../stores/undo';
 import { Icon } from '../../ui/icons';
 import { EmptyState, PlayShuffle, Tracks, playFrom } from '../../ui/components/TrackList';
@@ -26,6 +29,12 @@ function confirmClear(): void {
   });
 }
 
+/** A tab's count: only it follows the list (a play changes Recently played's). */
+function Count({ of }: { of: ReadonlySignal<Track[]> }) {
+  return <span class="count">{of.value.length}</span>;
+}
+
+/** The Library tab. Reads only the list shown: a track change re-renders nothing here on Liked. */
 export function Library() {
   const sel = section.value;
   const tracks = sel === 'liked' ? liked.value : recent.value;
@@ -54,7 +63,7 @@ export function Library() {
           onClick={() => (section.value = 'liked')}
           data-testid="lib-liked"
         >
-          Liked <span class="count">{liked.value.length}</span>
+          Liked <Count of={liked} />
         </button>
         <button
           role="tab"
@@ -63,7 +72,7 @@ export function Library() {
           onClick={() => (section.value = 'recent')}
           data-testid="lib-recent"
         >
-          Recently played <span class="count">{recent.value.length}</span>
+          Recently played <Count of={recent} />
         </button>
       </div>
 
@@ -90,18 +99,24 @@ export function Library() {
 }
 
 /**
- * Recently played, grouped by day (Today, Yesterday, Mon 6 Oct). A track appears once
- * per day; tapping one plays the whole history from there.
+ * Recently played, grouped by day (Today, Yesterday, Mon 6 Oct), rendered in chunks as you
+ * scroll. A track appears once per day; tapping one plays the whole history from there.
  */
 function HistoryDays() {
-  const days = groupByDay(history.value, Date.now());
-  const all = days.flatMap((d) => d.tracks);
+  const entries = history.value;
+  const today = dayKey(Date.now());
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `today`: the labels change at midnight
+  const days = useMemo(() => groupByDay(entries, Date.now()), [entries, today]);
+  const all = useMemo(() => days.flatMap((d) => d.tracks), [days]);
+  const { shown, sentinel, more } = useChunks(all.length, 'history');
+  const onPlay = useCallback((i: number) => void playFrom(all, i, RECENT_CTX), [all]);
   let offset = 0;
   return (
     <>
       {days.map((d) => {
         const start = offset;
         offset += d.tracks.length;
+        if (start >= shown) return null;
         return (
           <section key={d.key} class="day-group" data-testid="history-day" data-day={d.key}>
             <h3 class="day-head" data-testid="history-day-label">
@@ -109,14 +124,14 @@ function HistoryDays() {
               <span class="day-count">{d.tracks.length}</span>
             </h3>
             <ul class="list" data-testid="track-list">
-              {d.tracks.map((t, i) => (
-                <TrackRow key={t.id} track={t} index={start + i} onPlay={() => void playFrom(all, start + i, RECENT_CTX)} />
+              {d.tracks.slice(0, shown - start).map((t, i) => (
+                <TrackRow key={t.id} track={t} index={start + i} onPlay={onPlay} />
               ))}
             </ul>
           </section>
         );
       })}
-      <div class="list-foot end">— end of tape —</div>
+      {more ? <div ref={sentinel} class="list-foot" aria-hidden="true" /> : <div class="list-foot end">— end of tape —</div>}
     </>
   );
 }
