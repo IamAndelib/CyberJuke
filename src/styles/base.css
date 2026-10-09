@@ -173,9 +173,6 @@ h3 {
   flex: 1 1 0;
   max-width: 200px;
 }
-.push-right {
-  margin-left: auto;
-}
 
 .tag {
   display: inline-block;

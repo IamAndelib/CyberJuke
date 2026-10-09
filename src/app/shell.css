@@ -16,10 +16,6 @@
   position: relative;
 }
 
-.tab-content {
-  height: 100%;
-}
-
 .offline-banner {
   padding: calc(6px + var(--safe-top)) var(--gutter) 6px;
   background: var(--color-fg);
@@ -31,17 +27,6 @@
 }
 .offline-banner + .main .topbar {
   padding-top: 10px;
-}
-
-/* ---- Layers over the tab content (search, album) ---------------------------------- */
-
-.layer {
-  position: absolute;
-  inset: 0;
-  z-index: 8;
-}
-.album-layer {
-  z-index: 9;
 }
 
 /* ---- Tab bar ---------------------------------------------------------------------- */
@@ -74,9 +59,6 @@
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
-}
-.layer.search-top {
-  z-index: 10;
 }
 
 /* ---- Tabs and their pages (SM7, P4) ---------------------------------------------- */

@@ -139,13 +139,6 @@
   background: var(--color-fg);
   color: var(--color-bg);
 }
-.search-hint {
-  padding: 24px var(--gutter);
-}
-.search-hint p {
-  margin: 0 0 8px;
-  font-size: 14px;
-}
 .search .chips {
   padding-top: 4px;
 }
