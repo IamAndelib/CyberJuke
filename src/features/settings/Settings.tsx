@@ -45,6 +45,9 @@ function Toggle({ on, onChange, label, testid }: { on: boolean; onChange: (v: bo
   );
 }
 
+/** Where the code and the releases are (opened in the browser; github.com is allowlisted). */
+const REPO_URL = 'https://github.com/IamAndelib/CyberJuke';
+
 function A({ href, children }: { href: string; children: string }) {
   return (
     <a
@@ -363,6 +366,17 @@ export function Settings() {
           <summary>Libraries</summary>
           <p>Preact (MIT), @preact/signals (MIT), Capacitor (MIT), NewPipeExtractor (GPL-3.0).</p>
         </details>
+      </section>
+
+      <section class="card prose" data-testid="source-code">
+        <h2 class="card-title">Source code</h2>
+        <p>CyberJuke is free software. The code, issues and every release are on GitHub:</p>
+        <p data-testid="source-repo">
+          <A href={REPO_URL}>github.com/IamAndelib/CyberJuke</A>
+        </p>
+        <p data-testid="source-releases">
+          <A href={`${REPO_URL}/releases/latest`}>Latest release</A>
+        </p>
       </section>
     </Screen>
   );

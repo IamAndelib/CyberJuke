@@ -85,10 +85,31 @@ test('Account is the first card and says "members-only shared tracks"', async ({
   await page.goto('/');
   await page.getByTestId('tab-settings').click();
   const settings = page.getByTestId('screen-settings');
-  await expect(settings.locator('.card-title')).toHaveText(['Account', 'Theme', 'Playback & data', 'About', 'Licenses']);
+  await expect(settings.locator('.card-title')).toHaveText(['Account', 'Theme', 'Playback & data', 'About', 'Licenses', 'Source code']);
   const account = page.getByTestId('account');
   expect((await account.boundingBox())!.y).toBeLessThan((await page.getByTestId('theme-picker').boundingBox())!.y);
   await expect(account.locator('.signin-lead')).toHaveText('Optional. Signed in, the Jukebox also shows members-only shared tracks, marked [members].');
   await expect(settings).not.toContainText('members-only posts');
   await expect(page.getByTestId('about')).toContainText('Signing in adds members-only tracks.');
+});
+
+test('Source code: the last card links to the repository and its latest release', async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __opened: string[] };
+    w.__opened = [];
+    window.open = ((url: string) => {
+      w.__opened.push(String(url));
+      return null;
+    }) as typeof window.open;
+  });
+  await page.goto('/');
+  await page.getByTestId('tab-settings').click();
+  const card = page.getByTestId('source-code');
+  await card.scrollIntoViewIfNeeded();
+  // The very last card on the page.
+  expect(await page.getByTestId('screen-settings').locator('section.card').last().getAttribute('data-testid')).toBe('source-code');
+  await card.getByTestId('source-repo').getByRole('link').click();
+  await card.getByTestId('source-releases').getByRole('link').click();
+  const opened = await page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
+  expect(opened).toEqual(['https://github.com/IamAndelib/CyberJuke', 'https://github.com/IamAndelib/CyberJuke/releases/latest']);
 });
