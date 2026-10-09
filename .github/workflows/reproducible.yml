@@ -86,3 +86,46 @@ jobs:
             echo "::error title=Not reproducible::$TAG's rebuild differs from the signed APK. Compare them with diffoscope to see where."
             exit 1
           fi
+
+      # Logs and artifacts may not be at hand: say where the APKs differ as annotations.
+      - name: Show what differs
+        if: failure()
+        run: |
+          shopt -s nullglob
+          unsigned=(android/app/build/outputs/apk/release/*.apk)
+          signed=(signed/CyberJuke-*.apk)
+          (( ${#unsigned[@]} == 1 && ${#signed[@]} == 1 )) || exit 0
+          note() { echo "::warning title=$1::$2"; }
+          note "Sizes" "signed $(stat -c %s "${signed[0]}") B, rebuilt $(stat -c %s "${unsigned[0]}") B"
+          # Entries (name, size, CRC, method) in order, apart from the signature files.
+          list() { python3 - "$1" <<'PY'
+          import sys, zipfile
+          for i in zipfile.ZipFile(sys.argv[1]).infolist():
+              if i.filename.startswith('META-INF/') and i.filename.rsplit('.', 1)[-1] in ('SF', 'RSA', 'EC', 'DSA', 'MF'):
+                  continue
+              print(f"{i.filename}\t{i.file_size}\t{i.CRC:08x}\t{i.compress_type}\t{len(i.extra)}")
+          PY
+          }
+          list "${signed[0]}" > s.txt
+          list "${unsigned[0]}" > u.txt
+          note "Entries" "signed $(wc -l < s.txt), rebuilt $(wc -l < u.txt); same order: $(cut -f1 s.txt | cmp -s - <(cut -f1 u.txt) && echo yes || echo no)"
+          diff <(sort s.txt) <(sort u.txt) | grep '^[<>]' | head -n 30 | while IFS= read -r l; do note "Differs" "$l"; done
+          # The first differing text-like file: its first changed lines.
+          f=$(diff <(sort s.txt) <(sort u.txt) | grep '^<' | cut -f1 | sed 's/^< //' | grep -E '\.(js|json|html|css|txt|xml|properties|textproto)$' | head -n 1 || true)
+          if [[ -n "$f" ]]; then
+            mkdir -p xs xu
+            unzip -q -o "${signed[0]}" "$f" -d xs && unzip -q -o "${unsigned[0]}" "$f" -d xu
+            diff <(fold -w 200 "xs/$f") <(fold -w 200 "xu/$f") | head -n 12 | while IFS= read -r l; do note "In $f" "${l:0:400}"; done
+          fi
+          # The zip alignment / extra fields per entry (zipalign padding shows here).
+          python3 - "${signed[0]}" "${unsigned[0]}" <<'PY'
+          import sys, zipfile
+          a = {i.filename: i for i in zipfile.ZipFile(sys.argv[1]).infolist()}
+          b = {i.filename: i for i in zipfile.ZipFile(sys.argv[2]).infolist()}
+          n = 0
+          for k, i in a.items():
+              j = b.get(k)
+              if j and (i.extra != j.extra or i.header_offset != j.header_offset) and n < 5:
+                  print(f"::warning title=Zip layout::{k}: extra {len(i.extra)} vs {len(j.extra)}, offset {i.header_offset} vs {j.header_offset}")
+                  n += 1
+          PY
