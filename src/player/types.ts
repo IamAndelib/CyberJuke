@@ -4,6 +4,9 @@ import type { RepeatMode } from './native';
 
 export type { RepeatMode };
 
+/** Up next's sections, which is also what Undo of a remove puts a track back into. */
+export type UpNextKind = 'queued' | 'list' | 'autoplay';
+
 export interface UpNextItem {
   track: Track;
   /** Index in list order (what move/remove/skipTo take). */
@@ -106,21 +109,29 @@ export interface Player {
   next(): Promise<void>;
   prev(): Promise<void>;
   seek(positionMs: number): Promise<void>;
-  skipTo(index: number): Promise<void>;
+  /**
+   * Index commands (K2) take the id the caller sees at that index (for move, at `from`):
+   * when the list changed meanwhile and it is something else, nothing happens (the
+   * state is refreshed, no error).
+   */
+  skipTo(index: number, expectId?: string): Promise<void>;
   setShuffle(enabled: boolean): Promise<void>;
   setRepeat(mode: RepeatMode): Promise<void>;
-  move(from: number, to: number): Promise<void>;
-  remove(index: number): Promise<void>;
+  move(from: number, to: number, expectId?: string): Promise<void>;
+  remove(index: number, expectId?: string): Promise<void>;
+  /** Remove every item with one of these ids (signing out: members-only tracks, K5). */
+  removeIds(ids: string[]): Promise<void>;
   /**
    * "Add to queue": play next, after the current track and anything queued before
    * (first in, first out), shuffle or not. With nothing playing, plays them.
    */
   addToQueue(tracks: Track[]): Promise<void>;
   /**
-   * Undo a remove: put `track` back. A list track goes back at list `index`; a queued
-   * one at the end of "Queued by you"; an autoplay one at the end of autoplay.
+   * Undo a remove (K3): put `track` back in its section, right before `beforeId` (the
+   * track that followed it there) if that is still ahead in the section, else at the
+   * end of the section. Never at or before the current track.
    */
-  restore(track: Track, index: number, kind: 'queued' | 'list' | 'autoplay'): Promise<void>;
+  restore(track: Track, kind: UpNextKind, beforeId: string | null): Promise<void>;
   /** Autoplay tracks computed for `seedId`; ignored if the seed changed meanwhile. */
   addAutoplay(tracks: Track[], seedId: string): Promise<void>;
   /** The Autoplay setting (C3). Off drops the autoplay tracks still to come. */

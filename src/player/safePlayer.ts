@@ -22,6 +22,7 @@ export const COMMAND_ERRORS: Record<Command, string> = {
   setRepeat: "Couldn't change repeat",
   move: "Couldn't move that track",
   remove: "Couldn't remove that track",
+  removeIds: "Couldn't remove those tracks",
   addToQueue: "Couldn't add to the queue",
   restore: "Couldn't put that track back",
   addAutoplay: "Couldn't add autoplay tracks",
@@ -31,7 +32,7 @@ export const COMMAND_ERRORS: Record<Command, string> = {
 };
 
 /** Background work the user didn't ask for: a failure is logged, not toasted. */
-const SILENT: ReadonlySet<Command> = new Set<Command>(['addAutoplay', 'setAutoplay']);
+const SILENT: ReadonlySet<Command> = new Set<Command>(['addAutoplay', 'setAutoplay', 'removeIds']);
 const quiet: Notify = () => {};
 
 export function safePlayer(p: Player, notify: Notify): Player {
@@ -57,6 +58,7 @@ export function safePlayer(p: Player, notify: Notify): Player {
     setRepeat: wrap('setRepeat'),
     move: wrap('move'),
     remove: wrap('remove'),
+    removeIds: wrap('removeIds'),
     addToQueue: wrap('addToQueue'),
     restore: wrap('restore'),
     addAutoplay: wrap('addAutoplay'),

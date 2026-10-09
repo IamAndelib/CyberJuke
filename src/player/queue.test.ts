@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Queue } from './queue';
+import { KEEP_PLAYED, Queue } from './queue';
 
 const t = (id: string) => ({ id });
 const ids = (xs: { id: string }[]) => xs.map((x) => x.id);
@@ -251,20 +251,95 @@ describe('Queue: editing', () => {
     expect(ids(q.upNext(2))).toEqual(['y', 'b']);
   });
 
-  it('insertAt puts a removed list track back where it was (Undo)', () => {
+  it('restore puts a removed list track back before the track that followed it (Undo)', () => {
     const q = new Queue();
     q.setList(abc(), 0);
     q.addAuto([t('s1')]);
     q.remove(2);
-    q.insertAt(2, [t('c')]);
+    q.restore(t('c'), 'list', 'd');
     expect(ids(q.upNext())).toEqual(['b', 'c', 'd', 'e', 's1']);
+    expect(ids(q.items)).toEqual(['a', 'b', 'c', 'd', 'e', 's1']);
     const r = new Queue(seeded(3));
     r.setList(abc(), 0);
     r.setShuffle(true);
     r.addAuto([t('s1')]);
-    r.insertAt(5, [t('z')]);
+    r.restore(t('z'), 'list', null);
     expect(ids(r.upNext()).at(-1)).toBe('s1');
-    expect(ids(r.upNext())).toContain('z');
+    expect(ids(r.upNext()).at(-2)).toBe('z');
+  });
+
+  it('restore after another Add to queue: the list track stays out of the queued run', () => {
+    const q = new Queue();
+    q.setList([t('A'), t('B'), t('C')], 0);
+    q.queueNext([t('Q1')]);
+    q.remove(2); // B
+    q.queueNext([t('Q2')]);
+    q.restore(t('B'), 'list', 'C');
+    expect(ids(q.upNext())).toEqual(['Q1', 'Q2', 'B', 'C']);
+    expect(q.queuedCount).toBe(2);
+  });
+
+  it('restore after the track moved on: never behind the current track', () => {
+    const q = new Queue();
+    q.setList([t('A'), t('B'), t('C'), t('D')], 0);
+    q.remove(1); // B, followed by C
+    q.next(true); // A ended: C plays
+    q.restore(t('B'), 'list', 'C');
+    expect(q.current?.id).toBe('C');
+    expect(ids(q.upNext())).toEqual(['D', 'B']);
+  });
+
+  it('restore of a queued track goes back into the queued run, in place', () => {
+    const q = new Queue();
+    q.setList(abc(), 0);
+    q.queueNext([t('x'), t('y'), t('z')]);
+    q.remove(2); // y
+    q.restore(t('y'), 'queued', 'z');
+    expect(ids(q.upNext())).toEqual(['x', 'y', 'z', 'b', 'c', 'd', 'e']);
+    expect(q.queuedCount).toBe(3);
+    q.remove(3); // z, the last queued
+    q.restore(t('z'), 'queued', 'gone');
+    expect(ids(q.upNext())).toEqual(['x', 'y', 'z', 'b', 'c', 'd', 'e']);
+    expect(q.queuedCount).toBe(3);
+  });
+
+  it('restore of an autoplay track goes back into autoplay', () => {
+    const q = new Queue();
+    q.setList([t('a'), t('b')], 0);
+    q.addAuto([t('s1'), t('s2'), t('s3')]);
+    q.remove(3); // s2
+    q.restore(t('s2'), 'autoplay', 's3');
+    expect(q.sections().autoplay.map((x) => x.item.id)).toEqual(['s1', 's2', 's3']);
+    q.remove(4); // s3
+    q.restore(t('s3'), 'autoplay', null);
+    expect(q.sections().autoplay.map((x) => x.item.id)).toEqual(['s1', 's2', 's3']);
+  });
+
+  it('removeIds drops every copy; the current one moves on to the next that stays', () => {
+    const q = new Queue();
+    q.setList([t('a'), t('m'), t('b'), t('m2')], 1);
+    q.queueNext([t('m2')]);
+    expect(q.removeIds(['m', 'm2'])).toBe(true);
+    expect(q.current?.id).toBe('b');
+    expect(ids(q.items)).toEqual(['a', 'b']);
+    expect(q.queuedCount).toBe(0);
+    expect(q.removeIds(['nope'])).toBe(false);
+    expect(q.removeIds(['a', 'b'])).toBe(true);
+    expect(q.current).toBeNull();
+    expect(q.length).toBe(0);
+  });
+
+  it(`keeps at most ${KEEP_PLAYED} tracks behind the current one: older played autoplay tracks go`, () => {
+    const q = new Queue();
+    q.setList([t('a'), t('b')], 0);
+    const autos = Array.from({ length: KEEP_PLAYED + 20 }, (_, i) => t(`s${i}`));
+    q.addAuto(autos);
+    for (let i = 0; i < KEEP_PLAYED + 10; i++) q.next(true);
+    expect(q.current?.id).toBe(`s${KEEP_PLAYED + 8}`);
+    // The list tracks stay (they're within the oldest); only played autoplay tracks went.
+    expect(ids(q.items).slice(0, 3)).toEqual(['a', 'b', 's8']);
+    expect(q.index).toBe(KEEP_PLAYED + 2);
+    expect(q.upNext()).toHaveLength(11);
   });
 
   it('add appends to list and play order', () => {

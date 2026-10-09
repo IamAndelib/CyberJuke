@@ -8,7 +8,7 @@ import { toast } from '../stores/toast';
 import { TEST_HOOKS } from '../core/testHooks';
 import { Queue } from './queue';
 import type { RepeatMode } from './native';
-import { AUTOPLAY_LOW, EMPTY_STATE, LIST_CONTEXT, livePosition, type PlayContext, type Player, type PlayerState, type QueueLow } from './types';
+import { AUTOPLAY_LOW, EMPTY_STATE, LIST_CONTEXT, livePosition, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
 
 /* Minimal typings for the parts of the IFrame API we use. */
 interface YTPlayer {
@@ -314,7 +314,13 @@ export class WebPlayer implements Player {
     this.publish({ positionMs, sampledAt: performance.now() });
   }
 
-  async skipTo(index: number): Promise<void> {
+  /** K2: the item at `index` is still the one the caller saw. */
+  private holds(index: number, expectId?: string): boolean {
+    return expectId == null || this.q.items[index]?.id === expectId;
+  }
+
+  async skipTo(index: number, expectId?: string): Promise<void> {
+    if (!this.holds(index, expectId)) return this.publish();
     const auto = this.q.isAuto(index);
     if (!this.q.skipTo(index)) return;
     // A tapped autoplay track: the radio continues from it.
@@ -332,13 +338,21 @@ export class WebPlayer implements Player {
     this.publish();
   }
 
-  async move(from: number, to: number): Promise<void> {
-    this.q.move(from, to);
+  async move(from: number, to: number, expectId?: string): Promise<void> {
+    if (this.holds(from, expectId)) this.q.move(from, to);
     this.publish();
   }
 
-  async remove(index: number): Promise<void> {
+  async remove(index: number, expectId?: string): Promise<void> {
+    if (!this.holds(index, expectId)) return this.publish();
     const changed = this.q.remove(index);
+    this.publish();
+    if (changed) await this.loadCurrent(this.s.value.isPlaying, true);
+  }
+
+  async removeIds(ids: string[]): Promise<void> {
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['removeIds', ids]);
+    const changed = this.q.removeIds(ids);
     this.publish();
     if (changed) await this.loadCurrent(this.s.value.isPlaying, true);
   }
@@ -353,10 +367,12 @@ export class WebPlayer implements Player {
     if (wasEmpty) await this.loadCurrent(true, true);
   }
 
-  async restore(track: Track, index: number, kind: 'queued' | 'list' | 'autoplay'): Promise<void> {
-    if (kind === 'queued') return this.addToQueue([track]);
-    if (kind === 'autoplay') return this.addAutoplay([track], this.seed?.id ?? '');
-    this.q.insertAt(index, [track]);
+  async restore(track: Track, kind: UpNextKind, beforeId: string | null): Promise<void> {
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['restore', { id: track.id, kind, beforeId }]);
+    if (!this.q.current) return this.playList([track], 0);
+    // Autoplay rows don't come back while autoplay is off or repeat is on (they'd be dropped).
+    if (kind === 'autoplay' && (!this.autoplayOn || this.q.repeat !== 'off')) return;
+    this.q.restore(track, kind, beforeId);
     this.publish();
   }
 

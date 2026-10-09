@@ -24,8 +24,9 @@ const REPEAT: readonly RepeatMode[] = ['off', 'all', 'one'];
 /**
  * A `state` event (or getState() result) from the JukePlayer plugin. `prevQueueIds` is
  * used when the event says the list didn't change (`queueIdsUnchanged`, no
- * `queueIds`). `upNextKinds` always comes back with one letter per upNext id. Null when
- * it isn't a state object at all.
+ * `queueIds`). `upNextKinds` always comes back with one letter per upNext id, and
+ * `upNextIndex` with one list index per upNext id (-1 when native sent none, or one
+ * that doesn't hold that id). Null when it isn't a state object at all.
  */
 export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = []): NativeState | null {
   if (!isObj(x)) return null;
@@ -34,6 +35,12 @@ export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [
   const index = typeof x.index === 'number' && Number.isInteger(x.index) && x.index >= -1 && x.index < queueIds.length ? x.index : -1;
   const upNextIds = strings(x.upNextIds).slice(0, 50);
   const kinds = isStr(x.upNextKinds) ? x.upNextKinds : '';
+  // K1: one list index per upNext id; -1 where it's missing or doesn't fit (the id is then looked up).
+  const rawIndex = Array.isArray(x.upNextIndex) ? x.upNextIndex : [];
+  const upNextIndex = upNextIds.map((id, k) => {
+    const i = rawIndex[k];
+    return typeof i === 'number' && Number.isInteger(i) && i >= 0 && i < queueIds.length && queueIds[i] === id ? i : -1;
+  });
   const ctx = isObj(x.context) ? x.context : null;
   return {
     isPlaying: x.isPlaying === true,
@@ -48,6 +55,7 @@ export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [
     upNextIds,
     // One of q/l/a per upNext entry; anything missing or unknown is the list.
     upNextKinds: upNextIds.map((_, i) => (kinds[i] === 'q' || kinds[i] === 'a' ? kinds[i] : 'l')).join(''),
+    upNextIndex,
     context: ctx ? { label: isStr(ctx.label) ? ctx.label : '', mode: ctx.mode === 'radio' ? 'radio' : 'list' } : null,
     seedId: isStr(x.seedId) && x.seedId ? x.seedId : null,
   };

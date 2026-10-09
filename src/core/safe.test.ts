@@ -40,6 +40,7 @@ describe('safePlayer', () => {
       setRepeat: vi.fn(fail),
       move: vi.fn(fail),
       remove: vi.fn(fail),
+      removeIds: vi.fn(fail),
       addToQueue: vi.fn(fail),
       restore: vi.fn(fail),
       addAutoplay: vi.fn(fail),
@@ -59,8 +60,10 @@ describe('safePlayer', () => {
     await expect(p.play()).resolves.toBeUndefined();
     await expect(p.skipTo(3)).resolves.toBeUndefined();
     expect(raw.skipTo).toHaveBeenCalledWith(3);
-    await p.move(1, 2);
-    expect(raw.move).toHaveBeenCalledWith(1, 2);
+    await p.move(1, 2, 'x');
+    expect(raw.move).toHaveBeenCalledWith(1, 2, 'x');
+    // Background clean-up (signing out) fails quietly.
+    await p.removeIds(['m']);
     expect(toasts).toEqual([COMMAND_ERRORS.skipTo, COMMAND_ERRORS.move]);
     const commands = Object.keys(COMMAND_ERRORS) as (keyof typeof COMMAND_ERRORS)[];
     for (const c of commands) expect(typeof p[c]).toBe('function');

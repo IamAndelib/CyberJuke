@@ -1,10 +1,10 @@
 import { useRef } from 'preact/hooks';
-import { player, playContext, upNextSections, type PlayerState, type UpItem } from '../../player';
+import { currentId, player, playContext, upNextSections, type PlayerState, type UpItem, type UpNextKind } from '../../player';
 import { toast } from '../../stores/toast';
 import { Icon } from '../../ui/icons';
 import { Art } from '../../ui/components/Art';
 
-type Kind = 'queued' | 'list' | 'autoplay';
+type Kind = UpNextKind;
 
 /** After a removal the rows shift up: taps on the buttons column are ignored this long (M2). */
 const REMOVE_GUARD_MS = 300;
@@ -21,11 +21,20 @@ export function UpNext({ s }: { s: PlayerState }) {
   const guardUntil = useRef(0);
   const guarded = () => performance.now() < guardUntil.current;
 
-  const remove = (it: UpItem, kind: Kind) => {
+  const remove = (it: UpItem, kind: Kind, beforeId: string | null) => {
     if (guarded()) return;
     guardUntil.current = performance.now() + REMOVE_GUARD_MS;
-    void player.remove(it.index);
-    toast('Removed from queue', 4000, { label: 'Undo', run: () => void player.restore(it.track, it.index, kind) });
+    void player.remove(it.index, it.track.id);
+    // Undo goes back next to the row that followed it (K3); it goes once a new list or
+    // another track starts, when "back where it was" no longer means anything.
+    const ctx0 = playContext.peek();
+    const cur0 = currentId.peek();
+    toast('Removed from queue', 4000, {
+      label: 'Undo',
+      run: () => void player.restore(it.track, kind, beforeId),
+      stale: () => playContext.value !== ctx0 || currentId.value !== cur0,
+      ...(it.track.membersOnly && { membersOnly: true }),
+    });
   };
 
   const section = (kind: Kind, title: string, items: UpItem[]) =>
@@ -44,7 +53,7 @@ export function UpNext({ s }: { s: PlayerState }) {
           >
             <button
               class="row-main"
-              onClick={() => player.skipTo(it.index)}
+              onClick={() => player.skipTo(it.index, it.track.id)}
               aria-label={`Play ${it.track.title}${kind === 'queued' ? ', queued by you' : kind === 'autoplay' ? ', autoplay' : ''}`}
             >
               <div class="row-art">
@@ -63,7 +72,7 @@ export function UpNext({ s }: { s: PlayerState }) {
                     class="icon-btn"
                     aria-label={`Move ${it.track.title} up`}
                     disabled={k === 0}
-                    onClick={() => !guarded() && player.move(it.index, items[k - 1].index)}
+                    onClick={() => !guarded() && player.move(it.index, items[k - 1].index, it.track.id)}
                     data-testid="upnext-up"
                   >
                     <Icon name="up" size={20} />
@@ -72,14 +81,14 @@ export function UpNext({ s }: { s: PlayerState }) {
                     class="icon-btn"
                     aria-label={`Move ${it.track.title} down`}
                     disabled={k === items.length - 1}
-                    onClick={() => !guarded() && player.move(it.index, items[k + 1].index)}
+                    onClick={() => !guarded() && player.move(it.index, items[k + 1].index, it.track.id)}
                     data-testid="upnext-down"
                   >
                     <Icon name="down" size={20} />
                   </button>
                 </>
               ) : null}
-              <button class="icon-btn" aria-label={`Remove ${it.track.title} from queue`} onClick={() => remove(it, kind)} data-testid="upnext-remove">
+              <button class="icon-btn" aria-label={`Remove ${it.track.title} from queue`} onClick={() => remove(it, kind, items[k + 1]?.track.id ?? null)} data-testid="upnext-remove">
                 <Icon name="close" size={20} />
               </button>
             </div>

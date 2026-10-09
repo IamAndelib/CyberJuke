@@ -18,7 +18,11 @@
  *    tracks stay next, in order (P1);
  *  - autoplay tracks (addAuto) play after the list, in the order added. Shuffle
  *    reorders only the list. Repeat all or one drops the autoplay tracks still to
- *    come, and so does jumping to an autoplay track (the radio continues from it).
+ *    come, and so does jumping to an autoplay track (the radio continues from it);
+ *  - played autoplay tracks more than KEEP_PLAYED behind the current one are dropped
+ *    (a radio can run for hours);
+ *  - Undo of a remove (restore) puts the track back in its section, before the track
+ *    that followed it there, never at or before the current track.
  *
  * Up next is three sections, in play order: queued by you, the rest of the list,
  * autoplay (see sections()).
@@ -45,6 +49,10 @@ export interface QueueSections<T> {
 }
 
 export const RESTART_THRESHOLD_MS = 3000;
+/** Tracks kept behind the current one in play order; older played autoplay tracks go. */
+export const KEEP_PLAYED = 50;
+
+export type Section = 'queued' | 'list' | 'autoplay';
 
 export type PrevResult = 'restart' | 'moved';
 
@@ -169,6 +177,7 @@ export class Queue<T extends Identified> {
     if (p + 1 < this.order.length) {
       this.cur = this.order[p + 1];
       this.settle();
+      this.trimPlayed();
       return this.cur.item;
     }
     if (this.repeat === 'all' || (this.repeat === 'one' && !auto)) {
@@ -214,6 +223,7 @@ export class Queue<T extends Identified> {
     this.settle();
     this.keepQueuedNext();
     if (e.auto) this.dropAuto();
+    this.trimPlayed();
     return e.item;
   }
 
@@ -309,25 +319,56 @@ export class Queue<T extends Identified> {
   }
 
   /**
-   * Insert list tracks at a list index (Undo of a remove). In play order they go where the
-   * item now at that index is, or after the list when it is at the end.
+   * Undo of a remove: put `item` back in its section of Up next, right before the
+   * first track after the current one that is `beforeId` and in that section; else
+   * at the end of that section. Never at or before the current track; a queued track
+   * never after list tracks. With nothing playing, it is added (and plays).
    */
-  insertAt(index: number, items: T[]): void {
-    if (!items.length) return;
-    if (!this.cur) return this.add(items);
-    const at = clamp(index, 0, this.list.length);
-    const entries = items.map((i) => this.entry(i));
-    const after = this.list[at];
-    this.list.splice(at, 0, ...entries);
-    if (!this.shuffle) {
-      this.order = this.list.slice();
+  restore(item: T, kind: Section, beforeId: string | null): void {
+    if (!this.cur) {
+      if (kind === 'queued') this.queueNext([item]);
+      else if (kind === 'autoplay') this.addAuto([item]);
+      else this.add([item]);
       return;
     }
-    let p = after ? this.order.indexOf(after) : this.order.findIndex((e) => e.auto && e !== this.cur && this.order.indexOf(e) > this.order.indexOf(this.cur!));
-    if (p < 0) p = this.order.length;
-    // Never before the current track: it plays next then.
-    p = Math.max(p, this.order.indexOf(this.cur) + 1);
-    this.order.splice(p, 0, ...entries);
+    const of = (e: Entry<T>): Section => (this.queued.has(e) ? 'queued' : e.auto ? 'autoplay' : 'list');
+    const p = this.order.indexOf(this.cur);
+    let at = -1;
+    if (beforeId != null) at = this.order.findIndex((e, k) => k > p && e.item.id === beforeId && of(e) === kind);
+    if (at < 0) {
+      // The end of the section: after its last track ahead, else where it would start.
+      at = p + 1 + this.queuedCount;
+      // List tracks end where autoplay starts.
+      if (kind === 'list') while (at < this.order.length && !this.order[at].auto) at++;
+      else if (kind === 'autoplay') at = this.order.length;
+    }
+    const entry: Entry<T> = kind === 'autoplay' ? { ...this.entry(item), auto: true } : this.entry(item);
+    if (kind === 'queued') this.queued.add(entry);
+    const follower = this.order[at];
+    this.order.splice(at, 0, entry);
+    this.list.splice(follower ? this.list.indexOf(follower) : this.list.length, 0, entry);
+  }
+
+  /**
+   * Remove every item with one of these ids (signing out drops members-only tracks).
+   * When the current one goes, the next one in play order that stays becomes current
+   * (none: nothing plays). Returns true when the current track changed.
+   */
+  removeIds(ids: Iterable<string>): boolean {
+    const gone = new Set(ids);
+    if (!this.list.some((e) => gone.has(e.item.id))) return false;
+    let changed = false;
+    if (this.cur && gone.has(this.cur.item.id)) {
+      const p = this.order.indexOf(this.cur);
+      this.cur = this.order.slice(p + 1).find((e) => !gone.has(e.item.id)) ?? null;
+      this.settle();
+      changed = true;
+    }
+    const keep = (e: Entry<T>) => !gone.has(e.item.id);
+    for (const e of this.list) if (!keep(e)) this.queued.delete(e);
+    this.list = this.list.filter(keep);
+    this.order = this.order.filter(keep);
+    return changed;
   }
 
   /** Append tracks to the end of the queue (in list and play order). */
@@ -347,6 +388,16 @@ export class Queue<T extends Identified> {
   }
 
   // ---- internals -----------------------------------------------------------------
+
+  /** Drop played autoplay tracks more than KEEP_PLAYED behind the current one in play order. */
+  private trimPlayed(): void {
+    const p = this.cur ? this.order.indexOf(this.cur) : -1;
+    if (p <= KEEP_PLAYED) return;
+    const old = new Set(this.order.slice(0, p - KEEP_PLAYED).filter((e) => e.auto));
+    if (!old.size) return;
+    this.list = this.list.filter((e) => !old.has(e));
+    this.order = this.order.filter((e) => !old.has(e));
+  }
 
   /** The current entry changed: a queued track that starts playing is no longer "queued". */
   private settle(): void {

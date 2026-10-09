@@ -18,6 +18,11 @@ export interface NativeState {
   upNextIds: string[];      // the next tracks in actual play order (respects shuffle), max 50
   /** One letter per upNextIds entry: q = queued by you, l = the list, a = autoplay. */
   upNextKinds: string;
+  /**
+   * K1: per upNextIds entry, its index in the list (always sent, also with
+   * queueIdsUnchanged). Up next rows are addressed by these, never by id.
+   */
+  upNextIndex: number[];
   /** The context the current list was started with (C2), null before the first. */
   context: { label: string; mode: 'radio' | 'list' } | null;
   /** The track autoplay follows (the started track, or the autoplay track tapped). */
@@ -26,9 +31,18 @@ export interface NativeState {
 /** Why YouTube is refusing requests from this network (Y1). */
 export type BlockReason = 'BOT_CHECK' | 'RATE_LIMIT' | 'STREAM_FORBIDDEN';
 export interface BlockedEvent { until: number /* epoch ms */; reason: BlockReason }
+/** K6: the most tracks (or ids) one call may carry, and the longest string; more is TOO_LARGE. */
+export const BRIDGE_MAX_ITEMS = 2000;
+export const BRIDGE_MAX_STRING = 2000;
+/**
+ * K2: skipToIndex, removeItem and moveItem reject with this code (changing nothing)
+ * when the item at the index isn't `expectId`.
+ */
+export const STALE_INDEX = 'STALE_INDEX';
 /**
  * setQueue, addItems and queueNext reject the whole call ("Invalid tracks: track.ytId
  * invalid") when any ytId isn't 11 characters of [A-Za-z0-9_-]: filter before calling.
+ * More than BRIDGE_MAX_ITEMS tracks, or a string over BRIDGE_MAX_STRING, is TOO_LARGE.
  * While blocked, setQueue replaces the queue without preparing it (and resolves), and
  * play() is refused when nothing is loaded. trackError is never sent for blocks.
  */
@@ -42,13 +56,18 @@ export interface JukePlayerPlugin {
   addItems(o: { tracks: NativeTrack[]; index?: number }): Promise<void>;   // index omitted = append
   /** Insert after the current track + tracks already user-queued; respects shuffle; upNextIds reflects it. */
   queueNext(o: { tracks: NativeTrack[] }): Promise<void>;
-  removeItem(o: { index: number }): Promise<void>;
-  moveItem(o: { from: number; to: number }): Promise<void>;
+  /** K3: Undo of a remove, back in its section before `beforeId` (else at the section's end), never at or before the current track. */
+  restore(o: { track: NativeTrack; kind: 'queued' | 'list' | 'autoplay'; beforeId: string | null }): Promise<void>;
+  /** K5: remove every item with one of these ids (at most BRIDGE_MAX_ITEMS); the current one skips to the next that stays, or stops. */
+  removeIds(o: { ids: string[] }): Promise<void>;
+  removeItem(o: { index: number; expectId?: string }): Promise<void>;
+  /** expectId: the id at `from`. */
+  moveItem(o: { from: number; to: number; expectId?: string }): Promise<void>;
   play(): Promise<void>; pause(): Promise<void>;
   seekTo(o: { positionMs: number }): Promise<void>;
   skipToNext(): Promise<void>; skipToPrevious(): Promise<void>;
   /** A tap in Up next: queued tracks stay next; on an autoplay track the radio continues from it. */
-  skipToIndex(o: { index: number }): Promise<void>;
+  skipToIndex(o: { index: number; expectId?: string }): Promise<void>;
   setShuffle(o: { enabled: boolean }): Promise<void>;
   setRepeat(o: { mode: RepeatMode }): Promise<void>;
   setQuality(o: { quality: 'high' | 'low' }): Promise<void>;
@@ -60,6 +79,7 @@ export interface JukePlayerPlugin {
   setNetworkPrefs(o: { preferIpv4: boolean }): Promise<void>;
   /** Keep a screen area (CSS px relative to the WebView) out of the system back gesture; null clears it. */
   setGestureExclusion(rect: { left: number; top: number; width: number; height: number } | null): Promise<void>;
+  /** Native re-sends `tracks` when a `tracks` or `state` listener is added (K4): add `tracks` first. */
   addListener(event: 'state', cb: (s: NativeState) => void): Promise<{ remove: () => Promise<void> }>;
   addListener(event: 'trackError', cb: (e: { trackId: string; message: string; skipped: boolean }) => void): Promise<{ remove: () => Promise<void> }>;
   /** YouTube is refusing this network: playback paused, nothing is requested until `until`. */

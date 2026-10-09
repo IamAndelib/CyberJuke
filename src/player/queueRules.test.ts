@@ -1,7 +1,7 @@
 /** Runs the shared queue rule table (also run against the native queue by QueueRulesTest). */
 import { describe, expect, it } from 'vitest';
 import rules from '../../tests/spec/queue-rules.json';
-import { Queue, type RepeatMode } from './queue';
+import { Queue, type RepeatMode, type Section } from './queue';
 
 type Step = { op: string; [k: string]: unknown };
 interface Case {
@@ -64,6 +64,12 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             break;
           case 'move':
             q.move(indexOf(s.id), s.to as number);
+            break;
+          case 'restore':
+            q.restore(t(s.id as string), s.kind as Section, (s.beforeId as string | null) ?? null);
+            break;
+          case 'removeIds':
+            q.removeIds(s.ids as string[]);
             break;
           case 'setShuffle':
             q.setShuffle(s.on as boolean);

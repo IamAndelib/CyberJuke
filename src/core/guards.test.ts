@@ -29,6 +29,7 @@ describe('parseNativeState', () => {
       queueIds: ['a', 'b', 'c'],
       upNextIds: ['a', 'c'],
       upNextKinds: 'qa',
+      upNextIndex: [0, 2],
       context: { label: 'Liked', mode: 'list' },
       seedId: 'b',
     };
@@ -40,6 +41,14 @@ describe('parseNativeState', () => {
     expect(st?.upNextKinds).toBe('ll');
     expect(st?.context).toEqual({ label: '', mode: 'list' });
     expect(st?.seedId).toBeNull();
+  });
+
+  it('keeps each up-next index only when it is in range and holds that id', () => {
+    const st = parseNativeState({ index: 2, queueIds: ['A', 'B', 'C', 'A', 'D'], upNextIds: ['A', 'D', 'B'], upNextIndex: [3, 9, 0.5] });
+    expect(st?.upNextIndex).toEqual([3, -1, -1]);
+    expect(parseNativeState({ index: 0, queueIds: ['A', 'B'], upNextIds: ['B'], upNextIndex: [0] })?.upNextIndex).toEqual([-1]);
+    // An older native sends none.
+    expect(parseNativeState({ index: 0, queueIds: ['A', 'B'], upNextIds: ['B'] })?.upNextIndex).toEqual([-1]);
   });
 
   it('keeps the previous list when the event says it is unchanged', () => {
@@ -62,6 +71,7 @@ describe('parseNativeState', () => {
       queueIds: ['a'],
       upNextIds: [],
       upNextKinds: '',
+      upNextIndex: [],
       context: null,
       seedId: null,
     });

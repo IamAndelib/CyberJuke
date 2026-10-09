@@ -2,18 +2,39 @@
  * Player backed by the native JukePlayer plugin. The native side owns the queue;
  * this class only forwards commands and mirrors native state from events.
  */
-import { signal } from '@preact/signals';
+import { computed, effect, signal, untracked } from '@preact/signals';
 import { artworkUrl, type Track } from '../data/model';
-import { knownTrack } from '../stores/library';
+import { history, knownTrack, liked } from '../stores/library';
+import { catalog } from '../stores/catalog';
 import { toast } from '../stores/toast';
 import { YT_ID_RE, parseNativeState } from '../core/guards';
 import { logError } from '../core/log';
-import { JukePlayer, type NativeState, type NativeTrack, type RepeatMode } from './native';
-import { EMPTY_STATE, LIST_CONTEXT, type PlayContext, type Player, type PlayerState, type QueueLow } from './types';
+import { BRIDGE_MAX_ITEMS, BRIDGE_MAX_STRING, JukePlayer, STALE_INDEX, type NativeState, type NativeTrack, type RepeatMode } from './native';
+import { EMPTY_STATE, LIST_CONTEXT, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextItem, type UpNextKind } from './types';
+
+/** K6: text native would refuse as too long is cut (a link that long is dropped). */
+const clip = (s: string) => (s.length > BRIDGE_MAX_STRING ? s.slice(0, BRIDGE_MAX_STRING) : s);
+const link = (s: string) => (s.length > BRIDGE_MAX_STRING ? '' : s);
 
 export function toNative(t: Track): NativeTrack {
-  return { id: t.id, ytId: t.ytId, title: t.title, artist: t.artist, artworkUrl: t.artworkUrl, by: t.by, postUrl: t.postUrl };
+  return { id: t.id, ytId: t.ytId, title: clip(t.title), artist: clip(t.artist), artworkUrl: link(t.artworkUrl), by: clip(t.by), postUrl: link(t.postUrl) };
 }
+
+/** K6: at most BRIDGE_MAX_ITEMS tracks, a window around `start`; returns them and where `start` is in it. */
+export function bridgeWindow<T>(items: T[], start: number): { items: T[]; start: number } {
+  if (items.length <= BRIDGE_MAX_ITEMS) return { items, start };
+  const lo = Math.max(0, Math.min(start - Math.floor(BRIDGE_MAX_ITEMS / 2), items.length - BRIDGE_MAX_ITEMS));
+  return { items: items.slice(lo, lo + BRIDGE_MAX_ITEMS), start: start - lo };
+}
+
+/** Native refused an index command: the list changed under it (K2). */
+function isStale(e: unknown): boolean {
+  const o = (e ?? {}) as { code?: unknown; message?: unknown };
+  return o.code === STALE_INDEX || (typeof o.message === 'string' && o.message.includes(STALE_INDEX));
+}
+
+/** Catalog tracks by id: native state after the WebView was recreated carries only ids. */
+const catalogById = computed(() => new Map(catalog.all.value.map((t) => [t.id, t])));
 
 /** A track native added itself (Global radio), from its `tracks` event. */
 export function fromNative(t: NativeTrack): Track | null {
@@ -69,19 +90,14 @@ export class NativePlayer implements Player {
    * state doesn't flicker back to the previous track.
    */
   private expect: { id: string; until: number } | null = null;
+  /** Edits (move, remove, ...) sent and not answered yet: state events from before them are held back. */
+  private edits = 0;
+  /** Some track in the last state resolved to a placeholder. */
+  private unresolved = false;
 
   constructor() {
     const fail = (e: unknown) => logError('player.listen', e);
-    JukePlayer.addListener('state', (st) => this.onState(st)).catch(fail);
-    JukePlayer.addListener('trackError', (e) => {
-      const t = this.resolve(String(e?.trackId ?? ''));
-      if (e?.skipped) toast(`Skipped "${t.title}": unavailable`);
-      else toast(`Can't play "${t.title}"`);
-    }).catch(fail);
-    JukePlayer.addListener('queueLow', (e) => {
-      const ev: QueueLow = { left: Math.max(0, Number(e?.left) || 0), seedId: typeof e?.seedId === 'string' ? e.seedId : null };
-      for (const cb of this.lowListeners) cb(ev);
-    }).catch(fail);
+    // `tracks` first (K4): native re-announces the tracks it added when a listener comes.
     JukePlayer.addListener('tracks', (e) => {
       let added = false;
       for (const raw of Array.isArray(e?.tracks) ? e.tracks : []) {
@@ -96,6 +112,33 @@ export class NativePlayer implements Player {
         this.apply(this.last);
       }
     }).catch(fail);
+    JukePlayer.addListener('state', (st) => this.onState(st)).catch(fail);
+    JukePlayer.addListener('trackError', (e) => {
+      const id = String(e?.trackId ?? '');
+      const t = this.resolve(id);
+      if (e?.skipped) toast(`Skipped "${t.title}": unavailable`);
+      else toast(`Can't play "${t.title}"`);
+      // The track playList started was skipped: native won't report it, so stop waiting.
+      if (this.expect?.id === id) {
+        this.expect = null;
+        this.resync();
+      }
+    }).catch(fail);
+    JukePlayer.addListener('queueLow', (e) => {
+      const ev: QueueLow = { left: Math.max(0, Number(e?.left) || 0), seedId: typeof e?.seedId === 'string' ? e.seedId : null };
+      for (const cb of this.lowListeners) cb(ev);
+    }).catch(fail);
+    // Liked, history or the catalog loading can name tracks shown as "Unknown track".
+    effect(() => {
+      void liked.value;
+      void history.value;
+      void catalogById.value;
+      untracked(() => {
+        if (!this.unresolved || !this.last) return;
+        this.builtFrom = '';
+        this.apply(this.last);
+      });
+    });
     JukePlayer.getState()
       .then((st) => this.onState(st))
       .catch((e) => logError('player.getState', e));
@@ -105,6 +148,8 @@ export class NativePlayer implements Player {
     const st = parseNativeState(raw, this.lastQueueIds);
     if (!st) return;
     this.lastQueueIds = st.queueIds;
+    // May describe the list from before an edit in flight; resynced once they're answered.
+    if (this.edits > 0) return;
     if (this.expect) {
       if (st.trackId !== this.expect.id && performance.now() < this.expect.until) return;
       this.expect = null;
@@ -117,7 +162,30 @@ export class NativePlayer implements Player {
   }
 
   private resolve(id: string): Track {
-    return this.known.get(id) ?? knownTrack(id) ?? placeholder(id);
+    return this.known.get(id) ?? knownTrack(id) ?? catalogById.peek().get(id) ?? placeholder(id);
+  }
+
+  private resync(): void {
+    JukePlayer.getState()
+      .then((st) => this.onState(st))
+      .catch((e) => logError('player.getState', e));
+  }
+
+  /**
+   * An index command: `local` applies it to the state shown at once (the next tap
+   * sees the new indices), and native events are held back until it's answered. A
+   * stale index (K2) changes nothing and isn't an error.
+   */
+  private async edit(send: () => Promise<void>, local?: () => void): Promise<void> {
+    this.edits++;
+    try {
+      local?.();
+      await send();
+    } catch (e) {
+      if (!isStale(e)) throw e;
+    } finally {
+      if (--this.edits === 0) this.resync();
+    }
   }
 
   private apply(st: NativeState): void {
@@ -130,16 +198,23 @@ export class NativePlayer implements Player {
     if (from !== this.builtFrom) {
       this.builtFrom = from;
       queue = st.queueIds.map((id) => this.resolve(id));
+      this.unresolved = queue.some((t) => !t.ytId);
       const index = st.index >= 0 && st.index < queue.length ? st.index : -1;
-      // Map upNext ids back to list indices; with duplicate ids, use each list slot once.
+      // Up next rows by the list index native gives (K1). Without one (an older native),
+      // the id's next unused slot after the current track, then from the top.
       const used = new Set<number>([index]);
+      const n = st.queueIds.length;
       upNext = [];
       st.upNextIds.forEach((id, k) => {
-        let i = -1;
-        for (let j = 0; j < st.queueIds.length; j++) {
-          if (st.queueIds[j] === id && !used.has(j)) {
-            i = j;
-            break;
+        let i = st.upNextIndex[k] ?? -1;
+        if (i < 0 || used.has(i)) {
+          i = -1;
+          for (let step = 1; step <= n; step++) {
+            const j = (index + step + n) % n;
+            if (st.queueIds[j] === id && !used.has(j)) {
+              i = j;
+              break;
+            }
           }
         }
         if (i < 0) return;
@@ -171,16 +246,20 @@ export class NativePlayer implements Player {
 
   async playList(all: Track[], startIndex: number, ctx: PlayContext = LIST_CONTEXT): Promise<void> {
     // Native refuses the whole list over one bad id: drop those, keeping the start track's place.
-    const start = all[Math.max(0, Math.min(startIndex, all.length - 1))];
+    const at = Math.max(0, Math.min(startIndex, all.length - 1));
+    // A list starts at the tapped track, or the next one that plays.
+    const start = ctx.mode === 'radio' ? all[at] : all.find((t, j) => j >= at && isPlayable(t));
     // A radio plays the tapped track, then autoplay: the rest of the list isn't queued.
-    const tracks = playable(ctx.mode === 'radio' && start ? [start] : all);
-    if (!tracks.length) {
+    const ok = start && isPlayable(start) ? playable(ctx.mode === 'radio' ? [start] : all) : [];
+    if (!ok.length) {
       if (all.length) toast("Can't play this track");
       return;
     }
-    startIndex = Math.max(0, start ? tracks.indexOf(start) : 0);
+    // K6: at most BRIDGE_MAX_ITEMS, around the start track.
+    const win = bridgeWindow(ok, Math.max(0, ok.indexOf(start!)));
+    const tracks = win.items;
+    const i = win.start;
     this.remember(tracks);
-    const i = Math.max(0, Math.min(startIndex, tracks.length - 1));
     // Optimistic: show the mini player immediately; native state events follow. Queued
     // tracks stay next (P1).
     const queued = this.s.value.upNext.filter((u) => u.queued).map((u) => u.track);
@@ -225,14 +304,66 @@ export class NativePlayer implements Player {
     await JukePlayer.seekTo({ positionMs: Math.round(positionMs) });
   }
 
-  skipTo = (index: number) => JukePlayer.skipToIndex({ index });
+  skipTo = (index: number, expectId?: string) => this.edit(() => JukePlayer.skipToIndex({ index, ...(expectId != null && { expectId }) }));
   setShuffle = (enabled: boolean) => JukePlayer.setShuffle({ enabled });
   setRepeat = (mode: RepeatMode) => JukePlayer.setRepeat({ mode });
-  move = (from: number, to: number) => JukePlayer.moveItem({ from, to });
-  remove = (index: number) => JukePlayer.removeItem({ index });
+
+  move(from: number, to: number, expectId?: string): Promise<void> {
+    return this.edit(
+      () => JukePlayer.moveItem({ from, to, ...(expectId != null && { expectId }) }),
+      () => this.showMoved(from, to, expectId),
+    );
+  }
+
+  remove(index: number, expectId?: string): Promise<void> {
+    return this.edit(
+      () => JukePlayer.removeItem({ index, ...(expectId != null && { expectId }) }),
+      () => this.showRemoved(index, expectId),
+    );
+  }
+
+  /** The move as native will make it, shown now (unshuffled: play order is list order). */
+  private showMoved(from: number, to: number, expectId?: string): void {
+    const s = this.s.value;
+    const n = s.queue.length;
+    if (s.shuffle || from === to || from < 0 || to < 0 || from >= n || to >= n) return;
+    if (expectId != null && s.queue[from].id !== expectId) return;
+    const queue = s.queue.slice();
+    queue.splice(to, 0, ...queue.splice(from, 1));
+    const map = (j: number) => (j === from ? to : from < to ? (j > from && j <= to ? j - 1 : j) : j >= to && j < from ? j + 1 : j);
+    const upNext = s.upNext.slice();
+    const kf = upNext.findIndex((u) => u.index === from);
+    const kt = upNext.findIndex((u) => u.index === to);
+    if (kf >= 0 && kt >= 0) upNext.splice(kt, 0, ...upNext.splice(kf, 1));
+    this.show(queue, map(s.index), upNext.map((u) => ({ ...u, index: map(u.index) })));
+  }
+
+  /** A remove of an Up next row, shown now. */
+  private showRemoved(index: number, expectId?: string): void {
+    const s = this.s.value;
+    if (index < 0 || index >= s.queue.length || index === s.index) return;
+    if (expectId != null && s.queue[index].id !== expectId) return;
+    const queue = s.queue.filter((_, j) => j !== index);
+    const map = (j: number) => (j > index ? j - 1 : j);
+    this.show(
+      queue,
+      map(s.index),
+      s.upNext.filter((u) => u.index !== index).map((u) => ({ ...u, index: map(u.index) })),
+    );
+  }
+
+  private show(queue: Track[], index: number, upNext: UpNextItem[]): void {
+    this.builtFrom = '';
+    this.s.value = { ...this.s.value, queue, index, current: queue[index] ?? null, upNext };
+  }
+
+  async removeIds(ids: string[]): Promise<void> {
+    const unique = [...new Set(ids)];
+    for (let k = 0; k < unique.length; k += BRIDGE_MAX_ITEMS) await JukePlayer.removeIds({ ids: unique.slice(k, k + BRIDGE_MAX_ITEMS) });
+  }
 
   async addToQueue(all: Track[]): Promise<void> {
-    const tracks = playable(all);
+    const tracks = playable(all).slice(0, BRIDGE_MAX_ITEMS);
     if (!tracks.length) {
       if (all.length) toast("Can't play this track");
       return;
@@ -242,16 +373,15 @@ export class NativePlayer implements Player {
     await JukePlayer.queueNext({ tracks: tracks.map(toNative) });
   }
 
-  async restore(track: Track, index: number, kind: 'queued' | 'list' | 'autoplay'): Promise<void> {
-    if (!YT_ID_RE.test(track.ytId)) return;
-    if (kind === 'queued') return this.addToQueue([track]);
-    if (kind === 'autoplay') return this.addAutoplay([track], this.s.value.seed?.id ?? '');
+  async restore(track: Track, kind: UpNextKind, beforeId: string | null): Promise<void> {
+    if (!isPlayable(track)) return;
+    if (this.s.value.index < 0) return this.playList([track], 0);
     this.remember([track]);
-    await JukePlayer.addItems({ tracks: [toNative(track)], index });
+    await JukePlayer.restore({ track: toNative(track), kind, beforeId });
   }
 
   async addAutoplay(all: Track[], seedId: string): Promise<void> {
-    const tracks = playable(all);
+    const tracks = playable(all).slice(0, BRIDGE_MAX_ITEMS);
     if (!tracks.length) return;
     this.remember(tracks);
     await JukePlayer.addAutoplay({ tracks: tracks.map(toNative), seedId });
@@ -268,9 +398,13 @@ export class NativePlayer implements Player {
   setNetworkPrefs = (prefs: { preferIpv4: boolean }) => JukePlayer.setNetworkPrefs({ preferIpv4: prefs.preferIpv4 === true });
 }
 
-/** Tracks native accepts (a valid 11-character video id). */
+/** A track native accepts (a valid 11-character video id, an id it takes). */
+function isPlayable(t: Track): boolean {
+  return YT_ID_RE.test(t.ytId) && !!t.id && t.id.length <= BRIDGE_MAX_STRING;
+}
+
 function playable(tracks: Track[]): Track[] {
-  return tracks.filter((t) => YT_ID_RE.test(t.ytId));
+  return tracks.filter(isPlayable);
 }
 
 /** How long playList waits for native to report the new track before trusting events again. */

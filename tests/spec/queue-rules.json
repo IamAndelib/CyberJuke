@@ -1,5 +1,5 @@
 {
-  "about": "The queue rules, shared by the web Queue (src/player/queue.ts) and the native queue (NativeQueue, run by QueueRulesTest). Every case starts from `list` with `start` current (list index), shuffle and repeat as given, then runs `steps` in order. Ids are track ids; ids are unique within a case. Ops: setList {ids, start} (a new list: replaces the list and the autoplay tracks, keeps the queued ones); queueNext {ids}; addAuto {ids} (autoplay appends these); skipTo {id} (the list index of that id); next (a user skip); nextAuto (the track ended by itself); prev {positionMs} (go back: moves when positionMs <= 3000, else restarts the current track); remove {id}; move {id, to} (list index); setShuffle {on}; setRepeat {mode}. An expect step checks: current (id); upNext (the whole play order after the current track); upNextStartsWith (its first ids, for shuffled cases); queued (how many leading upNext tracks are 'Queued by you'); list (list order); and Up next's three sections: queuedIds (queued by you), listIds (the rest of the list, in play order), listSet (the same ids in any order, for shuffled cases), autoplayIds (autoplay, in play order).",
+  "about": "The queue rules, shared by the web Queue (src/player/queue.ts) and the native queue (NativeQueue, run by QueueRulesTest). Every case starts from `list` with `start` current (list index), shuffle and repeat as given, then runs `steps` in order. Ids are track ids; ids are unique within a case. Ops: setList {ids, start} (a new list: replaces the list and the autoplay tracks, keeps the queued ones); queueNext {ids}; addAuto {ids} (autoplay appends these); skipTo {id} (the list index of that id); next (a user skip); nextAuto (the track ended by itself); prev {positionMs} (go back: moves when positionMs <= 3000, else restarts the current track); remove {id}; move {id, to} (list index); setShuffle {on}; setRepeat {mode}; restore {id, kind, beforeId} (Undo of a remove: puts id back as a queued, list or autoplay track, right before the first track after the current one, in play order, that is beforeId and in that same section; with no such track, or beforeId null, at the end of that section: queued after the queued run, list after the list tracks ahead (before autoplay), autoplay at the very end. In list order it goes right before the track that follows it in play order, or at the end. Never at or before the current track); removeIds {ids} (every item with one of these ids goes; if the current one goes, the next one in play order that stays becomes current, or nothing plays). An expect step checks: current (id); upNext (the whole play order after the current track); upNextStartsWith (its first ids, for shuffled cases); queued (how many leading upNext tracks are 'Queued by you'); list (list order); and Up next's three sections: queuedIds (queued by you), listIds (the rest of the list, in play order), listSet (the same ids in any order, for shuffled cases), autoplayIds (autoplay, in play order).",
   "rule": "Queued tracks play right after the current track, first in first out, shuffle or not, until each one plays or is removed. A manual jump (skipTo, or prev moving back) keeps the still-queued tracks next: they move to just after the new current track, in the order they were going to play. Jumping to a queued track plays it; the others stay next. A new list replaces the list and the autoplay tracks, but the queued tracks stay next, in order. Autoplay tracks play after the list in the order added; shuffle reorders only the list. Repeat all or one drops the autoplay tracks still to come, and so does jumping to an autoplay track (the radio continues from it).",
   "cases": [
     {
@@ -497,6 +497,117 @@
           "upNext": ["s1", "s3"],
           "autoplayIds": ["s1", "s3"]
         }
+      ]
+    },
+    {
+      "name": "restore: a list track goes back before the track that followed it",
+      "list": ["a", "b", "c", "d"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1"] },
+        { "op": "remove", "id": "c" },
+        { "op": "restore", "id": "c", "kind": "list", "beforeId": "d" },
+        {
+          "op": "expect",
+          "current": "a",
+          "upNext": ["b", "c", "d", "s1"],
+          "listIds": ["b", "c", "d"],
+          "autoplayIds": ["s1"],
+          "list": ["a", "b", "c", "d", "s1"]
+        }
+      ]
+    },
+    {
+      "name": "restore: a list track stays out of the queued run, even after another Add to queue",
+      "list": ["a", "b", "c"],
+      "start": 0,
+      "steps": [
+        { "op": "queueNext", "ids": ["Q1"] },
+        { "op": "remove", "id": "b" },
+        { "op": "queueNext", "ids": ["Q2"] },
+        { "op": "restore", "id": "b", "kind": "list", "beforeId": "c" },
+        {
+          "op": "expect",
+          "current": "a",
+          "upNext": ["Q1", "Q2", "b", "c"],
+          "queuedIds": ["Q1", "Q2"],
+          "listIds": ["b", "c"]
+        }
+      ]
+    },
+    {
+      "name": "restore: never at or before the current track",
+      "list": ["a", "b", "c", "d"],
+      "start": 0,
+      "steps": [
+        { "op": "remove", "id": "b" },
+        { "op": "nextAuto" },
+        { "op": "restore", "id": "b", "kind": "list", "beforeId": "c" },
+        { "op": "expect", "current": "c", "upNext": ["d", "b"], "list": ["a", "c", "d", "b"] }
+      ]
+    },
+    {
+      "name": "restore: a list track with no anchor goes after the list, before autoplay",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "queueNext", "ids": ["Q"] },
+        { "op": "addAuto", "ids": ["s1"] },
+        { "op": "restore", "id": "z", "kind": "list", "beforeId": null },
+        { "op": "expect", "upNext": ["Q", "b", "z", "s1"], "queuedIds": ["Q"], "listIds": ["b", "z"], "autoplayIds": ["s1"] }
+      ]
+    },
+    {
+      "name": "restore: a queued track goes back into the queued run, never after list tracks",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "queueNext", "ids": ["X", "Y", "Z"] },
+        { "op": "remove", "id": "Y" },
+        { "op": "restore", "id": "Y", "kind": "queued", "beforeId": "Z" },
+        { "op": "expect", "upNext": ["X", "Y", "Z", "b"], "queuedIds": ["X", "Y", "Z"] },
+        { "op": "remove", "id": "Z" },
+        { "op": "restore", "id": "Z", "kind": "queued", "beforeId": "b" },
+        { "op": "expect", "upNext": ["X", "Y", "Z", "b"], "queuedIds": ["X", "Y", "Z"], "listIds": ["b"] }
+      ]
+    },
+    {
+      "name": "restore: an autoplay track goes back into autoplay (its anchor, else the end)",
+      "list": ["a"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
+        { "op": "remove", "id": "s2" },
+        { "op": "restore", "id": "s2", "kind": "autoplay", "beforeId": "s3" },
+        { "op": "expect", "upNext": ["s1", "s2", "s3"], "autoplayIds": ["s1", "s2", "s3"] },
+        { "op": "remove", "id": "s1" },
+        { "op": "nextAuto" },
+        { "op": "restore", "id": "s1", "kind": "autoplay", "beforeId": "s2" },
+        { "op": "expect", "current": "s2", "upNext": ["s3", "s1"], "autoplayIds": ["s3", "s1"] }
+      ]
+    },
+    {
+      "name": "restore: the anchor must be in the same section",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "queueNext", "ids": ["Q"] },
+        { "op": "restore", "id": "X", "kind": "queued", "beforeId": "b" },
+        { "op": "restore", "id": "z", "kind": "list", "beforeId": "Q" },
+        { "op": "expect", "upNext": ["Q", "X", "b", "z"], "queuedIds": ["Q", "X"], "listIds": ["b", "z"] }
+      ]
+    },
+    {
+      "name": "removeIds: every match goes; the current one moves on to the next that stays",
+      "list": ["a", "m1", "m2", "b"],
+      "start": 1,
+      "steps": [
+        { "op": "queueNext", "ids": ["m3"] },
+        { "op": "addAuto", "ids": ["s1"] },
+        { "op": "removeIds", "ids": ["m1", "m2", "m3"] },
+        { "op": "expect", "current": "b", "upNext": ["s1"], "list": ["a", "b", "s1"], "queued": 0 },
+        { "op": "removeIds", "ids": ["a", "b", "s1"] },
+        { "op": "expect", "current": null, "upNext": [], "list": [] }
       ]
     }
   ]
