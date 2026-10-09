@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { musicCalls, openNowPlaying, openSearch, start } from '../helpers';
+import { expectStable, musicCalls, openNowPlaying, openSearch, start } from '../helpers';
 import { genreFamilies } from '../../src/data/similar';
 import { artistKey, splitArtists } from '../../src/data/artists';
 import { words } from '../../src/data/search';
@@ -103,12 +103,20 @@ test('Up next: autoplay rows have only a 48px Remove, which offers Undo', async 
   const before = await rows.count();
   const gone = q.autoplay[1].title;
   // Two taps in a row: the second lands on the next row, which moved under the finger,
-  // and is ignored (300 ms).
-  await row.getByTestId('upnext-remove').evaluate((el) => {
+  // and is ignored (300 ms). It goes in as soon as the list has re-rendered (microtasks,
+  // no timer), so a slow runner can't stretch the gap past the guard.
+  const gap = await row.getByTestId('upnext-remove').evaluate(async (el) => {
+    const removes = () => document.querySelectorAll<HTMLElement>('[data-section="autoplay"] [data-testid="upnext-remove"]');
+    const n = removes().length;
+    const t0 = performance.now();
     (el as HTMLElement).click();
-    setTimeout(() => (document.querySelectorAll('[data-section="autoplay"] [data-testid="upnext-remove"]')[1] as HTMLElement).click(), 50);
+    for (let i = 0; i < 1000 && removes().length === n; i++) await Promise.resolve();
+    removes()[1].click();
+    return performance.now() - t0;
   });
+  expect(gap).toBeLessThan(300);
   await expect(rows).toHaveCount(before - 1);
+  await expectStable(() => rows.count(), 400);
   await expect(page.getByTestId('toast').filter({ hasText: 'Removed from queue' })).toHaveCount(1);
   await expect(rows.locator('.row-title', { hasText: gone })).toHaveCount(0);
   const t = page.getByTestId('toast').filter({ hasText: 'Removed from queue' });
