@@ -94,9 +94,10 @@ const FAKE_MUSIC = `
       subtitle: ['Night Owl', 'Curated', 'Mixtapes'][i % 3], url: 'https://music.youtube.com/playlist?list=PL' + ytId(p),
       thumbnailUrl: thumb(p), ...(i === 0 ? { itemCount: 42 } : {}) }));
   };
-  const LYRIC_MODES = ['greek', 'spanish', 'japanese', 'arabic', 'plain', 'none', 'instrumental'];
+  const LYRIC_MODES = ['greek', 'english', 'spanish', 'japanese', 'arabic', 'plain', 'none', 'instrumental'];
   const LYRICS = {
     greek: ['Το φεγγάρι λάμπει πάνω από τη θάλασσα', 'Περπατάμε μαζί στον ήσυχο δρόμο', 'Η νύχτα τραγουδά ένα παλιό τραγούδι', 'Και η καρδιά μου χορεύει ξανά'],
+    english: ['Neon lights are humming on the boulevard', 'We drive until the static fades to blue', 'Every radio is playing our old song', 'And the night is ours again'],
     spanish: ['Bajo la luna bailamos sin prisa', 'El viento canta en la ciudad dormida', 'Tu voz es un faro en la noche', 'Y el mar nos llama otra vez'],
     japanese: ['夜の街に光が揺れる', '君の声が風に溶けていく', '小さな夢を胸に抱いて', 'もう一度歩き出そう'],
     arabic: ['القمر يضيء فوق البحر', 'نمشي معاً في الطريق الهادئ', 'الليل يغني أغنية قديمة', 'وقلبي يرقص من جديد'],

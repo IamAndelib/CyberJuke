@@ -1,7 +1,7 @@
 """Generate CyberJuke's pixel-art jukebox icon (cream on black) at all Android sizes.
 
-Run: python3 media/src/make_icon.py   (needs Pillow). Outputs launcher icons, splash
-screens, media/icon.png and media/banner.png.
+Run: python3 media/brand/make_icon.py   (needs Pillow). Outputs launcher icons, splash
+screens, media/brand/icon.png and media/brand/banner.png.
 """
 from pathlib import Path
 from PIL import Image
@@ -91,7 +91,7 @@ for p in res.glob("drawable*/splash.png"):
     im.alpha_composite(a, ((w - a.width) // 2, (h - a.height) // 2))
     im.convert("RGB").save(p)
 
-media = ROOT / "media"
+media = ROOT / "media/brand"
 canvas(512, 0.80).save(media / "icon.png")
 
 # Banner: 1280x640, icon left, checkerboard shadow strip.

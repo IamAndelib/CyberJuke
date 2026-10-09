@@ -1,37 +1,53 @@
-<p align="center"><img src="media/banner.png" alt="CyberJuke" width="640"></p>
+<p align="center"><img src="media/brand/banner.png" alt="CyberJuke" width="640"></p>
+
+<p align="center">
+  <a href="https://github.com/IamAndelib/CyberJuke/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/IamAndelib/CyberJuke?label=release"></a>
+  <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-blue"></a>
+  <a href="https://github.com/IamAndelib/CyberJuke/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/IamAndelib/CyberJuke/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="Android 7.0+" src="https://img.shields.io/badge/Android-7.0%2B-3ddc84">
+</p>
 
 # CyberJuke
 
 **The [Cyberspace](https://beta.cyberspace.online) Jukebox as a music-streaming app for Android.**
 
-The Cyberspace Jukebox is where people on Cyberspace share the music they love, posted alongside what they write. It's a great way to find music you'd never have come across. CyberJuke turns it into a proper music app. It keeps Cyberspace's retro look and adds a music app's playback: a mini player, a Now Playing screen, an Up Next queue, and playback that continues with the screen off.
+The Cyberspace Jukebox is where people on Cyberspace share the music they love, posted alongside what they write. It's a great way to find music you'd never have come across. CyberJuke turns it into a proper music app. It keeps Cyberspace's retro look and adds a music app's playback: a mini player, a Now Playing screen, an Up Next queue, autoplay of similar songs, and playback that continues with the screen off.
 
 > **Unofficial.** CyberJuke is a fan-made app. It is not made, endorsed or supported by Cyberspace or its creator.
 
-<p align="center">
-  <img src="docs/images/home.png" width="200" alt="Home">
-  <img src="docs/images/now-playing.png" width="200" alt="Now Playing">
-  <img src="docs/images/lyrics.png" width="200" alt="Lyrics">
-  <img src="docs/images/artist.png" width="200" alt="Artist page">
-</p>
+**[Download the latest APK](https://github.com/IamAndelib/CyberJuke/releases/latest)** · Android 7.0 or newer · free and open source (GPL-3.0)
+
+## Highlights
+
+| | | |
+|:-:|:-:|:-:|
+| <img src="media/screenshots/home.png" width="230" alt="Home"><br>**Home**: the latest Jukebox posts, genre filters and Shuffle | <img src="media/screenshots/now-playing.png" width="230" alt="Now Playing"><br>**Now Playing**: big artwork, seek, shuffle, repeat, like | <img src="media/screenshots/up-next.png" width="230" alt="Up next"><br>**Up next**: your queue first, then autoplay of similar songs |
+| <img src="media/screenshots/lyrics.png" width="230" alt="Lyrics"><br>**Synced lyrics**: tap the artwork, in any language | <img src="media/screenshots/artist.png" width="230" alt="Artist page"><br>**Artist pages**: what people shared, then the discography | <img src="media/screenshots/genre.png" width="230" alt="Genre page"><br>**Genres**: every genre, with Play and Shuffle |
+| <img src="media/screenshots/search.png" width="230" alt="Search"><br>**Search**: the whole Jukebox, typo-tolerant, or Global | <img src="media/screenshots/here-search.png" width="230" alt="Here search on the Genres tab"><br>**Here**: search just the page you're on | <img src="media/screenshots/library.png" width="230" alt="Library"><br>**Library**: liked tracks and recently played |
 
 ## Features
 
-- **Latest tracks** posted to the Jukebox, as an endless list.
+- **Latest tracks** posted to the Jukebox, as an endless list, with a "new tracks" button when something new is posted.
 - **Most saved**: the tracks people saved most on Cyberspace, this month or all time.
-- **Search** every track on the Jukebox by title, artist, genre or @poster, with typo tolerance. With an empty query it lists the whole Jukebox, newest first. It works offline once the catalog is cached.
 - **Shuffle the Jukebox**: one tap for a random mix from the whole Jukebox.
-- **Genres**: browse every genre, heart your favorites to pin them to the top and to Home's filters, and play or shuffle any genre.
-- **Artists**: every artist shared on the Jukebox, most-shared first, with hearts for a Favorite artists section. An artist page puts what Cyberspace people shared first, then the artist's top songs, albums, live albums, EPs and singles, taken from the artist's own YouTube Music page, each with "See all". Tap the artist or genre in Now Playing to jump to their page.
-- **Sign in with Cyberspace** (optional): with your Cyberspace account, the Jukebox also shows the members-only shared tracks the site shows its members, marked `[members]`. See [Signing in](#signing-in).
-- **Global search** (optional): a separate `[Global]` mode in Search for any song, album, artist or playlist beyond the Jukebox, powered by YouTube Music data. Global tracks can be played, liked and queued, but never show up on Home, Genres, Most saved or Shuffle.
+- **Autoplay**: when a list ends, similar songs keep playing. A Jukebox song leads to Jukebox songs picked by artist, genre and what the same people share; a Global song leads to that song's radio. Tracks you add with "Add to queue" always stay next.
+- **Search** every track on the Jukebox by title, artist, genre or @poster, with typo tolerance and recent searches. **Here** searches only the page you're on: a genre, an artist, an album, your library, or the Genres and Artists lists themselves.
+- **Genres** and **Artists**: browse everything shared on the Jukebox, A–Z or by popularity, and ★ your favourites to pin them to the top. An artist page puts what Cyberspace people shared first, then the artist's top songs, albums, live albums, EPs and singles from the artist's own page.
+- **Global search** (optional): a separate Global mode for any song, album or artist beyond the Jukebox. Global tracks play, like and queue like any other, but never show up on Home, Genres, Most saved or Shuffle.
+- **Sign in with Cyberspace** (optional): the Jukebox also shows the members-only shared tracks, marked `[members]`. See [Signing in](#signing-in).
 - **Library**: liked tracks and recently played, stored on your phone.
 - **Background playback**: the notification, lock screen and headset buttons all work, and the queue keeps going with the screen off.
-- **Now Playing**: seek, shuffle, repeat, like, synced lyrics, and an Up Next queue you can reorder.
+- **Now Playing**: seek, shuffle, repeat, like, synced lyrics, share, "Playing from …", and an Up Next queue you can reorder.
 - **"Posted by @user"** opens the original post on Cyberspace, so you can see what the poster wrote and reply.
-- **Cyberspace themes**: Dark, Light, C64, VT320, Matrix, Crypt, Bubblegum and Brutalist.
+- **Undo** for unlike, unfavourite, removing from Up next and clearing history or recent searches.
 - **NSFW** posts are hidden unless you turn them on.
-- **Scroll memory**: every list keeps its place when you switch tabs or go back from a genre or artist, and a back-to-top button appears on long lists. On long lists, drag the scrollbar to jump; in A–Z order a big letter shows where you are while you drag.
+- **Made for thumbs**: scroll memory everywhere, back-to-top, an A–Z fast scroller, pull to refresh, long-press for a track's menu, and swipe Now Playing down to close.
+
+## Themes
+
+Eight Cyberspace themes, switchable any time in Settings:
+
+<p align="center"><img src="media/themes/themes.png" width="720" alt="CyberJuke in the Dark, Light, C64, VT320, Matrix, Crypt, Bubblegum and Brutalist themes"></p>
 
 ## Install
 

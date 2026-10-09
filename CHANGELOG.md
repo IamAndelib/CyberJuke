@@ -45,7 +45,7 @@ Hardening for a public release and F-Droid.
 - A draft fdroiddata recipe in `docs/fdroid/`.
 
 ### Repository
-- Web screenshots are no longer committed (a workflow renders them as an artifact); the README images are in `docs/images/`.
+- Web screenshots are no longer committed (a workflow renders them as an artifact); the README images are in `media/screenshots/`.
 - New `CONTRIBUTING.md` and `SECURITY.md`; the README covers the architecture, privacy and data use, YouTube limitations and building.
 
 ## [0.1.0] - 2026-10-05
