@@ -78,6 +78,8 @@
 .swatch-lines .l2 {
   display: block;
   height: 4px;
+}
+.swatch-lines .l1 {
   background: var(--color-fg);
 }
 .swatch-lines .l2 {

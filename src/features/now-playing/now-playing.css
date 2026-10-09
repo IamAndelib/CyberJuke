@@ -189,6 +189,7 @@
 }
 .np-art .dos-frame {
   padding: 6px;
+  position: relative;
 }
 .np-meta {
   display: flex;
@@ -379,9 +380,6 @@
 
 /* ---- Now Playing: art <-> lyrics ------------------------------------------------- */
 
-.np-art .dos-frame {
-  position: relative;
-}
 .np-art-btn {
   display: block;
   width: 100%;
@@ -430,8 +428,6 @@
   /* Pixel fonts first; system fonts for scripts they don't cover (CJK, Arabic, Hebrew, Devanagari, Thai…). */
   font-family: var(--font-ui), system-ui, -apple-system, 'Roboto', 'Noto Sans', 'Noto Sans CJK JP', 'Noto Sans CJK SC', 'Noto Sans Arabic',
     'Noto Naskh Arabic', 'Noto Sans Hebrew', 'Noto Sans Devanagari', 'Noto Sans Thai', 'Droid Sans Fallback', sans-serif;
-}
-.lyr {
   padding-top: 48px; /* header: credit on the left, [art] on the right */
 }
 .lyr::before {

@@ -11,7 +11,10 @@
   bottom: calc(12px + var(--fab-shadow));
   width: var(--fab);
   height: var(--fab);
-  z-index: 6;
+  z-index: 10;
+  transition:
+    transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
 }
 .fab-btn {
   position: relative;
@@ -43,11 +46,6 @@
 }
 /* Scrolling down tucks the search button away below the screen edge; scrolling up (or
    reaching the top) brings it back (SearchFab.tsx). */
-.fab {
-  transition:
-    transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
-    visibility 0s;
-}
 .fab.away {
   transform: translateY(calc(100% + 32px));
   visibility: hidden;
@@ -72,7 +70,12 @@
   background: var(--color-bg);
 }
 .search-bar {
-  gap: 6px;
+  gap: 0;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 0;
+  padding-top: calc(4px + var(--safe-top));
+  padding-bottom: 0;
 }
 .search-field {
   flex: 1;
@@ -148,14 +151,6 @@
 }
 
 /* Search: input row, then the scope rail under it (Rail styles in ui/ui.css). */
-.search-bar {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0;
-  min-height: 0;
-  padding-top: calc(4px + var(--safe-top));
-  padding-bottom: 0;
-}
 .search-row {
   display: flex;
   align-items: center;
@@ -183,12 +178,6 @@
   z-index: 1;
 }
 
-/* ---- Layers: the search button also shows over an album page; Search opened from an
-   album sits above it. ---------------------------------------------------------------- */
-
-.fab {
-  z-index: 10;
-}
 .here-loading {
   display: flex;
   align-items: center;

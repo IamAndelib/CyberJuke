@@ -8,6 +8,7 @@
   overflow-x: hidden;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
 /* Pull-to-refresh screens: no Android overscroll glow/stretch competing with the pull. */
 .screen.has-ptr {
@@ -51,6 +52,9 @@
   font-size: 12px;
   color: var(--color-fg-dim);
   margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Pull to refresh: the indicator waits behind the top bar, in a zero-height dock, and
@@ -1012,11 +1016,6 @@
   left: 8px;
   right: 8px;
 }
-.topbar-sub {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 /* ---- A–Z sections ------------------------------------------------------------------ */
 
@@ -1045,9 +1044,6 @@
 
 /* ---- Overlay scrollbar (the native one is hidden) ---------------------------------- */
 
-.screen {
-  scrollbar-width: none;
-}
 .screen::-webkit-scrollbar {
   display: none;
 }

@@ -2,6 +2,7 @@
    and radii are in themes.css). */
 
 :root {
+  /* ---- Layout -------------------------------------------------------------------------- */
   --safe-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
   --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
   --safe-left: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
@@ -11,11 +12,10 @@
   --fab: 56px;
   --gutter: 16px;
   --dither: repeating-conic-gradient(var(--color-fg-dim) 0 25%, transparent 0 50%);
-}
 
-/* Material's emphasized motion for Now Playing and the sheets: in over 250ms, slowing
-   to a stop; out over 200ms, speeding away. */
-:root {
+  /* ---- Motion -------------------------------------------------------------------------- */
+  /* Material's emphasized motion for Now Playing and the sheets: in over 250ms, slowing
+     to a stop; out over 200ms, speeding away. */
   --ease-in-ms: 250ms;
   --ease-in: cubic-bezier(0.05, 0.7, 0.1, 1);
   --ease-out-ms: 200ms;
