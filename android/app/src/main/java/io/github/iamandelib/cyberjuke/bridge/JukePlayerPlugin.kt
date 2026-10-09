@@ -201,12 +201,12 @@ class JukePlayerPlugin : Plugin() {
             if (reason != null) announceBlocked(until, reason)
             connect()
         }
-        openNowPlayingFor(activity?.intent)
+        openNowPlayingFor(activity?.intent, "page start")
     }
 
     override fun handleOnNewIntent(intent: Intent) {
         super.handleOnNewIntent(intent)
-        openNowPlayingFor(intent)
+        openNowPlayingFor(intent, "new intent")
     }
 
     /**
@@ -214,9 +214,11 @@ class JukePlayerPlugin : Plugin() {
      * until the page listens, for a cold start). Once: the intent is marked used, so the page
      * reloading (or the activity being recreated) doesn't open it again.
      */
-    private fun openNowPlayingFor(intent: Intent?) {
+    private fun openNowPlayingFor(intent: Intent?, how: String) {
         if (!LaunchOptions.opensNowPlaying(intent)) return
         intent?.action = Intent.ACTION_MAIN
+        // The CI smoke test looks for this (debug builds; R8 strips Log.i from release).
+        Log.i(TAG, "Opening Now Playing ($how)")
         notifyListeners("openNowPlaying", JSObject(), true)
     }
 

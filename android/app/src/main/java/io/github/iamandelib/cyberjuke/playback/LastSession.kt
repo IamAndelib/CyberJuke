@@ -33,6 +33,8 @@ internal data class LastSession(
     val seedId: String?,
     /** When it was saved (wall clock): a position saved later is newer than this list's. */
     val savedAtMs: Long = 0L,
+    /** Where [entries] start in the player's whole list (a long list keeps a window of it). */
+    val offset: Int = 0,
 ) {
     /** One track: the NativeTrack fields and its part of Up next. */
     data class Entry(
@@ -86,18 +88,20 @@ internal data class LastSession(
             }
             seedId?.let { put("seedId", it) }
             put("savedAtMs", savedAtMs)
+            put("offset", offset)
         }.toString()
     }
 
     /**
-     * The position preference ([positionPref]) applied: only one saved no earlier than this
-     * list, for the track still at its index. Anything else (older, stale, malformed) is ignored.
+     * The position preference ([positionPref], an index in the whole list) applied: only one
+     * saved no earlier than this list, for the track still at its index. Anything else (older,
+     * stale, malformed) is ignored.
      */
     fun withPositionPref(pref: String?): LastSession {
         val f = pref?.split('|', limit = 5)?.takeIf { it.size == 5 } ?: return this
         val savedAt = f[3].toLongOrNull() ?: return this
         if (savedAt < savedAtMs) return this
-        val index = f[0].toIntOrNull() ?: return this
+        val index = (f[0].toIntOrNull() ?: return this) - offset
         return withPosition(index, f[4], f[1].toLongOrNull() ?: 0L, f[2].toLongOrNull() ?: 0L)
     }
 
@@ -116,9 +120,9 @@ internal data class LastSession(
         entries == other.entries && index == other.index && positionMs == other.positionMs &&
         durationMs == other.durationMs && shuffle == other.shuffle &&
         (order?.contentEquals(other.order) ?: (other.order == null)) && repeat == other.repeat &&
-        context == other.context && seedId == other.seedId && savedAtMs == other.savedAtMs
+        context == other.context && seedId == other.seedId && savedAtMs == other.savedAtMs && offset == other.offset
 
-    override fun hashCode(): Int = listOf(entries, index, positionMs, durationMs, shuffle, order?.contentHashCode(), repeat, context, seedId, savedAtMs).hashCode()
+    override fun hashCode(): Int = listOf(entries, index, positionMs, durationMs, shuffle, order?.contentHashCode(), repeat, context, seedId, savedAtMs, offset).hashCode()
 
     companion object {
         private const val VERSION = 1
@@ -169,6 +173,7 @@ internal data class LastSession(
                 context = context,
                 seedId = seedId,
                 savedAtMs = savedAtMs,
+                offset = lo,
             )
         }
 
@@ -217,6 +222,7 @@ internal data class LastSession(
                 context = if (label != null && (mode == "radio" || mode == "list")) label to mode else null,
                 seedId = o.str("seedId"),
                 savedAtMs = o.optLong("savedAtMs", 0L),
+                offset = o.optInt("offset", 0).coerceAtLeast(0),
             )
         } catch (e: Exception) { // not JSON, or a field of the wrong type
             null

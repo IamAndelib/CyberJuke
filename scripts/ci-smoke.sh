@@ -15,7 +15,8 @@
 # the background; otherwise the exit code is non-zero.
 # Phase 2b (hard, debug builds) ends the page's WebView renderer while it plays, the way Android
 # reclaims it (`--es ci_renderer kill`) and as a crash (`crash`): the app process must survive,
-# keep playing, and load the page again.
+# keep playing, and load the page again. Then it ends in the background, and a notification
+# tap must open Now Playing on the page that loads on return.
 # Phase 2c (hard, debug builds) force-stops the app and opens it again: the last session (the
 # tone) must come back, paused. Pressing play then is a soft check.
 # Phase 3 (soft, debug builds) runs one YouTube Music search through NewPipeExtractor via
@@ -352,6 +353,41 @@ for how in kill crash; do
   [[ $how == kill ]] && sleep 12
 done
 summary "### :white_check_mark: The WebView renderer ending (system kill, crash) keeps the app and playback alive"
+
+# The renderer goes while the app is in the background; then the notification is tapped: the
+# page loads again on return and opens Now Playing (the tap must reach the new page).
+log "Phase 2b: renderer ends in the background, then the notification is tapped"
+adb shell am start -n "$PKG/.MainActivity" --es ci_renderer kill-later >/dev/null 2>&1 || true
+sleep 1
+since="$(device_now)"
+adb shell input keyevent KEYCODE_HOME
+gone=0
+for _ in $(seq 1 15); do
+  sleep 1
+  if logged_since "$since" CyberJukeActivity "WebView renderer gone"; then gone=1; break; fi
+done
+if (( gone != 1 )); then
+  diagnostics
+  finish 1 "The WebView renderer (kill in the background) was not reported gone"
+fi
+since="$(device_now)"
+adb shell am start -n "$PKG/.MainActivity" -a "$PKG.NOW_PLAYING" >/dev/null 2>&1 || true
+opened=0
+for _ in $(seq 1 20); do
+  sleep 1
+  if logged_since "$since" CyberJukePlugin "Opening Now Playing (page start)"; then opened=1; break; fi
+done
+sleep 2
+shot "05-renderer-background-tap"
+if (( opened != 1 )); then
+  diagnostics
+  finish 1 "After the renderer ended in the background, the notification tap did not reach the new page"
+fi
+if ! is_playing; then
+  diagnostics
+  finish 1 "Playback stopped when the renderer ended in the background"
+fi
+summary "### :white_check_mark: Renderer gone in the background: a notification tap opens Now Playing on the new page"
 
 # ---- Phase 2c: after a force stop, the last session comes back (paused) ---------------------
 log "Phase 2c: force-stopping, then opening the app again"

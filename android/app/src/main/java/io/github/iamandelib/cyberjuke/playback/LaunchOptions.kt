@@ -45,17 +45,21 @@ object LaunchOptions {
 
     /**
      * CI only (debuggable builds): `--es ci_renderer kill` (as when Android reclaims its memory)
-     * or `crash` ends the WebView's renderer; the URL that does it, else null.
+     * or `crash` ends the WebView's renderer; the URL that does it, else null. `kill-later`:
+     * a few seconds later, once the app is in the background ([ciRendererLater]).
      */
     @JvmStatic
     fun ciRendererUrl(context: Context, intent: Intent?): String? {
         if (!context.isDebuggable()) return null
         return when (intent?.getStringExtra("ci_renderer")) {
-            "kill" -> "chrome://kill"
+            "kill", "kill-later" -> "chrome://kill"
             "crash" -> "chrome://crash"
             else -> null
         }
     }
+
+    @JvmStatic
+    fun ciRendererLater(intent: Intent?): Boolean = intent?.getStringExtra("ci_renderer") == "kill-later"
     const val CI_TONE_ASSET = "asset:///ci-tone.ogg"
 
     @Volatile

@@ -67,6 +67,19 @@ class LastSessionTest {
     }
 
     @Test
+    fun aPositionInALongListAppliesToTheTrackInTheWindow() {
+        // The player saves its index in the whole list; the file keeps a window of it.
+        val s = LastSession.decode(session(2000, 1500).copy(savedAtMs = 1_000L).encode())!!
+        val pref = LastSession.positionPref(1501, "t1501", 42_000L, 190_000L, savedAtMs = 2_000L)
+        val back = s.withPositionPref(pref)
+        assertEquals("t1501", back.entries[back.index].id)
+        assertEquals(42_000L, back.positionMs)
+        // Near the start (no offset), the same.
+        val start = session(2000, 3).copy(savedAtMs = 1_000L)
+        assertEquals(4, start.withPositionPref(LastSession.positionPref(4, "t4", 1_000L, 0L, 2_000L)).index)
+    }
+
+    @Test
     fun onlyAPositionSavedNoEarlierThanTheListApplies() {
         val s = session(4, 1).copy(savedAtMs = 1_000L)
         // Saved later, same track: applies.

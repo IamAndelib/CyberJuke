@@ -21,6 +21,8 @@ public class MainActivity extends BridgeActivity {
     /** A renderer that crashed again this soon after the last crash: stop reloading the page. */
     private static final long CRASH_LOOP_MS = 10_000L;
 
+    private static final long CI_RENDERER_LATER_MS = 3_000L;
+
     /** When the page's renderer last crashed (elapsedRealtime); kept across recreations. */
     private static long lastRendererCrashAt = -CRASH_LOOP_MS;
 
@@ -32,20 +34,31 @@ public class MainActivity extends BridgeActivity {
     /** Inside onCreate: Capacitor replays the launch intent through onNewIntent there. */
     private boolean creating = false;
 
+    /** An activity was created in this process already (false again after Android stopped it). */
+    private static boolean processStarted = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         // Custom plugins must be registered before super.onCreate() creates the bridge.
         registerPlugin(JukePlayerPlugin.class);
         registerPlugin(MusicPlugin.class);
         registerPlugin(SecureStorePlugin.class);
-        LaunchOptions.updateFrom(this, getIntent());
+        Intent launch = getIntent();
+        // Recreated from its saved state in a new process (Android stopped the app; the launcher
+        // or Recents brought it back): the intent is the one that first opened it, not a new tap.
+        if (savedInstanceState != null && !processStarted && LaunchOptions.opensNowPlaying(launch)) {
+            launch.setAction(Intent.ACTION_MAIN);
+        }
+        processStarted = true;
+        LaunchOptions.updateFrom(this, launch);
         creating = true;
         try {
             super.onCreate(savedInstanceState);
         } finally {
             creating = false;
         }
-        getBridge().addWebViewListener(new RendererWatch());
+        // No bridge without a working WebView (Capacitor shows its own error then).
+        if (getBridge() != null) getBridge().addWebViewListener(new RendererWatch());
         // CI only (debuggable builds): ci_music_search / ci_artist / ci_lyrics / ci_artist_page extras log one check each.
         MusicPlugin.maybeRunCiChecks(this, getIntent());
     }
@@ -63,6 +76,9 @@ public class MainActivity extends BridgeActivity {
         // The latest intent is the activity's: a recreated activity (a new page) starts from it,
         // not from the one that first launched the app.
         setIntent(intent);
+        // The page is gone (its renderer died in the background) and comes back in onResume:
+        // the new page takes this intent (a notification tap opens Now Playing there).
+        if (recreateOnResume) return;
         super.onNewIntent(intent);
         MusicPlugin.maybeRunCiChecks(this, intent);
         maybeCrashRendererForCi(intent);
@@ -116,12 +132,21 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
-    /** CI only (debuggable builds): `--es ci_renderer kill|crash` ends the page's renderer. */
+    /**
+     * CI only (debuggable builds): `--es ci_renderer kill|crash` ends the page's renderer
+     * (`kill-later`: in 3 s, after the test has sent the app to the background).
+     */
     private void maybeCrashRendererForCi(Intent intent) {
         String url = LaunchOptions.ciRendererUrl(this, intent);
         if (url == null) return;
+        boolean later = LaunchOptions.ciRendererLater(intent);
         intent.removeExtra("ci_renderer"); // once: not again for the recreated activity
-        WebView webView = getBridge().getWebView();
-        if (webView != null) webView.loadUrl(url);
+        WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+        if (webView == null) return;
+        if (later) {
+            webView.postDelayed(() -> webView.loadUrl(url), CI_RENDERER_LATER_MS);
+        } else {
+            webView.loadUrl(url);
+        }
     }
 }
