@@ -9,6 +9,18 @@
 - Messages at the bottom can be swiped away, left or right, and only one shows at a time: a new one replaces the last (quick taps no longer stack "Added" and "Removed"). A message also goes as soon as you touch or scroll anywhere else; Undo stays a tap on the message itself.
 - Settings → Updates: CyberJuke checks GitHub for a newer release (once a day at most; can be turned off, or checked on request). A new release shows at the top of Settings with a Download link, and as a dot on the Settings tab. Installs from F-Droid update through F-Droid and never check.
 
+### Fixes
+- A scroll that starts on the seek bar scrolls Now Playing and no longer seeks.
+- Messages at the bottom no longer cover back-to-top or the YouTube banner's [Try now]; a message without Undo lets a tap through to what's under it.
+- A quick second tap where a starred tile was no longer stars the tile that slid into its place.
+- Genre and artist names fit their tiles on narrow phones instead of breaking mid-word.
+- The A–Z letter while fast-scrolling skips a letter whose tiles are all in Favourites.
+- Keyboard and screen-reader focus stays put when a star moves its tile, when Up next rows move or go, and after Clear history.
+- Settings → Updates shows the time of the last check.
+- Now Playing, the Library and Recently played do much less work while music plays (Now Playing redrew itself every second); long histories load as you scroll.
+- After Android stopped the app: a tap on the music notification opens Now Playing even if the page had to reload; a list of over 500 tracks comes back at the right place; Autoplay and audio quality settings apply to a media-key resume; a restored session keeps which tracks are members-only (and drops them when signed out).
+- Playback that YouTube paused resumes only where it was playing (not on the speaker once headphones are gone), keeps the phone awake for it when Play was pressed meanwhile, and a pause key cancels it.
+
 ## [1.0.2] - 2026-10-09
 
 ### The app
