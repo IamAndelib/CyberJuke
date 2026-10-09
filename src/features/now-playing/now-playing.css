@@ -194,14 +194,27 @@
   position: relative;
 }
 .np-meta {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
   padding: 0 calc(var(--gutter) - 8px) 0 calc(var(--gutter) + 4px);
+}
+/* Title over artist, the heart centred on both lines (as music players do). */
+.np-id {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.np-id:last-child {
+  margin-bottom: 12px;
 }
 .np-titles {
   flex: 1;
   min-width: 0;
+}
+.np-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
 }
 .np-title {
   font-family: var(--font-display);
@@ -211,7 +224,7 @@
 .np-artist {
   font-size: 15px;
   color: var(--color-fg-dim);
-  margin: 0 0 12px;
+  margin: 2px 0 0;
 }
 
 /* The range is 48px tall (the touch area); the bar drawn in it stays 12px. */
@@ -562,10 +575,7 @@ button.lyr-line {
   color: var(--color-accent);
 }
 .np-members {
-  display: inline-block;
-  margin-right: 8px;
   font-size: 12px;
-  vertical-align: middle;
 }
 
 /* M2: Up, Down and Remove are 48x48 with 8px between them. */

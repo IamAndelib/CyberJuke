@@ -365,27 +365,34 @@ function NowPlayingContent() {
           </div>
 
           <div class="np-meta">
-            <div class="np-titles">
-              <h2 class="np-title" data-testid="np-title">
-                <Marquee text={t.title} />
-              </h2>
-              <NpArtist track={t} />
-              {t.membersOnly && <MembersTag class="np-members" />}
-              {t.genre && (
-                <button class="tag np-genre" onClick={() => openGenrePage(t.genre)} aria-label={`Open genre ${t.genre}`} data-testid="np-genre">
-                  {t.genre}
-                </button>
-              )}
+            {/* Title and artist as one block, the heart centred beside both (it never sits on the scrolling title). */}
+            <div class="np-id">
+              <div class="np-titles">
+                <h2 class="np-title" data-testid="np-title">
+                  <Marquee text={t.title} />
+                </h2>
+                <NpArtist track={t} />
+              </div>
+              <button
+                class={'icon-btn like' + (isFav ? ' on' : '')}
+                aria-pressed={isFav}
+                aria-label={isFav ? 'Remove from liked' : 'Like'}
+                onClick={() => toggleLikeWithUndo(t)}
+                data-testid="np-like"
+              >
+                <Icon name={isFav ? 'heart' : 'heartOutline'} size={28} />
+              </button>
             </div>
-            <button
-              class={'icon-btn like' + (isFav ? ' on' : '')}
-              aria-pressed={isFav}
-              aria-label={isFav ? 'Remove from liked' : 'Like'}
-              onClick={() => toggleLikeWithUndo(t)}
-              data-testid="np-like"
-            >
-              <Icon name={isFav ? 'heart' : 'heartOutline'} size={28} />
-            </button>
+            {(t.membersOnly || t.genre) && (
+              <div class="np-tags">
+                {t.membersOnly && <MembersTag class="np-members" />}
+                {t.genre && (
+                  <button class="tag np-genre" onClick={() => openGenrePage(t.genre)} aria-label={`Open genre ${t.genre}`} data-testid="np-genre">
+                    {t.genre}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <SeekBar s={s} />

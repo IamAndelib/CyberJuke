@@ -147,22 +147,33 @@ describe('searchTracks', () => {
     expect(ids('BEYONCÉ')).toEqual(['beyonce']);
     expect(ids('ac/dc')[0]).toBe('acdc');
     expect(ids('ac dc')[0]).toBe('acdc');
-    expect(ids('@kaguya').sort()).toEqual(['beyonce', 'citypop2']);
+    expect(ids('@kaguya')).toEqual([]); // a poster's name, not music
     expect(ids('aint no sunshine')).toEqual([]); // "ain t" splits; "aint" is not a typo target (4 letters)
     expect(ids('ain’t no sunshine')).toEqual(['soul']);
   });
 
   it('requires every query word to match (AND)', () => {
     expect(ids('city pop').sort()).toEqual(['citypop', 'citypop2']);
-    expect(ids('@centipede city pop')).toEqual(['citypop']);
+    // A poster's name is no search term (only the music counts).
+    expect(ids('@centipede city pop')).toEqual([]);
     expect(ids('iron metallica')).toEqual([]);
   });
 
-  it('ranks title/artist matches above post-title matches, phrase first', () => {
+  it('ranks a title phrase first, then artists', () => {
     const r = ids('dark');
     expect(r[0]).toBe('darklord'); // title word + phrase bonus
-    expect(r.indexOf('darkthrone')).toBeLessThan(r.indexOf('postdark'));
-    expect(r.at(-1)).toBe('postdark');
+    expect(r).toContain('darkthrone');
+  });
+
+  it('finds the music only: not who posted it, nor the post caption', () => {
+    // "dark" only in the caption of postdark; "centipede", "eddie" only as posters.
+    expect(ids('dark')).not.toContain('postdark');
+    expect(ids('listening')).toEqual([]);
+    expect(ids('eddie')).toEqual([]);
+    expect(ids('centipede')).toEqual([]);
+    // The same word in a title or artist still finds that track.
+    const named = t({ id: 'named', title: 'Eddie', artist: 'Someone', by: 'z' });
+    expect(searchTracks(buildIndex([...CATALOG, named]), 'eddie').map((x) => x.id)).toEqual(['named']);
   });
 
   it('breaks ties by newest post', () => {

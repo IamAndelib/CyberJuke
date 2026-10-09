@@ -364,3 +364,16 @@ test('clearing the field shows the empty-query view at once, never results for t
   expect(stale).toBe(false);
   await expect(page.getByTestId('here-places')).toBeVisible();
 });
+
+test('Jukebox search finds music, not the people who posted it', async ({ page }) => {
+  await start(page);
+  // A poster's name, read off a row ("by @name").
+  const by = (await page.getByTestId('track-row').first().locator('.by').textContent())!.replace(/^by @/, '').trim();
+  await openSearch(page);
+  await page.getByTestId('search-input').fill(by);
+  await expect(page.getByTestId('search-empty')).toBeVisible();
+  await expect(page.getByTestId('search').getByTestId('track-row')).toHaveCount(0);
+  // An artist still finds their tracks.
+  await page.getByTestId('search-input').fill('neon');
+  await expect(page.getByTestId('search-results').getByTestId('track-row').first()).toBeVisible();
+});

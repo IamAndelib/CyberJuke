@@ -22,10 +22,10 @@ The first stable release.
 - Artist, genre and album pages open on the tab you're on; Back returns exactly where you were. Tapping the active tab scrolls to the top, then back to its first page.
 - Undo for unlike, unfavourite, removing from Up next and clearing history; confirmation before clearing history and signing out.
 - ★ marks favourite genres and artists (♥ is only for liked tracks); a genre or artist can be starred from its own page too.
-- Long titles scroll in Now Playing and the mini player; long-press a row for its menu; swipe up on the mini player.
+- Now Playing: the ♥ sits beside the title and artist; long titles scroll in Now Playing and the mini player; long-press a row for its menu; swipe up on the mini player.
 - Smoother pull to refresh, sheets and scrolling; bigger touch targets; no accidental text selection; a tap that stops a scroll no longer plays a track.
 - Settings → Licenses lists every bundled library and opens their full license texts.
-- Recent searches (with Clear all); "Here" search on the Genres and Artists tabs; shorter Settings text; better contrast in the C64, Matrix, Crypt and Bubblegum themes.
+- Search finds the music only (title, artist, genre), not who posted it. Recent searches (with Clear all); "Here" search on the Genres and Artists tabs; shorter Settings text; better contrast in the C64, Matrix, Crypt and Bubblegum themes.
 
 ### YouTube
 - **"YouTube is limiting requests" happens far less and clears by itself.**

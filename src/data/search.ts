@@ -7,7 +7,8 @@
  *  - every query word must match somewhere (AND), taking its best match:
  *      exact 1.0, start of a word 0.9, inside a word 0.6 (3+ letters),
  *      typo 0.5 (Damerau-Levenshtein 1 for 5-7 letters, 2 for 8+; never for 1-4);
- *  - each match is weighted by field (title/artist 3, genre/poster 2, post title 1);
+ *  - each match is weighted by field (title/artist 3, genre 2). Only the music counts: who
+ *    posted a track, and the post's caption, are not searched;
  *  - +2 when the whole query appears in the title or artist as a phrase starting at a
  *    word boundary; ties go to Jukebox tracks before Global ones, then the newest post.
  */
@@ -20,8 +21,6 @@ const PHRASE_BONUS = 2;
 const W_TITLE = 3;
 export const W_ARTIST = 3;
 export const W_GENRE = 2;
-export const W_POSTER = 2;
-const W_POST_TITLE = 1;
 
 /** Letters NFKD leaves alone but people type without the diacritic. */
 const FOLD: Record<string, string> = { ß: 'ss', æ: 'ae', œ: 'oe', ø: 'o', ł: 'l', đ: 'd', ð: 'd', þ: 'th', ı: 'i' };
@@ -98,8 +97,6 @@ export function buildIndex(tracks: Track[]): SearchIndex {
       { words: words(track.title), weight: W_TITLE },
       { words: words(track.artist), weight: W_ARTIST },
       { words: words(track.genre), weight: W_GENRE },
-      { words: words(track.by), weight: W_POSTER },
-      { words: words(track.postTitle), weight: W_POST_TITLE },
     ],
     phrase: [' ' + normalize(track.title) + ' ', ' ' + normalize(track.artist) + ' '],
   }));

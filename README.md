@@ -31,7 +31,7 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 - **Most saved**: the tracks people saved most on Cyberspace, this month or all time.
 - **Shuffle the Jukebox**: one tap for a random mix from the whole Jukebox.
 - **Autoplay**: when a list ends, similar songs keep playing. A Jukebox song leads to Jukebox songs picked by artist, genre and what the same people share; a Global song leads to that song's radio. Tracks you add with "Add to queue" always stay next.
-- **Search** every track on the Jukebox by title, artist, genre or @poster, with typo tolerance and recent searches. **Here** searches only the page you're on: a genre, an artist, an album, your library, or the Genres and Artists lists themselves.
+- **Search** every track on the Jukebox by title, artist or genre, with typo tolerance and recent searches. **Here** searches only the page you're on: a genre, an artist, an album, your library, or the Genres and Artists lists themselves.
 - **Genres** and **Artists**: browse everything shared on the Jukebox, A–Z or by popularity, and ★ your favourites to pin them to the top. An artist page puts what Cyberspace people shared first, then the artist's top songs, albums, live albums, EPs and singles from the artist's own page.
 - **Global search** (optional): a separate Global mode for any song, album or artist beyond the Jukebox. Global tracks play, like and queue like any other, but never show up on Home, Genres, Most saved or Shuffle.
 - **Sign in with Cyberspace** (optional): the Jukebox also shows the members-only shared tracks, marked `[members]`. See [Signing in](#signing-in).
