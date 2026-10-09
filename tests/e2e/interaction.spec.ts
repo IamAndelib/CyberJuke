@@ -499,3 +499,43 @@ test('a sheet is modal: what is behind it is inert and takes no pan, focus goes 
   await expect.poll(() => page.locator('.app').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
   await expect(rowMore).toBeFocused();
 });
+
+test('a toast never covers back-to-top or the block banner, and a plain one lets taps through', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('track-play').first().click();
+  const home = page.getByTestId('screen-home');
+  await home.evaluate((el) => el.scrollTo(0, el.clientHeight * 3));
+  const top = home.getByTestId('back-to-top');
+  await expect(top).toBeVisible();
+  const overlaps = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+  // Unliked from a row's ⋯ menu: an Undo toast, clear of back-to-top, which still works.
+  const row = page.locator('[data-testid="screen-home"] [data-testid="track-more"]').nth(30);
+  await row.click();
+  await page.getByTestId('menu-like').click();
+  await row.click();
+  await page.getByTestId('menu-like').click();
+  const toast = page.getByTestId('toast');
+  await expect(toast).toHaveText(/Removed from Liked/);
+  expect(overlaps(await box(toast), await box(top))).toBe(false);
+  await touchTap(page, top);
+  await expect.poll(() => scrollTopOf(page, 'screen-home')).toBe(0);
+
+  // A plain toast, wherever it sits, never takes a tap: the tap lands on what's under it.
+  await expect(toast).toHaveCount(0);
+  await page.getByTestId('track-more').first().click();
+  await page.getByTestId('menu-like').click();
+  await expect(toast).toHaveText('Added to Liked songs');
+  expect(await toast.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('none');
+
+  // While YouTube is blocked, the banner sits above the mini player: the toast sits above both.
+  await page.evaluate(() => (window as unknown as { __cyberjukeBlock: { blocked(e: unknown): void } }).__cyberjukeBlock.blocked({ until: Date.now() + 5 * 60_000, reason: 'BOT_CHECK' }));
+  const banner = page.getByTestId('block-banner');
+  await expect(banner).toBeVisible();
+  await page.getByTestId('track-more').first().click();
+  await page.getByTestId('menu-like').click();
+  await expect(toast).toHaveText(/Removed from Liked/);
+  const t = await box(toast);
+  expect(t.y + t.height).toBeLessThanOrEqual((await box(banner)).y);
+});

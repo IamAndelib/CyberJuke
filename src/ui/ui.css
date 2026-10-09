@@ -873,12 +873,12 @@
   position: fixed;
   left: 0;
   right: 0;
+  /* Set from the page as each toast shows (Toasts.tsx); this until then. */
   bottom: calc(var(--tabbar-h) + var(--mini-h) + 18px + var(--safe-bottom));
   z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
   pointer-events: none;
   padding: 0 var(--gutter);
 }
@@ -892,10 +892,10 @@
   font-size: 13px;
   box-shadow: 4px 4px 0 var(--color-border);
   animation: toast-in 0.18s steps(3);
-  /* Swiped away sideways (Toasts.tsx). The browser takes no part in a touch on a toast:
-     no pan, so no fling for the next tap to stop (Android drops that tap). A toast sits
-     outside every scroller, so a vertical drag on it never scrolled anything anyway. */
-  pointer-events: auto;
+  /* A plain toast takes no taps: a touch on it lands on what's under it (and, like any
+     touch, dismisses it). One with an action (Undo) takes taps, and a sideways swipe
+     dismisses it (Toasts.tsx). The browser takes no part in a touch on that one: no pan,
+     so no fling for the next tap to stop (Android drops that tap). */
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;

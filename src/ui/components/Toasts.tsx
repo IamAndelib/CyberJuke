@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import { reducedMotion } from '../../core/motion';
 import { dismissAllToasts, dismissToast, holdToast, releaseToast, runToastAction, toasts } from '../../stores/toast';
 
@@ -9,8 +9,37 @@ const SWIPE_AWAY_FRACTION = 0.35;
 const SWIPE_FLICK_PX_PER_MS = 0.5;
 /** The fly-out (and spring-back), in the app's stepped motion. */
 const SWIPE_ANIM_MS = 150;
+/** Room between a toast and what's under it. */
+const TOAST_GAP_PX = 18;
+const TOAST_GAP_ABOVE_BUTTON_PX = 12;
+
+/**
+ * Where the toasts go (px from the bottom of the window): above whatever is docked under the
+ * page (tab bar, mini player, the block banner), and above a back-to-top button showing there,
+ * so a toast never sits on something the user may want to tap.
+ */
+function toastBottom(): number | null {
+  const main = document.querySelector('.main');
+  if (!main) return null;
+  let bottom = innerHeight - main.getBoundingClientRect().bottom + TOAST_GAP_PX;
+  for (const top of document.querySelectorAll('.totop.on')) {
+    // Not one on another tab or a page underneath (content-visibility: hidden).
+    if (typeof top.checkVisibility === 'function' && !top.checkVisibility()) continue;
+    const r = top.getBoundingClientRect();
+    if (!r.width) continue;
+    bottom = Math.max(bottom, innerHeight - r.top + TOAST_GAP_ABOVE_BUTTON_PX);
+  }
+  return bottom;
+}
 
 export function Toasts() {
+  const list = toasts.value;
+  const box = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!list.length || !box.current) return;
+    const bottom = toastBottom();
+    box.current.style.bottom = bottom == null ? '' : `${bottom}px`;
+  }, [list]);
   // A toast goes as soon as the user does something else: a finger (or click) anywhere but on
   // a toast, or a wheel scroll. Only the user's own input counts; the app's own scrolling
   // (lyrics following the song, back-to-top) doesn't.
@@ -28,8 +57,8 @@ export function Toasts() {
     };
   }, []);
   return (
-    <div class="toasts" aria-live="polite" data-testid="toasts">
-      {toasts.value.map((t) => (
+    <div ref={box} class="toasts" aria-live="polite" data-testid="toasts">
+      {list.map((t) => (
         <ToastItem key={t.id} id={t.id} text={t.text} action={t.action?.label} />
       ))}
     </div>
