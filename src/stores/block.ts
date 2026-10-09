@@ -2,9 +2,10 @@
  * YouTube resilience state for the UI (Y1).
  *
  * - `blocked`: YouTube is refusing requests from this network (bot check, HTTP 429,
- *   a 403 on a fresh stream). Native pauses playback and backs off until `until`;
- *   the banner says when to try again. It clears on `unblocked`, or by itself once
- *   `until` has passed.
+ *   a 403 on a fresh stream), after native tried IPv4 and one retry. Native pauses
+ *   playback and backs off until `until`, then resumes by itself; the banner says when
+ *   and offers "Try now". It clears on `unblocked` (also sent when the network or the
+ *   IPv4 setting changes), or by itself once `until` has passed.
  * - `broken`: parsing failed in a way that means YouTube changed something; only an
  *   app update fixes that. Kept for the session.
  * Both can be dismissed; a new block (a later `until`) shows the banner again.
@@ -125,8 +126,40 @@ export function minutesLeft(until: number, now: number): number {
   return Math.max(1, Math.ceil((until - now) / 60_000));
 }
 
+/** The banner: what happened and when CyberJuke tries again by itself (it resumes playback then). */
 export function blockedText(until: number, now: number): string {
-  return `YouTube is limiting requests from your network. Try again in ${minutesLeft(until, now)} min, or switch between Wi-Fi and mobile data.`;
+  return `YouTube is limiting requests from your network. Trying again in ${minutesLeft(until, now)} min.`;
+}
+
+const REASON_TEXT: Record<string, string> = {
+  BOT_CHECK: 'bot check',
+  RATE_LIMIT: 'rate limit',
+  STREAM_FORBIDDEN: 'stream refused',
+};
+
+/** "14:02": a time today, or "3 Oct 14:02" on another day (the device's locale). */
+function when(at: number, now: number): string {
+  const d = new Date(at);
+  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === new Date(now).toDateString()) return time;
+  return `${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} ${time}`;
+}
+
+/**
+ * The Settings diagnostics line (for bug reports): "Connection: IPv4 (switched by Auto) ·
+ * last limit 14:02, bot check (music)". Null when there is nothing to show (the web player).
+ */
+export function netStatusText(
+  s: { family?: 'IPv4' | 'IPv6'; autoIpv4: boolean; lastLimit?: { at: number; reason: string; surface: string } } | null,
+  now: number,
+): string | null {
+  if (!s) return null;
+  const family = s.family ? `${s.family}${s.autoIpv4 ? ' (switched by Auto)' : ''}` : s.autoIpv4 ? 'IPv4 (switched by Auto)' : 'not used yet';
+  const l = s.lastLimit;
+  const limit = l
+    ? `last limit ${when(l.at, now)}, ${REASON_TEXT[l.reason] ?? 'limit'}${l.surface === 'music' ? ' (music)' : ''}`
+    : 'no limits so far';
+  return `Connection: ${family} · ${limit}`;
 }
 
 export const BROKEN_TEXT = 'YouTube changed something. Update CyberJuke when a new version is out.';

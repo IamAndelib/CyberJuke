@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.yt
 
+import io.github.iamandelib.cyberjuke.net.BlockedException
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import org.schabi.newpipe.extractor.MediaFormat
 import org.schabi.newpipe.extractor.NewPipe
@@ -9,20 +10,24 @@ import org.schabi.newpipe.extractor.exceptions.ContentNotAvailableException
 import org.schabi.newpipe.extractor.exceptions.ExtractionException
 import org.schabi.newpipe.extractor.exceptions.GeographicRestrictionException
 import org.schabi.newpipe.extractor.exceptions.PaidContentException
+import org.schabi.newpipe.extractor.exceptions.ParsingException
 import org.schabi.newpipe.extractor.exceptions.PrivateContentException
 import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
 import org.schabi.newpipe.extractor.exceptions.SignInConfirmNotBotException
 import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
+import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.AudioTrackType
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import org.schabi.newpipe.extractor.stream.StreamInfo
+import org.schabi.newpipe.extractor.stream.VideoStream
 import java.io.IOException
 
 /**
  * The ONLY file that touches the NewPipeExtractor stream API (checked against commit
  * 65cabc2ba5216ee871ace4a9963c08bdbf5d5dc0, which only asks YouTube's visionOS client for
  * streams: the ANDROID, iOS and WEB_EMBEDDED_PLAYER clients were removed upstream, PR #1529).
- * If a NewPipeExtractor bump breaks compilation, the fix should be confined to this file.
+ * If a NewPipeExtractor bump breaks compilation, the fix should be confined to this file (and
+ * [LeanRequests], which knows which of the extractor's requests streams don't need).
  */
 internal object YtCompat {
 
@@ -51,51 +56,104 @@ internal object YtCompat {
         initialized = true
     }
 
-    /** Blocking network call. Never call on the main thread. */
+    /** Use the lean path ([extractLean]) first. Off only in tests of the full path. */
+    @Volatile
+    var lean = true
+
+    /** Why the lean path last fell back to the full one (diagnostics, the canary). */
+    @Volatile
+    var lastLeanFallback: String? = null
+        private set
+
+    /**
+     * Blocking network call. Never call on the main thread. The lean path first; anything
+     * unexpected there (a parse failure, no streams) falls back to the full StreamInfo
+     * extraction. YouTube's own answers (blocked, gone, offline) are final: the full path
+     * would hear the same, with more requests.
+     */
     fun extract(ytId: String): Extracted {
         ensureInit()
-        val info = StreamInfo.getInfo(ServiceList.YouTube, "https://www.youtube.com/watch?v=$ytId")
-
-        val audio = info.audioStreams
-            .filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP && it.isUrl }
-            .map {
-                // getBitrate() is bps from the player response; getAverageBitrate() is the
-                // static itag table value in kbps.
-                val bitrate = when {
-                    it.bitrate > 0 -> it.bitrate
-                    it.averageBitrate > 0 -> it.averageBitrate * 1000
-                    else -> -1
-                }
-                Candidate(
-                    url = it.content,
-                    itag = it.itag,
-                    bitrate = bitrate,
-                    mimeType = it.format?.mimeType,
-                    originalTrack = it.audioTrackType == null ||
-                        it.audioTrackType == AudioTrackType.ORIGINAL,
-                )
+        if (lean) {
+            try {
+                return extractLean(ytId)
+            } catch (e: Exception) {
+                val kind = classify(e)
+                if (kind != FailureKind.BROKEN && kind != FailureKind.OTHER) throw e
+                lastLeanFallback = "${e.javaClass.simpleName}: ${e.message}"
             }
+        }
+        return extractFull(ytId)
+    }
 
-        val muxed = info.videoStreams
-            .filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP && it.isUrl && !it.isVideoOnly() }
-            .map {
-                Candidate(
-                    url = it.content,
-                    itag = it.itag,
-                    // Rank muxed streams by height: lowest first is what we want.
-                    bitrate = it.height,
-                    mimeType = it.format?.mimeType,
-                    originalTrack = true,
-                )
-            }
+    /**
+     * Only the requests streams come from: the visionOS client's visitor id and player
+     * response (2 requests instead of 5). The extractor's own code does the work, with the WEB
+     * metadata and `next` requests (title, thumbnails, related videos: unused here) answered
+     * locally by [DownloaderImpl] ([LeanRequests]). Throttling parameters are decoded by the
+     * extractor as usual.
+     */
+    fun extractLean(ytId: String): Extracted {
+        ensureInit()
+        val extractor = ServiceList.YouTube.getStreamExtractor(watchUrl(ytId))
+        LeanRequests.during { extractor.fetchPage() }
+        val out = Extracted(
+            audio = audioCandidates(extractor.audioStreams),
+            muxed = muxedCandidates(extractor.videoStreams),
+            hlsUrl = extractor.hlsUrl.takeIf { it.isNotBlank() },
+            durationSec = extractor.length,
+        )
+        if (out.audio.isEmpty() && out.muxed.isEmpty() && out.hlsUrl == null) {
+            throw ParsingException("lean: no streams in the player response")
+        }
+        return out
+    }
 
+    /** NewPipe's full extraction (every request StreamInfo makes). */
+    fun extractFull(ytId: String): Extracted {
+        ensureInit()
+        val info = StreamInfo.getInfo(ServiceList.YouTube, watchUrl(ytId))
         return Extracted(
-            audio = audio,
-            muxed = muxed,
+            audio = audioCandidates(info.audioStreams),
+            muxed = muxedCandidates(info.videoStreams),
             hlsUrl = info.hlsUrl?.takeIf { it.isNotBlank() },
             durationSec = info.duration,
         )
     }
+
+    private fun watchUrl(ytId: String) = "https://www.youtube.com/watch?v=$ytId"
+
+    private fun audioCandidates(streams: List<AudioStream>): List<Candidate> = streams
+        .filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP && it.isUrl }
+        .map {
+            // getBitrate() is bps from the player response; getAverageBitrate() is the
+            // static itag table value in kbps.
+            val bitrate = when {
+                it.bitrate > 0 -> it.bitrate
+                it.averageBitrate > 0 -> it.averageBitrate * 1000
+                else -> -1
+            }
+            Candidate(
+                url = it.content,
+                itag = it.itag,
+                bitrate = bitrate,
+                mimeType = it.format?.mimeType,
+                originalTrack = it.audioTrackType == null ||
+                    it.audioTrackType == AudioTrackType.ORIGINAL,
+            )
+        }
+
+    private fun muxedCandidates(streams: List<VideoStream>): List<Candidate> = streams
+        .filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP && it.isUrl && !it.isVideoOnly() }
+        .map {
+            Candidate(
+                url = it.content,
+                itag = it.itag,
+                // Rank muxed streams by height: lowest first is what we want.
+                bitrate = it.height,
+                mimeType = it.format?.mimeType,
+                originalTrack = true,
+            )
+        }
 
     /** m4a (AAC) is the most widely decodable; opus/webm is a close second. */
     fun isPreferredContainer(mimeType: String?): Boolean =
@@ -128,6 +186,7 @@ internal object YtCompat {
 
     /** Classify an extraction failure into a short, log-greppable reason. */
     fun describe(t: Throwable): String = when (t) {
+        is BlockedException -> "BOT_CHECK: YouTube back-off running (${t.reason})"
         is SignInConfirmNotBotException ->
             "BOT_CHECK: YouTube asks to sign in to confirm you're not a bot (IP blocked?): ${t.message}"
         is RateLimitedException -> "BOT_CHECK: rate limited by YouTube (HTTP 429): ${t.message}"

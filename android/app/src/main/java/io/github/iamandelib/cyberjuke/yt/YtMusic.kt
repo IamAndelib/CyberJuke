@@ -3,6 +3,7 @@ package io.github.iamandelib.cyberjuke.yt
 import io.github.iamandelib.cyberjuke.net.BlockedException
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.net.NetBlock
+import io.github.iamandelib.cyberjuke.net.Surface
 import org.schabi.newpipe.extractor.Image
 import org.schabi.newpipe.extractor.InfoItem
 import org.schabi.newpipe.extractor.ListExtractor.InfoItemsPage
@@ -138,7 +139,7 @@ internal object YtMusic {
      * [continuation], the page after it. Refused (BlockedException) during a back-off (Y1).
      */
     fun radio(videoId: String, continuation: String? = null): Radio.Page {
-        NetBlock.check()
+        NetBlock.check(Surface.MUSIC)
         YtCompat.ensureInit()
         val json = InnerTube.post("next", Radio.payload(videoId, continuation))
             ?: throw ContentNotAvailableException("radio $videoId not found")

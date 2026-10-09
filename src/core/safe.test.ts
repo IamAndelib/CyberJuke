@@ -48,6 +48,8 @@ describe('safePlayer', () => {
       onQueueLow: () => () => {},
       setQuality: vi.fn(fail),
       setNetworkPrefs: vi.fn(fail),
+      retryNow: vi.fn(fail),
+      netStatus: vi.fn(fail),
     };
   }
 
@@ -67,5 +69,13 @@ describe('safePlayer', () => {
     expect(toasts).toEqual([COMMAND_ERRORS.skipTo, COMMAND_ERRORS.move]);
     const commands = Object.keys(COMMAND_ERRORS) as (keyof typeof COMMAND_ERRORS)[];
     for (const c of commands) expect(typeof p[c]).toBe('function');
+  });
+
+  it('a failed status query is just no status: no toast', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const toasts: string[] = [];
+    const p = safePlayer(fake(), (t) => toasts.push(t));
+    await expect(p.netStatus()).resolves.toBeNull();
+    expect(toasts).toEqual([]);
   });
 });

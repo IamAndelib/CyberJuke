@@ -111,4 +111,15 @@ class StreamCacheTest {
         assertEquals(10_000L, PrefetchPolicy.delayMs(0L, 70_000L))
         assertEquals(0L, PrefetchPolicy.delayMs(5_000L, 40_000L)) // shorter than a minute
     }
+
+    @Test
+    fun theAddressAUrlIsBoundTo() {
+        val base = "https://rr1---sn-x.googlevideo.com/videoplayback?expire=1999999999&itag=251"
+        assertEquals(false, StreamUrls.boundToIpv6("$base&ip=203.0.113.9&id=o-x"))
+        assertEquals(true, StreamUrls.boundToIpv6("$base&ip=2a02%3A8108%3A1%3A%3A1&id=o-x"))
+        assertEquals(true, StreamUrls.boundToIpv6("$base&ip=2a02:8108:1::1"))
+        assertEquals(true, StreamUrls.boundToIpv6("https://manifest.googlevideo.com/api/manifest/hls_variant/expire/1/ip/2001%3Adb8%3A%3A1/file/index.m3u8"))
+        assertEquals(null, StreamUrls.boundToIpv6(base))
+        assertEquals(null, StreamUrls.boundToIpv6("$base&sip=1.2.3.4")) // not the ip parameter
+    }
 }

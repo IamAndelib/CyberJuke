@@ -6,7 +6,9 @@ import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.net.Hosts
 import io.github.iamandelib.cyberjuke.net.NetBlock
 import io.github.iamandelib.cyberjuke.net.NetEpoch
+import io.github.iamandelib.cyberjuke.net.Surface
 import io.github.iamandelib.cyberjuke.yt.YtCompat
+import io.github.iamandelib.cyberjuke.yt.YtGuard
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.util.concurrent.Callable
@@ -58,8 +60,8 @@ internal data class ResolvedStream(
  * - Concurrent resolutions of the same video share one extraction (in-flight map, pruned as
  *   each one finishes).
  * - While [NetBlock] holds a back-off, nothing is resolved, not even from the cache
- *   ([BlockedException]); a bot check or rate limit trips it. A successful extraction ends the
- *   back-off ladder ([NetBlock.requestSucceeded]).
+ *   ([BlockedException]). A bot check or rate limit switches to IPv4 or retries once, then
+ *   trips it ([YtGuard]); a successful extraction ends the unproven state.
  * - Re-resolving mid-track keeps the same itag ([reResolve], or a load that starts past byte 0),
  *   so the resumed bytes belong to the same file. Streams are also cached by itag for that.
  * - A change of network ([NetEpoch]) clears the cache; a URL extracted before it is not cached.
@@ -165,19 +167,17 @@ internal object StreamResolver {
         val gen = NetEpoch.generation
         val started = now()
         val extracted = try {
-            YtCompat.extract(ytId)
+            // Switches to IPv4 or retries once before a limit counts as a block (LimitPolicy).
+            YtGuard.run(Surface.PLAYBACK) { YtCompat.extract(ytId) }
         } catch (e: Exception) {
             val kind = YtCompat.classify(e)
             val reason = YtCompat.describe(e)
             // Details (with the id) only at info level: R8 strips them from release builds.
             Log.i(TAG, "resolve($ytId) failed: $reason")
             Log.w(TAG, "resolve failed: $kind ${e.javaClass.simpleName}")
-            kind.blockReason?.let { NetBlock.trip(it) }
             if (kind == FailureKind.BROKEN) PlayerBus.emitExtractorBroken(reason)
             throw ResolveException(ytId, reason, e, kind)
         }
-        // YouTube answered: the back-off ladder starts over (M1; a cached READY proves nothing).
-        NetBlock.requestSucceeded()
         val stream = choose(ytId, extracted, q, preferItag, gen)
         if (!Hosts.isAllowedMediaUrl(stream.url)) {
             throw ResolveException(ytId, "NO_STREAM: not an https googlevideo URL", null, FailureKind.CONTENT)

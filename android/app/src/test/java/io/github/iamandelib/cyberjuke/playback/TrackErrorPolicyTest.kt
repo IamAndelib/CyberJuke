@@ -40,7 +40,12 @@ class TrackErrorPolicyTest {
         assertEquals(Action.Block(BlockReason.BOT_CHECK), decideFor(ReCaptchaException("captcha", "https://www.google.com/sorry")))
         val tryLater = ContentNotAvailableException("Got error UNPLAYABLE: \"This content isn't available, try again later.\"")
         assertEquals(FailureKind.RATE_LIMIT, YtCompat.classify(tryLater))
-        assertEquals(Action.Block(BlockReason.RATE_LIMIT), TrackErrorPolicy.decide(Facts(kind = null, httpCode = 429)))
+        // A 429 on a stream gets one fresh link first; a second one is a block.
+        assertEquals(Action.ReResolve, TrackErrorPolicy.decide(Facts(kind = null, httpCode = 429)))
+        assertEquals(
+            Action.Block(BlockReason.RATE_LIMIT),
+            TrackErrorPolicy.decide(Facts(kind = null, httpCode = 429, alreadyReResolved = true)),
+        )
     }
 
     @Test
@@ -79,9 +84,10 @@ class TrackErrorPolicyTest {
     }
 
     @Test
-    fun forbiddenOnAFreshUrlIsABlockOnAnOldOneAReResolve() {
+    fun forbiddenOnAFreshUrlGetsOneFreshLinkThenBlocks() {
         val fresh = Facts(kind = null, httpCode = 403, urlAgeMs = 5_000L)
-        assertEquals(Action.Block(BlockReason.STREAM_FORBIDDEN), TrackErrorPolicy.decide(fresh))
+        // Retry once before calling it a block: the extraction tells whether we're blocked.
+        assertEquals(Action.ReResolve, TrackErrorPolicy.decide(fresh))
         val old = Facts(kind = null, httpCode = 403, urlAgeMs = 3L * 3600_000L)
         assertEquals(Action.ReResolve, TrackErrorPolicy.decide(old))
         assertEquals(Action.ReResolve, TrackErrorPolicy.decide(old.copy(urlAgeMs = null)))
@@ -109,8 +115,28 @@ class TrackErrorPolicyTest {
         val expired = Facts(kind = null, httpCode = 403, urlAgeMs = 5_000L, urlExpired = true)
         assertEquals(Action.ReResolve, TrackErrorPolicy.decide(expired))
         assertEquals(Action.ReResolve, TrackErrorPolicy.decide(expired.copy(httpCode = 410)))
-        // 429 stays a rate limit.
-        assertEquals(Action.Block(BlockReason.RATE_LIMIT), TrackErrorPolicy.decide(switched.copy(httpCode = 429)))
+        // 429 stays a rate limit once a fresh link was refused too.
+        assertEquals(
+            Action.Block(BlockReason.RATE_LIMIT),
+            TrackErrorPolicy.decide(switched.copy(httpCode = 429, alreadyReResolved = true)),
+        )
+    }
+
+    @Test
+    fun aRefusalOverIpv6SwitchesToIpv4WhenTheSettingIsAuto() {
+        val fresh403 = Facts(kind = null, httpCode = 403, urlAgeMs = 5_000L, viaIpv6 = true, canSwitchToIpv4 = true)
+        assertEquals(Action.SwitchToIpv4, TrackErrorPolicy.decide(fresh403))
+        assertEquals(Action.SwitchToIpv4, TrackErrorPolicy.decide(fresh403.copy(httpCode = 429, urlAgeMs = null)))
+        // Already on IPv4 (or the setting is Always / Off): one fresh link, as before.
+        assertEquals(Action.ReResolve, TrackErrorPolicy.decide(fresh403.copy(canSwitchToIpv4 = false)))
+        assertEquals(Action.ReResolve, TrackErrorPolicy.decide(fresh403.copy(viaIpv6 = false)))
+        // Switched and refused again: a block.
+        assertEquals(
+            Action.Block(BlockReason.STREAM_FORBIDDEN),
+            TrackErrorPolicy.decide(fresh403.copy(alreadyReResolved = true)),
+        )
+        // An old URL's 403 is expiry, not a refusal: no switch.
+        assertEquals(Action.ReResolve, TrackErrorPolicy.decide(fresh403.copy(urlAgeMs = 3L * 3600_000L)))
     }
 
     @Test

@@ -25,6 +25,16 @@ body:
       label: CyberJuke version
     validations:
       required: true
+  - type: input
+    id: connection
+    attributes:
+      label: Connection line
+      description: Settings → Playback & data, the line under IPv4 (for example "Connection: IPv4 (switched by Auto) · last limit 14:02, bot check"). Long-press to select it.
+  - type: dropdown
+    id: ipv4
+    attributes:
+      label: IPv4 setting
+      options: [Auto, Always, "Off"]
   - type: dropdown
     id: network
     attributes:

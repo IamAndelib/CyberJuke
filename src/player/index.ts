@@ -136,17 +136,17 @@ export function startAutoplay(): Autoplay {
 }
 
 /**
- * Send the player settings (audio quality, Y6 "Prefer IPv4", Autoplay) to the player now
+ * Send the player settings (audio quality, the Y6 IPv4 setting, Autoplay) to the player now
  * and on every change, and start autoplay. Called once the library has loaded, so native
  * never gets the defaults first.
  */
 export function startPlayerPrefs(): void {
   let lastQuality: string | null = null;
-  let lastIpv4: boolean | null = null;
+  let lastIpv4: string | null = null;
   let lastAutoplay: boolean | null = null;
   startAutoplay();
   effect(() => {
-    const { quality, preferIpv4 } = settings.value;
+    const { quality, ipv4 } = settings.value;
     const auto = autoplayEnabled();
     // Only the settings are followed: what the player calls read (its state) isn't.
     untracked(() => {
@@ -154,9 +154,9 @@ export function startPlayerPrefs(): void {
         lastQuality = quality;
         void player.setQuality(quality);
       }
-      if (preferIpv4 !== lastIpv4) {
-        lastIpv4 = preferIpv4;
-        void player.setNetworkPrefs({ preferIpv4 });
+      if (ipv4 !== lastIpv4) {
+        lastIpv4 = ipv4;
+        void player.setNetworkPrefs({ ipv4 });
       }
       if (auto !== lastAutoplay) {
         lastAutoplay = auto;

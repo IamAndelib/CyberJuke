@@ -8,7 +8,8 @@ import { toast } from '../stores/toast';
 import { TEST_HOOKS } from '../core/testHooks';
 import { Queue } from './queue';
 import type { RepeatMode } from './native';
-import { AUTOPLAY_LOW, EMPTY_STATE, LIST_CONTEXT, livePosition, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
+import type { Ipv4Mode } from '../stores/library';
+import { AUTOPLAY_LOW, EMPTY_STATE, LIST_CONTEXT, livePosition, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
 
 /* Minimal typings for the parts of the IFrame API we use. */
 interface YTPlayer {
@@ -43,6 +44,7 @@ declare global {
     onYouTubeIframeAPIReady?: () => void;
     /** e2e only: native-equivalent player calls made by the web player. */
     __cyberjukePlayerCalls?: unknown[][];
+    __cyberjukeNetStatus?: NetStatus;
   }
 }
 
@@ -404,8 +406,17 @@ export class WebPlayer implements Player {
     this.yt?.setPlaybackQuality?.(q === 'low' ? 'small' : 'default');
   }
 
-  async setNetworkPrefs(prefs: { preferIpv4: boolean }): Promise<void> {
+  async setNetworkPrefs(prefs: { ipv4: Ipv4Mode }): Promise<void> {
     // Nothing to do in a browser; e2e checks the call the native plugin would get.
-    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setNetworkPrefs', { preferIpv4: prefs.preferIpv4 }]);
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setNetworkPrefs', { ipv4: prefs.ipv4 }]);
+  }
+
+  async retryNow(): Promise<void> {
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['retryNow']);
+  }
+
+  async netStatus(): Promise<NetStatus | null> {
+    // e2e sets what native would report.
+    return (TEST_HOOKS && window.__cyberjukeNetStatus) || null;
   }
 }

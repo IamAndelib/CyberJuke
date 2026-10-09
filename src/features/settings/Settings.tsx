@@ -2,12 +2,16 @@ import {
   CHECK_EVERY_LABELS,
   CHECK_EVERY_OPTIONS,
   THEME_LABELS,
+  IPV4_MODES,
   THEMES,
   settings,
   updateSettings,
+  type Ipv4Mode,
   type ThemeId,
 } from '../../stores/library';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
+import { player } from '../../player';
+import { block, netStatusText } from '../../stores/block';
 import { AuthError, SIGN_UP_URL, auth, authErrorText } from '../../data/auth';
 import { toast } from '../../stores/toast';
 import { Screen } from '../../ui/components/Screen';
@@ -256,6 +260,30 @@ function Account() {
   );
 }
 
+const IPV4_LABELS: Record<Ipv4Mode, string> = { auto: 'Auto', always: 'Always', off: 'Off' };
+
+/** How the app reaches YouTube, for bug reports ("Tracks stopped playing" asks for it). */
+function NetStatusLine() {
+  const [text, setText] = useState<string | null>(null);
+  const ipv4 = settings.value.ipv4;
+  const blocked = block.blocked.value;
+  useEffect(() => {
+    let live = true;
+    void player.netStatus().then((s) => {
+      if (live) setText(netStatusText(s, Date.now()));
+    });
+    return () => {
+      live = false;
+    };
+  }, [ipv4, blocked]);
+  if (!text) return null;
+  return (
+    <p class="setting-desc net-status" data-testid="net-status">
+      {text}
+    </p>
+  );
+}
+
 export function Settings() {
   const s = settings.value;
   return (
@@ -300,13 +328,27 @@ export function Settings() {
             ))}
           </div>
         </div>
-        <div class="setting">
+        <div class="setting stack">
           <div class="setting-text">
-            <div class="setting-name">Prefer IPv4</div>
-            <div class="setting-desc">Try this if playback is blocked.</div>
+            <div class="setting-name">IPv4</div>
+            <div class="setting-desc">Auto switches when IPv6 gets blocked.</div>
           </div>
-          <Toggle on={s.preferIpv4} onChange={(v) => updateSettings({ preferIpv4: v })} label="Prefer IPv4" testid="ipv4-toggle" />
+          <div class="seg-grid three" role="radiogroup" aria-label="IPv4">
+            {IPV4_MODES.map((m) => (
+              <button
+                key={m}
+                role="radio"
+                aria-checked={s.ipv4 === m}
+                class={s.ipv4 === m ? 'on' : ''}
+                onClick={() => updateSettings({ ipv4: m })}
+                data-testid={`ipv4-${m}`}
+              >
+                {IPV4_LABELS[m]}
+              </button>
+            ))}
+          </div>
         </div>
+        <NetStatusLine />
         <div class="setting">
           <div class="setting-text">
             <div class="setting-name">Autoplay</div>

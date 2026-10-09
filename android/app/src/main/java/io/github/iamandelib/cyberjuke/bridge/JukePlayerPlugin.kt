@@ -28,7 +28,11 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.google.common.util.concurrent.ListenableFuture
 import io.github.iamandelib.cyberjuke.net.BlockReason
+import io.github.iamandelib.cyberjuke.net.Families
+import io.github.iamandelib.cyberjuke.net.Family
+import io.github.iamandelib.cyberjuke.net.Ipv4Mode
 import io.github.iamandelib.cyberjuke.net.NetBlock
+import io.github.iamandelib.cyberjuke.net.NetPrefs
 import io.github.iamandelib.cyberjuke.playback.BridgeLimits
 import io.github.iamandelib.cyberjuke.playback.ControllerKey
 import io.github.iamandelib.cyberjuke.playback.JukeCommands
@@ -51,7 +55,8 @@ import kotlin.math.roundToInt
  * Capacitor bridge to PlaybackService. Contract (TS side):
  *   setQueue, addItems, queueNext, removeItem, moveItem, play, pause, seekTo, skipToNext,
  *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, getState,
- *   getLaunchOptions, getBlockState, setNetworkPrefs, setGestureExclusion, addAutoplay,
+ *   getLaunchOptions, getBlockState, setNetworkPrefs, retryNow, getNetStatus,
+ *   setGestureExclusion, addAutoplay,
  *   setAutoplay, restore, removeIds; events 'state', 'trackError', 'blocked', 'unblocked', 'extractorBroken',
  *   'queueLow', 'tracks'.
  *
@@ -80,10 +85,12 @@ import kotlin.math.roundToInt
  *   `queueIdsUnchanged: true` is set. getState() always includes it.
  * - blocked { until: epoch ms, reason: 'BOT_CHECK' | 'RATE_LIMIT' | 'STREAM_FORBIDDEN' }: YouTube
  *   is backing us off (see [NetBlock]); sent when a back-off starts or is extended, and again
- *   when play()/setQueue is refused during one. unblocked {}: the back-off ran out, or playback
- *   worked again. extractorBroken { message }: YouTube changed something (parse failure).
+ *   when play()/setQueue is refused during one. unblocked {}: the back-off ran out or was lifted
+ *   (new network, IPv4 setting changed, retryNow), or playback worked again.
+ *   extractorBroken { message }: YouTube changed something (parse failure).
  * - While blocked, setQueue/play still update the queue but do not prepare (no extraction):
- *   playback stays paused with isBuffering false. After `until`, the next play() tries once.
+ *   playback stays paused with isBuffering false. Once the back-off ends, the service resumes
+ *   playback it stopped (or a play() it refused), within NetBlock.RESUME_WINDOW_MS.
  *
  * Threading: plugin methods arrive on Capacitor's background thread. Everything that
  * touches the MediaController is posted to the main thread; calls made before the
@@ -716,15 +723,55 @@ class JukePlayerPlugin : Plugin() {
     }
 
     /**
-     * `setNetworkPrefs({ preferIpv4: boolean })`: applies to the shared OkHttp client (NewPipe
-     * and streaming) right away and is persisted natively, so it also applies at the next
-     * service start before the web side loads.
+     * `setNetworkPrefs({ ipv4: 'auto' | 'always' | 'off' })` (or the pre-1.0 `{ preferIpv4 }`):
+     * applies to the shared OkHttp client (NewPipe and streaming) right away and is persisted
+     * natively, so it also applies at the next service start before the web side loads. A
+     * change lifts a running back-off: the next request goes out the new way.
      */
     @PluginMethod
     fun setNetworkPrefs(call: PluginCall) {
-        val preferIpv4 = call.getBoolean("preferIpv4") ?: return call.reject("preferIpv4 is required")
-        NetPrefsStore.setPreferIpv4(context, preferIpv4)
+        val mode = when (call.getString("ipv4")) {
+            "auto" -> Ipv4Mode.AUTO
+            "always" -> Ipv4Mode.ALWAYS
+            "off" -> Ipv4Mode.OFF
+            null -> when (call.getBoolean("preferIpv4")) {
+                true -> Ipv4Mode.ALWAYS
+                false -> Ipv4Mode.AUTO
+                null -> return call.reject("ipv4 is required")
+            }
+            else -> return call.reject("ipv4 must be 'auto', 'always' or 'off'")
+        }
+        val changed = mode != NetPrefs.mode
+        NetPrefsStore.setMode(context, mode)
+        if (changed) NetBlock.reset(keepLevel = false)
         call.resolve()
+    }
+
+    /** `retryNow()`: the banner's "Try now". Lifts the back-off; playback it stopped resumes. */
+    @PluginMethod
+    fun retryNow(call: PluginCall) {
+        NetBlock.reset(keepLevel = true)
+        call.resolve()
+    }
+
+    /**
+     * `getNetStatus()`: for the Settings diagnostics line. `{ family?: 'IPv4' | 'IPv6',
+     * ipv4: 'auto' | 'always' | 'off', autoIpv4: boolean, lastLimit?: { at, reason, surface } }`
+     */
+    @PluginMethod
+    fun getNetStatus(call: PluginCall) {
+        val out = JSObject()
+        Families.last?.let { out.put("family", if (it == Family.IPV6) "IPv6" else "IPv4") }
+        out.put("ipv4", NetPrefs.mode.name.lowercase())
+        out.put("autoIpv4", NetPrefs.mode == Ipv4Mode.AUTO && NetPrefs.autoActive)
+        NetBlock.lastLimit?.let {
+            val l = JSObject()
+            l.put("at", it.at)
+            l.put("reason", it.reason.name)
+            l.put("surface", it.surface.name.lowercase())
+            out.put("lastLimit", l)
+        }
+        call.resolve(out)
     }
 
     /**
@@ -777,6 +824,8 @@ class JukePlayerPlugin : Plugin() {
         val (until, reason) = NetBlock.active()
         if (reason == null) return false
         c.playWhenReady = false
+        // The user asked to play: it starts once the back-off is over.
+        NetBlock.wantResume()
         announceBlocked(until, reason, force = true)
         return true
     }

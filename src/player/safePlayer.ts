@@ -6,7 +6,7 @@
 import { safe, type Notify } from '../core/safe';
 import type { Player } from './types';
 
-type Command = Exclude<keyof Player, 'kind' | 'state' | 'onQueueLow'>;
+type Command = Exclude<keyof Player, 'kind' | 'state' | 'onQueueLow' | 'netStatus'>;
 
 /** What the toast says when a command fails. */
 export const COMMAND_ERRORS: Record<Command, string> = {
@@ -29,6 +29,7 @@ export const COMMAND_ERRORS: Record<Command, string> = {
   setAutoplay: "Couldn't change autoplay",
   setQuality: "Couldn't change the audio quality",
   setNetworkPrefs: "Couldn't change the network setting",
+  retryNow: "Couldn't try again",
 };
 
 /** Background work the user didn't ask for: a failure is logged, not toasted. */
@@ -46,6 +47,8 @@ export function safePlayer(p: Player, notify: Notify): Player {
     kind: p.kind,
     state: p.state,
     onQueueLow: (cb) => p.onQueueLow(cb),
+    // A query for a diagnostics line: a failure just shows nothing.
+    netStatus: () => p.netStatus().catch(() => null),
     playList: wrap('playList'),
     play: wrap('play'),
     pause: wrap('pause'),
@@ -65,5 +68,6 @@ export function safePlayer(p: Player, notify: Notify): Player {
     setAutoplay: wrap('setAutoplay'),
     setQuality: wrap('setQuality'),
     setNetworkPrefs: wrap('setNetworkPrefs'),
+    retryNow: wrap('retryNow'),
   };
 }

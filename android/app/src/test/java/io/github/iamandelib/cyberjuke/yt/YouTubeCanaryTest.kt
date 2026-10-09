@@ -57,17 +57,41 @@ class YouTubeCanaryTest {
     @Test
     fun resolvesFixedVideos() {
         for ((id, title) in VIDEOS) {
-            val ex = live("resolve $id ($title)") { YtCompat.extract(id) }
-            val streams = ex.audio + ex.muxed
-            assertTrue("$id: no progressive stream and no manifest", streams.isNotEmpty() || ex.hlsUrl != null)
-            assertTrue("$id: no audio-only stream", ex.audio.isNotEmpty())
-            assertTrue("$id: duration ${ex.durationSec}", ex.durationSec > 60)
-            for (s in streams) {
-                assertTrue("$id: stream host ${Hosts.hostOf(s.url)}", Hosts.isYouTubeMedia(Hosts.hostOf(s.url)))
-                assertTrue("$id: itag ${s.itag}", s.itag > 0)
-            }
-            assertTrue("$id: no expire= in the stream URL", ex.audio.all { StreamUrls.expireMs(it.url) != null })
+            checkStreams(id, live("resolve $id ($title)") { YtCompat.extract(id) })
         }
+    }
+
+    /**
+     * Both resolver paths, separately: the lean one (what the app uses; a failure here means it
+     * silently falls back to the full one, with more requests per song) and the full one (the
+     * fallback). The lean path must need fewer requests.
+     */
+    @Test
+    fun leanAndFullPathsBothResolve() {
+        val (id, title) = VIDEOS.first()
+        live("warm up") { YtCompat.extract(id) } // one-off requests (client version, JS player)
+        for ((vid, t) in VIDEOS.drop(1).ifEmpty { listOf(id to title) }) {
+            val before = DownloaderImpl.requests.get()
+            checkStreams(vid, live("lean resolve $vid ($t)") { YtCompat.extractLean(vid) })
+            val lean = DownloaderImpl.requests.get() - before
+            val mid = DownloaderImpl.requests.get()
+            checkStreams(vid, live("full resolve $vid ($t)") { YtCompat.extractFull(vid) })
+            val full = DownloaderImpl.requests.get() - mid
+            println("CANARY requests for $vid: lean $lean, full $full")
+            assertTrue("$vid: lean made $lean requests, full $full", lean < full)
+        }
+    }
+
+    private fun checkStreams(id: String, ex: YtCompat.Extracted) {
+        val streams = ex.audio + ex.muxed
+        assertTrue("$id: no progressive stream and no manifest", streams.isNotEmpty() || ex.hlsUrl != null)
+        assertTrue("$id: no audio-only stream", ex.audio.isNotEmpty())
+        assertTrue("$id: duration ${ex.durationSec}", ex.durationSec > 60)
+        for (s in streams) {
+            assertTrue("$id: stream host ${Hosts.hostOf(s.url)}", Hosts.isYouTubeMedia(Hosts.hostOf(s.url)))
+            assertTrue("$id: itag ${s.itag}", s.itag > 0)
+        }
+        assertTrue("$id: no expire= in the stream URL", ex.audio.all { StreamUrls.expireMs(it.url) != null })
     }
 
     /** The first bytes of a resolved stream, requested the way PlaybackService does. */

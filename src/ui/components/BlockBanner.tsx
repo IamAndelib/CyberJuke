@@ -1,10 +1,11 @@
 /**
  * Y1 banners, above the mini player, never in the way of the rest of the app:
- * - YouTube is limiting this network: when to try again (a countdown in whole
- *   minutes, updated as the minute changes) and what helps; dismissable until the next block.
+ * - YouTube is limiting this network: when CyberJuke tries again by itself (a countdown in
+ *   whole minutes, updated as the minute changes) and "Try now"; dismissable until the next block.
  * - YouTube changed something: only an app update helps; links to the releases.
  */
 import { useEffect, useState } from 'preact/hooks';
+import { player } from '../../player';
 import { block, blockedText, BROKEN_TEXT, msToNextMinute, RELEASES_URL } from '../../stores/block';
 import { Icon } from '../icons';
 import { openExternal } from '../links';
@@ -18,10 +19,22 @@ function Blocked({ until }: { until: number }) {
     return () => clearTimeout(t);
   });
   return (
-    <div class="block-banner" role="status" data-testid="block-banner">
+    <div class="block-banner" role="status" data-testid="block-banner" data-tap-through>
       <p class="block-text" data-testid="block-text">
         {blockedText(until, now)}
       </p>
+      <button
+        class="block-action"
+        onClick={() => {
+          // Native lifts the back-off at once (and resumes playback it stopped); if YouTube
+          // still refuses, a new `blocked` event brings the banner back.
+          void player.retryNow();
+          block.onUnblocked();
+        }}
+        data-testid="block-retry"
+      >
+        [Try now]
+      </button>
       <button class="icon-btn sm block-close" aria-label="Dismiss" onClick={() => block.dismiss()} data-testid="block-dismiss">
         <Icon name="close" size={20} />
       </button>
@@ -31,7 +44,7 @@ function Blocked({ until }: { until: number }) {
 
 function Broken() {
   return (
-    <div class="block-banner" role="status" data-testid="broken-banner">
+    <div class="block-banner" role="status" data-testid="broken-banner" data-tap-through>
       <p class="block-text">
         {BROKEN_TEXT}{' '}
         <a

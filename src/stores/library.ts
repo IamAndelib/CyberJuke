@@ -42,13 +42,20 @@ export interface Settings {
   showNsfw: boolean;
   quality: Quality;
   checkEvery: CheckEvery;
-  /** Y6: resolve YouTube hosts to IPv4 only (can help when a network's IPv6 is blocked). */
-  preferIpv4: boolean;
+  /**
+   * Y6: YouTube requests over IPv4. 'auto' switches by itself when YouTube limits a request
+   * that went out over IPv6 (remembered per kind of network for a day); 'always' and 'off'
+   * force it either way. Before 1.0.0 this was an on/off `preferIpv4`.
+   */
+  ipv4: Ipv4Mode;
   /** C3: when a list ends, keep playing similar songs. */
   autoplay: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { theme: 'dark', showNsfw: false, quality: 'high', checkEvery: 15, preferIpv4: false, autoplay: true };
+export type Ipv4Mode = 'auto' | 'always' | 'off';
+export const IPV4_MODES: readonly Ipv4Mode[] = ['auto', 'always', 'off'];
+
+export const DEFAULT_SETTINGS: Settings = { theme: 'dark', showNsfw: false, quality: 'high', checkEvery: 15, ipv4: 'auto', autoplay: true };
 
 const K_LIKED = 'liked';
 /** Old Preferences keys of history, migrated into the history file: timed entries, then the untimed list. */
@@ -118,17 +125,20 @@ export async function loadLibrary(): Promise<void> {
     artists.push(x.trim());
   }
   favoriteArtists.value = artists;
-  const merged = { ...DEFAULT_SETTINGS, ...(s && typeof s === 'object' ? s : {}) };
+  const stored = (s && typeof s === 'object' ? s : {}) as Partial<Settings> & { preferIpv4?: unknown };
+  const { preferIpv4, ...rest } = stored;
+  const merged = { ...DEFAULT_SETTINGS, ...rest };
   const migrated = THEME_MIGRATIONS[merged.theme as string];
   if (migrated) merged.theme = migrated;
   if (!THEMES.includes(merged.theme)) merged.theme = DEFAULT_SETTINGS.theme;
   if (merged.quality !== 'low') merged.quality = 'high';
   merged.showNsfw = merged.showNsfw === true;
-  merged.preferIpv4 = merged.preferIpv4 === true;
+  // The old on/off "Prefer IPv4": on is 'always'; off becomes the new default, 'auto'.
+  if (!IPV4_MODES.includes(rest.ipv4 as Ipv4Mode)) merged.ipv4 = preferIpv4 === true ? 'always' : DEFAULT_SETTINGS.ipv4;
   merged.autoplay = merged.autoplay !== false;
   if (!CHECK_EVERY_OPTIONS.includes(merged.checkEvery)) merged.checkEvery = DEFAULT_SETTINGS.checkEvery;
   settings.value = merged;
-  if (migrated) write(K_SETTINGS, merged);
+  if (migrated || preferIpv4 !== undefined) write(K_SETTINGS, merged);
 }
 
 /** Waits before each new attempt at reading a history file that couldn't be read. */

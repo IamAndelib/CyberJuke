@@ -118,6 +118,13 @@
   font-size: 12px;
   color: var(--color-fg-dim);
 }
+/* Diagnostics under the IPv4 setting: selectable, so it can be copied into a bug report. */
+.net-status {
+  margin: -4px 0 10px;
+  user-select: text;
+  -webkit-user-select: text;
+  overflow-wrap: anywhere;
+}
 
 .toggle {
   flex: none;
@@ -193,6 +200,9 @@
   border: var(--border-w) solid var(--color-fg);
   border-radius: var(--radius);
   overflow: hidden;
+}
+.seg-grid.three {
+  grid-template-columns: repeat(3, 1fr);
 }
 .seg-grid button {
   min-height: 44px;

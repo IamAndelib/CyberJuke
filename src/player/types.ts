@@ -1,5 +1,6 @@
 import type { ReadonlySignal } from '@preact/signals';
 import type { Track } from '../data/model';
+import type { Ipv4Mode } from '../stores/library';
 import type { RepeatMode } from './native';
 
 export type { RepeatMode };
@@ -139,8 +140,23 @@ export interface Player {
   /** Called when autoplay needs more tracks (native: the `queueLow` event). Returns an unsubscribe. */
   onQueueLow(cb: (e: QueueLow) => void): () => void;
   setQuality(q: 'high' | 'low'): Promise<void>;
-  /** Y6: prefer IPv4 for YouTube requests (native only; the web player ignores it). */
-  setNetworkPrefs(prefs: { preferIpv4: boolean }): Promise<void>;
+  /** Y6: the IPv4 setting for YouTube requests (native only; the web player ignores it). */
+  setNetworkPrefs(prefs: { ipv4: Ipv4Mode }): Promise<void>;
+  /** The block banner's "Try now": lift YouTube's back-off now (playback it stopped resumes). */
+  retryNow(): Promise<void>;
+  /** For the Settings diagnostics line; null where there is none (the web player). */
+  netStatus(): Promise<NetStatus | null>;
+}
+
+/** How CyberJuke reaches YouTube right now (native `getNetStatus`). */
+export interface NetStatus {
+  /** The address family of the latest YouTube request, if any yet. */
+  family?: 'IPv4' | 'IPv6';
+  ipv4: Ipv4Mode;
+  /** 'auto' has switched this network to IPv4. */
+  autoIpv4: boolean;
+  /** The last time YouTube limited us. */
+  lastLimit?: { at: number; reason: string; surface: 'playback' | 'music' };
 }
 
 /** Estimated live position, interpolated between samples while playing. */

@@ -12,11 +12,13 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import io.github.iamandelib.cyberjuke.lyrics.Lyrics
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.net.NetBlock
+import io.github.iamandelib.cyberjuke.net.Surface
 import io.github.iamandelib.cyberjuke.playback.PlayerBus
 import io.github.iamandelib.cyberjuke.playback.SessionPolicy
 import io.github.iamandelib.cyberjuke.playback.isDebuggable
 import io.github.iamandelib.cyberjuke.yt.ArtistPage
 import io.github.iamandelib.cyberjuke.yt.YtCompat
+import io.github.iamandelib.cyberjuke.yt.YtGuard
 import io.github.iamandelib.cyberjuke.yt.YtMusic
 import java.util.UUID
 import java.util.concurrent.ExecutorService
@@ -47,9 +49,10 @@ import java.util.concurrent.Executors
  *   radio({ ytId, next? }): Promise<MusicPage>   // the song's radio (songs, without the seed);
  *     next pages with the returned `next`.
  *
- * During a back-off every YouTube call (search, more, playlist, artist, artistPage,
- * artistReleases, radio, and the lyrics' YouTube Music fallback) rejects BOT_CHECK without a
- * request.
+ * During a back-off (of these music features, or of playback) every YouTube call (search,
+ * more, playlist, artist, artistPage, artistReleases, radio, and the lyrics' YouTube Music
+ * fallback) rejects BOT_CHECK without a request. A limit on one of them switches to IPv4 or
+ * retries once first (YtGuard), and then holds the music features only, not playback.
  *
  * Rejections carry code BOT_CHECK, NETWORK or UNAVAILABLE.
  *
@@ -207,7 +210,8 @@ class MusicPlugin : Plugin() {
         } else {
             null
         }
-        run(call, "lyrics '$artist - $title'", lyricsExecutor) {
+        // Not guarded: LRCLIB answers during a back-off; only the YouTube fallback is refused.
+        run(call, "lyrics '$artist - $title'", lyricsExecutor, guarded = false) {
             lyricsToJs(Lyrics.fetch(ytId, title, artist, album, duration))
         }
     }
@@ -222,11 +226,12 @@ class MusicPlugin : Plugin() {
     }
 
     /**
-     * Y1: no request at all while YouTube is backing us off (a block is network-wide): rejects
-     * BOT_CHECK. Lyrics still ask LRCLIB; their YouTube Music fallback is refused in InnerTube.
+     * Y1: no request at all while YouTube is backing the music features off (or playback, the
+     * same IP): rejects BOT_CHECK. Lyrics still ask LRCLIB; their YouTube Music fallback is
+     * refused in InnerTube.
      */
     private fun refuseWhileBlocked(call: PluginCall): Boolean {
-        if (!NetBlock.isBlocked()) return false
+        if (!NetBlock.isBlocked(Surface.MUSIC)) return false
         call.reject("BOT_CHECK: YouTube is limiting requests from this network", "BOT_CHECK")
         return true
     }
@@ -235,12 +240,15 @@ class MusicPlugin : Plugin() {
         call: PluginCall,
         what: String,
         pool: ExecutorService = executor,
+        guarded: Boolean = true,
         work: () -> JSObject,
     ) {
         try {
             pool.execute {
                 try {
-                    call.resolve(work())
+                    // A limit switches to IPv4 or retries once before it holds the music
+                    // features (never playback: YouTube judges those separately).
+                    call.resolve(if (guarded) YtGuard.run(Surface.MUSIC, work) else work())
                 } catch (t: Throwable) {
                     val code = YtMusic.errorCode(t)
                     val msg = YtMusic.describe(t)
@@ -257,12 +265,13 @@ class MusicPlugin : Plugin() {
     }
 
     /**
-     * A bot check or rate limit is network-wide: it starts the player's back-off too (Y1). A
-     * parse failure means YouTube changed something (the JukePlayer `extractorBroken` event).
+     * A bot check or rate limit holds the music features (YtGuard has tripped it already; this
+     * covers the unguarded lyrics). A parse failure means YouTube changed something (the
+     * JukePlayer `extractorBroken` event).
      */
     private fun reportFailure(t: Throwable) {
         val kind = YtCompat.classify(t)
-        kind.blockReason?.let { NetBlock.trip(it) }
+        kind.blockReason?.let { NetBlock.trip(it, Surface.MUSIC) }
         if (kind == FailureKind.BROKEN) PlayerBus.emitExtractorBroken(YtMusic.describe(t))
     }
 

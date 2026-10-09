@@ -1,6 +1,6 @@
 import { expect, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { openNowPlaying, seedStorage, start, waitForTracks } from '../helpers';
+import { openNowPlaying, playerCalls, seedStorage, start, waitForTracks } from '../helpers';
 
 /**
  * When things go wrong: YouTube limiting the network or changing something (Y1),
@@ -33,9 +33,8 @@ test('a block shows the banner with a countdown above the mini player; dismiss, 
 
   await page.evaluate(() => (window as unknown as { __cyberjukeBlock: Block }).__cyberjukeBlock.blocked({ until: Date.now() + 14 * 60_000 + 30_000, reason: 'BOT_CHECK' }));
   const banner = page.getByTestId('block-banner');
-  await expect(banner).toHaveText(
-    'YouTube is limiting requests from your network. Try again in 15 min, or switch between Wi-Fi and mobile data.',
-  );
+  await expect(page.getByTestId('block-text')).toHaveText('YouTube is limiting requests from your network. Trying again in 15 min.');
+  await expect(page.getByTestId('block-retry')).toHaveText('[Try now]');
   // Above the mini player, and the app stays usable.
   expect((await banner.boundingBox())!.y + (await banner.boundingBox())!.height).toBeLessThanOrEqual((await page.getByTestId('mini-player').boundingBox())!.y + 1);
   await page.getByTestId('tab-genres').click();
@@ -44,7 +43,7 @@ test('a block shows the banner with a countdown above the mini player; dismiss, 
 
   // The countdown follows a shorter block.
   await page.evaluate(() => (window as unknown as { __cyberjukeBlock: Block }).__cyberjukeBlock.blocked({ until: Date.now() + 90_000, reason: 'RATE_LIMIT' }));
-  await expect(page.getByTestId('block-text')).toContainText('Try again in 2 min');
+  await expect(page.getByTestId('block-text')).toContainText('Trying again in 2 min');
 
   // The ⋯ menu offers the track on YouTube while blocked.
   const ytId = /\/vi\/([^/]+)\//.exec((await page.locator('.mini .art img').getAttribute('src'))!)![1];
@@ -66,8 +65,22 @@ test('a block shows the banner with a countdown above the mini player; dismiss, 
 test('a block clears by itself when its time is up', async ({ page }) => {
   await start(page);
   await page.evaluate(() => (window as unknown as { __cyberjukeBlock: Block }).__cyberjukeBlock.blocked({ until: Date.now() + 1500, reason: 'BOT_CHECK' }));
-  await expect(page.getByTestId('block-banner')).toContainText('Try again in 1 min');
+  await expect(page.getByTestId('block-banner')).toContainText('Trying again in 1 min');
   await expect(page.getByTestId('block-banner')).toHaveCount(0, { timeout: 5000 });
+});
+
+test('"Try now" asks the player to try again at once and hides the banner; a new block brings it back', async ({ page }) => {
+  await start(page);
+  await blockHook(page, (b) => b.blocked({ until: Date.now() + 10 * 60_000, reason: 'BOT_CHECK' }));
+  const banner = page.getByTestId('block-banner');
+  await expect(banner).toBeVisible();
+  await page.getByTestId('block-retry').click();
+  await expect(banner).toHaveCount(0);
+  const calls = await playerCalls(page);
+  expect(calls.filter((c) => c[0] === 'retryNow')).toHaveLength(1);
+  // YouTube still refuses: native sends the next, longer block.
+  await blockHook(page, (b) => b.blocked({ until: Date.now() + 30 * 60_000, reason: 'BOT_CHECK' }));
+  await expect(page.getByTestId('block-text')).toContainText('Trying again in 30 min');
 });
 
 test('"YouTube changed something" links to the releases and can be dismissed', async ({ page }) => {

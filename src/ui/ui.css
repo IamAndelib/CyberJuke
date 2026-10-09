@@ -1262,6 +1262,21 @@ section[data-kind] > .shelf {
 .block-text a {
   color: var(--color-accent);
 }
+/* "Try now": a full-size touch target that doesn't squeeze the text. */
+.block-action {
+  flex: none;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0 8px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--color-accent);
+  touch-action: manipulation;
+}
+.block-action:active {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
 
 /* ---- Long lists: skip layout and paint of rows and sections far off screen ---------- */
 

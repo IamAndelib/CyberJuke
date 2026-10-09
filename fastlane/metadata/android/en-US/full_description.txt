@@ -26,7 +26,7 @@
 <p>Every Jukebox track is a YouTube link. CyberJuke plays the audio with NewPipeExtractor, the library behind NewPipe, and Media3/ExoPlayer. This is why it has the NonFreeNet anti-feature, and it means:</p>
 <ul>
 <li>When YouTube changes something, playback can stop working for everyone until NewPipeExtractor and CyberJuke are updated.</li>
-<li>YouTube sometimes limits requests from a network (VPNs, Tor and some mobile networks more often). CyberJuke then pauses instead of skipping, waits before trying again, and tells you; switching between Wi-Fi and mobile data usually helps. A "Prefer IPv4" setting can also help on some networks.</li>
+<li>YouTube sometimes limits requests from a network (VPNs, Tor and some mobile networks more often). CyberJuke switches to IPv4 by itself (YouTube flags IPv6 more often) and retries; if it is still refused, it pauses instead of skipping, tells you how long it waits, and resumes by itself.</li>
 <li>Some videos can't be played (removed, private, age-restricted or region-blocked); they are skipped.</li>
 </ul>
 

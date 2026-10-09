@@ -6,7 +6,9 @@ import io.github.iamandelib.cyberjuke.net.FailureKind
 /**
  * The decision part of PlaybackService's error handling, as a pure function (TrackErrorPolicyTest).
  * Only real per-video failures skip ahead; a block, a network failure or a broken extractor
- * pauses on the item, because every other track would fail the same way.
+ * pauses on the item, because every other track would fail the same way. A stream refusal
+ * (429, or 403 on a fresh URL) gets one fresh link first, over IPv4 when it came over IPv6 and
+ * the setting is Auto; only a second refusal is a block.
  */
 internal object TrackErrorPolicy {
     /** A 403 within this long of resolving the URL is stream-token enforcement, not expiry. */
@@ -27,6 +29,10 @@ internal object TrackErrorPolicy {
         val resolvedBeforeNetworkChange: Boolean = false,
         /** The item was already re-resolved once after a 403/410. */
         val alreadyReResolved: Boolean = false,
+        /** The failing stream URL is bound to an IPv6 address ([StreamUrls.boundToIpv6]). */
+        val viaIpv6: Boolean = false,
+        /** The IPv4 setting is Auto and not on IPv4 yet ([io.github.iamandelib.cyberjuke.net.NetPrefs.canSwitchToIpv4]). */
+        val canSwitchToIpv4: Boolean = false,
         /** Extraction was skipped because a back-off is running ([BlockedException]). */
         val blocked: Boolean = false,
         /** Generic I/O failure while streaming (connection failed, timeout). */
@@ -46,6 +52,9 @@ internal object TrackErrorPolicy {
 
         /** Expired stream URL: resolve again (same itag) and resume at the same position. */
         object ReResolve : Action()
+
+        /** Refused over IPv6 with the IPv4 setting on Auto: switch to IPv4, then [ReResolve]. */
+        object SwitchToIpv4 : Action()
 
         /** Pause on the item without skipping (offline, or [broken] extractor). */
         data class Pause(val broken: Boolean) : Action()
@@ -69,14 +78,17 @@ internal object TrackErrorPolicy {
             else -> Unit
         }
         f.httpCode?.let { code ->
+            // A refusal (429, or 403 on a URL resolved moments ago) over IPv6: try IPv4 first.
+            val refused = code == 429 || (code == 403 && f.urlAgeMs != null && f.urlAgeMs < FRESH_URL_MS)
             when {
+                refused && f.viaIpv6 && f.canSwitchToIpv4 && !f.alreadyReResolved -> return Action.SwitchToIpv4
+                // One fresh link first: the extraction itself tells whether we're blocked.
+                code == 429 && !f.alreadyReResolved -> return Action.ReResolve
                 code == 429 -> return Action.Block(BlockReason.RATE_LIMIT)
                 // An expired URL, or one bound to the old network's IP, is no sign of a block.
-                (code == 403 || code == 410) && !f.alreadyReResolved &&
-                    (f.urlExpired || f.resolvedBeforeNetworkChange) -> return Action.ReResolve
+                (code == 403 || code == 410) && !f.alreadyReResolved -> return Action.ReResolve
                 code == 403 && f.urlAgeMs != null && f.urlAgeMs < FRESH_URL_MS ->
                     return Action.Block(BlockReason.STREAM_FORBIDDEN)
-                (code == 403 || code == 410) && !f.alreadyReResolved -> return Action.ReResolve
                 code >= 500 -> return Action.Pause(broken = false)
                 else -> Unit
             }

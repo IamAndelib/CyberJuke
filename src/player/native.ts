@@ -75,8 +75,20 @@ export interface JukePlayerPlugin {
   getLaunchOptions(): Promise<{ autoplay?: 'latest' }>;   // from Android intent extra, used by the CI smoke test
   /** The network-wide back-off in force, if any (until 0 = none). */
   getBlockState(): Promise<{ until: number; reason?: string }>;
-  /** Y6: resolve hostnames to IPv4 only, for extraction and streaming alike (saved natively, applied at service start). */
-  setNetworkPrefs(o: { preferIpv4: boolean }): Promise<void>;
+  /**
+   * Y6: the IPv4 setting, for extraction and streaming alike (saved natively, applied at
+   * service start). A change lifts a running back-off.
+   */
+  setNetworkPrefs(o: { ipv4: 'auto' | 'always' | 'off' }): Promise<void>;
+  /** Lift the back-off now ("Try now"); playback it stopped resumes. */
+  retryNow(): Promise<void>;
+  /** For the Settings diagnostics line. */
+  getNetStatus(): Promise<{
+    family?: string;
+    ipv4?: string;
+    autoIpv4?: boolean;
+    lastLimit?: { at: number; reason: string; surface: string };
+  }>;
   /** Keep a screen area (CSS px relative to the WebView) out of the system back gesture; null clears it. */
   setGestureExclusion(rect: { left: number; top: number; width: number; height: number } | null): Promise<void>;
   /** Native re-sends `tracks` when a `tracks` or `state` listener is added (K4): add `tracks` first. */

@@ -1,7 +1,7 @@
 import { expect, test } from '../fixtures';
 import { cssVar, playerCalls, seedStorage, SETTINGS_KEY } from '../helpers';
 
-/** Settings: themes, NSFW, the new-tracks interval, Prefer IPv4 and the card order. */
+/** Settings: themes, NSFW, the new-tracks interval, the IPv4 setting and the card order. */
 
 test('switching theme changes the CSS variables and persists', async ({ page }) => {
   await page.goto('/');
@@ -64,21 +64,48 @@ test('"Check for new tracks" interval is a setting that persists', async ({ page
   await expect(page.getByTestId('check-every-5')).toBeFocused();
 });
 
-test('Prefer IPv4: off by default, sent to the player at start and on change, and kept', async ({ page }) => {
+test('IPv4: Auto by default, sent to the player at start and on change, and kept', async ({ page }) => {
   await page.goto('/');
   const prefs = async () => (await playerCalls(page)).filter((c) => c[0] === 'setNetworkPrefs').map((c) => c[1]);
-  await expect.poll(prefs).toEqual([{ preferIpv4: false }]);
+  await expect.poll(prefs).toEqual([{ ipv4: 'auto' }]);
   await page.getByTestId('tab-settings').click();
-  const toggle = page.getByTestId('ipv4-toggle');
-  await expect(toggle).toHaveAttribute('aria-checked', 'false');
-  await expect(page.getByTestId('screen-settings')).toContainText('Try this if playback is blocked.');
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-checked', 'true');
-  await expect.poll(prefs).toEqual([{ preferIpv4: false }, { preferIpv4: true }]);
+  await expect(page.getByTestId('ipv4-auto')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('screen-settings')).toContainText('Auto switches when IPv6 gets blocked.');
+  await page.getByTestId('ipv4-always').click();
+  await expect(page.getByTestId('ipv4-always')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('ipv4-auto')).toHaveAttribute('aria-checked', 'false');
+  await expect.poll(prefs).toEqual([{ ipv4: 'auto' }, { ipv4: 'always' }]);
   await page.reload();
-  await expect.poll(prefs).toEqual([{ preferIpv4: true }]);
+  await expect.poll(prefs).toEqual([{ ipv4: 'always' }]);
   await page.getByTestId('tab-settings').click();
-  await expect(page.getByTestId('ipv4-toggle')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('ipv4-always')).toHaveAttribute('aria-checked', 'true');
+  // No native side, no status line.
+  await expect(page.getByTestId('net-status')).toHaveCount(0);
+});
+
+test('an old "Prefer IPv4: on" becomes Always', async ({ page }) => {
+  await seedStorage(page, { [SETTINGS_KEY]: { theme: 'dark', preferIpv4: true } });
+  await page.goto('/');
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('ipv4-always')).toHaveAttribute('aria-checked', 'true');
+});
+
+test('the connection line shows how YouTube is reached, for bug reports', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as unknown as { __cyberjukeNetStatus: unknown }).__cyberjukeNetStatus = {
+      family: 'IPv4',
+      ipv4: 'auto',
+      autoIpv4: true,
+      lastLimit: { at: Date.now() - 60_000, reason: 'BOT_CHECK', surface: 'playback' },
+    };
+  });
+  await page.goto('/');
+  await page.getByTestId('tab-settings').click();
+  const line = page.getByTestId('net-status');
+  await expect(line).toContainText('Connection: IPv4 (switched by Auto) · last limit ');
+  await expect(line).toContainText(', bot check');
+  // Selectable, so it can be copied into an issue.
+  expect(await line.evaluate((el) => getComputedStyle(el).userSelect)).toBe('text');
 });
 
 test('Account is the first card and says "members-only shared tracks"', async ({ page }) => {

@@ -2,8 +2,10 @@ package io.github.iamandelib.cyberjuke.net
 
 import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import java.net.Inet4Address
+import java.net.Inet6Address
 import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 
@@ -18,24 +20,115 @@ internal object Http {
     val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .dns(NetPrefs.dns)
+            .addNetworkInterceptor(Families.interceptor)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             // Everything we fetch is https: never follow a redirect down to http (L5).
             .followSslRedirects(false)
             .build()
     }
+
+    /** Drops pooled connections, so the next request resolves (and picks a family) again. */
+    fun evictConnections() {
+        try {
+            client.connectionPool.evictAll()
+        } catch (_: Exception) {
+        }
+    }
 }
 
+/** IPv4 or IPv6: which one a YouTube request actually went out on. */
+internal enum class Family { IPV4, IPV6 }
+
 /**
- * Network preferences applied to [Http.client] (Y6). "Prefer IPv4": YouTube flags IPv6 ranges
- * (mobile CGNAT, some ISPs) more readily than IPv4, so resolve to IPv4 addresses only when a
- * host has any. Persisted by the app in SharedPreferences ([NetPrefsStore]) and loaded at
- * service start, before the web side runs.
+ * Records the address family of every YouTube request (a network interceptor sees the real
+ * connection). A limit that came back over IPv6 is the cue to switch to IPv4 ([NetPrefs]).
+ * Extraction runs synchronously on the caller's thread, so [lastOnThread] is the family of the
+ * request that just failed there; [last] is the latest one anywhere (diagnostics).
+ */
+internal object Families {
+    private val onThread = ThreadLocal<Family?>()
+
+    @Volatile
+    var last: Family? = null
+        private set
+
+    val interceptor = Interceptor { chain ->
+        val address = chain.connection()?.socket()?.inetAddress
+        if (address != null && Hosts.isYouTubeMedia(chain.request().url.host)) record(familyOf(address))
+        chain.proceed(chain.request())
+    }
+
+    fun familyOf(address: InetAddress): Family = if (address is Inet6Address) Family.IPV6 else Family.IPV4
+
+    fun record(f: Family) {
+        onThread.set(f)
+        last = f
+    }
+
+    /** The family of this thread's last YouTube request since [clearThread], or null. */
+    fun lastOnThread(): Family? = onThread.get()
+
+    fun clearThread() = onThread.remove()
+}
+
+/** "Prefer IPv4" setting (Y6). AUTO switches on its own when YouTube limits us over IPv6. */
+internal enum class Ipv4Mode { AUTO, ALWAYS, OFF }
+
+/**
+ * Network preferences applied to [Http.client] (Y6). YouTube judges IPv6 addresses in large
+ * blocks (a whole home network or carrier range), so they get bot checks far more often than
+ * IPv4; resolving to IPv4 addresses only (when a host has any) avoids that.
+ *
+ * - ALWAYS: IPv4 whenever there is one. OFF: whatever the system picks.
+ * - AUTO (default): the system's pick until YouTube limits a request that went out over IPv6;
+ *   then IPv4 for this kind of network (Wi-Fi, mobile data...) for [AUTO_MS]. The switch
+ *   applies at once; an expired one only lapses on the next network change or app start, so
+ *   the family never flips under a playing track.
+ *
+ * Persisted by the app in SharedPreferences ([io.github.iamandelib.cyberjuke.playback.NetPrefsStore])
+ * through [onChange] and loaded at service start, before the web side runs.
  */
 internal object NetPrefs {
+    /** How long an automatic switch to IPv4 is remembered for a network. */
+    const val AUTO_MS = 24L * 60L * 60L * 1000L
+
     @Volatile
-    var preferIpv4: Boolean = false
+    var mode: Ipv4Mode = Ipv4Mode.AUTO
         private set
+
+    /** The kind of network we are on ("wifi", "cellular"...), the key of the AUTO memory. */
+    @Volatile
+    var networkKey: String = "default"
+        private set
+
+    /** networkKey -> until when AUTO keeps IPv4 there. */
+    private val autoUntil = HashMap<String, Long>()
+
+    /** AUTO has switched this network to IPv4 (evaluated on a switch, network change or load). */
+    @Volatile
+    var autoActive: Boolean = false
+        private set
+
+    @Volatile
+    var clock: () -> Long = { System.currentTimeMillis() }
+
+    /**
+     * Called after the user's choice or the AUTO memory changed (persist it); the argument says
+     * whether the family in force changed too (drop cached stream URLs then).
+     */
+    @Volatile
+    var onChange: ((familyChanged: Boolean) -> Unit)? = null
+
+    val preferIpv4: Boolean
+        get() = when (mode) {
+            Ipv4Mode.ALWAYS -> true
+            Ipv4Mode.OFF -> false
+            Ipv4Mode.AUTO -> autoActive
+        }
+
+    /** AUTO, and not on IPv4 yet: a limit over IPv6 may switch. */
+    fun canSwitchToIpv4(): Boolean = mode == Ipv4Mode.AUTO && !autoActive
 
     // OkHttp 4's Dns is a plain Kotlin interface, not a fun interface: no SAM lambda.
     val dns: Dns = object : Dns {
@@ -51,18 +144,87 @@ internal object NetPrefs {
     }
 
     /**
-     * Returns true if the value changed. Pooled connections (possibly IPv6) are dropped then,
-     * so the next request resolves again; cached stream URLs are bound to the old address, so
-     * the caller also clears them.
+     * Applies a saved or chosen mode and AUTO memory. Returns true if the family in force
+     * changed (pooled connections are dropped then; the caller drops cached stream URLs).
      */
-    fun setPreferIpv4(value: Boolean): Boolean {
-        if (preferIpv4 == value) return false
-        preferIpv4 = value
-        try {
-            Http.client.connectionPool.evictAll()
-        } catch (_: Exception) {
-        }
+    @Synchronized
+    fun load(mode: Ipv4Mode, memory: Map<String, Long>): Boolean {
+        val before = preferIpv4
+        this.mode = mode
+        autoUntil.clear()
+        autoUntil.putAll(memory)
+        autoActive = remembered(networkKey)
+        return applied(before)
+    }
+
+    /** The user picked [mode]. Returns true if the family in force changed. */
+    @Synchronized
+    fun setMode(mode: Ipv4Mode): Boolean {
+        val before = preferIpv4
+        this.mode = mode
+        return applied(before).also { onChange?.invoke(it) }
+    }
+
+    /** The default network is now of kind [key]. Returns true if the family in force changed. */
+    @Synchronized
+    fun onNetwork(key: String): Boolean {
+        val before = preferIpv4
+        networkKey = key
+        autoActive = remembered(key)
+        return applied(before)
+    }
+
+    /** YouTube limited us over IPv6 in AUTO: IPv4 for this network from now on. */
+    @Synchronized
+    fun switchToIpv4Automatically(): Boolean {
+        if (!canSwitchToIpv4()) return false
+        val before = preferIpv4
+        autoUntil[networkKey] = clock() + AUTO_MS
+        autoActive = true
+        onChange?.invoke(applied(before))
         return true
+    }
+
+    /** The AUTO memory still in force (for persisting). */
+    @Synchronized
+    fun memory(): Map<String, Long> {
+        val now = clock()
+        autoUntil.entries.removeAll { it.value <= now }
+        return HashMap(autoUntil)
+    }
+
+    /** "wifi=1700000000000;cellular=..." (SharedPreferences), and back; bad entries are dropped. */
+    fun encodeMemory(memory: Map<String, Long>): String =
+        memory.entries.sortedBy { it.key }.joinToString(";") { "${it.key}=${it.value}" }
+
+    fun decodeMemory(s: String?): Map<String, Long> {
+        if (s.isNullOrBlank()) return emptyMap()
+        val out = HashMap<String, Long>()
+        for (part in s.split(';')) {
+            val key = part.substringBefore('=', "")
+            val until = part.substringAfter('=', "").toLongOrNull()
+            if (key.isNotEmpty() && key.all { it.isLetterOrDigit() || it == '_' } && until != null) out[key] = until
+        }
+        return out
+    }
+
+    private fun remembered(key: String): Boolean = (autoUntil[key] ?: 0L) > clock()
+
+    private fun applied(before: Boolean): Boolean {
+        if (preferIpv4 == before) return false
+        Http.evictConnections()
+        return true
+    }
+
+    /** Tests only. */
+    @Synchronized
+    internal fun resetForTest() {
+        mode = Ipv4Mode.AUTO
+        networkKey = "default"
+        autoUntil.clear()
+        autoActive = false
+        onChange = null
+        clock = { System.currentTimeMillis() }
     }
 }
 

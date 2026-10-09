@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -41,14 +42,18 @@ import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import io.github.iamandelib.cyberjuke.MainActivity
+import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.BlockedException
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.net.Hosts
 import io.github.iamandelib.cyberjuke.net.Http
 import io.github.iamandelib.cyberjuke.net.NetBlock
 import io.github.iamandelib.cyberjuke.net.NetEpoch
+import io.github.iamandelib.cyberjuke.net.NetPrefs
+import io.github.iamandelib.cyberjuke.net.Surface
 import io.github.iamandelib.cyberjuke.yt.Radio
 import io.github.iamandelib.cyberjuke.yt.YtCompat
+import io.github.iamandelib.cyberjuke.yt.YtGuard
 import io.github.iamandelib.cyberjuke.yt.YtMusic
 import org.json.JSONArray
 import org.json.JSONObject
@@ -119,30 +124,84 @@ class PlaybackService : MediaSessionService() {
      */
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
-            if (NetEpoch.onNetwork(network.toString())) onNetworkChanged()
+            if (NetEpoch.onNetwork(network.toString())) onNetworkChanged(newNetwork = true)
+        }
+
+        override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+            // The IPv4 setting's Auto memory is per kind of network.
+            if (NetPrefs.onNetwork(networkKey(caps))) StreamResolver.clear()
         }
 
         override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
             val addresses = linkProperties.linkAddresses.mapNotNull { it.address?.hostAddress }.toSet()
-            if (NetEpoch.onAddresses(network.toString(), addresses)) onNetworkChanged()
+            if (NetEpoch.onAddresses(network.toString(), addresses)) onNetworkChanged(newNetwork = false)
         }
     }
     private var networkCallbackRegistered = false
 
-    /** Any thread (ConnectivityManager's). */
-    private fun onNetworkChanged() {
+    private fun networkKey(caps: NetworkCapabilities): String = when {
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> "vpn"
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
+        else -> "other"
+    }
+
+    /**
+     * Any thread (ConnectivityManager's). A new network is a new IP as far as YouTube is
+     * concerned: a running back-off is lifted at once (and playback resumes if it stopped it).
+     */
+    private fun onNetworkChanged(newNetwork: Boolean) {
         StreamResolver.clear()
-        try {
-            Http.client.connectionPool.evictAll()
-        } catch (_: Exception) {
-        }
+        Http.evictConnections()
+        if (newNetwork) NetBlock.reset(keepLevel = false)
         Log.i(TAG, "Default network changed (generation ${NetEpoch.generation}): stream URLs dropped")
+    }
+
+    /** Resumes playback a back-off stopped once it ends (lifted early, or ran out). */
+    private val blockListener = object : NetBlock.Listener {
+        override fun onBlocked(until: Long, reason: BlockReason) {
+            handler.post {
+                handler.removeCallbacks(blockEnded)
+                handler.postDelayed(blockEnded, (until - System.currentTimeMillis()).coerceAtLeast(0L) + BLOCK_END_SLACK_MS)
+            }
+        }
+
+        override fun onUnblocked() {
+            handler.post { blockEnded.run() }
+        }
+    }
+
+    private val blockEnded = Runnable { resumeAfterBlock() }
+
+    /**
+     * The back-off is over: if it stopped playback (within [NetBlock.RESUME_WINDOW_MS]), play
+     * again. That load is also the probe: if YouTube still refuses, the next, longer back-off
+     * starts and playback waits again.
+     */
+    private fun resumeAfterBlock() {
+        handler.removeCallbacks(blockEnded)
+        val p = player ?: return
+        val (until, _) = NetBlock.active()
+        if (until > 0L) {
+            handler.postDelayed(blockEnded, (until - System.currentTimeMillis()).coerceAtLeast(0L) + BLOCK_END_SLACK_MS)
+            return
+        }
+        if (!NetBlock.takeResume() || p.mediaItemCount == 0) return
+        Log.i(TAG, "Back-off over: resuming")
+        when (p.playbackState) {
+            Player.STATE_IDLE -> p.prepare()
+            Player.STATE_ENDED -> return
+            else -> Unit
+        }
+        p.play()
     }
 
     override fun onCreate() {
         super.onCreate()
-        // Before anything touches the network: "Prefer IPv4" applies to extraction and streams.
+        // Before anything touches the network: the IPv4 setting applies to extraction and streams.
         NetPrefsStore.load(this)
+        NetBlock.add(blockListener)
         YtDataSpecResolver.allowCiTone = isDebuggable()
         try {
             (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
@@ -208,6 +267,8 @@ class PlaybackService : MediaSessionService() {
         Log.i(TAG, "PlaybackService destroyed")
         handler.removeCallbacks(prefetchCheck)
         handler.removeCallbacks(lowCheck)
+        handler.removeCallbacks(blockEnded)
+        NetBlock.remove(blockListener)
         radioExecutor.shutdownNow()
         StreamResolver.cancelPrefetch()
         if (networkCallbackRegistered) {
@@ -240,6 +301,12 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) = schedulePrefetch()
+
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            // A pause outside a back-off is the user's: nothing to resume later. (During one,
+            // the pause is ours, or a refused play the plugin turned into a pause.)
+            if (!playWhenReady && !NetBlock.isBlocked()) NetBlock.cancelResume()
+        }
 
         override fun onPositionDiscontinuity(
             oldPosition: Player.PositionInfo,
@@ -517,7 +584,7 @@ class PlaybackService : MediaSessionService() {
     private fun refillRadio(r: RadioState) {
         if (radioInFlight) return
         val wait = maxOf(
-            NetBlock.active().first - System.currentTimeMillis(),
+            NetBlock.active(Surface.MUSIC).first - System.currentTimeMillis(),
             radioNotBefore - SystemClock.elapsedRealtime(),
         )
         if (wait > 0) {
@@ -533,7 +600,8 @@ class PlaybackService : MediaSessionService() {
         val gen = radioGen
         try {
             radioExecutor.execute {
-                val result = runCatching { YtMusic.radio(r.ytId, r.next) }
+                // A limit here holds the music features only, never playback (YtGuard).
+                val result = runCatching { YtGuard.run(Surface.MUSIC) { YtMusic.radio(r.ytId, r.next) } }
                 handler.post { onRadioPage(gen, r, result) }
             }
         } catch (_: Exception) { // RejectedExecutionException after onDestroy
@@ -548,7 +616,6 @@ class PlaybackService : MediaSessionService() {
         result.onFailure { t ->
             val kind = YtCompat.classify(t)
             Log.w(TAG, "Radio failed [$kind]: ${t.javaClass.simpleName}")
-            kind.blockReason?.let { NetBlock.trip(it) }
             if (kind == FailureKind.BROKEN) PlayerBus.emitExtractorBroken(YtCompat.describe(t))
             // L5: a failed page must not stall the radio; retry later (bounded).
             retryRadio(delayMs = RADIO_RETRY_MS * (radioRetries + 1))
@@ -636,6 +703,8 @@ class PlaybackService : MediaSessionService() {
             urlAgeMs = served?.let { now - it.resolvedAtMs },
             urlExpired = served?.let { StreamUrls.isExpired(it.url, it.resolvedAtMs, now) } == true,
             resolvedBeforeNetworkChange = served?.let { it.netGen < NetEpoch.generation } == true,
+            viaIpv6 = served?.let { StreamUrls.boundToIpv6(it.url) } == true,
+            canSwitchToIpv4 = NetPrefs.canSwitchToIpv4(),
             alreadyReResolved = trackId in expiredRetried,
             blocked = error.findCause<BlockedException>() != null,
             ioNetwork = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
@@ -652,9 +721,9 @@ class PlaybackService : MediaSessionService() {
 
         when (action) {
             TrackErrorPolicy.Action.WaitBlocked -> {
-                // A back-off is running: stay here, paused, without a request. play() after it
-                // ends tries once more.
-                p.pause()
+                // A back-off is running: stay here, paused, without a request. Playback resumes
+                // by itself once it ends (resumeAfterBlock).
+                pauseForBlock(p)
             }
             is TrackErrorPolicy.Action.Block -> {
                 Log.i(TAG, "BLOCKED ${action.reason} on $trackId: $message")
@@ -662,23 +731,27 @@ class PlaybackService : MediaSessionService() {
                 StreamResolver.cancelPrefetch()
                 // The rejected URL must not be tried again from the cache (L1).
                 ytId?.let { StreamResolver.reResolve(it) }
-                p.pause()
+                pauseForBlock(p)
+            }
+            TrackErrorPolicy.Action.SwitchToIpv4 -> {
+                if (ytId == null) {
+                    perVideoFailure(p, index, trackId, ytId, message, error)
+                    return
+                }
+                // Refused over IPv6: IPv4 for this network from now on (drops cached URLs),
+                // then a fresh link at the same position.
+                Log.i(TAG, "HTTP ${http?.responseCode} over IPv6 for $trackId: switching to IPv4")
+                NetPrefs.switchToIpv4Automatically()
+                reResolveAndRetry(p, index, item, trackId, ytId)
             }
             TrackErrorPolicy.Action.ReResolve -> {
                 if (ytId == null) {
                     perVideoFailure(p, index, trackId, ytId, message, error)
                     return
                 }
-                // Expired URL (or a new network address): same itag, same position.
+                // Expired URL (or a new network address, or a refusal): same itag, same position.
                 Log.i(TAG, "HTTP ${http?.responseCode} for $trackId: re-resolving once")
-                expiredRetried.add(trackId)
-                StreamResolver.reResolve(ytId)
-                if (item.localConfiguration?.uri?.scheme != JukeUris.SCHEME) {
-                    // Swapped to its HLS manifest earlier: that manifest is what expired (L15).
-                    // Back to our URI, so the resolver fetches a fresh one.
-                    p.replaceMediaItem(index, item.buildUpon().setUri(JukeUris.forYt(ytId)).setMimeType(null).build())
-                }
-                p.prepare()
+                reResolveAndRetry(p, index, item, trackId, ytId)
             }
             is TrackErrorPolicy.Action.Pause -> {
                 Log.i(TAG, "TRACK_ERROR $trackId (yt=$ytId), pausing: $message")
@@ -687,6 +760,26 @@ class PlaybackService : MediaSessionService() {
             }
             else -> perVideoFailure(p, index, trackId, ytId, message, error)
         }
+    }
+
+    /** Fetches a fresh stream link for the item once and loads it again at the same position. */
+    private fun reResolveAndRetry(p: ExoPlayer, index: Int, item: MediaItem, trackId: String, ytId: String) {
+        expiredRetried.add(trackId)
+        StreamResolver.reResolve(ytId)
+        if (item.localConfiguration?.uri?.scheme != JukeUris.SCHEME) {
+            // Swapped to its HLS manifest earlier: that manifest is what expired (L15).
+            // Back to our URI, so the resolver fetches a fresh one.
+            p.replaceMediaItem(index, item.buildUpon().setUri(JukeUris.forYt(ytId)).setMimeType(null).build())
+        }
+        p.prepare()
+    }
+
+    /** Pauses for a back-off; if it was playing, it resumes once the back-off ends. */
+    private fun pauseForBlock(p: ExoPlayer) {
+        val wasPlaying = p.playWhenReady
+        p.pause()
+        // After pause(): its listener call clears a resume only outside a back-off, but be sure.
+        if (wasPlaying) NetBlock.wantResume()
     }
 
     /** A real per-video failure: skip it (with the [TrackErrorPolicy.MAX_CONSECUTIVE_FAILURES] guard). */
@@ -942,6 +1035,9 @@ class PlaybackService : MediaSessionService() {
         private const val TAG = "CyberJukeService"
         private const val RADIO_MAX_RETRIES = 3
         private const val RADIO_RETRY_MS = 15_000L
+
+        /** Resume a little after the back-off's end, so the check sees it over. */
+        private const val BLOCK_END_SLACK_MS = 500L
     }
 }
 

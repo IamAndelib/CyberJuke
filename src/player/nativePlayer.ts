@@ -4,13 +4,13 @@
  */
 import { computed, effect, signal, untracked } from '@preact/signals';
 import { artworkUrl, type Track } from '../data/model';
-import { history, knownTrack, liked } from '../stores/library';
+import { history, knownTrack, liked, IPV4_MODES, type Ipv4Mode } from '../stores/library';
 import { catalog } from '../stores/catalog';
 import { toast } from '../stores/toast';
 import { YT_ID_RE, parseNativeState } from '../core/guards';
 import { logError } from '../core/log';
 import { BRIDGE_MAX_ITEMS, BRIDGE_MAX_STRING, JukePlayer, STALE_INDEX, type NativeState, type NativeTrack, type RepeatMode } from './native';
-import { EMPTY_STATE, LIST_CONTEXT, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextItem, type UpNextKind } from './types';
+import { EMPTY_STATE, LIST_CONTEXT, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextItem, type UpNextKind } from './types';
 
 /** K6: text native would refuse as too long is cut (a link that long is dropped). */
 const clip = (s: string) => (s.length > BRIDGE_MAX_STRING ? s.slice(0, BRIDGE_MAX_STRING) : s);
@@ -395,7 +395,23 @@ export class NativePlayer implements Player {
   }
 
   setQuality = (quality: 'high' | 'low') => JukePlayer.setQuality({ quality });
-  setNetworkPrefs = (prefs: { preferIpv4: boolean }) => JukePlayer.setNetworkPrefs({ preferIpv4: prefs.preferIpv4 === true });
+  setNetworkPrefs = (prefs: { ipv4: Ipv4Mode }) => JukePlayer.setNetworkPrefs({ ipv4: prefs.ipv4 });
+  retryNow = () => JukePlayer.retryNow();
+
+  async netStatus(): Promise<NetStatus | null> {
+    const s = await JukePlayer.getNetStatus();
+    if (!s || typeof s !== 'object') return null;
+    const l = s.lastLimit;
+    return {
+      family: s.family === 'IPv4' || s.family === 'IPv6' ? s.family : undefined,
+      ipv4: IPV4_MODES.includes(s.ipv4 as Ipv4Mode) ? (s.ipv4 as Ipv4Mode) : 'auto',
+      autoIpv4: s.autoIpv4 === true,
+      lastLimit:
+        l && Number.isFinite(Number(l.at)) && typeof l.reason === 'string'
+          ? { at: Number(l.at), reason: l.reason, surface: l.surface === 'music' ? 'music' : 'playback' }
+          : undefined,
+    };
+  }
 }
 
 /** A track native accepts (a valid 11-character video id, an id it takes). */

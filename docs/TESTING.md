@@ -15,7 +15,12 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] Unplugging headphones or disconnecting Bluetooth pauses playback.
 - [ ] Switch between Wi-Fi and mobile data **during** a song: playback continues, or resumes by itself within a few seconds. No "YouTube is limiting requests" banner.
 - [ ] Settings → Audio quality **Low**, then **High**: both play.
-- [ ] Settings → **Prefer IPv4** on: tracks play. Then turn it off again.
+- [ ] Settings → **IPv4**: Always, then Off, then back to **Auto**: tracks play each time.
+- [ ] On a phone or network that showed "YouTube is limiting requests" before: play for a while with IPv4 on **Auto**. The banner should rarely show; if it does, playback **resumes by itself** when the countdown ends (keep the app in the background to check).
+- [ ] If the banner shows: tap **[Try now]**. It goes away; music resumes, or the banner comes back with a longer wait. Switching Wi-Fi ↔ mobile data also lifts it at once.
+- [ ] Settings shows a **Connection** line under IPv4 (IPv4 or IPv6, and the last limit, if any).
+- [ ] Pause a track right after starting it: it stays paused once it has loaded.
+- [ ] Fling a long list and tap the search button (or a tab) while it is still moving: it opens on the first tap.
 
 ## Queue and autoplay
 - [ ] Tap a track on Home. **Up next** shows similar songs under "Autoplay · similar to …" (same artist or genre feel).

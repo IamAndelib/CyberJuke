@@ -22,6 +22,17 @@ internal object StreamUrls {
 
     fun itag(url: String): Int? = ITAG.find(url)?.groupValues?.get(1)?.toIntOrNull()
 
+    private val IP = Regex("""[?&/]ip[=/]([0-9A-Fa-f.:%]{2,64})(?:[&/]|$)""")
+
+    /**
+     * True if the URL is bound to an IPv6 address (googlevideo's `ip` parameter, URL-encoded
+     * colons included), false for IPv4, null if it doesn't say.
+     */
+    fun boundToIpv6(url: String): Boolean? {
+        val ip = IP.find(url)?.groupValues?.get(1) ?: return null
+        return ip.contains(':') || ip.contains("%3A", ignoreCase = true)
+    }
+
     /** Until when a URL resolved at [resolvedAtMs] may be served from the cache. */
     fun cacheUntil(url: String, resolvedAtMs: Long): Long =
         expireMs(url)?.let { it - EXPIRY_MARGIN_MS } ?: (resolvedAtMs + FALLBACK_TTL_MS)

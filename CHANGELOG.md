@@ -18,8 +18,15 @@ Hardening for a public release and F-Droid.
 - Recent searches (with Clear all); "Here" search on the Genres and Artists tabs; shorter Settings text; better contrast in the C64, Matrix, Crypt and Bubblegum themes.
 
 ### YouTube
-- When YouTube limits requests from your network, playback pauses with a banner and waits (2, 5, 15, then 60 minutes) instead of skipping track after track; switching between Wi-Fi and mobile data no longer counts as a block.
-- NewPipeExtractor follows the commit the NewPipe app ships. "Prefer IPv4" in Settings can help on networks YouTube flags.
+- **"YouTube is limiting requests" happens far less and clears by itself.**
+  - A new **IPv4** setting: **Auto** (the default), Always or Off. YouTube flags IPv6 addresses much more readily, so on Auto the app switches a network to IPv4 the moment YouTube refuses a request over IPv6, retries at once with no banner, and remembers that network (Wi-Fi and mobile data separately) for a day. The old "Prefer IPv4: on" becomes Always.
+  - A refused request is retried once before anything is blocked; a refused stream gets one fresh link first.
+  - When a block does happen, playback pauses instead of skipping track after track, and **resumes by itself** when the wait is over. Waits are shorter (1, 3, 10, then 30 minutes) and relax again after half an hour without a block.
+  - Switching between Wi-Fi and mobile data, changing the IPv4 setting, or tapping **[Try now]** on the banner lifts a block at once.
+  - A refused search, artist page, radio or lyrics lookup no longer stops the music: those features wait on their own.
+  - Each song now costs YouTube 2 requests instead of 5 (the app asks only for what playback needs, and falls back to the full lookup if anything looks unexpected).
+  - Settings shows a "Connection" line (IPv4 or IPv6, the last limit) to paste into bug reports.
+- NewPipeExtractor follows the commit the NewPipe app ships.
 - Stream links are reused until they expire; prefetching waits until a track has played for a while.
 
 ### Security and releases

@@ -30,7 +30,7 @@ describe('theme migration', () => {
   it('migrates a saved GRiD theme to Brutalist and saves it', async () => {
     store.set('settings', JSON.stringify({ theme: 'grid', showNsfw: true, quality: 'low' }));
     await lib.loadLibrary();
-    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, preferIpv4: false, autoplay: true });
+    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true });
     await flush();
     expect(JSON.parse(store.get('settings')!).theme).toBe('brutalist');
   });
@@ -42,6 +42,27 @@ describe('theme migration', () => {
     store.set('settings', JSON.stringify({ theme: 'nope' }));
     await lib.loadLibrary();
     expect(lib.settings.value.theme).toBe('dark');
+  });
+
+  it('turns the old on/off Prefer IPv4 into the three-way setting, and saves it', async () => {
+    store.set('settings', JSON.stringify({ theme: 'dark', preferIpv4: true }));
+    await lib.loadLibrary();
+    expect(lib.settings.value.ipv4).toBe('always');
+    expect(lib.settings.value).not.toHaveProperty('preferIpv4');
+    await flush();
+    expect(JSON.parse(store.get('settings')!)).toMatchObject({ ipv4: 'always' });
+    expect(JSON.parse(store.get('settings')!)).not.toHaveProperty('preferIpv4');
+    // Off was the default: it becomes the new default, Auto.
+    store.set('settings', JSON.stringify({ preferIpv4: false }));
+    await lib.loadLibrary();
+    expect(lib.settings.value.ipv4).toBe('auto');
+    // A saved choice wins; nonsense falls back to Auto.
+    store.set('settings', JSON.stringify({ ipv4: 'off', preferIpv4: true }));
+    await lib.loadLibrary();
+    expect(lib.settings.value.ipv4).toBe('off');
+    store.set('settings', JSON.stringify({ ipv4: 'sometimes' }));
+    await lib.loadLibrary();
+    expect(lib.settings.value.ipv4).toBe('auto');
   });
 
   it('lists Brutalist and not GRiD', () => {

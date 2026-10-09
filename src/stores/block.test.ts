@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BROKEN_TEXT, MAX_TIMER_MS, blockedText, createBlockStore, minutesLeft, msToNextMinute } from './block';
+import { BROKEN_TEXT, MAX_TIMER_MS, blockedText, createBlockStore, minutesLeft, msToNextMinute, netStatusText } from './block';
 
 function setup() {
   let clock = 1_000_000;
@@ -109,8 +109,31 @@ describe('block store', () => {
     expect(minutesLeft(30_000, 0)).toBe(1);
     expect(minutesLeft(0, 5)).toBe(1);
     expect(blockedText(15 * 60_000, 0)).toBe(
-      'YouTube is limiting requests from your network. Try again in 15 min, or switch between Wi-Fi and mobile data.',
+      'YouTube is limiting requests from your network. Trying again in 15 min.',
     );
     expect(BROKEN_TEXT).toBe('YouTube changed something. Update CyberJuke when a new version is out.');
+  });
+});
+
+describe('net status line', () => {
+  const at = new Date(2026, 9, 9, 14, 2).getTime();
+  const time = new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+  it('says how YouTube is reached and the last limit', () => {
+    expect(netStatusText(null, at)).toBeNull();
+    expect(netStatusText({ autoIpv4: false }, at)).toBe('Connection: not used yet · no limits so far');
+    expect(netStatusText({ family: 'IPv6', autoIpv4: false }, at)).toBe('Connection: IPv6 · no limits so far');
+    expect(
+      netStatusText({ family: 'IPv4', autoIpv4: true, lastLimit: { at, reason: 'BOT_CHECK', surface: 'playback' } }, at + 60_000),
+    ).toBe(`Connection: IPv4 (switched by Auto) · last limit ${time}, bot check`);
+    expect(netStatusText({ family: 'IPv4', autoIpv4: false, lastLimit: { at, reason: 'RATE_LIMIT', surface: 'music' } }, at)).toBe(
+      `Connection: IPv4 · last limit ${time}, rate limit (music)`,
+    );
+  });
+
+  it('dates a limit from another day', () => {
+    const text = netStatusText({ family: 'IPv4', autoIpv4: false, lastLimit: { at, reason: 'WHATEVER', surface: 'playback' } }, at + 2 * 86_400_000)!;
+    const day = new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+    expect(text).toBe(`Connection: IPv4 · last limit ${day} ${time}, limit`);
   });
 });
