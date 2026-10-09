@@ -45,7 +45,11 @@ import java.util.concurrent.Executors
  *     more?: { albums?: string; singles?: string } }>   // opaque "See all" tokens
  *   artistReleases({ token }): Promise<{ releases: Release[] }>
  *   radio({ ytId, next? }): Promise<MusicPage>   // the song's radio (songs, without the seed);
- *     next pages with the returned `next`. Rejects BOT_CHECK during a back-off without a request.
+ *     next pages with the returned `next`.
+ *
+ * During a back-off every YouTube call (search, more, playlist, artist, artistPage,
+ * artistReleases, radio, and the lyrics' YouTube Music fallback) rejects BOT_CHECK without a
+ * request.
  *
  * Rejections carry code BOT_CHECK, NETWORK or UNAVAILABLE.
  *
@@ -76,6 +80,7 @@ class MusicPlugin : Plugin() {
 
     @PluginMethod
     fun search(call: PluginCall) {
+        if (refuseWhileBlocked(call)) return
         val query = call.getString("query")?.trim()
         if (query.isNullOrEmpty()) {
             call.reject("query is required", "UNAVAILABLE"); return
@@ -89,6 +94,7 @@ class MusicPlugin : Plugin() {
 
     @PluginMethod
     fun more(call: PluginCall) {
+        if (refuseWhileBlocked(call)) return
         val token = call.getString("next")
         val cont = token?.let { synchronized(pages) { pages[it] } }
         if (cont == null) {
@@ -99,6 +105,7 @@ class MusicPlugin : Plugin() {
 
     @PluginMethod
     fun playlist(call: PluginCall) {
+        if (refuseWhileBlocked(call)) return
         val url = call.getString("url")?.trim()
         if (url.isNullOrEmpty()) {
             call.reject("url is required", "UNAVAILABLE"); return
@@ -115,6 +122,7 @@ class MusicPlugin : Plugin() {
 
     @PluginMethod
     fun artist(call: PluginCall) {
+        if (refuseWhileBlocked(call)) return
         val name = call.getString("name")?.trim()
         if (name.isNullOrEmpty()) {
             call.reject("name is required", "UNAVAILABLE"); return
@@ -124,6 +132,7 @@ class MusicPlugin : Plugin() {
 
     @PluginMethod
     fun artistPage(call: PluginCall) {
+        if (refuseWhileBlocked(call)) return
         val channelId = call.getString("channelId")?.trim()
         if (channelId.isNullOrEmpty()) {
             call.reject("channelId is required", "UNAVAILABLE"); return
@@ -150,6 +159,7 @@ class MusicPlugin : Plugin() {
 
     @PluginMethod
     fun artistReleases(call: PluginCall) {
+        if (refuseWhileBlocked(call)) return
         val token = call.getString("token")
         val more = token?.let { synchronized(releaseTokens) { releaseTokens[it] } }
         if (more == null) {
@@ -170,10 +180,7 @@ class MusicPlugin : Plugin() {
             call.reject("ytId is required", "UNAVAILABLE"); return
         }
         val next = call.getString("next")?.takeIf { it.isNotBlank() }
-        // Y1: no request at all while YouTube is backing us off.
-        if (NetBlock.isBlocked()) {
-            call.reject("BOT_CHECK: YouTube is limiting requests from this network", "BOT_CHECK"); return
-        }
+        if (refuseWhileBlocked(call)) return
         run(call, "radio $ytId") {
             val page = YtMusic.radio(ytId, next)
             val arr = JSArray()
@@ -212,6 +219,16 @@ class MusicPlugin : Plugin() {
     override fun handleOnDestroy() {
         executor.shutdownNow()
         lyricsExecutor.shutdownNow()
+    }
+
+    /**
+     * Y1: no request at all while YouTube is backing us off (a block is network-wide): rejects
+     * BOT_CHECK. Lyrics still ask LRCLIB; their YouTube Music fallback is refused in InnerTube.
+     */
+    private fun refuseWhileBlocked(call: PluginCall): Boolean {
+        if (!NetBlock.isBlocked()) return false
+        call.reject("BOT_CHECK: YouTube is limiting requests from this network", "BOT_CHECK")
+        return true
     }
 
     private fun run(

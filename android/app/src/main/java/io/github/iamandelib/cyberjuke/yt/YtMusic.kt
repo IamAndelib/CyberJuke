@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.yt
 
+import io.github.iamandelib.cyberjuke.net.BlockedException
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.net.NetBlock
 import org.schabi.newpipe.extractor.Image
@@ -273,13 +274,25 @@ internal object YtMusic {
      * limits (HTTP 429) are BOT_CHECK; I/O failures and HTTP 5xx anywhere in the cause chain
      * are NETWORK; everything else (missing content, parse errors) is UNAVAILABLE.
      */
-    fun errorCode(t: Throwable): String = when (YtCompat.classify(t)) {
+    fun errorCode(t: Throwable): String = if (isBlocked(t)) "BOT_CHECK" else when (YtCompat.classify(t)) {
         FailureKind.BOT_CHECK, FailureKind.RATE_LIMIT -> "BOT_CHECK"
         FailureKind.NETWORK -> "NETWORK"
         else -> "UNAVAILABLE"
     }
 
     fun describe(t: Throwable): String = YtCompat.describe(t)
+
+    /** Refused because a back-off is running ([BlockedException] anywhere in the chain). */
+    private fun isBlocked(t: Throwable): Boolean {
+        var c: Throwable? = t
+        var depth = 0
+        while (c != null && depth < 8) {
+            if (c is BlockedException) return true
+            c = c.cause
+            depth++
+        }
+        return false
+    }
 
     // ---- mapping ------------------------------------------------------------------------
 
