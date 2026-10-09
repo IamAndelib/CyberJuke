@@ -377,7 +377,6 @@ function Updates() {
       <div class="setting">
         <div class="setting-text">
           <div class="setting-name">Check for updates automatically</div>
-          <div class="setting-desc">Once a day at most, from GitHub.</div>
         </div>
         <Toggle on={s.checkUpdates} onChange={(v) => updateSettings({ checkUpdates: v })} label="Check for updates automatically" testid="updates-auto" />
       </div>
@@ -397,7 +396,6 @@ function Updates() {
           </button>
         )}
       </div>
-      {a.preview && <p class="setting-desc">This is the preview app. Releases install as the separate CyberJuke app.</p>}
     </section>
   );
 }

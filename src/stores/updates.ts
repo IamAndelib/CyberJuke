@@ -76,7 +76,7 @@ export function releaseOf(json: unknown): Release | null {
 }
 
 /** This install: its version, and whether F-Droid updates it. */
-export const app = signal<{ version: string; fdroid: boolean; preview: boolean }>({ version: __APP_VERSION__, fdroid: false, preview: false });
+export const app = signal<{ version: string; fdroid: boolean }>({ version: __APP_VERSION__, fdroid: false });
 /** The last check: when, and the latest release then. */
 export const lastCheck = signal<Saved>({ checkedAt: 0, latest: null });
 export const checking = signal(false);
@@ -148,7 +148,6 @@ export async function startUpdates(appInfo?: AppInfo): Promise<void> {
       app.value = {
         version: info.version || __APP_VERSION__,
         fdroid: isFdroidInstaller(info.installer),
-        preview: /-preview$/.test(info.version ?? ''),
       };
     } catch (e) {
       logError('getAppInfo', e);
