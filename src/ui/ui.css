@@ -2,6 +2,8 @@
    states, back-to-top, Global results, rails, A–Z sections, the overlay scrollbar, sheets,
    toasts and the banners. */
 
+/* ---- Screen and top bar ----------------------------------------------------------- */
+
 .screen {
   height: 100%;
   overflow-y: auto;
@@ -477,7 +479,7 @@
   color: var(--color-fg-dim);
 }
 
-/* ---- Genres ----------------------------------------------------------------------- */
+/* ---- Grid tiles (the Genres and Artists grids) -------------------------------------- */
 
 .genre-grid {
   display: grid;

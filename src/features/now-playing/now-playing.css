@@ -1,5 +1,7 @@
 /* Now Playing and the mini player: the sheet, art and lyrics, controls, Up next, the marquee. */
 
+/* ---- Now Playing: the tappable genre tag, a Global track's source ------------------ */
+
 .np-genre {
   position: relative;
   cursor: pointer;

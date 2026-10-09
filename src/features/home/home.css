@@ -1,5 +1,7 @@
 /* Home: the brand, the shuffle hero, Latest | Most saved, the new-tracks pill. */
 
+/* ---- Top bar and the shuffle hero -------------------------------------------------- */
+
 .hero:active .hero-title {
   text-shadow: none;
 }
@@ -7,7 +9,6 @@
   letter-spacing: 2px;
 }
 
-/* Shuffle hero */
 .hero {
   display: flex;
   align-items: center;
