@@ -101,7 +101,8 @@ test('Up next: autoplay rows have only a 48px Remove, which offers Undo', async 
 
   const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
   const before = await rows.count();
-  const gone = q.autoplay[1].title;
+  // By id: two picks can share a title.
+  const gone = q.autoplay[1].id;
   // Two taps in a row: the second lands on the next row, which moved under the finger,
   // and is ignored (300 ms). It goes in as soon as the list has re-rendered (microtasks,
   // no timer), so a slow runner can't stretch the gap past the guard.
@@ -118,11 +119,12 @@ test('Up next: autoplay rows have only a 48px Remove, which offers Undo', async 
   await expect(rows).toHaveCount(before - 1);
   await expectStable(() => rows.count(), 400);
   await expect(page.getByTestId('toast').filter({ hasText: 'Removed from queue' })).toHaveCount(1);
-  await expect(rows.locator('.row-title', { hasText: gone })).toHaveCount(0);
+  await expect(page.locator(`[data-testid="upnext-row"][data-track-id="${gone}"]`)).toHaveCount(0);
   const t = page.getByTestId('toast').filter({ hasText: 'Removed from queue' });
   await expect(t).toBeVisible();
   await t.getByTestId('toast-action').click();
-  await expect(rows.locator('.row-title', { hasText: gone })).toHaveCount(1);
+  // Back where it was: second in autoplay.
+  await expect(rows.nth(1)).toHaveAttribute('data-track-id', gone);
 });
 
 test('Album Play plays the album, then continues into autoplay at the end', async ({ page }) => {

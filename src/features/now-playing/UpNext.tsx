@@ -48,6 +48,7 @@ export function UpNext({ s }: { s: PlayerState }) {
             key={`${it.track.id}:${it.index}`}
             class={'row' + (kind === 'queued' ? ' queued' : '') + (kind === 'autoplay' ? ' autoplay' : '')}
             data-testid="upnext-row"
+            data-track-id={it.track.id}
             data-section={kind}
             data-queued={kind === 'queued' ? 'true' : undefined}
           >
