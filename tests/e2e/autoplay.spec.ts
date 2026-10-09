@@ -240,3 +240,22 @@ test('repeat turns autoplay off; the Autoplay setting off plays only the list', 
   await expect(page.getByTestId('np-repeat')).toHaveAttribute('data-mode', 'off');
   await withAutoplay(page);
 });
+
+test('a track started before the Jukebox catalog has loaded still gets its autoplay once it does', async ({ page }) => {
+  // The catalog (300-row pages) waits until let through; the Home feed loads as usual.
+  let release: () => void = () => {};
+  const held = new Promise<void>((r) => (release = r));
+  await page.route(/firestore\.googleapis\.com\/.*:runQuery/, async (route) => {
+    const q = route.request().method() === 'POST' ? JSON.parse(route.request().postData() ?? '{}').structuredQuery : null;
+    if (q?.limit === 300) await held;
+    return route.fallback();
+  });
+  await page.goto('/');
+  await page.getByTestId('track-play').first().click();
+  await expect(page.getByTestId('mini-player')).toBeVisible();
+  await page.waitForTimeout(500);
+  expect((await queueState(page)).autoplay).toHaveLength(0);
+  release();
+  const q = await withAutoplay(page);
+  expect(q.autoplay.length).toBeGreaterThanOrEqual(20);
+});

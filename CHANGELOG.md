@@ -31,7 +31,8 @@ The first stable release.
 - **"YouTube is limiting requests" happens far less and clears by itself.**
   - A new **IPv4** setting: **Auto** (the default), Always or Off. YouTube flags IPv6 addresses much more readily, so on Auto the app switches a network to IPv4 the moment YouTube refuses a request over IPv6, retries at once with no banner, and remembers that network (Wi-Fi and mobile data separately) for a day. The old "Prefer IPv4: on" becomes Always.
   - A refused request is retried once before anything is blocked; a refused stream gets one fresh link first.
-  - When a block does happen, playback pauses instead of skipping track after track, and **resumes by itself** when the wait is over. Waits are shorter (1, 3, 10, then 30 minutes) and relax again after half an hour without a block.
+  - When a block does happen, playback pauses instead of skipping track after track, and **resumes by itself** when a short wait is over (screen off too; not if you unplugged your headphones meanwhile). Waits are shorter (1, 3, 10, then 30 minutes) and relax again after half an hour without a block.
+  - The same after a dropped connection: playback picks up again when the network is back.
   - Switching between Wi-Fi and mobile data, changing the IPv4 setting, or tapping **[Try now]** on the banner lifts a block at once.
   - A refused search, artist page, radio or lyrics lookup no longer stops the music: those features wait on their own.
   - Each song now costs YouTube 2 requests instead of 5 (the app asks only for what playback needs, and falls back to the full lookup if anything looks unexpected).

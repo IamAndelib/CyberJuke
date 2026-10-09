@@ -1,17 +1,21 @@
 package io.github.iamandelib.cyberjuke.playback
 
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioManager
 import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
@@ -127,6 +131,10 @@ class PlaybackService : MediaSessionService() {
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
             // The IPv4 setting's Auto memory is per kind of network.
             if (NetPrefs.onNetwork(networkKey(caps))) StreamResolver.clear()
+            // Online again (validated): playback an outage stopped picks up again.
+            if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) && NetBlock.resumePending()) {
+                handler.post { resumeAfterBlock() }
+            }
         }
 
         override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
@@ -160,10 +168,7 @@ class PlaybackService : MediaSessionService() {
     /** Resumes playback a back-off stopped once it ends (lifted early, or ran out). */
     private val blockListener = object : NetBlock.Listener {
         override fun onBlocked(until: Long, reason: BlockReason) {
-            handler.post {
-                handler.removeCallbacks(blockEnded)
-                handler.postDelayed(blockEnded, (until - System.currentTimeMillis()).coerceAtLeast(0L) + BLOCK_END_SLACK_MS)
-            }
+            handler.post { scheduleResume(until) }
         }
 
         override fun onUnblocked() {
@@ -172,6 +177,47 @@ class PlaybackService : MediaSessionService() {
     }
 
     private val blockEnded = Runnable { resumeAfterBlock() }
+
+    /**
+     * Keeps the CPU awake until a pending resume is due: the player is paused (no wake lock of
+     * its own), and a Handler's delay doesn't run on while the phone sleeps in a pocket. Only
+     * for a resume that can still happen (within [NetBlock.RESUME_WINDOW_MS]); timed.
+     */
+    private var resumeWakeLock: PowerManager.WakeLock? = null
+
+    private fun scheduleResume(until: Long) {
+        handler.removeCallbacks(blockEnded)
+        val wait = (until - System.currentTimeMillis()).coerceAtLeast(0L) + BLOCK_END_SLACK_MS
+        handler.postDelayed(blockEnded, wait)
+        if (!NetBlock.resumePending() || wait > NetBlock.RESUME_WINDOW_MS) return
+        try {
+            val lock = resumeWakeLock ?: (getSystemService(Context.POWER_SERVICE) as PowerManager)
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "CyberJuke:resume")
+                .apply { setReferenceCounted(false) }
+                .also { resumeWakeLock = it }
+            lock.acquire(wait + WAKE_SLACK_MS)
+        } catch (e: Exception) {
+            Log.w(TAG, "No wake lock for the resume: ${e.javaClass.simpleName}")
+        }
+    }
+
+    private fun releaseResumeWakeLock() {
+        try {
+            resumeWakeLock?.takeIf { it.isHeld }?.release()
+        } catch (_: Exception) {
+        }
+    }
+
+    /** Headphones unplugged or Bluetooth gone while a resume waits: it must not start on the speaker. */
+    private val noisyReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != AudioManager.ACTION_AUDIO_BECOMING_NOISY || !NetBlock.resumePending()) return
+            Log.i(TAG, "Audio output changed while a resume was pending: cancelled")
+            NetBlock.cancelResume()
+            releaseResumeWakeLock()
+        }
+    }
+    private var noisyRegistered = false
 
     /**
      * The back-off is over: if it stopped playback (within [NetBlock.RESUME_WINDOW_MS]), play
@@ -183,9 +229,10 @@ class PlaybackService : MediaSessionService() {
         val p = player ?: return
         val (until, _) = NetBlock.active()
         if (until > 0L) {
-            handler.postDelayed(blockEnded, (until - System.currentTimeMillis()).coerceAtLeast(0L) + BLOCK_END_SLACK_MS)
+            scheduleResume(until)
             return
         }
+        releaseResumeWakeLock()
         if (!NetBlock.takeResume() || p.mediaItemCount == 0) return
         // Another app is playing now: leave it be (and keep our audio focus request out of it).
         val audio = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
@@ -193,7 +240,7 @@ class PlaybackService : MediaSessionService() {
             Log.i(TAG, "Back-off over, but other audio is playing: not resuming")
             return
         }
-        Log.i(TAG, "Back-off over: resuming")
+        Log.i(TAG, "Resuming after a back-off or an outage")
         when (p.playbackState) {
             Player.STATE_IDLE -> p.prepare()
             Player.STATE_ENDED -> return
@@ -208,8 +255,18 @@ class PlaybackService : MediaSessionService() {
         NetPrefsStore.load(this)
         NetBlock.add(blockListener)
         // A back-off already running (the service was restarted): resume when it ends.
-        NetBlock.active().first.takeIf { it > 0L }?.let { until ->
-            handler.postDelayed(blockEnded, (until - System.currentTimeMillis()).coerceAtLeast(0L) + BLOCK_END_SLACK_MS)
+        NetBlock.active().first.takeIf { it > 0L }?.let { scheduleResume(it) }
+        try {
+            val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+            // A system broadcast: delivered to a non-exported receiver too.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(noisyReceiver, filter)
+            }
+            noisyRegistered = true
+        } catch (e: Exception) {
+            Log.w(TAG, "No becoming-noisy receiver: ${e.javaClass.simpleName}")
         }
         YtDataSpecResolver.allowCiTone = isDebuggable()
         try {
@@ -281,6 +338,11 @@ class PlaybackService : MediaSessionService() {
         handler.removeCallbacks(blockEnded)
         NetBlock.remove(blockListener)
         NetBlock.cancelResume()
+        releaseResumeWakeLock()
+        if (noisyRegistered) {
+            runCatching { unregisterReceiver(noisyReceiver) }
+            noisyRegistered = false
+        }
         radio.shutdown()
         StreamResolver.cancelPrefetch()
         if (networkCallbackRegistered) {
@@ -348,6 +410,13 @@ class PlaybackService : MediaSessionService() {
             queue.onPlaylistChanged()
             queueChanged()
             schedulePrefetch()
+            // Something was added after the list had played to its end (late autoplay, Add to
+            // queue, Undo): ExoPlayer stays ENDED, so go on to it.
+            val p = player ?: return
+            if (p.playbackState == Player.STATE_ENDED && p.playWhenReady && p.hasNextMediaItem()) {
+                Log.i(TAG, "Items added after the end: continuing")
+                p.seekToNextMediaItem()
+            }
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
@@ -502,11 +571,13 @@ class PlaybackService : MediaSessionService() {
         val p = player ?: return
         if (!autoplayEnabled || p.repeatMode != Player.REPEAT_MODE_OFF || p.mediaItemCount == 0 || seedId == null) {
             lowKey = null
+            QueueInfo.clearLow()
             return
         }
         val left = queue.autoAhead()
         if (left > QueueCommands.LOW) {
             lowKey = null
+            QueueInfo.clearLow()
             return
         }
         val key = "$seedId|$left|${p.currentMediaItemIndex}|${p.mediaItemCount}"
@@ -571,7 +642,7 @@ class PlaybackService : MediaSessionService() {
             TrackErrorPolicy.Action.WaitBlocked -> {
                 // A back-off is running: stay here, paused, without a request. Playback resumes
                 // by itself once it ends (resumeAfterBlock).
-                pauseForBlock(p)
+                pauseToResume(p)
             }
             is TrackErrorPolicy.Action.Block -> {
                 Log.i(TAG, "BLOCKED ${action.reason} on $trackId: $message")
@@ -579,7 +650,7 @@ class PlaybackService : MediaSessionService() {
                 StreamResolver.cancelPrefetch()
                 // The rejected URL must not be tried again from the cache (L1).
                 ytId?.let { StreamResolver.reResolve(it) }
-                pauseForBlock(p)
+                pauseToResume(p)
             }
             TrackErrorPolicy.Action.SwitchToIpv4 -> {
                 if (ytId == null) {
@@ -603,7 +674,7 @@ class PlaybackService : MediaSessionService() {
             }
             is TrackErrorPolicy.Action.Pause -> {
                 Log.i(TAG, "TRACK_ERROR $trackId (yt=$ytId), pausing: $message")
-                p.pause()
+                if (action.broken) p.pause() else pauseToResume(p) // offline: back when the network is
                 PlayerBus.emitTrackError(trackId, message, false)
             }
             else -> perVideoFailure(p, index, trackId, ytId, message, error)
@@ -622,11 +693,14 @@ class PlaybackService : MediaSessionService() {
         p.prepare()
     }
 
-    /** Pauses for a back-off; if it was playing, it resumes once the back-off ends. */
-    private fun pauseForBlock(p: ExoPlayer) {
+    /**
+     * Pauses for a back-off or an outage; if it was playing, it resumes once the back-off ends
+     * or the network is back (within [NetBlock.RESUME_WINDOW_MS]).
+     */
+    private fun pauseToResume(p: ExoPlayer) {
         val wasPlaying = p.playWhenReady
         p.pause()
-        // After pause(): its listener call clears a resume only outside a back-off, but be sure.
+        // After pause(): its listener call cancels a pending resume.
         if (wasPlaying) NetBlock.wantResume()
     }
 
@@ -884,5 +958,8 @@ class PlaybackService : MediaSessionService() {
 
         /** Resume a little after the back-off's end, so the check sees it over. */
         private const val BLOCK_END_SLACK_MS = 500L
+
+        /** The resume wake lock outlasts the wait by this much (then it times out by itself). */
+        private const val WAKE_SLACK_MS = 15_000L
     }
 }

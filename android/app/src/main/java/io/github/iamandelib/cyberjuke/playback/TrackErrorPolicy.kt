@@ -89,8 +89,9 @@ internal object TrackErrorPolicy {
                 // One fresh link first: the extraction itself tells whether we're blocked.
                 code == 429 && !f.alreadyReResolved -> return Action.ReResolve
                 code == 429 -> return Action.Block(BlockReason.RATE_LIMIT)
-                // An expired URL, or one bound to the old network's IP, is no sign of a block.
-                (code == 403 || code == 410) && !f.alreadyReResolved -> return Action.ReResolve
+                // An expired URL, or one bound to the old network's IP, is no sign of a block: a
+                // fresh link, even a second time (the network changed again meanwhile).
+                (code == 403 || code == 410) && (stale || !f.alreadyReResolved) -> return Action.ReResolve
                 fresh403 -> return Action.Block(BlockReason.STREAM_FORBIDDEN)
                 code >= 500 -> return Action.Pause(broken = false)
                 else -> Unit

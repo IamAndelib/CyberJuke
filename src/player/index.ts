@@ -20,7 +20,7 @@ import { exposeForTests } from '../core/testHooks';
 import { createAutoplay, type Autoplay } from './autoplay';
 import { NativePlayer } from './nativePlayer';
 import { safePlayer } from './safePlayer';
-import type { PlayContext, Player, UpItem, UpNextItem, UpNextSections } from './types';
+import { nsfwAutoplayIds, type PlayContext, type Player, type UpItem, type UpNextItem, type UpNextSections } from './types';
 import { WebPlayer } from './webPlayer';
 
 export * from './types';
@@ -132,6 +132,11 @@ function startAutoplay(): Autoplay {
     radio: (ytId, next) => music.radio(ytId, next).then((page) => ({ tracks: musicTracks(page.items), next: page.next })),
     log: logError,
   });
+  const a = autoplay;
+  // A list started before the catalog loaded gets its autoplay once it has.
+  effect(() => {
+    if (catalog.tracks.value.length) untracked(() => a.catalogReady());
+  });
   return autoplay;
 }
 
@@ -172,13 +177,25 @@ function dropMembersFromQueue(): Promise<void> {
   return ids.length ? player.removeIds(ids) : Promise.resolve();
 }
 
+/** NSFW turned off: the NSFW picks autoplay already queued go (what you chose yourself stays). */
+function dropNsfwAutoplay(): Promise<void> {
+  const ids = nsfwAutoplayIds(state.peek().upNext);
+  return ids.length ? player.removeIds(ids) : Promise.resolve();
+}
+
 let purging = false;
 
-/** Follow sign-outs for the queue (call once at startup). */
+/** Follow sign-outs and the NSFW setting for the queue (call once at startup). */
 export function startQueuePurge(): void {
   if (purging) return;
   purging = true;
   auth.onChange((signedIn) => {
     if (!signedIn) void dropMembersFromQueue();
+  });
+  let nsfwWas = showNsfw.peek();
+  effect(() => {
+    const nsfw = showNsfw.value;
+    if (nsfwWas && !nsfw) untracked(() => void dropNsfwAutoplay());
+    nsfwWas = nsfw;
   });
 }

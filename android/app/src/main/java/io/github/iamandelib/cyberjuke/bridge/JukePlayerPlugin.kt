@@ -75,8 +75,10 @@ import kotlin.math.roundToInt
  *   with code TOO_LARGE.
  * - queueLow { left, seedId }: autoplay has `left` (<= 5) Jukebox tracks to go: the web side
  *   computes more and sends them with addAutoplay({ tracks, seedId }).
- * - tracks { tracks: NativeTrack[] }: autoplay items the service added itself (Global radio),
- *   so the web side can show them; sent again after a resume or a new state listener.
+ * - tracks { tracks: NativeTrack[] }: the Global tracks in the queue (the web side can't look
+ *   them up anywhere: radio items the service added itself, and after a WebView reload also the
+ *   albums and playlists the user started), so it can show them; sent again after a resume or a
+ *   new state listener.
  *
  * - state: NativeState. Sent on every player event and once a second while playing and the
  *   app is in the foreground (no ticks in the background). `queueIds` is only included when
@@ -242,6 +244,8 @@ class JukePlayerPlugin : Plugin() {
                 controller?.let { announceTracks(it) }
             }
         }
+        // A reloaded page: the "running low" it missed, so autoplay goes on.
+        if (event == "queueLow") QueueInfo.lastLow?.let { (left, seed) -> queueLowListener.onQueueLow(left, seed) }
     }
 
     override fun handleOnDestroy() {
@@ -503,7 +507,7 @@ class JukePlayerPlugin : Plugin() {
         val expectId = stringArg(call, call.getString("expectId"), "expectId") ?: return
         withController(call) { c ->
             if (index !in 0 until c.mediaItemCount) {
-                call.reject("index out of range: $index")
+                rejectOutOfRange(call, expectId, "index out of range: $index")
             } else {
                 val args = Bundle().apply {
                     putInt(QueueCommands.ARG_INDEX, index)
@@ -523,7 +527,7 @@ class JukePlayerPlugin : Plugin() {
         withController(call) { c ->
             val n = c.mediaItemCount
             if (from !in 0 until n || to !in 0 until n) {
-                call.reject("index out of range: from=$from to=$to count=$n")
+                rejectOutOfRange(call, expectId, "index out of range: from=$from to=$to count=$n")
             } else {
                 val args = Bundle().apply {
                     putInt(QueueCommands.ARG_FROM, from)
@@ -593,7 +597,8 @@ class JukePlayerPlugin : Plugin() {
             if (c.mediaItemCount > 0 && !(needsLoad && refuseWhileBlocked(c))) {
                 when (c.playbackState) {
                     Player.STATE_IDLE -> c.prepare()
-                    Player.STATE_ENDED -> c.seekTo(c.currentMediaItemIndex, 0L)
+                    // Played to the end: on to what was added since, else the last track again.
+                    Player.STATE_ENDED -> if (c.hasNextMediaItem()) c.seekToNextMediaItem() else c.seekTo(c.currentMediaItemIndex, 0L)
                     else -> Unit
                 }
                 c.play()
@@ -650,7 +655,7 @@ class JukePlayerPlugin : Plugin() {
         val expectId = stringArg(call, call.getString("expectId"), "expectId") ?: return
         withController(call) { c ->
             if (index !in 0 until c.mediaItemCount) {
-                call.reject("index out of range: $index")
+                rejectOutOfRange(call, expectId, "index out of range: $index")
             } else {
                 // In the service: queued tracks stay next; on an autoplay track the radio continues from it.
                 val args = Bundle().apply {
@@ -877,7 +882,7 @@ class JukePlayerPlugin : Plugin() {
         return StateEncoder.encode(c, queueIds)
     }
 
-    /** Describes autoplay items the service added itself (Global radio) to the web, once each. */
+    /** Describes the Global tracks in the queue to the web, once each (it can't look them up). */
     private fun announceTracks(c: MediaController) {
         if (!hasListeners("tracks")) return
         val arr = JSArray()
@@ -885,7 +890,6 @@ class JukePlayerPlugin : Plugin() {
             val item = c.getMediaItemAt(i)
             val id = item.mediaId
             if (!id.startsWith(QueueCommands.GLOBAL_PREFIX) || id in announcedTracks) continue
-            if (item.mediaMetadata.extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) != true) continue
             val ytId = JukeUris.ytIdOf(item) ?: continue
             announcedTracks.add(id)
             val o = JSObject()
@@ -925,6 +929,14 @@ class JukePlayerPlugin : Plugin() {
     } catch (e: TooLargeException) {
         call.reject(e.message, QueueCommands.TOO_LARGE)
         null
+    }
+
+    /**
+     * An index past the end: with an `expectId` the caller's list is just stale (the service
+     * trimmed or removed items meanwhile), so STALE_INDEX lets it resync quietly (K2).
+     */
+    private fun rejectOutOfRange(call: PluginCall, expectId: String, message: String) {
+        if (expectId.isNotEmpty()) call.reject(message, QueueCommands.STALE_INDEX) else call.reject(message)
     }
 
     private fun Bundle.putExpect(expectId: String) {

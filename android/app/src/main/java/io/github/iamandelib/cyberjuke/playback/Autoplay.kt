@@ -108,7 +108,29 @@ internal object QueueInfo {
 
     private val lowListeners = CopyOnWriteArraySet<QueueLowListener>()
 
-    fun addLow(l: QueueLowListener) = lowListeners.add(l)
+    /**
+     * The last "running low" not answered yet (left, seedId). The service only says it once per
+     * state; if nobody was listening then (the app swiped away, the WebView reloading), a new
+     * listener hears it again, so autoplay doesn't run dry.
+     */
+    @Volatile
+    var lastLow: Pair<Int, String?>? = null
+        private set
+
+    fun addLow(l: QueueLowListener) {
+        lowListeners.add(l)
+        lastLow?.let { (left, seed) -> l.onQueueLow(left, seed) }
+    }
+
     fun removeLow(l: QueueLowListener) = lowListeners.remove(l)
-    fun emitQueueLow(left: Int, seedId: String?) = lowListeners.forEach { it.onQueueLow(left, seedId) }
+
+    fun emitQueueLow(left: Int, seedId: String?) {
+        lastLow = left to seedId
+        lowListeners.forEach { it.onQueueLow(left, seedId) }
+    }
+
+    /** Autoplay has enough ahead again (or stopped): nothing to repeat to a new listener. */
+    fun clearLow() {
+        lastLow = null
+    }
 }

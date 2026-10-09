@@ -185,6 +185,9 @@ internal object NetPrefs {
     /** The default network is now of kind [key]. Returns true if the family in force changed. */
     @Synchronized
     fun onNetwork(key: String): Boolean {
+        // Capabilities change often on the same network: only a new kind re-reads the memory,
+        // so an expired switch lapses at a real network change, never mid-song.
+        if (key == networkKey) return false
         val before = preferIpv4
         networkKey = key
         autoActive = remembered(key)

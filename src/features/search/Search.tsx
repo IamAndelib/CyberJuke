@@ -52,16 +52,20 @@ const FILTERS: RailItem<MusicFilter>[] = (['songs', 'albums', 'artists', 'playli
   testid: `filter-${id}`,
 }));
 
-/** The query after a pause in typing; clearing the field takes effect at once. */
-function useDebounced(value: string, ms: number): string {
-  const [v, setV] = useState(value);
+/**
+ * The query after a pause in typing; clearing the field takes effect at once, and so does a
+ * new [scope] (switching to Global mid-word searches what's typed, not a stale prefix).
+ */
+function useDebounced(value: string, ms: number, scope: string): string {
+  const [v, setV] = useState({ value, scope });
   const cleared = !value.trim();
+  const rescoped = v.scope !== scope;
   useEffect(() => {
-    if (cleared) return setV(value);
-    const id = setTimeout(() => setV(value), ms);
+    if (cleared || rescoped) return setV({ value, scope });
+    const id = setTimeout(() => setV({ value, scope }), ms);
     return () => clearTimeout(id);
-  }, [value, ms, cleared]);
-  return cleared ? value : v;
+  }, [value, ms, cleared, scope, rescoped]);
+  return cleared || rescoped ? value : v.value;
 }
 
 /** The one place a wider scope is suggested: under few or no results. */
@@ -443,7 +447,7 @@ export function Search() {
   const ctx = searchContext.value;
   // Here only exists with a context.
   const mode: SearchMode = searchMode.value === 'here' && !ctx ? 'jukebox' : searchMode.value;
-  const debounced = useDebounced(q, mode === 'global' ? GLOBAL_DEBOUNCE_MS : DEBOUNCE_MS);
+  const debounced = useDebounced(q, mode === 'global' ? GLOBAL_DEBOUNCE_MS : DEBOUNCE_MS, mode);
   const label = mode === 'global' ? 'Search globally' : placeholder(mode, ctx);
 
   useEffect(() => {

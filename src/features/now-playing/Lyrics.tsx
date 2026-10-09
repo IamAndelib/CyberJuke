@@ -54,25 +54,34 @@ function useLyrics(track: Track, durationMs: number): [LyricsOutcome | null, () 
       return;
     }
     setState({ id: track.id, outcome: null });
-    if (!durReady) return;
+    // Not known yet (a placeholder while the list resolves): wait for the real track.
+    if (!durReady || !track.ytId) return;
     void client.get(track, durationMs).then((outcome) => live && setState({ id: track.id, outcome }));
     return () => {
       live = false;
     };
     // Keyed by the track's id: a new Track object for the same id (or a duration update) mustn't refetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [track.id, durReady, attempt]);
+  }, [track.id, !!track.ytId, durReady, attempt]);
   return [state.id === track.id ? state.outcome : null, () => setAttempt((n) => n + 1)];
 }
 
 export function LyricsPanel({ track, s }: { track: Track; s: PlayerState }) {
   const [outcome, retry] = useLyrics(track, s.durationMs);
   const isOnline = online.value;
+  const failed = outcome?.status === 'error';
+  // Back online after a failure: try again by itself.
+  useEffect(() => {
+    if (isOnline && failed) retry();
+    // Only the connection coming back counts, not a new failure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOnline]);
   let body;
   if (!outcome) body = <LyricsState text="[ fetching lyrics… ]" busy />;
   else if (outcome.status === 'error')
     body =
-      outcome.offline || !isOnline ? (
+      // Offline only when the device is: a failed request while online offers Retry.
+      !isOnline ? (
         <LyricsState text="Lyrics unavailable offline" />
       ) : (
         <LyricsState text="Lyrics unavailable right now">

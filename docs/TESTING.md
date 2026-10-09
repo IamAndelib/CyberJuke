@@ -14,9 +14,11 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] Notification and lock screen: play/pause, next and previous work, and they show the title and artwork. *(These changed: the lock screen no longer lists the queue.)*
 - [ ] Unplugging headphones or disconnecting Bluetooth pauses playback.
 - [ ] Switch between Wi-Fi and mobile data **during** a song: playback continues, or resumes by itself within a few seconds. No "YouTube is limiting requests" banner.
+- [ ] Turn on airplane mode during a song until it stops, then off again: it carries on by itself.
+- [ ] Start a Jukebox track, swipe the app away, and let it play past the list: autoplay keeps going. Reopen the app: Up next shows the autoplay tracks.
 - [ ] Settings → Audio quality **Low**, then **High**: both play.
 - [ ] Settings → **IPv4**: Always, then Off, then back to **Auto**: tracks play each time.
-- [ ] On a phone or network that showed "YouTube is limiting requests" before: play for a while with IPv4 on **Auto**. The banner should rarely show; if it does, playback **resumes by itself** when the countdown ends (keep the app in the background to check).
+- [ ] On a phone or network that showed "YouTube is limiting requests" before: play for a while with IPv4 on **Auto**. The banner should rarely show; if it does, playback **resumes by itself** when a short countdown (1 or 3 min) ends, also with the screen off (keep the app in the background to check). Unplug your headphones during the countdown: it then stays paused.
 - [ ] If the banner shows: tap **[Try now]**. It goes away; music resumes, or the banner comes back with a longer wait. Switching Wi-Fi ↔ mobile data also lifts it at once.
 - [ ] Settings shows a **Connection** line under IPv4 (IPv4 or IPv6, and the last limit, if any).
 - [ ] Pause a track right after starting it: it stays paused once it has loaded.

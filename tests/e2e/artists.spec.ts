@@ -10,9 +10,10 @@ const y = async (l: Locator) => (await l.boundingBox())!.y;
 async function openFirstArtist(page: Page): Promise<string> {
   await page.goto('/');
   await page.getByTestId('tab-artists').click();
-  const tile = page.getByTestId('artist-grid').getByTestId('artist-tile').first();
-  const artist = (await tile.getAttribute('data-artist'))!;
-  await tile.click();
+  const grid = page.getByTestId('artist-grid');
+  const artist = (await grid.getByTestId('artist-tile').first().getAttribute('data-artist'))!;
+  // By name: the grid may still be re-ordering as it fills in.
+  await grid.locator(`[data-testid="artist-tile"][data-artist="${artist.replace(/"/g, '\\"')}"]`).click();
   await expect(page.getByTestId('screen-artist')).toBeVisible();
   return artist;
 }

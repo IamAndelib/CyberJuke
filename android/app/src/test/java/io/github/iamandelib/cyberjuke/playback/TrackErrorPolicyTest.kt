@@ -151,8 +151,9 @@ class TrackErrorPolicyTest {
         assertEquals(Action.ReResolve, TrackErrorPolicy.decide(moved))
         // Same for a URL past its own expire.
         assertEquals(Action.ReResolve, TrackErrorPolicy.decide(moved.copy(resolvedBeforeNetworkChange = false, urlExpired = true)))
-        // And once re-resolved, a stale URL's second 403 is not taken as a block either.
-        assertEquals(Action.Skip, TrackErrorPolicy.decide(moved.copy(alreadyReResolved = true)))
+        // Re-resolved, and the network changed again before it loaded (the IPv6 address came a
+        // second later): still bound to an old IP, so another fresh link, not a block or a skip.
+        assertEquals(Action.ReResolve, TrackErrorPolicy.decide(moved.copy(alreadyReResolved = true)))
         // A 429 is a refusal wherever the URL came from.
         assertEquals(Action.SwitchToIpv4, TrackErrorPolicy.decide(moved.copy(httpCode = 429)))
     }

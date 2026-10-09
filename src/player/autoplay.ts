@@ -35,6 +35,8 @@ export interface AutoplayDeps {
 export interface Autoplay {
   /** Add more after a low signal (also what the player's onQueueLow calls). */
   fill(e: QueueLow): Promise<void>;
+  /** The catalog has loaded: answer a signal that came before it (the player won't send it again). */
+  catalogReady(): void;
   stop(): void;
 }
 
@@ -50,6 +52,11 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
    * dropped: repeat, a new list).
    */
   let batch: { seedId: string; ids: string[]; at: number; queue?: readonly Track[] } | null = null;
+  /**
+   * A Jukebox signal that came while the catalog was still loading (first launch, sign-in,
+   * a reloaded WebView): nothing to pick from yet, so it waits for `catalogReady`.
+   */
+  let starved: QueueLow | null = null;
 
   async function run(e: QueueLow): Promise<void> {
     const s = player.state.peek();
@@ -83,10 +90,16 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       return;
     }
 
+    const catalog = deps.catalog();
+    if (!catalog.length) {
+      starved = e;
+      return;
+    }
+    starved = null;
     // What played since this seed started steers it (Jukebox tracks only: similarTracks skips Global ones).
     const played = s.index >= 0 ? s.queue.slice(0, s.index + 1) : [];
     const from = played.map((t) => t.id).lastIndexOf(seed.id);
-    const picks = similarTracks(deps.catalog(), {
+    const picks = similarTracks(catalog, {
       seed,
       played: from < 0 ? [] : played.slice(from + 1).reverse(),
       recent: deps.history(),
@@ -121,6 +134,12 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     return p;
   }
 
+  function catalogReady(): void {
+    const e = starved;
+    starved = null;
+    if (e) void fill(e);
+  }
+
   const off = player.onQueueLow((e) => void fill(e));
-  return { fill, stop: off };
+  return { fill, catalogReady, stop: off };
 }

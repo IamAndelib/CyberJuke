@@ -150,8 +150,12 @@ internal object NetBlock {
     @Volatile
     private var resumeUntil = 0L
 
-    /** Auto-resume only within this long of playback being interrupted (no surprise music later). */
-    const val RESUME_WINDOW_MS = 15L * 60_000L
+    /**
+     * Auto-resume only within this long of playback being interrupted: no surprise music much
+     * later, and inside the 10 minutes Media3 keeps a paused service in the foreground (after
+     * that, Android 12+ may refuse to restart playback from the background).
+     */
+    const val RESUME_WINDOW_MS = 9L * 60_000L
 
     private fun state(s: Surface) = if (s == Surface.PLAYBACK) playback else music
 

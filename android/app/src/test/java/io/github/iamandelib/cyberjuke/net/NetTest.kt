@@ -51,6 +51,22 @@ class NetTest {
     }
 
     @Test
+    fun anExpiredSwitchLapsesOnlyAtARealNetworkChange() {
+        var now = 0L
+        NetPrefs.clock = { now }
+        NetPrefs.onNetwork("wifi")
+        NetPrefs.switchToIpv4Automatically()
+        now = NetPrefs.AUTO_MS + 1
+        // The same Wi-Fi's capabilities change (signal, validation): no flip mid-song.
+        assertFalse(NetPrefs.onNetwork("wifi"))
+        assertTrue(NetPrefs.preferIpv4)
+        // Off to mobile data and back: now the expired memory lapses.
+        NetPrefs.onNetwork("cellular")
+        NetPrefs.onNetwork("wifi")
+        assertFalse(NetPrefs.preferIpv4)
+    }
+
+    @Test
     fun alwaysAndOffOverrideTheAutoMemory() {
         NetPrefs.clock = { 0L }
         NetPrefs.onNetwork("wifi")

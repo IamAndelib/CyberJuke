@@ -64,6 +64,23 @@ describe('autoplay', () => {
     expect(added[1][0]).toHaveLength(AUTOPLAY_MORE);
   });
 
+  it('a signal that came before the catalog loaded is answered once it has (the player asks only once)', async () => {
+    const seed = track('c0', { artist: 'A0' });
+    let cat: Track[] = [];
+    const full = Array.from({ length: 60 }, (_, i) => track(`c${i}`, { artist: `A${i % 15}` }));
+    const { ap, added } = setup({ current: seed, seed, queue: [seed], upNext: [] }, { catalog: () => cat });
+    await ap.fill({ left: 0, seedId: 'c0' });
+    expect(added).toHaveLength(0);
+    cat = full;
+    ap.catalogReady();
+    await vi.waitFor(() => expect(added).toHaveLength(1));
+    expect(added[0][0]).toHaveLength(AUTOPLAY_FIRST);
+    // Answered once: another ready signal adds nothing more.
+    ap.catalogReady();
+    await Promise.resolve();
+    expect(added).toHaveLength(1);
+  });
+
   it('a low signal from during a refill is counted again: no second batch while the first is ahead, even before the state shows it', async () => {
     const seed = track('c0', { artist: 'A0' });
     const { ap, added, s, player } = setup({ current: seed, seed, queue: [seed], upNext: [] });

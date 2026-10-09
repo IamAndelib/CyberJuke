@@ -165,3 +165,8 @@ export function livePosition(s: PlayerState, now = performance.now()): number {
   const p = s.positionMs + Math.max(0, now - s.sampledAt);
   return s.durationMs > 0 ? Math.min(p, s.durationMs) : p;
 }
+
+/** The NSFW tracks autoplay queued (each once): they go when NSFW is turned off. */
+export function nsfwAutoplayIds(upNext: readonly UpNextItem[]): string[] {
+  return [...new Set(upNext.filter((u) => u.auto && u.track.nsfw).map((u) => u.track.id))];
+}

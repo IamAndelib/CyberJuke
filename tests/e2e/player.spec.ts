@@ -335,7 +335,10 @@ test('scrolling the lyrics by hand pauses the auto-scroll', async ({ page }) => 
     return tops;
   });
   expect(seen.length).toBeGreaterThan(10);
-  expect(new Set(seen)).toEqual(new Set([0]));
+  // Near the top (an auto-scroll already in flight may stop a few px short), and still there:
+  // nothing scrolled it back during the pause.
+  expect(seen[0]).toBeLessThan(20);
+  expect(new Set(seen)).toEqual(new Set([seen[0]]));
   // After the pause it centres the current line again.
   await expect.poll(() => synced.evaluate((el) => el.scrollTop), { timeout: 8000 }).toBeGreaterThan(50);
 });

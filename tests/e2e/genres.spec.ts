@@ -129,9 +129,10 @@ for (const kind of ['genres', 'artists'] as const) {
 test('★ on a genre page: adds it to Favourites, Undo takes it back, and it follows the grid', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('tab-genres').click();
-  const cell = page.getByTestId('genre-grid').getByTestId('genre-cell').nth(2);
-  const genre = (await cell.getAttribute('data-genre'))!;
-  await cell.getByTestId('genre-tile').click();
+  const grid = page.getByTestId('genre-grid');
+  const genre = (await grid.getByTestId('genre-cell').nth(2).getAttribute('data-genre'))!;
+  // By name: the grid may still be re-ordering as it fills in.
+  await grid.locator(`[data-testid="genre-tile"][data-genre="${genre}"]`).click();
   const star = page.getByTestId('genre-page-fav');
   await expect(star).toHaveAttribute('aria-pressed', 'false');
   await expect(star).toHaveAttribute('aria-label', `Add ${genre} to favourites`);

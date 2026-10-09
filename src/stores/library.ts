@@ -93,7 +93,13 @@ function write(key: string, value: unknown): void {
   store.set(key, JSON.stringify(value)).catch(() => {});
 }
 
+/** loadLibrary ran: history may be written, and later loads replace the library outright. */
+let loadedOnce = false;
+
 function saveHistory(entries: HistoryEntry[]): void {
+  // Before the file was first read, a write would replace the history in it: loadLibrary
+  // merges what was played meanwhile and saves then.
+  if (!loadedOnce) return;
   void historyFile.save(encodeHistory(entries));
 }
 
@@ -106,9 +112,12 @@ export async function loadLibrary(): Promise<void> {
     readJson<unknown>(store, K_FAV_ARTISTS, []),
   ]);
   liked.value = asTracks(l);
-  history.value = decodeHistory(h, Date.now());
-  // Rewrites a migrated (old-shape) history in the current one; skipped when unchanged.
-  if (h != null) saveHistory(history.value);
+  // A play recorded before the first read (the app reopened mid-song) is kept, not overwritten.
+  const early = loadedOnce ? [] : history.value;
+  loadedOnce = true;
+  history.value = early.length ? mergeHistory(early, decodeHistory(h, Date.now()), Date.now()) : decodeHistory(h, Date.now());
+  // Rewrites a migrated (old-shape) history in the current one, and keeps early plays; skipped when unchanged.
+  if (h != null || early.length) saveHistory(history.value);
   // There but unreadable (not missing): what's played now is kept in memory, and the
   // file is read again later and merged, never replaced.
   if (historyFile.unreadable) retryHistory(0);

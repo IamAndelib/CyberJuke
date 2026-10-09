@@ -99,7 +99,7 @@ interface JukePlayerPlugin {
   addListener(event: 'unblocked', cb: (e: Record<string, never>) => void): Promise<{ remove: () => Promise<void> }>;
   /** Autoplay has `left` (<= 5) Jukebox tracks to go: send more with addAutoplay. */
   addListener(event: 'queueLow', cb: (e: { left: number; seedId: string | null }) => void): Promise<{ remove: () => Promise<void> }>;
-  /** Tracks the service added itself (Global radio), so they can be shown. */
+  /** The Global tracks in the queue (radio items, and after a reload every Global track), so they can be shown. */
   addListener(event: 'tracks', cb: (e: { tracks: NativeTrack[] }) => void): Promise<{ remove: () => Promise<void> }>;
   /** Parsing failed in a way that means YouTube changed something (an app update is needed). */
   addListener(event: 'extractorBroken', cb: (e: { message: string }) => void): Promise<{ remove: () => Promise<void> }>;
