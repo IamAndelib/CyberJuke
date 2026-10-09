@@ -6,7 +6,7 @@ vi.mock('@capacitor/preferences', () => ({
   Preferences: { get: async () => ({ value: null }), set: async () => {} },
 }));
 
-const { CATALOG_KEY, CATALOG_MEMBERS_KEY, FULL_AFTER_MS, INCREMENTAL_AFTER_MS, catalogKey, createCatalog, genreCounts, mergeTracks, mostSaved } =
+const { CATALOG_KEY, CATALOG_MEMBERS_KEY, FULL_AFTER_MS, INCREMENTAL_AFTER_MS, catalogKey, createCatalog, genreCounts, mergeById, mostSaved } =
   await import('./catalog');
 
 function t(id: string, createdAt: string, p: Partial<Track> = {}): Track {
@@ -65,16 +65,16 @@ function setup(opts: { tracks?: Track[]; stored?: object; nsfw?: boolean; start?
   };
 }
 
-describe('mergeTracks', () => {
+describe('mergeById', () => {
   it('dedupes by id, newer data wins, newest first', () => {
     const old = [t('a', D(1), { saves: 1 }), t('b', D(2))];
-    const merged = mergeTracks(old, [t('a', D(1), { saves: 5 }), t('c', D(3))]);
+    const merged = mergeById(old, [t('a', D(1), { saves: 5 }), t('c', D(3))]);
     expect(merged.map((x) => x.id)).toEqual(['c', 'b', 'a']);
     expect(merged.find((x) => x.id === 'a')!.saves).toBe(5);
   });
 
   it('orders same-timestamp tracks deterministically', () => {
-    expect(mergeTracks([t('x', D(1)), t('y', D(1))], []).map((x) => x.id)).toEqual(['y', 'x']);
+    expect(mergeById([t('x', D(1)), t('y', D(1))], []).map((x) => x.id)).toEqual(['y', 'x']);
   });
 });
 

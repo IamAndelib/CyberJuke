@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { whenIdle } from '../core/idle';
 
 const CHUNK = 60;
 
@@ -12,17 +13,6 @@ function remember(key: string | null, n: number): void {
   counts.set(key, n);
   if (counts.size > MAX_KEYS) counts.delete(counts.keys().next().value!);
 }
-
-type Idle = (cb: () => void) => number;
-const idle: Idle = (cb) => {
-  const ric = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
-  return ric ? ric(cb, { timeout: 200 }) : (setTimeout(cb, 16) as unknown as number);
-};
-const cancelIdle = (id: number) => {
-  const cic = (globalThis as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
-  if (cic) cic(id);
-  else clearTimeout(id);
-};
 
 interface ChunkOptions {
   /**
@@ -57,10 +47,7 @@ export function useChunks(total: number, key: string | null, step = CHUNK, opts:
 
   useEffect(() => {
     if (shown >= total) return;
-    if (opts.fill) {
-      const id = idle(grow);
-      return () => cancelIdle(id);
-    }
+    if (opts.fill) return whenIdle(grow, 200, 16);
     const el = sentinel.current;
     if (!el) return;
     const io = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && grow(), { rootMargin: '800px 0px' });

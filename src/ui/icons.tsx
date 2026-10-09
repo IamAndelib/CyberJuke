@@ -4,7 +4,7 @@
  * A few icons are smooth vectors on the same 12x12 grid (see V).
  */
 
-const B: Record<string, string[]> = {
+const B = {
   pause: [
     '............',
     '..###..###..',
@@ -301,20 +301,6 @@ const B: Record<string, string[]> = {
     '............',
     '............',
   ],
-  plus: [
-    '............',
-    '.....##.....',
-    '.....##.....',
-    '.....##.....',
-    '.....##.....',
-    '.##########.',
-    '.##########.',
-    '.....##.....',
-    '.....##.....',
-    '.....##.....',
-    '.....##.....',
-    '............',
-  ],
   playNext: [
     '............',
     '#...........',
@@ -399,21 +385,7 @@ const B: Record<string, string[]> = {
     '........###.',
     '.........##.',
   ],
-  offline: [
-    '............',
-    '#...........',
-    '.#..######..',
-    '..#.......#.',
-    '.#.#.####..#',
-    '#...#....#..',
-    '...#.#.......',
-    '..#...#.##..',
-    '.......#....',
-    '.....##.#...',
-    '.....##..#..',
-    '..........#.',
-  ],
-};
+} satisfies Record<string, string[]>;
 
 /**
  * Vector icons on the 12x12 grid. Play is a smooth triangle as tall as the pause bars
@@ -425,10 +397,10 @@ const V = {
 
 const cache = new Map<string, string>();
 
-function pathFor(name: string): string {
+function pathFor(name: keyof typeof B): string {
   const hit = cache.get(name);
   if (hit) return hit;
-  const rows = B[name] ?? [];
+  const rows: string[] = B[name];
   let d = '';
   rows.forEach((row, y) => {
     let x = 0;

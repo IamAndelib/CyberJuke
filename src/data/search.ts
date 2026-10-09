@@ -19,8 +19,8 @@ const MAX_GENRES = 8;
 const PHRASE_BONUS = 2;
 
 const W_TITLE = 3;
-export const W_ARTIST = 3;
-export const W_GENRE = 2;
+const W_ARTIST = 3;
+const W_GENRE = 2;
 
 /** Letters NFKD leaves alone but people type without the diacritic. */
 const FOLD: Record<string, string> = { ß: 'ss', æ: 'ae', œ: 'oe', ø: 'o', ł: 'l', đ: 'd', ð: 'd', þ: 'th', ı: 'i' };

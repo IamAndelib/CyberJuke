@@ -376,7 +376,7 @@ function useSwipeToClose(ref: { current: HTMLDivElement | null }): void {
       el.removeEventListener('touchend', onEnd);
       el.removeEventListener('touchcancel', onEnd);
     };
-    // Mount-only: `ref` is a stable ref object to the sheet, which never remounts (UX rework pending).
+    // Mount-only: `ref` is a stable ref object to the sheet, which never remounts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }

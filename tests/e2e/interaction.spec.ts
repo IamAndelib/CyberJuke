@@ -4,7 +4,7 @@ import { box, openNowPlaying, openSearch, playerCalls, scrollTo, scrollTopOf, se
 
 /**
  * Wave 1c interaction: navigation in place (P4, P5, SM7, M10), undo toasts and confirm
- * sheets (C1, M1, M3), favourites that don't move under the finger (M8), row taps
+ * sheets (C1, M1, M3), favourites (M8, since reworked: a starred tile moves up), row taps
  * (M9, P10), Search (P9, P7), play contexts and full lists (P2, P3, P8), Settings (C3, U2).
  */
 

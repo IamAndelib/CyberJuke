@@ -104,7 +104,11 @@ test('every screen (dark)', async ({ page }) => {
   await page.getByTestId('np-close').click();
 
   await page.getByTestId('tab-genres').click();
-  for (const i of [3, 1]) await page.getByTestId('genre-grid').getByTestId('genre-fav').nth(i).click();
+  for (const i of [3, 1]) {
+    await page.getByTestId('genre-grid').getByTestId('genre-fav').nth(i).click();
+    // A second star at the spot a starred tile just left is ignored for a moment (FavTile).
+    await page.waitForTimeout(700);
+  }
   await expect(page.getByTestId('fav-genres').getByTestId('genre-tile')).toHaveCount(2);
   // The "added" toasts gone before the shot.
   await expect(page.getByTestId('toast')).toHaveCount(0, { timeout: 5000 });
@@ -141,7 +145,11 @@ test('every screen (dark)', async ({ page }) => {
   await page.getByTestId('search-close').click();
 
   await page.getByTestId('tab-artists').click();
-  for (const i of [4, 0]) await page.getByTestId('artist-grid').getByTestId('artist-fav').nth(i).click();
+  for (const i of [4, 0]) {
+    await page.getByTestId('artist-grid').getByTestId('artist-fav').nth(i).click();
+    // A second star at the spot a starred tile just left is ignored for a moment (FavTile).
+    await page.waitForTimeout(700);
+  }
   await page.getByTestId('tab-home').click();
   await page.getByTestId('tab-artists').click();
   await expect(page.getByTestId('fav-artists').getByTestId('artist-tile')).toHaveCount(2);

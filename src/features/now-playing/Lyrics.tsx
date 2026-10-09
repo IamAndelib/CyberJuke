@@ -43,7 +43,7 @@ function useLyrics(track: Track, durationMs: number): [LyricsOutcome | null, () 
     setDurReady(false);
     const id = setTimeout(() => setDurReady(true), 2500);
     return () => clearTimeout(id);
-    // Only whether a duration is known matters, not its value (UX rework pending).
+    // Only whether a duration is known matters, not its value.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track.id, durationMs > 0]);
   useEffect(() => {

@@ -21,10 +21,10 @@ import { isGlobal, type Track } from './model';
 import { artistKey, splitArtists } from './artists';
 import { normalize, words } from './search';
 
-export const W_ARTIST = 3;
-export const W_GENRE = 2.5;
+const W_ARTIST = 3;
+const W_GENRE = 2.5;
 const W_VIBE = 2;
-export const W_POSTER = 0.5;
+const W_POSTER = 0.5;
 const W_SAVES = 0.4;
 const W_RECENT = 0.3;
 /** Share of the score from the seed; the rest from the last DRIFT_TRACKS played. */

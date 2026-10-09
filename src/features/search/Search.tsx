@@ -37,8 +37,6 @@ const GLOBAL_DEBOUNCE_MS = 400;
 /** Fewer Jukebox results than this shows the "Search globally" line. */
 const BRIDGE_BELOW = 5;
 
-export { searchMode, type SearchMode };
-
 /** Results start a radio from the tapped track (C2). */
 const SEARCH_CTX = radio('Search');
 const GLOBAL_CTX = radio('Global');
@@ -409,7 +407,7 @@ function RecentSearches({ onPick }: { onPick: (q: string) => void }) {
           class="link-btn recent-clear"
           onClick={() => {
             const old = clearRecentSearches();
-            toast('Recent searches cleared', 4000, { label: 'Undo', run: () => restoreRecentSearches(old) });
+            toast('Recent searches cleared', undefined, { label: 'Undo', run: () => restoreRecentSearches(old) });
           }}
           data-testid="recent-clear"
         >

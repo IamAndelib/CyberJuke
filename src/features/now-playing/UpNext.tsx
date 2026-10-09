@@ -75,7 +75,7 @@ export function UpNext() {
     // another track starts, when "back where it was" no longer means anything.
     const ctx0 = playContext.peek();
     const cur0 = currentId.peek();
-    toast('Removed from queue', 4000, {
+    toast('Removed from queue', undefined, {
       label: 'Undo',
       run: () => void player.restore(it.track, kind, beforeId),
       stale: () => playContext.value !== ctx0 || currentId.value !== cur0,

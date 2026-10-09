@@ -1,6 +1,5 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { TEST_HOOKS } from '../../core/testHooks';
 import { scrollAnimating } from '../clickGuard';
 import { Icon } from '../icons';
 import { reducedMotion } from '../../core/motion';
@@ -438,6 +437,3 @@ export function Screen({
     </div>
   );
 }
-
-// Named for the dev/test render counter (minified builds lose function names).
-if (TEST_HOOKS) (Screen as { displayName?: string }).displayName = 'Screen';

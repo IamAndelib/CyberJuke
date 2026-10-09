@@ -95,7 +95,7 @@ function byNewest(a: Track, b: Track): number {
 }
 
 /** Merge `incoming` into `existing` by id (incoming wins), newest first. */
-export function mergeTracks(existing: Track[], incoming: Track[]): Track[] {
+export function mergeById(existing: Track[], incoming: Track[]): Track[] {
   const map = new Map<string, Track>();
   for (const t of existing) map.set(t.id, t);
   for (const t of incoming) map.set(t.id, t);
@@ -181,13 +181,13 @@ export function createCatalog(deps: CatalogDeps): Catalog {
       if (mode === 'full') {
         const fetched = await deps.source.catalog();
         if (g !== gen) return;
-        all.value = mergeTracks([], fetched);
+        all.value = mergeById([], fetched);
         fullAt = checkedAt = now();
       } else {
         const since = new Date(all.value[0].createdAt);
         const fresh = await deps.source.catalog(isNaN(since.getTime()) ? undefined : since);
         if (g !== gen) return;
-        if (fresh.length) all.value = mergeTracks(all.value, fresh);
+        if (fresh.length) all.value = mergeById(all.value, fresh);
         checkedAt = now();
       }
       error.value = null;
