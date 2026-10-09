@@ -42,6 +42,9 @@ import { BootError } from './BootError';
 import { Home } from '../features/home/Home';
 import { TrackRow } from '../ui/components/TrackRow';
 import { MiniPlayer, NowPlaying } from '../features/now-playing/PlayerUI';
+import { ArtistGrid, ArtistTile, ArtistTiles } from '../features/artists/Artists';
+import { ArtistPage } from '../features/artists/Artist';
+import { GenreDetail, GenreGrid, GenreTile, GenreTiles } from '../features/genres/Genres';
 
 const native = Capacitor.isNativePlatform();
 
@@ -122,7 +125,7 @@ function startCatalog(): void {
 async function boot(): Promise<void> {
   // e2e: the boot-failure screen.
   if (TEST_HOOKS && localStorage.getItem('__cyberjukeFailBoot')) throw new Error('Simulated boot failure');
-  installRenderCounter({ App, Overlays, Home, TrackRow, MiniPlayer, NowPlaying });
+  installRenderCounter({ App, Overlays, Home, TrackRow, MiniPlayer, NowPlaying, ArtistGrid, ArtistTiles, ArtistTile, ArtistPage, GenreGrid, GenreTiles, GenreTile, GenreDetail });
   // A saved Cyberspace login decides which query the first requests use.
   await Promise.all([loadLibrary().catch((e) => logError('loadLibrary', e)), auth.restore()]);
   startAccount();

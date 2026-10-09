@@ -3,6 +3,7 @@ import { artistKey } from '../../data/artists';
 import { catalog } from '../../stores/catalog';
 import { artistIndex, displayArtist } from '../../stores/artists';
 import { favoriteArtists } from '../../stores/library';
+import { useFavArtist } from '../../ui/useFavs';
 import { toggleFavoriteArtistWithUndo } from '../../stores/undo';
 import { Icon } from '../../ui/icons';
 import { openArtistPage, useSearchContext, type Place } from '../../ui/nav';
@@ -14,9 +15,9 @@ import { useMemo } from 'preact/hooks';
 import { takeSections, useChunks } from '../../ui/useChunks';
 import type { Artist } from '../../data/artists';
 import { artistsSort } from '../../stores/prefs';
-import { useSettled } from '../../ui/useSettled';
 
-function ArtistTile({ name, fav }: { name: string; fav: boolean }) {
+export function ArtistTile({ name }: { name: string }) {
+  const fav = useFavArtist(name);
   return (
     <div class={'genre-cell' + (fav ? ' fav' : '')} data-testid="artist-cell" data-artist={name}>
       <button class="genre-tile" onClick={() => openArtistPage(name)} data-testid="artist-tile" data-artist={name}>
@@ -35,11 +36,34 @@ function ArtistTile({ name, fav }: { name: string; fav: boolean }) {
   );
 }
 
+/** ★ Favourites above the grid, in the order added; follows every star at once. */
+function FavArtists() {
+  const favs = favoriteArtists.value;
+  if (!favs.length) return null;
+  return (
+    <>
+      <section data-testid="fav-artists">
+        <div class="section-head">
+          <h2 class="section-title">★ Favourites</h2>
+        </div>
+        <div class="genre-grid">
+          {favs.map((name) => (
+            <ArtistTile key={artistKey(name)} name={displayArtist(name)} />
+          ))}
+        </div>
+      </section>
+      <div class="section-head">
+        <h2 class="section-title">All artists</h2>
+      </div>
+    </>
+  );
+}
+
 /** Grid tiles per chunk: the first screens render at once, the rest in idle time. */
 const GRID_CHUNK = 120;
 
 /** Every artist as tiles, Popular or A–Z, rendered in chunks. */
-function ArtistTiles({ list, sort, favKeys }: { list: Artist[]; sort: 'popular' | 'az'; favKeys: Set<string> }) {
+export function ArtistTiles({ list, sort }: { list: Artist[]; sort: 'popular' | 'az' }) {
   const sections = useMemo(() => (sort === 'az' ? groupAZ(list, (a) => a.name) : null), [list, sort]);
   const { shown } = useChunks(list.length, `artists:${sort}`, GRID_CHUNK, { fill: true });
   if (sections) {
@@ -50,7 +74,7 @@ function ArtistTiles({ list, sort, favKeys }: { list: Artist[]; sort: 'popular' 
             <AZHead letter={sec.letter} />
             <div class="genre-grid">
               {sec.items.map((a) => (
-                <ArtistTile key={a.key} name={a.name} fav={favKeys.has(a.key)} />
+                <ArtistTile key={a.key} name={a.name} />
               ))}
             </div>
           </section>
@@ -61,7 +85,7 @@ function ArtistTiles({ list, sort, favKeys }: { list: Artist[]; sort: 'popular' 
   return (
     <div class="genre-grid" data-testid="artist-grid" data-sort="popular">
       {list.slice(0, shown).map((a) => (
-        <ArtistTile key={a.key} name={a.name} fav={favKeys.has(a.key)} />
+        <ArtistTile key={a.key} name={a.name} />
       ))}
     </div>
   );
@@ -80,10 +104,6 @@ export function ArtistGrid() {
     tracks: () => NO_TRACKS,
     places: artistPlaces,
   });
-  const favs = favoriteArtists.value;
-  // M8: the Favourites section changes on the next visit or after a scroll, never under the finger.
-  const [favSection, anchor] = useSettled(favs);
-  const favKeys = new Set(favs.map(artistKey));
   const status = catalog.status.value;
   const sort = artistsSort.value;
 
@@ -97,24 +117,7 @@ export function ArtistGrid() {
       right={<GridSortRail sort={artistsSort} testid="artists-sort" />}
       azScroller={sort === 'az' && list.length > 0}
     >
-      <div ref={anchor} />
-      {favSection.length > 0 && (
-        <section data-testid="fav-artists">
-          <div class="section-head">
-            <h2 class="section-title">★ Favourites</h2>
-          </div>
-          <div class="genre-grid">
-            {favSection.map((name) => (
-              <ArtistTile key={artistKey(name)} name={displayArtist(name)} fav={favKeys.has(artistKey(name))} />
-            ))}
-          </div>
-        </section>
-      )}
-      {favSection.length > 0 && (
-        <div class="section-head">
-          <h2 class="section-title">All artists</h2>
-        </div>
-      )}
+      <FavArtists />
       {status === 'error' && !list.length ? (
         <ErrorState offline={!!catalog.error.value?.offline} message="Couldn't load artists." onRetry={() => void catalog.refresh()} />
       ) : !list.length ? (
@@ -124,7 +127,7 @@ export function ArtistGrid() {
           ))}
         </div>
       ) : (
-        <ArtistTiles list={list} sort={sort} favKeys={favKeys} />
+        <ArtistTiles list={list} sort={sort} />
       )}
       <p class="fineprint">Everyone whose music has been shared on the Jukebox. Tap ☆ to pin an artist to the top.</p>
     </Screen>

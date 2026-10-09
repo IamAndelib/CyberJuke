@@ -892,6 +892,11 @@
   font-size: 13px;
   box-shadow: 4px 4px 0 var(--color-border);
   animation: toast-in 0.18s steps(3);
+  /* Swiped away sideways (Toasts.tsx); vertical moves stay the page's. */
+  pointer-events: auto;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
 }
 @keyframes toast-in {
   from {

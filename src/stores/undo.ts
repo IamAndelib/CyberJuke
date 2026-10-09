@@ -23,6 +23,9 @@ import { toast } from './toast';
 
 const UNDO = 'Undo';
 
+/** How long an "added" confirmation shows (no Undo: adding is undone by tapping again). */
+const ADDED_MS = 1800;
+
 /** Like or unlike; an unlike can be undone. Returns the new liked state. */
 export function toggleLikeWithUndo(track: Track): boolean {
   // A track not known yet (a placeholder while the player's list resolves) can't be saved.
@@ -32,7 +35,7 @@ export function toggleLikeWithUndo(track: Track): boolean {
   }
   if (!isLiked(track.id)) {
     toggleLike(track);
-    toast('Added to Liked', 1800);
+    toast('Added to Liked songs', ADDED_MS);
     return true;
   }
   const r = unlike(track.id);
@@ -40,27 +43,27 @@ export function toggleLikeWithUndo(track: Track): boolean {
   return false;
 }
 
-/** Favourite or unfavourite a genre, with Undo either way. Returns the new state. */
+/** Favourite or unfavourite a genre; an unfavourite can be undone. Returns the new state. */
 export function toggleFavoriteGenreWithUndo(name: string): boolean {
   if (!isFavoriteGenre(name)) {
     toggleFavoriteGenre(name);
-    toast(`${name}: added to ★ Favourites`, undefined, { label: UNDO, run: () => void removeFavoriteGenre(name) });
+    toast(`${name} added to Favourites`, ADDED_MS);
     return true;
   }
   const r = removeFavoriteGenre(name);
-  if (r) toast(`${name}: removed from Favourites`, undefined, { label: UNDO, run: () => restoreFavoriteGenre(r) });
+  if (r) toast(`${name} removed from Favourites`, undefined, { label: UNDO, run: () => restoreFavoriteGenre(r) });
   return false;
 }
 
-/** Favourite or unfavourite an artist, with Undo either way. Returns the new state. */
+/** Favourite or unfavourite an artist; an unfavourite can be undone. Returns the new state. */
 export function toggleFavoriteArtistWithUndo(name: string): boolean {
   if (!isFavoriteArtist(name)) {
     toggleFavoriteArtist(name);
-    toast(`${name}: added to ★ Favourites`, undefined, { label: UNDO, run: () => void removeFavoriteArtist(name) });
+    toast(`${name} added to Favourites`, ADDED_MS);
     return true;
   }
   const r = removeFavoriteArtist(name);
-  if (r) toast(`${name}: removed from Favourites`, undefined, { label: UNDO, run: () => restoreFavoriteArtist(r) });
+  if (r) toast(`${name} removed from Favourites`, undefined, { label: UNDO, run: () => restoreFavoriteArtist(r) });
   return false;
 }
 

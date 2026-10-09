@@ -80,6 +80,15 @@ export const favoriteGenres = signal<string[]>([]);
 /** Favorite artists (display names), in the order they were added. Matched by artistKey. */
 export const favoriteArtists = signal<string[]>([]);
 
+// Lookups for the stars and hearts: a component reads its own item through these (with
+// useComputed), so a change re-renders only the stars whose state flipped.
+/** Favorite genre names. */
+export const favGenreSet = computed(() => new Set(favoriteGenres.value));
+/** Favorite artists by artistKey. */
+export const favArtistKeys = computed(() => new Set(favoriteArtists.value.map(artistKey)));
+/** Liked track ids. */
+export const likedIds = computed(() => new Set(liked.value.map((t) => t.id)));
+
 let store: KV = kv;
 let historyFile: JsonFile<unknown> = jsonFile('data', 'history', (raw) => raw, { legacyKeys: HISTORY_LEGACY_KEYS });
 
@@ -187,7 +196,7 @@ function mergeHistory(a: HistoryEntry[], b: HistoryEntry[], now: number): Histor
 }
 
 export function isFavoriteGenre(name: string): boolean {
-  return favoriteGenres.value.includes(name);
+  return favGenreSet.value.has(name);
 }
 
 /** Toggle a favorite genre; returns the new state. New favorites go last. */
@@ -249,7 +258,7 @@ export function restoreFavoriteGenre(r: Removed<string>): void {
 
 export function isFavoriteArtist(name: string): boolean {
   const k = artistKey(name);
-  return !!k && favoriteArtists.value.some((x) => artistKey(x) === k);
+  return !!k && favArtistKeys.value.has(k);
 }
 
 /** Toggle a favorite artist; returns the new state. New favorites go last. */
@@ -280,7 +289,7 @@ export function restoreFavoriteArtist(r: Removed<string>): void {
 }
 
 export function isLiked(id: string): boolean {
-  return liked.value.some((t) => t.id === id);
+  return likedIds.value.has(id);
 }
 
 /** Toggle like; returns the new liked state. */

@@ -25,6 +25,11 @@ const ACTION_TOAST_MS = 4000;
 export const toasts = signal<Toast[]>([]);
 let nextId = 1;
 const timers = new Map<number, ReturnType<typeof setTimeout>>();
+/** When each toast's timer runs out (Date.now()), and what was left of it while it's held. */
+const deadlines = new Map<number, number>();
+const held = new Map<number, number>();
+/** A toast let go after a drag stays at least this long, so it doesn't vanish on release. */
+const MIN_AFTER_HOLD_MS = 1500;
 /** The `stale` watchers of toasts on screen. */
 const watchers = new Map<number, () => void>();
 
@@ -33,9 +38,11 @@ function unwatch(id: number): void {
   watchers.delete(id);
 }
 
-function dismissToast(id: number): void {
+export function dismissToast(id: number): void {
   clearTimeout(timers.get(id));
   timers.delete(id);
+  deadlines.delete(id);
+  held.delete(id);
   unwatch(id);
   if (toasts.value.some((t) => t.id === id)) toasts.value = toasts.value.filter((x) => x.id !== id);
 }
@@ -61,10 +68,7 @@ export function toast(text: string, ms?: number, action?: ToastAction): number {
   const kept = toasts.value.slice(-1);
   for (const old of toasts.value) if (!kept.includes(old)) dismissToast(old.id);
   toasts.value = [...kept, t];
-  timers.set(
-    t.id,
-    setTimeout(() => dismissToast(t.id), ms ?? (action ? ACTION_TOAST_MS : 3200)),
-  );
+  startTimer(t.id, ms ?? (action ? ACTION_TOAST_MS : 3200));
   const stale = action?.stale;
   if (stale) {
     // Dropped after the effect has run (not from inside it).
@@ -76,6 +80,31 @@ export function toast(text: string, ms?: number, action?: ToastAction): number {
     );
   }
   return t.id;
+}
+
+function startTimer(id: number, ms: number): void {
+  clearTimeout(timers.get(id));
+  deadlines.set(id, Date.now() + ms);
+  timers.set(
+    id,
+    setTimeout(() => dismissToast(id), ms),
+  );
+}
+
+/** A finger is dragging the toast: it doesn't time out meanwhile. */
+export function holdToast(id: number): void {
+  if (held.has(id) || !timers.has(id)) return;
+  clearTimeout(timers.get(id));
+  timers.delete(id);
+  held.set(id, Math.max(0, (deadlines.get(id) ?? 0) - Date.now()));
+}
+
+/** Let go without dismissing it: the rest of its time runs (a moment at least). */
+export function releaseToast(id: number): void {
+  const left = held.get(id);
+  if (left == null) return;
+  held.delete(id);
+  if (toasts.peek().some((t) => t.id === id)) startTimer(id, Math.max(left, MIN_AFTER_HOLD_MS));
 }
 
 /** The toast's button was tapped: run its action once and dismiss it. */

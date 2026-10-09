@@ -34,15 +34,15 @@ test('the Artists tab lists artists; a heart adds Favorite artists, which surviv
   const artist = (await second.getAttribute('data-artist'))!;
   await second.getByTestId('artist-fav').click();
   await expect(second.getByTestId('artist-fav')).toHaveAttribute('aria-pressed', 'true');
-  // M8: Favourites shows it on the next visit, so the grid doesn't move under the finger.
-  await expect(page.getByTestId('fav-artists')).toHaveCount(0);
+  await expect(page.getByTestId('toast').last()).toHaveText(`${artist} added to Favourites`);
+  // ★ Favourites shows it at once, and after a restart.
+  await expect(page.getByTestId('fav-artists').getByTestId('artist-tile')).toHaveText([artist]);
   await page.reload();
   await page.getByTestId('tab-artists').click();
   await expect(page.getByTestId('fav-artists').getByTestId('artist-tile')).toHaveText([artist]);
   await page.getByTestId('fav-artists').getByTestId('artist-fav').click();
-  await page.getByTestId('tab-home').click();
-  await page.getByTestId('tab-artists').click();
   await expect(page.getByTestId('fav-artists')).toHaveCount(0);
+  await expect(page.getByTestId('toast').last()).toContainText(`${artist} removed from Favourites`);
 });
 
 test('artist page: Jukebox, Top songs, Albums, Live albums, EPs, Singles in order; See all opens the grid', async ({ page }) => {

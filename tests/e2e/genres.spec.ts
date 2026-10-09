@@ -36,11 +36,8 @@ test('hearting a genre adds Favorite genres, which survive a reload and lead Hom
   await expect(heart).toHaveAttribute('aria-pressed', 'false');
   await heart.click();
   await expect(heart).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByTestId('toast').last()).toContainText(`${genre}: added to ★ Favourites`);
-  // M8: the grid doesn't move under the finger; Favourites shows it on the next visit.
-  await expect(page.getByTestId('fav-genres')).toHaveCount(0);
-  await page.getByTestId('tab-home').click();
-  await page.getByTestId('tab-genres').click();
+  await expect(page.getByTestId('toast').last()).toHaveText(`${genre} added to Favourites`);
+  // ★ Favourites shows it at once.
   await expect(page.getByTestId('fav-genres').locator('.section-title')).toHaveText('★ Favourites');
   await expect(page.getByTestId('fav-genres').getByTestId('genre-tile')).toHaveText([genre]);
 
@@ -52,10 +49,9 @@ test('hearting a genre adds Favorite genres, which survive a reload and lead Hom
   await page.getByTestId('tab-genres').click();
   const favHeart = page.getByTestId('fav-genres').getByTestId('genre-fav');
   await favHeart.click();
-  await expect(favHeart).toHaveAttribute('aria-pressed', 'false');
-  await page.getByTestId('tab-home').click();
-  await page.getByTestId('tab-genres').click();
+  // Gone from Favourites at once; its tile in the grid shows it too.
   await expect(page.getByTestId('fav-genres')).toHaveCount(0);
+  await expect(heart).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('a genre page opened before the catalog has loaded fills in by itself', async ({ page }) => {
@@ -139,7 +135,7 @@ test('★ on a genre page: adds it to Favourites, Undo takes it back, and it fol
 
   await star.click();
   await expect(star).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByTestId('toast').last()).toContainText(`${genre}: added to ★ Favourites`);
+  await expect(page.getByTestId('toast').last()).toHaveText(`${genre} added to Favourites`);
   await page.getByTestId('genre-back').click();
   await expect(page.getByTestId('fav-genres').getByTestId('genre-tile')).toHaveText([genre]);
 

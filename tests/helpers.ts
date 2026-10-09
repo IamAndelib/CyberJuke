@@ -113,6 +113,19 @@ export async function touchDrag(page: Page, x: number, y0: number, y1: number, m
   await cdp.detach();
 }
 
+/** A sideways finger drag from (x0, y) to (x1, y) over `ms` (touch events, like a phone). */
+export async function touchSwipe(page: Page, x0: number, x1: number, y: number, ms: number, steps = 10): Promise<void> {
+  const cdp = await page.context().newCDPSession(page);
+  const pt = (x: number) => [{ x, y, id: 1 }];
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(x0) });
+  for (let i = 1; i <= steps; i++) {
+    if (ms) await pace(ms / steps);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(x0 + ((x1 - x0) * i) / steps) });
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+}
+
 export const box = async (l: Locator) => (await l.boundingBox())!;
 
 export const cssVar = (page: Page, name: string) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);

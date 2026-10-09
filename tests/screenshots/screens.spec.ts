@@ -105,10 +105,9 @@ test('every screen (dark)', async ({ page }) => {
 
   await page.getByTestId('tab-genres').click();
   for (const i of [3, 1]) await page.getByTestId('genre-grid').getByTestId('genre-fav').nth(i).click();
-  // Favourites move into their section on the next visit, not under the finger (M8).
-  await page.getByTestId('tab-home').click();
-  await page.getByTestId('tab-genres').click();
   await expect(page.getByTestId('fav-genres').getByTestId('genre-tile')).toHaveCount(2);
+  // The "added" toasts gone before the shot.
+  await expect(page.getByTestId('toast')).toHaveCount(0, { timeout: 5000 });
   await settle(page);
   await shot(page, '06-genres');
   await page.getByTestId('genre-tile').first().click();

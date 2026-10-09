@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { box, openNowPlaying, openSearch, playerCalls, scrollTo, scrollTopOf, seedStorage, start, toastsGone, waitForTracks } from '../helpers';
+import { box, openNowPlaying, openSearch, playerCalls, scrollTo, scrollTopOf, seedStorage, start, toastsGone, touchSwipe, waitForTracks } from '../helpers';
 
 /**
  * Wave 1c interaction: navigation in place (P4, P5, SM7, M10), undo toasts and confirm
@@ -157,7 +157,7 @@ test('however long the finger stays down, lifting it after a long press does not
   await expect(page.getByTestId('track-menu')).toBeVisible();
   await expect(page.getByTestId('mini-player')).toHaveCount(0);
   await page.getByTestId('menu-like').click();
-  await expect(page.getByTestId('toast').last()).toContainText('Added to Liked');
+  await expect(page.getByTestId('toast').last()).toHaveText('Added to Liked songs');
 });
 
 test('a scroll that starts on a row never opens its menu (P10)', async ({ page }) => {
@@ -173,7 +173,7 @@ test('a scroll that starts on a row never opens its menu (P10)', async ({ page }
   await expect(page.getByTestId('track-menu')).toBeHidden();
 });
 
-test('favouriting a genre tile: a toast with Undo; the grid stays put; Favourites shows it next visit (C1, M1, M8, P6)', async ({ page }) => {
+test('favouriting a genre tile: a plain toast, Favourites follows at once; removing has Undo (C1, M1, P6)', async ({ page }) => {
   await page.goto('/');
   await genresLoaded(page);
   const grid = page.getByTestId('genre-grid');
@@ -181,33 +181,74 @@ test('favouriting a genre tile: a toast with Undo; the grid stays put; Favourite
   const genre = (await cell.getAttribute('data-genre'))!;
   const star = cell.getByTestId('genre-fav');
   await expect(star.locator('svg')).toHaveAttribute('data-icon', 'starOutline');
-  const before = await box(cell);
   await star.click();
   await expect(star).toHaveAttribute('aria-pressed', 'true');
   await expect(star.locator('svg')).toHaveAttribute('data-icon', 'star');
-  expect((await box(cell)).y).toBe(before.y);
+  // Adding: a confirmation, nothing to undo (tapping the star again does that).
   const toast = page.getByTestId('toast').last();
-  await expect(toast).toContainText(`${genre}: added to ★ Favourites`);
-  const undo = toast.getByTestId('toast-action');
-  expect((await box(undo)).height).toBeGreaterThanOrEqual(48);
-  expect(await toast.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('auto');
-  await undo.click();
-  await expect(page.getByTestId('toast')).toHaveCount(0);
-  await expect(star).toHaveAttribute('aria-pressed', 'false');
-
-  // Favourite two, then unfavourite the first from the Favourites section: Undo puts it back first.
-  const other = (await grid.getByTestId('genre-cell').nth(5).getAttribute('data-genre'))!;
-  await star.click();
-  await grid.getByTestId('genre-cell').nth(5).getByTestId('genre-fav').click();
-  await page.getByTestId('tab-home').click();
-  await page.getByTestId('tab-genres').click();
+  await expect(toast).toHaveText(`${genre} added to Favourites`);
+  await expect(toast.getByTestId('toast-action')).toHaveCount(0);
+  // ★ Favourites shows it at once.
   const favs = page.getByTestId('fav-genres');
+  await expect(favs.getByTestId('genre-tile')).toHaveText([genre]);
+
+  // Favourite a second one, then unfavourite the first from the Favourites section: it goes
+  // at once, and Undo puts it back first.
+  const other = (await grid.getByTestId('genre-cell').nth(5).getAttribute('data-genre'))!;
+  await grid.getByTestId('genre-cell').nth(5).getByTestId('genre-fav').click();
   await expect(favs.getByTestId('genre-tile')).toHaveText([genre, other]);
   await favs.getByTestId('genre-fav').first().click();
-  await page.getByTestId('toast').last().getByTestId('toast-action').click();
-  await page.getByTestId('tab-home').click();
-  await page.getByTestId('tab-genres').click();
+  await expect(favs.getByTestId('genre-tile')).toHaveText([other]);
+  await expect(star).toHaveAttribute('aria-pressed', 'false');
+  const removed = page.getByTestId('toast').last();
+  await expect(removed).toContainText(`${genre} removed from Favourites`);
+  const undo = removed.getByTestId('toast-action');
+  expect((await box(undo)).height).toBeGreaterThanOrEqual(48);
+  expect(await removed.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('auto');
+  await undo.click();
   await expect(favs.getByTestId('genre-tile')).toHaveText([genre, other]);
+  await expect(star).toHaveAttribute('aria-pressed', 'true');
+});
+
+/** Star then unstar a genre tile: leaves the "removed … Undo" toast on screen. */
+async function removedToast(page: Page, nth: number) {
+  const cell = page.getByTestId('genre-grid').getByTestId('genre-cell').nth(nth);
+  const star = cell.getByTestId('genre-fav');
+  await star.click();
+  await star.click();
+  await expect(star).toHaveAttribute('aria-pressed', 'false');
+  const toast = page.getByTestId('toast').last();
+  await expect(toast).toContainText('removed from Favourites');
+  return { toast, star };
+}
+
+test('a toast swiped left or right goes; a short drag springs back; a swipe from Undo does not undo', async ({ page }) => {
+  await page.goto('/');
+  await genresLoaded(page);
+  for (const dir of [-1, 1]) {
+    const { toast, star } = await removedToast(page, 2);
+    const b = await box(toast);
+    const y = b.y + b.height / 2;
+    const x = b.x + b.width / 3;
+    await touchSwipe(page, x, x + dir * b.width * 0.6, y, 200);
+    await expect(page.getByTestId('toast')).toHaveCount(0);
+    // Dismissed, not undone.
+    await expect(star).toHaveAttribute('aria-pressed', 'false');
+  }
+
+  // A short drag springs back: the toast stays, back in place, and still has its Undo.
+  const { toast, star } = await removedToast(page, 4);
+  const b = await box(toast);
+  await touchSwipe(page, b.x + b.width / 3, b.x + b.width / 3 + 30, b.y + b.height / 2, 600);
+  await expect(toast).toBeVisible();
+  await expect.poll(() => toast.evaluate((el) => getComputedStyle(el).transform)).toMatch(/^(none|matrix\(1, 0, 0, 1, 0, 0\))$/);
+  await expect(toast.getByTestId('toast-action')).toBeVisible();
+
+  // A swipe that starts on the Undo button dismisses; it doesn't press Undo.
+  const undo = await box(toast.getByTestId('toast-action'));
+  await touchSwipe(page, undo.x + undo.width / 2, undo.x + undo.width / 2 - b.width * 0.6, undo.y + undo.height / 2, 200);
+  await expect(page.getByTestId('toast')).toHaveCount(0);
+  await expect(star).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('Clear history asks first, away from Play; Undo brings the plays back (M3, M1)', async ({ page }) => {

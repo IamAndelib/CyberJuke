@@ -47,6 +47,8 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] Long-pressing text (headers, titles) doesn't select it.
 - [ ] Swipe up on the mini player: Now Playing opens. Swipe Now Playing down: it closes.
 - [ ] Unlike a track, unfavourite (★) a genre or artist, and clear history: each one offers **Undo**. Clearing history and signing out ask you first.
+- [ ] Liking a track or favouriting (★) a genre or artist shows a short "added" message with no Undo, and the star or heart fills at once, even with a long Artists list. ★ Favourites on the Genres and Artists tabs gains or loses the tile straight away.
+- [ ] Swipe a message at the bottom left, then another right: each one goes. A short drag springs back. A swipe that starts on **Undo** doesn't undo.
 - [ ] Every theme (Settings → Theme) is readable.
 
 ## Account (if you use Cyberspace sign-in)

@@ -11,7 +11,7 @@ test('like from the track menu adds it to Library, and it survives a reload', as
   await page.getByTestId('track-more').first().click();
   await expect(page.getByTestId('track-menu')).toBeVisible();
   await page.getByTestId('menu-like').click();
-  await expect(page.getByTestId('toast').last()).toContainText('Added to Liked');
+  await expect(page.getByTestId('toast').last()).toHaveText('Added to Liked songs');
   await page.getByTestId('tab-library').click();
   await page.getByTestId('lib-liked').click();
   await expect(page.getByTestId('liked-list').getByTestId('track-title')).toHaveText([title]);

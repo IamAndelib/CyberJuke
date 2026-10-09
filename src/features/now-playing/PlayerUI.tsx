@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { canSkipNext, currentTrack, hasCurrent, isAdvancing, isBuffering, isPlaying, livePosition, playContext, player, upNextSections, type PlayerState } from '../../player';
 import { block } from '../../stores/block';
-import { isLiked, liked } from '../../stores/library';
 import { toggleLikeWithUndo } from '../../stores/undo';
 import { toast } from '../../stores/toast';
 import { Icon } from '../../ui/icons';
@@ -17,6 +16,7 @@ import { MembersTag } from '../../ui/components/TrackRow';
 import { LyricsPanel } from './Lyrics';
 import { UpNext } from './UpNext';
 import { useModal } from '../../ui/useModal';
+import { useLiked } from '../../ui/useFavs';
 import { shareTrack } from '../../ui/share';
 
 function fmt(ms: number): string {
@@ -145,6 +145,22 @@ function MiniBar({ track: t }: { track: Track }) {
 }
 
 // ---- Now Playing -------------------------------------------------------------------
+
+/** The ♥ beside the title: only it re-renders when Liked changes. */
+function NpLike({ track }: { track: Track }) {
+  const fav = useLiked(track.id);
+  return (
+    <button
+      class={'icon-btn like' + (fav ? ' on' : '')}
+      aria-pressed={fav}
+      aria-label={fav ? 'Remove from liked' : 'Like'}
+      onClick={() => toggleLikeWithUndo(track)}
+      data-testid="np-like"
+    >
+      <Icon name={fav ? 'heart' : 'heartOutline'} size={28} />
+    </button>
+  );
+}
 
 /** A drag on the seek bar: where the thumb is, for which track. */
 interface SeekDrag {
@@ -355,8 +371,6 @@ export function NowPlaying() {
 function NowPlayingContent() {
   const s = player.state.value;
   const t = s.current;
-  void liked.value; // subscribe to like changes
-  const isFav = t ? isLiked(t.id) : false;
   const showLyrics = lyricsOpen.value;
   return (
     <>
@@ -409,15 +423,7 @@ function NowPlayingContent() {
                 </h2>
                 <NpArtist track={t} />
               </div>
-              <button
-                class={'icon-btn like' + (isFav ? ' on' : '')}
-                aria-pressed={isFav}
-                aria-label={isFav ? 'Remove from liked' : 'Like'}
-                onClick={() => toggleLikeWithUndo(t)}
-                data-testid="np-like"
-              >
-                <Icon name={isFav ? 'heart' : 'heartOutline'} size={28} />
-              </button>
+              <NpLike track={t} />
             </div>
             {(t.membersOnly || t.genre) && (
               <div class="np-tags">
@@ -599,9 +605,8 @@ export function TrackMenu() {
   const sheet = useRef<HTMLDivElement>(null);
   const t = useSheetContent(open, sheet);
   useModal(open != null, sheet);
-  void liked.value;
   const close = () => (menuTrack.value = null);
-  const fav = t ? isLiked(t.id) : false;
+  const fav = useLiked(t?.id);
   return (
     <div class={'sheet-wrap' + (open ? ' open' : '')} aria-hidden={!open} inert={!open}>
       <div class="scrim" onClick={close} />

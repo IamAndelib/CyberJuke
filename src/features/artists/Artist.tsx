@@ -6,9 +6,9 @@ import { mergeTracks } from '../../data/search';
 import { SHELF_LABEL, SHELF_ORDER, shelfToken, type MusicItem, type ReleaseKind } from '../../data/ytmusic';
 import { catalog } from '../../stores/catalog';
 import { displayArtist, jukeboxTracksBy } from '../../stores/artists';
-import { favoriteArtists, isFavoriteArtist } from '../../stores/library';
 import { toggleFavoriteArtistWithUndo } from '../../stores/undo';
 import { Icon } from '../../ui/icons';
+import { useFavArtist } from '../../ui/useFavs';
 import { popPage, useSearchContext, type AlbumRef } from '../../ui/nav';
 import { CatalogError, PlayShuffle, Tracks } from '../../ui/components/TrackList';
 import { list as listCtx } from '../../ui/playAll';
@@ -57,8 +57,6 @@ const SHELF_TESTID: Record<ReleaseKind, string> = { album: 'artist-albums', live
 export function ArtistPage({ name: raw }: { name: string }) {
   const name = displayArtist(raw);
   const key = artistKey(name);
-  void favoriteArtists.value;
-  const fav = isFavoriteArtist(name);
   const jukebox = jukeboxTracksBy(name);
   const catalogReady = catalog.tracks.value.length > 0;
   const catalogFailed = !catalogReady && catalog.status.value === 'error';
@@ -80,17 +78,7 @@ export function ArtistPage({ name: raw }: { name: string }) {
           <Icon name="back" />
         </button>
       }
-      right={
-        <button
-          class={'icon-btn like' + (fav ? ' on' : '')}
-          aria-pressed={fav}
-          aria-label={fav ? `Remove ${name} from favourites` : `Add ${name} to favourites`}
-          onClick={() => toggleFavoriteArtistWithUndo(name)}
-          data-testid="artist-page-fav"
-        >
-          <Icon name={fav ? 'star' : 'starOutline'} size={26} />
-        </button>
-      }
+      right={<ArtistFavButton name={name} />}
       onRefresh={() => catalog.refresh({ force: true })}
     >
       <section data-testid="artist-jukebox">
@@ -169,6 +157,22 @@ export function ArtistPage({ name: raw }: { name: string }) {
  * ARTIST_SONGS_MAX songs, cached with the page), each song once, Jukebox first; plus
  * the releases on the page by title. Results update as the song list arrives.
  */
+/** The artist page's star (starred here, on the grid or by an Undo: it follows). */
+function ArtistFavButton({ name }: { name: string }) {
+  const fav = useFavArtist(name);
+  return (
+    <button
+      class={'icon-btn like' + (fav ? ' on' : '')}
+      aria-pressed={fav}
+      aria-label={fav ? `Remove ${name} from favourites` : `Add ${name} to favourites`}
+      onClick={() => toggleFavoriteArtistWithUndo(name)}
+      data-testid="artist-page-fav"
+    >
+      <Icon name={fav ? 'star' : 'starOutline'} size={26} />
+    </button>
+  );
+}
+
 function useArtistHere(name: string, page: Feed<Track, TopCursor, ArtistPageMeta>): void {
   const key = artistKey(name);
   /** Bumped on every change of the page or song list: Search's reads depend on it. */

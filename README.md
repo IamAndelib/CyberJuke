@@ -40,7 +40,7 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 - **Picks up where you left off**: the app opens on what you last played, paused at the same spot, even after Android stopped it.
 - **Now Playing**: seek, shuffle, repeat, like, synced lyrics, share, "Playing from …", and an Up Next queue you can reorder.
 - **"Posted by @user"** opens the original post on Cyberspace, so you can see what the poster wrote and reply.
-- **Undo** for unlike, unfavourite, removing from Up next and clearing history or recent searches.
+- **Undo** for unlike, unfavourite, removing from Up next and clearing history or recent searches. Any message at the bottom can be swiped away, left or right.
 - **NSFW** posts are hidden unless you turn them on.
 - **Made for thumbs**: scroll memory everywhere, back-to-top, an A–Z fast scroller, pull to refresh, long-press for a track's menu, and swipe Now Playing down to close.
 

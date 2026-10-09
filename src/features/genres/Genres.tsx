@@ -3,6 +3,7 @@ import { source } from '../../data';
 import { catalog } from '../../stores/catalog';
 import { catalogGenre, genres, genresComplete } from '../../stores/genres';
 import { favoriteGenres, showNsfw } from '../../stores/library';
+import { useFavGenre } from '../../ui/useFavs';
 import { toggleFavoriteGenreWithUndo } from '../../stores/undo';
 import { useMemo } from 'preact/hooks';
 import { takeSections, useChunks } from '../../ui/useChunks';
@@ -18,9 +19,9 @@ import { usePaged } from '../../ui/usePaged';
 import { authScope } from '../../stores/feed';
 import { auth } from '../../data/auth';
 import { list as listCtx, withRest } from '../../ui/playAll';
-import { useSettled } from '../../ui/useSettled';
 
-function GenreTile({ name, fav }: { name: string; fav: boolean }) {
+export function GenreTile({ name }: { name: string }) {
+  const fav = useFavGenre(name);
   return (
     <div class={'genre-cell' + (fav ? ' fav' : '')} data-testid="genre-cell" data-genre={name}>
       <button class="genre-tile" onClick={() => openGenrePage(name)} data-testid="genre-tile" data-genre={name}>
@@ -52,9 +53,6 @@ export function GenreGrid() {
     tracks: () => NO_TRACKS,
     places: genrePlaces,
   });
-  const favs = favoriteGenres.value;
-  // M8: the Favourites section changes on the next visit or after a scroll, never under the finger.
-  const [favSection, anchor] = useSettled(favs);
   const status = catalog.status.value;
   const complete = genresComplete.value;
   const sort = genresSort.value;
@@ -69,24 +67,7 @@ export function GenreGrid() {
       right={<GridSortRail sort={genresSort} testid="genres-sort" />}
       azScroller={sort === 'az' && list.length > 0}
     >
-      <div ref={anchor} />
-      {favSection.length > 0 && (
-        <section data-testid="fav-genres">
-          <div class="section-head">
-            <h2 class="section-title">★ Favourites</h2>
-          </div>
-          <div class="genre-grid">
-            {favSection.map((name) => (
-              <GenreTile key={name} name={name} fav={favs.includes(name)} />
-            ))}
-          </div>
-        </section>
-      )}
-      {favSection.length > 0 && (
-        <div class="section-head">
-          <h2 class="section-title">All genres</h2>
-        </div>
-      )}
+      <FavGenres />
       {status === 'error' && !list.length ? (
         <ErrorState
           offline={!!catalog.error.value?.offline}
@@ -100,10 +81,33 @@ export function GenreGrid() {
           ))}
         </div>
       ) : (
-        <GenreTiles list={list} sort={sort} favs={favs} />
+        <GenreTiles list={list} sort={sort} />
       )}
       <p class="fineprint">Genres are free text chosen by each poster. Tap ☆ to pin a genre to the top.</p>
     </Screen>
+  );
+}
+
+/** ★ Favourites above the grid, in the order added; follows every star at once. */
+function FavGenres() {
+  const favs = favoriteGenres.value;
+  if (!favs.length) return null;
+  return (
+    <>
+      <section data-testid="fav-genres">
+        <div class="section-head">
+          <h2 class="section-title">★ Favourites</h2>
+        </div>
+        <div class="genre-grid">
+          {favs.map((name) => (
+            <GenreTile key={name} name={name} />
+          ))}
+        </div>
+      </section>
+      <div class="section-head">
+        <h2 class="section-title">All genres</h2>
+      </div>
+    </>
   );
 }
 
@@ -111,7 +115,7 @@ export function GenreGrid() {
 const GRID_CHUNK = 120;
 
 /** Every genre as tiles, Popular or A–Z, rendered in chunks. */
-function GenreTiles({ list, sort, favs }: { list: GenreCount[]; sort: 'popular' | 'az'; favs: string[] }) {
+export function GenreTiles({ list, sort }: { list: GenreCount[]; sort: 'popular' | 'az' }) {
   const sections = useMemo(() => (sort === 'az' ? groupAZ(list, (g) => g.name) : null), [list, sort]);
   const { shown } = useChunks(list.length, `genres:${sort}`, GRID_CHUNK, { fill: true });
   if (sections) {
@@ -122,7 +126,7 @@ function GenreTiles({ list, sort, favs }: { list: GenreCount[]; sort: 'popular' 
             <AZHead letter={sec.letter} />
             <div class="genre-grid">
               {sec.items.map((g) => (
-                <GenreTile key={g.name} name={g.name} fav={favs.includes(g.name)} />
+                <GenreTile key={g.name} name={g.name} />
               ))}
             </div>
           </section>
@@ -133,7 +137,7 @@ function GenreTiles({ list, sort, favs }: { list: GenreCount[]; sort: 'popular' 
   return (
     <div class="genre-grid" data-testid="genre-grid" data-sort="popular">
       {list.slice(0, shown).map((g) => (
-        <GenreTile key={g.name} name={g.name} fav={favs.includes(g.name)} />
+        <GenreTile key={g.name} name={g.name} />
       ))}
     </div>
   );
@@ -142,8 +146,6 @@ function GenreTiles({ list, sort, favs }: { list: GenreCount[]; sort: 'popular' 
 /** One genre's tracks, opened in place on the current tab. */
 export function GenreDetail({ genre }: { genre: string }) {
   const nsfw = showNsfw.value;
-  // Starred here, on the grid or by an Undo: the star follows.
-  const fav = favoriteGenres.value.includes(genre);
   const scope = authScope(auth.state.value.status === 'signedIn');
   const feedKey = `genre:${scope}:${genre}:${nsfw}`;
   const paged = usePaged(feedKey, async (c) => {
@@ -188,22 +190,28 @@ export function GenreDetail({ genre }: { genre: string }) {
           <Icon name="back" />
         </button>
       }
-      right={
-        <button
-          class={'icon-btn like' + (fav ? ' on' : '')}
-          aria-pressed={fav}
-          aria-label={fav ? `Remove ${genre} from favourites` : `Add ${genre} to favourites`}
-          onClick={() => toggleFavoriteGenreWithUndo(genre)}
-          data-testid="genre-page-fav"
-        >
-          <Icon name={fav ? 'star' : 'starOutline'} size={26} />
-        </button>
-      }
+      right={<GenreFavButton genre={genre} />}
       onRefresh={paged.refresh}
       scrollKey={`genre:${genre}`}
     >
       <PlayShuffle tracks={full} ctx={ctx} testid="genre" disabled={!has} playTestid="genre-play-all" shuffleTestid="genre-shuffle" />
       <PagedTracks paged={paged} ctx={ctx} queue={full} hideGenre chunkKey={feedKey} />
     </Screen>
+  );
+}
+
+/** The genre page's star (starred here, on the grid or by an Undo: it follows). */
+function GenreFavButton({ genre }: { genre: string }) {
+  const fav = useFavGenre(genre);
+  return (
+    <button
+      class={'icon-btn like' + (fav ? ' on' : '')}
+      aria-pressed={fav}
+      aria-label={fav ? `Remove ${genre} from favourites` : `Add ${genre} to favourites`}
+      onClick={() => toggleFavoriteGenreWithUndo(genre)}
+      data-testid="genre-page-fav"
+    >
+      <Icon name={fav ? 'star' : 'starOutline'} size={26} />
+    </button>
   );
 }
