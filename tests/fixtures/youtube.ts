@@ -52,18 +52,19 @@ const FAKE_YT = `
 (() => {
   class Player {
     constructor(el, opts) {
-      this.opts = opts; this.t = 0; this.state = -1; this.timer = null;
+      this.opts = opts; this.t = 0; this.state = -1; this.timer = null; this.starting = null;
       setTimeout(() => opts.events.onReady && opts.events.onReady(), 30);
     }
     emit(s) { this.state = s; this.opts.events.onStateChange && this.opts.events.onStateChange({ data: s }); }
-    loadVideoById() { this.t = 0; this.emit(3); setTimeout(() => this.playVideo(), 150); }
-    cueVideoById() { this.t = 0; this.emit(5); }
+    // Like the real player: buffering, then playing, unless paused (or cued) meanwhile.
+    loadVideoById() { this.t = 0; this.emit(3); clearTimeout(this.starting); this.starting = setTimeout(() => this.playVideo(), 150); }
+    cueVideoById() { clearTimeout(this.starting); this.t = 0; this.emit(5); }
     playVideo() {
       clearInterval(this.timer);
       this.timer = setInterval(() => { this.t += 0.25; }, 250);
       this.emit(1);
     }
-    pauseVideo() { clearInterval(this.timer); this.emit(2); }
+    pauseVideo() { clearTimeout(this.starting); clearInterval(this.timer); this.emit(2); }
     seekTo(s) { this.t = s - 71; }
     getCurrentTime() { return this.t + 71; }
     getDuration() { return 247; }

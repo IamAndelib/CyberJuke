@@ -244,12 +244,14 @@ export class WebPlayer implements Player {
       return;
     }
     if (this.q.current !== t) return; // superseded while loading
+    // Paused while the player was loading: respect it (the pause already published).
+    const play = autoplay && this.s.value.isPlaying;
     if (this.loadedId === t.ytId && !force) {
-      if (autoplay) yt.playVideo();
+      if (play) yt.playVideo();
       return;
     }
     this.loadedId = t.ytId;
-    if (autoplay) yt.loadVideoById(t.ytId);
+    if (play) yt.loadVideoById(t.ytId);
     else yt.cueVideoById(t.ytId);
   }
 
