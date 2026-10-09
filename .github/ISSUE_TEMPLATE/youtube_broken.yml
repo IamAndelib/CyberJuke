@@ -1,0 +1,33 @@
+name: Tracks stopped playing
+description: Playback, Global search, artist pages or lyrics stopped working for every track.
+labels: [youtube-breakage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        YouTube changes things now and then, and every NewPipe-based app needs an update afterwards. First check that you're on the [latest release](https://github.com/IamAndelib/CyberJuke/releases/latest) and that an [open issue](https://github.com/IamAndelib/CyberJuke/issues?q=is%3Aissue+is%3Aopen+label%3Ayoutube-breakage) doesn't already cover it.
+  - type: dropdown
+    id: what
+    attributes:
+      label: What stopped working?
+      multiple: true
+      options: [Playback, Global search, Artist pages, Lyrics]
+    validations:
+      required: true
+  - type: dropdown
+    id: banner
+    attributes:
+      label: Did a banner show?
+      options: ["\"YouTube is limiting requests from your network\"", "\"YouTube changed something\"", "No banner", "Not sure"]
+  - type: input
+    id: version
+    attributes:
+      label: CyberJuke version
+    validations:
+      required: true
+  - type: dropdown
+    id: network
+    attributes:
+      label: Network
+      description: Blocks are often tied to the network; say whether switching helps.
+      options: [Wi-Fi, Mobile data, VPN, Both]

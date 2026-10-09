@@ -1,0 +1,43 @@
+name: Bug report
+description: Something in CyberJuke doesn't work as it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+      placeholder: "I tapped …, expected …, but …"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Tap …
+  - type: input
+    id: version
+    attributes:
+      label: CyberJuke version
+      description: Settings shows it under the title (e.g. v1.0.0). Say if it's the Preview app.
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Phone and Android version
+      placeholder: "Pixel 7, Android 15"
+    validations:
+      required: true
+  - type: dropdown
+    id: network
+    attributes:
+      label: Network
+      options: [Wi-Fi, Mobile data, Both, Not sure]
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots or a screen recording
+      description: Drag files here if you have any. Please don't post your Cyberspace login or other private details.

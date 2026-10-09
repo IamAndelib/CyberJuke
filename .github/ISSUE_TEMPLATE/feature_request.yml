@@ -1,0 +1,11 @@
+name: Feature idea
+description: Something CyberJuke could do better or do at all.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: Describe what you'd do in the app and why it would help.
+    validations:
+      required: true
