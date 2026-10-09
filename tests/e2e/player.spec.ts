@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { box, musicCalls, openNowPlaying, playAndOpen, playerCalls, setLyricsMode, start, touchDrag } from '../helpers';
+import { box, musicCalls, openNowPlaying, playAndOpen, playerCalls, setLyricsMode, start, touchDrag, touchSwipe, touchTap } from '../helpers';
 
 /** Mini player, Now Playing (controls, swipe, links), the queue, lyrics and Share. */
 
@@ -239,11 +239,88 @@ test('a scroll that starts on the seek bar scrolls Now Playing and seeks nothing
   const bar = (await page.getByTestId('seek').boundingBox())!;
   const scroller = page.locator('.np-scroll');
   const top0 = await scroller.evaluate((el) => el.scrollTop);
+  // Everything the bar shows while the finger moves: no input, the time never jumps.
+  await page.evaluate(() => {
+    const w = window as unknown as { __seekInputs: number; __times: string[] };
+    w.__seekInputs = 0;
+    w.__times = [];
+    document.querySelector('[data-testid="seek"]')!.addEventListener('input', () => w.__seekInputs++);
+    const time = document.querySelector('[data-testid="time-pos"]')!;
+    new MutationObserver(() => w.__times.push(time.textContent ?? '')).observe(time, { childList: true, characterData: true, subtree: true });
+  });
   // A finger lands on the seek bar (right of the thumb) and pushes the sheet up.
   await touchDrag(page, bar.x + bar.width * 0.85, bar.y + bar.height / 2, bar.y + bar.height / 2 - 300, 300);
   await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(top0 + 50);
   expect(await page.evaluate(() => (window as unknown as { __ytSeeks?: number }).__ytSeeks ?? 0)).toBe(0);
   await expect(pos).toHaveText(/^1:[12]\d$/);
+  const seen = await page.evaluate(() => window as unknown as { __seekInputs: number; __times: string[] }).then(() =>
+    page.evaluate(() => {
+      const w = window as unknown as { __seekInputs: number; __times: string[] };
+      return { inputs: w.__seekInputs, times: w.__times };
+    }),
+  );
+  // The thumb never moved: no input from the bar, and only the playing time was shown.
+  expect(seen.inputs).toBe(0);
+  for (const t of seen.times) expect(t).toMatch(/^1:[12]\d$/);
+});
+
+test('the seek bar by touch: a sideways drag seeks once where it ends, a tap seeks there; keys still seek', async ({ page }) => {
+  await start(page);
+  await playAndOpen(page);
+  const pos = page.getByTestId('time-pos');
+  await expect(pos).toHaveText(/^1:1\d$/);
+  const seeks = () => page.evaluate(() => (window as unknown as { __ytSeeks?: number }).__ytSeeks ?? 0);
+  const bar = await box(page.getByTestId('seek'));
+  const y = bar.y + bar.height / 2;
+  // The thumb's travel: the bar less the thumb (20px), as drawn.
+  const xAt = (sec: number) => bar.x + 10 + ((bar.width - 20) * sec) / 247;
+  await touchSwipe(page, xAt(72), xAt(200), y, 300);
+  await expect(pos).toHaveText(/^3:2[0-2]$/);
+  expect(await seeks()).toBe(1);
+  // A tap on the bar seeks to that spot.
+  await touchTap(page, page.getByTestId('seek'));
+  await expect(pos).toHaveText(/^2:0\d$/);
+  expect(await seeks()).toBe(2);
+  // Keyboard: the bar is still a slider.
+  await page.getByTestId('seek').focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(seeks).toBe(3);
+});
+
+test('a swipe down closes Now Playing in one motion: on from the finger, never back up', async ({ page }) => {
+  await start(page);
+  await playAndOpen(page);
+  const h = page.viewportSize()!.height;
+  // Every frame from the release on: the sheet's offset, and when.
+  await page.evaluate(() => {
+    const w = window as unknown as { __frames: [number, number][]; __end: number };
+    w.__frames = [];
+    w.__end = 0;
+    const np = document.querySelector<HTMLElement>('[data-testid="now-playing"]')!;
+    window.addEventListener('touchend', () => {
+      w.__end = performance.now();
+      const t0 = w.__end;
+      const sample = () => {
+        const m = new DOMMatrix(getComputedStyle(np).transform);
+        w.__frames.push([performance.now() - t0, m.m42]);
+        if (performance.now() - t0 < 900) requestAnimationFrame(sample);
+      };
+      sample();
+    }, { capture: true, once: true });
+  });
+  await touchDrag(page, 200, 150, 150 + h * 0.3, 240);
+  await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __frames: [number, number][] }).__frames.at(-1)?.[0] ?? 0)).toBeGreaterThan(850);
+  const frames = await page.evaluate(() => (window as unknown as { __frames: [number, number][] }).__frames);
+  const start0 = frames[0][1];
+  const sheet = await page.getByTestId('now-playing').evaluate((el) => el.clientHeight);
+  // Never back up towards the top.
+  for (let i = 1; i < frames.length; i++) expect(frames[i][1], `frame ${i}`).toBeGreaterThanOrEqual(frames[i - 1][1] - 0.5);
+  // Straight on from the finger: well under way 80 ms after the release (the old close stood
+  // still that long, then sped off: two steps), and all the way down.
+  const at = (ms: number) => frames.filter(([t]) => t <= ms).at(-1)![1];
+  expect((at(80) - start0) / (sheet - start0)).toBeGreaterThan(0.3);
+  expect(frames.at(-1)![1]).toBeGreaterThanOrEqual(sheet - 1);
 });
 
 test('quick taps on the Now Playing heart leave one toast, about the last tap', async ({ page }) => {

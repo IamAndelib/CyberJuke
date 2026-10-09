@@ -196,9 +196,10 @@ const TabPane = memo(function TabPane({ t, active }: { t: Tab; active: boolean }
 });
 
 /**
- * SM5: the app behind Now Playing becomes inert once the sheet has finished opening
- * (not on its first frame, which would cost that frame a style pass over the whole
- * app), and stops being inert the moment the sheet starts closing.
+ * SM5: the app behind Now Playing becomes inert once the sheet has finished opening, and
+ * stops being inert once it has finished closing: either change is a style pass over the
+ * whole app, which would cost the sheet's first frame (a visible hitch as it starts to move).
+ * The sheet covers the app until then anyway.
  */
 function useInertUnderNowPlaying(app: { current: HTMLElement | null }): void {
   useEffect(() => {
@@ -208,25 +209,21 @@ function useInertUnderNowPlaying(app: { current: HTMLElement | null }): void {
       cancel?.();
       cancel = null;
       const el = app.current;
-      if (!el) return;
-      if (!open) {
-        el.inert = false;
-        return;
-      }
+      if (!el || el.inert === open) return;
       const np = document.querySelector<HTMLElement>('[data-testid="now-playing"]');
       let timer = 0;
       let frame = 0;
       const settle = () => {
         cancel?.();
         cancel = null;
-        if (nowPlayingOpen.peek()) el.inert = true;
+        if (nowPlayingOpen.peek() === open) el.inert = open;
       };
       const onEnd = (e: TransitionEvent) => {
         if (e.target === np) settle();
       };
       np?.addEventListener('transitionend', onEnd);
       if (reducedMotion()) frame = requestAnimationFrame(settle);
-      else timer = window.setTimeout(settle, 450);
+      else timer = window.setTimeout(settle, open ? 450 : 300);
       cancel = () => {
         np?.removeEventListener('transitionend', onEnd);
         clearTimeout(timer);

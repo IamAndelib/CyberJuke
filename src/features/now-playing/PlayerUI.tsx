@@ -204,6 +204,19 @@ interface SeekDrag {
   ms: number;
 }
 
+/** The thumb's full width (14px + 2 × 3px border, now-playing.css): its centre travels the bar less this. */
+const SEEK_THUMB_PX = 20;
+/** A finger moving this far decides: sideways is a seek drag, up or down is a scroll. */
+const SEEK_SLOP_PX = 8;
+
+/** A pointer on the bar: where it went down, and whether it is dragging the thumb yet. */
+interface SeekPointer {
+  id: number;
+  x0: number;
+  y0: number;
+  dragging: boolean;
+}
+
 function SeekBar() {
   // Re-renders once a second while playing (the time shown), and on a seek: not every frame.
   useTickValue(isAdvancing.value, () => Math.floor(positionNow() / 1000));
@@ -211,6 +224,7 @@ function SeekBar() {
   const [drag, setDrag] = useState<SeekDrag | null>(null);
   // The drag in progress, read by whichever event ends it first.
   const dragRef = useRef<SeekDrag | null>(null);
+  const pointer = useRef<SeekPointer | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const id = currentId.value ?? undefined;
   const dur = durationMs.value;
@@ -221,66 +235,103 @@ function SeekBar() {
     dragRef.current = { id, ms };
     setDrag(dragRef.current);
   };
-  // The drag ends on release (or a key): one seek, on the track it was made on. Listened to
-  // natively: preact/compat (loaded for memo) turns onChange on inputs into onInput, which
-  // sought on every step of a drag and left the bar stuck on the last one.
-  // A touch that turns into a scroll (the page takes it: pointercancel) seeks nothing: the
-  // thumb goes back, and the `change` Chromium still sends at touchend is ignored.
+  /** The drag ends: one seek, on the track it was made on. */
+  const end = () => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    setDrag(null);
+    if (d && d.id === player.state.peek().current?.id) void player.seek(d.ms);
+  };
+  /** Where a pointer at `x` puts the thumb (its centre over the bar less the thumb), in ms. */
+  const msAt = (x: number) => {
+    const el = input.current;
+    const d = player.state.peek().durationMs;
+    if (!el || d <= 0) return 0;
+    const r = el.getBoundingClientRect();
+    const f = Math.min(1, Math.max(0, (x - r.left - SEEK_THUMB_PX / 2) / Math.max(1, r.width - SEEK_THUMB_PX)));
+    return Math.round((f * d) / 1000) * 1000;
+  };
+
+  // The keyboard (and TalkBack) work the range itself: each step moves the thumb (input),
+  // and `change` ends it with one seek. Listened to natively: preact/compat (loaded for memo)
+  // turns onChange on inputs into onInput.
   useEffect(() => {
     const el = input.current;
     if (!el) return;
-    let cancelled = false;
-    const end = () => {
-      const d = dragRef.current;
-      dragRef.current = null;
-      setDrag(null);
-      if (d && d.id === player.state.peek().current?.id) void player.seek(d.ms);
-    };
-    const down = () => {
-      cancelled = false;
-    };
-    const cancel = () => {
-      cancelled = true;
-      dragRef.current = null;
-      setDrag(null);
-    };
-    const change = () => {
-      if (cancelled) {
-        cancelled = false;
-        dragRef.current = null;
-        setDrag(null);
+    el.addEventListener('change', end);
+    return () => el.removeEventListener('change', end);
+  }, []);
+
+  // A finger or the mouse on the bar (the range itself takes no pointer: Chromium would put
+  // the thumb under the finger at once, before knowing whether the finger means to scroll).
+  // A finger decides by its first moves: sideways drags the thumb, up or down scrolls Now
+  // Playing (touch-action: pan-y; the browser then cancels the pointer) and changes nothing.
+  // A tap seeks to that spot. The mouse drags from the press, like any slider.
+  const onPointerDown = (e: PointerEvent) => {
+    if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0) || dur <= 0) return;
+    const p: SeekPointer = { id: e.pointerId, x0: e.clientX, y0: e.clientY, dragging: false };
+    pointer.current = p;
+    if (e.pointerType === 'mouse') {
+      p.dragging = true;
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      input.current?.focus({ preventScroll: true });
+      move(msAt(e.clientX));
+    }
+  };
+  const onPointerMove = (e: PointerEvent) => {
+    const p = pointer.current;
+    if (!p || e.pointerId !== p.id) return;
+    if (!p.dragging) {
+      const dx = Math.abs(e.clientX - p.x0);
+      const dy = Math.abs(e.clientY - p.y0);
+      if (dy > SEEK_SLOP_PX && dy > dx) {
+        pointer.current = null; // a scroll: not ours
         return;
       }
-      end();
-    };
-    el.addEventListener('pointerdown', down);
-    el.addEventListener('change', change);
-    el.addEventListener('pointerup', end);
-    el.addEventListener('pointercancel', cancel);
-    return () => {
-      el.removeEventListener('pointerdown', down);
-      el.removeEventListener('change', change);
-      el.removeEventListener('pointerup', end);
-      el.removeEventListener('pointercancel', cancel);
-    };
-  }, []);
+      if (dx <= SEEK_SLOP_PX) return;
+      p.dragging = true;
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    }
+    move(msAt(e.clientX));
+  };
+  const onPointerUp = (e: PointerEvent) => {
+    const p = pointer.current;
+    if (!p || e.pointerId !== p.id) return;
+    pointer.current = null;
+    // A tap (never past the slop): the thumb goes there.
+    if (!p.dragging) move(msAt(e.clientX));
+    end();
+  };
+  const onPointerCancel = (e: PointerEvent) => {
+    const p = pointer.current;
+    if (!p || e.pointerId !== p.id) return;
+    pointer.current = null;
+    // The browser took the finger (a scroll): nothing was moved unless it was dragging.
+    if (p.dragging) {
+      dragRef.current = null;
+      setDrag(null);
+    }
+  };
+
   return (
     <div class="seek">
-      <input
-        ref={input}
-        type="range"
-        class="seek-range"
-        min={0}
-        max={Math.max(1, dur)}
-        step={1000}
-        value={Math.min(pos, dur)}
-        disabled={dur <= 0}
-        style={{ '--progress': `${pct}%` }}
-        aria-label="Seek"
-        aria-valuetext={`${fmt(pos)} of ${fmt(dur)}`}
-        onInput={(e) => move(Number((e.target as HTMLInputElement).value))}
-        data-testid="seek"
-      />
+      <div class="seek-hit" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerCancel}>
+        <input
+          ref={input}
+          type="range"
+          class="seek-range"
+          min={0}
+          max={Math.max(1, dur)}
+          step={1000}
+          value={Math.min(pos, dur)}
+          disabled={dur <= 0}
+          style={{ '--progress': `${pct}%` }}
+          aria-label="Seek"
+          aria-valuetext={`${fmt(pos)} of ${fmt(dur)}`}
+          onInput={(e) => move(Number((e.target as HTMLInputElement).value))}
+          data-testid="seek"
+        />
+      </div>
       <div class="seek-times">
         <span data-testid="time-pos">{fmt(pos)}</span>
         <span data-testid="time-dur">{dur > 0 ? fmt(dur) : '--:--'}</span>
@@ -292,6 +343,17 @@ function SeekBar() {
 /** Close when dragged this share of the sheet's height, or flicked faster than this. */
 const SWIPE_CLOSE_FRACTION = 0.25;
 const SWIPE_CLOSE_VELOCITY = 0.5; // px/ms
+
+/**
+ * Let go to close, the sheet carries on from the finger: a fast start that eases out, timed
+ * so its first frames move at the finger's speed (the curve starts at about 2.4 × its average
+ * speed), at least EXIT_MIN_SPEED, within EXIT_MIN_MS..EXIT_MAX_MS.
+ */
+const EXIT_EASE = 'cubic-bezier(0.25, 0.6, 0.45, 1)';
+const EXIT_START_SLOPE = 2.4;
+const EXIT_MIN_SPEED = 1.2; // px/ms
+const EXIT_MIN_MS = 120;
+const EXIT_MAX_MS = 240;
 
 /**
  * Swipe down to close Now Playing. A downward drag that starts while the sheet is
@@ -356,15 +418,48 @@ function useSwipeToClose(ref: { current: HTMLDivElement | null }): void {
       const a = samples[0];
       const b = samples[samples.length - 1];
       const v = b && a && b.t > a.t ? (b.y - a.y) / (b.t - a.t) : 0;
-      const close = dy > (el.clientHeight || 1) * SWIPE_CLOSE_FRACTION || v > SWIPE_CLOSE_VELOCITY;
-      if (close) {
-        const instant = reducedMotion();
-        el.style.transition = instant ? 'none' : '';
+      const h = el.clientHeight || 1;
+      const close = dy > h * SWIPE_CLOSE_FRACTION || v > SWIPE_CLOSE_VELOCITY;
+      if (!close) return reset();
+      if (reducedMotion()) {
+        el.style.transition = 'none';
         el.style.transform = '';
         el.style.opacity = '';
         nowPlayingOpen.value = false;
-        if (instant) requestAnimationFrame(() => (el.style.transition = ''));
-      } else reset();
+        requestAnimationFrame(() => (el.style.transition = ''));
+        return;
+      }
+      // On from where the finger let go, in one motion, at its speed: the end state is set
+      // here (the class change that follows can't send it back up or restart it slowly), and
+      // the sheet keeps its layer until it is down.
+      const ms = Math.round(Math.min(EXIT_MAX_MS, Math.max(EXIT_MIN_MS, ((h - dy) / Math.max(v, EXIT_MIN_SPEED)) * EXIT_START_SLOPE)));
+      el.style.willChange = 'transform, opacity';
+      el.style.transition = `transform ${ms}ms ${EXIT_EASE}, opacity ${ms}ms linear, visibility 0s linear ${ms}ms`;
+      el.style.transform = 'translateY(100%)';
+      el.style.opacity = '0.6';
+      nowPlayingOpen.value = false;
+      let done = false;
+      const settle = () => {
+        if (done) return;
+        done = true;
+        el.removeEventListener('transitionend', onDone);
+        clearTimeout(timer);
+        unwatch();
+        // The closed class holds the same values: nothing moves.
+        el.style.transition = '';
+        el.style.transform = '';
+        el.style.opacity = '';
+        el.style.willChange = '';
+      };
+      const onDone = (ev: TransitionEvent) => {
+        if (ev.target === el && ev.propertyName === 'transform') settle();
+      };
+      el.addEventListener('transitionend', onDone);
+      // Only if no transitionend comes (a hidden page): cleared mid-flight, the class's own
+      // transition would restart the motion.
+      const timer = setTimeout(settle, ms + 1000);
+      // Opened again on its way down: the opening takes over from where it is.
+      const unwatch = nowPlayingOpen.subscribe((open) => open && settle());
     };
     el.addEventListener('touchstart', onStart, { passive: true });
     el.addEventListener('touchmove', onMove, { passive: false });

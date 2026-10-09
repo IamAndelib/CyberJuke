@@ -238,6 +238,13 @@
 .seek {
   padding: 6px calc(var(--gutter) + 4px) 0;
 }
+/* Takes the finger for the bar (PlayerUI.tsx SeekBar): sideways it seeks, up or down the
+   browser scrolls Now Playing. The range itself takes no pointer, so it never jumps under a
+   finger that turns out to be scrolling; the keyboard and TalkBack still work it. */
+.seek-hit {
+  touch-action: pan-y;
+  cursor: pointer;
+}
 .seek-range {
   -webkit-appearance: none;
   appearance: none;
@@ -246,7 +253,7 @@
   height: 48px;
   margin: 0;
   background: transparent;
-  cursor: pointer;
+  pointer-events: none;
   --progress: 0%;
 }
 .seek-range::-webkit-slider-runnable-track {
@@ -268,6 +275,7 @@
 }
 .seek-range::-webkit-slider-thumb {
   -webkit-appearance: none;
+  /* 14px + 2 × 3px border: SEEK_THUMB_PX in PlayerUI.tsx. */
   width: 14px;
   height: 26px;
   margin-top: -8px;

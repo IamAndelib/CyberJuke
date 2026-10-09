@@ -72,7 +72,7 @@ test('tapping the tab you are on scrolls to the top, then goes back to its root 
   await expect(page.getByTestId('genre-grid')).toBeVisible();
 });
 
-test('Back closes lyrics, then Now Playing; the app is inert only once the sheet is open (M10, SM5)', async ({ page }) => {
+test('Back closes lyrics, then Now Playing; the app is inert only while the sheet is open (M10, SM5)', async ({ page }) => {
   await start(page);
   await page.getByTestId('track-play').first().click();
   await openNowPlaying(page);
@@ -82,13 +82,15 @@ test('Back closes lyrics, then Now Playing; the app is inert only once the sheet
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('np-lyrics')).toHaveCount(0);
   await expect(page.getByTestId('now-playing')).toHaveClass(/open/);
-  // Closing: inert goes at once, before the sheet has slid away.
+  // Closing: the app stays inert while the sheet slides away (no style pass over the whole
+  // app on its first frame), and isn't once it is down.
   const inertAtClose = await page.evaluate(() => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     return (document.querySelector('.app') as HTMLElement).inert;
   });
-  expect(inertAtClose).toBe(false);
+  expect(inertAtClose).toBe(true);
   await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
+  await expect.poll(() => page.locator('.app').evaluate((el) => (el as HTMLElement).inert)).toBe(false);
 });
 
 test('a double tap on a row plays once; tapping the playing row opens Now Playing, a paused one resumes (M9)', async ({ page }) => {
