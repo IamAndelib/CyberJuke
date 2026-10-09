@@ -2,18 +2,26 @@ package io.github.iamandelib.cyberjuke.yt
 
 import io.github.iamandelib.cyberjuke.net.Hosts
 import io.github.iamandelib.cyberjuke.net.Http
+import io.github.iamandelib.cyberjuke.net.NetBlock
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Request
 import org.schabi.newpipe.extractor.downloader.Response
+import java.io.InterruptedIOException
 
 /** NewPipeExtractor [Downloader] backed by OkHttp (modelled on NewPipe's DownloaderImpl). */
 internal class DownloaderImpl private constructor(private val client: OkHttpClient) : Downloader() {
 
     override fun execute(request: Request): Response {
+        // A cancelled load (ExoPlayer interrupts the loader thread on a skip) stops here, so
+        // rapid skipping leaves no extractions running on (L14).
+        if (Thread.currentThread().isInterrupted) throw InterruptedIOException("interrupted")
         val url = request.url()
+        // Y1: nothing goes to YouTube during a back-off, whoever asks (every request here is
+        // NewPipe's or InnerTube's, so YouTube's).
+        NetBlock.check()
         val method = request.httpMethod()
         val data: ByteArray? = request.dataToSend()
         val body: RequestBody? = when {

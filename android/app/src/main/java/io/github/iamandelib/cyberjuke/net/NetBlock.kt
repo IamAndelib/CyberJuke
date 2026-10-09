@@ -22,7 +22,9 @@ internal class BlockedException(val until: Long, val reason: BlockReason) :
  *
  * Ladder: 2, 5, 15, then 60 minutes. A trip while a back-off is running does not escalate (a
  * prefetch and the playing item failing together count once); the first trip after a back-off
- * has run out does. [success] (playback reached READY) resets the ladder.
+ * has run out does. [success] resets the ladder; it is called when YouTube actually answered
+ * (an extraction or an InnerTube request, [requestSucceeded]), never for playback from a
+ * cached URL or buffered bytes, which proves nothing.
  *
  * Pure apart from its listeners: the clock is passed in, so the state machine is unit-tested
  * (NetBlockTest). Thread-safe.
@@ -112,6 +114,14 @@ internal object NetBlock {
 
     fun success() {
         if (state.success()) listeners.forEach { it.onUnblocked() }
+    }
+
+    /**
+     * A YouTube request succeeded: [success], unless a back-off is running (a request that
+     * started before the trip proves nothing about now).
+     */
+    fun requestSucceeded() {
+        if (!isBlocked()) success()
     }
 
     /** Tests only. */

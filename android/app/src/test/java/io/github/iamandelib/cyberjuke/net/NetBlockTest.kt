@@ -52,6 +52,36 @@ class NetBlockTest {
     }
 
     @Test
+    fun aRequestThatSucceedsDuringABackOffDoesNotEndIt() {
+        var now = 0L
+        NetBlock.clock = { now }
+        NetBlock.trip(BlockReason.BOT_CHECK)
+        // An extraction that started before the trip finishes fine: still blocked.
+        NetBlock.requestSucceeded()
+        assertTrue(NetBlock.isBlocked())
+        // After the back-off, a real YouTube answer resets the ladder...
+        now = 3 * 60_000L
+        NetBlock.requestSucceeded()
+        assertFalse(NetBlock.isQuiet())
+        // ...so the next trip starts at 2 minutes again; without it, it would be 5.
+        NetBlock.trip(BlockReason.BOT_CHECK)
+        assertEquals(now + 2 * 60_000L, NetBlock.active().first)
+    }
+
+    @Test
+    fun aBlockIsNotLiftedByPlaybackAlone() {
+        // M1: nothing but requestSucceeded resets the ladder, so after a back-off that ran out
+        // (playback resuming from a cached URL calls nothing) the next trip escalates.
+        var now = 0L
+        NetBlock.clock = { now }
+        NetBlock.trip(BlockReason.BOT_CHECK)
+        now = 3 * 60_000L
+        assertTrue(NetBlock.isQuiet())
+        NetBlock.trip(BlockReason.BOT_CHECK)
+        assertEquals(now + 5 * 60_000L, NetBlock.active().first)
+    }
+
+    @Test
     fun activeReportsUntilAndReasonOnlyWhileBlocked() {
         val s = BlockState()
         assertEquals(0L to null, s.active(5L))

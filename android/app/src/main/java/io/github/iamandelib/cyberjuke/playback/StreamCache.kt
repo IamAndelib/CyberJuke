@@ -33,6 +33,23 @@ internal object StreamUrls {
     }
 }
 
+/** googlevideo request details, pure (StreamCacheTest). */
+internal object YtUrls {
+    /**
+     * The `rn` request counter goes on progressive (query-style) `/videoplayback?...` URLs only,
+     * never on path-style ones (HLS segments `/videoplayback/id/.../file/seg.ts`) and never twice;
+     * NewPipe's HLS data source turns it off too (M3).
+     */
+    fun wantsRn(url: String): Boolean {
+        val q = url.indexOf('?')
+        if (q < 0) return false
+        val path = url.substring(0, q).substringAfter("://").substringAfter('/', "")
+        if (path != "videoplayback") return false
+        val query = url.substring(q + 1)
+        return query.split('&').none { it.startsWith("rn=") }
+    }
+}
+
 /** Small access-ordered LRU with a per-entry deadline; thread-safe. */
 internal class TtlLru<K, V>(private val maxEntries: Int) {
     private class Entry<V>(val value: V, val until: Long)

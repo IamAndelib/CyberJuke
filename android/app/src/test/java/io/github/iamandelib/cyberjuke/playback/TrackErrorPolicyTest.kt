@@ -96,6 +96,24 @@ class TrackErrorPolicyTest {
     }
 
     @Test
+    fun forbiddenAfterANetworkSwitchReResolves() {
+        // H1: a 60 s old URL bound to the Wi-Fi IP, requested from LTE.
+        val switched = Facts(kind = null, httpCode = 403, urlAgeMs = 60_000L, resolvedBeforeNetworkChange = true)
+        assertEquals(Action.ReResolve, TrackErrorPolicy.decide(switched))
+        // The URL resolved on the new network is refused too: that is enforcement.
+        assertEquals(
+            Action.Block(BlockReason.STREAM_FORBIDDEN),
+            TrackErrorPolicy.decide(switched.copy(resolvedBeforeNetworkChange = false, alreadyReResolved = true)),
+        )
+        // Y5: a URL past its own expire re-resolves, whatever its age says.
+        val expired = Facts(kind = null, httpCode = 403, urlAgeMs = 5_000L, urlExpired = true)
+        assertEquals(Action.ReResolve, TrackErrorPolicy.decide(expired))
+        assertEquals(Action.ReResolve, TrackErrorPolicy.decide(expired.copy(httpCode = 410)))
+        // 429 stays a rate limit.
+        assertEquals(Action.Block(BlockReason.RATE_LIMIT), TrackErrorPolicy.decide(switched.copy(httpCode = 429)))
+    }
+
+    @Test
     fun runningBackOffJustWaits() {
         assertEquals(Action.WaitBlocked, TrackErrorPolicy.decide(Facts(kind = null, blocked = true)))
     }

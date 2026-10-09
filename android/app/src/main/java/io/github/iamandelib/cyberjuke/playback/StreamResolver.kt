@@ -3,9 +3,12 @@ package io.github.iamandelib.cyberjuke.playback
 import android.util.Log
 import androidx.media3.common.MimeTypes
 import io.github.iamandelib.cyberjuke.net.FailureKind
+import io.github.iamandelib.cyberjuke.net.Hosts
 import io.github.iamandelib.cyberjuke.net.NetBlock
+import io.github.iamandelib.cyberjuke.net.NetEpoch
 import io.github.iamandelib.cyberjuke.yt.YtCompat
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.util.concurrent.Callable
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutionException
@@ -41,6 +44,8 @@ internal data class ResolvedStream(
     val description: String,
     val resolvedAtMs: Long,
     val itag: Int,
+    /** [NetEpoch.generation] when the extraction started: older ones are bound to an old IP. */
+    val netGen: Int = 0,
 )
 
 /**
@@ -52,10 +57,13 @@ internal data class ResolvedStream(
  *   LRU of [MAX_CACHE] entries.
  * - Concurrent resolutions of the same video share one extraction (in-flight map, pruned as
  *   each one finishes).
- * - While [NetBlock] holds a back-off, nothing is extracted ([BlockedException]); a bot check
- *   or rate limit trips it.
+ * - While [NetBlock] holds a back-off, nothing is resolved, not even from the cache
+ *   ([BlockedException]); a bot check or rate limit trips it. A successful extraction ends the
+ *   back-off ladder ([NetBlock.requestSucceeded]).
  * - Re-resolving mid-track keeps the same itag ([reResolve], or a load that starts past byte 0),
- *   so the resumed bytes belong to the same file.
+ *   so the resumed bytes belong to the same file. Streams are also cached by itag for that.
+ * - A change of network ([NetEpoch]) clears the cache; a URL extracted before it is not cached.
+ * - Only https URLs are served ([Hosts.isAllowedMediaUrl]).
  */
 internal object StreamResolver {
     private const val TAG = "CyberJukeResolver"
@@ -72,8 +80,12 @@ internal object StreamResolver {
 
     private val cache = TtlLru<String, ResolvedStream>(MAX_CACHE)
 
-    /** The stream last handed out per video (for the itag and the URL's age). */
+    /**
+     * The stream last handed out per video (for the itag, the URL's age and expiry), kept
+     * [SERVED_TTL_MS] so a resume after a long pause still knows its itag.
+     */
     private val served = TtlLru<String, ResolvedStream>(MAX_CACHE)
+    private const val SERVED_TTL_MS = 24L * 60L * 60L * 1000L
 
     /** ytId -> itag to prefer on the next extraction (set by [reResolve]). */
     private val pins = ConcurrentHashMap<String, Int>()
@@ -91,6 +103,8 @@ internal object StreamResolver {
 
     private fun key(ytId: String, q: Quality) = "$ytId|${q.name}"
 
+    private fun itagKey(ytId: String, itag: Int) = "$ytId|i$itag"
+
     private fun now() = System.currentTimeMillis()
 
     /**
@@ -99,39 +113,56 @@ internal object StreamResolver {
      */
     @Throws(IOException::class)
     fun resolve(ytId: String, midStream: Boolean = false): ResolvedStream {
+        // Y1: no request during a back-off, and no stale URL either (a 403 on it would be one).
+        NetBlock.check()
         val q = quality
         val k = key(ytId, q)
-        cache.get(k, now())?.let { return serve(it) }
-        NetBlock.check()
-        val prefer = pins.remove(ytId) ?: if (midStream) served.get(ytId, now())?.itag else null
-        val task = FutureTask(Callable { extract(ytId, q, k, prefer) })
-        val running = inFlight.putIfAbsent(k, task)
-        val mine = running == null
-        val job = running ?: task
-        if (mine) {
+        // A resume keeps the file it was playing: a cached stream of another itag won't do.
+        val keep = if (midStream) served.get(ytId, now())?.itag?.takeIf { it > 0 } else null
+        val hit = cache.get(k, now())?.takeIf { keep == null || it.itag == keep }
+            ?: keep?.let { cache.get(itagKey(ytId, it), now()) }
+        if (hit != null) return serve(hit)
+        val prefer = pins.remove(ytId) ?: keep
+        val flight = if (prefer != null) itagKey(ytId, prefer) else k
+        for (attempt in 0..1) {
+            val task = FutureTask(Callable { extract(ytId, q, k, prefer) })
+            val running = inFlight.putIfAbsent(flight, task)
+            val mine = running == null
+            val job = running ?: task
+            if (mine) {
+                try {
+                    task.run()
+                } finally {
+                    inFlight.remove(flight, task)
+                }
+            }
             try {
-                task.run()
-            } finally {
-                inFlight.remove(k, task)
+                return serve(job.get())
+            } catch (e: ExecutionException) {
+                // Another load's extraction we waited on was cancelled (its thread interrupted,
+                // L14): ours was not, so run one of our own.
+                if (!mine && attempt == 0 && e.hasCause<InterruptedIOException>() &&
+                    !Thread.currentThread().isInterrupted
+                ) {
+                    continue
+                }
+                throw (e.cause as? IOException) ?: IOException(e.cause)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                throw IOException("interrupted", e)
             }
         }
-        return try {
-            serve(job.get())
-        } catch (e: ExecutionException) {
-            throw (e.cause as? IOException) ?: IOException(e.cause)
-        } catch (e: InterruptedException) {
-            Thread.currentThread().interrupt()
-            throw IOException("interrupted", e)
-        }
+        throw IOException("unreachable")
     }
 
     private fun serve(s: ResolvedStream): ResolvedStream {
-        served.put(s.ytId, s, StreamUrls.cacheUntil(s.url, s.resolvedAtMs) + StreamUrls.EXPIRY_MARGIN_MS)
+        served.put(s.ytId, s, s.resolvedAtMs + SERVED_TTL_MS)
         return s
     }
 
     private fun extract(ytId: String, q: Quality, k: String, preferItag: Int?): ResolvedStream {
-        cache.get(k, now())?.let { return it }
+        if (preferItag == null) cache.get(k, now())?.let { return it }
+        val gen = NetEpoch.generation
         val started = now()
         val extracted = try {
             YtCompat.extract(ytId)
@@ -145,19 +176,48 @@ internal object StreamResolver {
             if (kind == FailureKind.BROKEN) PlayerBus.emitExtractorBroken(reason)
             throw ResolveException(ytId, reason, e, kind)
         }
-        val stream = choose(ytId, extracted, q, preferItag)
+        // YouTube answered: the back-off ladder starts over (M1; a cached READY proves nothing).
+        NetBlock.requestSucceeded()
+        val stream = choose(ytId, extracted, q, preferItag, gen)
+        if (!Hosts.isAllowedMediaUrl(stream.url)) {
+            throw ResolveException(ytId, "NO_STREAM: not an https googlevideo URL", null, FailureKind.CONTENT)
+        }
         Log.i(TAG, "resolve($ytId) -> ${stream.description} in ${now() - started}ms")
-        cache.put(k, stream, StreamUrls.cacheUntil(stream.url, stream.resolvedAtMs))
+        if (NetEpoch.generation == gen) {
+            // Not cached when the network changed meanwhile: the URL is bound to the old IP.
+            val until = StreamUrls.cacheUntil(stream.url, stream.resolvedAtMs)
+            cache.put(itagKey(ytId, stream.itag), stream, until)
+            val byQuality = if (preferItag == null) {
+                stream
+            } else {
+                runCatching { choose(ytId, extracted, q, null, gen) }.getOrNull()
+            }
+            byQuality?.takeIf { Hosts.isAllowedMediaUrl(it.url) }?.let {
+                cache.put(k, it, StreamUrls.cacheUntil(it.url, it.resolvedAtMs))
+                cache.put(itagKey(ytId, it.itag), it, StreamUrls.cacheUntil(it.url, it.resolvedAtMs))
+            }
+        }
         return stream
     }
 
-    private fun choose(ytId: String, ex: YtCompat.Extracted, q: Quality, preferItag: Int?): ResolvedStream {
+    private inline fun <reified T : Throwable> Throwable.hasCause(): Boolean {
+        var t: Throwable? = this
+        var depth = 0
+        while (t != null && depth < 16) {
+            if (t is T) return true
+            t = t.cause
+            depth++
+        }
+        return false
+    }
+
+    private fun choose(ytId: String, ex: YtCompat.Extracted, q: Quality, preferItag: Int?, gen: Int): ResolvedStream {
         val now = now()
 
         // 0. Resuming: the same format as before, if it is still offered.
         if (preferItag != null && preferItag > 0) {
             (ex.audio + ex.muxed).firstOrNull { it.itag == preferItag }?.let { pick ->
-                return stream(ytId, pick, "same itag $preferItag ${pick.mimeType}", now)
+                return stream(ytId, pick, "same itag $preferItag ${pick.mimeType}", now, gen)
             }
         }
 
@@ -175,12 +235,12 @@ internal object StreamResolver {
                 Quality.HIGH -> sorted.first()
                 Quality.LOW -> sorted.lastOrNull { it.bitrate > 0 } ?: sorted.last()
             }
-            return stream(ytId, pick, "audio ${pick.mimeType} ${pick.bitrate / 1000}kbps", now)
+            return stream(ytId, pick, "audio ${pick.mimeType} ${pick.bitrate / 1000}kbps", now, gen)
         }
 
         // 2. Lowest progressive muxed (audio+video) stream; ExoPlayer just plays its audio.
         ex.muxed.minByOrNull { if (it.bitrate > 0) it.bitrate else Int.MAX_VALUE }?.let { pick ->
-            return stream(ytId, pick, "muxed ${pick.mimeType} ${pick.bitrate}p", now)
+            return stream(ytId, pick, "muxed ${pick.mimeType} ${pick.bitrate}p", now, gen)
         }
 
         // 3. Adaptive manifest (handled by the service, see ManifestOnlyException).
@@ -189,16 +249,17 @@ internal object StreamResolver {
         throw ResolveException(ytId, "NO_STREAM: no playable stream found for $ytId", null, FailureKind.CONTENT)
     }
 
-    private fun stream(ytId: String, c: YtCompat.Candidate, description: String, now: Long) = ResolvedStream(
+    private fun stream(ytId: String, c: YtCompat.Candidate, description: String, now: Long, gen: Int) = ResolvedStream(
         ytId = ytId,
         url = c.url,
         headers = YtCompat.streamHeaders(c.url),
         description = "$description itag=${c.itag}",
         resolvedAtMs = now,
         itag = if (c.itag > 0) c.itag else StreamUrls.itag(c.url) ?: -1,
+        netGen = gen,
     )
 
-    /** The stream last served for [ytId] (any quality), or null. */
+    /** The stream last served for [ytId] (any quality, kept a day, even once expired), or null. */
     fun lastServed(ytId: String): ResolvedStream? = served.get(ytId, now())
 
     /**

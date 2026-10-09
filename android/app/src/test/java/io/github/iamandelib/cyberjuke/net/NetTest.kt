@@ -30,4 +30,15 @@ class NetTest {
         assertFalse(Hosts.isYouTubeMedia("googlevideo.com.evil.example"))
         assertFalse(Hosts.isYouTubeMedia(null))
     }
+
+    @Test
+    fun mediaUrlsMustBeHttpsOnYouTubeMediaHosts() {
+        assertTrue(Hosts.isAllowedMediaUrl("https://rr3---sn-abc.googlevideo.com/videoplayback?expire=1&itag=251"))
+        assertTrue(Hosts.isAllowedMediaUrl("https://manifest.googlevideo.com/api/manifest/hls_variant/expire/1/file/index.m3u8"))
+        assertFalse(Hosts.isAllowedMediaUrl("http://rr3---sn-abc.googlevideo.com/videoplayback?itag=251"))
+        assertFalse(Hosts.isAllowedMediaUrl("https://evil.example/videoplayback"))
+        assertFalse(Hosts.isAllowedMediaUrl("file:///data/data/x"))
+        assertFalse(Hosts.isAllowedMediaUrl("content://media/1"))
+        assertFalse(Hosts.isAllowedMediaUrl("asset:///ci-tone.ogg"))
+    }
 }

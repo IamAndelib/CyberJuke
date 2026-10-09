@@ -92,6 +92,16 @@ class StreamCacheTest {
     }
 
     @Test
+    fun rnOnlyOnQueryStyleVideoplaybackUrls() {
+        assertTrue(YtUrls.wantsRn("https://rr1---sn-abc.googlevideo.com/videoplayback?expire=1760000000&itag=251"))
+        // Path-style HLS segment: appending "&rn=" would corrupt the path (M3).
+        assertFalse(YtUrls.wantsRn("https://rr1---sn-abc.googlevideo.com/videoplayback/id/x.1/itag/140/expire/1760000000/sq/3/file/seg.ts"))
+        assertFalse(YtUrls.wantsRn("https://rr1---sn-abc.googlevideo.com/videoplayback?itag=251&rn=4"))
+        assertFalse(YtUrls.wantsRn("https://manifest.googlevideo.com/api/manifest/hls_playlist/expire/1/file/index.m3u8"))
+        assertFalse(YtUrls.wantsRn("https://rr1---sn-abc.googlevideo.com/other/videoplayback?itag=251"))
+    }
+
+    @Test
     fun prefetchAfterThirtySecondsOrInTheLastMinute() {
         val min3 = 180_000L
         assertEquals(30_000L, PrefetchPolicy.delayMs(0L, min3))

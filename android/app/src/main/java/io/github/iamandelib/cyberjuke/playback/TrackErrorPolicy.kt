@@ -21,6 +21,10 @@ internal object TrackErrorPolicy {
         val httpCode: Int? = null,
         /** How long ago the failing stream URL was resolved, if known. */
         val urlAgeMs: Long? = null,
+        /** The failing URL is past googlevideo's own `expire` ([StreamUrls.isExpired], Y5). */
+        val urlExpired: Boolean = false,
+        /** The failing URL was resolved on an earlier network ([io.github.iamandelib.cyberjuke.net.NetEpoch], H1). */
+        val resolvedBeforeNetworkChange: Boolean = false,
         /** The item was already re-resolved once after a 403/410. */
         val alreadyReResolved: Boolean = false,
         /** Extraction was skipped because a back-off is running ([BlockedException]). */
@@ -67,6 +71,9 @@ internal object TrackErrorPolicy {
         f.httpCode?.let { code ->
             when {
                 code == 429 -> return Action.Block(BlockReason.RATE_LIMIT)
+                // An expired URL, or one bound to the old network's IP, is no sign of a block.
+                (code == 403 || code == 410) && !f.alreadyReResolved &&
+                    (f.urlExpired || f.resolvedBeforeNetworkChange) -> return Action.ReResolve
                 code == 403 && f.urlAgeMs != null && f.urlAgeMs < FRESH_URL_MS ->
                     return Action.Block(BlockReason.STREAM_FORBIDDEN)
                 (code == 403 || code == 410) && !f.alreadyReResolved -> return Action.ReResolve

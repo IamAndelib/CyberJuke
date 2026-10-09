@@ -1,7 +1,11 @@
 package io.github.iamandelib.cyberjuke.playback
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.LinkProperties
+import android.net.Network
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -41,11 +45,13 @@ import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.net.Hosts
 import io.github.iamandelib.cyberjuke.net.Http
 import io.github.iamandelib.cyberjuke.net.NetBlock
+import io.github.iamandelib.cyberjuke.net.NetEpoch
 import io.github.iamandelib.cyberjuke.yt.Radio
 import io.github.iamandelib.cyberjuke.yt.YtCompat
 import io.github.iamandelib.cyberjuke.yt.YtMusic
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.IOException
 import java.util.Random
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -99,10 +105,45 @@ class PlaybackService : MediaSessionService() {
     private var prefetchedKey: String? = null
     private val prefetchCheck = Runnable { checkPrefetch() }
 
+    /**
+     * H1: googlevideo URLs are bound to the IP that resolved them. On a new default network
+     * (or new addresses on it) the cached URLs go, and a 403 on a URL from before the change
+     * re-resolves instead of counting as STREAM_FORBIDDEN (TrackErrorPolicy, [NetEpoch]).
+     */
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            if (NetEpoch.onNetwork(network.toString())) onNetworkChanged()
+        }
+
+        override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
+            val addresses = linkProperties.linkAddresses.mapNotNull { it.address?.hostAddress }.toSet()
+            if (NetEpoch.onAddresses(network.toString(), addresses)) onNetworkChanged()
+        }
+    }
+    private var networkCallbackRegistered = false
+
+    /** Any thread (ConnectivityManager's). */
+    private fun onNetworkChanged() {
+        StreamResolver.clear()
+        try {
+            Http.client.connectionPool.evictAll()
+        } catch (_: Exception) {
+        }
+        Log.i(TAG, "Default network changed (generation ${NetEpoch.generation}): stream URLs dropped")
+    }
+
     override fun onCreate() {
         super.onCreate()
         // Before anything touches the network: "Prefer IPv4" applies to extraction and streams.
         NetPrefsStore.load(this)
+        YtDataSpecResolver.allowCiTone = isDebuggable()
+        try {
+            (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
+                .registerDefaultNetworkCallback(networkCallback)
+            networkCallbackRegistered = true
+        } catch (e: Exception) { // SecurityException without ACCESS_NETWORK_STATE, or too many callbacks
+            Log.w(TAG, "No network callback: ${e.javaClass.simpleName}")
+        }
 
         // DefaultDataSource handles asset:// (CI test tone) and delegates http(s) to OkHttp.
         val upstream = DefaultDataSource.Factory(this, OkHttpDataSource.Factory(Http.client))
@@ -162,6 +203,14 @@ class PlaybackService : MediaSessionService() {
         handler.removeCallbacks(lowCheck)
         radioExecutor.shutdownNow()
         StreamResolver.cancelPrefetch()
+        if (networkCallbackRegistered) {
+            try {
+                (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
+                    .unregisterNetworkCallback(networkCallback)
+            } catch (_: Exception) {
+            }
+            networkCallbackRegistered = false
+        }
         mediaSession?.let { session ->
             session.player.release()
             session.release()
@@ -178,9 +227,8 @@ class PlaybackService : MediaSessionService() {
             if (playbackState == Player.STATE_READY) {
                 consecutiveFailures = 0
                 player?.currentMediaItem?.mediaId?.let { expiredRetried.remove(it) }
-                // Playback works end to end after a back-off ran out: reset the ladder. During
-                // a running back-off this may just be a cached URL, which proves nothing.
-                if (!NetBlock.isBlocked()) NetBlock.success()
+                // No NetBlock.success() here: READY from a cached URL or buffered bytes proves
+                // nothing about YouTube; a successful extraction or InnerTube request does (M1).
             }
         }
 
@@ -544,10 +592,13 @@ class PlaybackService : MediaSessionService() {
         val http = error.findCause<HttpDataSource.InvalidResponseCodeException>()
         val resolve = error.findCause<ResolveException>()
         val served = ytId?.let { StreamResolver.lastServed(it) }
+        val now = System.currentTimeMillis()
         val facts = TrackErrorPolicy.Facts(
             kind = resolve?.kind,
             httpCode = http?.responseCode,
-            urlAgeMs = served?.let { System.currentTimeMillis() - it.resolvedAtMs },
+            urlAgeMs = served?.let { now - it.resolvedAtMs },
+            urlExpired = served?.let { StreamUrls.isExpired(it.url, it.resolvedAtMs, now) } == true,
+            resolvedBeforeNetworkChange = served?.let { it.netGen < NetEpoch.generation } == true,
             alreadyReResolved = trackId in expiredRetried,
             blocked = error.findCause<BlockedException>() != null,
             ioNetwork = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
@@ -572,6 +623,8 @@ class PlaybackService : MediaSessionService() {
                 Log.i(TAG, "BLOCKED ${action.reason} on $trackId: $message")
                 NetBlock.trip(action.reason)
                 StreamResolver.cancelPrefetch()
+                // The rejected URL must not be tried again from the cache (L1).
+                ytId?.let { StreamResolver.reResolve(it) }
                 p.pause()
             }
             TrackErrorPolicy.Action.ReResolve -> {
@@ -583,6 +636,11 @@ class PlaybackService : MediaSessionService() {
                 Log.i(TAG, "HTTP ${http?.responseCode} for $trackId: re-resolving once")
                 expiredRetried.add(trackId)
                 StreamResolver.reResolve(ytId)
+                if (item.localConfiguration?.uri?.scheme != JukeUris.SCHEME) {
+                    // Swapped to its HLS manifest earlier: that manifest is what expired (L15).
+                    // Back to our URI, so the resolver fetches a fresh one.
+                    p.replaceMediaItem(index, item.buildUpon().setUri(JukeUris.forYt(ytId)).setMimeType(null).build())
+                }
                 p.prepare()
             }
             is TrackErrorPolicy.Action.Pause -> {
@@ -859,14 +917,22 @@ private inline fun <reified T : Throwable> Throwable.findCause(): T? {
     return null
 }
 
-/** Maps cyberjuke://yt/<id> to the real googlevideo URL + headers, on the loader thread. */
+/**
+ * Maps cyberjuke://yt/<id> to the real googlevideo URL + headers, on the loader thread. Every
+ * load goes through here: only https YouTube media URLs leave it (L5), plus the CI test tone
+ * asset on debuggable builds.
+ */
 @OptIn(UnstableApi::class)
 internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
     private val requestNumber = AtomicLong()
 
+    /** Set by PlaybackService: debuggable builds play the CI tone asset. */
+    @Volatile
+    var allowCiTone = false
+
     override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
         val ytId = JukeUris.ytIdOf(dataSpec.uri)
-        if (ytId == LaunchOptions.CI_TONE) {
+        if (ytId == LaunchOptions.CI_TONE && allowCiTone) {
             return dataSpec.buildUpon().setUri(Uri.parse(LaunchOptions.CI_TONE_ASSET)).build()
         }
         val url: String
@@ -877,16 +943,16 @@ internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
             url = stream.url
             headers.putAll(stream.headers)
         } else {
-            val raw = dataSpec.uri.toString()
-            if (!Hosts.isYouTubeMedia(dataSpec.uri.host)) {
-                return dataSpec // not ours (e.g. artwork); leave untouched
-            }
-            url = raw
-            headers.putAll(YtCompat.streamHeaders(raw))
+            // An HLS manifest, variant or segment (the manifest-only fallback).
+            url = dataSpec.uri.toString()
+            headers.putAll(YtCompat.streamHeaders(url))
+        }
+        if (!Hosts.isAllowedMediaUrl(url)) {
+            throw IOException("Refusing to load a non-https or non-YouTube media URL")
         }
 
         val isVideoPlayback = Uri.parse(url).path?.startsWith("/videoplayback") == true
-        val finalUrl = if (isVideoPlayback && !url.contains("&rn=")) {
+        val finalUrl = if (ytId != null && YtUrls.wantsRn(url)) {
             url + "&rn=" + requestNumber.incrementAndGet()
         } else {
             url

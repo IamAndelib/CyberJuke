@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.yt
 
+import io.github.iamandelib.cyberjuke.net.NetBlock
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -22,6 +23,8 @@ internal object InnerTube {
      * retry later), IllegalStateException on any other status (UNAVAILABLE).
      */
     fun post(endpoint: String, payload: JSONObject): JSONObject? {
+        // Y1: no request at all during a back-off (BlockedException, code BOT_CHECK).
+        NetBlock.check()
         YtCompat.ensureInit()
         val version = YoutubeParsingHelper.getYoutubeMusicClientVersion()
         val client = JSONObject()
@@ -44,7 +47,7 @@ internal object InnerTube {
         )
         return when (response.responseCode()) {
             200 -> try {
-                JSONObject(response.responseBody())
+                JSONObject(response.responseBody()).also { NetBlock.requestSucceeded() }
             } catch (e: JSONException) {
                 throw IOException("YouTube Music $endpoint: invalid JSON", e)
             }

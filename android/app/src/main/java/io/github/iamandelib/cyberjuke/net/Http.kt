@@ -78,4 +78,10 @@ internal object Hosts {
     }
 
     fun hostOf(url: String): String? = url.toHttpUrlOrNull()?.host
+
+    /** A stream, manifest or segment URL ExoPlayer may load: https on a YouTube media host. */
+    fun isAllowedMediaUrl(url: String): Boolean {
+        val u = url.toHttpUrlOrNull() ?: return false
+        return u.isHttps && isYouTubeMedia(u.host)
+    }
 }
