@@ -10,7 +10,7 @@ import { toast } from '../stores/toast';
 import { YT_ID_RE, parseNativeState } from '../core/guards';
 import { logError } from '../core/log';
 import { BRIDGE_MAX_ITEMS, BRIDGE_MAX_STRING, JukePlayer, STALE_INDEX, type NativeState, type NativeTrack, type RepeatMode } from './native';
-import { EMPTY_STATE, LIST_CONTEXT, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextItem, type UpNextKind } from './types';
+import { EMPTY_STATE, LIST_CONTEXT, livePosition, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextItem, type UpNextKind } from './types';
 
 /** K6: text native would refuse as too long is cut (a link that long is dropped). */
 const clip = (s: string) => (s.length > BRIDGE_MAX_STRING ? s.slice(0, BRIDGE_MAX_STRING) : s);
@@ -312,7 +312,17 @@ export class NativePlayer implements Player {
 
   play = () => JukePlayer.play();
   pause = () => JukePlayer.pause();
-  toggle = () => (this.s.value.isPlaying ? JukePlayer.pause() : JukePlayer.play());
+  /**
+   * Shown at once (the position held where it is), so a quick second tap undoes the first
+   * instead of repeating it before native's state comes back. Native's state is read back
+   * after it (a play refused during a back-off changes nothing there, so sends no event).
+   */
+  toggle = () => {
+    const s = this.s.value;
+    const now = performance.now();
+    this.s.value = { ...s, isPlaying: !s.isPlaying, isBuffering: false, positionMs: livePosition(s, now), sampledAt: now };
+    return (s.isPlaying ? JukePlayer.pause() : JukePlayer.play()).finally(() => this.resync());
+  };
   next = () => JukePlayer.skipToNext();
   prev = () => JukePlayer.skipToPrevious();
 

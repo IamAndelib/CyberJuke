@@ -782,6 +782,8 @@ export function TrackMenu() {
   useModal(open != null, sheet);
   const close = () => (menuTrack.value = null);
   const fav = useLiked(t?.id);
+  // A track still being looked up (no video yet) can't be queued, shared or liked.
+  const known = !!t?.ytId;
   return (
     <div class={'sheet-wrap' + (open ? ' open' : '')} aria-hidden={!open} inert={!open}>
       <div class="scrim" onClick={close} />
@@ -803,6 +805,7 @@ export function TrackMenu() {
                 toast(playing ? 'Added to queue · plays next' : 'Playing');
                 close();
               }}
+              disabled={!known}
               data-testid="menu-add-queue"
             >
               <Icon name="playNext" size={20} /> Add to queue
@@ -813,6 +816,7 @@ export function TrackMenu() {
                 close();
                 void shareTrack(t);
               }}
+              disabled={!known}
               data-testid="menu-share"
             >
               <Icon name="share" size={20} /> Share
@@ -823,6 +827,7 @@ export function TrackMenu() {
                 toggleLikeWithUndo(t);
                 close();
               }}
+              disabled={!known}
               data-testid="menu-like"
             >
               <Icon name={fav ? 'heart' : 'heartOutline'} size={20} /> {fav ? 'Unlike' : 'Like'}

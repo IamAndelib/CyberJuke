@@ -14,9 +14,10 @@ import { player } from '../../player';
 import { block, netStatusText } from '../../stores/block';
 import { AuthError, SIGN_UP_URL, auth, authErrorText } from '../../data/auth';
 import { toast } from '../../stores/toast';
-import { app, checkFailed, checkForUpdates, checking, lastCheck, updateAvailable } from '../../stores/updates';
+import { app, checkFailed, checkForUpdates, checking, installUnknown, lastCheck, updateAvailable } from '../../stores/updates';
 import { Screen } from '../../ui/components/Screen';
 import { openExternal } from '../../ui/links';
+import { arrowChoice } from '../../ui/arrowChoice';
 import { askConfirm, usePageActive } from '../../ui/nav';
 
 function Swatch({ id }: { id: ThemeId }) {
@@ -52,6 +53,7 @@ function Toggle({ on, onChange, label, testid }: { on: boolean; onChange: (v: bo
 
 /** Where the code and the releases are (opened in the browser; github.com is allowlisted). */
 const REPO_URL = 'https://github.com/IamAndelib/CyberJuke';
+const QUALITIES = ['high', 'low'] as const;
 
 function A({ href, children }: { href: string; children: string }) {
   return (
@@ -70,15 +72,7 @@ function A({ href, children }: { href: string; children: string }) {
 /** "Check for new tracks": how often Home asks whether anything new was posted. */
 function CheckEvery() {
   const cur = settings.value.checkEvery;
-  const onKey = (e: KeyboardEvent) => {
-    const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
-    if (!d) return;
-    e.preventDefault();
-    const i = CHECK_EVERY_OPTIONS.indexOf(cur);
-    const next = CHECK_EVERY_OPTIONS[(i + d + CHECK_EVERY_OPTIONS.length) % CHECK_EVERY_OPTIONS.length];
-    updateSettings({ checkEvery: next });
-    (e.currentTarget as HTMLElement).querySelector<HTMLElement>(`[data-value="${next}"]`)?.focus();
-  };
+  const onKey = arrowChoice(CHECK_EVERY_OPTIONS, cur, (v) => updateSettings({ checkEvery: v }));
   return (
     <div class="setting stack">
       <div class="setting-text">
@@ -356,15 +350,17 @@ function Updates() {
   }
   const r = updateAvailable.value;
   const last = lastCheck.value;
-  const status = checking.value
-    ? 'Checking…'
-    : checkFailed.value
-      ? "Couldn't check. Try again later."
-      : r
-        ? `CyberJuke ${r.version} is available.`
-        : last.checkedAt
-          ? `Up to date (${a.version}). ${checkedText(last.checkedAt)}.`
-          : 'Not checked yet.';
+  const status = installUnknown.value
+    ? "CyberJuke couldn't tell how it was installed, so it doesn't check."
+    : checking.value
+      ? 'Checking…'
+      : checkFailed.value
+        ? "Couldn't check. Try again later."
+        : r
+          ? `CyberJuke ${r.version} is available.`
+          : last.checkedAt
+            ? `Up to date (${a.version}). ${checkedText(last.checkedAt)}.`
+            : 'Not checked yet.';
   return (
     <section class="card" data-testid="updates">
       <h2 class="card-title">Updates</h2>
@@ -424,12 +420,14 @@ export function Settings() {
             <div class="setting-name">Audio quality</div>
             <div class="setting-desc">Low saves data.</div>
           </div>
-          <div class="segmented small" role="radiogroup" aria-label="Audio quality">
-            {(['high', 'low'] as const).map((q) => (
+          <div class="segmented small" role="radiogroup" aria-label="Audio quality" onKeyDown={arrowChoice(QUALITIES, s.quality, (q) => updateSettings({ quality: q }))}>
+            {QUALITIES.map((q) => (
               <button
                 key={q}
                 role="radio"
                 aria-checked={s.quality === q}
+                tabIndex={s.quality === q ? 0 : -1}
+                data-value={q}
                 class={s.quality === q ? 'on' : ''}
                 onClick={() => updateSettings({ quality: q })}
                 data-testid={`quality-${q}`}
@@ -444,12 +442,14 @@ export function Settings() {
             <div class="setting-name">IPv4</div>
             <div class="setting-desc">Auto switches when IPv6 gets blocked.</div>
           </div>
-          <div class="seg-grid three" role="radiogroup" aria-label="IPv4">
+          <div class="seg-grid three" role="radiogroup" aria-label="IPv4" onKeyDown={arrowChoice(IPV4_MODES, s.ipv4, (m) => updateSettings({ ipv4: m }))}>
             {IPV4_MODES.map((m) => (
               <button
                 key={m}
                 role="radio"
                 aria-checked={s.ipv4 === m}
+                tabIndex={s.ipv4 === m ? 0 : -1}
+                data-value={m}
                 class={s.ipv4 === m ? 'on' : ''}
                 onClick={() => updateSettings({ ipv4: m })}
                 data-testid={`ipv4-${m}`}

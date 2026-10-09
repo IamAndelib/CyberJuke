@@ -421,11 +421,13 @@ test('lyrics replace the art: synced lines follow the position, a tap seeks, oth
   await page.getByTestId('np-next').click();
   await expect(page.getByTestId('lyrics-state')).toContainText('Instrumental');
 
-  const req = (await musicCalls(page)).filter((c) => c[0] === 'lyrics').map((c) => c[1] as { ytId: string; title: string });
+  const req = (await musicCalls(page)).filter((c) => c[0] === 'lyrics').map((c) => c[1] as { ytId: string; title: string; durationSec?: number });
   expect(req.length).toBeGreaterThanOrEqual(7);
   for (const r of req) {
     expect(r.ytId).toMatch(/^[A-Za-z0-9_-]{11}$/);
     expect(r.title).not.toMatch(/official (music )?video/i);
+    // Each next track's lyrics are asked for with its length (a closer match), not without.
+    expect(r.durationSec, r.title).toBeGreaterThan(0);
   }
 
   await page.getByTestId('np-lyrics-toggle').click();

@@ -30,18 +30,22 @@ function creditFor(source: string | undefined): string {
 
 type Load = { id: string; outcome: LyricsOutcome | null };
 
+/** How long lyrics wait for the track's duration before asking without it. */
+const LYRICS_DURATION_WAIT_MS = 2500;
+
 function useLyrics(track: Track, durationMs: number): [LyricsOutcome | null, () => void] {
   const [state, setState] = useState<Load>(() => {
     const hit = client.peek(track.id);
     return { id: track.id, outcome: hit ? { status: 'ok', lyrics: hit } : null };
   });
   const [attempt, setAttempt] = useState(0);
-  // Wait for the duration (better matches) unless it takes long to arrive.
-  const [durReady, setDurReady] = useState(durationMs > 0);
+  // Wait for this track's duration (better matches) unless it takes long to arrive. Kept per
+  // track: on a skip, the last track's "ready" must not let the next one ask without it.
+  const [waitedFor, setWaitedFor] = useState<string | null>(null);
+  const durReady = durationMs > 0 || waitedFor === track.id;
   useEffect(() => {
-    if (durationMs > 0) return setDurReady(true);
-    setDurReady(false);
-    const id = setTimeout(() => setDurReady(true), 2500);
+    if (durationMs > 0) return;
+    const id = setTimeout(() => setWaitedFor(track.id), LYRICS_DURATION_WAIT_MS);
     return () => clearTimeout(id);
     // Only whether a duration is known matters, not its value.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -210,7 +214,7 @@ function SyncedLyrics({ lyrics }: { lyrics: Lyrics }) {
         l.text ? (
           <button
             key={i}
-            class={'lyr-line' + (i === cur ? ' on' : i < cur ? ' past' : '')}
+            class={'lyr-line' + (i === cur ? ' on' : '')}
             dir="auto"
             data-i={i}
             data-t={l.t}

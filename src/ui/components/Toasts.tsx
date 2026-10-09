@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import { reducedMotion } from '../../core/motion';
 import { nowPlayingOpen } from '../nav';
+import { hasCurrent } from '../../player';
+import { block } from '../../stores/block';
 import { dismissAllToasts, dismissToast, holdToast, releaseToast, runToastAction, toasts } from '../../stores/toast';
 
 /** A drag shorter than this, or more vertical than sideways, isn't a swipe. */
@@ -16,20 +18,23 @@ const TOAST_GAP_ABOVE_BUTTON_PX = 12;
 
 /**
  * Where the toasts go (CSS `bottom`): above whatever is docked under the page (tab bar, mini
- * player, the block banner), and above a back-to-top button showing there, so a toast never
- * sits on something the user may want to tap. Over Now Playing: at the bottom edge, where
+ * player, the block banner), and above the back-to-top and search buttons showing there, so
+ * a toast never sits on something the user may want to tap. Over Now Playing: at the bottom edge, where
  * the sheet leaves room for it under its last row (now-playing.css).
  */
 function toastBottom(): string | null {
   if (document.querySelector('.np.open')) return `calc(${TOAST_GAP_PX}px + var(--safe-bottom))`;
   const main = document.querySelector('.main');
   if (!main) return null;
-  let bottom = innerHeight - main.getBoundingClientRect().bottom + TOAST_GAP_PX;
-  for (const top of document.querySelectorAll('.totop.on')) {
+  const mainBottom = main.getBoundingClientRect().bottom;
+  let bottom = innerHeight - mainBottom + TOAST_GAP_PX;
+  // The buttons over the bottom of the page: back-to-top and the search button.
+  for (const button of document.querySelectorAll('.totop.on, .fab')) {
     // Not one on another tab or a page underneath (content-visibility: hidden).
-    if (typeof top.checkVisibility === 'function' && !top.checkVisibility()) continue;
-    const r = top.getBoundingClientRect();
-    if (!r.width) continue;
+    if (typeof button.checkVisibility === 'function' && !button.checkVisibility()) continue;
+    const r = button.getBoundingClientRect();
+    // Nor the search button tucked away below the page while scrolling.
+    if (!r.width || r.top >= mainBottom) continue;
     bottom = Math.max(bottom, innerHeight - r.top + TOAST_GAP_ABOVE_BUTTON_PX);
   }
   return `${bottom}px`;
@@ -37,14 +42,16 @@ function toastBottom(): string | null {
 
 export function Toasts() {
   const list = toasts.value;
-  // Placed again when Now Playing opens or closes under a toast (Back closes it untouched).
-  const npOpen = nowPlayingOpen.value;
+  // Placed again when what's under a toast changes while it shows: Now Playing opens or
+  // closes (Back closes it untouched), the mini player or a banner appears.
+  const under = [nowPlayingOpen.value, hasCurrent.value, block.banner.value, block.brokenBanner.value];
   const box = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (!list.length || !box.current) return;
     const bottom = toastBottom();
     box.current.style.bottom = bottom ?? '';
-  }, [list, npOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `under` lists what moves the bottom edge
+  }, [list, ...under]);
   // A toast goes as soon as the user does something else: a finger (or click) anywhere but on
   // a toast, or a wheel scroll. Only the user's own input counts; the app's own scrolling
   // (lyrics following the song, back-to-top) doesn't.

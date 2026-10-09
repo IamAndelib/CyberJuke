@@ -87,8 +87,11 @@ export class Feed<T, C, M = undefined> {
     void this.loadFirst(false);
   }
 
-  /** Reload the first page, keeping what's shown until it arrives. */
-  refresh(): Promise<void> {
+  /**
+   * Reload the first page, keeping what's shown until it arrives. Resolves to the error if it
+   * failed while something was shown (which stays, as it was), else null.
+   */
+  refresh(): Promise<LoadError | null> {
     this.started = true;
     return this.loadFirst(true);
   }
@@ -132,7 +135,7 @@ export class Feed<T, C, M = undefined> {
       });
   }
 
-  private async loadFirst(soft: boolean): Promise<void> {
+  private async loadFirst(soft: boolean): Promise<LoadError | null> {
     const g = ++this.gen;
     this.busy = true;
     this.loadingMore = false;
@@ -145,17 +148,22 @@ export class Feed<T, C, M = undefined> {
     this.emit();
     try {
       const p = await this.loader(null);
-      if (g !== this.gen) return;
+      if (g !== this.gen) return null;
       this.opts.onPage?.(p.items);
       this.items = this.dedupe(p.items);
       this.cursor = p.cursor;
       this.meta = p.meta;
       this.status = 'ready';
+      return null;
     } catch (e) {
-      if (g !== this.gen) return;
-      this.error = toLoadError(e, !online.peek());
-      // A failed refresh keeps showing what we had.
-      if (this.status !== 'ready') this.status = 'error';
+      if (g !== this.gen) return null;
+      const err = toLoadError(e, !online.peek());
+      // A failed refresh keeps showing what we had, as it was (its list end too): the caller
+      // says it failed.
+      if (this.status === 'ready') return err;
+      this.error = err;
+      this.status = 'error';
+      return null;
     } finally {
       if (g === this.gen) {
         this.busy = false;

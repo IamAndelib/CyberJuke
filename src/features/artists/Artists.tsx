@@ -9,6 +9,7 @@ import { FavSection, FavTile } from '../../ui/components/FavTile';
 import { openArtistPage, useSearchContext, type Place } from '../../ui/nav';
 import { ErrorState } from '../../ui/components/TrackList';
 import { Screen } from '../../ui/components/Screen';
+import { refreshCatalog } from '../../ui/refresh';
 import { AZHead, GridSortRail } from '../../ui/components/GridSort';
 import { groupAZ } from '../../ui/azSections';
 import { useMemo } from 'preact/hooks';
@@ -88,7 +89,7 @@ export function ArtistGrid() {
       testid="screen-artists"
       title="Artists"
       subtitle={list.length ? `${list.length} artists on the Jukebox` : 'Browse by artist'}
-      onRefresh={() => catalog.refresh({ force: true })}
+      onRefresh={refreshCatalog}
       scrollKey={`artists:${sort}`}
       right={<GridSortRail sort={artistsSort} testid="artists-sort" />}
       azScroller={sort === 'az' && list.length > 0}

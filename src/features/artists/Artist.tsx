@@ -14,6 +14,7 @@ import { CatalogError, PlayShuffle, Tracks } from '../../ui/components/TrackList
 import { list as listCtx } from '../../ui/playAll';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
+import { refreshCatalog } from '../../ui/refresh';
 import { PageStar } from '../../ui/components/FavTile';
 import {
   ARTIST_SONGS_MAX,
@@ -80,7 +81,7 @@ export function ArtistPage({ name: raw }: { name: string }) {
         </button>
       }
       right={<ArtistFavButton name={name} />}
-      onRefresh={() => catalog.refresh({ force: true })}
+      onRefresh={refreshCatalog}
     >
       <section data-testid="artist-jukebox">
         <div class="section-head">

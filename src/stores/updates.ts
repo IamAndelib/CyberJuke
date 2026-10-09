@@ -96,6 +96,8 @@ export const lastCheck = signal<Saved>({ checkedAt: 0, latest: null });
 export const checking = signal(false);
 /** The last check failed (offline, GitHub unreachable): shown until the next one. */
 export const checkFailed = signal(false);
+/** The app couldn't tell how it was installed: no checks, and Settings says why. */
+export const installUnknown = signal(false);
 
 /** A newer release than this install is out. */
 export const updateAvailable = computed<Release | null>(() => {
@@ -160,6 +162,7 @@ export async function startUpdates(appInfo?: AppInfo): Promise<void> {
       };
     } catch (e) {
       // How it was installed is unknown: it stays so, and nothing asks GitHub.
+      installUnknown.value = true;
       logError('getAppInfo', e);
     }
   }

@@ -86,16 +86,27 @@
   width: 60%;
   background: var(--color-fg-dim);
 }
+/* The whole name fits the swatch: sized to it (the longest, "Bubblegum", is 9 letters of
+   about 0.67em), and the selected one's brackets hang outside the name, into the gap. */
 .swatch-name {
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 11px;
+}
+@supports (width: 1cqi) {
+  .swatch {
+    container-type: inline-size;
+  }
+  .swatch .swatch-name {
+    font-size: min(12px, calc(100cqi / 6.1));
+  }
 }
 .swatch.on .swatch-name::before {
   content: '[';
+  margin-left: -0.67em;
 }
 .swatch.on .swatch-name::after {
   content: ']';
+  margin-right: -0.67em;
 }
 
 .setting {

@@ -5,7 +5,7 @@ import { buildIndex, searchGenres, searchTitles, searchTracks } from '../../data
 import { musicTracks, type MusicFilter, type MusicItem } from '../../data/ytmusic';
 import { catalog } from '../../stores/catalog';
 import { genres } from '../../stores/genres';
-import { addRecentSearch, clearRecentSearches, loadRecentSearches, recentSearches, removeRecentSearch, restoreRecentSearches } from '../../stores/searches';
+import { addRecentSearch, clearRecentSearches, loadRecentSearches, recentSearches, removeRecentSearch, restoreRecentSearch, restoreRecentSearches } from '../../stores/searches';
 import { toast } from '../../stores/toast';
 import { isFavoriteArtist, isFavoriteGenre } from '../../stores/library';
 import { useChunks } from '../../ui/useChunks';
@@ -427,7 +427,10 @@ function RecentSearches({ onPick }: { onPick: (q: string) => void }) {
               type="button"
               class="icon-btn recent-x"
               aria-label={`Remove “${q}” from recent searches`}
-              onClick={() => removeRecentSearch(q)}
+              onClick={() => {
+                const at = removeRecentSearch(q);
+                if (at >= 0) toast(`Removed “${q}”`, undefined, { label: 'Undo', run: () => restoreRecentSearch(q, at) });
+              }}
               data-testid="recent-search-remove"
             >
               <Icon name="close" size={18} />

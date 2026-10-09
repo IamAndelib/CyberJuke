@@ -3,6 +3,7 @@ import type { Track } from '../data/model';
 import type { Cursor, Page } from '../data/source';
 import { source } from '../data';
 import { recordTracks } from '../stores/genres';
+import { sayRefreshFailed } from './refresh';
 import type { LoadError } from '../core/errors';
 import { feeds, type Feed, type FeedCache, type FeedLoader, type FeedOptions, type FeedSnapshot, type FeedStatus } from '../stores/feed';
 
@@ -66,7 +67,7 @@ export function usePaged(key: string, loader: (cursor: Cursor | null) => Promise
     loadMore: () => feed.loadMore(),
     refresh: async () => {
       source.invalidate?.();
-      await feed.refresh();
+      sayRefreshFailed(await feed.refresh());
     },
     retry: () => feed.retry(),
   };

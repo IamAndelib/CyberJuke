@@ -223,3 +223,21 @@ test('Updates: the automatic check is a setting that persists', async ({ page })
   await page.getByTestId('tab-settings').click();
   await expect(page.getByTestId('updates-auto')).toHaveAttribute('aria-checked', 'false');
 });
+
+test('radio groups and the Library tabs are one Tab stop each, worked with the arrow keys', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('tab-settings').click();
+  await page.getByTestId('quality-high').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('quality-low')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('quality-low')).toBeFocused();
+  await expect(page.getByTestId('quality-high')).toHaveAttribute('tabindex', '-1');
+  await page.getByTestId('ipv4-auto').focus();
+  await page.keyboard.press('End');
+  await expect(page.locator('[data-testid^="ipv4-"]').last()).toHaveAttribute('aria-checked', 'true');
+  await page.getByTestId('tab-library').click();
+  await page.getByTestId('lib-liked').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('lib-recent')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('lib-recent')).toBeFocused();
+});

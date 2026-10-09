@@ -4,6 +4,7 @@ import type { Track } from '../../data/model';
 import { history, liked, recent } from '../../stores/library';
 import { dayKey, groupByDay } from '../../stores/history';
 import { useChunks } from '../../ui/useChunks';
+import { arrowChoice } from '../../ui/arrowChoice';
 import { clearHistoryWithUndo } from '../../stores/undo';
 import { Icon } from '../../ui/icons';
 import { EmptyState, PlayShuffle, Tracks, playFrom } from '../../ui/components/TrackList';
@@ -12,7 +13,8 @@ import { Screen } from '../../ui/components/Screen';
 import { askConfirm, selectTab, useSearchContext } from '../../ui/nav';
 import { list } from '../../ui/playAll';
 
-const section = signal<'liked' | 'recent'>('liked');
+const SECTIONS = ['liked', 'recent'] as const;
+const section = signal<(typeof SECTIONS)[number]>('liked');
 
 const LIKED_CTX = list('Liked');
 const RECENT_CTX = list('Recently played');
@@ -55,10 +57,12 @@ export function Library() {
         ) : undefined
       }
     >
-      <div class="segmented" role="tablist" aria-label="Library section">
+      <div class="segmented" role="tablist" aria-label="Library section" onKeyDown={arrowChoice(SECTIONS, sel, (v) => (section.value = v))}>
         <button
           role="tab"
           aria-selected={sel === 'liked'}
+          tabIndex={sel === 'liked' ? 0 : -1}
+          data-value="liked"
           class={sel === 'liked' ? 'on' : ''}
           onClick={() => (section.value = 'liked')}
           data-testid="lib-liked"
@@ -68,6 +72,8 @@ export function Library() {
         <button
           role="tab"
           aria-selected={sel === 'recent'}
+          tabIndex={sel === 'recent' ? 0 : -1}
+          data-value="recent"
           class={sel === 'recent' ? 'on' : ''}
           onClick={() => (section.value = 'recent')}
           data-testid="lib-recent"
@@ -109,7 +115,15 @@ function HistoryDays() {
   const days = useMemo(() => groupByDay(entries, Date.now()), [entries, today]);
   const all = useMemo(() => days.flatMap((d) => d.tracks), [days]);
   const { shown, sentinel, more } = useChunks(all.length, 'history');
-  const onPlay = useCallback((i: number) => void playFrom(all, i, RECENT_CTX), [all]);
+  // The rows list a track once per day; what plays is the history with each track once (as
+  // Play does), from the tapped one.
+  const onPlay = useCallback(
+    (i: number) => {
+      const list = recent.peek();
+      void playFrom(list, Math.max(0, list.findIndex((t) => t.id === all[i]?.id)), RECENT_CTX);
+    },
+    [all],
+  );
   let offset = 0;
   return (
     <>

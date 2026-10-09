@@ -507,9 +507,6 @@
 button.lyr-line {
   cursor: pointer;
 }
-.lyr-line.past {
-  opacity: 0.65;
-}
 /* The current line changes colour and glow only: same weight, and the marker sits in
    padding every line has, so nothing changes width or wraps differently. */
 .lyr-synced .lyr-line {
@@ -607,8 +604,9 @@ button.lyr-line {
   min-height: 48px;
 }
 
-/* Autoplay: slightly dimmed, under "Autoplay · similar to <seed>". */
-.upnext .row.autoplay .row-main {
+/* Autoplay, under "Autoplay · similar to <seed>": the artwork a little dimmed. Not the text,
+   which keeps its theme's contrast (themes.test.ts). */
+.upnext .row.autoplay .row-art {
   opacity: 0.72;
 }
 .upnext-label.auto {

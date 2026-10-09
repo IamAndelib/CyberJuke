@@ -12,6 +12,7 @@ import { FavSection, FavTile, PageStar } from '../../ui/components/FavTile';
 import { openGenrePage, popPage, useSearchContext, type Place } from '../../ui/nav';
 import { ErrorState, PagedTracks, PlayShuffle } from '../../ui/components/TrackList';
 import { Screen } from '../../ui/components/Screen';
+import { refreshCatalog } from '../../ui/refresh';
 import { AZHead, GridSortRail } from '../../ui/components/GridSort';
 import { groupAZ } from '../../ui/azSections';
 import type { GenreCount } from '../../stores/genres';
@@ -49,27 +50,25 @@ export function GenreGrid() {
       testid="screen-genres"
       title="Genres"
       subtitle={complete ? `${list.length} genres on the Jukebox` : 'Browse by genre'}
-      onRefresh={() => catalog.refresh({ force: true })}
+      onRefresh={refreshCatalog}
       scrollKey={`genres:${sort}`}
       right={<GridSortRail sort={genresSort} testid="genres-sort" />}
       azScroller={sort === 'az' && list.length > 0}
     >
       <FavGenres />
-      {status === 'error' && !list.length ? (
-        <ErrorState
-          offline={!!catalog.error.value?.offline}
-          message="Couldn't load genres."
-          onRetry={() => void catalog.refresh()}
-        />
-      ) : !list.length ? (
+      {/* The catalog failed: said so even over the genres seen on Home meanwhile (a part). */}
+      {status === 'error' && !complete && (
+        <ErrorState offline={!!catalog.error.value?.offline} message="Couldn't load genres." onRetry={() => void catalog.refresh()} />
+      )}
+      {list.length ? (
+        <GenreTiles list={list} sort={sort} />
+      ) : status !== 'error' ? (
         <div class="genre-grid" aria-hidden="true" data-testid="genre-skeleton">
           {Array.from({ length: 10 }, (_, i) => (
             <div class="genre-tile skel-block" key={i} />
           ))}
         </div>
-      ) : (
-        <GenreTiles list={list} sort={sort} />
-      )}
+      ) : null}
       <p class="fineprint">Genres are free text chosen by each poster. Tap ☆ to pin a genre to the top.</p>
     </Screen>
   );

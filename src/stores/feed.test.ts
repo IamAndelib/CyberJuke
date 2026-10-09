@@ -64,6 +64,22 @@ describe('FeedCache (usePaged cache)', () => {
     expect(f.snapshot.items).toEqual([2]);
   });
 
+  it('a refresh that fails keeps the list as it was (no error at its end) and says it failed', async () => {
+    const loader = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [1, 2], cursor: 2 })
+      .mockRejectedValueOnce(Object.assign(new Error('offline'), { offline: true }));
+    const f = new Feed<number, number>(loader);
+    f.start();
+    await flush();
+    const failed = await f.refresh();
+    expect(failed).toMatchObject({ message: 'offline' });
+    expect(f.snapshot).toMatchObject({ items: [1, 2], status: 'ready', error: null, hasMore: true });
+    // A refresh that works says nothing.
+    loader.mockResolvedValueOnce({ items: [3], cursor: null });
+    expect(await f.refresh()).toBeNull();
+  });
+
   it('retries a failed first page on the next start, but not a loaded one', async () => {
     const loader = vi.fn().mockRejectedValueOnce(Object.assign(new Error('nope'), { code: 'BOT_CHECK' })).mockResolvedValue({ items: [1], cursor: null });
     const f = new Feed<number, number>(loader);

@@ -10,6 +10,7 @@ import { Icon } from '../../ui/icons';
 import { CatalogError, EmptyState, PagedTracks, Tracks } from '../../ui/components/TrackList';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
+import { refreshCatalog } from '../../ui/refresh';
 import { NewTracksPill } from './NewTracksPill';
 import { Rail, RailRow, type RailItem } from '../../ui/components/Rail';
 import { usePaged } from '../../ui/usePaged';
@@ -180,7 +181,7 @@ export function Home() {
       subtitle="The Cyberspace Jukebox"
       scrollKey={`home:${sort}:${sort === 'saved' ? savedRange.value : ''}:${g ?? ''}`}
       onRefresh={async () => {
-        if (sort === 'saved') await catalog.refresh({ force: true });
+        if (sort === 'saved') await refreshCatalog();
         else await paged.refresh();
       }}
     >

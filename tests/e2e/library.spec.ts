@@ -123,3 +123,26 @@ test('Here: search from Library is scoped to Liked', async ({ page }) => {
   await page.getByTestId('here-bridge').click();
   await expect(page.getByTestId('mode-jukebox')).toHaveAttribute('aria-selected', 'true');
 });
+
+test('a Recently played row plays the history with each track once', async ({ page }) => {
+  const D = 24 * 60 * 60 * 1000;
+  const noon = (daysAgo: number) => {
+    const d = new Date(Date.now() - daysAgo * D);
+    d.setHours(12, 0, 0, 0);
+    return Math.min(Date.now() - 1000, d.getTime());
+  };
+  await seedStorage(page, {
+    'CapacitorStorage.history': [
+      { track: tr('s1', 'Seed One'), playedAt: noon(0) },
+      { track: tr('s2', 'Seed Two'), playedAt: noon(1) },
+      { track: tr('s1', 'Seed One'), playedAt: noon(1) - 1000 },
+      { track: tr('s3', 'Seed Three'), playedAt: noon(1) - 2000 },
+    ],
+  });
+  await page.goto('/');
+  await page.getByTestId('tab-library').click();
+  await page.getByTestId('lib-recent').click();
+  await page.getByTestId('recent-list').getByTestId('track-play').first().click();
+  const q = await page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => { current: { title: string }; list: { title: string }[] } }).__cyberjukeQueue());
+  expect([q.current.title, ...q.list.map((t) => t.title)]).toEqual(['Seed One', 'Seed Two', 'Seed Three']);
+});

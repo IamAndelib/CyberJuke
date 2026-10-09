@@ -37,7 +37,7 @@ const HOME_FEED_PREFIX = 'home:';
 export async function refreshLatest(): Promise<void> {
   freshness.dismiss();
   fs?.invalidateAll();
-  const jobs: Promise<void>[] = [];
+  const jobs: Promise<unknown>[] = [];
   for (const [key, feed] of feeds.entries(HOME_FEED_PREFIX)) {
     if (feed.watched) jobs.push(feed.refresh());
     else feeds.delete(key);

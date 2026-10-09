@@ -58,6 +58,9 @@ describe('the update check in the app', () => {
     await v.checkForUpdates();
     expect(fetches).toBe(1);
     expect(v.app.value.fdroid).toBeNull();
+    // Settings can say why it doesn't check.
+    expect(v.installUnknown.value).toBe(true);
+    expect(u.installUnknown.value).toBe(false);
   });
 
   it('after a failed check, returning to the app does not ask again within the hour', async () => {

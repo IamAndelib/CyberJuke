@@ -592,3 +592,32 @@ test('starring from the keyboard keeps focus on the star, which moves with its t
   await page.keyboard.press('Enter');
   await expect.poll(focused).toBe(`genre-fav:${genre}:grid`);
 });
+
+test('an Undo message never sits on the search button', async ({ page }) => {
+  await page.goto('/');
+  await genresLoaded(page);
+  const grid = page.getByTestId('genre-grid');
+  const genre = (await grid.getByTestId('genre-cell').nth(1).getAttribute('data-genre'))!;
+  await grid.locator(`[data-testid="genre-cell"][data-genre="${genre}"]`).getByTestId('genre-fav').click();
+  await page.getByTestId('fav-genres').getByTestId('genre-fav').first().click();
+  const toast = page.getByTestId('toast');
+  await expect(toast).toContainText('removed from Favourites');
+  const t = await box(toast);
+  const f = await box(page.getByTestId('search-fab'));
+  expect(t.y + t.height <= f.y || f.x + f.width <= t.x || t.x + t.width <= f.x).toBe(true);
+});
+
+test('a message showing when the block banner appears moves above it', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('track-play').first().click();
+  await page.getByTestId('track-more').nth(2).click();
+  await page.getByTestId('menu-like').click();
+  await page.getByTestId('track-more').nth(2).click();
+  await page.getByTestId('menu-like').click();
+  const toast = page.getByTestId('toast');
+  await expect(toast).toContainText('Removed from Liked');
+  await page.evaluate(() => (window as unknown as { __cyberjukeBlock: { blocked(e: unknown): void } }).__cyberjukeBlock.blocked({ until: Date.now() + 5 * 60_000, reason: 'BOT_CHECK' }));
+  const banner = page.getByTestId('block-banner');
+  await expect(banner).toBeVisible();
+  await expect.poll(async () => (await box(toast)).y + (await box(toast)).height <= (await box(banner)).y).toBe(true);
+});

@@ -28,6 +28,8 @@ const fake = vi.hoisted(() => {
       removeIds: cmd(),
       queueNext: cmd(),
       addAutoplay: cmd(),
+      play: cmd(),
+      pause: cmd(),
     },
   };
 });
@@ -146,6 +148,19 @@ describe('NativePlayer: a session native restored after a restart', () => {
   it('sends members-only to native, so a restored session still knows it', () => {
     expect(toNative(tr('M', { membersOnly: true })).membersOnly).toBe(true);
     expect('membersOnly' in toNative(tr('A'))).toBe(false);
+  });
+});
+
+describe('NativePlayer: play/pause', () => {
+  it('a quick second tap undoes the first, before native has answered', async () => {
+    const p = new NativePlayer();
+    emit('state', state({ isPlaying: true, queueIds: ['A'], upNextIds: [], upNextKinds: '' }));
+    await p.toggle();
+    expect(p.state.value.isPlaying).toBe(false);
+    await p.toggle();
+    expect(fake.plugin.pause).toHaveBeenCalledTimes(1);
+    expect(fake.plugin.play).toHaveBeenCalledTimes(1);
+    expect(p.state.value.isPlaying).toBe(true);
   });
 });
 

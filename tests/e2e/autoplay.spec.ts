@@ -83,8 +83,10 @@ test('a Home row starts a radio: Up next is similar Jukebox tracks', async ({ pa
   await expect(page.getByTestId('upnext-list-label')).toHaveCount(0);
   const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
   await expect(rows.first().locator('.row-title')).toHaveText(q.autoplay[0].title);
-  // Slightly dimmed.
-  expect(Number(await rows.first().locator('.row-main').evaluate((el) => getComputedStyle(el).opacity))).toBeLessThan(1);
+  // The artwork slightly dimmed; the text keeps its theme's contrast.
+  const opacity = (sel: string) => rows.first().locator(sel).evaluate((el) => Number(getComputedStyle(el).opacity));
+  expect(await opacity('.row-art')).toBeLessThan(1);
+  expect(await opacity('.row-main')).toBe(1);
 });
 
 test('Up next: autoplay rows reorder like the others (not with shuffle), and Remove offers Undo', async ({ page }) => {

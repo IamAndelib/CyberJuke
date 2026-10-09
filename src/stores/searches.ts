@@ -62,10 +62,21 @@ export function addRecentSearch(q: string): void {
   save();
 }
 
-export function removeRecentSearch(q: string): void {
-  const next = recentSearches.value.filter((x) => x !== q);
-  if (next.length === recentSearches.value.length) return;
-  recentSearches.value = next;
+/** Removes one; returns where it was (for Undo: restoreRecentSearch), or -1. */
+export function removeRecentSearch(q: string): number {
+  const at = recentSearches.value.indexOf(q);
+  if (at < 0) return -1;
+  recentSearches.value = recentSearches.value.filter((x) => x !== q);
+  save();
+  return at;
+}
+
+/** Undo of a removal: back where it was (unless searched again since). */
+export function restoreRecentSearch(q: string, at: number): void {
+  if (recentSearches.value.includes(q)) return;
+  const next = recentSearches.value.slice();
+  next.splice(Math.min(at, next.length), 0, q);
+  recentSearches.value = clean(next);
   save();
 }
 

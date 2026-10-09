@@ -158,3 +158,21 @@ test('★ on a genre page: adds it to Favourites, Undo takes it back, and it fol
   await page.getByTestId('tab-genres').click();
   await expect(page.getByTestId('fav-genres')).toHaveCount(0);
 });
+
+test('after the catalog failed, Genres says so with Retry even when some genres show', async ({ page, backend }) => {
+  backend.offline = true;
+  await page.goto('/');
+  await expect(page.getByTestId('retry').first()).toBeVisible();
+  // Long enough for the catalog's own first load (in idle time after startup) to fail too.
+  await page.waitForTimeout(2500);
+  backend.offline = false;
+  // Home's own Retry loads Home; the catalog itself is still the failed one.
+  await page.getByTestId('retry').first().click();
+  await expect(page.getByTestId('track-play').first()).toBeVisible();
+  await page.getByTestId('tab-genres').click();
+  const screen = page.getByTestId('screen-genres');
+  await expect(screen.getByTestId('retry')).toBeVisible();
+  await screen.getByTestId('retry').click();
+  await expect(screen.locator('.topbar-sub')).toContainText('genres on the Jukebox');
+  await expect(screen.getByTestId('retry')).toHaveCount(0);
+});
