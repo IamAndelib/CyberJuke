@@ -125,6 +125,28 @@ describe('NativePlayer: after the WebView is recreated (K4)', () => {
   });
 });
 
+describe('NativePlayer: a session native restored after a restart', () => {
+  it('names a track nothing else knows from what native describes, members-only kept; the catalog still wins', () => {
+    const p = new NativePlayer();
+    emit('tracks', {
+      tracks: [
+        { id: 'M', ytId: tr('M').ytId, title: 'Members', artist: 'Y', artworkUrl: '', by: 'poster', postUrl: 'https://cyberspace.online/post/1', membersOnly: true },
+        { id: 'B', ytId: tr('B').ytId, title: 'Old title', artist: 'Y', artworkUrl: '' },
+      ],
+    });
+    emit('state', state({ queueIds: ['A', 'M', 'B'], upNextIds: ['M', 'B'], upNextKinds: 'll', upNextIndex: [1, 2] }));
+    const m = p.state.value.upNext[0].track;
+    expect([m.title, m.by, m.membersOnly]).toEqual(['Members', 'poster', true]);
+    (catalog.all as Signal<Track[]>).value = [tr('B')];
+    expect(p.state.value.upNext[1].track.title).toBe('Title B');
+  });
+
+  it('sends members-only to native, so a restored session still knows it', () => {
+    expect(toNative(tr('M', { membersOnly: true })).membersOnly).toBe(true);
+    expect('membersOnly' in toNative(tr('A'))).toBe(false);
+  });
+});
+
 describe('NativePlayer: edits (K2)', () => {
   const list = (p: InstanceType<typeof NativePlayer>) => {
     void p;

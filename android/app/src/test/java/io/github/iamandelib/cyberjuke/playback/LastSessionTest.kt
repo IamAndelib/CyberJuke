@@ -34,6 +34,15 @@ class LastSessionTest {
     }
 
     @Test
+    fun aMembersOnlyTrackStaysMembersOnly() {
+        val s = LastSession.of(listOf(entry(0).copy(membersOnly = true), entry(1)), 0, 0L, 0L, false, null, 0, null, null)!!
+        val back = LastSession.decode(s.encode())!!
+        assertEquals(listOf(true, false), back.entries.map { it.membersOnly })
+        assertEquals(true, back.entries[0].toNativeTrack().optBoolean("membersOnly"))
+        assertEquals(false, back.entries[1].toNativeTrack().has("membersOnly"))
+    }
+
+    @Test
     fun aLongListKeepsAWindowAroundTheCurrentTrack() {
         val n = 2000
         val order = IntArray(n) { n - 1 - it }

@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.playback
 
+import android.app.ActivityManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -18,6 +19,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
+import android.view.KeyEvent
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -194,6 +196,15 @@ class PlaybackService : MediaSessionService() {
         override fun onUnblocked() {
             handler.post { blockEnded.run() }
         }
+
+        // Stopped by a back-off while playing, or Play pressed during one: where the sound was
+        // going, and the resume's timer, now with its wake lock.
+        override fun onResumeWanted() {
+            handler.post {
+                pausedOnExternal = hasExternalOutput()
+                NetBlock.active().first.takeIf { it > 0L }?.let { scheduleResume(it) }
+            }
+        }
     }
 
     private val blockEnded = Runnable { resumeAfterBlock() }
@@ -207,6 +218,28 @@ class PlaybackService : MediaSessionService() {
 
     /** pauseToResume's pause is on its way to the listener (it isn't the user's). */
     private var ownPause = false
+
+    /** Headphones or Bluetooth were connected when the resume was asked for. */
+    private var pausedOnExternal = false
+
+    private fun hasExternalOutput(): Boolean = try {
+        val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        AudioOutputs.hasExternal(audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).map { it.type }.toIntArray())
+    } catch (e: Exception) {
+        false
+    }
+
+    /**
+     * Android 12+ lets a service start in the foreground from the background only in some
+     * cases: a resume when the app has neither its page nor its playback in the foreground any
+     * more (paused longer than Media3 keeps it there) would play without one, and be stopped.
+     */
+    private fun mayStartPlaybackNow(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        val info = ActivityManager.RunningAppProcessInfo()
+        ActivityManager.getMyMemoryState(info)
+        return info.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE
+    }
 
     /** When the list last played to its end (elapsedRealtime). */
     private var endedAt = 0L
@@ -269,6 +302,16 @@ class PlaybackService : MediaSessionService() {
             Log.i(TAG, "Back-off over, but other audio is playing: not resuming")
             return
         }
+        // Headphones unplugged or Bluetooth gone meanwhile (the becoming-noisy broadcast isn't
+        // sent while nothing plays): not on the speaker.
+        if (pausedOnExternal && !hasExternalOutput()) {
+            Log.i(TAG, "Back-off over, but the headphones or Bluetooth output is gone: not resuming")
+            return
+        }
+        if (!mayStartPlaybackNow()) {
+            Log.i(TAG, "Back-off over, but the app is in the background: not resuming")
+            return
+        }
         Log.i(TAG, "Resuming after a back-off or an outage")
         when (p.playbackState) {
             Player.STATE_IDLE -> p.prepare()
@@ -283,6 +326,9 @@ class PlaybackService : MediaSessionService() {
         lastSession = LastSessionStore(this)
         // Before anything touches the network: the IPv4 setting applies to extraction and streams.
         NetPrefsStore.load(this)
+        // The page's settings as it last sent them (it may not be there to send them again).
+        autoplayEnabled = PlayerPrefsStore.autoplay(this)
+        StreamResolver.quality = PlayerPrefsStore.quality(this)
         NetBlock.add(blockListener)
         // A back-off already running (the service was restarted): resume when it ends.
         NetBlock.active().first.takeIf { it > 0L }?.let { scheduleResume(it) }
@@ -586,6 +632,7 @@ class PlaybackService : MediaSessionService() {
     private fun setAutoplay(enabled: Boolean) {
         if (enabled == autoplayEnabled) return
         autoplayEnabled = enabled
+        PlayerPrefsStore.setAutoplay(this, enabled)
         lowKey = null
         if (!enabled) {
             radio.stop()
@@ -689,7 +736,7 @@ class PlaybackService : MediaSessionService() {
         p.shuffleModeEnabled = s.shuffle
         queue.restoreSession(items, s.entries.map { it.section }, s.index, s.positionMs, s.order)
         context = s.context
-        radio.reseed(items.firstOrNull { it.mediaId == s.seedId })
+        radio.reseedFromId(s.seedId)
         seedId = s.seedId
         queueChanged()
         Log.i(TAG, "Restored the last session: ${items.size} item(s), paused")
@@ -707,7 +754,7 @@ class PlaybackService : MediaSessionService() {
                 .setMediaMetadata(MediaMetadata.Builder().setTitle(e.title).setArtist(e.artist).build())
                 .build()
         } else {
-            JukeTracks.toMediaItem(e.toNativeTrack())
+            JukeTracks.toMediaItem(e.toNativeTrack(), restored = true)
         }
         if (durationMs <= 0L) return item
         // Its length, for Now Playing before the track loads (StateEncoder).
@@ -741,6 +788,7 @@ class PlaybackService : MediaSessionService() {
                     artworkUrl = item.mediaMetadata.artworkUri?.toString(),
                     by = extra?.by,
                     postUrl = extra?.postUrl,
+                    membersOnly = extra?.membersOnly == true,
                     section = when {
                         serial != 0L && serial in pending -> NativeQueue.Section.QUEUED
                         extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) == true -> NativeQueue.Section.AUTO
@@ -958,6 +1006,31 @@ class PlaybackService : MediaSessionService() {
     // ---------------------------------------------------------------------------------------
 
     private inner class SessionCallback : MediaSession.Callback {
+        /**
+         * A pause or stop key while already paused changes nothing in the player, so nothing
+         * else hears it: a resume waiting for a back-off to end is cancelled here (the user
+         * wants it quiet). The key is then handled as usual.
+         */
+        override fun onMediaButtonEvent(
+            session: MediaSession,
+            controllerInfo: MediaSession.ControllerInfo,
+            intent: Intent,
+        ): Boolean {
+            val key = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT)
+            }
+            val stop = key?.keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE || key?.keyCode == KeyEvent.KEYCODE_MEDIA_STOP
+            if (key?.action == KeyEvent.ACTION_DOWN && stop && NetBlock.resumePending()) {
+                Log.i(TAG, "Pause key while a resume was pending: cancelled")
+                NetBlock.cancelResume()
+                releaseResumeWakeLock()
+            }
+            return false
+        }
+
         /**
          * S1: full access for our own app, the media notification, Android Auto/Automotive and
          * trusted system controllers; transport commands only for everyone else (see

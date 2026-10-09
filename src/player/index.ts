@@ -191,12 +191,18 @@ function dropNsfwAutoplay(): Promise<void> {
 
 let purging = false;
 
+/** The queue holds a members-only track (recomputed only when the list itself changes). */
+const queueList = computed(() => state.value.queue);
+const queuedMembersOnly = computed(() => queueList.value.some((t) => t.membersOnly));
+
 /** Follow sign-outs and the NSFW setting for the queue (call once at startup). */
 export function startQueuePurge(): void {
   if (purging) return;
   purging = true;
-  auth.onChange((signedIn) => {
-    if (!signedIn) void dropMembersFromQueue();
+  // Signed out with members-only tracks queued: on signing out, and at startup (the app
+  // reopens on the last session, which may be from before a sign-out).
+  effect(() => {
+    if (auth.state.value.status === 'signedOut' && queuedMembersOnly.value) untracked(() => void dropMembersFromQueue());
   });
   let nsfwWas = showNsfw.peek();
   effect(() => {

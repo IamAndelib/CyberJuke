@@ -4,7 +4,7 @@
  */
 import { registerPlugin } from '@capacitor/core';
 
-export interface NativeTrack { id: string; ytId: string; title: string; artist: string; artworkUrl: string; by?: string; postUrl?: string }
+export interface NativeTrack { id: string; ytId: string; title: string; artist: string; artworkUrl: string; by?: string; postUrl?: string; membersOnly?: boolean }
 export type RepeatMode = 'off' | 'all' | 'one';
 export interface NativeState {
   isPlaying: boolean; isBuffering: boolean;

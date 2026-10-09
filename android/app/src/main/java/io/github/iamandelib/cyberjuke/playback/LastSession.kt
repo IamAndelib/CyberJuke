@@ -46,6 +46,8 @@ internal data class LastSession(
         val by: String?,
         val postUrl: String?,
         val section: NativeQueue.Section,
+        /** A members-only post: the page drops it when signed out. */
+        val membersOnly: Boolean = false,
     ) {
         /** The NativeTrack JSON that [JukeTracks.toMediaItem] takes. */
         fun toNativeTrack(): JSONObject = JSONObject().apply {
@@ -56,6 +58,7 @@ internal data class LastSession(
             artworkUrl?.let { put("artworkUrl", it) }
             by?.let { put("by", it) }
             postUrl?.let { put("postUrl", it) }
+            if (membersOnly) put("membersOnly", true)
         }
     }
 
@@ -203,6 +206,7 @@ internal data class LastSession(
                         "a" -> NativeQueue.Section.AUTO
                         else -> NativeQueue.Section.LIST
                     },
+                    membersOnly = t.optBoolean("membersOnly", false),
                 )
             }
             val index = o.getInt("index")

@@ -17,7 +17,16 @@ const clip = (s: string) => (s.length > BRIDGE_MAX_STRING ? s.slice(0, BRIDGE_MA
 const link = (s: string) => (s.length > BRIDGE_MAX_STRING ? '' : s);
 
 export function toNative(t: Track): NativeTrack {
-  return { id: t.id, ytId: t.ytId, title: clip(t.title), artist: clip(t.artist), artworkUrl: link(t.artworkUrl), by: clip(t.by), postUrl: link(t.postUrl) };
+  return {
+    id: t.id,
+    ytId: t.ytId,
+    title: clip(t.title),
+    artist: clip(t.artist),
+    artworkUrl: link(t.artworkUrl),
+    by: clip(t.by),
+    postUrl: link(t.postUrl),
+    ...(t.membersOnly && { membersOnly: true }),
+  };
 }
 
 /** K6: at most BRIDGE_MAX_ITEMS tracks, a window around `start`; returns them and where `start` is in it. */
@@ -36,8 +45,11 @@ function isStale(e: unknown): boolean {
 /** Catalog tracks by id: native state after the WebView was recreated carries only ids. */
 const catalogById = computed(() => new Map(catalog.all.value.map((t) => [t.id, t])));
 
-/** A track native added itself (Global radio), from its `tracks` event. */
-function fromNative(t: NativeTrack): Track | null {
+/**
+ * A track native describes in its `tracks` event: one it added itself (Global radio), or one
+ * of the last session it restored after a restart (the app may know it no more).
+ */
+export function fromNative(t: NativeTrack): Track | null {
   if (!t || typeof t.id !== 'string' || !t.id || typeof t.ytId !== 'string' || !YT_ID_RE.test(t.ytId)) return null;
   return {
     id: t.id,
@@ -45,12 +57,13 @@ function fromNative(t: NativeTrack): Track | null {
     title: typeof t.title === 'string' && t.title ? t.title : 'Untitled',
     artist: typeof t.artist === 'string' && t.artist ? t.artist : 'Unknown artist',
     genre: '',
-    by: '',
+    by: typeof t.by === 'string' ? t.by : '',
     postTitle: '',
-    postUrl: '',
+    postUrl: typeof t.postUrl === 'string' ? t.postUrl : '',
     createdAt: '',
     nsfw: false,
     artworkUrl: artworkUrl(t.ytId),
+    ...(t.membersOnly === true && { membersOnly: true }),
     ...(t.id.startsWith('ytm:') && { source: 'ytmusic' as const }),
   };
 }
@@ -77,6 +90,8 @@ export class NativePlayer implements Player {
   readonly state = this.s;
   /** Every Track we've handed to native, so ids in native state resolve to full Tracks. */
   private known = new Map<string, Track>();
+  /** Tracks native described itself (`tracks`): used when nothing better knows the id. */
+  private described = new Map<string, Track>();
   /** The last full list native sent (events with queueIdsUnchanged omit it). */
   private lastQueueIds: string[] = [];
   /** The last state applied, re-applied when native describes new tracks. */
@@ -102,8 +117,8 @@ export class NativePlayer implements Player {
       let added = false;
       for (const raw of Array.isArray(e?.tracks) ? e.tracks : []) {
         const t = fromNative(raw);
-        if (t && !this.known.has(t.id)) {
-          this.known.set(t.id, t);
+        if (t && !this.described.has(t.id)) {
+          this.described.set(t.id, t);
           added = true;
         }
       }
@@ -162,7 +177,7 @@ export class NativePlayer implements Player {
   }
 
   private resolve(id: string): Track {
-    return this.known.get(id) ?? knownTrack(id) ?? catalogById.peek().get(id) ?? placeholder(id);
+    return this.known.get(id) ?? knownTrack(id) ?? catalogById.peek().get(id) ?? this.described.get(id) ?? placeholder(id);
   }
 
   private resync(): void {

@@ -129,6 +129,9 @@ internal object NetBlock {
     interface Listener {
         fun onBlocked(until: Long, reason: BlockReason)
         fun onUnblocked()
+
+        /** Playback should start once the back-off ends ([wantResume]; any thread). */
+        fun onResumeWanted() {}
     }
 
     /** The last limit YouTube put on us, for the Settings diagnostics line. */
@@ -222,6 +225,7 @@ internal object NetBlock {
     /** Playback was playing (or asked to) when a back-off stopped it: resume once it ends. */
     fun wantResume() {
         resumeUntil = clock() + RESUME_WINDOW_MS
+        listeners.forEach { it.onResumeWanted() }
     }
 
     /** The user paused or stopped: no resume. */

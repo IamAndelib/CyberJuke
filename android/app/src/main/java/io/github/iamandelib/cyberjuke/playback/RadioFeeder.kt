@@ -61,10 +61,21 @@ internal class RadioFeeder(private val handler: Handler, private val host: Host)
 
     /** Autoplay follows [seed] now: a radio for a Global track, nothing otherwise. */
     fun reseed(seed: MediaItem?) {
+        reseedYt(seed?.takeIf { it.mediaId.startsWith(QueueCommands.GLOBAL_PREFIX) }?.let { JukeUris.ytIdOf(it) })
+    }
+
+    /**
+     * From a seed's id alone (`ytm:<video id>`): a restored session, whose window of the list
+     * may no longer hold the seed track.
+     */
+    fun reseedFromId(seedId: String?) {
+        reseedYt(seedId?.takeIf { it.startsWith(QueueCommands.GLOBAL_PREFIX) }?.removePrefix(QueueCommands.GLOBAL_PREFIX)?.takeIf { SessionPolicy.isValidYtId(it) })
+    }
+
+    private fun reseedYt(ytId: String?) {
         stop()
         retries = 0
         notBefore = 0L
-        val ytId = seed?.takeIf { it.mediaId.startsWith(QueueCommands.GLOBAL_PREFIX) }?.let { JukeUris.ytIdOf(it) }
         state = ytId?.let { State(it, null) }
     }
 

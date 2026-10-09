@@ -38,16 +38,21 @@ internal object JukeUris {
  * own copy), but native features that need them should use [get].
  */
 internal object TrackExtras {
-    data class Extra(val by: String?, val postUrl: String?)
+    /** [restored]: from the last session, not (yet) from the page, which may not know it. */
+    data class Extra(val by: String?, val postUrl: String?, val membersOnly: Boolean = false, val restored: Boolean = false)
 
     private const val MAX = 2000
     private val map = object : LinkedHashMap<String, Extra>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Extra>?) = size > MAX
     }
 
-    fun put(mediaId: String, by: String?, postUrl: String?) {
+    fun put(mediaId: String, by: String?, postUrl: String?, membersOnly: Boolean = false, restored: Boolean = false) {
         synchronized(map) {
-            if (by == null && postUrl == null) map.remove(mediaId) else map[mediaId] = Extra(by, postUrl)
+            if (by == null && postUrl == null && !membersOnly && !restored) {
+                map.remove(mediaId)
+            } else {
+                map[mediaId] = Extra(by, postUrl, membersOnly, restored)
+            }
         }
     }
 
@@ -113,11 +118,12 @@ internal object JukeTracks {
         return items
     }
 
-    fun toMediaItem(o: JSONObject): MediaItem {
+    /** [restored]: a track of the last session (see [TrackExtras.Extra.restored]). */
+    fun toMediaItem(o: JSONObject, restored: Boolean = false): MediaItem {
         val id = o.str("id") ?: throw IllegalArgumentException("track.id missing")
         val ytId = o.str("ytId") ?: throw IllegalArgumentException("track.ytId missing ($id)")
         if (!SessionPolicy.isValidYtId(ytId)) throw IllegalArgumentException("track.ytId invalid ($id)")
-        TrackExtras.put(id, o.str("by"), o.str("postUrl"))
+        TrackExtras.put(id, o.str("by"), o.str("postUrl"), o.optBoolean("membersOnly", false), restored)
         val extras = Bundle().apply { putString(JukeUris.EXTRA_YT_ID, ytId) }
         val metadata = MediaMetadata.Builder()
             .setTitle(o.str("title"))

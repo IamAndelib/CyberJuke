@@ -43,10 +43,12 @@ import io.github.iamandelib.cyberjuke.playback.NativeQueue
 import io.github.iamandelib.cyberjuke.playback.NetPrefsStore
 import io.github.iamandelib.cyberjuke.playback.PlaybackService
 import io.github.iamandelib.cyberjuke.playback.PlayerBus
+import io.github.iamandelib.cyberjuke.playback.PlayerPrefsStore
 import io.github.iamandelib.cyberjuke.playback.QueueCommands
 import io.github.iamandelib.cyberjuke.playback.QueueInfo
 import io.github.iamandelib.cyberjuke.playback.StreamResolver
 import io.github.iamandelib.cyberjuke.playback.TooLargeException
+import io.github.iamandelib.cyberjuke.playback.TrackExtras
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.roundToInt
@@ -415,7 +417,7 @@ class JukePlayerPlugin : Plugin() {
             sendCommand(call, c, QueueCommands.SET_LIST, args) {
                 if (items.isEmpty()) {
                     // Nothing to load.
-                } else if (refuseWhileBlocked(it)) {
+                } else if (refuseWhileBlocked(it, play = playWhenReady)) {
                     // Queue updated, but no extraction until the back-off ends.
                 } else {
                     it.playWhenReady = playWhenReady
@@ -720,6 +722,7 @@ class JukePlayerPlugin : Plugin() {
             "low" -> StreamResolver.Quality.LOW
             else -> return call.reject("quality must be 'high' or 'low'")
         }
+        PlayerPrefsStore.setQuality(context, StreamResolver.quality)
         // Takes effect from the next resolution (next track / next prepare).
         call.resolve()
     }
@@ -873,14 +876,16 @@ class JukePlayerPlugin : Plugin() {
 
     // ---- YouTube back-off (main thread) ---------------------------------------------------
 
-    /** While a back-off runs: pause (no prepare, no extraction) and remind the web. */
-    private fun refuseWhileBlocked(c: MediaController): Boolean {
+    /**
+     * While a back-off runs: pause (no prepare, no extraction) and remind the web. [play]: the
+     * user asked to play, so it starts once the back-off is over.
+     */
+    private fun refuseWhileBlocked(c: MediaController, play: Boolean = true): Boolean {
         val (until, reason) = NetBlock.active()
         if (reason == null) return false
         // Already false in the usual case; the service only cancels a resume on a change.
         if (c.playWhenReady) c.playWhenReady = false
-        // The user asked to play: it starts once the back-off is over.
-        NetBlock.wantResume()
+        if (play) NetBlock.wantResume()
         announceBlocked(until, reason, force = true)
         return true
     }
@@ -937,7 +942,9 @@ class JukePlayerPlugin : Plugin() {
         for (i in 0 until c.mediaItemCount) {
             val item = c.getMediaItemAt(i)
             val id = item.mediaId
-            if (!id.startsWith(QueueCommands.GLOBAL_PREFIX) || id in announcedTracks) continue
+            val extra = TrackExtras.get(id)
+            // Ours (Global radio), or the last session's: the page may know neither.
+            if (!(id.startsWith(QueueCommands.GLOBAL_PREFIX) || extra?.restored == true) || id in announcedTracks) continue
             val ytId = JukeUris.ytIdOf(item) ?: continue
             announcedTracks.add(id)
             val o = JSObject()
@@ -946,6 +953,9 @@ class JukePlayerPlugin : Plugin() {
             o.put("title", item.mediaMetadata.title?.toString() ?: "")
             o.put("artist", item.mediaMetadata.artist?.toString() ?: "")
             o.put("artworkUrl", item.mediaMetadata.artworkUri?.toString() ?: "")
+            extra?.by?.let { o.put("by", it) }
+            extra?.postUrl?.let { o.put("postUrl", it) }
+            if (extra?.membersOnly == true) o.put("membersOnly", true)
             arr.put(o)
         }
         if (announcedTracks.size > MAX_ANNOUNCED) announcedTracks.clear()
