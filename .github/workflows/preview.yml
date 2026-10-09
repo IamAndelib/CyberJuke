@@ -4,6 +4,11 @@ name: Preview
 # The preview is a separate app (io.github.iamandelib.cyberjuke.preview, "CyberJuke Preview"):
 # a release-like build (R8, not debuggable) signed with its own key, which lives only in the
 # PREVIEW_* secrets. It installs alongside the release and never shares its data.
+#
+# Two jobs, like the release: `build` makes an unsigned APK with a read-only token and no
+# secrets (npm, Vite, Gradle and JitPack code all run there); `sign-and-publish` runs only
+# apksigner and the release upload, in the "preview" environment (restrict it to main under
+# Settings > Environments).
 on:
   workflow_dispatch:
 
@@ -18,29 +23,13 @@ env:
   JAVA_VERSION: '21'
 
 jobs:
-  preview:
-    name: Build and publish preview
+  build:
+    name: Build unsigned preview APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
-      contents: write # replace the "preview" release and its tag
+      contents: read
     steps:
-      - name: Check signing secrets
-        env:
-          PREVIEW_KEYSTORE_FILE: ${{ secrets.PREVIEW_KEYSTORE_FILE }}
-          PREVIEW_KEYSTORE_PASSWORD: ${{ secrets.PREVIEW_KEYSTORE_PASSWORD }}
-          PREVIEW_KEY_ALIAS: ${{ secrets.PREVIEW_KEY_ALIAS }}
-          PREVIEW_KEY_PASSWORD: ${{ secrets.PREVIEW_KEY_PASSWORD }}
-        run: |
-          missing=()
-          for name in PREVIEW_KEYSTORE_FILE PREVIEW_KEYSTORE_PASSWORD PREVIEW_KEY_ALIAS PREVIEW_KEY_PASSWORD; do
-            if [[ -z "${!name}" ]]; then missing+=("$name"); fi
-          done
-          if (( ${#missing[@]} > 0 )); then
-            echo "::error title=Missing preview signing secrets::Add these repository secrets (Settings > Secrets and variables > Actions): ${missing[*]}. PREVIEW_KEYSTORE_FILE is the base64 of the preview .jks (base64 -w0 preview.jks). See CONTRIBUTING.md > Preview builds."
-            exit 1
-          fi
-
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
@@ -54,7 +43,6 @@ jobs:
 
       # The GitHub Ubuntu runner image already ships the Android SDK (ANDROID_HOME).
 
-      # Signed builds don't write to the shared Gradle cache.
       - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
         with:
           cache-read-only: true
@@ -70,6 +58,60 @@ jobs:
       - name: Wait for JitPack to build the pinned NewPipeExtractor
         run: bash scripts/jitpack-warm.sh
 
+      # No PREVIEW_* variables here, so build.gradle leaves the preview build unsigned.
+      - name: Build unsigned preview APK
+        working-directory: android
+        run: bash ../scripts/gradlew-retry.sh assemblePreview --stacktrace
+
+      - name: Collect the APK
+        run: |
+          shopt -s nullglob
+          apks=(android/app/build/outputs/apk/preview/*.apk)
+          if (( ${#apks[@]} != 1 )); then
+            echo "::error::Expected one preview APK, found ${#apks[@]}"; ls -la android/app/build/outputs/apk/preview || true; exit 1
+          fi
+          mkdir -p out
+          cp "${apks[0]}" out/CyberJuke-preview-unsigned.apk
+          sha256sum out/CyberJuke-preview-unsigned.apk
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: unsigned-preview-apk
+          path: out/CyberJuke-preview-unsigned.apk
+          if-no-files-found: error
+          retention-days: 3
+
+  sign-and-publish:
+    name: Sign and publish preview
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: preview
+    permissions:
+      contents: write # replace the "preview" release and its tag
+    steps:
+      - name: Check signing secrets
+        env:
+          PREVIEW_KEYSTORE_FILE: ${{ secrets.PREVIEW_KEYSTORE_FILE }}
+          PREVIEW_KEYSTORE_PASSWORD: ${{ secrets.PREVIEW_KEYSTORE_PASSWORD }}
+          PREVIEW_KEY_ALIAS: ${{ secrets.PREVIEW_KEY_ALIAS }}
+          PREVIEW_KEY_PASSWORD: ${{ secrets.PREVIEW_KEY_PASSWORD }}
+        run: |
+          missing=()
+          for name in PREVIEW_KEYSTORE_FILE PREVIEW_KEYSTORE_PASSWORD PREVIEW_KEY_ALIAS PREVIEW_KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then missing+=("$name"); fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            echo "::error title=Missing preview signing secrets::Add these secrets to the 'preview' environment (Settings > Environments > preview) or the repository: ${missing[*]}. PREVIEW_KEYSTORE_FILE is the base64 of the preview .jks (base64 -w0 preview.jks). See CONTRIBUTING.md > Preview builds."
+            exit 1
+          fi
+
+      # No checkout: nothing from the repository runs in this job.
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: unsigned-preview-apk
+          path: unsigned
+
       - name: Decode preview keystore
         env:
           PREVIEW_KEYSTORE_FILE: ${{ secrets.PREVIEW_KEYSTORE_FILE }}
@@ -80,34 +122,34 @@ jobs:
             echo "::error::PREVIEW_KEYSTORE_FILE did not decode to a keystore (expected base64)"; exit 1
           fi
 
-      - name: Build signed preview APK
-        working-directory: android
+      - name: Align, sign and verify
         env:
-          # android/app/build.gradle reads these; the file variable is the decoded path here.
-          PREVIEW_KEYSTORE_FILE: ${{ runner.temp }}/preview.jks
           PREVIEW_KEYSTORE_PASSWORD: ${{ secrets.PREVIEW_KEYSTORE_PASSWORD }}
           PREVIEW_KEY_ALIAS: ${{ secrets.PREVIEW_KEY_ALIAS }}
           PREVIEW_KEY_PASSWORD: ${{ secrets.PREVIEW_KEY_PASSWORD }}
-        run: bash ../scripts/gradlew-retry.sh assemblePreview --stacktrace
+        run: |
+          bt="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)/"
+          in="unsigned/CyberJuke-preview-unsigned.apk"
+          mkdir -p out
+          if "${bt}zipalign" -c -p 4 "$in"; then
+            cp "$in" "$RUNNER_TEMP/aligned.apk"
+          else
+            "${bt}zipalign" -p -f 4 "$in" "$RUNNER_TEMP/aligned.apk"
+          fi
+          "${bt}apksigner" sign \
+            --ks "$RUNNER_TEMP/preview.jks" \
+            --ks-pass env:PREVIEW_KEYSTORE_PASSWORD \
+            --ks-key-alias "$PREVIEW_KEY_ALIAS" \
+            --key-pass env:PREVIEW_KEY_PASSWORD \
+            --out out/CyberJuke-preview.apk \
+            "$RUNNER_TEMP/aligned.apk"
+          # Fails on an unsigned APK, so a build without the key can never be published.
+          "${bt}apksigner" verify --verbose --print-certs out/CyberJuke-preview.apk
+          (cd out && sha256sum CyberJuke-preview.apk > CyberJuke-preview.apk.sha256 && cat CyberJuke-preview.apk.sha256)
 
       - name: Remove keystore
         if: always()
-        run: rm -f "$RUNNER_TEMP/preview.jks"
-
-      - name: Verify signature, rename and checksum
-        run: |
-          shopt -s nullglob
-          apks=(android/app/build/outputs/apk/preview/*.apk)
-          if (( ${#apks[@]} != 1 )); then
-            echo "::error::Expected one preview APK, found ${#apks[@]}"; ls -la android/app/build/outputs/apk/preview || true; exit 1
-          fi
-          mkdir -p out
-          cp "${apks[0]}" out/CyberJuke-preview.apk
-          apksigner="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)/apksigner"
-          # Fails on an unsigned APK, so a build without the key can never be published.
-          "$apksigner" verify --print-certs out/CyberJuke-preview.apk
-          cd out && sha256sum CyberJuke-preview.apk > CyberJuke-preview.apk.sha256
-          cat CyberJuke-preview.apk.sha256
+        run: rm -f "$RUNNER_TEMP/preview.jks" "$RUNNER_TEMP/aligned.apk"
 
       - name: Remove the previous preview release
         env:
