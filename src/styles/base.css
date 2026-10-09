@@ -1,0 +1,251 @@
+/* Base: the reset, the page, type, buttons and the primitives every screen uses (the DOS
+   frame, the spinner). Cyberspace's terminal look: mono type, 2px borders, dithered offset
+   shadows, [bracketed] controls. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.4;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+body {
+  text-shadow: var(--glow-soft);
+  /* App UI, not a document: a long-press never selects text or opens the callout. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input,
+textarea,
+[contenteditable]:not([contenteditable='false']) {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+img {
+  -webkit-user-drag: none;
+}
+
+#app {
+  height: 100%;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: inherit;
+  text-shadow: inherit;
+  letter-spacing: inherit;
+  touch-action: manipulation;
+}
+button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+input:focus-visible {
+  outline: 2px dashed var(--color-fg);
+  outline-offset: 2px;
+}
+
+a {
+  color: var(--color-fg);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 400;
+}
+
+/* The full CRT glow on titles and the current row; body text has the 3px one. */
+.topbar-title,
+.np-title,
+.hero-title,
+.section-title,
+.state-title,
+.album-title,
+.row.is-current .row-title {
+  text-shadow: var(--glow);
+}
+
+.icon {
+  display: block;
+  flex: none;
+}
+
+.dim {
+  color: var(--color-fg-dim);
+}
+.small {
+  font-size: 12px;
+}
+
+/* ---- Buttons ---------------------------------------------------------------------- */
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: var(--radius);
+  flex: none;
+}
+.icon-btn:active:not(:disabled) {
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+}
+.icon-btn.sm {
+  min-width: 40px;
+  min-height: 44px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: var(--border-w) solid var(--color-fg);
+  border-radius: var(--radius);
+  font-family: var(--font-display);
+  font-size: 15px;
+  background: var(--color-bg);
+  box-shadow: 3px 3px 0 var(--color-border);
+}
+.btn.primary {
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+}
+.btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--color-border);
+}
+
+.link-btn {
+  min-height: 44px;
+  padding: 0 4px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--color-fg);
+}
+.link-btn:active {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px var(--gutter) 6px;
+  flex-wrap: wrap;
+}
+.actions .btn {
+  flex: 1 1 0;
+  max-width: 200px;
+}
+.push-right {
+  margin-left: auto;
+}
+
+.tag {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--color-fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+/* ---- DOS box: double-rule frame with dithered drop shadow (from the site) --------- */
+
+.dos {
+  --dos-d: 4px;
+  position: relative;
+  margin: 16px calc(var(--gutter) + 6px) 16px var(--gutter);
+}
+.dos-frame {
+  position: relative;
+  z-index: 1;
+  background: var(--color-bg);
+  border: var(--border-w) solid var(--color-fg);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 0 0 var(--border-w) var(--color-bg),
+    0 0 0 calc(var(--border-w) * 2) var(--color-fg);
+}
+.dos-shadow {
+  position: absolute;
+  inset: 0;
+  transform: translate(10px, 10px);
+  border-radius: var(--radius-lg);
+  background-image: var(--dither);
+  background-size: var(--dos-d) var(--dos-d);
+  z-index: 0;
+}
+
+/* Spinner: a blocky rotating square, stepped like an old cursor. */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 3px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 0.8s steps(8) infinite;
+  flex: none;
+}
+.spinner.big {
+  width: 26px;
+  height: 26px;
+  border-width: 4px;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

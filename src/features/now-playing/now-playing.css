@@ -1,0 +1,598 @@
+/* Now Playing and the mini player: the sheet, art and lyrics, controls, Up next, the marquee. */
+
+.np-genre {
+  position: relative;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--color-border);
+  text-underline-offset: 3px;
+}
+/* 44px hit area around the 20px tag. */
+.np-genre::after {
+  content: '';
+  position: absolute;
+  inset: -12px -6px;
+}
+.np-genre:active {
+  background: var(--color-fg);
+  color: var(--color-bg);
+  border-color: var(--color-fg);
+  text-shadow: none;
+}
+.np-global {
+  color: var(--color-fg-dim);
+}
+
+/* ---- Marquee: one line that scrolls when it doesn't fit (Marquee.tsx) -------------- */
+
+/* At rest the glow may paint past the clip; scrolling text is cut at the edges. */
+.marquee {
+  display: block;
+  min-width: 0;
+  overflow: clip;
+  overflow-clip-margin: 10px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.marquee.run {
+  overflow-clip-margin: 0;
+  text-overflow: clip;
+}
+.marquee.run .marquee-text {
+  display: inline-block;
+  will-change: transform;
+}
+/* The repeat after a gap, so the loop is seamless (not in the DOM's text). */
+.marquee.run .marquee-text::after {
+  content: attr(data-text);
+  padding-left: var(--marquee-gap);
+}
+/* ---- Mini player ------------------------------------------------------------------ */
+
+.mini {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--mini-h);
+  padding: 0 6px 0 0;
+  border-top: var(--border-w) solid var(--color-fg);
+  background: var(--color-bg);
+  flex: none;
+}
+/* The dithered rail, and the filled part as a child scaled from the left: each tick
+   changes only its transform, eased over the tick so it glides. */
+.mini-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  overflow: hidden;
+  background-color: var(--color-bg);
+  background-image: var(--dither);
+  background-size: 2px 2px;
+  pointer-events: none;
+}
+.mini-progress-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--color-fg);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s linear;
+  will-change: transform;
+}
+/* Play/Pause and Next: 48px targets, 8px apart. */
+.mini .icon-btn {
+  min-width: 48px;
+  min-height: 48px;
+}
+.mini-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 100%;
+  padding-left: 10px;
+}
+.mini-open .art-sm {
+  width: 46px;
+  height: 46px;
+}
+.mini-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.mini-title {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mini-artist {
+  font-size: 13px;
+  color: var(--color-fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Now Playing sheet ------------------------------------------------------------ */
+
+/* Closed it is faded a little, so a swipe released part-way (the sheet dims as it is
+   dragged) carries on smoothly instead of flashing back to full. */
+.np {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: var(--color-bg);
+  transform: translateY(100%);
+  opacity: 0.6;
+  visibility: hidden;
+  transition:
+    transform var(--ease-out-ms) var(--ease-out),
+    opacity var(--ease-out-ms) var(--ease-out),
+    visibility 0s linear var(--ease-out-ms);
+}
+.np.open {
+  transform: none;
+  opacity: 1;
+  visibility: visible;
+  /* Kept on its own layer while open, so a drag never waits for one to be made. */
+  will-change: transform, opacity;
+  transition:
+    transform var(--ease-in-ms) var(--ease-in),
+    opacity var(--ease-in-ms) var(--ease-in),
+    visibility 0s;
+}
+.np-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior-y: none;
+  padding: var(--safe-top) calc(var(--safe-right)) calc(24px + var(--safe-bottom)) var(--safe-left);
+}
+.np-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+}
+.np-head-title {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+}
+.np-kicker {
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.np-from {
+  font-size: 12px;
+  color: var(--color-fg-dim);
+}
+.np-art {
+  margin: 8px calc(var(--gutter) + 18px) 26px calc(var(--gutter) + 8px);
+  max-width: 420px;
+}
+@media (min-width: 470px) {
+  .np-art {
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+.np-art .dos-frame {
+  padding: 6px;
+}
+.np-meta {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0 calc(var(--gutter) - 8px) 0 calc(var(--gutter) + 4px);
+}
+.np-titles {
+  flex: 1;
+  min-width: 0;
+}
+.np-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1.2;
+}
+.np-artist {
+  font-size: 15px;
+  color: var(--color-fg-dim);
+  margin: 0 0 12px;
+}
+
+/* The range is 48px tall (the touch area); the bar drawn in it stays 12px. */
+.seek {
+  padding: 6px calc(var(--gutter) + 4px) 0;
+}
+.seek-range {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 48px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  --progress: 0%;
+}
+.seek-range::-webkit-slider-runnable-track {
+  height: 12px;
+  background-color: var(--color-bg);
+  background-image: linear-gradient(to right, var(--color-fg) var(--progress), transparent var(--progress)), var(--dither);
+  background-size:
+    100% 100%,
+    4px 4px;
+  border: 1px solid var(--color-border);
+}
+.seek-range::-moz-range-track {
+  height: 12px;
+  background-color: var(--color-bg);
+  background-image: linear-gradient(to right, var(--color-fg) var(--progress), transparent var(--progress)), var(--dither);
+  background-size:
+    100% 100%,
+    4px 4px;
+}
+.seek-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 26px;
+  margin-top: -8px;
+  background: var(--color-fg);
+  border: 3px solid var(--color-bg);
+  outline: 2px solid var(--color-fg);
+}
+.seek-range::-moz-range-thumb {
+  width: 10px;
+  height: 22px;
+  background: var(--color-fg);
+  border: 3px solid var(--color-bg);
+  border-radius: 0;
+}
+.seek-range:disabled {
+  opacity: 0.5;
+}
+.seek-times {
+  margin-top: -6px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--color-fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.np-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px calc(var(--gutter) - 4px) 6px;
+  max-width: 440px;
+  margin: 0 auto;
+}
+.toggle-icon {
+  color: var(--color-fg-dim);
+  position: relative;
+}
+.toggle-icon.on {
+  color: var(--color-fg);
+}
+.toggle-icon.on::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  background: currentColor;
+}
+.icon-btn.big {
+  min-width: 56px;
+  min-height: 56px;
+}
+.play-btn {
+  width: 76px;
+  height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+  box-shadow:
+    0 0 0 3px var(--color-bg),
+    0 0 0 5px var(--color-fg);
+}
+.play-btn:active {
+  transform: scale(0.94);
+}
+
+.np-post {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: calc(100% - 2 * var(--gutter));
+  margin: 14px var(--gutter) 6px;
+  padding: 10px 12px;
+  min-height: 52px;
+  border: var(--border-w) dashed var(--color-border);
+  border-radius: var(--radius);
+  font-size: 14px;
+}
+.np-post > span {
+  min-width: 0;
+}
+.np-post-title {
+  display: block;
+  font-size: 12px;
+  color: var(--color-fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-post:active {
+  background: var(--color-surface);
+}
+
+.upnext {
+  margin-top: 10px;
+  border-top: var(--border-w) solid var(--color-border);
+}
+.upnext .section-head {
+  flex-wrap: wrap;
+}
+.upnext-empty {
+  padding: 4px var(--gutter) 12px;
+}
+.upnext .row {
+  padding-right: 6px;
+}
+
+/* ---- Now Playing: grab handle + swipe to close ----------------------------------- */
+
+.np-grab {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 0;
+  margin-bottom: -6px;
+  touch-action: none;
+}
+.np-grab span {
+  width: 40px;
+  height: 4px;
+  background: var(--color-fg-dim);
+  /* pixel-stepped ends */
+  clip-path: polygon(2px 0, calc(100% - 2px) 0, calc(100% - 2px) 1px, 100% 1px, 100% 3px, calc(100% - 2px) 3px, calc(100% - 2px) 100%, 2px 100%, 2px 3px, 0 3px, 0 1px, 2px 1px);
+}
+
+/* ---- Now Playing: art <-> lyrics ------------------------------------------------- */
+
+.np-art .dos-frame {
+  position: relative;
+}
+.np-art-btn {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.np-flip {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--color-fg);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.np-flip::after {
+  content: '';
+  position: absolute;
+  /* a 48px target around the 28px label */
+  inset: -10px;
+}
+.np-art.lyrics .np-flip {
+  bottom: auto;
+  top: 10px;
+}
+
+/* The panel matches the art: a square inside the same frame. */
+.lyr {
+  position: relative;
+  aspect-ratio: 1;
+  width: 100%;
+  overflow: hidden;
+  border-radius: calc(var(--radius-lg) - 2px);
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  /* Pixel fonts first; system fonts for scripts they don't cover (CJK, Arabic, Hebrew, Devanagari, Thai…). */
+  font-family: var(--font-ui), system-ui, -apple-system, 'Roboto', 'Noto Sans', 'Noto Sans CJK JP', 'Noto Sans CJK SC', 'Noto Sans Arabic',
+    'Noto Naskh Arabic', 'Noto Sans Hebrew', 'Noto Sans Devanagari', 'Noto Sans Thai', 'Droid Sans Fallback', sans-serif;
+}
+.lyr {
+  padding-top: 48px; /* header: credit on the left, [art] on the right */
+}
+.lyr::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 47px;
+  border-top: 1px dashed var(--color-border);
+}
+.lyr-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 16px 24px;
+  scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 8px, #000 40px, #000 calc(100% - 32px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, transparent 8px, #000 40px, #000 calc(100% - 32px), transparent 100%);
+}
+.lyr-synced {
+  /* room so the first and last lines can sit in the middle */
+  padding-top: 40%;
+  padding-bottom: 45%;
+}
+.lyr-line {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 5px 0;
+  border: 0;
+  background: none;
+  color: var(--color-fg-dim);
+  font: inherit;
+  font-size: 17px;
+  line-height: 1.4;
+  text-align: start;
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+  transition: color 0.2s;
+}
+.lyr-plain .lyr-line {
+  color: var(--color-fg);
+  font-size: 16px;
+  padding: 2px 0;
+}
+button.lyr-line {
+  cursor: pointer;
+}
+.lyr-line.past {
+  opacity: 0.65;
+}
+/* The current line changes colour and glow only: same weight, and the marker sits in
+   padding every line has, so nothing changes width or wraps differently. */
+.lyr-synced .lyr-line {
+  position: relative;
+  padding-inline-start: 2ch;
+}
+.lyr-line.on {
+  color: var(--color-fg);
+  text-shadow: var(--glow);
+}
+.lyr-line.on::before {
+  content: '>';
+  position: absolute;
+  inset-inline-start: 0;
+  color: var(--color-accent);
+}
+.lyr-line.on:dir(rtl)::before {
+  content: '<';
+}
+.lyr-gap {
+  min-height: 14px;
+  text-align: center;
+  color: var(--color-fg-dim);
+  font-size: 14px;
+  padding: 2px 0;
+}
+.lyr-gap.on {
+  color: var(--color-accent);
+}
+.lyr-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  font-family: var(--font-display);
+  color: var(--color-fg-dim);
+}
+.lyr-credit {
+  position: absolute;
+  left: 14px;
+  right: 90px;
+  top: 10px;
+  line-height: 28px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lyr-line {
+    transition: none;
+  }
+}
+
+/* ---- Up Next: "Queued by you" ---------------------------------------------------- */
+
+.upnext-label {
+  list-style: none;
+  padding: 10px var(--gutter) 4px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--color-fg-dim);
+}
+.upnext-label::before {
+  content: '// ';
+}
+.row.queued .row-title::before {
+  content: '+ ';
+  color: var(--color-accent);
+}
+.np-members {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+/* M2: Up, Down and Remove are 48x48 with 8px between them. */
+.upnext-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+.upnext-actions .icon-btn {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+}
+
+/* Autoplay: slightly dimmed, under "Autoplay · similar to <seed>". */
+.upnext .row.autoplay .row-main {
+  opacity: 0.72;
+}
+.upnext-label.auto {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.upnext-label.auto::before {
+  content: '~ ';
+}

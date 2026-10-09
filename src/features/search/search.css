@@ -1,0 +1,276 @@
+/* Search: the search button, the search screen, recent searches, Global results while the
+   next ones load. */
+
+/* ---- Search button ------------------------------------------------------------- */
+
+/* Sits in .main, whose bottom edge is the top of the mini player (or the tab bar). */
+.fab {
+  --fab-shadow: 6px;
+  position: absolute;
+  right: calc(var(--gutter) + var(--fab-shadow));
+  bottom: calc(12px + var(--fab-shadow));
+  width: var(--fab);
+  height: var(--fab);
+  z-index: 6;
+}
+.fab-btn {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+  border-radius: var(--radius);
+  box-shadow:
+    0 0 0 var(--border-w) var(--color-bg),
+    0 0 0 calc(var(--border-w) * 2) var(--color-fg);
+}
+.fab-shadow {
+  position: absolute;
+  inset: calc(var(--border-w) * -2);
+  transform: translate(var(--fab-shadow), var(--fab-shadow));
+  border-radius: var(--radius);
+  background-color: var(--color-bg);
+  background-image: var(--dither);
+  background-size: 4px 4px;
+}
+.fab-btn:active {
+  transform: translate(calc(var(--fab-shadow) / 2), calc(var(--fab-shadow) / 2));
+}
+/* Scrolling down tucks the search button away below the screen edge; scrolling up (or
+   reaching the top) brings it back (SearchFab.tsx). */
+.fab {
+  transition:
+    transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
+}
+.fab.away {
+  transform: translateY(calc(100% + 32px));
+  visibility: hidden;
+  transition:
+    transform 0.2s cubic-bezier(0.3, 0, 0.8, 0.15),
+    visibility 0s linear 0.2s;
+}
+.fab-btn {
+  transition: transform 0.12s ease-out;
+}
+.fab-btn.pressed {
+  transform: translate(calc(var(--fab-shadow) / 2), calc(var(--fab-shadow) / 2)) scale(0.94);
+  transition: transform 0.05s ease-out;
+}
+
+/* ---- Search screen ---------------------------------------------------------------- */
+
+.search {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  background: var(--color-bg);
+}
+.search-bar {
+  gap: 6px;
+}
+.search-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding-left: 10px;
+  border: var(--border-w) solid var(--color-fg-dim);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  cursor: text;
+}
+.search-field:focus-within {
+  border-color: var(--color-fg);
+}
+.search-prompt {
+  flex: none;
+  margin-right: 8px;
+  font-family: var(--font-display);
+  color: var(--color-fg-dim);
+}
+.search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-fg);
+  font: inherit;
+  font-size: 16px;
+  text-shadow: inherit;
+  caret-color: var(--color-fg);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.search-input:focus-visible {
+  outline: none;
+}
+.search-input::placeholder {
+  color: var(--color-fg-dim);
+  opacity: 1;
+}
+.search-input::-webkit-search-cancel-button,
+.search-input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  display: none;
+}
+.search-clear {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 100%;
+  color: var(--color-fg-dim);
+}
+.search-clear:active {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+.search-hint {
+  padding: 24px var(--gutter);
+}
+.search-hint p {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.search .chips {
+  padding-top: 4px;
+}
+
+/* Search: input row, then the scope rail under it (Rail styles in ui/ui.css). */
+.search-bar {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  min-height: 0;
+  padding-top: calc(4px + var(--safe-top));
+  padding-bottom: 0;
+}
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bridge {
+  display: flex;
+  justify-content: center;
+  padding: 8px var(--gutter) 4px;
+}
+.bridge-btn {
+  text-decoration: underline;
+  text-decoration-color: var(--color-border);
+  text-underline-offset: 4px;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+/* ---- Search header: field, then the scope rail on the header rule ------------------ */
+
+.search-rail {
+  /* Overlap the header rule so the underline sits on it. */
+  margin: 0 calc(var(--gutter) * -1) calc(var(--border-w) * -1);
+  padding: 0 calc(var(--gutter) - 10px);
+  z-index: 1;
+}
+
+/* ---- Layers: the search button also shows over an album page; Search opened from an
+   album sits above it. ---------------------------------------------------------------- */
+
+.fab {
+  z-index: 10;
+}
+.here-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---- Search: recent searches (P9), Global results while the next ones load (P7) ---- */
+
+.recent-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+.recent-item {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px dashed var(--color-border);
+}
+.recent-q {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 var(--gutter);
+  text-align: left;
+}
+.recent-q:active {
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+}
+.recent-text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.recent-x {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  color: var(--color-fg-dim);
+}
+
+.global-stale {
+  position: relative;
+}
+.global-stale > :not(.progress-line) {
+  opacity: 0.45;
+  transition: opacity 0.15s;
+}
+.progress-line {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 2px;
+  margin: 0 var(--gutter);
+  overflow: hidden;
+  background: var(--color-border);
+}
+.progress-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 30%;
+  background: var(--color-fg);
+  animation: progress-run 0.9s steps(8) infinite;
+}
+@keyframes progress-run {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress-line::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.6;
+  }
+}

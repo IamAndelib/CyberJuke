@@ -6,7 +6,7 @@ import { Icon } from '../icons';
  * YouTube thumbnail with the pixel treatment: cropped to a square from the 16:9
  * area inside hqdefault's 4:3 letterbox (or from mqdefault's 16:9 frame for small
  * art), grayscale + contrast, and one overlay with the theme-tinted duotone and the
- * dither/scanlines (see .art in app.css).
+ * dither/scanlines (see .art in ui/ui.css).
  */
 export function Art({ track, size = 'md', class: cls }: { track: Track | null; size?: 'sm' | 'md' | 'lg' | 'fill'; class?: string }) {
   const [failedFor, setFailedFor] = useState<string | null>(null);

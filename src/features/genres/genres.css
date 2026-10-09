@@ -1,0 +1,12 @@
+/* Genres (the grid tiles are shared with Artists, in ui/ui.css). */
+
+[data-testid='fav-genres'] + .section-head {
+  margin-top: 14px;
+}
+.genre-name {
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  text-transform: lowercase;
+}

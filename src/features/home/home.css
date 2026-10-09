@@ -1,0 +1,139 @@
+/* Home: the brand, the shuffle hero, Latest | Most saved, the new-tracks pill. */
+
+.hero:active .hero-title {
+  text-shadow: none;
+}
+.brand {
+  letter-spacing: 2px;
+}
+
+/* Shuffle hero */
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 96px;
+  padding: 16px 16px 16px 18px;
+}
+.hero:active {
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+}
+.hero:active .hero-sub,
+.hero:active .hero-kicker {
+  color: inherit;
+}
+.hero-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hero-kicker {
+  font-size: 12px;
+  color: var(--color-fg-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.hero-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1.15;
+}
+.hero-sub {
+  font-size: 13px;
+  color: var(--color-fg-dim);
+}
+.hero-btn {
+  flex: none;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+}
+.hero:active .hero-btn {
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+/* ---- New tracks pill (Home) ------------------------------------------------------- */
+
+.ntp-dock {
+  position: sticky;
+  top: calc(var(--safe-top) + 72px);
+  z-index: 4;
+  height: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.ntp {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 16px 0 12px;
+  margin-top: 4px;
+  border: var(--border-w) solid var(--color-fg);
+  border-radius: 999px;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  font-family: var(--font-display);
+  font-size: 14px;
+  text-shadow: none;
+  box-shadow: 3px 3px 0 var(--color-border);
+  animation: ntp-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  position: relative;
+}
+/* 44px hit area */
+.ntp::after {
+  content: '';
+  position: absolute;
+  inset: -4px -2px;
+}
+.ntp:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--color-border);
+}
+.ntp[aria-busy='true'] {
+  opacity: 0.7;
+}
+/* Fading out once the list has refreshed (NewTracksPill.tsx). */
+.ntp.out {
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition:
+    opacity 0.2s steps(3),
+    transform 0.2s steps(3);
+}
+@keyframes ntp-in {
+  from {
+    transform: translateY(-16px);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ntp {
+    animation: none;
+  }
+}
+
+/* ---- Home: LATEST | MOST SAVED, then (Most saved) this month  all time ------------ */
+
+.home-rail {
+  margin: 6px 0 0;
+  padding: 0 calc(var(--gutter) - 10px);
+}
+.range-rail {
+  padding: 0 calc(var(--gutter) - 8px);
+}

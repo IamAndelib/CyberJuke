@@ -1,11 +1,18 @@
+// Styles, in cascade order: tokens and themes, base, the shell, shared components, then
+// each feature's own. Later files may build on earlier ones, never the other way round.
 import '../styles/fonts.css';
+import '../styles/tokens.css';
 import '../styles/themes.css';
-import '../styles/app.css';
-import '../styles/ui-b.css';
-import '../styles/ui-a.css';
-import '../styles/ui-c.css';
-import '../styles/interaction.css';
-import '../styles/queue.css';
+import '../styles/base.css';
+import './shell.css';
+import '../ui/ui.css';
+import '../features/home/home.css';
+import '../features/genres/genres.css';
+import '../features/artists/artists.css';
+import '../features/search/search.css';
+import '../features/library/library.css';
+import '../features/settings/settings.css';
+import '../features/now-playing/now-playing.css';
 import { render } from 'preact';
 import { effect } from '@preact/signals';
 import { Capacitor } from '@capacitor/core';

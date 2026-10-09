@@ -1,0 +1,311 @@
+/* Settings, and the Cyberspace account card in it. */
+
+/* ---- Settings --------------------------------------------------------------------- */
+
+.card {
+  margin: 16px var(--gutter);
+  padding: 14px;
+  border: var(--border-w) solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.card-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+.card-title::before {
+  content: '> ';
+  color: var(--color-fg-dim);
+}
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0;
+  background: none;
+  font-family: var(--font-display);
+  font-size: 12px;
+  text-align: center;
+  color: var(--color-fg-dim);
+}
+.swatch.on {
+  color: var(--color-fg);
+}
+.swatch-preview {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  height: 52px;
+  padding: 7px;
+  background: var(--color-bg);
+  border: var(--border-w) solid var(--color-border);
+  border-radius: var(--radius);
+  /* the preview carries its own data-theme, so these vars are that theme's */
+  text-shadow: var(--glow);
+}
+.swatch.on .swatch-preview {
+  border-color: var(--color-fg);
+  box-shadow:
+    0 0 0 2px var(--color-bg),
+    0 0 0 4px var(--color-fg);
+}
+.swatch-art {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  background-image: var(--dither);
+  background-size: 4px 4px;
+  border: 2px solid var(--color-fg);
+}
+.swatch-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.swatch-lines .l1,
+.swatch-lines .l2 {
+  display: block;
+  height: 4px;
+  background: var(--color-fg);
+}
+.swatch-lines .l2 {
+  width: 60%;
+  background: var(--color-fg-dim);
+}
+.swatch-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.swatch.on .swatch-name::before {
+  content: '[';
+}
+.swatch.on .swatch-name::after {
+  content: ']';
+}
+
+.setting {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+.setting + .setting {
+  border-top: 1px dashed var(--color-border);
+}
+.setting-text {
+  flex: 1;
+  min-width: 0;
+}
+.setting-name {
+  font-weight: 700;
+}
+.setting-desc {
+  font-size: 12px;
+  color: var(--color-fg-dim);
+}
+
+.toggle {
+  flex: none;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  border: var(--border-w) solid var(--color-fg);
+  border-radius: var(--radius);
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 13px;
+}
+.toggle-opt {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 10px;
+  color: var(--color-fg-dim);
+}
+.toggle:not(.on) .toggle-opt.off,
+.toggle.on .toggle-opt.on {
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+}
+
+.prose p {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.prose details {
+  border-top: 1px dashed var(--color-border);
+  padding: 4px 0;
+}
+.prose summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+  font-size: 14px;
+}
+.prose summary::-webkit-details-marker {
+  display: none;
+}
+.prose summary::before {
+  content: '[+]';
+  font-family: var(--font-display);
+  margin-right: 8px;
+  color: var(--color-fg-dim);
+}
+.prose details[open] summary::before {
+  content: '[-]';
+}
+.prose code {
+  font-family: var(--font-display);
+  background: var(--color-surface);
+  padding: 0 4px;
+}
+
+/* ---- Settings: check interval ----------------------------------------------------- */
+
+.setting.stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+.seg-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border: var(--border-w) solid var(--color-fg);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.seg-grid button {
+  min-height: 44px;
+  padding: 0 4px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  white-space: nowrap;
+  text-align: center;
+}
+.seg-grid button + button {
+  border-left: var(--border-w) solid var(--color-fg);
+}
+.seg-grid button.wide {
+  grid-column: 1 / -1;
+  border-left: 0;
+  border-top: var(--border-w) solid var(--color-fg);
+}
+.seg-grid button.on {
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+}
+
+/* ---- Settings → Account ----------------------------------------------------------- */
+
+.signin {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.signin-lead {
+  margin: 2px 0 12px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 12px;
+}
+.field-label {
+  font-family: var(--font-display);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--color-fg-dim);
+}
+.field-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.field-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: var(--border-w) solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font: inherit;
+  font-size: 16px; /* no zoom on focus */
+  text-shadow: inherit;
+  caret-color: var(--color-fg);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.field-input:focus {
+  border-color: var(--color-fg);
+  outline: none;
+}
+.field-input:focus-visible {
+  outline: 2px dashed var(--color-fg);
+  outline-offset: 2px;
+}
+.field-input:disabled {
+  opacity: 0.6;
+}
+.field-reveal {
+  flex: none;
+  min-width: 64px;
+  min-height: 44px;
+  padding: 0 6px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--color-fg-dim);
+}
+.field-reveal[aria-pressed='true'] {
+  color: var(--color-fg);
+}
+.signin-error {
+  margin: -2px 0 12px;
+  padding: 8px 10px;
+  border: 1px dashed var(--color-accent);
+  border-radius: var(--radius);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-accent);
+}
+.signin-submit {
+  width: 100%;
+  margin: 2px 0 12px;
+}
+.signin-note {
+  margin: 0 0 6px;
+  line-height: 1.45;
+}
+.signin-note a {
+  display: inline-block;
+  padding: 12px 0;
+  margin: -12px 0;
+}
+.account-in .btn {
+  align-self: flex-start;
+}
+.account-in .setting-name {
+  overflow-wrap: anywhere;
+}

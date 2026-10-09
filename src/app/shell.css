@@ -1,0 +1,130 @@
+/* The app shell (app/App.tsx): the offline banner, tabs and their page stacks, the tab bar. */
+
+/* ---- App shell -------------------------------------------------------------------- */
+
+.app {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+.main {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.tab-content {
+  height: 100%;
+}
+
+.offline-banner {
+  padding: calc(6px + var(--safe-top)) var(--gutter) 6px;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+  font-family: var(--font-display);
+  font-size: 13px;
+  text-align: center;
+}
+.offline-banner + .main .topbar {
+  padding-top: 10px;
+}
+
+/* ---- Layers over the tab content (search, album) ---------------------------------- */
+
+.layer {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+}
+.album-layer {
+  z-index: 9;
+}
+
+/* ---- Tab bar ---------------------------------------------------------------------- */
+
+.tabbar {
+  flex: none;
+  display: flex;
+  border-top: var(--border-w) solid var(--color-border);
+  background: var(--color-bg);
+  padding: 4px 6px calc(4px + var(--safe-bottom));
+  gap: 4px;
+}
+.has-player .tabbar {
+  border-top-color: var(--color-border);
+}
+.tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 52px;
+  border-radius: var(--radius);
+  color: var(--color-fg-dim);
+  font-family: var(--font-display);
+  font-size: 12px;
+}
+.tab.on {
+  background: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+}
+.layer.search-top {
+  z-index: 10;
+}
+
+/* ---- Tabs and their pages (SM7, P4) ---------------------------------------------- */
+
+/* Every visited tab stays mounted; only the current one is rendered. */
+.tab-pane {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.tab-pane:not(.on) {
+  content-visibility: hidden;
+}
+/* A tab's root and the pages pushed over it, all the same size, the top one last. */
+.page {
+  position: absolute;
+  inset: 0;
+  background: var(--color-bg);
+}
+/* A page under another one: kept (scroll, artwork) but not rendered. */
+.page.covered {
+  content-visibility: hidden;
+}
+.page.pushed {
+  /* `backwards`: once in, the page has no transform (fixed children stay fixed). */
+  animation: page-in 0.18s cubic-bezier(0.05, 0.7, 0.1, 1) backwards;
+}
+.page[data-kind='search'] {
+  animation-name: page-rise;
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateX(8%);
+  }
+}
+@keyframes page-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page.pushed {
+    animation: none;
+  }
+}
+/* Search fills its page (it used to be its own layer). */
+.page > .search {
+  z-index: auto;
+}

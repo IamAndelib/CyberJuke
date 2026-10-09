@@ -1,0 +1,23 @@
+/* Design tokens that don't change with the theme (the theme's own colours, fonts, glow
+   and radii are in themes.css). */
+
+:root {
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
+  --tabbar-h: 60px;
+  --mini-h: 64px;
+  --fab: 56px;
+  --gutter: 16px;
+  --dither: repeating-conic-gradient(var(--color-fg-dim) 0 25%, transparent 0 50%);
+}
+
+/* Material's emphasized motion for Now Playing and the sheets: in over 250ms, slowing
+   to a stop; out over 200ms, speeding away. */
+:root {
+  --ease-in-ms: 250ms;
+  --ease-in: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-out-ms: 200ms;
+  --ease-out: cubic-bezier(0.3, 0, 0.8, 0.15);
+}

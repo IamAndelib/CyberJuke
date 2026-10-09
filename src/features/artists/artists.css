@@ -1,0 +1,47 @@
+/* Artists and an album page (shelves and release grids are Global results, in ui/ui.css). */
+
+.album-screen {
+  background: var(--color-bg);
+}
+.album-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  padding: 4px var(--gutter) 0 0;
+}
+.album-cover {
+  flex: none;
+  width: 132px;
+  margin: 16px 6px 16px var(--gutter);
+}
+.album-cover .dos-frame {
+  padding: 4px;
+}
+.album-info {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 14px;
+}
+.album-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* No margin-left: as a link, .np-link's -4px lines its underline up with the title. */
+.album-artist {
+  font-size: 14px;
+  margin-top: 2px;
+  margin-right: 0;
+  margin-bottom: 2px;
+}
+.artist-name {
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}

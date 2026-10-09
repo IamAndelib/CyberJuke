@@ -1,0 +1,33 @@
+/* Library. */
+
+/* ---- Library: history day groups -------------------------------------------------- */
+
+.day-group + .day-group {
+  margin-top: 8px;
+}
+.day-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 var(--gutter);
+  padding: 14px 0 6px;
+  border-bottom: var(--border-w) solid var(--color-border);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: normal;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.day-count {
+  margin-left: auto;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0;
+  color: var(--color-fg-dim);
+}
+
+/* Library: [Clear] sits in the top bar, away from Play / Shuffle. */
+.lib-clear {
+  min-height: 48px;
+  padding: 0 8px;
+}
