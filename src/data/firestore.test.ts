@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import fixture from './__fixtures__/runquery-sample.json';
 import {
   buildQuery,
+  CACHE_MAX_PAGES,
   CACHE_TTL_MS,
   CATALOG_FIELDS,
   CATALOG_PAGE_SIZE,
@@ -155,6 +156,17 @@ describe('FirestoreSource', () => {
     now += 2;
     await src.latest();
     expect(f).toHaveBeenCalledTimes(2);
+  });
+
+  it(`keeps at most ${CACHE_MAX_PAGES} pages; the oldest go first`, async () => {
+    const f = mockFetch(rows);
+    const src = new FirestoreSource({ fetch: f as any });
+    for (let i = 0; i <= CACHE_MAX_PAGES; i++) await src.byGenre(`g${i}`);
+    expect(f).toHaveBeenCalledTimes(CACHE_MAX_PAGES + 1);
+    await src.byGenre(`g${CACHE_MAX_PAGES}`);
+    expect(f).toHaveBeenCalledTimes(CACHE_MAX_PAGES + 1);
+    await src.byGenre('g0');
+    expect(f).toHaveBeenCalledTimes(CACHE_MAX_PAGES + 2);
   });
 
   it('keys the cache by query (genre, cursor)', async () => {

@@ -26,6 +26,8 @@ export const API_KEY = 'AIzaSyA8yov3J3KN9VoW633F2hfDpWsExMJov2Y';
 export const RUN_QUERY_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents:runQuery?key=${API_KEY}`;
 export const PAGE_SIZE = 24;
 export const CACHE_TTL_MS = 5 * 60 * 1000;
+/** Pages kept in memory at most (the oldest go first; a stale one goes when it's next asked for). */
+export const CACHE_MAX_PAGES = 120;
 /** A pull-to-refresh only drops cache entries older than this. */
 export const MIN_REFRESH_AGE_MS = 20 * 1000;
 /** How many latest pages shuffle() draws from. */
@@ -164,7 +166,7 @@ export interface FirestoreSourceOptions {
 }
 
 export class FirestoreSource implements TrackSource {
-  /** Raw pages by query body (fresh for CACHE_TTL_MS; loads in progress shared). */
+  /** Raw pages by query body (fresh for CACHE_TTL_MS, at most CACHE_MAX_PAGES; loads in progress shared). */
   private readonly cache: Cache<string, RawPage>;
   private readonly showNsfw: () => boolean;
   private readonly fetchFn: typeof fetch;
@@ -182,7 +184,7 @@ export class FirestoreSource implements TrackSource {
     this.auth = opts.auth;
     this.showNsfw = opts.showNsfw ?? (() => false);
     this.fetchFn = opts.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
-    this.cache = new Cache({ ttlMs: CACHE_TTL_MS, now: opts.now ?? (() => Date.now()) });
+    this.cache = new Cache({ ttlMs: CACHE_TTL_MS, max: CACHE_MAX_PAGES, dropStale: true, now: opts.now ?? (() => Date.now()) });
   }
 
   latest(cursor?: Cursor | null): Promise<Page> {

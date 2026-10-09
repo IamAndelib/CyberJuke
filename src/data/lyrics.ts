@@ -197,6 +197,8 @@ export function createLyricsClient(deps: LyricsDeps): LyricsClient {
   const inflight = new InFlight<string, LyricsOutcome>();
   // Requests go one at a time (LRCLIB rate-limits).
   let chain: Promise<unknown> = Promise.resolve();
+  /** Bumped by dropMembersOnly: a members-only lookup from before it isn't kept. */
+  let drops = 0;
 
   const ready = () =>
     cache
@@ -224,6 +226,7 @@ export function createLyricsClient(deps: LyricsDeps): LyricsClient {
       return cache?.get(id)?.l;
     },
     async dropMembersOnly() {
+      drops++;
       const c = await ready();
       let changed = false;
       for (const [k, v] of c.pairs()) {
@@ -242,6 +245,7 @@ export function createLyricsClient(deps: LyricsDeps): LyricsClient {
       if (pending) return pending;
       const p = deps.plugin();
       if (!p) return { status: 'error', offline: false };
+      const asked = drops;
       const req: Promise<LyricsOutcome> = inflight.track(
         track.id,
         chain
@@ -256,6 +260,8 @@ export function createLyricsClient(deps: LyricsDeps): LyricsClient {
           )
           .then((r): LyricsOutcome => {
             const lyrics = normalizeLyrics(r);
+            // Signed out while it was looked up: members-only lyrics don't stay (S8).
+            if (track.membersOnly && asked !== drops) return { status: 'ok', lyrics };
             const e: CacheEntry = { at: now(), l: lyrics, ...(track.membersOnly && { m: true as const }) };
             c.set(track.id, e, e.at);
             persist();

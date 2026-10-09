@@ -34,9 +34,20 @@ export class InFlight<K, T> {
 
   /** Share `req` under `key` until it settles; returns the shared promise. */
   track(key: K, req: Promise<T>): Promise<T> {
-    const shared = req.finally(() => this.pending.delete(key));
+    const shared: Promise<T> = req.finally(() => {
+      if (this.pending.get(key) === shared) this.pending.delete(key);
+    });
     this.pending.set(key, shared);
     return shared;
+  }
+
+  /** Stop sharing the load of `key`: the next caller starts a new one. */
+  forget(key: K): void {
+    this.pending.delete(key);
+  }
+
+  clear(): void {
+    this.pending.clear();
   }
 }
 
@@ -88,11 +99,15 @@ export class Cache<K, V> {
     this.map.set(key, { at, value });
   }
 
+  /** Drop an entry; a load of it still going stores nothing and isn't shared any more. */
   delete(key: K): boolean {
+    this.inflight.forget(key);
     return this.map.delete(key);
   }
 
+  /** Drop everything; loads still going store nothing and aren't shared any more. */
   clear(): void {
+    this.inflight.clear();
     this.map.clear();
   }
 
@@ -109,8 +124,9 @@ export class Cache<K, V> {
 
   /**
    * A fresh value, else the load already in progress for `key`, else `start()`'s
-   * result, stored when it resolves. A failed load stores nothing; a `start` that
-   * throws synchronously rejects without becoming a shared load.
+   * result, stored when it resolves (unless delete() or clear() dropped the key
+   * meanwhile: it resolves, but stores nothing). A failed load stores nothing; a
+   * `start` that throws synchronously rejects without becoming a shared load.
    */
   load(key: K, start: () => Promise<V>, o: LoadOptions<V> = {}): Promise<V> {
     const hit = this.get(key);
@@ -123,9 +139,12 @@ export class Cache<K, V> {
     } catch (e) {
       return Promise.reject(e);
     }
+    let shared: Promise<V> | null = null;
     let stored = req.then((value) => {
-      this.set(key, value);
-      o.stored?.(value);
+      if (this.inflight.get(key) === shared) {
+        this.set(key, value);
+        o.stored?.(value);
+      }
       return value;
     });
     const mapError = o.mapError;
@@ -134,7 +153,7 @@ export class Cache<K, V> {
         throw mapError(e);
       });
     }
-    return this.inflight.track(key, stored);
+    return (shared = this.inflight.track(key, stored));
   }
 
   private fresh(e: { at: number; value: V }): boolean {

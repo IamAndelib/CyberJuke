@@ -170,4 +170,20 @@ describe('freshness reset (sign in or out)', () => {
     await h.f.check();
     expect(h.newerThan).toHaveBeenCalledWith('2026-10-08T10:00:00Z');
   });
+
+  it('a check still going at the reset (the other sign-in state) shows no pill', async () => {
+    const h = harness();
+    let answer: () => void = () => {};
+    h.newerThan.mockImplementationOnce(() => new Promise((r) => (answer = () => r({ count: 3, newest: '2026-10-08T12:00:00Z' }))));
+    const old = h.f.check();
+    h.f.reset();
+    // A check after the reset doesn't wait on the old one.
+    h.newerThan.mockResolvedValueOnce({ count: 0, newest: null });
+    await h.f.check();
+    expect(h.newerThan).toHaveBeenCalledTimes(2);
+    answer();
+    await old;
+    expect(h.f.pending.value).toBeNull();
+    expect(h.onFound).not.toHaveBeenCalled();
+  });
 });

@@ -73,6 +73,8 @@ export function createFreshness(deps: FreshnessDeps): Freshness {
   let lastCheckAt = 0;
   let running: Promise<void> | null = null;
   let started = false;
+  /** Bumped by reset(): a check from the other sign-in state counts posts this one can't show. */
+  let epoch = 0;
 
   const baseline = () => shown ?? deps.fallbackBaseline();
 
@@ -99,9 +101,11 @@ export function createFreshness(deps: FreshnessDeps): Freshness {
     if (!base) return Promise.resolve();
     if (deps.isOnline && !deps.isOnline()) return Promise.resolve();
     lastCheckAt = now();
-    running = deps
+    const asked = epoch;
+    const p: Promise<void> = deps
       .newerThan(base)
       .then((r) => {
+        if (asked !== epoch) return;
         // The baseline may have moved on while the request was out.
         const cur = baseline();
         if (r.count > 0 && r.newest && (!cur || r.newest > cur)) {
@@ -116,8 +120,11 @@ export function createFreshness(deps: FreshnessDeps): Freshness {
       .catch(() => {
         /* a failed check just waits for the next one */
       })
-      .finally(() => (running = null));
-    return running;
+      .finally(() => {
+        if (running === p) running = null;
+      });
+    running = p;
+    return p;
   }
 
   return {
@@ -150,6 +157,8 @@ export function createFreshness(deps: FreshnessDeps): Freshness {
       schedule();
     },
     reset() {
+      epoch++;
+      running = null;
       shown = null;
       pending.value = null;
     },

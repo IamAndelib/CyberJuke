@@ -141,6 +141,20 @@ describe('lyrics client cache', () => {
     expect(plugin.lyrics).toHaveBeenCalledTimes(3);
   });
 
+  it('a members-only lookup that answers after signing out is not kept', async () => {
+    const { c, plugin, store } = setup();
+    let answer: () => void = () => {};
+    plugin.lyrics.mockImplementationOnce(() => new Promise((r) => (answer = () => r({ found: true, source: 'LRCLIB', plain: 'secret' }))));
+    const got = c.get({ ...track('m'), membersOnly: true });
+    await vi.waitFor(() => expect(plugin.lyrics).toHaveBeenCalled());
+    await c.dropMembersOnly();
+    answer();
+    expect((await got).status).toBe('ok');
+    expect(c.peek('m')).toBeUndefined();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(store.get(l.LYRICS_CACHE_KEY) ?? '').not.toContain('secret');
+  });
+
   it('looks up with cleaned metadata and caches found results', async () => {
     const { c, plugin } = setup();
     const r = await c.get(track('1', 'Song (Official Video)', 'Artist - Topic'), 201_400);

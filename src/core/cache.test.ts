@@ -91,6 +91,37 @@ describe('Cache', () => {
   });
 });
 
+describe('Cache: loads still going when an entry is dropped', () => {
+  it('a load started before clear() resolves but stores nothing, and a new load does not join it', async () => {
+    const c = new Cache<string, string>();
+    let finish: (v: string) => void = () => {};
+    const stored = vi.fn();
+    const old = c.load('k', () => new Promise<string>((r) => (finish = r)), { stored });
+    c.clear();
+    const fresh = c.load('k', async () => 'new');
+    finish('old');
+    expect(await old).toBe('old');
+    expect(await fresh).toBe('new');
+    expect(stored).not.toHaveBeenCalled();
+    expect(c.get('k')).toBe('new');
+  });
+
+  it('delete() of one key drops its load the same way', async () => {
+    const c = new Cache<string, string>();
+    let finish: (v: string) => void = () => {};
+    const old = c.load('k', () => new Promise<string>((r) => (finish = r)));
+    const other = c.load('o', async () => 'o');
+    c.delete('k');
+    const start = vi.fn(async () => 'fresh');
+    const fresh = c.load('k', start);
+    expect(start).toHaveBeenCalled();
+    finish('stale');
+    await Promise.all([old, fresh, other]);
+    expect(c.get('k')).toBe('fresh');
+    expect(c.get('o')).toBe('o');
+  });
+});
+
 describe('InFlight', () => {
   it('shares a promise until it settles', async () => {
     const f = new InFlight<string, number>();

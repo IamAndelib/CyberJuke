@@ -108,6 +108,14 @@ describe('client', () => {
     expect(plugin.search).toHaveBeenCalledTimes(3);
   });
 
+  it('a fresh artist page does not reuse a request already going', async () => {
+    const { c, plugin } = setup();
+    const first = c.artistPage('UC1');
+    const fresh = c.artistPage('UC1', true);
+    await Promise.all([first, fresh]);
+    expect(plugin.artistPage).toHaveBeenCalledTimes(2);
+  });
+
   it('de-duplicates in-flight calls and caches more/playlist', async () => {
     const { c, plugin } = setup();
     await Promise.all([c.more('t'), c.more('t')]);
