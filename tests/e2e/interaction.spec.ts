@@ -342,6 +342,8 @@ test('Clear history asks first, away from Play; Undo brings the plays back (M3, 
   await clear.click();
   await page.getByTestId('confirm-ok').click();
   await expect(page.getByTestId('recent-list').getByTestId('track-row')).toHaveCount(0);
+  // Clear has gone with the plays: focus stays on the page, not lost to the document.
+  await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-testid="screen-library"]'))).toBe(true);
   const toast = page.getByTestId('toast').last();
   await expect(toast).toContainText('Cleared 2 plays');
   await toast.getByTestId('toast-action').click();
