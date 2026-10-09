@@ -308,21 +308,24 @@ else
 fi
 
 # ---- Phase 2b: the page's renderer goes while music plays (must keep playing) ----------------
-bridge_calls() { # how often the page has called getLaunchOptions (once per page load)
+# The log ring buffer rotates, so look only at the lines since a step began.
+device_now() { adb shell date +'%m-%d %H:%M:%S.000' 2>/dev/null | tr -d '\r'; }
+logged_since() { # $1 = time from device_now, $2 = tag, $3 = text
   local t
-  t="$(adb logcat -d -v brief -s CyberJukePlugin:V 2>/dev/null)"
-  grep -c "BRIDGE getLaunchOptions" <<<"$t" || true
+  t="$(adb logcat -d -v brief -T "$1" -s "$2:V" 2>/dev/null)"
+  grep -q "$3" <<<"$t"
 }
 app_pid() { adb shell pidof "$PKG" 2>/dev/null | tr -d '\r'; }
 for how in kill crash; do
   pid_before="$(app_pid)"
-  loads_before="$(bridge_calls)"
+  since="$(device_now)"
   log "Phase 2b: ending the WebView renderer ($how) while playing (pid $pid_before)"
   adb shell am start -n "$PKG/.MainActivity" --es ci_renderer "$how" >/dev/null 2>&1 || true
   reloaded=0
   for _ in $(seq 1 20); do
     sleep 1
-    if (( $(bridge_calls) > loads_before )); then reloaded=1; break; fi
+    # A new page calls getLaunchOptions at boot.
+    if logged_since "$since" CyberJukePlugin "BRIDGE getLaunchOptions"; then reloaded=1; break; fi
   done
   pid_after="$(app_pid)"
   shot "05-renderer-$how"
@@ -330,7 +333,7 @@ for how in kill crash; do
     diagnostics
     finish 1 "The app process did not survive the WebView renderer ending ($how): pid $pid_before -> ${pid_after:-none}"
   fi
-  if ! adb logcat -d -v brief -s CyberJukeActivity:V 2>/dev/null | grep -q "WebView renderer gone"; then
+  if ! logged_since "$since" CyberJukeActivity "WebView renderer gone"; then
     diagnostics
     finish 1 "The WebView renderer ($how) was not reported gone (did ci_renderer reach the app?)"
   fi
@@ -352,11 +355,12 @@ summary "### :white_check_mark: The WebView renderer ending (system kill, crash)
 log "Phase 2c: force-stopping, then opening the app again"
 adb shell am force-stop "$PKG"
 sleep 2
+since="$(device_now)"
 adb shell am start -W -n "$PKG/.MainActivity" >/dev/null 2>&1 || true
 restored=0
 for _ in $(seq 1 20); do
   sleep 1
-  if adb logcat -d -v brief -s CyberJukeService:V 2>/dev/null | grep -q "Restored the last session"; then restored=1; break; fi
+  if logged_since "$since" CyberJukeService "Restored the last session"; then restored=1; break; fi
 done
 sleep 3
 shot 06-restored
