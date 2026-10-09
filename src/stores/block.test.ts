@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BROKEN_TEXT, blockedText, createBlockStore, minutesLeft } from './block';
+import { BROKEN_TEXT, MAX_TIMER_MS, blockedText, createBlockStore, minutesLeft, msToNextMinute } from './block';
 
 function setup() {
   let clock = 1_000_000;
@@ -45,6 +45,19 @@ describe('block store', () => {
     expect(store.blocked.value).toBeNull();
   });
 
+  it('a timer that fires early (the clock went back, a very long block) waits again', () => {
+    const { store, now, advance, timers } = setup();
+    const until = now() + 2 * MAX_TIMER_MS;
+    store.onBlocked({ until, reason: 'RATE_LIMIT' });
+    expect(timers[0].at - now()).toBe(MAX_TIMER_MS);
+    // Fires before `until`.
+    timers.shift()!.fn();
+    expect(store.blocked.value).not.toBeNull();
+    expect(timers).toHaveLength(1);
+    advance(until - now());
+    expect(store.blocked.value).toBeNull();
+  });
+
   it('ignores a block that is already over, and unknown reasons become BOT_CHECK', () => {
     const { store, now } = setup();
     store.onBlocked({ until: now() - 1, reason: 'BOT_CHECK' });
@@ -79,6 +92,15 @@ describe('block store', () => {
     store.onExtractorBroken({});
     expect(store.broken.value).toBe('unknown');
     expect(store.brokenBanner.value).toBe(true);
+  });
+
+  it('the banner updates when the minute shown changes', () => {
+    const until = 1_000_000 + 5 * 60_000 + 7_000;
+    expect(msToNextMinute(until, 1_000_000)).toBe(7_000);
+    expect(minutesLeft(until, 1_000_000 + 7_000 - 1)).toBe(6);
+    expect(minutesLeft(until, 1_000_000 + 7_000)).toBe(5);
+    expect(msToNextMinute(until, 1_000_000 + 7_000)).toBe(60_000);
+    expect(msToNextMinute(until, until + 1)).toBe(60_000);
   });
 
   it('counts down in whole minutes, never below 1', () => {

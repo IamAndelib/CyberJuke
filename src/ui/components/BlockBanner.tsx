@@ -1,18 +1,22 @@
 /**
  * Y1 banners, above the mini player, never in the way of the rest of the app:
- * - YouTube is limiting this network: when to try again (a live countdown in whole
- *   minutes) and what helps; dismissable until the next block.
+ * - YouTube is limiting this network: when to try again (a countdown in whole
+ *   minutes, updated as the minute changes) and what helps; dismissable until the next block.
  * - YouTube changed something: only an app update helps; links to the releases.
  */
-import { block, blockedText, BROKEN_TEXT, minutesLeft, RELEASES_URL } from '../../stores/block';
+import { useEffect, useState } from 'preact/hooks';
+import { block, blockedText, BROKEN_TEXT, msToNextMinute, RELEASES_URL } from '../../stores/block';
 import { Icon } from '../icons';
 import { openExternal } from '../links';
-import { useTickValue } from '../useTick';
 
 function Blocked({ until }: { until: number }) {
-  // Re-renders when the minute shown changes.
   const now = Date.now();
-  useTickValue(true, () => minutesLeft(until, Date.now()));
+  // Re-renders when the minute shown changes (one timer a minute, no frame loop).
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => setTick((n) => n + 1), msToNextMinute(until, Date.now()) + 20);
+    return () => clearTimeout(t);
+  });
   return (
     <div class="block-banner" role="status" data-testid="block-banner">
       <p class="block-text" data-testid="block-text">

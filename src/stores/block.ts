@@ -61,6 +61,22 @@ export function createBlockStore(deps: BlockDeps = {}): BlockStore {
     blocked.value = null;
   };
 
+  /**
+   * Clears the block once `until` has passed. A timer can fire early (the clock was set
+   * back, or a delay past what timers take): then it waits again.
+   */
+  const arm = () => {
+    stop();
+    const b = blocked.value;
+    if (!b) return;
+    const left = b.until - now();
+    if (left <= 0) return clear();
+    timer = setTimer(() => {
+      timer = null;
+      arm();
+    }, Math.min(left, MAX_TIMER_MS));
+  };
+
   return {
     blocked,
     broken,
@@ -76,12 +92,8 @@ export function createBlockStore(deps: BlockDeps = {}): BlockStore {
       const reason = REASONS.includes(e?.reason as BlockReason) ? (e!.reason as BlockReason) : 'BOT_CHECK';
       const cur = blocked.value;
       if (!cur || cur.until !== until || cur.reason !== reason) blocked.value = { until, reason };
-      stop();
       // Native sends `unblocked` too; this covers a missed event (the app was paused).
-      timer = setTimer(() => {
-        timer = null;
-        if (blocked.value && blocked.value.until <= now()) blocked.value = null;
-      }, until - now());
+      arm();
     },
     onUnblocked: clear,
     onExtractorBroken(e) {
@@ -96,6 +108,16 @@ export function createBlockStore(deps: BlockDeps = {}): BlockStore {
       brokenDismissed.value = true;
     },
   };
+}
+
+/** The longest delay setTimeout takes (2^31 - 1 ms); longer ones fire at once. */
+export const MAX_TIMER_MS = 2 ** 31 - 1;
+
+/** Ms until the whole minutes left (minutesLeft) next change. */
+export function msToNextMinute(until: number, now: number): number {
+  const left = until - now;
+  if (left <= 0) return 60_000;
+  return left % 60_000 || 60_000;
 }
 
 /** Whole minutes left, at least 1 while blocked. */
