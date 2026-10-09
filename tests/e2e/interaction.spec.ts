@@ -177,28 +177,30 @@ test('favouriting a genre tile: a plain toast, Favourites follows at once; remov
   await page.goto('/');
   await genresLoaded(page);
   const grid = page.getByTestId('genre-grid');
-  const cell = grid.getByTestId('genre-cell').nth(3);
-  const genre = (await cell.getAttribute('data-genre'))!;
-  const star = cell.getByTestId('genre-fav');
+  const genre = (await grid.getByTestId('genre-cell').nth(3).getAttribute('data-genre'))!;
+  // By name: the tile moves between the grid and ★ Favourites.
+  const cellOf = (g: string) => grid.locator(`[data-testid="genre-cell"][data-genre="${g}"]`);
+  const star = cellOf(genre).getByTestId('genre-fav');
   await expect(star.locator('svg')).toHaveAttribute('data-icon', 'starOutline');
   await star.click();
-  await expect(star).toHaveAttribute('aria-pressed', 'true');
-  await expect(star.locator('svg')).toHaveAttribute('data-icon', 'star');
   // Adding: a confirmation, nothing to undo (tapping the star again does that).
   const toast = page.getByTestId('toast').last();
   await expect(toast).toHaveText(`${genre} added to Favourites`);
   await expect(toast.getByTestId('toast-action')).toHaveCount(0);
-  // ★ Favourites shows it at once.
+  // It moves up into ★ Favourites at once, starred; no copy stays in the grid.
   const favs = page.getByTestId('fav-genres');
   await expect(favs.getByTestId('genre-tile')).toHaveText([genre]);
+  await expect(favs.getByTestId('genre-fav').locator('svg')).toHaveAttribute('data-icon', 'star');
+  await expect(cellOf(genre)).toHaveCount(0);
 
   // Favourite a second one, then unfavourite the first from the Favourites section: it goes
   // at once, and Undo puts it back first.
   const other = (await grid.getByTestId('genre-cell').nth(5).getAttribute('data-genre'))!;
-  await grid.getByTestId('genre-cell').nth(5).getByTestId('genre-fav').click();
+  await cellOf(other).getByTestId('genre-fav').click();
   await expect(favs.getByTestId('genre-tile')).toHaveText([genre, other]);
   await favs.getByTestId('genre-fav').first().click();
   await expect(favs.getByTestId('genre-tile')).toHaveText([other]);
+  // Back in the grid, unstarred.
   await expect(star).toHaveAttribute('aria-pressed', 'false');
   const removed = page.getByTestId('toast').last();
   await expect(removed).toContainText(`${genre} removed from Favourites`);
@@ -207,15 +209,16 @@ test('favouriting a genre tile: a plain toast, Favourites follows at once; remov
   expect(await removed.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('auto');
   await undo.click();
   await expect(favs.getByTestId('genre-tile')).toHaveText([genre, other]);
-  await expect(star).toHaveAttribute('aria-pressed', 'true');
+  await expect(cellOf(genre)).toHaveCount(0);
 });
 
-/** Star then unstar a genre tile: leaves the "removed … Undo" toast on screen. */
+/** Star a genre tile, then unstar it in ★ Favourites: leaves the "removed … Undo" toast on screen. */
 async function removedToast(page: Page, nth: number) {
-  const cell = page.getByTestId('genre-grid').getByTestId('genre-cell').nth(nth);
-  const star = cell.getByTestId('genre-fav');
+  const grid = page.getByTestId('genre-grid');
+  const genre = (await grid.getByTestId('genre-cell').nth(nth).getAttribute('data-genre'))!;
+  const star = grid.locator(`[data-testid="genre-cell"][data-genre="${genre}"]`).getByTestId('genre-fav');
   await star.click();
-  await star.click();
+  await page.getByTestId('fav-genres').locator(`[data-testid="genre-cell"][data-genre="${genre}"]`).getByTestId('genre-fav').click();
   await expect(star).toHaveAttribute('aria-pressed', 'false');
   const toast = page.getByTestId('toast').last();
   await expect(toast).toContainText('removed from Favourites');

@@ -76,7 +76,8 @@ test('a favourite star tap re-renders the star, not the grid or page around it',
   // 1. A tile's star on the Artists grid.
   await reset();
   results.gridMs = await tap('[data-testid="artist-grid"] [data-testid="artist-fav"]');
-  await expect(page.locator('[data-testid="artist-grid"] [data-testid="artist-fav"]').first()).toHaveAttribute('aria-pressed', 'true');
+  // Moved up into ★ Favourites (gone from the grid).
+  await expect(page.getByTestId('fav-artists').getByTestId('artist-fav')).toHaveAttribute('aria-pressed', 'true');
   const grid = await renders();
   results.grid = grid;
 

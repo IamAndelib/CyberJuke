@@ -20,8 +20,13 @@ import { authScope } from '../../stores/feed';
 import { auth } from '../../data/auth';
 import { list as listCtx, withRest } from '../../ui/playAll';
 
-export function GenreTile({ name }: { name: string }) {
+/**
+ * A genre tile. In the main grid (`inGrid`) a favourite isn't shown: it sits in ★ Favourites
+ * above instead, and comes back to its place here when unstarred. Only this tile re-renders.
+ */
+export function GenreTile({ name, inGrid }: { name: string; inGrid?: boolean }) {
   const fav = useFavGenre(name);
+  if (inGrid && fav) return null;
   return (
     <div class={'genre-cell' + (fav ? ' fav' : '')} data-testid="genre-cell" data-genre={name}>
       <button class="genre-tile" onClick={() => openGenrePage(name)} data-testid="genre-tile" data-genre={name}>
@@ -126,7 +131,7 @@ export function GenreTiles({ list, sort }: { list: GenreCount[]; sort: 'popular'
             <AZHead letter={sec.letter} />
             <div class="genre-grid">
               {sec.items.map((g) => (
-                <GenreTile key={g.name} name={g.name} />
+                <GenreTile key={g.name} name={g.name} inGrid />
               ))}
             </div>
           </section>
@@ -137,7 +142,7 @@ export function GenreTiles({ list, sort }: { list: GenreCount[]; sort: 'popular'
   return (
     <div class="genre-grid" data-testid="genre-grid" data-sort="popular">
       {list.slice(0, shown).map((g) => (
-        <GenreTile key={g.name} name={g.name} />
+        <GenreTile key={g.name} name={g.name} inGrid />
       ))}
     </div>
   );

@@ -30,19 +30,26 @@ test('the Artists tab lists artists; a heart adds Favorite artists, which surviv
   expect(names.some((n) => / & /.test(n))).toBe(true);
   expect(new Set(names.map((n) => n.toLowerCase())).size).toBe(names.length);
 
-  const second = grid.getByTestId('artist-cell').nth(1);
-  const artist = (await second.getAttribute('data-artist'))!;
-  await second.getByTestId('artist-fav').click();
-  await expect(second.getByTestId('artist-fav')).toHaveAttribute('aria-pressed', 'true');
+  const artist = (await grid.getByTestId('artist-cell').nth(1).getAttribute('data-artist'))!;
+  // By name: the tile moves when starred.
+  const inGrid = grid.locator(`[data-testid="artist-cell"][data-artist="${artist}"]`);
+  await inGrid.getByTestId('artist-fav').click();
   await expect(page.getByTestId('toast').last()).toHaveText(`${artist} added to Favourites`);
-  // ★ Favourites shows it at once, and after a restart.
-  await expect(page.getByTestId('fav-artists').getByTestId('artist-tile')).toHaveText([artist]);
+  // It moves up into ★ Favourites at once (no copy left in the grid), and stays after a restart.
+  const favs = page.getByTestId('fav-artists');
+  await expect(favs.getByTestId('artist-tile')).toHaveText([artist]);
+  await expect(favs.getByTestId('artist-fav')).toHaveAttribute('aria-pressed', 'true');
+  await expect(inGrid).toHaveCount(0);
   await page.reload();
   await page.getByTestId('tab-artists').click();
-  await expect(page.getByTestId('fav-artists').getByTestId('artist-tile')).toHaveText([artist]);
-  await page.getByTestId('fav-artists').getByTestId('artist-fav').click();
-  await expect(page.getByTestId('fav-artists')).toHaveCount(0);
+  await expect(favs.getByTestId('artist-tile')).toHaveText([artist]);
+  await expect(inGrid).toHaveCount(0);
+  await favs.getByTestId('artist-fav').click();
+  await expect(favs).toHaveCount(0);
   await expect(page.getByTestId('toast').last()).toContainText(`${artist} removed from Favourites`);
+  // Back in its place in the grid.
+  await expect(inGrid.getByTestId('artist-fav')).toHaveAttribute('aria-pressed', 'false');
+  await expect(grid.getByTestId('artist-cell').nth(1)).toHaveAttribute('data-artist', artist);
 });
 
 test('artist page: Jukebox, Top songs, Albums, Live albums, EPs, Singles in order; See all opens the grid', async ({ page }) => {

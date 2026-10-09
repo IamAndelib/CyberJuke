@@ -4,7 +4,7 @@
 
 ### The app
 - Starring a genre or artist, or liking a track, now responds at once. One tap used to redraw the whole Artists or Genres grid (every tile, even behind another tab) or the whole page around the star; now only the star changes.
-- ★ Favourites on the Genres and Artists tabs gains or loses a tile the moment you tap, instead of after a scroll or the next visit.
+- On the Genres and Artists tabs, a starred tile moves up into ★ Favourites the moment you tap (no copy stays in the grid below); unstarring puts it back in its place. This used to wait for a scroll or the next visit.
 - Adding shows a short "‹name› added to Favourites" / "Added to Liked songs" message without Undo; removing still offers Undo.
 - Messages at the bottom can be swiped away, left or right.
 - Quick taps on a heart or star no longer stack "Added" and "Removed" messages: the newest replaces the one before it.

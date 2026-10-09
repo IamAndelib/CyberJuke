@@ -16,8 +16,13 @@ import { takeSections, useChunks } from '../../ui/useChunks';
 import type { Artist } from '../../data/artists';
 import { artistsSort } from '../../stores/prefs';
 
-export function ArtistTile({ name }: { name: string }) {
+/**
+ * An artist tile. In the main grid (`inGrid`) a favourite isn't shown: it sits in ★ Favourites
+ * above instead, and comes back to its place here when unstarred. Only this tile re-renders.
+ */
+export function ArtistTile({ name, inGrid }: { name: string; inGrid?: boolean }) {
   const fav = useFavArtist(name);
+  if (inGrid && fav) return null;
   return (
     <div class={'genre-cell' + (fav ? ' fav' : '')} data-testid="artist-cell" data-artist={name}>
       <button class="genre-tile" onClick={() => openArtistPage(name)} data-testid="artist-tile" data-artist={name}>
@@ -74,7 +79,7 @@ export function ArtistTiles({ list, sort }: { list: Artist[]; sort: 'popular' | 
             <AZHead letter={sec.letter} />
             <div class="genre-grid">
               {sec.items.map((a) => (
-                <ArtistTile key={a.key} name={a.name} />
+                <ArtistTile key={a.key} name={a.name} inGrid />
               ))}
             </div>
           </section>
@@ -85,7 +90,7 @@ export function ArtistTiles({ list, sort }: { list: Artist[]; sort: 'popular' | 
   return (
     <div class="genre-grid" data-testid="artist-grid" data-sort="popular">
       {list.slice(0, shown).map((a) => (
-        <ArtistTile key={a.key} name={a.name} />
+        <ArtistTile key={a.key} name={a.name} inGrid />
       ))}
     </div>
   );

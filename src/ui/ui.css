@@ -1303,6 +1303,10 @@ section[data-kind] > .shelf {
 .list.compact > .row {
   contain-intrinsic-size: auto 60px;
 }
+/* A letter whose tiles are all in ★ Favourites (moved up) has nothing left to head. */
+.az-section:not(:has(.genre-cell)) {
+  display: none;
+}
 .az-section {
   content-visibility: auto;
   contain-intrinsic-size: auto 240px;

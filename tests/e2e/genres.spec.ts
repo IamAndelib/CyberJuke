@@ -30,16 +30,19 @@ test('hearting a genre adds Favorite genres, which survive a reload and lead Hom
   // Rendered in chunks: the rest of the grid follows in idle time.
   await expect.poll(() => grid.getByTestId('genre-tile').count()).toBeGreaterThan(100);
 
-  const second = grid.getByTestId('genre-cell').nth(1);
-  const genre = (await second.getAttribute('data-genre'))!;
-  const heart = second.getByTestId('genre-fav');
+  const genre = (await grid.getByTestId('genre-cell').nth(1).getAttribute('data-genre'))!;
+  // By name: the tile moves when starred.
+  const inGrid = grid.locator(`[data-testid="genre-cell"][data-genre="${genre}"]`);
+  const heart = inGrid.getByTestId('genre-fav');
   await expect(heart).toHaveAttribute('aria-pressed', 'false');
   await heart.click();
-  await expect(heart).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId('toast').last()).toHaveText(`${genre} added to Favourites`);
-  // ★ Favourites shows it at once.
-  await expect(page.getByTestId('fav-genres').locator('.section-title')).toHaveText('★ Favourites');
-  await expect(page.getByTestId('fav-genres').getByTestId('genre-tile')).toHaveText([genre]);
+  // It moves up into ★ Favourites at once; no copy stays in the grid.
+  const favs = page.getByTestId('fav-genres');
+  await expect(favs.locator('.section-title')).toHaveText('★ Favourites');
+  await expect(favs.getByTestId('genre-tile')).toHaveText([genre]);
+  await expect(favs.getByTestId('genre-fav')).toHaveAttribute('aria-pressed', 'true');
+  await expect(inGrid).toHaveCount(0);
 
   await page.reload();
   await page.getByTestId('tab-genres').click();
@@ -49,9 +52,11 @@ test('hearting a genre adds Favorite genres, which survive a reload and lead Hom
   await page.getByTestId('tab-genres').click();
   const favHeart = page.getByTestId('fav-genres').getByTestId('genre-fav');
   await favHeart.click();
-  // Gone from Favourites at once; its tile in the grid shows it too.
+  // Gone from Favourites at once, and back in its place in the grid.
   await expect(page.getByTestId('fav-genres')).toHaveCount(0);
+  await expect(inGrid).toHaveCount(1);
   await expect(heart).toHaveAttribute('aria-pressed', 'false');
+  await expect(grid.getByTestId('genre-cell').nth(1)).toHaveAttribute('data-genre', genre);
 });
 
 test('a genre page opened before the catalog has loaded fills in by itself', async ({ page }) => {
