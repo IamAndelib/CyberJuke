@@ -6,6 +6,17 @@ package io.github.iamandelib.cyberjuke.playback
  */
 internal object QueueOrder {
 
+    /** [order] holds every index in 0 until [n] exactly once. */
+    fun isPermutation(order: IntArray, n: Int): Boolean {
+        if (order.size != n) return false
+        val seen = BooleanArray(n)
+        for (i in order) {
+            if (i !in 0 until n || seen[i]) return false
+            seen[i] = true
+        }
+        return true
+    }
+
     /**
      * Returns [order] (a play order: every playlist index exactly once) with the [queued]
      * indices taken out and put right after [current], in the order given (FIFO).
@@ -106,8 +117,11 @@ internal interface QueueHost<T> {
     /** The item at [index] was added by autoplay. */
     fun isAutoAt(index: Int): Boolean
 
-    /** Replaces the playlist ([serials] as in [insertTagged]); [start] becomes current. */
-    fun setItems(items: List<T>, serials: List<Long>, start: Int, positionMs: Long)
+    /**
+     * Replaces the playlist ([serials] as in [insertTagged]); [start] becomes current. [auto]
+     * (empty, or one flag per item) tags autoplay items, for a saved session put back.
+     */
+    fun setItems(items: List<T>, serials: List<Long>, start: Int, positionMs: Long, auto: List<Boolean> = emptyList())
 
     /** Inserts [items] tagged as autoplay at [at] (null = append). */
     fun insertAuto(at: Int?, items: List<T>)
@@ -218,6 +232,28 @@ internal class NativeQueue<T>(private val host: QueueHost<T>) {
         repeat(items.size - s - 1) { serials.add(0L) }
         host.setItems(list, serials, s, positionMs)
         shuffleFromCurrent()
+    }
+
+    /**
+     * A saved session put back (LastSession): [sections] says what each item was, [start] is
+     * current at [positionMs], and the shuffle play [order] it had comes back when it still fits
+     * (shuffle on). The queued items stay next, in the order they were going to play.
+     */
+    fun restoreSession(items: List<T>, sections: List<Section>, start: Int, positionMs: Long, order: IntArray?) {
+        require(sections.size == items.size) { "one section per item" }
+        pending.clear()
+        if (items.isEmpty()) {
+            host.setItems(emptyList(), emptyList(), 0, 0L)
+            return
+        }
+        val s = start.coerceIn(0, items.size - 1)
+        val serials = sections.mapIndexed { i, sec -> if (sec == Section.QUEUED && i != s) nextSerial++ else 0L }
+        host.setItems(items, serials, s, positionMs, sections.map { it == Section.AUTO })
+        if (host.shuffleEnabled && order != null && QueueOrder.isPermutation(order, items.size)) {
+            host.setShuffleOrder(order)
+        }
+        for (i in upcoming()) host.serialAt(i).takeIf { it != 0L }?.let { pending.add(it) }
+        if (host.shuffleEnabled) enforceShuffleOrder() else enforceLinearOrder()
     }
 
     /** Shuffle on: a shuffle order that starts at the current item (then the usual rules). */

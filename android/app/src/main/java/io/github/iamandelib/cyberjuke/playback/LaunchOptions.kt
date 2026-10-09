@@ -31,6 +31,31 @@ object LaunchOptions {
      * (src/debug/assets), so in release this id just fails to load.
      */
     const val CI_TONE = "ci-tone"
+
+    /** The media notification's tap: the app opens on Now Playing. */
+    const val ACTION_NOW_PLAYING = "io.github.iamandelib.cyberjuke.NOW_PLAYING"
+
+    /**
+     * [intent] is the notification's tap, as it happened (not the same intent replayed when the
+     * app is reopened from Recents after Android stopped it).
+     */
+    @JvmStatic
+    fun opensNowPlaying(intent: Intent?): Boolean = intent?.action == ACTION_NOW_PLAYING &&
+        (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0
+
+    /**
+     * CI only (debuggable builds): `--es ci_renderer kill` (as when Android reclaims its memory)
+     * or `crash` ends the WebView's renderer; the URL that does it, else null.
+     */
+    @JvmStatic
+    fun ciRendererUrl(context: Context, intent: Intent?): String? {
+        if (!context.isDebuggable()) return null
+        return when (intent?.getStringExtra("ci_renderer")) {
+            "kill" -> "chrome://kill"
+            "crash" -> "chrome://crash"
+            else -> null
+        }
+    }
     const val CI_TONE_ASSET = "asset:///ci-tone.ogg"
 
     @Volatile

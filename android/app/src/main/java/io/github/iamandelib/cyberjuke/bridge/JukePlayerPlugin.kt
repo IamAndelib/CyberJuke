@@ -3,6 +3,7 @@ package io.github.iamandelib.cyberjuke.bridge
 import android.Manifest
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.graphics.Rect
@@ -200,6 +201,23 @@ class JukePlayerPlugin : Plugin() {
             if (reason != null) announceBlocked(until, reason)
             connect()
         }
+        openNowPlayingFor(activity?.intent)
+    }
+
+    override fun handleOnNewIntent(intent: Intent) {
+        super.handleOnNewIntent(intent)
+        openNowPlayingFor(intent)
+    }
+
+    /**
+     * The media notification was tapped: the page opens Now Playing (`openNowPlaying`, kept
+     * until the page listens, for a cold start). Once: the intent is marked used, so the page
+     * reloading (or the activity being recreated) doesn't open it again.
+     */
+    private fun openNowPlayingFor(intent: Intent?) {
+        if (!LaunchOptions.opensNowPlaying(intent)) return
+        intent?.action = Intent.ACTION_MAIN
+        notifyListeners("openNowPlaying", JSObject(), true)
     }
 
     override fun handleOnPause() {

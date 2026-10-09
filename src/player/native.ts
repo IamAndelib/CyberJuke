@@ -103,6 +103,8 @@ interface JukePlayerPlugin {
   addListener(event: 'tracks', cb: (e: { tracks: NativeTrack[] }) => void): Promise<{ remove: () => Promise<void> }>;
   /** Parsing failed in a way that means YouTube changed something (an app update is needed). */
   addListener(event: 'extractorBroken', cb: (e: { message: string }) => void): Promise<{ remove: () => Promise<void> }>;
+  /** The media notification was tapped (kept until a listener comes, for a cold start). */
+  addListener(event: 'openNowPlaying', cb: (e: Record<string, never>) => void): Promise<{ remove: () => Promise<void> }>;
 }
 
 export const JukePlayer = registerPlugin<JukePlayerPlugin>('JukePlayer');

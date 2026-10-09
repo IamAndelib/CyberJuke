@@ -55,14 +55,16 @@ internal object StateEncoder {
             }
         }
 
-        val duration = c.duration
+        // Not loaded yet (a restored session): the length it had when it was saved.
+        val duration = c.duration.takeIf { it != C.TIME_UNSET && it > 0L }
+            ?: c.currentMediaItem?.mediaMetadata?.durationMs ?: 0L
         val state = JSObject()
         state.put("isPlaying", c.isPlaying)
         state.put("isBuffering", c.playbackState == Player.STATE_BUFFERING)
         state.put("index", index)
         state.put("trackId", if (index >= 0) c.currentMediaItem?.mediaId ?: JSONObject.NULL else JSONObject.NULL)
         state.put("positionMs", if (index >= 0) c.currentPosition.coerceAtLeast(0L) else 0L)
-        state.put("durationMs", if (duration == C.TIME_UNSET || duration < 0) 0L else duration)
+        state.put("durationMs", duration.coerceAtLeast(0L))
         state.put("shuffle", c.shuffleModeEnabled)
         state.put(
             "repeat",

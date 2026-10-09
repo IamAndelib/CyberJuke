@@ -13,6 +13,11 @@
 # Phase 1 plays the latest live track (a YouTube bot check on the runner IP is only a warning).
 # Phase 2 plays a bundled test tone (debug builds) and must reach PLAYING and keep playing in
 # the background; otherwise the exit code is non-zero.
+# Phase 2b (hard, debug builds) ends the page's WebView renderer while it plays, the way Android
+# reclaims it (`--es ci_renderer kill`) and as a crash (`crash`): the app process must survive,
+# keep playing, and load the page again.
+# Phase 2c (hard, debug builds) force-stops the app and opens it again: the last session (the
+# tone) must come back, paused. Pressing play then is a soft check.
 # Phase 3 (soft, debug builds) runs one YouTube Music search through NewPipeExtractor via
 # `--es ci_music_search "<query>"` and reports the logged result count. It never fails the job.
 # Phase 4 (soft, debug builds) resolves artist candidates (`--es ci_artist`) and looks up one
@@ -300,6 +305,76 @@ if [[ -n "$controllers" ]]; then
   fi
 else
   summary "### :warning: MediaSession controllers: no connection logged (is this a debug build?)"
+fi
+
+# ---- Phase 2b: the page's renderer goes while music plays (must keep playing) ----------------
+bridge_calls() { # how often the page has called getLaunchOptions (once per page load)
+  local t
+  t="$(adb logcat -d -v brief -s CyberJukePlugin:V 2>/dev/null)"
+  grep -c "BRIDGE getLaunchOptions" <<<"$t" || true
+}
+app_pid() { adb shell pidof "$PKG" 2>/dev/null | tr -d '\r'; }
+for how in kill crash; do
+  pid_before="$(app_pid)"
+  loads_before="$(bridge_calls)"
+  log "Phase 2b: ending the WebView renderer ($how) while playing (pid $pid_before)"
+  adb shell am start -n "$PKG/.MainActivity" --es ci_renderer "$how" >/dev/null 2>&1 || true
+  reloaded=0
+  for _ in $(seq 1 20); do
+    sleep 1
+    if (( $(bridge_calls) > loads_before )); then reloaded=1; break; fi
+  done
+  pid_after="$(app_pid)"
+  shot "05-renderer-$how"
+  if [[ -z "$pid_after" || "$pid_after" != "$pid_before" ]]; then
+    diagnostics
+    finish 1 "The app process did not survive the WebView renderer ending ($how): pid $pid_before -> ${pid_after:-none}"
+  fi
+  if ! adb logcat -d -v brief -s CyberJukeActivity:V 2>/dev/null | grep -q "WebView renderer gone"; then
+    diagnostics
+    finish 1 "The WebView renderer ($how) was not reported gone (did ci_renderer reach the app?)"
+  fi
+  if ! is_playing; then
+    diagnostics
+    finish 1 "Playback stopped when the WebView renderer ended ($how)"
+  fi
+  if (( reloaded != 1 )); then
+    diagnostics
+    finish 1 "The page did not load again after the WebView renderer ended ($how)"
+  fi
+  log "Renderer $how: same process, still playing, page loaded again"
+  # Two crashes within 10 s count as a crash loop (the page is closed): wait that out.
+  [[ $how == kill ]] && sleep 12
+done
+summary "### :white_check_mark: The WebView renderer ending (system kill, crash) keeps the app and playback alive"
+
+# ---- Phase 2c: after a force stop, the last session comes back (paused) ---------------------
+log "Phase 2c: force-stopping, then opening the app again"
+adb shell am force-stop "$PKG"
+sleep 2
+adb shell am start -W -n "$PKG/.MainActivity" >/dev/null 2>&1 || true
+restored=0
+for _ in $(seq 1 20); do
+  sleep 1
+  if adb logcat -d -v brief -s CyberJukeService:V 2>/dev/null | grep -q "Restored the last session"; then restored=1; break; fi
+done
+sleep 3
+shot 06-restored
+if (( restored != 1 )); then
+  diagnostics
+  finish 1 "After a force stop, the last session did not come back (no 'Restored the last session')"
+fi
+if is_playing; then
+  finish 1 "The restored session started playing by itself (it must wait for Play)"
+fi
+log "Restored the last session, paused"
+summary "### :white_check_mark: After a force stop the last session comes back, paused"
+adb shell cmd media_session dispatch play >/dev/null 2>&1 || true
+if wait_playing 20; then
+  summary "### :white_check_mark: Play resumes the restored session"
+else
+  echo "::warning title=Restored session not resumed::'cmd media_session dispatch play' did not start the restored session (the media key may not have reached it)"
+  summary "### :warning: Play on the restored session: not verified"
 fi
 
 # ---- Phase 3 (soft): YouTube Music search (MusicPlugin CI hook, debug builds only) ----------

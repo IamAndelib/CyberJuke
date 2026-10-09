@@ -8,7 +8,7 @@
  * another artist), and Back pops it, returning exactly where you were. Visited tabs
  * stay mounted (App), so their scroll and artwork survive a tab switch.
  */
-import { computed, signal, useComputed, type ReadonlySignal } from '@preact/signals';
+import { computed, effect, signal, untracked, useComputed, type ReadonlySignal } from '@preact/signals';
 import { createContext } from 'preact';
 import { useContext, useEffect, useRef } from 'preact/hooks';
 import type { Track } from '../data/model';
@@ -83,6 +83,32 @@ export interface ConfirmRequest {
   testid?: string;
 }
 export const confirmRequest = signal<ConfirmRequest | null>(null);
+
+/**
+ * The media notification was tapped: Now Playing, over whatever was open (menus and sheets
+ * close). At a cold start the player's state comes a moment after the page, so it opens once
+ * there is a track, if one comes within [waitMs].
+ */
+export function openNowPlayingWhen(hasTrack: ReadonlySignal<boolean>, waitMs = 5000): void {
+  const open = () => {
+    menuTrack.value = null;
+    artistChoice.value = null;
+    confirmRequest.value = null;
+    nowPlayingOpen.value = true;
+  };
+  if (hasTrack.peek()) {
+    open();
+    return;
+  }
+  let dispose = () => {};
+  const timer = setTimeout(() => dispose(), waitMs);
+  dispose = effect(() => {
+    if (!hasTrack.value) return;
+    clearTimeout(timer);
+    untracked(open);
+    queueMicrotask(() => dispose());
+  });
+}
 
 /** Ask before doing something that can't easily be taken back. */
 export function askConfirm(req: ConfirmRequest): void {

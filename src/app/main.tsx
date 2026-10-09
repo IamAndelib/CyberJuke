@@ -30,10 +30,10 @@ import { catalog } from '../stores/catalog';
 import { startFreshness } from '../stores/newTracks';
 import { startAccount } from '../stores/account';
 import { auth } from '../data/auth';
-import { goBack } from '../ui/nav';
+import { goBack, openNowPlayingWhen } from '../ui/nav';
 import { retryWatchedFeeds } from '../stores/feed';
 import { JukePlayer } from '../player/native';
-import { startPlayerPrefs, startQueuePurge } from '../player';
+import { hasCurrent, startPlayerPrefs, startQueuePurge } from '../player';
 import { playFrom, radio } from '../ui/playAll';
 import { startBlockEvents } from '../player/blockEvents';
 import { source } from '../data';
@@ -69,6 +69,12 @@ function applyTheme(): void {
       StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {});
     }
   });
+}
+
+/** A tap on the media notification opens Now Playing. */
+function wireNotificationTap(): void {
+  if (!native) return;
+  JukePlayer.addListener('openNowPlaying', () => openNowPlayingWhen(hasCurrent)).catch((e) => logError('openNowPlaying', e));
 }
 
 function wireBackButton(): void {
@@ -127,6 +133,7 @@ async function boot(): Promise<void> {
   // Back online: lists on screen that failed to load try again.
   onReconnect(() => retryWatchedFeeds());
   wireBackButton();
+  wireNotificationTap();
   startBlockEvents();
   const root = document.getElementById('app')!;
   render(

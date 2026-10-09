@@ -53,13 +53,17 @@ internal class ExoQueueHost(private val p: ExoPlayer) : QueueHost<MediaItem> {
     override fun isAutoAt(index: Int): Boolean =
         p.getMediaItemAt(index).mediaMetadata.extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) == true
 
-    override fun setItems(items: List<MediaItem>, serials: List<Long>, start: Int, positionMs: Long) {
+    override fun setItems(items: List<MediaItem>, serials: List<Long>, start: Int, positionMs: Long, auto: List<Boolean>) {
         if (items.isEmpty()) {
             p.clearMediaItems()
             return
         }
         val tagged = items.mapIndexed { k, item ->
-            if (serials[k] == 0L) item else tag(item) { putLong(JukeCommands.EXTRA_QUEUE_SERIAL, serials[k]) }
+            when {
+                serials[k] != 0L -> tag(item) { putLong(JukeCommands.EXTRA_QUEUE_SERIAL, serials[k]) }
+                auto.getOrElse(k) { false } -> tag(item) { putBoolean(QueueCommands.EXTRA_AUTOPLAY, true) }
+                else -> item
+            }
         }
         p.setMediaItems(tagged, start, positionMs.coerceAtLeast(0L))
     }

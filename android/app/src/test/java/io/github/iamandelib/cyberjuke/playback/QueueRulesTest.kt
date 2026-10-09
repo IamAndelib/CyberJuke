@@ -183,13 +183,13 @@ class QueueRulesTest {
         override fun idAt(index: Int) = ids[index]
         override fun isAutoAt(index: Int) = auto[index]
 
-        override fun setItems(items: List<String>, serials: List<Long>, start: Int, positionMs: Long) {
+        override fun setItems(items: List<String>, serials: List<Long>, start: Int, positionMs: Long, auto: List<Boolean>) {
             ids.clear()
             this.serials.clear()
-            auto.clear()
+            this.auto.clear()
             ids.addAll(items)
             this.serials.addAll(serials)
-            items.forEach { auto.add(false) }
+            items.indices.forEach { this.auto.add(auto.getOrElse(it) { false }) }
             order = ArrayList((items.indices).toList().shuffled(rnd))
             current = if (items.isEmpty()) -1 else start.coerceIn(0, items.size - 1)
             emit(timelineChanged, transition)

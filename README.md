@@ -36,7 +36,8 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 - **Global search** (optional): a separate Global mode for any song, album, artist or playlist beyond the Jukebox. Global tracks play, like and queue like any other, but never show up on Home, Genres, Most saved or Shuffle.
 - **Sign in with Cyberspace** (optional): the Jukebox also shows the members-only shared tracks, marked `[members]`. See [Signing in](#signing-in).
 - **Library**: liked tracks and recently played, stored on your phone.
-- **Background playback**: the notification, lock screen and headset buttons all work, and the queue keeps going with the screen off.
+- **Background playback**: the notification, lock screen and headset buttons all work, and the queue keeps going with the screen off. Tapping the notification opens Now Playing.
+- **Picks up where you left off**: the app opens on what you last played, paused at the same spot, even after Android stopped it.
 - **Now Playing**: seek, shuffle, repeat, like, synced lyrics, share, "Playing from …", and an Up Next queue you can reorder.
 - **"Posted by @user"** opens the original post on Cyberspace, so you can see what the poster wrote and reply.
 - **Undo** for unlike, unfavourite, removing from Up next and clearing history or recent searches.
@@ -103,6 +104,7 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 |---|---|
 | Liked tracks, recently played, settings, favorite genres and artists, recent searches | App data (Capacitor Preferences and app files). Android may include these in your own Google backup; members-only tracks are removed whenever the app starts signed out, so a restored backup never brings them back. |
 | The cached Jukebox catalog and lyrics | App data and cache; cleared on sign-out |
+| What was playing last (the queue and where in it), so the app reopens on it | App files, excluded from backups; signing out removes members-only tracks from it |
 | Login token, user id and @username (only if you sign in) | Encrypted with an Android Keystore key; excluded from Android cloud and device-transfer backups |
 | Stream URLs, YouTube Music results | Memory only |
 
@@ -162,7 +164,7 @@ cd android
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow, the emulator smoke test and the commit style.
 
-**CI** ([`ci.yml`](.github/workflows/ci.yml)) runs the web checks, the Kotlin unit tests, the e2e suite in three shards, debug and preview builds, and an emulator smoke test ([`scripts/ci-smoke.sh`](scripts/ci-smoke.sh)) that checks playback reaches PLAYING and keeps playing in the background. GitHub's runners are often blocked by YouTube's bot check, so the smoke test also plays a test tone bundled only in debug builds.
+**CI** ([`ci.yml`](.github/workflows/ci.yml)) runs the web checks, the Kotlin unit tests, the e2e suite in three shards, debug and preview builds, and an emulator smoke test ([`scripts/ci-smoke.sh`](scripts/ci-smoke.sh)) that checks playback reaches PLAYING, keeps playing in the background and survives the web page's renderer being killed, and that the last session comes back after a force stop. GitHub's runners are often blocked by YouTube's bot check, so the smoke test also plays a test tone bundled only in debug builds.
 
 **Releases** are made by the manual [`Release`](.github/workflows/release.yml) workflow: it commits the version bump (`versionCode = major × 1,000,000 + minor × 1,000 + patch`), builds an unsigned APK, signs it in the protected `release` environment and tags the commit. The [`Preview`](.github/workflows/preview.yml) workflow publishes the preview app. All workflow actions are pinned to commit SHAs, and the Gradle wrapper and its distribution are checksum-verified.
 

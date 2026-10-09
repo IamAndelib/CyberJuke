@@ -22,6 +22,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
@@ -70,6 +71,20 @@ class PlaybackService : MediaSessionService() {
 
     /** "Add to queue" bookkeeping (pure, shared rule with the web: QueueRulesTest). */
     private lateinit var queue: NativeQueue<MediaItem>
+    private lateinit var queueHost: ExoQueueHost
+
+    /** What was playing, kept on disk so the app opens on it again (paused) after a restart. */
+    private lateinit var lastSession: LastSessionStore
+    private val saveSession = Runnable { saveSessionNow() }
+
+    /** The list changed since it was last saved. */
+    private var sessionDirty = false
+    private val savePositionTick = object : Runnable {
+        override fun run() {
+            savePosition()
+            if (player?.isPlaying == true) handler.postDelayed(this, POSITION_SAVE_MS)
+        }
+    }
 
     // ---- autoplay (AP1, AP4) ----
     /** The Autoplay setting (C3), sent by the web side at start. */
@@ -265,6 +280,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        lastSession = LastSessionStore(this)
         // Before anything touches the network: the IPv4 setting applies to extraction and streams.
         NetPrefsStore.load(this)
         NetBlock.add(blockListener)
@@ -314,11 +330,14 @@ class PlaybackService : MediaSessionService() {
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
             .setTrackTypeDisabled(C.TRACK_TYPE_IMAGE, true)
             .build()
-        queue = NativeQueue(ExoQueueHost(exo))
+        queueHost = ExoQueueHost(exo)
+        queue = NativeQueue(queueHost)
         exo.addListener(PlayerListener())
         player = exo
 
+        // A tap on the media notification (or the lock screen's player) opens Now Playing.
         val openApp = Intent(this, MainActivity::class.java)
+            .setAction(LaunchOptions.ACTION_NOW_PLAYING)
             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         val sessionActivity = PendingIntent.getActivity(
             this,
@@ -333,6 +352,7 @@ class PlaybackService : MediaSessionService() {
             .build()
 
         setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this).build())
+        restoreLastSession()
         Log.i(TAG, "PlaybackService created")
     }
 
@@ -340,6 +360,7 @@ class PlaybackService : MediaSessionService() {
         mediaSession
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        savePosition()
         val p = player
         if (p == null || !p.playWhenReady || p.mediaItemCount == 0 ||
             p.playbackState == Player.STATE_ENDED || p.playbackState == Player.STATE_IDLE
@@ -353,6 +374,12 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         Log.i(TAG, "PlaybackService destroyed")
+        // The latest list and position, before the player goes.
+        if (sessionDirty) saveSessionNow()
+        savePosition()
+        handler.removeCallbacks(saveSession)
+        handler.removeCallbacks(savePositionTick)
+        lastSession.close()
         handler.removeCallbacks(prefetchCheck)
         handler.removeCallbacks(lowCheck)
         handler.removeCallbacks(blockEnded)
@@ -387,6 +414,11 @@ class PlaybackService : MediaSessionService() {
     private inner class PlayerListener : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_ENDED) endedAt = SystemClock.elapsedRealtime()
+            // Loading again (a restored session's first Play, or a retry): autoplay may top up.
+            if (playbackState != Player.STATE_IDLE) {
+                handler.removeCallbacks(lowCheck)
+                handler.post(lowCheck)
+            }
             if (playbackState == Player.STATE_READY) {
                 consecutiveFailures = 0
                 player?.currentMediaItem?.mediaId?.let { expiredRetried.remove(it) }
@@ -395,7 +427,13 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
-        override fun onIsPlayingChanged(isPlaying: Boolean) = schedulePrefetch()
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            schedulePrefetch()
+            // Where it stopped, and while it plays every few seconds (a crash loses no more).
+            handler.removeCallbacks(savePositionTick)
+            savePosition()
+            if (isPlaying) handler.postDelayed(savePositionTick, POSITION_SAVE_MS)
+        }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             // Our own pause (pauseToResume) arrives here after it returned (Media3 queues events
@@ -416,7 +454,10 @@ class PlaybackService : MediaSessionService() {
             oldPosition: Player.PositionInfo,
             newPosition: Player.PositionInfo,
             reason: Int,
-        ) = schedulePrefetch()
+        ) {
+            schedulePrefetch()
+            if (reason == Player.DISCONTINUITY_REASON_SEEK) savePosition()
+        }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             queue.onTransition()
@@ -595,6 +636,10 @@ class PlaybackService : MediaSessionService() {
         QueueInfo.seedId = seedId
         handler.removeCallbacks(lowCheck)
         handler.post(lowCheck)
+        // Saved a moment later: a burst of changes (a new list, then its autoplay) writes once.
+        sessionDirty = true
+        handler.removeCallbacks(saveSession)
+        handler.postDelayed(saveSession, SESSION_SAVE_DELAY_MS)
     }
 
     /**
@@ -603,7 +648,9 @@ class PlaybackService : MediaSessionService() {
      */
     private fun checkLow() {
         val p = player ?: return
-        if (!autoplayEnabled || p.repeatMode != Player.REPEAT_MODE_OFF || p.mediaItemCount == 0 || seedId == null) {
+        // Nothing loading (a restored session before its first Play): no requests for more yet.
+        val idle = p.playbackState == Player.STATE_IDLE && !p.playWhenReady
+        if (!autoplayEnabled || p.repeatMode != Player.REPEAT_MODE_OFF || p.mediaItemCount == 0 || seedId == null || idle) {
             lowKey = null
             QueueInfo.clearLow()
             return
@@ -619,6 +666,107 @@ class PlaybackService : MediaSessionService() {
         lowKey = key
         if (radio.active) radio.refill() else QueueInfo.emitQueueLow(left, seedId)
     }
+
+    // ---- the last session ---------------------------------------------------------------------
+
+    /**
+     * After the app was swiped away, stopped, killed or crashed: the service starts with an
+     * empty player, and what was playing comes back, paused and not loaded (no request, no
+     * notification) until Play.
+     */
+    private fun restoreLastSession() {
+        val p = player ?: return
+        if (p.mediaItemCount > 0) return
+        val s = lastSession.load(::isRestorable) ?: return
+        val items = try {
+            s.entries.mapIndexed { i, e -> restoredItem(e, if (i == s.index) s.durationMs else 0L) }
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "Last session not restorable: ${e.javaClass.simpleName}")
+            lastSession.clear()
+            return
+        }
+        p.repeatMode = s.repeat
+        p.shuffleModeEnabled = s.shuffle
+        queue.restoreSession(items, s.entries.map { it.section }, s.index, s.positionMs, s.order)
+        context = s.context
+        radio.reseed(items.firstOrNull { it.mediaId == s.seedId })
+        seedId = s.seedId
+        queueChanged()
+        Log.i(TAG, "Restored the last session: ${items.size} item(s), paused")
+    }
+
+    /** A saved track's ytId this build can play (the CI tone in debuggable builds too). */
+    private fun isRestorable(ytId: String): Boolean =
+        SessionPolicy.isValidYtId(ytId) || (ytId == LaunchOptions.CI_TONE && YtDataSpecResolver.allowCiTone)
+
+    private fun restoredItem(e: LastSession.Entry, durationMs: Long): MediaItem {
+        val item = if (e.ytId == LaunchOptions.CI_TONE) {
+            MediaItem.Builder()
+                .setMediaId(e.id)
+                .setUri(JukeUris.forYt(e.ytId))
+                .setMediaMetadata(MediaMetadata.Builder().setTitle(e.title).setArtist(e.artist).build())
+                .build()
+        } else {
+            JukeTracks.toMediaItem(e.toNativeTrack())
+        }
+        if (durationMs <= 0L) return item
+        // Its length, for Now Playing before the track loads (StateEncoder).
+        return item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon().setDurationMs(durationMs).build()).build()
+    }
+
+    private fun saveSessionNow() {
+        handler.removeCallbacks(saveSession)
+        sessionDirty = false
+        val p = player ?: return
+        val s = sessionOf(p)
+        if (s == null) lastSession.clear() else lastSession.save(s)
+    }
+
+    private fun sessionOf(p: ExoPlayer): LastSession? {
+        val n = p.mediaItemCount
+        if (n == 0) return null
+        val pending = queue.pendingSerials
+        val entries = ArrayList<LastSession.Entry>(n)
+        for (i in 0 until n) {
+            val item = p.getMediaItemAt(i)
+            val extras = item.mediaMetadata.extras
+            val serial = extras?.getLong(JukeCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L
+            val extra = TrackExtras.get(item.mediaId)
+            entries.add(
+                LastSession.Entry(
+                    id = item.mediaId,
+                    ytId = JukeUris.ytIdOf(item) ?: return null,
+                    title = item.mediaMetadata.title?.toString(),
+                    artist = item.mediaMetadata.artist?.toString(),
+                    artworkUrl = item.mediaMetadata.artworkUri?.toString(),
+                    by = extra?.by,
+                    postUrl = extra?.postUrl,
+                    section = when {
+                        serial != 0L && serial in pending -> NativeQueue.Section.QUEUED
+                        extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) == true -> NativeQueue.Section.AUTO
+                        else -> NativeQueue.Section.LIST
+                    },
+                ),
+            )
+        }
+        return LastSession.of(
+            entries, p.currentMediaItemIndex, positionOf(p), durationOf(p), p.shuffleModeEnabled,
+            queueHost.shuffleOrder(), p.repeatMode, context, seedId,
+        )
+    }
+
+    private fun savePosition() {
+        val p = player ?: return
+        val item = p.currentMediaItem ?: return
+        lastSession.savePosition(p.currentMediaItemIndex, item.mediaId, positionOf(p), durationOf(p))
+    }
+
+    /** A list that played to its end comes back at the start of its last track. */
+    private fun positionOf(p: Player): Long =
+        if (p.playbackState == Player.STATE_ENDED) 0L else p.currentPosition.coerceAtLeast(0L)
+
+    private fun durationOf(p: Player): Long =
+        p.duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: p.currentMediaItem?.mediaMetadata?.durationMs ?: 0L
 
     // ---- errors (Y1, Y5) ----------------------------------------------------------------------
 
@@ -1009,5 +1157,11 @@ class PlaybackService : MediaSessionService() {
 
         /** At most one network-triggered resume per this long. */
         private const val NET_RESUME_GAP_MS = 10_000L
+
+        /** The list is saved this long after it last changed. */
+        private const val SESSION_SAVE_DELAY_MS = 1_000L
+
+        /** While playing, the position is saved this often. */
+        private const val POSITION_SAVE_MS = 15_000L
     }
 }
