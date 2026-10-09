@@ -2,7 +2,6 @@
  * M1: actions that take something away come with an Undo toast, and Undo puts the item
  * back exactly where it was. Use these from the UI rather than the bare toggles.
  */
-import { artistKey } from '../data/artists';
 import type { Track } from '../data/model';
 import {
   clearRecent,
@@ -36,11 +35,11 @@ export function toggleLikeWithUndo(track: Track): boolean {
   }
   if (!isLiked(track.id)) {
     toggleLike(track);
-    toast('Added to Liked songs', ADDED_MS, undefined, `like:${track.id}`);
+    toast('Added to Liked songs', ADDED_MS);
     return true;
   }
   const r = unlike(track.id);
-  if (r) toast('Removed from Liked', undefined, { label: UNDO, run: () => restoreLike(r), ...(r.item.membersOnly && { membersOnly: true }) }, `like:${track.id}`);
+  if (r) toast('Removed from Liked', undefined, { label: UNDO, run: () => restoreLike(r), ...(r.item.membersOnly && { membersOnly: true }) });
   return false;
 }
 
@@ -48,11 +47,11 @@ export function toggleLikeWithUndo(track: Track): boolean {
 export function toggleFavoriteGenreWithUndo(name: string): boolean {
   if (!isFavoriteGenre(name)) {
     toggleFavoriteGenre(name);
-    toast(`${name} added to Favourites`, ADDED_MS, undefined, `genre:${name}`);
+    toast(`${name} added to Favourites`, ADDED_MS);
     return true;
   }
   const r = removeFavoriteGenre(name);
-  if (r) toast(`${name} removed from Favourites`, undefined, { label: UNDO, run: () => restoreFavoriteGenre(r) }, `genre:${name}`);
+  if (r) toast(`${name} removed from Favourites`, undefined, { label: UNDO, run: () => restoreFavoriteGenre(r) });
   return false;
 }
 
@@ -60,11 +59,11 @@ export function toggleFavoriteGenreWithUndo(name: string): boolean {
 export function toggleFavoriteArtistWithUndo(name: string): boolean {
   if (!isFavoriteArtist(name)) {
     toggleFavoriteArtist(name);
-    toast(`${name} added to Favourites`, ADDED_MS, undefined, `artist:${artistKey(name)}`);
+    toast(`${name} added to Favourites`, ADDED_MS);
     return true;
   }
   const r = removeFavoriteArtist(name);
-  if (r) toast(`${name} removed from Favourites`, undefined, { label: UNDO, run: () => restoreFavoriteArtist(r) }, `artist:${artistKey(name)}`);
+  if (r) toast(`${name} removed from Favourites`, undefined, { label: UNDO, run: () => restoreFavoriteArtist(r) });
   return false;
 }
 

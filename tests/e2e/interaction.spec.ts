@@ -198,6 +198,9 @@ test('favouriting a genre tile: a plain toast, Favourites follows at once; remov
   const other = (await grid.getByTestId('genre-cell').nth(5).getAttribute('data-genre'))!;
   await cellOf(other).getByTestId('genre-fav').click();
   await expect(favs.getByTestId('genre-tile')).toHaveText([genre, other]);
+  // One message at a time: the newer one replaces the last.
+  await expect(page.getByTestId('toast')).toHaveCount(1);
+  await expect(page.getByTestId('toast')).toHaveText(`${other} added to Favourites`);
   await favs.getByTestId('genre-fav').first().click();
   await expect(favs.getByTestId('genre-tile')).toHaveText([other]);
   // Back in the grid, unstarred.

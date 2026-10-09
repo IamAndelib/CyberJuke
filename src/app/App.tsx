@@ -36,6 +36,7 @@ import { Library } from '../features/library/Library';
 import { ReleasesPage } from '../features/artists/Releases';
 import { Search } from '../features/search/Search';
 import { Settings } from '../features/settings/Settings';
+import { updateAvailable } from '../stores/updates';
 
 const TAB_ITEMS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
@@ -90,9 +91,11 @@ function TabBar() {
           aria-current={cur === t.id ? 'page' : undefined}
           onClick={() => (cur === t.id ? retapTab(t.id) : selectTab(t.id))}
           data-testid={`tab-${t.id}`}
+          aria-label={t.id === 'settings' && updateAvailable.value ? 'Settings (update available)' : undefined}
         >
           <Icon name={t.icon} size={24} />
           <span class="tab-label">{t.label}</span>
+          {t.id === 'settings' && updateAvailable.value && <span class="tab-dot" aria-hidden="true" data-testid="settings-update-dot" />}
         </button>
       ))}
     </nav>

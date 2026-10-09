@@ -72,7 +72,9 @@ interface JukePlayerPlugin {
   setRepeat(o: { mode: RepeatMode }): Promise<void>;
   setQuality(o: { quality: 'high' | 'low' }): Promise<void>;
   getState(): Promise<NativeState>;
-  getLaunchOptions(): Promise<{ autoplay?: 'latest' }>;   // from Android intent extra, used by the CI smoke test
+  getLaunchOptions(): Promise<{ autoplay?: 'latest' }>;
+  /** The installed versionName ("1.0.3", "1.0.3-preview") and the package that installed it (F-Droid's client, …). */
+  getAppInfo(): Promise<{ version: string; installer?: string }>;   // from Android intent extra, used by the CI smoke test
   /** The network-wide back-off in force, if any (until 0 = none). */
   getBlockState(): Promise<{ until: number; reason?: string }>;
   /**

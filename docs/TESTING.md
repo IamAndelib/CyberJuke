@@ -49,6 +49,8 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] Unlike a track, unfavourite (★) a genre or artist, and clear history: each one offers **Undo**. Clearing history and signing out ask you first.
 - [ ] Liking a track or favouriting (★) a genre or artist shows a short "added" message with no Undo, and the star or heart fills at once, even with a long Artists list. On the Genres and Artists tabs the starred tile moves up into ★ Favourites straight away (not also left in the grid), and unstarring puts it back in its place.
 - [ ] Swipe a message at the bottom left, then another right: each one goes. A short drag springs back. A swipe that starts on **Undo** doesn't undo. Right after a swipe, one tap on ♥ or a ★ works (a fast flick too).
+- [ ] Only one message shows at a time: star several genres quickly, and each new message replaces the last.
+- [ ] Settings → **Updates**: the automatic check is on; **Check now** says "Up to date (x.y.z)" or, when a newer release is out, shows it at the top of Settings with **Download**, and a dot on the Settings tab. Turning the toggle off stays off after a restart. Installed from F-Droid, the card only says updates come through F-Droid.
 - [ ] The ⋯ menu of a liked song says **Unlike**; of any other song, **Like**. After **Next**, the Now Playing ♥ shows the new song's state.
 - [ ] Every theme (Settings → Theme) is readable.
 

@@ -60,6 +60,19 @@
   color: var(--color-bg);
   text-shadow: none;
 }
+.tab {
+  position: relative;
+}
+/* A newer release is out (stores/updates.ts): a dot on the Settings tab. */
+.tab-dot {
+  position: absolute;
+  top: 6px;
+  right: calc(50% - 20px);
+  width: 9px;
+  height: 9px;
+  background: var(--color-accent, var(--color-fg));
+  border: 2px solid var(--color-bg);
+}
 
 /* ---- Tabs and their pages (SM7, P4) ---------------------------------------------- */
 

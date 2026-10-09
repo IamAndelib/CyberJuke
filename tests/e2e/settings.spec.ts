@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { cssVar, playerCalls, seedStorage, SETTINGS_KEY } from '../helpers';
+import { cssVar, playerCalls, seedStorage, SETTINGS_KEY, start, waitForTracks } from '../helpers';
 
 /** Settings: themes, NSFW, the new-tracks interval, the IPv4 setting and the card order. */
 
@@ -127,7 +127,7 @@ test('Account is the first card and says "members-only shared tracks"', async ({
   await page.goto('/');
   await page.getByTestId('tab-settings').click();
   const settings = page.getByTestId('screen-settings');
-  await expect(settings.locator('.card-title')).toHaveText(['Account', 'Theme', 'Playback & data', 'About', 'Licenses', 'Source code']);
+  await expect(settings.locator('.card-title')).toHaveText(['Account', 'Theme', 'Playback & data', 'Updates', 'About', 'Licenses', 'Source code']);
   const account = page.getByTestId('account');
   expect((await account.boundingBox())!.y).toBeLessThan((await page.getByTestId('theme-picker').boundingBox())!.y);
   await expect(account.locator('.signin-lead')).toHaveText('Optional. Signed in, the Jukebox also shows members-only shared tracks, marked [members].');
@@ -168,4 +168,58 @@ test('Licenses: every bundled library is listed and the full texts open in the a
   for (const t of ['Apache License', 'Mozilla Public License Version 2.0', 'GNU GENERAL PUBLIC LICENSE', 'Version 3, 29 June 2007', 'CLASSPATH', 'Copyright (c) 2015-present Jason Miller', 'Copyright (c) 2025 Ionic', 'Copyright 2008 Google Inc.']) {
     await expect(text).toContainText(t);
   }
+});
+
+const LATEST = 'https://api.github.com/repos/IamAndelib/CyberJuke/releases/latest';
+const latest = (tag: string) => ({ tag_name: tag, html_url: `https://github.com/IamAndelib/CyberJuke/releases/tag/${tag}`, draft: false, prerelease: false });
+
+test('Updates: Check now finds a newer release (banner, dot on the tab), or says it is up to date, or that it could not check', async ({ page }) => {
+  let answer: { status: number; body?: unknown } = { status: 200, body: latest('v99.0.0') };
+  await page.route(LATEST, (route) => route.fulfill({ status: answer.status, contentType: 'application/json', body: JSON.stringify(answer.body ?? {}) }));
+  await start(page);
+  await page.getByTestId('tab-settings').click();
+  const card = page.getByTestId('updates');
+  await expect(card.getByTestId('updates-auto')).toHaveAttribute('aria-checked', 'true');
+  await expect(card.getByTestId('updates-status')).toHaveText('Not checked yet.');
+  await expect(page.getByTestId('settings-update-dot')).toHaveCount(0);
+
+  await card.getByTestId('updates-check').click();
+  await expect(card.getByTestId('updates-status')).toHaveText('CyberJuke 99.0.0 is available.');
+  await expect(page.getByTestId('update-banner')).toContainText('CyberJuke 99.0.0 is out');
+  await expect(page.getByTestId('update-download')).toBeVisible();
+  await expect(page.getByTestId('settings-update-dot')).toBeVisible();
+  await expect(page.getByTestId('tab-settings')).toHaveAttribute('aria-label', 'Settings (update available)');
+  // Remembered: still shown after a restart, without asking again.
+  await page.reload();
+  await waitForTracks(page);
+  await expect(page.getByTestId('settings-update-dot')).toBeVisible();
+
+  // The latest release is not newer than this version: up to date, no banner, no dot.
+  // (While an update is shown, Download replaces Check now: start afresh.)
+  answer = { status: 200, body: latest('v0.0.1') };
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await waitForTracks(page);
+  await page.getByTestId('tab-settings').click();
+  await page.getByTestId('updates').getByTestId('updates-check').click();
+  await expect(page.getByTestId('updates-status')).toHaveText(/^Up to date \(\d+\.\d+\.\d+\)\. Checked just now\.$/);
+  await expect(page.getByTestId('update-banner')).toHaveCount(0);
+  await expect(page.getByTestId('settings-update-dot')).toHaveCount(0);
+
+  // GitHub unreachable: says so; nothing else changes.
+  answer = { status: 503 };
+  await page.getByTestId('updates').getByTestId('updates-check').click();
+  await expect(page.getByTestId('updates-status')).toHaveText("Couldn't check. Try again later.");
+});
+
+test('Updates: the automatic check is a setting that persists', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('tab-settings').click();
+  const auto = page.getByTestId('updates-auto');
+  await auto.click();
+  await expect(auto).toHaveAttribute('aria-checked', 'false');
+  await page.reload();
+  await waitForTracks(page);
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('updates-auto')).toHaveAttribute('aria-checked', 'false');
 });

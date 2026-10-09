@@ -38,6 +38,7 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 - **Library**: liked tracks and recently played, stored on your phone.
 - **Background playback**: the notification, lock screen and headset buttons all work, and the queue keeps going with the screen off. Tapping the notification opens Now Playing.
 - **Picks up where you left off**: the app opens on what you last played, paused at the same spot, even after Android stopped it.
+- **Update notices**: Settings → Updates checks for a new release once a day (or on request) and shows it in Settings with a download link. Installs from F-Droid update through F-Droid instead.
 - **Now Playing**: seek, shuffle, repeat, like, synced lyrics, share, "Playing from …", and an Up Next queue you can reorder.
 - **"Posted by @user"** opens the original post on Cyberspace, so you can see what the poster wrote and reply.
 - **Undo** for unlike, unfavourite, removing from Up next and clearing history or recent searches. Any message at the bottom can be swiped away, left or right.
@@ -92,6 +93,7 @@ Releases are built by the `Release` workflow from a tagged commit with no caches
 | **Playback** | Every Jukebox track is a YouTube link. A native Android player (`android/app/src/main/java/.../playback/`; Capacitor plugins in `bridge/`, YouTube code in `yt/`, lyrics in `lyrics/`, HTTP and back-off in `net/`) resolves the audio stream with [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) and plays it with Media3/ExoPlayer in a media session. The queue lives in that native service, which is what keeps music going with the screen off. The web side talks to it through a Capacitor plugin (`src/player/native.ts`). |
 | **Global search, artist pages** | YouTube Music data, read on the phone through the `JukeMusic` plugin (`src/data/ytmusic.ts` on the web side): the artist's own page for top songs and the discography, NewPipeExtractor for search, albums and playlists. Results are cached for 10 minutes. |
 | **Lyrics** | Looked up on [LRCLIB](https://lrclib.net) when the lyrics panel is open, and cached on the phone. |
+| **Update check** | Asks GitHub's API for the latest release: at most once a day while the app is open (Settings → Updates; can be turned off), or when you tap Check now. Never for installs from F-Droid. |
 | **Sign-in** | Optional. `src/data/auth.ts` signs in with Cyberspace's own login (Firebase Auth, email and password, over plain HTTPS; no Firebase SDK). Signed in, requests carry your login token and use the same query the site uses for members. |
 
 ## Privacy and data

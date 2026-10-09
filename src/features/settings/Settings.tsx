@@ -14,6 +14,7 @@ import { player } from '../../player';
 import { block, netStatusText } from '../../stores/block';
 import { AuthError, SIGN_UP_URL, auth, authErrorText } from '../../data/auth';
 import { toast } from '../../stores/toast';
+import { app, checkFailed, checkForUpdates, checking, lastCheck, updateAvailable } from '../../stores/updates';
 import { Screen } from '../../ui/components/Screen';
 import { openExternal } from '../../ui/links';
 import { askConfirm, usePageActive } from '../../ui/nav';
@@ -314,10 +315,98 @@ function NetStatusLine() {
   );
 }
 
+/** "Checked 5 min ago", "Checked today at 14:02", "Checked on 3 Oct". */
+function checkedText(at: number, now = Date.now()): string {
+  const mins = Math.round((now - at) / 60_000);
+  if (mins < 1) return 'Checked just now';
+  if (mins < 60) return `Checked ${mins} min ago`;
+  const d = new Date(at);
+  const today = new Date(now).toDateString() === d.toDateString();
+  return today
+    ? `Checked today at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    : `Checked on ${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}`;
+}
+
+/** A newer release is out: at the top of Settings (the Settings tab shows a dot meanwhile). */
+function UpdateBanner() {
+  const r = updateAvailable.value;
+  if (!r) return null;
+  return (
+    <section class="card update-banner" role="status" data-testid="update-banner">
+      <div class="setting">
+        <div class="setting-text">
+          <div class="setting-name">CyberJuke {r.version} is out</div>
+          <div class="setting-desc">You have {app.value.version}. Download and install it to update.</div>
+        </div>
+        <button class="btn primary" onClick={() => openExternal(r.url)} data-testid="update-download">
+          Download
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/** Settings → Updates: check by itself (daily at most), or now. F-Droid installs: F-Droid's job. */
+function Updates() {
+  const a = app.value;
+  const s = settings.value;
+  if (a.fdroid) {
+    return (
+      <section class="card" data-testid="updates">
+        <h2 class="card-title">Updates</h2>
+        <p class="setting-desc" data-testid="updates-fdroid">
+          Installed from F-Droid: updates come through F-Droid.
+        </p>
+      </section>
+    );
+  }
+  const r = updateAvailable.value;
+  const last = lastCheck.value;
+  const status = checking.value
+    ? 'Checking…'
+    : checkFailed.value
+      ? "Couldn't check. Try again later."
+      : r
+        ? `CyberJuke ${r.version} is available.`
+        : last.checkedAt
+          ? `Up to date (${a.version}). ${checkedText(last.checkedAt)}.`
+          : 'Not checked yet.';
+  return (
+    <section class="card" data-testid="updates">
+      <h2 class="card-title">Updates</h2>
+      <div class="setting">
+        <div class="setting-text">
+          <div class="setting-name">Check for updates automatically</div>
+          <div class="setting-desc">Once a day at most, from GitHub.</div>
+        </div>
+        <Toggle on={s.checkUpdates} onChange={(v) => updateSettings({ checkUpdates: v })} label="Check for updates automatically" testid="updates-auto" />
+      </div>
+      <div class="setting">
+        <div class="setting-text">
+          <div class="setting-desc" aria-live="polite" data-testid="updates-status">
+            {status}
+          </div>
+        </div>
+        {r ? (
+          <button class="btn primary" onClick={() => openExternal(r.url)} data-testid="updates-download">
+            Download
+          </button>
+        ) : (
+          <button class="btn" disabled={checking.value} onClick={() => void checkForUpdates()} data-testid="updates-check">
+            Check now
+          </button>
+        )}
+      </div>
+      {a.preview && <p class="setting-desc">This is the preview app. Releases install as the separate CyberJuke app.</p>}
+    </section>
+  );
+}
+
 export function Settings() {
   const s = settings.value;
   return (
     <Screen testid="screen-settings" title="Settings" subtitle={`CyberJuke v${__APP_VERSION__}`} scrollKey="settings" backToTop={false}>
+      <UpdateBanner />
       <Account />
 
       <section class="card">
@@ -388,6 +477,8 @@ export function Settings() {
         </div>
         <CheckEvery />
       </section>
+
+      <Updates />
 
       <section class="card prose" data-testid="about">
         <h2 class="card-title">About</h2>

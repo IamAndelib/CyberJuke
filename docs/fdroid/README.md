@@ -44,6 +44,7 @@ The recipe holds only the newest release (fdroiddata asks for that until an app 
 
 ## Things F-Droid's scanner checks that are already handled
 
+- The app's own update check (Settings → Updates, GitHub's releases API) never runs when F-Droid or another F-Droid client installed the app (detected from the installer package); those installs update through F-Droid.
 - No Google Play Services, Firebase SDK or `google-services` plugin (Firebase Auth and Firestore are reached over plain HTTPS from the web code).
 - No dependency-metadata block in the APK (`dependenciesInfo` is off in `android/app/build.gradle`).
 - No prebuilt binaries in the repository besides the official Gradle wrapper JAR (its checksum is validated in CI).

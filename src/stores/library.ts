@@ -50,12 +50,14 @@ export interface Settings {
   ipv4: Ipv4Mode;
   /** C3: when a list ends, keep playing similar songs. */
   autoplay: boolean;
+  /** Look for a newer release by itself (daily at most; never for F-Droid installs). */
+  checkUpdates: boolean;
 }
 
 export type Ipv4Mode = 'auto' | 'always' | 'off';
 export const IPV4_MODES: readonly Ipv4Mode[] = ['auto', 'always', 'off'];
 
-const DEFAULT_SETTINGS: Settings = { theme: 'dark', showNsfw: false, quality: 'high', checkEvery: 15, ipv4: 'auto', autoplay: true };
+const DEFAULT_SETTINGS: Settings = { theme: 'dark', showNsfw: false, quality: 'high', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: true };
 
 const K_LIKED = 'liked';
 /** Old Preferences keys of history, migrated into the history file: timed entries, then the untimed list. */
@@ -154,6 +156,7 @@ export async function loadLibrary(): Promise<void> {
   // The old on/off "Prefer IPv4": on is 'always'; off becomes the new default, 'auto'.
   if (!IPV4_MODES.includes(rest.ipv4 as Ipv4Mode)) merged.ipv4 = preferIpv4 === true ? 'always' : DEFAULT_SETTINGS.ipv4;
   merged.autoplay = merged.autoplay !== false;
+  merged.checkUpdates = merged.checkUpdates !== false;
   if (!CHECK_EVERY_OPTIONS.includes(merged.checkEvery)) merged.checkEvery = DEFAULT_SETTINGS.checkEvery;
   settings.value = merged;
   if (migrated || preferIpv4 !== undefined) write(K_SETTINGS, merged);

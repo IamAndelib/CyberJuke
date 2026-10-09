@@ -6,8 +6,8 @@
 - Starring a genre or artist, or liking a track, now responds at once. One tap used to redraw the whole Artists or Genres grid (every tile, even behind another tab) or the whole page around the star; now only the star changes.
 - On the Genres and Artists tabs, a starred tile moves up into ★ Favourites the moment you tap (no copy stays in the grid below); unstarring puts it back in its place. This used to wait for a scroll or the next visit.
 - Adding shows a short "‹name› added to Favourites" / "Added to Liked songs" message without Undo; removing still offers Undo.
-- Messages at the bottom can be swiped away, left or right.
-- Quick taps on a heart or star no longer stack "Added" and "Removed" messages: the newest replaces the one before it.
+- Messages at the bottom can be swiped away, left or right, and only one shows at a time: a new one replaces the last (quick taps no longer stack "Added" and "Removed").
+- Settings → Updates: CyberJuke checks GitHub for a newer release (once a day at most; can be turned off, or checked on request). A new release shows at the top of Settings with a Download link, and as a dot on the Settings tab. Installs from F-Droid update through F-Droid and never check.
 
 ## [1.0.2] - 2026-10-09
 

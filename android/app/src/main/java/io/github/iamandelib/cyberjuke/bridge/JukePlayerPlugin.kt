@@ -727,6 +727,34 @@ class JukePlayerPlugin : Plugin() {
         withController(call) { c -> call.resolve(buildState(c, fullQueue = true)) }
     }
 
+    /**
+     * `{ version, installer? }`: the installed versionName ("1.0.3", "1.0.3-preview") and the
+     * package that installed the app (F-Droid's client, a browser, adb: null). The update
+     * check leaves F-Droid installs to F-Droid.
+     */
+    @PluginMethod
+    fun getAppInfo(call: PluginCall) {
+        val ctx = context
+        val out = JSObject()
+        try {
+            out.put("version", ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "")
+        } catch (e: Exception) {
+            out.put("version", "")
+        }
+        val installer = try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                ctx.packageManager.getInstallSourceInfo(ctx.packageName).installingPackageName
+            } else {
+                @Suppress("DEPRECATION")
+                ctx.packageManager.getInstallerPackageName(ctx.packageName)
+            }
+        } catch (e: Exception) {
+            null
+        }
+        installer?.let { out.put("installer", it) }
+        call.resolve(out)
+    }
+
     @PluginMethod
     fun getLaunchOptions(call: PluginCall) {
         // CI smoke test: proves a web -> native plugin call got through (CSP, bridge injection).

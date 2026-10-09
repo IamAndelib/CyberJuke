@@ -26,16 +26,14 @@ describe('toast actions', () => {
   });
 });
 
-describe('toasts about the same thing', () => {
-  it('replace each other instead of stacking (quick taps on a heart)', () => {
+describe('one toast at a time', () => {
+  it('a new toast replaces the one showing, whatever it was about (and its Undo)', () => {
     for (const t of toasts.peek()) dismissToast(t.id);
-    toast('Added to Liked songs', 1800, undefined, 'like:a');
-    toast('Removed from Liked', undefined, { label: 'Undo', run: () => {} }, 'like:a');
-    const last = toast('Added to Liked songs', 1800, undefined, 'like:a');
+    toast('Added to Liked songs', 1800);
+    toast('Removed from Liked', undefined, { label: 'Undo', run: () => {} });
+    expect(toasts.value.map((t) => t.text)).toEqual(['Removed from Liked']);
+    const last = toast('Shoegaze added to Favourites', 1800);
     expect(toasts.value.map((t) => t.id)).toEqual([last]);
-    // About something else: shown alongside.
-    toast('Shoegaze added to Favourites', 1800, undefined, 'genre:Shoegaze');
-    expect(toasts.value.map((t) => t.text)).toEqual(['Added to Liked songs', 'Shoegaze added to Favourites']);
   });
 });
 

@@ -34,6 +34,7 @@ import { goBack, openNowPlayingWhen } from '../ui/nav';
 import { retryWatchedFeeds } from '../stores/feed';
 import { JukePlayer } from '../player/native';
 import { hasCurrent, startPlayerPrefs, startQueuePurge } from '../player';
+import { startUpdates } from '../stores/updates';
 import { playFrom, radio } from '../ui/playAll';
 import { startBlockEvents } from '../player/blockEvents';
 import { source } from '../data';
@@ -148,6 +149,7 @@ async function boot(): Promise<void> {
   );
   startCatalog();
   startFreshness();
+  void startUpdates(native ? () => JukePlayer.getAppInfo() : undefined);
   maybeAutoplay().catch((e) => logError('autoplay', e));
 }
 
