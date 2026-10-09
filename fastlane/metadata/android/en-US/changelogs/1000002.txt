@@ -1,0 +1,4 @@
+- Opens on what you played last, paused at the same spot, even after Android stopped the app or it crashed
+- Tapping the media notification opens Now Playing
+- Music keeps playing if Android reclaims the app's page memory in the background (it used to stop)
+- Seek bar: a drag seeks once when you let go, and the bar no longer sticks after skipping

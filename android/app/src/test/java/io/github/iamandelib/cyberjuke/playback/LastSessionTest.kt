@@ -67,6 +67,27 @@ class LastSessionTest {
     }
 
     @Test
+    fun onlyAPositionSavedNoEarlierThanTheListApplies() {
+        val s = session(4, 1).copy(savedAtMs = 1_000L)
+        // Saved later, same track: applies.
+        val later = LastSession.positionPref(2, "t2", 42_000L, 190_000L, savedAtMs = 2_000L)
+        assertEquals(2, s.withPositionPref(later).index)
+        assertEquals(42_000L, s.withPositionPref(later).positionMs)
+        // Saved before this list was (an earlier play of the same list): the list's position wins.
+        val earlier = LastSession.positionPref(2, "t2", 42_000L, 190_000L, savedAtMs = 999L)
+        assertEquals(s, s.withPositionPref(earlier))
+        // Missing, malformed, or the old four-field format: ignored.
+        assertEquals(s, s.withPositionPref(null))
+        assertEquals(s, s.withPositionPref("2|42000|190000|t2"))
+        assertEquals(s, s.withPositionPref("x|42000|190000|2000|t2"))
+        // An id with the separator in it still matches.
+        val odd = LastSession.of(listOf(entry(0).copy(id = "a|b")), 0, 0L, 0L, false, null, 0, null, null, savedAtMs = 5L)!!
+        assertEquals(7_000L, odd.withPositionPref(LastSession.positionPref(0, "a|b", 7_000L, 0L, 6L)).positionMs)
+        // The save time round-trips.
+        assertEquals(1_000L, LastSession.decode(s.encode())!!.savedAtMs)
+    }
+
+    @Test
     fun anythingBrokenIsDroppedNotHalfRestored() {
         val good = JSONObject(session(3, 0).encode())
         assertNull(LastSession.decode("not json"))

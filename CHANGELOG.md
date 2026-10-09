@@ -2,12 +2,15 @@
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-09
+
 ### The app
 - The app opens on what you were playing last time, paused at the same spot (with Up next, shuffle and repeat), even after it was swiped away, stopped by Android, force-stopped or crashed. Nothing loads until you press Play.
 - Tapping the media notification (or the lock screen player) opens Now Playing.
 
 ### Fixed
 - If Android reclaimed the memory of the app's web page while music played in the background (or that page crashed), Android killed the whole app and the music stopped. Now only the page reloads; playback goes on.
+- Dragging the seek bar sought on every step of the drag, and the bar then stayed where it was let go, even after skipping to the next track. A drag now seeks once, when it ends, and the bar follows playback again.
 
 ### Repository
 - The emulator smoke test also ends the page's renderer while music plays (as a system kill and as a crash) and checks that the app keeps playing, and force-stops the app and checks the last session comes back.

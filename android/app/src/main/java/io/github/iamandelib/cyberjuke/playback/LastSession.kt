@@ -31,6 +31,8 @@ internal data class LastSession(
     /** Where it came from (label, mode), as in SET_LIST. */
     val context: Pair<String, String>?,
     val seedId: String?,
+    /** When it was saved (wall clock): a position saved later is newer than this list's. */
+    val savedAtMs: Long = 0L,
 ) {
     /** One track: the NativeTrack fields and its part of Up next. */
     data class Entry(
@@ -83,7 +85,20 @@ internal data class LastSession(
                 put("mode", it.second)
             }
             seedId?.let { put("seedId", it) }
+            put("savedAtMs", savedAtMs)
         }.toString()
+    }
+
+    /**
+     * The position preference ([positionPref]) applied: only one saved no earlier than this
+     * list, for the track still at its index. Anything else (older, stale, malformed) is ignored.
+     */
+    fun withPositionPref(pref: String?): LastSession {
+        val f = pref?.split('|', limit = 5)?.takeIf { it.size == 5 } ?: return this
+        val savedAt = f[3].toLongOrNull() ?: return this
+        if (savedAt < savedAtMs) return this
+        val index = f[0].toIntOrNull() ?: return this
+        return withPosition(index, f[4], f[1].toLongOrNull() ?: 0L, f[2].toLongOrNull() ?: 0L)
     }
 
     /** [atIndex] current at [positionMs] (a later position than the list's), if it is still [id]. */
@@ -101,12 +116,16 @@ internal data class LastSession(
         entries == other.entries && index == other.index && positionMs == other.positionMs &&
         durationMs == other.durationMs && shuffle == other.shuffle &&
         (order?.contentEquals(other.order) ?: (other.order == null)) && repeat == other.repeat &&
-        context == other.context && seedId == other.seedId
+        context == other.context && seedId == other.seedId && savedAtMs == other.savedAtMs
 
-    override fun hashCode(): Int = listOf(entries, index, positionMs, durationMs, shuffle, order?.contentHashCode(), repeat, context, seedId).hashCode()
+    override fun hashCode(): Int = listOf(entries, index, positionMs, durationMs, shuffle, order?.contentHashCode(), repeat, context, seedId, savedAtMs).hashCode()
 
     companion object {
         private const val VERSION = 1
+
+        /** The position preference: where in the list playback is, and when that was. */
+        fun positionPref(index: Int, id: String, positionMs: Long, durationMs: Long, savedAtMs: Long): String =
+            "$index|${positionMs.coerceAtLeast(0L)}|${durationMs.coerceAtLeast(0L)}|$savedAtMs|$id"
 
         /** At most this many tracks are kept: a window around the current one. */
         const val MAX_ENTRIES = 500
@@ -128,6 +147,7 @@ internal data class LastSession(
             repeat: Int,
             context: Pair<String, String>?,
             seedId: String?,
+            savedAtMs: Long = 0L,
         ): LastSession? {
             if (entries.isEmpty() || index !in entries.indices) return null
             var lo = 0
@@ -148,6 +168,7 @@ internal data class LastSession(
                 repeat = repeat,
                 context = context,
                 seedId = seedId,
+                savedAtMs = savedAtMs,
             )
         }
 
@@ -195,6 +216,7 @@ internal data class LastSession(
                 repeat = o.optInt("repeat", 0).takeIf { it in 0..2 } ?: 0,
                 context = if (label != null && (mode == "radio" || mode == "list")) label to mode else null,
                 seedId = o.str("seedId"),
+                savedAtMs = o.optLong("savedAtMs", 0L),
             )
         } catch (e: Exception) { // not JSON, or a field of the wrong type
             null
@@ -241,19 +263,21 @@ internal class LastSessionStore(context: Context) {
             clear()
             return null
         }
-        val pos = prefs.getString(KEY_POSITION, null)?.split('|', limit = 4)
-        if (pos == null || pos.size != 4) return session
-        val index = pos[0].toIntOrNull() ?: return session
-        return session.withPosition(index, pos[3], pos[1].toLongOrNull() ?: 0L, pos[2].toLongOrNull() ?: 0L)
+        return session.withPositionPref(prefs.getString(KEY_POSITION, null))
     }
 
     fun save(session: LastSession?) = enqueue(Pending(session))
 
-    fun clear() = enqueue(Pending(null))
+    fun clear() {
+        // Now, not when the file goes: a position saved for a new list meanwhile must stay.
+        prefs.edit().remove(KEY_POSITION).apply()
+        enqueue(Pending(null))
+    }
 
     /** Where in the list playback is (index and id, so a stale value is ignored). */
     fun savePosition(index: Int, id: String, positionMs: Long, durationMs: Long) {
-        prefs.edit().putString(KEY_POSITION, "$index|${positionMs.coerceAtLeast(0L)}|${durationMs.coerceAtLeast(0L)}|$id").apply()
+        val pref = LastSession.positionPref(index, id, positionMs, durationMs, System.currentTimeMillis())
+        prefs.edit().putString(KEY_POSITION, pref).apply()
     }
 
     /** The service is going: what is still queued is written before it does (briefly). */
@@ -280,7 +304,6 @@ internal class LastSessionStore(context: Context) {
             val session = p.session
             if (session == null) {
                 file.delete()
-                prefs.edit().remove(KEY_POSITION).apply()
                 return
             }
             val bytes = session.encode().toByteArray(Charsets.UTF_8)

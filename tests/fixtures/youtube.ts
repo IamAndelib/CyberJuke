@@ -65,7 +65,7 @@ const FAKE_YT = `
       this.emit(1);
     }
     pauseVideo() { clearTimeout(this.starting); clearInterval(this.timer); this.emit(2); }
-    seekTo(s) { this.t = s - 71; }
+    seekTo(s) { this.t = s - 71; window.__ytSeeks = (window.__ytSeeks || 0) + 1; }
     getCurrentTime() { return this.t + 71; }
     getDuration() { return 247; }
     setPlaybackQuality() {}

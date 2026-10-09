@@ -146,17 +146,54 @@ function MiniBar({ track: t }: { track: Track }) {
 
 // ---- Now Playing -------------------------------------------------------------------
 
+/** A drag on the seek bar: where the thumb is, for which track. */
+interface SeekDrag {
+  id: string | undefined;
+  ms: number;
+}
+
 function SeekBar({ s }: { s: PlayerState }) {
   // Re-renders once a second while playing (the time shown), not every frame.
   useTickValue(s.isPlaying && !s.isBuffering, () => Math.floor(positionNow() / 1000));
   const live = livePosition(s);
-  const [drag, setDrag] = useState<number | null>(null);
+  const [drag, setDrag] = useState<SeekDrag | null>(null);
+  // The drag in progress, read by whichever event ends it first.
+  const dragRef = useRef<SeekDrag | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const id = s.current?.id;
   const dur = s.durationMs;
-  const pos = drag ?? live;
+  // A drag left over from another track (it changed mid-drag) shows nothing.
+  const pos = drag && drag.id === id ? drag.ms : live;
   const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0;
+  const move = (ms: number) => {
+    dragRef.current = { id, ms };
+    setDrag(dragRef.current);
+  };
+  // The drag ends on release (or a key): one seek, on the track it was made on. Listened to
+  // natively: preact/compat (loaded for memo) turns onChange on inputs into onInput, which
+  // sought on every step of a drag and left the bar stuck on the last one.
+  useEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    const end = () => {
+      const d = dragRef.current;
+      dragRef.current = null;
+      setDrag(null);
+      if (d && d.id === player.state.peek().current?.id) void player.seek(d.ms);
+    };
+    el.addEventListener('change', end);
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    return () => {
+      el.removeEventListener('change', end);
+      el.removeEventListener('pointerup', end);
+      el.removeEventListener('pointercancel', end);
+    };
+  }, []);
   return (
     <div class="seek">
       <input
+        ref={input}
         type="range"
         class="seek-range"
         min={0}
@@ -167,12 +204,7 @@ function SeekBar({ s }: { s: PlayerState }) {
         style={{ '--progress': `${pct}%` }}
         aria-label="Seek"
         aria-valuetext={`${fmt(pos)} of ${fmt(dur)}`}
-        onInput={(e) => setDrag(Number((e.target as HTMLInputElement).value))}
-        onChange={(e) => {
-          const v = Number((e.target as HTMLInputElement).value);
-          setDrag(null);
-          void player.seek(v);
-        }}
+        onInput={(e) => move(Number((e.target as HTMLInputElement).value))}
         data-testid="seek"
       />
       <div class="seek-times">

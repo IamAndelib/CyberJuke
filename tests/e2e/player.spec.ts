@@ -188,6 +188,31 @@ test('Add to queue plays next in the order added, under "Queued by you"', async 
   await expect(page.locator('[data-testid="upnext-row"][data-queued="true"]')).toHaveCount(1);
 });
 
+test('a seek-bar drag held still before release still seeks, and the bar follows the next track', async ({ page }) => {
+  await start(page);
+  await playAndOpen(page);
+  const pos = page.getByTestId('time-pos');
+  // The fake player starts every track at 1:11 of 4:07.
+  await expect(pos).toHaveText(/^1:1\d$/);
+  const bar = (await page.getByTestId('seek').boundingBox())!;
+  const y = bar.y + bar.height / 2;
+  const xAt = (sec: number) => bar.x + (bar.width * sec) / 247;
+  // Press on the thumb, drag to about 2:54, then hold still while the bar re-renders (the
+  // clock ticks every second while playing) before letting go.
+  await page.mouse.move(xAt(72), y);
+  await page.mouse.down();
+  await page.mouse.move(xAt(174), y, { steps: 8 });
+  await page.waitForTimeout(1600);
+  await page.mouse.up();
+  await expect(pos).toHaveText(/^2:5\d$/);
+  // One seek for the whole drag, when it ends (not one per step).
+  expect(await page.evaluate(() => (window as unknown as { __ytSeeks?: number }).__ytSeeks)).toBe(1);
+  // Next: the new track starts at 1:11 again, and the bar shows that, not the dragged spot.
+  await page.getByTestId('np-next').click();
+  await expect(pos).toHaveText(/^1:1\d$/);
+  await expect.poll(async () => Number(await page.getByTestId('seek').inputValue())).toBeLessThan(80_000);
+});
+
 test('skipping past queued tracks keeps them next (tests/spec/queue-rules.json)', async ({ page }) => {
   await start(page);
   const titles = (await page.getByTestId('track-title').allTextContents()).map((t) => t.trim());

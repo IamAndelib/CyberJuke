@@ -751,7 +751,7 @@ class PlaybackService : MediaSessionService() {
         }
         return LastSession.of(
             entries, p.currentMediaItemIndex, positionOf(p), durationOf(p), p.shuffleModeEnabled,
-            queueHost.shuffleOrder(), p.repeatMode, context, seedId,
+            queueHost.shuffleOrder(), p.repeatMode, context, seedId, System.currentTimeMillis(),
         )
     }
 
