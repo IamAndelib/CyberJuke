@@ -49,7 +49,7 @@ const catalogById = computed(() => new Map(catalog.all.value.map((t) => [t.id, t
  * A track native describes in its `tracks` event: one it added itself (Global radio), or one
  * of the last session it restored after a restart (the app may know it no more).
  */
-export function fromNative(t: NativeTrack): Track | null {
+function fromNative(t: NativeTrack): Track | null {
   if (!t || typeof t.id !== 'string' || !t.id || typeof t.ytId !== 'string' || !YT_ID_RE.test(t.ytId)) return null;
   return {
     id: t.id,

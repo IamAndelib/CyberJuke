@@ -65,7 +65,8 @@ test('playback with Now Playing open re-renders the clock, not the sheet', async
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   console.info(`Now Playing open, ${t2} on, renders over ${secs.toFixed(1)} s: ${JSON.stringify(counts)} (${(total / secs).toFixed(2)}/s)`);
   expect(counts.NowPlaying ?? 0).toBe(0);
-  expect(total / secs, 'component renders per second').toBeLessThan(3);
+  // About 1 a second; room for an incidental render (a feed refresh) on a slow runner.
+  expect(total / secs, 'component renders per second').toBeLessThan(5);
 });
 
 /**

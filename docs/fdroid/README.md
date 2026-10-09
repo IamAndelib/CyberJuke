@@ -36,7 +36,7 @@ The recipe holds only the newest release (fdroiddata asks for that until an app 
 
 1. Fork [fdroiddata](https://gitlab.com/fdroid/fdroiddata) on GitLab and add `metadata/io.github.iamandelib.cyberjuke.yml`.
 2. Open a merge request using the "App inclusion" template. Mention:
-   - It is a Capacitor app; `node_modules` is removed by `scandelete` after the web build.
+   - It is a Capacitor app; `scandelete: node_modules` removes the prebuilt binaries the scanner flags in it, after the web build.
    - Reproducible builds with the developer's signature (`Binaries` + `AllowedAPKSigningKeys`), so F-Droid and GitHub APKs update each other.
    - `NonFreeNet`: YouTube playback through NewPipeExtractor, and Cyberspace's backend (Firestore).
    - NewPipeExtractor comes from JitPack, as in NewPipe's own recipe.

@@ -290,26 +290,32 @@ test('a toast goes as soon as the user does something else: a scroll, a tap else
   const heart = page.getByTestId('np-like');
   const toast = page.getByTestId('toast');
 
-  // Liked, then a finger scrolls Now Playing: the toast goes at once.
-  await heart.click();
-  await expect(toast).toHaveText('Added to Liked songs');
+  // Each time an Undo message (4 s), so only the user's action can make it go within a second.
+  const removed = async () => {
+    await heart.click();
+    await expect(heart).toHaveAttribute('aria-pressed', 'true');
+    await heart.click();
+    await expect(toast).toContainText('Removed from Liked');
+  };
+  const goneAtOnce = () => expect(toast).toHaveCount(0, { timeout: 1000 });
+
+  // A finger scrolls Now Playing: the toast goes at once.
+  await removed();
   const np = await box(page.getByTestId('now-playing'));
   await touchDrag(page, np.x + np.width / 2, np.y + np.height * 0.7, np.y + np.height * 0.4, 300);
-  await expect(toast).toHaveCount(0);
+  await goneAtOnce();
 
-  // Unliked, then a tap somewhere else (the shuffle button): gone.
-  await heart.click();
-  await expect(toast).toContainText('Removed from Liked');
+  // A tap somewhere else (the shuffle button): gone.
+  await removed();
   await page.getByTestId('np-shuffle').click();
-  await expect(toast).toHaveCount(0);
+  await goneAtOnce();
   await page.getByTestId('np-shuffle').click();
 
   // The mouse wheel counts too.
-  await heart.click();
-  await expect(toast).toHaveCount(1);
+  await removed();
   await page.mouse.move(np.x + np.width / 2, np.y + np.height / 2);
   await page.mouse.wheel(0, 200);
-  await expect(toast).toHaveCount(0);
+  await goneAtOnce();
 
   // Undo on the toast itself still works.
   await heart.click();
@@ -557,7 +563,6 @@ test('a second tap where a starred tile was does not star the tile that took its
   const b = await box(grid.getByTestId('genre-cell').nth(3).getByTestId('genre-fav'));
   // A double tap on the star: the first stars it (it moves up), the second lands on the next.
   await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
-  await elapsed(page, 150);
   await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
   await elapsed(page, 300);
   await expect(favs).toHaveText([first, genre]);

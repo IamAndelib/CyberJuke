@@ -2,9 +2,11 @@
  * Updates: is a newer stable release out? Asks GitHub for the latest release (the one the
  * README's download link points to) and compares it with this install.
  * - Automatic (Settings → Updates, on by default): at most once a day, when the app opens or
- *   comes back to the foreground. "Check now" any time.
+ *   comes back to the foreground (after a failed check, not again for an hour). "Check now"
+ *   any time.
  * - Installed through F-Droid (or another F-Droid client): F-Droid brings the updates, so
- *   the app never asks GitHub.
+ *   the app never asks GitHub. Until the app knows how it was installed, it doesn't ask
+ *   either (nor if it can't tell).
  * - A newer release shows in Settings (with a link to download it) and as a dot on the
  *   Settings tab.
  */
@@ -18,6 +20,8 @@ export const RELEASES_URL = 'https://github.com/IamAndelib/CyberJuke/releases';
 const LATEST_API = 'https://api.github.com/repos/IamAndelib/CyberJuke/releases/latest';
 /** Automatic checks: at most this often. */
 export const AUTO_CHECK_MS = 24 * 60 * 60 * 1000;
+/** After a failed check (offline, GitHub's rate limit), no automatic one for this long. */
+export const RETRY_AFTER_FAILURE_MS = 60 * 60 * 1000;
 const TIMEOUT_MS = 10_000;
 const K_UPDATES = 'updates';
 
@@ -29,6 +33,9 @@ const FDROID_INSTALLERS = new Set([
   'com.looker.droidify',
   'com.machiav3lli.fdroid',
   'eu.bubu1.fdroidclassic',
+  'nya.kitsunyan.foxydroid',
+  'com.aurora.adroid',
+  'org.fdroid.fdroid.debug',
 ]);
 
 export interface Release {
@@ -60,8 +67,12 @@ export function isFdroidInstaller(installer: string | null | undefined): boolean
   return installer != null && FDROID_INSTALLERS.has(installer);
 }
 
-/** An automatic check is due: never checked, or the last one is a day old. */
-export function autoCheckDue(checkedAt: number, now = Date.now()): boolean {
+/**
+ * An automatic check is due: never checked, or the last one is a day old; but not within
+ * an hour of a failed attempt (`failedAt`).
+ */
+export function autoCheckDue(checkedAt: number, now = Date.now(), failedAt = 0): boolean {
+  if (failedAt && now >= failedAt && now - failedAt < RETRY_AFTER_FAILURE_MS) return false;
   return !checkedAt || now - checkedAt >= AUTO_CHECK_MS || now < checkedAt;
 }
 
@@ -75,8 +86,11 @@ export function releaseOf(json: unknown): Release | null {
   return { version: p.join('.'), url };
 }
 
-/** This install: its version, and whether F-Droid updates it. */
-export const app = signal<{ version: string; fdroid: boolean }>({ version: __APP_VERSION__, fdroid: false });
+/**
+ * This install: its version, and whether F-Droid updates it (null in the app until Android
+ * has said how it was installed, or if it couldn't: no request to GitHub then).
+ */
+export const app = signal<{ version: string; fdroid: boolean | null }>({ version: __APP_VERSION__, fdroid: Capacitor.isNativePlatform() ? null : false });
 /** The last check: when, and the latest release then. */
 export const lastCheck = signal<Saved>({ checkedAt: 0, latest: null });
 export const checking = signal(false);
@@ -87,14 +101,16 @@ export const checkFailed = signal(false);
 export const updateAvailable = computed<Release | null>(() => {
   const r = lastCheck.value.latest;
   const a = app.value;
-  return r && !a.fdroid && isNewer(r.version, a.version) ? r : null;
+  return r && a.fdroid === false && isNewer(r.version, a.version) ? r : null;
 });
 
 const store = kv;
+/** When the last check failed (Date.now()), 0 after a success. */
+let failedAt = 0;
 
 /** Ask GitHub now. Resolves when done (a failure only sets `checkFailed`). */
 export async function checkForUpdates(): Promise<void> {
-  if (checking.peek() || app.peek().fdroid) return;
+  if (checking.peek() || app.peek().fdroid !== false) return;
   checking.value = true;
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
@@ -105,9 +121,11 @@ export async function checkForUpdates(): Promise<void> {
     if (!latest) throw new Error('no stable release in the answer');
     lastCheck.value = { checkedAt: Date.now(), latest };
     checkFailed.value = false;
+    failedAt = 0;
     void store.set(K_UPDATES, JSON.stringify(lastCheck.peek())).catch(() => {});
   } catch (e) {
     checkFailed.value = true;
+    failedAt = Date.now();
     logError('update check', e);
   } finally {
     clearTimeout(timer);
@@ -118,7 +136,7 @@ export async function checkForUpdates(): Promise<void> {
 /** Automatic check, if it's on and due (the real app only; the browser build is for tests). */
 function maybeAutoCheck(): void {
   if (!Capacitor.isNativePlatform() || !settings.peek().checkUpdates) return;
-  if (autoCheckDue(lastCheck.peek().checkedAt)) void checkForUpdates();
+  if (autoCheckDue(lastCheck.peek().checkedAt, Date.now(), failedAt)) void checkForUpdates();
 }
 
 let started = false;
@@ -133,15 +151,6 @@ export type AppInfo = () => Promise<{ version: string; installer?: string }>;
 export async function startUpdates(appInfo?: AppInfo): Promise<void> {
   if (started) return;
   started = true;
-  try {
-    const saved = JSON.parse((await store.get(K_UPDATES)) ?? 'null') as Saved | null;
-    if (saved && typeof saved.checkedAt === 'number') {
-      const latest = saved.latest && typeof saved.latest.version === 'string' && typeof saved.latest.url === 'string' ? saved.latest : null;
-      lastCheck.value = { checkedAt: saved.checkedAt, latest };
-    }
-  } catch {
-    // A broken saved check: ask again.
-  }
   if (appInfo) {
     try {
       const info = await appInfo();
@@ -150,8 +159,18 @@ export async function startUpdates(appInfo?: AppInfo): Promise<void> {
         fdroid: isFdroidInstaller(info.installer),
       };
     } catch (e) {
+      // How it was installed is unknown: it stays so, and nothing asks GitHub.
       logError('getAppInfo', e);
     }
+  }
+  try {
+    const saved = JSON.parse((await store.get(K_UPDATES)) ?? 'null') as Saved | null;
+    if (saved && typeof saved.checkedAt === 'number') {
+      const latest = saved.latest && typeof saved.latest.version === 'string' && typeof saved.latest.url === 'string' ? saved.latest : null;
+      lastCheck.value = { checkedAt: saved.checkedAt, latest };
+    }
+  } catch {
+    // A broken saved check: ask again.
   }
   maybeAutoCheck();
   document.addEventListener('visibilitychange', () => {

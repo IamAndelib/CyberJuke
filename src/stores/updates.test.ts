@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AUTO_CHECK_MS, RELEASES_URL, autoCheckDue, isFdroidInstaller, isNewer, parseVersion, releaseOf } from './updates';
+import { AUTO_CHECK_MS, RELEASES_URL, RETRY_AFTER_FAILURE_MS, autoCheckDue, isFdroidInstaller, isNewer, parseVersion, releaseOf } from './updates';
 
 describe('versions', () => {
   it('compares x.y.z numerically, ignoring a leading v and a suffix', () => {
@@ -34,6 +34,13 @@ describe('automatic checks', () => {
     expect(autoCheckDue(now - AUTO_CHECK_MS + 60_000, now)).toBe(false);
     expect(autoCheckDue(now - AUTO_CHECK_MS, now)).toBe(true);
     expect(autoCheckDue(now + 3_600_000, now)).toBe(true);
+  });
+
+  it('wait an hour after a failed one', () => {
+    const now = 1_800_000_000_000;
+    expect(autoCheckDue(0, now, now - 10 * 60_000)).toBe(false);
+    expect(autoCheckDue(0, now, now - RETRY_AFTER_FAILURE_MS)).toBe(true);
+    expect(autoCheckDue(now - AUTO_CHECK_MS, now, now - 60_000)).toBe(false);
   });
 });
 

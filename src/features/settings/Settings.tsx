@@ -389,7 +389,7 @@ function Updates() {
             Download
           </button>
         ) : (
-          <button class="btn" disabled={checking.value} onClick={() => void checkForUpdates()} data-testid="updates-check">
+          <button class="btn" disabled={checking.value || a.fdroid !== false} onClick={() => void checkForUpdates()} data-testid="updates-check">
             Check now
           </button>
         )}

@@ -120,6 +120,7 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 | YouTube Music | Your Global search query, or the artist you open; the video ID of a Global track, for its radio (also in the background while autoplay refills); the video ID of the playing track when LRCLIB has no lyrics for it | Global search, artist pages, Global autoplay, lyrics fallback |
 | YouTube and Google image servers (`i.ytimg.com`, `*.googleusercontent.com`, `*.ggpht.com`) | Artwork requests | Lists, artist pages and Now Playing |
 | LRCLIB | Artist, title, album (when known) and duration of the current track | Lyrics panel open |
+| GitHub (`api.github.com`) | A request for the latest CyberJuke release (nothing about you or your library) | At most once a day when the app opens or comes back (an hour after a failed check), or **Check now**; never for F-Droid installs; off with Settings → Updates |
 
 Nothing is sent to the developer. Your password is never stored or logged.
 
@@ -154,7 +155,7 @@ You need Node 22, JDK 21 and the Android SDK (compile SDK 36).
 ```bash
 npm ci --ignore-scripts          # no dependency needs an install script on Linux/Windows
 npm run check                    # typecheck, ESLint and the unit tests
-npm run dev                      # browser preview (plays through a YouTube embed)
+npm run dev                      # browser preview of the UI (playback needs the app: the CSP blocks embeds)
 npm run e2e                      # Playwright tests (Firestore, the player and auth are stubbed)
 npm run sync                     # build the web app and copy it into android/
 cd android

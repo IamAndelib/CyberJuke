@@ -5,7 +5,8 @@
     <!--
       Content Security Policy: only the app's own scripts and styles run; images come
       from the app and the video host's image servers; requests go only to Cyberspace's
-      database and login. Styles set from code (style properties) are not affected.
+      database and login, and GitHub's releases API (the update check). Styles set from
+      code (style properties) are not affected.
     -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; img-src 'self' data: https://i.ytimg.com https://*.ytimg.com https://*.googleusercontent.com https://*.ggpht.com; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.github.com; style-src 'self'; font-src 'self'; media-src 'none'; worker-src 'none'; manifest-src 'self'" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
