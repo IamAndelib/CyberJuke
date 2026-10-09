@@ -209,11 +209,12 @@ const SEEK_THUMB_PX = 20;
 /** A finger moving this far decides: sideways is a seek drag, up or down is a scroll. */
 const SEEK_SLOP_PX = 8;
 
-/** A pointer on the bar: where it went down, and whether it is dragging the thumb yet. */
+/** A pointer on the bar: where it went down, on which track, and whether it is dragging the thumb yet. */
 interface SeekPointer {
   id: number;
   x0: number;
   y0: number;
+  track: string | undefined;
   dragging: boolean;
 }
 
@@ -231,9 +232,17 @@ function SeekBar() {
   // A drag left over from another track (it changed mid-drag) shows nothing.
   const pos = drag && drag.id === id ? drag.ms : live;
   const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0;
-  const move = (ms: number) => {
-    dragRef.current = { id, ms };
+  /** The thumb at `ms`, for the track the gesture began on (the keyboard: the current one). */
+  const move = (ms: number, track = id) => {
+    dragRef.current = { id: track, ms };
     setDrag(dragRef.current);
+  };
+  const capture = (el: HTMLElement, pointerId: number) => {
+    try {
+      el.setPointerCapture(pointerId);
+    } catch {
+      // Not a live pointer (one an accessibility service made up): nothing to capture.
+    }
   };
   /** The drag ends: one seek, on the track it was made on. */
   const end = () => {
@@ -267,15 +276,20 @@ function SeekBar() {
   // A finger decides by its first moves: sideways drags the thumb, up or down scrolls Now
   // Playing (touch-action: pan-y; the browser then cancels the pointer) and changes nothing.
   // A tap seeks to that spot. The mouse drags from the press, like any slider.
+  // One finger at a time, any finger (a thumb may be resting elsewhere on the screen). A
+  // pointer event aimed at the range itself is no real one (it takes no pointer): an
+  // accessibility service's, which works the range as a slider.
   const onPointerDown = (e: PointerEvent) => {
-    if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0) || dur <= 0) return;
-    const p: SeekPointer = { id: e.pointerId, x0: e.clientX, y0: e.clientY, dragging: false };
+    if (pointer.current || e.target === input.current || (e.pointerType === 'mouse' && e.button !== 0) || dur <= 0) return;
+    const p: SeekPointer = { id: e.pointerId, x0: e.clientX, y0: e.clientY, track: id, dragging: false };
     pointer.current = p;
     if (e.pointerType === 'mouse') {
+      // No mousedown focus handling: it would move focus off the range to the bar's box.
+      e.preventDefault();
       p.dragging = true;
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      capture(e.currentTarget as HTMLElement, e.pointerId);
       input.current?.focus({ preventScroll: true });
-      move(msAt(e.clientX));
+      move(msAt(e.clientX), p.track);
     }
   };
   const onPointerMove = (e: PointerEvent) => {
@@ -290,16 +304,16 @@ function SeekBar() {
       }
       if (dx <= SEEK_SLOP_PX) return;
       p.dragging = true;
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      capture(e.currentTarget as HTMLElement, e.pointerId);
     }
-    move(msAt(e.clientX));
+    move(msAt(e.clientX), p.track);
   };
   const onPointerUp = (e: PointerEvent) => {
     const p = pointer.current;
     if (!p || e.pointerId !== p.id) return;
     pointer.current = null;
     // A tap (never past the slop): the thumb goes there.
-    if (!p.dragging) move(msAt(e.clientX));
+    if (!p.dragging) move(msAt(e.clientX), p.track);
     end();
   };
   const onPointerCancel = (e: PointerEvent) => {

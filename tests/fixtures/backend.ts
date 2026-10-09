@@ -38,7 +38,7 @@ const CORS = {
 
 let shared: Dataset | null = null;
 /** One dataset per worker (it only depends on the hour). */
-export function dataset(): Dataset {
+function dataset(): Dataset {
   return (shared ??= buildDataset());
 }
 

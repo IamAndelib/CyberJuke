@@ -14,7 +14,7 @@ export interface SecureStorePlugin {
   remove(o: { key: string }): Promise<void>;
 }
 
-export const SecureStore = registerPlugin<SecureStorePlugin>('SecureStore');
+const SecureStore = registerPlugin<SecureStorePlugin>('SecureStore');
 
 /** In-memory stand-in for the browser build. */
 export function memorySecureStore(): SecureStorePlugin {

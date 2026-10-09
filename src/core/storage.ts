@@ -123,7 +123,7 @@ export function localFiles(ls: Pick<Storage, 'getItem' | 'setItem' | 'removeItem
 }
 
 let defaultBackend: FileBackend | null = null;
-export function files(): FileBackend {
+function files(): FileBackend {
   return (defaultBackend ??= Capacitor.isNativePlatform() ? nativeFiles() : localFiles());
 }
 

@@ -230,7 +230,7 @@ const FAKE_MUSIC = `
 `;
 
 /** Square cover art for Global albums/artists/playlists. */
-export function fakeCover(id: string): string {
+function fakeCover(id: string): string {
   const h = hash(id);
   const hue = h % 360;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">

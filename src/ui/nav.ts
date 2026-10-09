@@ -61,7 +61,7 @@ export const tab = signal<Tab>('home');
 /** Each tab's pages above its root, bottom first. */
 export const stacks = signal<Record<Tab, StackEntry[]>>(EMPTY_STACKS);
 /** The current tab's pages. */
-export const stack = computed(() => stacks.value[tab.value]);
+const stack = computed(() => stacks.value[tab.value]);
 /** The page showing on the current tab (null: its root). */
 export const topEntry = computed<StackEntry | null>(() => stack.value.at(-1) ?? null);
 
@@ -238,7 +238,7 @@ export function openReleasesPage(release: ReleasesRef): void {
 // ---- Search ------------------------------------------------------------------------
 
 /** A value Search reads while it renders: a signal, or a getter (that may read signals). */
-export type Source<T> = ReadonlySignal<T> | (() => T);
+type Source<T> = ReadonlySignal<T> | (() => T);
 
 /** The current value of a Source; read during render, so the reader re-renders when it changes. */
 export function read<T>(src: Source<T>): T {

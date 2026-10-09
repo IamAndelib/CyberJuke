@@ -10,7 +10,7 @@
  * shadow-banned, members-only (isPublic false) and posts without audio.
  */
 
-export const PROJECT_PATH = 'projects/cyberspace-cyberspace/databases/(default)/documents';
+const PROJECT_PATH = 'projects/cyberspace-cyberspace/databases/(default)/documents';
 
 export const AUTH_USER = { email: 'nightowl@example.com', password: 'correct horse battery', username: 'nightowl', uid: 'fakeUid0001' };
 
@@ -48,7 +48,7 @@ function mulberry32(seed: number) {
 }
 
 const AB = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-export function fakeYtId(seed: string): string {
+function fakeYtId(seed: string): string {
   let h = 2166136261;
   for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
   const r = mulberry32(h);

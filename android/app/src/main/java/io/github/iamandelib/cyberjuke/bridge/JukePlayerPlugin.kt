@@ -55,7 +55,7 @@ import kotlin.math.roundToInt
 
 /**
  * Capacitor bridge to PlaybackService. Contract (TS side):
- *   setQueue, addItems, queueNext, removeItem, moveItem, play, pause, seekTo, skipToNext,
+ *   setQueue, queueNext, removeItem, moveItem, play, pause, seekTo, skipToNext,
  *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, getState,
  *   getLaunchOptions, getBlockState, setNetworkPrefs, retryNow, getNetStatus,
  *   setGestureExclusion, addAutoplay,
@@ -489,22 +489,6 @@ class JukePlayerPlugin : Plugin() {
                 }
             }
         }, ContextCompat.getMainExecutor(context))
-    }
-
-    @PluginMethod
-    fun addItems(call: PluginCall) {
-        val items = parseTracksOrReject(call, call.getArray("tracks")) ?: return
-        val index = intArg(call, "index")
-        withController(call) { c ->
-            if (items.isNotEmpty()) {
-                if (index == null) {
-                    c.addMediaItems(items)
-                } else {
-                    c.addMediaItems(index.coerceIn(0, c.mediaItemCount), items)
-                }
-            }
-            call.resolve()
-        }
     }
 
     /**

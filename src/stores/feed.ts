@@ -297,14 +297,6 @@ export class FeedCache {
   deletePrefix(...prefixes: string[]): void {
     for (const k of [...this.map.keys()]) if (prefixes.some((p) => k.startsWith(p))) this.map.delete(k);
   }
-
-  get size(): number {
-    return this.map.size;
-  }
-
-  clear(): void {
-    this.map.clear();
-  }
 }
 
 /**

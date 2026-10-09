@@ -16,7 +16,7 @@ function hash(s: string): number {
  * A 480x360 "hqdefault": 16:9 scene with black letterbox bars, like YouTube's. With
  * `wide`, the 320x180 "mqdefault": the same scene without the bars.
  */
-export function fakeThumb(id: string, wide = false): string {
+function fakeThumb(id: string, wide = false): string {
   const h = hash(id);
   const hue = h % 360;
   const sx = 120 + (h % 240);

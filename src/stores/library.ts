@@ -27,7 +27,7 @@ export const THEME_LABELS: Record<ThemeId, string> = {
 type Quality = 'high' | 'low';
 
 /** Minutes between checks for new tracks; 0 = only when I refresh. */
-export type CheckEvery = 5 | 15 | 30 | 60 | 0;
+type CheckEvery = 5 | 15 | 30 | 60 | 0;
 export const CHECK_EVERY_OPTIONS: readonly CheckEvery[] = [5, 15, 30, 60, 0];
 export const CHECK_EVERY_LABELS: Record<CheckEvery, string> = {
   5: '5 min',
@@ -216,7 +216,7 @@ export function toggleFavoriteGenre(name: string): boolean {
  * else at `index`. Neighbours are matched by key, so other changes meanwhile (another
  * removal, a new like on top) don't shift it.
  */
-export interface Removed<T> {
+interface Removed<T> {
   item: T;
   index: number;
   next?: string;

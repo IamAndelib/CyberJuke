@@ -8,7 +8,7 @@ export interface NativeTrack { id: string; ytId: string; title: string; artist: 
 export type RepeatMode = 'off' | 'all' | 'one';
 export interface NativeState {
   isPlaying: boolean; isBuffering: boolean;
-  index: number;            // index into the list last passed to setQueue/addItems (current list order), -1 if empty
+  index: number;            // index into the current list (list order), -1 if empty
   trackId: string | null;
   positionMs: number; durationMs: number;   // durationMs 0 if unknown
   shuffle: boolean; repeat: RepeatMode;
@@ -40,7 +40,7 @@ export const BRIDGE_MAX_STRING = 2000;
  */
 export const STALE_INDEX = 'STALE_INDEX';
 /**
- * setQueue, addItems and queueNext reject the whole call ("Invalid tracks: track.ytId
+ * setQueue, queueNext and addAutoplay reject the whole call ("Invalid tracks: track.ytId
  * invalid") when any ytId isn't 11 characters of [A-Za-z0-9_-]: filter before calling.
  * More than BRIDGE_MAX_ITEMS tracks, or a string over BRIDGE_MAX_STRING, is TOO_LARGE.
  * While blocked, setQueue replaces the queue without preparing it (and resolves), and
@@ -53,7 +53,6 @@ interface JukePlayerPlugin {
   addAutoplay(o: { tracks: NativeTrack[]; seedId: string }): Promise<void>;
   /** The Autoplay setting; off drops the autoplay tracks still to come. */
   setAutoplay(o: { enabled: boolean }): Promise<void>;
-  addItems(o: { tracks: NativeTrack[]; index?: number }): Promise<void>;   // index omitted = append
   /** Insert after the current track + tracks already user-queued; respects shuffle; upNextIds reflects it. */
   queueNext(o: { tracks: NativeTrack[] }): Promise<void>;
   /** K3: Undo of a remove, back in its section before `beforeId` (else at the section's end), never at or before the current track. */

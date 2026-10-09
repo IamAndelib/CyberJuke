@@ -2,7 +2,7 @@ import type { ComponentChildren } from 'preact';
 import { Icon } from '../icons';
 
 /** What a tile is: its test ids (`genre-cell`, `artist-fav`…), data attribute and name style. */
-export type TileKind = 'genre' | 'artist';
+type TileKind = 'genre' | 'artist';
 
 /**
  * A star tap moves its tile out (into ★ Favourites, or back to the grid), and the next tile

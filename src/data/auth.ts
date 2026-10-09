@@ -179,7 +179,6 @@ export interface Auth {
 
 interface FirebaseErrorBody {
   error?: { message?: string } | string;
-  error_description?: string;
 }
 
 function errorMessage(json: unknown): string | undefined {

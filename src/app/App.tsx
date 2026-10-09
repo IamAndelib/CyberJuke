@@ -22,6 +22,7 @@ import {
 } from '../ui/nav';
 import { ArtistChooser, MiniPlayer, NowPlaying, TrackMenu } from '../features/now-playing/PlayerUI';
 import { Toasts } from '../ui/components/Toasts';
+import { holdInert, releaseInert } from '../ui/inert';
 import { ConfirmSheet } from '../ui/components/ConfirmSheet';
 import { screenToTop } from '../ui/components/Screen';
 import { SearchFab } from '../features/search/SearchFab';
@@ -197,10 +198,13 @@ const TabPane = memo(function TabPane({ t, active }: { t: Tab; active: boolean }
 
 /**
  * SM5: the app behind Now Playing becomes inert once the sheet has finished opening, and
- * stops being inert once it has finished closing: either change is a style pass over the
- * whole app, which would cost the sheet's first frame (a visible hitch as it starts to move).
- * The sheet covers the app until then anyway.
+ * stops being inert two frames after it starts closing. Either change is a style pass over
+ * the whole app: in the sheet's first frame it would hold the start of the slide (a visible
+ * hitch); two frames on, the slide is already running on its own layer.
  */
+/** Now Playing's hold on the app's `inert` (ui/inert.ts). */
+const NOW_PLAYING = {};
+
 function useInertUnderNowPlaying(app: { current: HTMLElement | null }): void {
   useEffect(() => {
     let cancel: (() => void) | null = null;
@@ -209,21 +213,40 @@ function useInertUnderNowPlaying(app: { current: HTMLElement | null }): void {
       cancel?.();
       cancel = null;
       const el = app.current;
-      if (!el || el.inert === open) return;
+      if (!el) return;
+      if (!open) {
+        if (reducedMotion()) {
+          releaseInert(el, NOW_PLAYING);
+          return;
+        }
+        let f2 = 0;
+        const f1 = requestAnimationFrame(() => {
+          f2 = requestAnimationFrame(() => {
+            cancel = null;
+            if (!nowPlayingOpen.peek()) releaseInert(el, NOW_PLAYING);
+          });
+        });
+        cancel = () => {
+          cancelAnimationFrame(f1);
+          cancelAnimationFrame(f2);
+          // Opened again before then: it never stopped being inert, and needn't.
+        };
+        return;
+      }
       const np = document.querySelector<HTMLElement>('[data-testid="now-playing"]');
       let timer = 0;
       let frame = 0;
       const settle = () => {
         cancel?.();
         cancel = null;
-        if (nowPlayingOpen.peek() === open) el.inert = open;
+        if (nowPlayingOpen.peek()) holdInert(el, NOW_PLAYING);
       };
       const onEnd = (e: TransitionEvent) => {
         if (e.target === np) settle();
       };
       np?.addEventListener('transitionend', onEnd);
       if (reducedMotion()) frame = requestAnimationFrame(settle);
-      else timer = window.setTimeout(settle, open ? 450 : 300);
+      else timer = window.setTimeout(settle, 450);
       cancel = () => {
         np?.removeEventListener('transitionend', onEnd);
         clearTimeout(timer);

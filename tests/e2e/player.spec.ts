@@ -574,3 +574,96 @@ test('in Now Playing an Undo message sits at the bottom, and Up next scrolls cle
     expect(b.y + b.height, id).toBeLessThanOrEqual(t.y);
   }
 });
+
+test('closing Now Playing gives focus back to the mini player, keeps the app inert only while open, and takes the next tap', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('track-play').first().click();
+  const focused = () => page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.testid ?? document.activeElement?.tagName);
+  const inert = () => page.locator('.app').evaluate((el) => (el as HTMLElement).inert);
+  for (const how of ['button', 'escape', 'swipe'] as const) {
+    await page.getByTestId('mini-open').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('now-playing')).toHaveClass(/open/);
+    await expect.poll(inert).toBe(true);
+    if (how === 'button') {
+      await page.getByTestId('np-close').focus();
+      await page.keyboard.press('Enter');
+    } else if (how === 'escape') await page.keyboard.press('Escape');
+    else await touchDrag(page, 200, 150, 150 + page.viewportSize()!.height * 0.35, 200);
+    await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
+    await expect.poll(focused, how).toBe('mini-open');
+    await expect.poll(inert, how).toBe(false);
+  }
+  // A tab tapped straight after a flick-close works (the app isn't inert for long).
+  await page.getByTestId('mini-open').click();
+  await expect.poll(inert).toBe(true);
+  await touchDrag(page, 200, 150, 250, 60, 4, true);
+  await page.waitForTimeout(80);
+  await touchTap(page, page.getByTestId('tab-genres'));
+  await expect(page.getByTestId('tab-genres')).toHaveClass(/\bon\b/);
+});
+
+test('a menu opened while Now Playing slides in and closed after leaves the app behind inert', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('track-play').first().click();
+  const inert = () => page.locator('.app').evaluate((el) => (el as HTMLElement).inert);
+  // ⋯ straight away, while the sheet is still sliding in (before the app behind is inert).
+  await page.evaluate(() => {
+    (document.querySelector('[data-testid="mini-open"]') as HTMLElement).click();
+    // Next frame: the sheet has its content, and is only starting to move.
+    requestAnimationFrame(() => (document.querySelector('[data-testid="np-more"]') as HTMLElement).click());
+  });
+  await expect(page.getByTestId('track-menu')).toBeVisible();
+  await expect.poll(inert).toBe(true);
+  // Closed once Now Playing has settled: the app must stay inert under the open sheet.
+  await page.waitForTimeout(600);
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('track-menu')).toBeHidden();
+  await expect(page.getByTestId('now-playing')).toHaveClass(/open/);
+  await page.waitForTimeout(300);
+  expect(await inert()).toBe(true);
+});
+
+test('the seek bar: a second finger seeks; the mouse then the keys; a drag through a track change seeks nothing', async ({ page }) => {
+  await start(page);
+  await playAndOpen(page);
+  const pos = page.getByTestId('time-pos');
+  await expect(pos).toHaveText(/^1:1\d$/);
+  const seeks = () => page.evaluate(() => (window as unknown as { __ytSeeks?: number }).__ytSeeks ?? 0);
+  const bar = await box(page.getByTestId('seek'));
+  const y = bar.y + bar.height / 2;
+  const xAt = (sec: number) => bar.x + 10 + ((bar.width - 20) * sec) / 247;
+
+  // A thumb resting elsewhere on the screen, a second finger drags the bar.
+  const cdp = await page.context().newCDPSession(page);
+  const rest = { x: 30, y: 420, id: 1 };
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [rest] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [rest, { x: xAt(50), y, id: 2 }] });
+  for (let i = 1; i <= 8; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [rest, { x: xAt(50 + (150 * i) / 8), y, id: 2 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [rest] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+  await expect(pos).toHaveText(/^3:2[0-2]$/);
+  expect(await seeks()).toBe(1);
+
+  // A mouse click on the bar seeks there, and leaves the keys working it.
+  await page.mouse.click(xAt(100), y);
+  await expect.poll(seeks).toBe(2);
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(seeks).toBe(3);
+
+  // A finger dragging when the next track starts: letting go seeks nothing on the new one.
+  const drag = await page.context().newCDPSession(page);
+  const at = (x: number) => [{ x, y, id: 3 }];
+  await drag.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(xAt(60)) });
+  for (let i = 1; i <= 4; i++) await drag.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(xAt(60 + 20 * i)) });
+  const title = await page.getByTestId('np-title').textContent();
+  await page.evaluate(() => (document.querySelector('[data-testid="np-next"]') as HTMLElement).click());
+  await expect(page.getByTestId('np-title')).not.toHaveText(title!);
+  for (let i = 5; i <= 8; i++) await drag.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(xAt(60 + 20 * i)) });
+  await drag.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await drag.detach();
+  await page.waitForTimeout(300);
+  expect(await seeks()).toBe(3);
+  await expect(pos).toHaveText(/^1:1\d$/);
+});

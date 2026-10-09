@@ -107,14 +107,14 @@ export function smallArtworkUrl(url: string): string | null {
   return m ? `${m[1]}mqdefault.jpg` : null;
 }
 
-export function postUrl(username: string, slug: string): string {
+function postUrl(username: string, slug: string): string {
   return `${SITE_ORIGIN}/${encodeURIComponent(username)}/${encodeURIComponent(slug)}`;
 }
 
 // ---- Firestore REST value decoding -------------------------------------------------
 
 /** A Firestore REST `Value`. Only the shapes we read are typed. */
-export type FsValue =
+type FsValue =
   | { stringValue: string }
   | { booleanValue: boolean }
   | { integerValue: string }
@@ -139,7 +139,7 @@ export interface FsRunQueryRow {
   done?: boolean;
 }
 
-export function str(v: FsValue | undefined): string {
+function str(v: FsValue | undefined): string {
   if (v && 'stringValue' in v && typeof v.stringValue === 'string') return v.stringValue;
   return '';
 }
@@ -154,7 +154,7 @@ export function ts(v: FsValue | undefined): string {
 }
 
 /** Firestore integers arrive as strings; anything else (or missing) is undefined. */
-export function int(v: FsValue | undefined): number | undefined {
+function int(v: FsValue | undefined): number | undefined {
   if (v && 'integerValue' in v) {
     const n = Number(v.integerValue);
     return Number.isFinite(n) ? n : undefined;

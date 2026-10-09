@@ -90,7 +90,7 @@ export interface LyricsResult {
   found: boolean;
 }
 
-export const JukeMusic = registerPlugin<JukeMusicPlugin>('JukeMusic');
+const JukeMusic = registerPlugin<JukeMusicPlugin>('JukeMusic');
 
 declare global {
   interface Window {
@@ -276,7 +276,7 @@ export function shelfToken(kind: ReleaseKind, more: ArtistPageResult['more']): s
 export const MUSIC_CACHE_TTL_MS = 10 * 60 * 1000;
 const CACHE_MAX = 200;
 
-export type AlbumPage = { title: string; subtitle: string; thumbnailUrl?: string } & MusicPage;
+type AlbumPage = { title: string; subtitle: string; thumbnailUrl?: string } & MusicPage;
 
 export interface MusicClient {
   search(query: string, filter: MusicFilter): Promise<MusicPage>;

@@ -4,7 +4,7 @@
  * what the caller should do next.
  *
  * Terms (mirroring the native plugin contract):
- *  - "list": the queue in list order (what setQueue/addItems/moveItem index into);
+ *  - "list": the queue in list order (what setQueue/moveItem index into);
  *  - "play order": the order tracks will actually play (differs when shuffled).
  *
  * The rules (shared with the native queue; the cases both must pass are in

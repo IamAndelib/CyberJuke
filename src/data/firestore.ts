@@ -45,7 +45,6 @@ export const CATALOG_FIELDS = [
   'title',
   'isNSFW',
   'createdAt',
-  'topics',
   'bookmarksCount',
   'repliesCount',
 ] as const;
