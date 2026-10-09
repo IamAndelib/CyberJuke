@@ -18,7 +18,7 @@ Binaries: https://github.com/IamAndelib/CyberJuke/releases/download/v%v/CyberJuk
 Builds:
   - versionName: 1.0.0
     versionCode: 1000000
-    commit: v1.0.0
+    commit: 63b0bb47d199b1e88e0cb72777836b99530f462e
     subdir: android/app
     sudo:
       - echo 'deb https://deb.debian.org/debian trixie main' > /etc/apt/sources.list.d/trixie.list
