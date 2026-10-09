@@ -28,7 +28,7 @@ export const freshness = createFreshness({
 if (fs) fs.onLatest = (newest) => freshness.seen(newest);
 
 /** Home feeds share this key prefix (Home.tsx: `home:<m|p>:<genre>:<nsfw>`). */
-export const HOME_FEED_PREFIX = 'home:';
+const HOME_FEED_PREFIX = 'home:';
 
 /**
  * The pill was tapped: drop the cached Latest pages and the source cache, reload the

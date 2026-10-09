@@ -13,15 +13,15 @@
  */
 import { isGlobal, type Track } from './model';
 
-export const MAX_RESULTS = 100;
-export const MAX_GENRES = 8;
-export const PHRASE_BONUS = 2;
+const MAX_RESULTS = 100;
+const MAX_GENRES = 8;
+const PHRASE_BONUS = 2;
 
-export const W_TITLE = 3;
+const W_TITLE = 3;
 export const W_ARTIST = 3;
 export const W_GENRE = 2;
 export const W_POSTER = 2;
-export const W_POST_TITLE = 1;
+const W_POST_TITLE = 1;
 
 /** Letters NFKD leaves alone but people type without the diacritic. */
 const FOLD: Record<string, string> = { ß: 'ss', æ: 'ae', œ: 'oe', ø: 'o', ł: 'l', đ: 'd', ð: 'd', þ: 'th', ı: 'i' };
@@ -82,14 +82,14 @@ interface Field {
   weight: number;
 }
 
-export interface IndexedTrack {
+interface IndexedTrack {
   track: Track;
   fields: Field[];
   /** Normalized title and artist, space-padded, for the phrase bonus. */
   phrase: string[];
 }
 
-export type SearchIndex = IndexedTrack[];
+type SearchIndex = IndexedTrack[];
 
 export function buildIndex(tracks: Track[]): SearchIndex {
   return tracks.map((track) => ({
@@ -122,7 +122,7 @@ function scoreFields(qWords: string[], fields: Field[]): number {
   return total;
 }
 
-export function scoreTrack(qWords: string[], qPhrase: string, item: IndexedTrack): number {
+function scoreTrack(qWords: string[], qPhrase: string, item: IndexedTrack): number {
   const s = scoreFields(qWords, item.fields);
   if (s === 0) return 0;
   const needle = ' ' + qPhrase;

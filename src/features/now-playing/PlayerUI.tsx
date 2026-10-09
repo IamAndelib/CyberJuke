@@ -18,7 +18,7 @@ import { LyricsPanel } from './Lyrics';
 import { UpNext } from './UpNext';
 import { shareTrack } from '../../ui/share';
 
-export function fmt(ms: number): string {
+function fmt(ms: number): string {
   if (!isFinite(ms) || ms < 0) ms = 0;
   const t = Math.floor(ms / 1000);
   const h = Math.floor(t / 3600);
@@ -79,7 +79,7 @@ function NextButton({ size, class: cls, testid }: { size: number; class: string;
 }
 
 /** A swipe up this far on the mini player (more up than sideways) opens Now Playing. */
-export const MINI_SWIPE_PX = 32;
+const MINI_SWIPE_PX = 32;
 
 /**
  * Swipe up on the mini player to open Now Playing (P11). Sideways swipes do nothing (no
@@ -183,8 +183,8 @@ function SeekBar({ s }: { s: PlayerState }) {
 }
 
 /** Close when dragged this share of the sheet's height, or flicked faster than this. */
-export const SWIPE_CLOSE_FRACTION = 0.25;
-export const SWIPE_CLOSE_VELOCITY = 0.5; // px/ms
+const SWIPE_CLOSE_FRACTION = 0.25;
+const SWIPE_CLOSE_VELOCITY = 0.5; // px/ms
 
 /**
  * Swipe down to close Now Playing. A downward drag that starts while the sheet is
@@ -278,7 +278,7 @@ const NEXT_REPEAT = { off: 'all', all: 'one', one: 'off' } as const;
 const REPEAT_LABEL = { off: 'Repeat off', all: 'Repeat all', one: 'Repeat one' } as const;
 
 /** How long the sheet's contents stay after closing: the slide-down (0.2s) plus a margin. */
-export const NP_UNMOUNT_MS = 400;
+const NP_UNMOUNT_MS = 400;
 
 /**
  * The Now Playing sheet. Its contents exist only while it is open (and while it

@@ -24,7 +24,7 @@ import {
   type SearchMode,
 } from '../../ui/nav';
 import { Rail, RailRow, RailSep, type RailItem } from '../../ui/components/Rail';
-import { ChunkedTracks, EmptyState, ErrorState, Tracks } from '../../ui/components/TrackList';
+import { CatalogError, ChunkedTracks, EmptyState, Tracks } from '../../ui/components/TrackList';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
 import { CoverRow, GlobalError, LoadMore, MUSIC_ITEM_OPTS, MusicRow, searchLoader } from '../../ui/components/Music';
@@ -32,10 +32,10 @@ import { useFeed } from '../../ui/usePaged';
 import { globalFeeds } from '../../stores/feed';
 import { list, radio } from '../../ui/playAll';
 
-export const DEBOUNCE_MS = 120;
-export const GLOBAL_DEBOUNCE_MS = 400;
+const DEBOUNCE_MS = 120;
+const GLOBAL_DEBOUNCE_MS = 400;
 /** Fewer Jukebox results than this shows the "Search globally" line. */
-export const BRIDGE_BELOW = 5;
+const BRIDGE_BELOW = 5;
 
 export { searchMode, type SearchMode };
 
@@ -140,8 +140,7 @@ function PlaceResults({ q, ctx, places }: { q: string; ctx: SearchContext; place
   if (!places.length) {
     // The genres and artists come from the Jukebox: if it couldn't load, say so (and retry).
     if (catalog.status.value === 'error') {
-      const err = catalog.error.value ?? { message: "Couldn't load the Jukebox.", offline: false };
-      return <ErrorState {...err} onRetry={() => void catalog.refresh()} />;
+      return <CatalogError />;
     }
     return <HereLoading text={`Loading ${what}…`} />;
   }
@@ -254,8 +253,7 @@ function JukeboxResults({ q }: { q: string }) {
   const gHits = useMemo(() => (q.trim() ? searchGenres(genreList, q) : []), [genreList, q]);
   if (!tracks.length) {
     if (status === 'error') {
-      const err = catalog.error.value ?? { message: "Couldn't load the Jukebox.", offline: false };
-      return <ErrorState {...err} onRetry={() => void catalog.refresh()} />;
+      return <CatalogError />;
     }
     return (
       <div class="state" data-testid="search-indexing" role="status">

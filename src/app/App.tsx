@@ -46,9 +46,9 @@ const TAB_ITEMS: { id: Tab; label: string; icon: IconName }[] = [
 ];
 
 /** SM7: a pushed page slides in over this long; the page under it hides once it has. */
-export const PAGE_ENTER_MS = 180;
+const PAGE_ENTER_MS = 180;
 /** P5: a second tap on the active tab within this long pops to its root. */
-export const RETAP_MS = 700;
+const RETAP_MS = 700;
 
 /** The scroller of the page showing on a tab. */
 function topScroller(t: Tab): HTMLElement | null {

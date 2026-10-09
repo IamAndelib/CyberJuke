@@ -8,7 +8,7 @@ import { effect } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { livePosition, player, positionSample } from '../player';
 
-export const TICK_MS = 250;
+const TICK_MS = 250;
 
 const subs = new Set<() => void>();
 let raf = 0;
@@ -33,7 +33,7 @@ function kick(): void {
 if (typeof document !== 'undefined') document.addEventListener('visibilitychange', kick);
 
 /** Call `fn` every tick until the returned function is called. */
-export function onTick(fn: () => void): () => void {
+function onTick(fn: () => void): () => void {
   subs.add(fn);
   kick();
   return () => {
@@ -46,7 +46,7 @@ export function onTick(fn: () => void): () => void {
 }
 
 /** Call the latest `fn` every tick while `active` (no re-render). */
-export function useTicker(active: boolean, fn: () => void): void {
+function useTicker(active: boolean, fn: () => void): void {
   const ref = useRef(fn);
   ref.current = fn;
   useEffect(() => (active ? onTick(() => ref.current()) : undefined), [active]);

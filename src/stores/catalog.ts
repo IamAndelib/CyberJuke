@@ -37,21 +37,21 @@ export function catalogKey(signedIn: boolean): string {
   return signedIn ? CATALOG_MEMBERS_KEY : CATALOG_KEY;
 }
 /** Where a catalog's fetch times are kept. */
-export function metaKey(key: string): string {
+function metaKey(key: string): string {
   return key + '.meta';
 }
 export const INCREMENTAL_AFTER_MS = 60 * 60 * 1000;
 export const FULL_AFTER_MS = 24 * 60 * 60 * 1000;
 
-export type CatalogStatus = 'idle' | 'loading' | 'ready' | 'error';
+type CatalogStatus = 'idle' | 'loading' | 'ready' | 'error';
 
-export interface CatalogStorage {
+interface CatalogStorage {
   get(key: string): Promise<string | null>;
   set(key: string, value: string): Promise<void>;
   remove?(key: string): Promise<void>;
 }
 
-export interface CatalogDeps {
+interface CatalogDeps {
   source: Pick<TrackSource, 'catalog'>;
   storage: CatalogStorage;
   showNsfw: () => boolean;
@@ -235,7 +235,7 @@ export function createCatalog(deps: CatalogDeps): Catalog {
 // ---- Ranking helpers -----------------------------------------------------------------
 
 export type SavedRange = 'month' | 'all';
-export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * "Most saved": tracks with at least one save, optionally in one genre and within

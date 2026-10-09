@@ -21,7 +21,7 @@ The first stable release.
 ### Interface
 - Artist, genre and album pages open on the tab you're on; Back returns exactly where you were. Tapping the active tab scrolls to the top, then back to its first page.
 - Undo for unlike, unfavourite, removing from Up next and clearing history; confirmation before clearing history and signing out.
-- ★ marks favourite genres and artists (♥ is only for liked tracks).
+- ★ marks favourite genres and artists (♥ is only for liked tracks); a genre or artist can be starred from its own page too.
 - Long titles scroll in Now Playing and the mini player; long-press a row for its menu; swipe up on the mini player.
 - Smoother pull to refresh, sheets and scrolling; bigger touch targets; no accidental text selection; a tap that stops a scroll no longer plays a track.
 - Settings → Licenses lists every bundled library and opens their full license texts.

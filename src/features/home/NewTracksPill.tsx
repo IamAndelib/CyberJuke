@@ -13,9 +13,9 @@ import { Icon } from '../../ui/icons';
 import { reducedMotion } from '../../core/motion';
 
 /** The fade-out; the pill unmounts after it (or after this long without a transitionend). */
-export const PILL_FADE_MS = 200;
+const PILL_FADE_MS = 200;
 
-export function newTracksLabel(count: number): string {
+function newTracksLabel(count: number): string {
   if (count >= FRESHNESS_LIMIT) return `${FRESHNESS_LIMIT}+ new tracks`;
   return `${count} new track${count === 1 ? '' : 's'}`;
 }

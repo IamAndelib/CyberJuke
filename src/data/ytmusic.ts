@@ -62,7 +62,7 @@ export interface Release {
   url: string;
   thumbnailUrl?: string;
 }
-export interface ArtistPageResult {
+interface ArtistPageResult {
   name: string;
   thumbnailUrl?: string;
   topSongs: MusicItem[];
@@ -73,7 +73,7 @@ export interface ArtistPageResult {
   more?: { albums?: string; singles?: string };
 }
 
-export interface LyricsRequest {
+interface LyricsRequest {
   ytId: string;
   title: string;
   artist: string;
@@ -139,7 +139,7 @@ export function isEndOfList(e: unknown): boolean {
 
 // ---- Mapping --------------------------------------------------------------------------
 
-export const YTM_PREFIX = 'ytm:';
+const YTM_PREFIX = 'ytm:';
 const YT_ID = /^[A-Za-z0-9_-]{11}$/;
 
 function idFromUrl(url: string): string | undefined {
@@ -241,7 +241,7 @@ export const SHELF_LABEL: Record<ReleaseKind, string> = { album: 'Albums', live:
 export const RELEASE_LABEL: Record<ReleaseKind, string> = { album: 'Album', live: 'Live album', ep: 'EP', single: 'Single' };
 
 /** Titles that make an album a live album (same rule as the native side). */
-export const LIVE_TITLE = /\blive\b|unplugged|in concert|live at|live from/i;
+const LIVE_TITLE = /\blive\b|unplugged|in concert|live at|live from/i;
 
 /**
  * The shelf a release goes on. The native side classifies already; this keeps the
@@ -294,7 +294,7 @@ export interface MusicClient {
   clear(): void;
 }
 
-export interface MusicClientDeps {
+interface MusicClientDeps {
   /** The plugin to call, or null when there is none (web without a stub). */
   plugin: () => JukeMusicPlugin | null;
   now?: () => number;
@@ -343,7 +343,7 @@ export function createMusicClient(deps: MusicClientDeps): MusicClient {
 const KINDS: readonly ReleaseKind[] = ['album', 'ep', 'single', 'live'];
 
 /** Releases from the plugin: a kind, a title and a URL each, or dropped. */
-export function parseReleases(x: unknown): Release[] {
+function parseReleases(x: unknown): Release[] {
   if (!Array.isArray(x)) return [];
   const out: Release[] = [];
   for (const r of x) {

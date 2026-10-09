@@ -12,7 +12,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
@@ -22,7 +21,6 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
@@ -30,9 +28,6 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
-import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
-import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -45,24 +40,11 @@ import com.google.common.util.concurrent.ListenableFuture
 import io.github.iamandelib.cyberjuke.MainActivity
 import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.BlockedException
-import io.github.iamandelib.cyberjuke.net.FailureKind
-import io.github.iamandelib.cyberjuke.net.Hosts
 import io.github.iamandelib.cyberjuke.net.Http
 import io.github.iamandelib.cyberjuke.net.NetBlock
 import io.github.iamandelib.cyberjuke.net.NetEpoch
 import io.github.iamandelib.cyberjuke.net.NetPrefs
-import io.github.iamandelib.cyberjuke.net.Surface
-import io.github.iamandelib.cyberjuke.yt.Radio
-import io.github.iamandelib.cyberjuke.yt.YtCompat
-import io.github.iamandelib.cyberjuke.yt.YtGuard
-import io.github.iamandelib.cyberjuke.yt.YtMusic
 import org.json.JSONArray
-import org.json.JSONObject
-import java.io.IOException
-import java.util.Random
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Foreground media service: ExoPlayer + MediaSession. The default Media3 notification
@@ -92,27 +74,36 @@ class PlaybackService : MediaSessionService() {
     private var seedId: String? = null
     private var context: Pair<String, String>? = null
 
-    /** A Global seed's YouTube Music radio: refilled here, so it works with the screen off. */
-    private data class RadioState(val ytId: String, val next: String?)
-
-    private var radio: RadioState? = null
-
-    /** Bumped when the seed or list changes: a radio page fetched for the old one is dropped. */
-    private var radioGen = 0
-    private var radioInFlight = false
-
-    /** Retries since the radio last added items (an empty or failed page, L5); bounded. */
-    private var radioRetries = 0
-
-    /** No radio request before this (SystemClock.elapsedRealtime), after a failed page. */
-    private var radioNotBefore = 0L
-
     /** What the last "low" check acted on, so each low state is handled once. */
     private var lowKey: String? = null
     private val lowCheck = Runnable { checkLow() }
-    private val radioExecutor: ExecutorService = Executors.newSingleThreadExecutor { r ->
-        Thread(r, "JukeRadio").apply { isDaemon = true }
-    }
+
+    /** A Global seed's radio (autoplay for Global tracks). */
+    private val radio = RadioFeeder(
+        handler,
+        object : RadioFeeder.Host {
+            override fun ytIdsInPlayer(): Set<String> {
+                val p = player ?: return emptySet()
+                val ids = HashSet<String>()
+                for (i in 0 until p.mediaItemCount) JukeUris.ytIdOf(p.getMediaItemAt(i))?.let { ids.add(it) }
+                return ids
+            }
+
+            override fun addRadioItems(items: List<MediaItem>): Boolean {
+                if (!autoplayEnabled || player?.repeatMode != Player.REPEAT_MODE_OFF) return false
+                queue.addAutoplay(items)
+                queueChanged()
+                return true
+            }
+
+            override fun recheckLow(delayMs: Long?) {
+                lowKey = null
+                if (delayMs == null) return
+                handler.removeCallbacks(lowCheck)
+                handler.postDelayed(lowCheck, delayMs)
+            }
+        },
+    )
 
     /** "<current mediaId>><next ytId>" already prefetched, so each pair is warmed once. */
     private var prefetchedKey: String? = null
@@ -290,7 +281,7 @@ class PlaybackService : MediaSessionService() {
         handler.removeCallbacks(blockEnded)
         NetBlock.remove(blockListener)
         NetBlock.cancelResume()
-        radioExecutor.shutdownNow()
+        radio.shutdown()
         StreamResolver.cancelPrefetch()
         if (networkCallbackRegistered) {
             try {
@@ -373,76 +364,6 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    /** [QueueHost] over the service's ExoPlayer. */
-    private inner class ExoQueueHost(private val p: ExoPlayer) : QueueHost<MediaItem> {
-        override val count: Int get() = p.mediaItemCount
-        override val currentIndex: Int get() = if (p.mediaItemCount == 0) -1 else p.currentMediaItemIndex
-        override val shuffleEnabled: Boolean get() = p.shuffleModeEnabled
-
-        override fun serialAt(index: Int): Long =
-            p.getMediaItemAt(index).mediaMetadata.extras?.getLong(JukeCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L
-
-        override fun shuffleOrder(): IntArray? {
-            val n = p.mediaItemCount
-            val shuffle = p.shuffleOrder
-            if (n == 0 || shuffle.length != n) return null
-            val order = IntArray(n)
-            var i = shuffle.firstIndex
-            var k = 0
-            while (i != C.INDEX_UNSET && k < n) {
-                order[k++] = i
-                i = shuffle.getNextIndex(i)
-            }
-            return if (k == n) order else null
-        }
-
-        override fun setShuffleOrder(order: IntArray) {
-            p.setShuffleOrder(DefaultShuffleOrder(order, shuffleSeeds.nextLong()))
-        }
-
-        override fun moveItem(from: Int, to: Int) = p.moveMediaItem(from, to)
-
-        override fun insertTagged(at: Int?, items: List<MediaItem>, serials: List<Long>) {
-            val tagged = items.mapIndexed { k, item -> tag(item) { putLong(JukeCommands.EXTRA_QUEUE_SERIAL, serials[k]) } }
-            if (at == null) p.addMediaItems(tagged) else p.addMediaItems(at, tagged)
-        }
-
-        override fun itemAt(index: Int): MediaItem = p.getMediaItemAt(index)
-
-        override fun idAt(index: Int): String = p.getMediaItemAt(index).mediaId
-
-        override fun isAutoAt(index: Int): Boolean =
-            p.getMediaItemAt(index).mediaMetadata.extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) == true
-
-        override fun setItems(items: List<MediaItem>, serials: List<Long>, start: Int, positionMs: Long) {
-            if (items.isEmpty()) {
-                p.clearMediaItems()
-                return
-            }
-            val tagged = items.mapIndexed { k, item ->
-                if (serials[k] == 0L) item else tag(item) { putLong(JukeCommands.EXTRA_QUEUE_SERIAL, serials[k]) }
-            }
-            p.setMediaItems(tagged, start, positionMs.coerceAtLeast(0L))
-        }
-
-        override fun insertAuto(at: Int?, items: List<MediaItem>) {
-            val tagged = items.map { tag(it) { putBoolean(QueueCommands.EXTRA_AUTOPLAY, true) } }
-            if (at == null) p.addMediaItems(tagged) else p.addMediaItems(at, tagged)
-        }
-
-        override fun removeAt(index: Int) = p.removeMediaItem(index)
-
-        override fun seekTo(index: Int) = p.seekTo(index, 0L)
-
-        private inline fun tag(item: MediaItem, edit: Bundle.() -> Unit): MediaItem {
-            val extras = Bundle(item.mediaMetadata.extras ?: Bundle.EMPTY).apply(edit)
-            return item.buildUpon()
-                .setMediaMetadata(item.mediaMetadata.buildUpon().setExtras(extras).build())
-                .build()
-        }
-    }
-
-    private val shuffleSeeds = Random()
 
     // ---- prefetch (Y4) ------------------------------------------------------------------------
 
@@ -503,13 +424,8 @@ class PlaybackService : MediaSessionService() {
     /** Autoplay follows [seed] from now on: a Global seed gets its radio from here. */
     private fun reseed(seed: MediaItem?) {
         seedId = seed?.mediaId
-        radioGen++
-        radioInFlight = false
-        radioRetries = 0
-        radioNotBefore = 0L
+        radio.reseed(seed)
         lowKey = null
-        val ytId = seed?.takeIf { it.mediaId.startsWith(QueueCommands.GLOBAL_PREFIX) }?.let { JukeUris.ytIdOf(it) }
-        radio = ytId?.let { RadioState(it, null) }
         queueChanged()
     }
 
@@ -528,8 +444,7 @@ class PlaybackService : MediaSessionService() {
         autoplayEnabled = enabled
         lowKey = null
         if (!enabled) {
-            radioGen++
-            radioInFlight = false
+            radio.stop()
             queue.dropUpcomingAuto()
         }
         queueChanged()
@@ -597,95 +512,7 @@ class PlaybackService : MediaSessionService() {
         val key = "$seedId|$left|${p.currentMediaItemIndex}|${p.mediaItemCount}"
         if (key == lowKey) return
         lowKey = key
-        val r = radio
-        if (r != null) refillRadio(r) else QueueInfo.emitQueueLow(left, seedId)
-    }
-
-    /** One radio page at a time, never during a back-off (Y1); a bot check or 429 starts one. */
-    private fun refillRadio(r: RadioState) {
-        if (radioInFlight) return
-        val wait = maxOf(
-            NetBlock.active(Surface.MUSIC).first - System.currentTimeMillis(),
-            radioNotBefore - SystemClock.elapsedRealtime(),
-        )
-        if (wait > 0) {
-            // Try again once the back-off (or the retry delay) is over, even with no event.
-            lowKey = null
-            if (radioRetries < RADIO_MAX_RETRIES) {
-                handler.removeCallbacks(lowCheck)
-                handler.postDelayed(lowCheck, wait + 1000L)
-            }
-            return
-        }
-        radioInFlight = true
-        val gen = radioGen
-        try {
-            radioExecutor.execute {
-                // A limit here holds the music features only, never playback (YtGuard).
-                val result = runCatching { YtGuard.run(Surface.MUSIC) { YtMusic.radio(r.ytId, r.next) } }
-                handler.post { onRadioPage(gen, r, result) }
-            }
-        } catch (_: Exception) { // RejectedExecutionException after onDestroy
-            radioInFlight = false
-        }
-    }
-
-    private fun onRadioPage(gen: Int, r: RadioState, result: Result<Radio.Page>) {
-        if (gen != radioGen) return
-        radioInFlight = false
-        val p = player ?: return
-        result.onFailure { t ->
-            val kind = YtCompat.classify(t)
-            Log.w(TAG, "Radio failed [$kind]: ${t.javaClass.simpleName}")
-            if (kind == FailureKind.BROKEN) PlayerBus.emitExtractorBroken(YtCompat.describe(t))
-            // L5: a failed page must not stall the radio; retry later (bounded).
-            retryRadio(delayMs = RADIO_RETRY_MS * (radioRetries + 1))
-        }
-        val page = result.getOrNull() ?: return
-        val have = HashSet<String>()
-        for (i in 0 until p.mediaItemCount) JukeUris.ytIdOf(p.getMediaItemAt(i))?.let { have.add(it) }
-        val items = page.items.mapNotNull { it ->
-            val ytId = it.ytId ?: return@mapNotNull null
-            if (!have.add(ytId)) return@mapNotNull null
-            runCatching {
-                JukeTracks.toMediaItem(
-                    JSONObject()
-                        .put("id", QueueCommands.GLOBAL_PREFIX + ytId)
-                        .put("ytId", ytId)
-                        .put("title", it.title)
-                        .put("artist", Radio.cleanCredit(it.subtitle))
-                        .put("artworkUrl", "https://i.ytimg.com/vi/$ytId/hqdefault.jpg"),
-                )
-            }.getOrNull()
-        }
-        // At the end of a radio, start a new one from its last song.
-        radio = when {
-            page.next != null -> r.copy(next = page.next)
-            items.isNotEmpty() -> JukeUris.ytIdOf(items.last())?.let { RadioState(it, null) }
-            else -> null
-        }
-        Log.i(TAG, "Radio: ${items.size} new of ${page.items.size}, more=${page.next != null}")
-        if (items.isNotEmpty() && autoplayEnabled && p.repeatMode == Player.REPEAT_MODE_OFF) {
-            radioRetries = 0
-            queue.addAutoplay(items)
-            queueChanged()
-        } else if (items.isEmpty() && radio != null) {
-            // L5: nothing new on this page (all duplicates) but the radio goes on: the next page.
-            retryRadio(delayMs = 0L)
-        }
-    }
-
-    /** Checks the low state again after [delayMs], at most [RADIO_MAX_RETRIES] times in a row. */
-    private fun retryRadio(delayMs: Long) {
-        if (radioRetries >= RADIO_MAX_RETRIES) {
-            Log.w(TAG, "Radio: giving up after $radioRetries retries")
-            return
-        }
-        radioRetries++
-        radioNotBefore = SystemClock.elapsedRealtime() + delayMs
-        lowKey = null
-        handler.removeCallbacks(lowCheck)
-        handler.postDelayed(lowCheck, delayMs)
+        if (radio.active) radio.refill() else QueueInfo.emitQueueLow(left, seedId)
     }
 
     // ---- errors (Y1, Y5) ----------------------------------------------------------------------
@@ -1054,96 +881,8 @@ class PlaybackService : MediaSessionService() {
 
     companion object {
         private const val TAG = "CyberJukeService"
-        private const val RADIO_MAX_RETRIES = 3
-        private const val RADIO_RETRY_MS = 15_000L
 
         /** Resume a little after the back-off's end, so the check sees it over. */
         private const val BLOCK_END_SLACK_MS = 500L
-    }
-}
-
-private inline fun <reified T : Throwable> Throwable.findCause(): T? {
-    var t: Throwable? = this
-    var depth = 0
-    while (t != null && depth < 16) {
-        if (t is T) return t
-        t = t.cause
-        depth++
-    }
-    return null
-}
-
-/**
- * Maps cyberjuke://yt/<id> to the real googlevideo URL + headers, on the loader thread. Every
- * load goes through here: only https YouTube media URLs leave it (L5), plus the CI test tone
- * asset on debuggable builds.
- */
-@OptIn(UnstableApi::class)
-internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
-    private val requestNumber = AtomicLong()
-
-    /** Set by PlaybackService: debuggable builds play the CI tone asset. */
-    @Volatile
-    var allowCiTone = false
-
-    override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
-        val ytId = JukeUris.ytIdOf(dataSpec.uri)
-        if (ytId == LaunchOptions.CI_TONE && allowCiTone) {
-            return dataSpec.buildUpon().setUri(Uri.parse(LaunchOptions.CI_TONE_ASSET)).build()
-        }
-        val url: String
-        val headers = HashMap(dataSpec.httpRequestHeaders)
-        if (ytId != null) {
-            // A load that starts past byte 0 resumes a track: keep its itag (same file).
-            val stream = StreamResolver.resolve(ytId, midStream = dataSpec.position > 0)
-            url = stream.url
-            headers.putAll(stream.headers)
-        } else {
-            // An HLS manifest, variant or segment (the manifest-only fallback).
-            url = dataSpec.uri.toString()
-            headers.putAll(YtCompat.streamHeaders(url))
-        }
-        if (!Hosts.isAllowedMediaUrl(url)) {
-            throw IOException("Refusing to load a non-https or non-YouTube media URL")
-        }
-
-        val isVideoPlayback = Uri.parse(url).path?.startsWith("/videoplayback") == true
-        val finalUrl = if (ytId != null && YtUrls.wantsRn(url)) {
-            url + "&rn=" + requestNumber.incrementAndGet()
-        } else {
-            url
-        }
-
-        val builder = dataSpec.buildUpon()
-            .setUri(Uri.parse(finalUrl))
-            .setHttpRequestHeaders(headers)
-        if (isVideoPlayback && StreamResolver.USE_POST_BODY) {
-            builder.setHttpMethod(DataSpec.HTTP_METHOD_POST)
-                .setHttpBody(StreamResolver.POST_BODY)
-        }
-        return builder.build()
-    }
-}
-
-/**
- * Don't keep retrying what can never succeed or would make things worse: unavailable videos,
- * bot checks, a running back-off, and HTTP 403/410/429 (429 must never be retried; 403/410 are
- * handled by re-resolving in PlaybackService). Network failures keep ExoPlayer's retries.
- */
-@OptIn(UnstableApi::class)
-internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
-    override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
-        val e = loadErrorInfo.exception
-        if (e.findCause<ManifestOnlyException>() != null) return C.TIME_UNSET
-        if (e.findCause<BlockedException>() != null) return C.TIME_UNSET
-        val resolve = e.findCause<ResolveException>()
-        if (resolve != null && resolve.permanent) return C.TIME_UNSET
-        val http = e.findCause<HttpDataSource.InvalidResponseCodeException>()
-        if (http != null && http.responseCode in NO_RETRY_HTTP) return C.TIME_UNSET
-        return super.getRetryDelayMsFor(loadErrorInfo)
-    }
-
-    private companion object {
-        val NO_RETRY_HTTP = setOf(403, 410, 429)
     }
 }

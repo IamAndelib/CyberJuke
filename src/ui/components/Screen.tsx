@@ -10,11 +10,11 @@ import { usePress } from '../usePress';
 import { FastScroller } from './FastScroller';
 
 /** Back-to-top shows past this many screen-heights. */
-export const TOTOP_SCREENS = 1.5;
+const TOTOP_SCREENS = 1.5;
 /** How long a restore keeps waiting for the content to grow tall enough. */
-export const RESTORE_WAIT_MS = 1000;
+const RESTORE_WAIT_MS = 1000;
 /** A finger that moves this far on back-to-top is scrolling, not tapping it. */
-export const TOTOP_MOVE_PX = 10;
+const TOTOP_MOVE_PX = 10;
 
 /** Sent to a screen's scroller to run its back-to-top (registered with the click guard, stopped by a touch). */
 const TO_TOP_EVENT = 'cyberjuke:totop';

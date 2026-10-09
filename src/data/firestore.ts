@@ -29,13 +29,13 @@ export const CACHE_TTL_MS = 5 * 60 * 1000;
 /** Pages kept in memory at most (the oldest go first; a stale one goes when it's next asked for). */
 export const CACHE_MAX_PAGES = 120;
 /** A pull-to-refresh only drops cache entries older than this. */
-export const MIN_REFRESH_AGE_MS = 20 * 1000;
+const MIN_REFRESH_AGE_MS = 20 * 1000;
 /** How many latest pages shuffle() draws from. */
-export const SHUFFLE_PAGES = 4;
+const SHUFFLE_PAGES = 4;
 /** Catalog page size: the whole Jukebox (~640 posts) takes two or three requests. */
 export const CATALOG_PAGE_SIZE = 300;
 /** Safety stop for catalog paging (300 * 40 = 12,000 posts). */
-export const CATALOG_MAX_PAGES = 40;
+const CATALOG_MAX_PAGES = 40;
 /** Field mask for catalog requests: only what parseDoc and the counts need. */
 export const CATALOG_FIELDS = [
   'attachments',
@@ -53,14 +53,14 @@ export const CATALOG_FIELDS = [
 /** Most rows the freshness check asks for ("25+ new tracks"). */
 export const FRESHNESS_LIMIT = 25;
 /** Field mask for the freshness check: only the timestamp. */
-export const FRESHNESS_FIELDS = ['createdAt'] as const;
+const FRESHNESS_FIELDS = ['createdAt'] as const;
 /** Extra fields members requests ask for: the ban flags (filtered here) and isPublic. */
-export const MEMBERS_EXTRA_FIELDS = ['isPublic', 'isBanned', 'isShadowBanned'] as const;
+const MEMBERS_EXTRA_FIELDS = ['isPublic', 'isBanned', 'isShadowBanned'] as const;
 export const MEMBERS_CATALOG_FIELDS = [...CATALOG_FIELDS, ...MEMBERS_EXTRA_FIELDS] as const;
 export const MEMBERS_FRESHNESS_FIELDS = ['createdAt', 'isBanned', 'isShadowBanned'] as const;
 
 /** The freshness check's field mask: NSFW hidden adds isNSFW, so NSFW posts aren't counted. */
-export function freshnessFields(members: boolean, includeNsfw: boolean): readonly string[] {
+function freshnessFields(members: boolean, includeNsfw: boolean): readonly string[] {
   const base: readonly string[] = members ? MEMBERS_FRESHNESS_FIELDS : FRESHNESS_FIELDS;
   return includeNsfw ? base : [...base, 'isNSFW'];
 }
@@ -148,13 +148,13 @@ interface RawPage {
 }
 
 /** What the source needs from the Cyberspace login (./auth). */
-export interface SourceAuth {
+interface SourceAuth {
   signedIn(): boolean;
   token(): Promise<string | null>;
   refreshNow(): Promise<string | null>;
 }
 
-export interface FirestoreSourceOptions {
+interface FirestoreSourceOptions {
   /** Whether NSFW tracks should be returned. Read on every call. Default: hide. */
   showNsfw?: () => boolean;
   fetch?: typeof fetch;

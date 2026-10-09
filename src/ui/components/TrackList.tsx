@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import type { Track } from '../../data/model';
+import { catalog } from '../../stores/catalog';
 import type { Paged } from '../usePaged';
 import { useChunks } from '../useChunks';
 import { Icon } from '../icons';
@@ -94,6 +95,12 @@ export function ErrorState({ offline, message, onRetry }: { offline: boolean; me
       </button>
     </div>
   );
+}
+
+/** The Jukebox catalog couldn't load (or we're offline): say so, with Retry. */
+export function CatalogError() {
+  const err = catalog.error.value ?? { message: "Couldn't load the Jukebox.", offline: false };
+  return <ErrorState {...err} onRetry={() => void catalog.refresh()} />;
 }
 
 /**

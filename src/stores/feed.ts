@@ -186,7 +186,7 @@ export class Feed<T, C, M = undefined> {
 const filling = new WeakSet<Feed<unknown, unknown, unknown>>();
 
 /** Whether `fillFeed` is loading this feed's pages right now. */
-export function isBeingFilled(feed: Feed<unknown, unknown, unknown>): boolean {
+function isBeingFilled(feed: Feed<unknown, unknown, unknown>): boolean {
   return filling.has(feed);
 }
 
@@ -230,7 +230,7 @@ export function fillFeed<T, C, M>(feed: Feed<T, C, M>, max: number): void {
 }
 
 /** Most feeds kept; the least recently used ones beyond this are dropped. */
-export const FEED_CACHE_MAX = 40;
+const FEED_CACHE_MAX = 40;
 
 /**
  * Feeds by key, least recently used first. A feed on screen (watched), loading a

@@ -7,7 +7,7 @@ import { catalogGenre, chipGenres } from '../../stores/genres';
 import { favoriteGenres, showNsfw } from '../../stores/library';
 import { toast } from '../../stores/toast';
 import { Icon } from '../../ui/icons';
-import { EmptyState, ErrorState, PagedTracks, Tracks } from '../../ui/components/TrackList';
+import { CatalogError, EmptyState, PagedTracks, Tracks } from '../../ui/components/TrackList';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
 import { NewTracksPill } from './NewTracksPill';
@@ -18,23 +18,23 @@ import { auth } from '../../data/auth';
 import { list as listCtx, playAll, radio, withRest } from '../../ui/playAll';
 
 /** Selected genre chip on Home (null = All). Survives tab switches. */
-export const homeGenre = signal<string | null>(null);
+const homeGenre = signal<string | null>(null);
 /** Home sort: newest posts (Firestore pages) or most saved (local catalog). */
-export const homeSort = signal<'latest' | 'saved'>('latest');
-export const savedRange = signal<SavedRange>('month');
+const homeSort = signal<'latest' | 'saved'>('latest');
+const savedRange = signal<SavedRange>('month');
 
 /** Most-saved list length; beyond this it's mostly single-save noise. */
 const SAVED_MAX = 100;
 const SAVED_CTX = radio('Most saved');
 
-export async function shuffleJukebox(): Promise<void> {
+async function shuffleJukebox(): Promise<void> {
   const all = catalog.tracks.value;
   const tracks = all.length ? shuffled(all).slice(0, 50) : await source.shuffle(50);
   if (!tracks.length) throw new Error('No tracks found');
   await playAll(tracks, { shuffle: true, ctx: listCtx('Jukebox shuffle') });
 }
 
-export function ShuffleHero() {
+function ShuffleHero() {
   const [busy, setBusy] = useState(false);
   const go = async () => {
     if (busy) return;
@@ -64,7 +64,7 @@ export function ShuffleHero() {
   );
 }
 
-export function GenreChips() {
+function GenreChips() {
   void favoriteGenres.value;
   const sel = homeGenre.value;
   const names = chipGenres(24);
@@ -138,8 +138,7 @@ function MostSaved({ genre }: { genre: string | null }) {
   const list = useMemo(() => mostSaved(all, { genre, range }).slice(0, SAVED_MAX), [all, genre, range]);
   if (!all.length) {
     if (status === 'error') {
-      const err = catalog.error.value ?? { message: "Couldn't load the Jukebox.", offline: false };
-      return <ErrorState {...err} onRetry={() => void catalog.refresh()} />;
+      return <CatalogError />;
     }
     return <SkeletonRows />;
   }

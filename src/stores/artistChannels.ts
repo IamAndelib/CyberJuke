@@ -10,14 +10,14 @@ import { music, resolveArtistChannel, type MusicClient } from '../data/ytmusic';
 
 const K_CHANNELS = 'artistChannels';
 /** Most names kept (oldest dropped first). */
-export const ARTIST_CHANNELS_MAX = 500;
+const ARTIST_CHANNELS_MAX = 500;
 
-export interface ArtistChannelStore {
+interface ArtistChannelStore {
   get(name: string): Promise<string | null>;
   remember(name: string, channelId: string | undefined): void;
 }
 
-export interface ArtistChannelDeps {
+interface ArtistChannelDeps {
   client: Pick<MusicClient, 'artist'>;
   load(): Promise<Record<string, string>>;
   save(map: Record<string, string>): void;

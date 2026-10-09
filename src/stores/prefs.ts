@@ -3,7 +3,7 @@ import { signal, type Signal } from '@preact/signals';
 import { Preferences } from '@capacitor/preferences';
 
 export type GridSort = 'popular' | 'az';
-export const GRID_SORTS: readonly GridSort[] = ['popular', 'az'];
+const GRID_SORTS: readonly GridSort[] = ['popular', 'az'];
 
 const K_GENRES_SORT = 'prefs.genresSort';
 const K_ARTISTS_SORT = 'prefs.artistsSort';

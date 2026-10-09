@@ -15,9 +15,8 @@ class NetTest {
 
     @Test
     fun preferIpv4KeepsOnlyIpv4WhenThereIsAny() {
-        assertEquals(listOf(v6, v4), NetPrefs.order(listOf(v6, v4), preferIpv4 = false))
-        assertEquals(listOf(v4), NetPrefs.order(listOf(v6, v4), preferIpv4 = true))
-        assertEquals(listOf(v6), NetPrefs.order(listOf(v6), preferIpv4 = true)) // IPv6-only host
+        assertEquals(listOf(v4), NetPrefs.ipv4Only(listOf(v6, v4)))
+        assertEquals(listOf(v6), NetPrefs.ipv4Only(listOf(v6))) // IPv6-only host
     }
 
     @After

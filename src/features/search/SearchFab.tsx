@@ -4,7 +4,7 @@ import { openSearch, pageSearchContext, tab } from '../../ui/nav';
 import { usePress } from '../../ui/usePress';
 
 /** Scrolling this far in one direction hides (down) or shows (up) the button. */
-export const FAB_SCROLL_PX = 24;
+const FAB_SCROLL_PX = 24;
 /** Within this distance of the top the button always shows. */
 const FAB_TOP_PX = 24;
 

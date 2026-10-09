@@ -6,7 +6,7 @@ import { recordTracks } from '../stores/genres';
 import type { LoadError } from '../core/errors';
 import { feeds, type Feed, type FeedCache, type FeedLoader, type FeedOptions, type FeedSnapshot, type FeedStatus } from '../stores/feed';
 
-export type Status = FeedStatus;
+type Status = FeedStatus;
 
 export interface Paged {
   tracks: Track[];

@@ -142,6 +142,8 @@ function GenreTiles({ list, sort, favs }: { list: GenreCount[]; sort: 'popular' 
 /** One genre's tracks, opened in place on the current tab. */
 export function GenreDetail({ genre }: { genre: string }) {
   const nsfw = showNsfw.value;
+  // Starred here, on the grid or by an Undo: the star follows.
+  const fav = favoriteGenres.value.includes(genre);
   const scope = authScope(auth.state.value.status === 'signedIn');
   const feedKey = `genre:${scope}:${genre}:${nsfw}`;
   const paged = usePaged(feedKey, async (c) => {
@@ -184,6 +186,17 @@ export function GenreDetail({ genre }: { genre: string }) {
       left={
         <button class="icon-btn" aria-label="Back" onClick={popPage} data-testid="genre-back">
           <Icon name="back" />
+        </button>
+      }
+      right={
+        <button
+          class={'icon-btn like' + (fav ? ' on' : '')}
+          aria-pressed={fav}
+          aria-label={fav ? `Remove ${genre} from favourites` : `Add ${genre} to favourites`}
+          onClick={() => toggleFavoriteGenreWithUndo(genre)}
+          data-testid="genre-page-fav"
+        >
+          <Icon name={fav ? 'star' : 'starOutline'} size={26} />
         </button>
       }
       onRefresh={paged.refresh}

@@ -46,7 +46,7 @@ export const STALE_INDEX = 'STALE_INDEX';
  * While blocked, setQueue replaces the queue without preparing it (and resolves), and
  * play() is refused when nothing is loaded. trackError is never sent for blocks.
  */
-export interface JukePlayerPlugin {
+interface JukePlayerPlugin {
   /** A new list. Tracks queued with queueNext stay next (P1); autoplay starts over from the start track (a Global one gets its radio natively). */
   setQueue(o: { tracks: NativeTrack[]; startIndex: number; positionMs?: number; playWhenReady: boolean; context?: { label: string; mode: 'radio' | 'list' } }): Promise<void>;
   /** Jukebox autoplay picks for `seedId` (after queueLow); dropped if the seed changed, autoplay is off or repeat is on. */

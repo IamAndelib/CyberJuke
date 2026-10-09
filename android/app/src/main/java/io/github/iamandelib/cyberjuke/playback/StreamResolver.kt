@@ -143,7 +143,7 @@ internal object StreamResolver {
             } catch (e: ExecutionException) {
                 // Another load's extraction we waited on was cancelled (its thread interrupted,
                 // L14): ours was not, so run one of our own.
-                if (!mine && attempt == 0 && e.hasCause<InterruptedIOException>() &&
+                if (!mine && attempt == 0 && e.findCause<InterruptedIOException>() != null &&
                     !Thread.currentThread().isInterrupted
                 ) {
                     continue
@@ -198,17 +198,6 @@ internal object StreamResolver {
             }
         }
         return stream
-    }
-
-    private inline fun <reified T : Throwable> Throwable.hasCause(): Boolean {
-        var t: Throwable? = this
-        var depth = 0
-        while (t != null && depth < 16) {
-            if (t is T) return true
-            t = t.cause
-            depth++
-        }
-        return false
     }
 
     private fun choose(ytId: String, ex: YtCompat.Extracted, q: Quality, preferItag: Int?, gen: Int): ResolvedStream {

@@ -37,7 +37,7 @@ function isStale(e: unknown): boolean {
 const catalogById = computed(() => new Map(catalog.all.value.map((t) => [t.id, t])));
 
 /** A track native added itself (Global radio), from its `tracks` event. */
-export function fromNative(t: NativeTrack): Track | null {
+function fromNative(t: NativeTrack): Track | null {
   if (!t || typeof t.id !== 'string' || !t.id || typeof t.ytId !== 'string' || !YT_ID_RE.test(t.ytId)) return null;
   return {
     id: t.id,

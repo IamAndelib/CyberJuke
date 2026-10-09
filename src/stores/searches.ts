@@ -5,7 +5,7 @@
 import { signal } from '@preact/signals';
 import { kv, readJson, type KV } from '../core/storage';
 
-export const RECENT_SEARCHES_MAX = 5;
+const RECENT_SEARCHES_MAX = 5;
 const K_RECENT_SEARCHES = 'recentSearches';
 
 export const recentSearches = signal<string[]>([]);

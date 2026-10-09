@@ -142,6 +142,22 @@ class TrackErrorPolicyTest {
     }
 
     @Test
+    fun aForbiddenRightAfterANetworkSwitchIsNoReasonToSwitchToIpv4() {
+        // Resolved 20 s ago on Wi-Fi (IPv6), requested from mobile data: bound to the old IP.
+        val moved = Facts(
+            kind = null, httpCode = 403, urlAgeMs = 20_000L, viaIpv6 = true, canSwitchToIpv4 = true,
+            resolvedBeforeNetworkChange = true,
+        )
+        assertEquals(Action.ReResolve, TrackErrorPolicy.decide(moved))
+        // Same for a URL past its own expire.
+        assertEquals(Action.ReResolve, TrackErrorPolicy.decide(moved.copy(resolvedBeforeNetworkChange = false, urlExpired = true)))
+        // And once re-resolved, a stale URL's second 403 is not taken as a block either.
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(moved.copy(alreadyReResolved = true)))
+        // A 429 is a refusal wherever the URL came from.
+        assertEquals(Action.SwitchToIpv4, TrackErrorPolicy.decide(moved.copy(httpCode = 429)))
+    }
+
+    @Test
     fun runningBackOffJustWaits() {
         assertEquals(Action.WaitBlocked, TrackErrorPolicy.decide(Facts(kind = null, blocked = true)))
     }

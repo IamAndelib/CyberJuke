@@ -9,7 +9,7 @@ import type { Track } from '../data/model';
 import { toast } from '../stores/toast';
 import { TEST_HOOKS } from '../core/testHooks';
 
-export function shareUrl(t: Pick<Track, 'ytId'>): string {
+function shareUrl(t: Pick<Track, 'ytId'>): string {
   return `https://music.youtube.com/watch?v=${encodeURIComponent(t.ytId)}`;
 }
 

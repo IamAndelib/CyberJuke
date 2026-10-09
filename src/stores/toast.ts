@@ -1,7 +1,7 @@
 import { effect, signal } from '@preact/signals';
 
 /** A button on a toast (Undo): tapping it runs `run` and dismisses the toast. */
-export interface ToastAction {
+interface ToastAction {
   label: string;
   run: () => void;
   /**
@@ -13,14 +13,14 @@ export interface ToastAction {
   membersOnly?: boolean;
 }
 
-export interface Toast {
+interface Toast {
   id: number;
   text: string;
   action?: ToastAction;
 }
 
 /** How long a toast with an action stays: long enough to reach for Undo. */
-export const ACTION_TOAST_MS = 4000;
+const ACTION_TOAST_MS = 4000;
 
 export const toasts = signal<Toast[]>([]);
 let nextId = 1;
@@ -33,7 +33,7 @@ function unwatch(id: number): void {
   watchers.delete(id);
 }
 
-export function dismissToast(id: number): void {
+function dismissToast(id: number): void {
   clearTimeout(timers.get(id));
   timers.delete(id);
   unwatch(id);
@@ -41,7 +41,7 @@ export function dismissToast(id: number): void {
 }
 
 /** Take the button off a toast; its text stays for the rest of its time. */
-export function dropToastAction(id: number): void {
+function dropToastAction(id: number): void {
   unwatch(id);
   if (toasts.peek().some((t) => t.id === id && t.action)) toasts.value = toasts.peek().map((t) => (t.id === id ? { id: t.id, text: t.text } : t));
 }

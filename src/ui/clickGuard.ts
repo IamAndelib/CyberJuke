@@ -46,7 +46,7 @@ export function smoothScrolling(el: Element, ms = SMOOTH_SCROLL_MS): () => void 
 }
 
 /** Whether the click guard would swallow a tap landing on `target` now (for tests). */
-export function scrollRunningUnder(target: EventTarget | null): boolean {
+function scrollRunningUnder(target: EventTarget | null): boolean {
   if (!(target instanceof Node)) return false;
   for (const el of running.keys()) if (el.contains(target)) return true;
   return false;

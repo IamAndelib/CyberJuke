@@ -10,7 +10,7 @@
  * - Leading "The" is not stripped.
  */
 
-export interface AZSection<T> {
+interface AZSection<T> {
   letter: string;
   items: T[];
 }
@@ -25,7 +25,7 @@ export function azLetter(name: string): string {
   return (special[first] ?? first).toLocaleUpperCase();
 }
 
-export function compareNames(a: string, b: string): number {
+function compareNames(a: string, b: string): number {
   return collator.compare(a.trim(), b.trim()) || (a < b ? -1 : a > b ? 1 : 0);
 }
 

@@ -51,8 +51,8 @@ export async function readJson<T>(store: KV, key: string, fallback: T): Promise<
   }
 }
 
-export type Area = 'data' | 'cache';
-export const AREA_DIRS: Record<Area, string> = { data: 'cyberjuke', cache: 'cyberjuke-cache' };
+type Area = 'data' | 'cache';
+const AREA_DIRS: Record<Area, string> = { data: 'cyberjuke', cache: 'cyberjuke-cache' };
 
 export function filePath(area: Area, name: string): string {
   return `${AREA_DIRS[area]}/${name}.json`;
@@ -74,7 +74,7 @@ export function isMissingFile(e: unknown): boolean {
 }
 
 /** @capacitor/filesystem, Directory.Data / Directory.Cache. */
-export function nativeFiles(): FileBackend {
+function nativeFiles(): FileBackend {
   const fs = () => import('@capacitor/filesystem');
   const dir = async (area: Area) => {
     const { Directory } = await fs();
@@ -127,7 +127,7 @@ export function files(): FileBackend {
   return (defaultBackend ??= Capacitor.isNativePlatform() ? nativeFiles() : localFiles());
 }
 
-export interface TextFileOptions {
+interface TextFileOptions {
   backend?: FileBackend;
   /** Preferences keys this file replaces (newest shape first). */
   legacyKeys?: readonly string[];

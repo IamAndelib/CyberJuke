@@ -17,7 +17,7 @@ import { Cache, InFlight } from '../core/cache';
 import { textFile } from '../core/storage';
 import { online } from '../core/network';
 
-export interface LyricLine {
+interface LyricLine {
   /** ms from the start of the track. */
   t: number;
   text: string;
@@ -31,7 +31,7 @@ export interface Lyrics {
   instrumental?: boolean;
 }
 
-export const LYRICS_CACHE_MAX = 300;
+const LYRICS_CACHE_MAX = 300;
 export const NOT_FOUND_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 // ---- Cleaning titles for lookups -------------------------------------------------------
@@ -79,7 +79,7 @@ const TIME_TAG = /\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g;
 const OFFSET_TAG = /^\s*\[offset:\s*([+-]?\d+)\s*\]\s*$/i;
 
 /** Whether text carries LRC time tags. */
-export function looksLikeLrc(text: string): boolean {
+function looksLikeLrc(text: string): boolean {
   return /\[\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?\]/.test(text ?? '');
 }
 
@@ -156,7 +156,7 @@ export function normalizeLyrics(r: LyricsResult | null | undefined): Lyrics {
 
 // ---- Cache ---------------------------------------------------------------------------------
 
-export interface LyricsStorage {
+interface LyricsStorage {
   get(key: string): Promise<string | null>;
   set(key: string, value: string): Promise<void>;
 }
@@ -172,7 +172,7 @@ export const LYRICS_CACHE_KEY = 'lyrics.v1';
 
 export type LyricsOutcome = { status: 'ok'; lyrics: Lyrics } | { status: 'error'; offline: boolean };
 
-export interface LyricsClient {
+interface LyricsClient {
   get(track: Track, durationMs?: number): Promise<LyricsOutcome>;
   /** A cached result, if any (no request). */
   peek(trackId: string): Lyrics | undefined;
@@ -180,7 +180,7 @@ export interface LyricsClient {
   dropMembersOnly(): Promise<void>;
 }
 
-export interface LyricsDeps {
+interface LyricsDeps {
   plugin: () => Pick<JukeMusicPlugin, 'lyrics'> | null;
   storage: LyricsStorage;
   now?: () => number;

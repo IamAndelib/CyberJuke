@@ -23,19 +23,19 @@ import { normalize, words } from './search';
 
 export const W_ARTIST = 3;
 export const W_GENRE = 2.5;
-export const W_VIBE = 2;
+const W_VIBE = 2;
 export const W_POSTER = 0.5;
-export const W_SAVES = 0.4;
-export const W_RECENT = 0.3;
+const W_SAVES = 0.4;
+const W_RECENT = 0.3;
 /** Share of the score from the seed; the rest from the last DRIFT_TRACKS played. */
-export const SEED_SHARE = 0.6;
-export const DRIFT_TRACKS = 3;
+const SEED_SHARE = 0.6;
+const DRIFT_TRACKS = 3;
 /** Recently played tracks left out. */
-export const EXCLUDE_RECENT = 50;
+const EXCLUDE_RECENT = 50;
 /** Draws are made among this many best candidates. */
-export const TOP_K = 12;
+const TOP_K = 12;
 /** Likeness that counts as a good match (an equal genre, the same artist, a strong vibe...). */
-export const GOOD_MATCH = 1;
+const GOOD_MATCH = 1;
 export const VARIETY_WINDOW = 10;
 export const MAX_PER_ARTIST = 2;
 const RECENCY_DAYS = 180;
@@ -45,7 +45,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * Genre families: a genre belongs to every family with a key among its words (normalized,
  * whole words, so "r&b" is "r b" and "hip hop" needs both words). Families may overlap.
  */
-export const GENRE_FAMILIES: Record<string, readonly string[]> = {
+const GENRE_FAMILIES: Record<string, readonly string[]> = {
   rock: ['rock', 'metal', 'punk', 'grunge', 'alt', 'alternative', 'hardcore', 'emo', 'shoegaze', 'post rock', 'post punk', 'garage rock', 'prog', 'doom', 'stoner', 'screamo', 'math rock', 'new wave'],
   electronic: [
     'electronic', 'electronica', 'house', 'techno', 'edm', 'dnb', 'drum and bass', 'drum n bass', 'jungle', 'trance', 'synthwave', 'outrun', 'idm', 'dubstep',
@@ -85,7 +85,7 @@ interface Feat {
   poster: string;
 }
 
-export interface SimilarIndex {
+interface SimilarIndex {
   feats: Feat[];
   /** artist key -> the posters who shared them */
   posters: Map<string, Set<string>>;

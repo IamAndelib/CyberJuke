@@ -10,7 +10,7 @@ import { favoriteArtists, isFavoriteArtist } from '../../stores/library';
 import { toggleFavoriteArtistWithUndo } from '../../stores/undo';
 import { Icon } from '../../ui/icons';
 import { popPage, useSearchContext, type AlbumRef } from '../../ui/nav';
-import { ErrorState, PlayShuffle, Tracks } from '../../ui/components/TrackList';
+import { CatalogError, PlayShuffle, Tracks } from '../../ui/components/TrackList';
 import { list as listCtx } from '../../ui/playAll';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
@@ -100,11 +100,7 @@ export function ArtistPage({ name: raw }: { name: string }) {
         </div>
         {catalogFailed ? (
           // P7: a failed catalog says so and offers Retry, instead of an endless skeleton.
-          <ErrorState
-            offline={!!catalog.error.value?.offline}
-            message="Couldn't load the Jukebox."
-            onRetry={() => void catalog.refresh()}
-          />
+          <CatalogError />
         ) : !catalogReady ? (
           <SkeletonRows n={3} />
         ) : jukebox.length ? (

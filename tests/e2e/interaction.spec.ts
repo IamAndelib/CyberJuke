@@ -325,7 +325,7 @@ test('the artist page says when the Jukebox could not load, and Retry loads it (
   await page.getByTestId('filter-artists').click();
   await page.getByTestId('music-open').first().click();
   const jukebox = page.getByTestId('screen-artist').getByTestId('artist-jukebox');
-  await expect(jukebox.getByTestId('error')).toContainText("Couldn't load the Jukebox.");
+  await expect(jukebox.getByTestId('error')).toContainText("Couldn't load the Jukebox");
   await expect(jukebox.getByTestId('skeleton')).toHaveCount(0);
   failing = false;
   await jukebox.getByTestId('retry').click();

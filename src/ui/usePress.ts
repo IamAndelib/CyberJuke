@@ -8,7 +8,7 @@ import type { RefObject } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { reducedMotion } from '../core/motion';
 
-export const PRESS_MS = 120;
+const PRESS_MS = 120;
 
 export function usePress(ref: RefObject<HTMLElement | null>): void {
   useEffect(() => {

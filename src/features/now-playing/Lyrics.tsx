@@ -17,10 +17,10 @@ import { smoothScrolling } from '../../ui/clickGuard';
 import { reducedMotion } from '../../core/motion';
 import { useTickValue } from '../../ui/useTick';
 
-export const MANUAL_PAUSE_MS = 4000;
+const MANUAL_PAUSE_MS = 4000;
 
 /** The source credit line ("Lyrics: LRCLIB", "Source: LyricFind"). Never names the video host. */
-export function creditFor(source: string | undefined): string {
+function creditFor(source: string | undefined): string {
   const src = (source ?? '').trim();
   if (!src || /youtube/i.test(src)) return 'Source: LyricFind';
   if (/^source\s*:/i.test(src)) return src;

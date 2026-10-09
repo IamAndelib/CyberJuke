@@ -19,7 +19,7 @@ import { dropToastActions, toast } from './toast';
 const fs = source instanceof FirestoreSource ? source : null;
 
 /** One genre's tracks from the catalog (NSFW included; the source filters). */
-export async function catalogGenreTracks(genre: string): Promise<Track[]> {
+async function catalogGenreTracks(genre: string): Promise<Track[]> {
   if (!catalog.all.value.length) await catalog.refresh();
   const all = catalog.all.value;
   const err = catalog.error.value;
@@ -30,7 +30,7 @@ export async function catalogGenreTracks(genre: string): Promise<Track[]> {
 if (fs) fs.genreTracks = catalogGenreTracks;
 
 /** Forget everything loaded in the other sign-in state and load the catalog again. */
-export async function resetForSignIn(): Promise<void> {
+async function resetForSignIn(): Promise<void> {
   fs?.invalidateAll();
   feeds.deletePrefix(...JUKEBOX_FEED_PREFIXES);
   freshness.reset();

@@ -10,7 +10,7 @@ import { logError } from '../core/log';
 import { TEST_HOOKS, exposeForTests } from '../core/testHooks';
 import { JukePlayer } from '../player/native';
 
-export interface ExclusionRect {
+interface ExclusionRect {
   left: number;
   top: number;
   width: number;

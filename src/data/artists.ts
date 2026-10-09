@@ -10,7 +10,7 @@
 import type { Track } from './model';
 import { normalize } from './search';
 
-export const UNKNOWN_ARTIST = 'Unknown artist';
+const UNKNOWN_ARTIST = 'Unknown artist';
 
 /** "(feat. X)" / "[ft. X]" become ", X" so the brackets don't stick to the names. */
 const BRACKETED_FEAT = /[([]\s*(?:feat\.?|ft\.?|featuring)\s+([^)\]]*)[)\]]/gi;
@@ -59,7 +59,7 @@ export interface Artist {
   count: number;
 }
 
-export interface ArtistIndex {
+interface ArtistIndex {
   /** Most-shared first, then by name. */
   artists: Artist[];
   /** Tracks per artist key, in the input order (newest first for the catalog). */

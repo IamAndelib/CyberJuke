@@ -292,3 +292,23 @@ test('the Jukebox tracks of an artist play from the artist page', async ({ page 
   await page.getByTestId('artist-jukebox-play').click();
   await expect(page.getByTestId('mini-title')).toHaveText(first);
 });
+
+test('★ on an artist page: adds the artist to Favourites, and unstarring removes it', async ({ page }) => {
+  const artist = await openFirstArtist(page);
+  const star = page.getByTestId('artist-page-fav');
+  await expect(star).toHaveAttribute('aria-pressed', 'false');
+  await star.click();
+  await expect(star).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('toast').last()).toContainText(artist);
+  await page.getByTestId('artist-back').click();
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('tab-artists').click();
+  await expect(page.getByTestId('fav-artists').getByTestId('artist-tile')).toHaveText([artist]);
+  await page.getByTestId('fav-artists').getByTestId('artist-tile').click();
+  await star.click();
+  await expect(star).toHaveAttribute('aria-pressed', 'false');
+  await page.getByTestId('artist-back').click();
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('tab-artists').click();
+  await expect(page.getByTestId('fav-artists')).toHaveCount(0);
+});

@@ -46,7 +46,7 @@ export function Cover({ url, size = 'md', round, class: cls }: { url?: string; s
   );
 }
 
-export function albumRef(item: MusicItem, fallbackArtist = ''): AlbumRef {
+function albumRef(item: MusicItem, fallbackArtist = ''): AlbumRef {
   return {
     url: item.url,
     title: item.title,
@@ -77,7 +77,7 @@ export function releaseRef(r: Release, artist: string, kind: ReleaseKind = r.kin
 }
 
 /** One release: square cover, title, year. Opens the album page. */
-export function ReleaseCard({ release, artist, kind }: { release: Release; artist: string; kind: ReleaseKind }) {
+function ReleaseCard({ release, artist, kind }: { release: Release; artist: string; kind: ReleaseKind }) {
   const label = RELEASE_LABEL[kind];
   return (
     <button
@@ -263,12 +263,12 @@ export function searchLoader(query: string, filter: MusicFilter): FeedLoader<Mus
 }
 
 /** "More by" stops paging after this many matches, or MORE_BY_PAGES pages. */
-export const MORE_BY_TARGET = 20;
-export const MORE_BY_PAGES = 3;
+const MORE_BY_TARGET = 20;
+const MORE_BY_PAGES = 3;
 
 type ByCursor = { next: string; channel: string };
 /** `resolved: false`: no artist matched the name exactly, so the section is hidden. */
-export interface MoreByMeta {
+interface MoreByMeta {
   resolved: boolean;
 }
 

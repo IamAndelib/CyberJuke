@@ -14,7 +14,7 @@ import { useContext, useEffect, useRef } from 'preact/hooks';
 import type { Track } from '../data/model';
 
 export type Tab = 'home' | 'genres' | 'artists' | 'library' | 'settings';
-export const TABS: readonly Tab[] = ['home', 'genres', 'artists', 'library', 'settings'];
+const TABS: readonly Tab[] = ['home', 'genres', 'artists', 'library', 'settings'];
 
 /** An album or playlist from Global search. What we know before it loads is shown at once. */
 export interface AlbumRef {
@@ -93,7 +93,7 @@ export function askConfirm(req: ConfirmRequest): void {
 // ---- Taps --------------------------------------------------------------------------
 
 /** M9: taps on a just-opened page are ignored this long when they land where the opening tap did. */
-export const OPEN_GUARD_MS = 300;
+const OPEN_GUARD_MS = 300;
 /** How close (px) a tap must be to the opening tap to count as its double. */
 const OPEN_GUARD_PX = 48;
 
@@ -151,7 +151,7 @@ function closeOverlays(): void {
 }
 
 /** Open a page on top of the current tab (closing Now Playing and menus first). */
-export function pushPage(page: Page): void {
+function pushPage(page: Page): void {
   closeOverlays();
   const t = tab.value;
   let cur = stacks.value[t];
@@ -257,7 +257,7 @@ export function pageKey(t: Tab, entry: StackEntry | null): string {
 }
 
 /** Key of the page showing now. */
-export const activePageKey = computed(() => pageKey(tab.value, topEntry.value));
+const activePageKey = computed(() => pageKey(tab.value, topEntry.value));
 
 /** Whether the page this component sits in is the one showing (re-renders only when that flips). */
 export function usePageActive(): boolean {

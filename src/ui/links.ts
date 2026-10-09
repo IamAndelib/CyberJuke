@@ -6,7 +6,7 @@
 import { SITE_ORIGIN } from '../data/model';
 
 /** Hosts `openExternal` may open (exact match). */
-export const EXTERNAL_HOSTS: ReadonlySet<string> = new Set([
+const EXTERNAL_HOSTS: ReadonlySet<string> = new Set([
   'beta.cyberspace.online',
   'cyberspace.online',
   'github.com',

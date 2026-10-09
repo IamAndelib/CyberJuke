@@ -125,3 +125,34 @@ for (const kind of ['genres', 'artists'] as const) {
     await expect(grid).toHaveAttribute('data-sort', 'popular');
   });
 }
+
+test('★ on a genre page: adds it to Favourites, Undo takes it back, and it follows the grid', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('tab-genres').click();
+  const cell = page.getByTestId('genre-grid').getByTestId('genre-cell').nth(2);
+  const genre = (await cell.getAttribute('data-genre'))!;
+  await cell.getByTestId('genre-tile').click();
+  const star = page.getByTestId('genre-page-fav');
+  await expect(star).toHaveAttribute('aria-pressed', 'false');
+  await expect(star).toHaveAttribute('aria-label', `Add ${genre} to favourites`);
+
+  await star.click();
+  await expect(star).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('toast').last()).toContainText(`${genre}: added to ★ Favourites`);
+  await page.getByTestId('genre-back').click();
+  await expect(page.getByTestId('fav-genres').getByTestId('genre-tile')).toHaveText([genre]);
+
+  // Undo from inside the page.
+  await page.getByTestId('fav-genres').getByTestId('genre-tile').click();
+  await star.click();
+  await expect(star).toHaveAttribute('aria-pressed', 'false');
+  await page.getByTestId('toast').last().getByRole('button', { name: 'Undo' }).click();
+  await expect(star).toHaveAttribute('aria-pressed', 'true');
+
+  // Unstarred from the page: gone from Favourites.
+  await star.click();
+  await page.getByTestId('genre-back').click();
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('tab-genres').click();
+  await expect(page.getByTestId('fav-genres')).toHaveCount(0);
+});

@@ -31,7 +31,7 @@ const DEFAULT_TTL_S = 3600;
 
 // ---- Errors ---------------------------------------------------------------------------
 
-export type AuthErrorCode =
+type AuthErrorCode =
   | 'BAD_CREDENTIALS'
   | 'WRONG_PASSWORD'
   | 'USER_NOT_FOUND'
@@ -118,15 +118,15 @@ export function authErrorText(code: AuthErrorCode): string {
 
 // ---- State ----------------------------------------------------------------------------
 
-export type AuthStatus = 'restoring' | 'signedOut' | 'signedIn';
+type AuthStatus = 'restoring' | 'signedOut' | 'signedIn';
 
-export interface AuthUser {
+interface AuthUser {
   uid: string;
   /** "@username", or the email when the username couldn't be read. */
   name: string;
 }
 
-export interface AuthState {
+interface AuthState {
   status: AuthStatus;
   user: AuthUser | null;
 }
@@ -148,9 +148,9 @@ interface Saved {
   refreshToken: string;
 }
 
-export type AuthChangeReason = 'signIn' | 'signOut' | 'expired';
+type AuthChangeReason = 'signIn' | 'signOut' | 'expired';
 
-export interface AuthDeps {
+interface AuthDeps {
   store: Pick<SecureStorePlugin, 'get' | 'set' | 'remove'>;
   fetch?: typeof fetch;
   now?: () => number;

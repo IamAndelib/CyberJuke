@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 
-export const CHUNK = 60;
+const CHUNK = 60;
 
 /** Rows rendered per list key, so a remount renders as many as before (for scroll memory). */
 const counts = new Map<string, number>();
@@ -24,7 +24,7 @@ const cancelIdle = (id: number) => {
   else clearTimeout(id);
 };
 
-export interface ChunkOptions {
+interface ChunkOptions {
   /**
    * Keep adding chunks in idle time until everything is rendered (grids with an A–Z
    * scroller need their full height); otherwise more come only near the bottom.

@@ -6,9 +6,9 @@ import { menuTrack, nowPlayingOpen } from '../nav';
 import { Art } from './Art';
 
 /** M9: a second tap on the same row this soon is the tail of a double tap. */
-export const ROW_DOUBLE_TAP_MS = 500;
+const ROW_DOUBLE_TAP_MS = 500;
 /** P10: holding a row this long opens its ⋯ menu. */
-export const LONG_PRESS_MS = 500;
+const LONG_PRESS_MS = 500;
 /** A finger that moves this far (px) is scrolling, not pressing. */
 const PRESS_SLOP = 10;
 
@@ -19,7 +19,7 @@ let lastRowTap = { id: '', at: 0 };
  * already current it resumes (paused) or opens Now Playing (playing), never restarts;
  * otherwise it plays.
  */
-export function tapRow(track: Track, play: () => void, now = performance.now()): void {
+function tapRow(track: Track, play: () => void, now = performance.now()): void {
   if (lastRowTap.id === track.id && now - lastRowTap.at < ROW_DOUBLE_TAP_MS) return;
   lastRowTap = { id: track.id, at: now };
   if (currentId.peek() === track.id) {
@@ -44,7 +44,7 @@ function buzz(): void {
  * however long the finger stays down. The next touch (a new pointerdown) ends it, so a
  * release that makes no click doesn't eat a later tap.
  */
-export function swallowNextClick(): void {
+function swallowNextClick(): void {
   const stop = (e: Event) => {
     e.preventDefault();
     e.stopPropagation();
@@ -115,7 +115,7 @@ function longPress(track: Track) {
   };
 }
 
-export function Bars() {
+function Bars() {
   return (
     <span class="bars" aria-hidden="true">
       <i />

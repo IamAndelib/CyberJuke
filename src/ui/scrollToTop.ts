@@ -13,7 +13,7 @@ export function easeOut(t: number): number {
   return 1 - (1 - p) ** 3;
 }
 
-export interface ScrollToTopOptions {
+interface ScrollToTopOptions {
   /** Jump at once, no animation (prefers-reduced-motion). */
   reduced?: boolean;
   duration?: number;

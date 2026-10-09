@@ -163,7 +163,7 @@ export function int(v: FsValue | undefined): number | undefined {
   return undefined;
 }
 
-export function docId(name: string): string {
+function docId(name: string): string {
   const i = name.lastIndexOf('/');
   return i >= 0 ? name.slice(i + 1) : name;
 }

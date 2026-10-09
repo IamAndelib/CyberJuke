@@ -13,10 +13,10 @@
 import { useEffect, useRef } from 'preact/hooks';
 import { reducedMotion } from '../../core/motion';
 
-export const MARQUEE_PX_S = 36;
-export const MARQUEE_HOLD_MS = 1500;
+const MARQUEE_PX_S = 36;
+const MARQUEE_HOLD_MS = 1500;
 /** Space between the end of the text and its repeat. */
-export const MARQUEE_GAP_PX = 48;
+const MARQUEE_GAP_PX = 48;
 
 export function Marquee({ text, active = true }: { text: string; active?: boolean }) {
   const box = useRef<HTMLSpanElement>(null);

@@ -78,8 +78,12 @@ internal object TrackErrorPolicy {
             else -> Unit
         }
         f.httpCode?.let { code ->
-            // A refusal (429, or 403 on a URL resolved moments ago) over IPv6: try IPv4 first.
-            val refused = code == 429 || (code == 403 && f.urlAgeMs != null && f.urlAgeMs < FRESH_URL_MS)
+            // A 403 on a URL from an earlier network or past its own expire is no refusal: the
+            // URL is bound to the old IP, or simply too old. A fresh one on this network is.
+            val stale = f.urlExpired || f.resolvedBeforeNetworkChange
+            val fresh403 = code == 403 && !stale && f.urlAgeMs != null && f.urlAgeMs < FRESH_URL_MS
+            // A refusal (429, or that fresh 403) over IPv6: try IPv4 first.
+            val refused = code == 429 || fresh403
             when {
                 refused && f.viaIpv6 && f.canSwitchToIpv4 && !f.alreadyReResolved -> return Action.SwitchToIpv4
                 // One fresh link first: the extraction itself tells whether we're blocked.
@@ -87,8 +91,7 @@ internal object TrackErrorPolicy {
                 code == 429 -> return Action.Block(BlockReason.RATE_LIMIT)
                 // An expired URL, or one bound to the old network's IP, is no sign of a block.
                 (code == 403 || code == 410) && !f.alreadyReResolved -> return Action.ReResolve
-                code == 403 && f.urlAgeMs != null && f.urlAgeMs < FRESH_URL_MS ->
-                    return Action.Block(BlockReason.STREAM_FORBIDDEN)
+                fresh403 -> return Action.Block(BlockReason.STREAM_FORBIDDEN)
                 code >= 500 -> return Action.Pause(broken = false)
                 else -> Unit
             }

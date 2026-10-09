@@ -30,7 +30,7 @@
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
-export interface Identified {
+interface Identified {
   id: string;
 }
 
@@ -42,19 +42,19 @@ interface Entry<T> {
 }
 
 /** Up next split into its three sections, each in play order, with list indices. */
-export interface QueueSections<T> {
+interface QueueSections<T> {
   queued: { item: T; index: number }[];
   list: { item: T; index: number }[];
   autoplay: { item: T; index: number }[];
 }
 
-export const RESTART_THRESHOLD_MS = 3000;
+const RESTART_THRESHOLD_MS = 3000;
 /** Tracks kept behind the current one in play order; older played autoplay tracks go. */
 export const KEEP_PLAYED = 50;
 
 export type Section = 'queued' | 'list' | 'autoplay';
 
-export type PrevResult = 'restart' | 'moved';
+type PrevResult = 'restart' | 'moved';
 
 export class Queue<T extends Identified> {
   private list: Entry<T>[] = [];

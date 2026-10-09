@@ -153,15 +153,12 @@ internal object NetPrefs {
 
     /** IPv4 addresses only, where a host has any ([Http]'s IPv4 client). */
     val ipv4Dns: Dns = object : Dns {
-        override fun lookup(hostname: String): List<InetAddress> = order(Dns.SYSTEM.lookup(hostname), true)
+        override fun lookup(hostname: String): List<InetAddress> = ipv4Only(Dns.SYSTEM.lookup(hostname))
     }
 
-    /** IPv4 addresses only when [preferIpv4] and there are any; otherwise unchanged. */
-    fun order(addresses: List<InetAddress>, preferIpv4: Boolean): List<InetAddress> {
-        if (!preferIpv4) return addresses
-        val v4 = addresses.filterIsInstance<Inet4Address>()
-        return v4.ifEmpty { addresses }
-    }
+    /** The IPv4 addresses if there are any; otherwise all of them (an IPv6-only host). */
+    fun ipv4Only(addresses: List<InetAddress>): List<InetAddress> =
+        addresses.filterIsInstance<Inet4Address>().ifEmpty { addresses }
 
     /**
      * Applies a saved or chosen mode and AUTO memory. Returns true if the family in force

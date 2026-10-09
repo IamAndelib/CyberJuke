@@ -7,7 +7,7 @@
  * order they were stored, and one that touches on every use is an LRU.
  */
 
-export interface CacheOptions<V> {
+interface CacheOptions<V> {
   /** How long an entry stays fresh, in ms, or per value (Infinity: forever). Default: forever. */
   ttlMs?: number | ((value: V) => number);
   /** Most entries kept; past it the least recently written go first. Default: no limit. */
@@ -17,7 +17,7 @@ export interface CacheOptions<V> {
   now?: () => number;
 }
 
-export interface LoadOptions<V> {
+interface LoadOptions<V> {
   /** Called right after a loaded value is stored (not for hits or shared loads). */
   stored?: (value: V) => void;
   /** Maps a failed load's error (the shared promise rejects with what this returns). */

@@ -13,7 +13,7 @@
  */
 import { signal, type ReadonlySignal } from '@preact/signals';
 
-export interface NewTracks {
+interface NewTracks {
   /** How many are newer (capped at the query limit). */
   count: number;
   /** createdAt of the newest one. */
@@ -38,7 +38,7 @@ export interface FreshnessDeps {
 /** A resume or reconnect within this long of the last check doesn't check again. */
 export const RESUME_MIN_MS = 60 * 1000;
 
-export interface Freshness {
+interface Freshness {
   /** What the pill shows; null hides it. */
   pending: ReadonlySignal<NewTracks | null>;
   /** The newest createdAt shown on the Latest feed (pill clears if it covers `pending`). */

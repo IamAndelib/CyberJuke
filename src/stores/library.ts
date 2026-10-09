@@ -24,7 +24,7 @@ export const THEME_LABELS: Record<ThemeId, string> = {
   brutalist: 'Brutalist',
 };
 
-export type Quality = 'high' | 'low';
+type Quality = 'high' | 'low';
 
 /** Minutes between checks for new tracks; 0 = only when I refresh. */
 export type CheckEvery = 5 | 15 | 30 | 60 | 0;
@@ -55,11 +55,11 @@ export interface Settings {
 export type Ipv4Mode = 'auto' | 'always' | 'off';
 export const IPV4_MODES: readonly Ipv4Mode[] = ['auto', 'always', 'off'];
 
-export const DEFAULT_SETTINGS: Settings = { theme: 'dark', showNsfw: false, quality: 'high', checkEvery: 15, ipv4: 'auto', autoplay: true };
+const DEFAULT_SETTINGS: Settings = { theme: 'dark', showNsfw: false, quality: 'high', checkEvery: 15, ipv4: 'auto', autoplay: true };
 
 const K_LIKED = 'liked';
 /** Old Preferences keys of history, migrated into the history file: timed entries, then the untimed list. */
-export const HISTORY_LEGACY_KEYS = ['history', 'recent'] as const;
+const HISTORY_LEGACY_KEYS = ['history', 'recent'] as const;
 const K_SETTINGS = 'settings';
 const K_FAV_GENRES = 'favGenres';
 const K_FAV_ARTISTS = 'favArtists';

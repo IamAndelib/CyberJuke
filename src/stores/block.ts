@@ -13,14 +13,14 @@
 import { computed, signal, type ReadonlySignal } from '@preact/signals';
 import type { BlockReason, BlockedEvent } from '../player/native';
 
-export interface BlockState {
+interface BlockState {
   until: number;
   reason: BlockReason;
 }
 
 const REASONS: readonly BlockReason[] = ['BOT_CHECK', 'RATE_LIMIT', 'STREAM_FORBIDDEN'];
 
-export interface BlockDeps {
+interface BlockDeps {
   now?: () => number;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (id: unknown) => void;

@@ -14,7 +14,7 @@ export interface HistoryEntry {
   playedAt: number;
 }
 
-export const HISTORY_DAYS = 3;
+const HISTORY_DAYS = 3;
 export const HISTORY_EXTRA = 100;
 export const HISTORY_MAX = 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -70,7 +70,7 @@ export function migrateHistory(raw: unknown, now: number): HistoryEntry[] {
  * How history is stored: plays as `{ id, playedAt }`, newest first, and each track
  * once in a table (a track played on many days is stored once).
  */
-export interface StoredHistory {
+interface StoredHistory {
   v: 2;
   plays: { id: string; playedAt: number }[];
   tracks: Record<string, Track>;
@@ -131,7 +131,7 @@ export function dayLabel(ms: number, now: number): string {
   return d.getFullYear() === new Date(now).getFullYear() ? base : `${base} ${d.getFullYear()}`;
 }
 
-export interface HistoryDay {
+interface HistoryDay {
   key: string;
   label: string;
   tracks: Track[];

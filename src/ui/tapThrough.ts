@@ -12,15 +12,15 @@
  */
 
 /** Containers whose buttons act on a tap even when Chromium drops the click. */
-export const TAP_THROUGH = '[data-tap-through], .tabbar, .mini, .topbar, .fab, .toasts';
+const TAP_THROUGH = '[data-tap-through], .tabbar, .mini, .topbar, .fab, .toasts';
 /** What counts as a tappable control inside them. */
 const CONTROL = 'button, a[href], [role="tab"], [role="radio"]';
 /** Further than this and the finger was scrolling, not tapping. */
-export const TAP_SLOP_PX = 10;
+const TAP_SLOP_PX = 10;
 /** Longer than this and it was a hold, not a tap. */
 const TAP_MAX_MS = 500;
 /** How long to wait for the real click before supplying it. */
-export const CLICK_WAIT_MS = 80;
+const CLICK_WAIT_MS = 80;
 /** A real click this soon after a supplied one is the same tap arriving late: dropped. */
 const LATE_CLICK_MS = 400;
 

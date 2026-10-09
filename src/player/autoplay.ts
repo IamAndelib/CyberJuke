@@ -13,7 +13,7 @@ import { similarTracks } from '../data/similar';
 import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, type Player, type QueueLow } from './types';
 
 /** How long a batch just added counts as ahead even before the player's state shows it (native's lags the call). */
-export const BATCH_LAG_MS = 5000;
+const BATCH_LAG_MS = 5000;
 
 export interface AutoplayDeps {
   player: Player;

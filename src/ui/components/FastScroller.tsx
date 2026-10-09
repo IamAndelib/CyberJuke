@@ -3,13 +3,13 @@ import { useEffect, useRef } from 'preact/hooks';
 import { setGestureExclusion } from '../gestureExclusion';
 
 /** The thumb fades this long after scrolling stops. */
-export const SCROLLBAR_HIDE_MS = 1200;
+const SCROLLBAR_HIDE_MS = 1200;
 /** The A–Z letter popup fades this long after a drag of the thumb ends. */
-export const LETTER_HIDE_MS = 600;
+const LETTER_HIDE_MS = 600;
 /** Lists longer than this many screens get a draggable thumb. */
-export const DRAG_SCREENS = 3;
+const DRAG_SCREENS = 3;
 /** A press on the thumb becomes a drag once it has moved this far; a tap does nothing. */
-export const DRAG_START_PX = 6;
+const DRAG_START_PX = 6;
 /** The thumb's rect goes to the back-gesture exclusion at most this often while it moves. */
 const EXCLUSION_MS = 100;
 const MIN_THUMB = 48;

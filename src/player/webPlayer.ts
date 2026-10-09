@@ -54,7 +54,7 @@ const YT_PLAYING = 1;
 const YT_PAUSED = 2;
 const YT_BUFFERING = 3;
 /** Codes where the video can never play here (removed, private, embedding disabled). */
-export const SKIP_ERROR_CODES = new Set([100, 101, 150]);
+const SKIP_ERROR_CODES = new Set([100, 101, 150]);
 
 let apiPromise: Promise<YTNamespace> | null = null;
 function loadApi(): Promise<YTNamespace> {

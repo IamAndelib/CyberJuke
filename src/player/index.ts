@@ -90,7 +90,7 @@ exposeForTests('__cyberjukeQueue', () => {
   return { context: s.context, current: t(s.current), seed: t(sec.seed), queued: items(sec.queued), list: items(sec.list), autoplay: items(sec.autoplay) };
 });
 
-export interface PositionSample {
+interface PositionSample {
   positionMs: number;
   durationMs: number;
   sampledAt: number;
@@ -114,14 +114,14 @@ effect(() => {
 });
 
 /** The Autoplay setting (C3); on unless turned off. */
-export function autoplayEnabled(): boolean {
+function autoplayEnabled(): boolean {
   return (settings.value as { autoplay?: boolean }).autoplay !== false;
 }
 
 let autoplay: Autoplay | null = null;
 
 /** Start autoplay (AP4): it answers the player's "running low" signals. Once. */
-export function startAutoplay(): Autoplay {
+function startAutoplay(): Autoplay {
   autoplay ??= createAutoplay({
     player,
     catalog: () => catalog.tracks.peek(),
@@ -167,7 +167,7 @@ export function startPlayerPrefs(): void {
 }
 
 /** Signed out: members-only tracks leave the queue (K5, S8). */
-export function dropMembersFromQueue(): Promise<void> {
+function dropMembersFromQueue(): Promise<void> {
   const ids = [...new Set(state.peek().queue.filter((t) => t.membersOnly).map((t) => t.id))];
   return ids.length ? player.removeIds(ids) : Promise.resolve();
 }

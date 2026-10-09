@@ -8,7 +8,7 @@ import { Icon } from '../icons';
  * art), grayscale + contrast, and one overlay with the theme-tinted duotone and the
  * dither/scanlines (see .art in ui/ui.css).
  */
-export function Art({ track, size = 'md', class: cls }: { track: Track | null; size?: 'sm' | 'md' | 'lg' | 'fill'; class?: string }) {
+export function Art({ track, size = 'md', class: cls }: { track: Track | null; size?: 'sm' | 'md' | 'fill'; class?: string }) {
   const [failedFor, setFailedFor] = useState<string | null>(null);
   const full = track?.artworkUrl;
   const small = size === 'sm' && full ? smallArtworkUrl(full) : null;
@@ -18,7 +18,7 @@ export function Art({ track, size = 'md', class: cls }: { track: Track | null; s
     <div class={`art art-${size}${small ? ' art-wide' : ''}${cls ? ' ' + cls : ''}`} aria-hidden="true">
       {failed ? (
         <div class="art-ph">
-          <Icon name="note" size={size === 'lg' || size === 'fill' ? 72 : 24} />
+          <Icon name="note" size={size === 'fill' ? 72 : 24} />
         </div>
       ) : (
         <img src={url} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setFailedFor(url!)} />
