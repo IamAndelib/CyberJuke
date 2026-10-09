@@ -91,6 +91,16 @@ describe('autoplay', () => {
     expect(added[1][0].filter((id) => added[0][0].includes(id))).toEqual([]);
   });
 
+  it('a batch the player dropped (repeat on and off again) does not hold up the next one', async () => {
+    const seed = track('c0', { artist: 'A0' });
+    const { ap, added, s } = setup({ current: seed, seed, queue: [seed], upNext: [] });
+    await ap.fill({ left: 0, seedId: 'c0' });
+    // The state showed the batch, then repeat dropped it: a new list without it.
+    s.value = { ...s.value, queue: [seed] };
+    await ap.fill({ left: 0, seedId: 'c0' });
+    expect(added).toHaveLength(2);
+  });
+
   it('the seed drifts only with what played since it started', async () => {
     const seed = track('c0', { artist: 'A0' });
     const before = track('old', { artist: 'Elsewhere', genre: 'techno' });

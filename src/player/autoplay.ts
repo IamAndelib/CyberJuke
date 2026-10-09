@@ -44,8 +44,12 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
   const now = deps.now ?? (() => Date.now());
   /** The web player's Global radio: where the next page starts. */
   let radio: { seedId: string; ytId: string; next?: string } | null = null;
-  /** The last batch added, until the player's state shows it. */
-  let batch: { seedId: string; ids: string[]; at: number } | null = null;
+  /**
+   * The last batch added, until the player's state shows it: `queue` is the list the
+   * state had when the call returned; once that changes, the batch is in it (or was
+   * dropped: repeat, a new list).
+   */
+  let batch: { seedId: string; ids: string[]; at: number; queue?: readonly Track[] } | null = null;
 
   async function run(e: QueueLow): Promise<void> {
     const s = player.state.peek();
@@ -55,15 +59,17 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     const inQueue = new Set(s.queue.flatMap((t) => [t.id, t.ytId]));
     // The signal may be older than the last refill (one that came in during it): count
     // again. A batch the state doesn't show yet is ahead too, and not picked again.
-    if (batch && (batch.seedId !== seed.id || now() - batch.at > BATCH_LAG_MS || batch.ids.some((id) => inQueue.has(id)))) batch = null;
+    if (batch && (batch.seedId !== seed.id || now() - batch.at > BATCH_LAG_MS || (batch.queue && batch.queue !== s.queue) || batch.ids.some((id) => inQueue.has(id)))) batch = null;
     const lagging = batch?.ids ?? [];
     for (const id of lagging) inQueue.add(id);
     const left = Math.max(e.left, s.upNext.filter((u) => u.auto).length) + lagging.length;
     if (left > AUTOPLAY_LOW) return;
     const count = left <= 0 ? AUTOPLAY_FIRST : AUTOPLAY_MORE;
     const add = async (tracks: Track[]) => {
-      batch = { seedId: seed.id, ids: tracks.map((t) => t.id), at: now() };
+      const b: NonNullable<typeof batch> = { seedId: seed.id, ids: tracks.map((t) => t.id), at: now() };
+      batch = b;
       await player.addAutoplay(tracks, seed.id);
+      b.queue = player.state.peek().queue;
     };
 
     if (isGlobal(seed)) {
