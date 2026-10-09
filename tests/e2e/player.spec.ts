@@ -231,6 +231,21 @@ test('the Now Playing heart follows the track: liked on one, empty on the next, 
   await expect(heart).toHaveAttribute('aria-pressed', 'true');
 });
 
+test('a scroll that starts on the seek bar scrolls Now Playing and seeks nothing', async ({ page }) => {
+  await start(page);
+  await playAndOpen(page);
+  const pos = page.getByTestId('time-pos');
+  await expect(pos).toHaveText(/^1:1\d$/);
+  const bar = (await page.getByTestId('seek').boundingBox())!;
+  const scroller = page.locator('.np-scroll');
+  const top0 = await scroller.evaluate((el) => el.scrollTop);
+  // A finger lands on the seek bar (right of the thumb) and pushes the sheet up.
+  await touchDrag(page, bar.x + bar.width * 0.85, bar.y + bar.height / 2, bar.y + bar.height / 2 - 300, 300);
+  await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(top0 + 50);
+  expect(await page.evaluate(() => (window as unknown as { __ytSeeks?: number }).__ytSeeks ?? 0)).toBe(0);
+  await expect(pos).toHaveText(/^1:[12]\d$/);
+});
+
 test('quick taps on the Now Playing heart leave one toast, about the last tap', async ({ page }) => {
   await start(page);
   await playAndOpen(page);

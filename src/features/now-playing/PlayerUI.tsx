@@ -188,22 +188,44 @@ function SeekBar({ s }: { s: PlayerState }) {
   // The drag ends on release (or a key): one seek, on the track it was made on. Listened to
   // natively: preact/compat (loaded for memo) turns onChange on inputs into onInput, which
   // sought on every step of a drag and left the bar stuck on the last one.
+  // A touch that turns into a scroll (the page takes it: pointercancel) seeks nothing: the
+  // thumb goes back, and the `change` Chromium still sends at touchend is ignored.
   useEffect(() => {
     const el = input.current;
     if (!el) return;
+    let cancelled = false;
     const end = () => {
       const d = dragRef.current;
       dragRef.current = null;
       setDrag(null);
       if (d && d.id === player.state.peek().current?.id) void player.seek(d.ms);
     };
-    el.addEventListener('change', end);
+    const down = () => {
+      cancelled = false;
+    };
+    const cancel = () => {
+      cancelled = true;
+      dragRef.current = null;
+      setDrag(null);
+    };
+    const change = () => {
+      if (cancelled) {
+        cancelled = false;
+        dragRef.current = null;
+        setDrag(null);
+        return;
+      }
+      end();
+    };
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('change', change);
     el.addEventListener('pointerup', end);
-    el.addEventListener('pointercancel', end);
+    el.addEventListener('pointercancel', cancel);
     return () => {
-      el.removeEventListener('change', end);
+      el.removeEventListener('pointerdown', down);
+      el.removeEventListener('change', change);
       el.removeEventListener('pointerup', end);
-      el.removeEventListener('pointercancel', end);
+      el.removeEventListener('pointercancel', cancel);
     };
   }, []);
   return (
