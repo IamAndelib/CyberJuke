@@ -15,7 +15,7 @@ Hardening for a public release and F-Droid.
 - ★ marks favourite genres and artists (♥ is only for liked tracks).
 - Long titles scroll in Now Playing and the mini player; long-press a row for its menu; swipe up on the mini player.
 - Smoother pull to refresh, sheets and scrolling; bigger touch targets; no accidental text selection; a tap that stops a scroll no longer plays a track.
-- Recent searches; "Share post" for Jukebox tracks; shorter Settings text; better contrast in the C64, Matrix, Crypt and Bubblegum themes.
+- Recent searches (with Clear all); "Here" search on the Genres and Artists tabs; shorter Settings text; better contrast in the C64, Matrix, Crypt and Bubblegum themes.
 
 ### YouTube
 - When YouTube limits requests from your network, playback pauses with a banner and waits (2, 5, 15, then 60 minutes) instead of skipping track after track; switching between Wi-Fi and mobile data no longer counts as a block.

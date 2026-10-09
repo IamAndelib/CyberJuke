@@ -349,9 +349,9 @@ test('Share in the ⋯ menu shares the track title, artist and music.youtube.com
   const ytId = /\/vi\/([^/]+)\//.exec(src)![1];
   const title = (await page.getByTestId('np-title').innerText()).trim();
   await page.getByTestId('np-more').click();
-  // A Jukebox track: "Share track", and "Share post" for its Cyberspace post.
-  await expect(page.getByTestId('menu-share')).toHaveText('Share track');
-  await expect(page.getByTestId('menu-share-post')).toHaveText('Share post');
+  // One Share item: the track link (no separate "Share post").
+  await expect(page.getByTestId('menu-share')).toHaveText('Share');
+  await expect(page.getByTestId('menu-share-post')).toHaveCount(0);
   await page.getByTestId('menu-share').click();
   await expect(page.getByTestId('track-menu')).not.toBeVisible();
   const shares = (await musicCalls(page)).filter((c) => c[0] === 'share').map((c) => c[1] as { title: string; text: string; url: string });

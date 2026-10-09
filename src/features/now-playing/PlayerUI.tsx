@@ -16,7 +16,7 @@ import { Marquee } from './Marquee';
 import { MembersTag } from '../../ui/components/TrackRow';
 import { LyricsPanel } from './Lyrics';
 import { UpNext } from './UpNext';
-import { canSharePost, sharePost, shareTrack } from '../../ui/share';
+import { shareTrack } from '../../ui/share';
 
 export function fmt(ms: number): string {
   if (!isFinite(ms) || ms < 0) ms = 0;
@@ -590,20 +590,8 @@ export function TrackMenu() {
               }}
               data-testid="menu-share"
             >
-              <Icon name="share" size={20} /> {canSharePost(t) ? 'Share track' : 'Share'}
+              <Icon name="share" size={20} /> Share
             </button>
-            {canSharePost(t) && (
-              <button
-                class="sheet-item"
-                onClick={() => {
-                  close();
-                  void sharePost(t);
-                }}
-                data-testid="menu-share-post"
-              >
-                <Icon name="share" size={20} /> Share post
-              </button>
-            )}
             <button
               class="sheet-item"
               onClick={() => {
