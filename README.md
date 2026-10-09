@@ -85,7 +85,7 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 
 | What | Where |
 |---|---|
-| Liked tracks, recently played, settings, favorite genres and artists | App data (Capacitor Preferences and app files) |
+| Liked tracks, recently played, settings, favorite genres and artists, recent searches | App data (Capacitor Preferences and app files). Android may include these in your own Google backup; members-only tracks are removed whenever the app starts signed out, so a restored backup never brings them back. |
 | The cached Jukebox catalog and lyrics | App data and cache; cleared on sign-out |
 | Login token, user id and @username (only if you sign in) | Encrypted with an Android Keystore key; excluded from Android cloud and device-transfer backups |
 | Stream URLs, YouTube Music results | Memory only |
@@ -97,9 +97,9 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 | Cyberspace's backend (Google Firestore) | Requests for Jukebox posts; your login token if signed in | Browsing the Jukebox |
 | Cyberspace's login (Google Identity Toolkit / Secure Token) | Your email and password; token refreshes | Only if you sign in |
 | YouTube | The video ID of the track being played or prefetched | Playback |
-| YouTube Music | Your Global search query, or the artist you open | Global search, artist pages |
-| YouTube image servers (`i.ytimg.com`) | Artwork requests | Lists and Now Playing |
-| LRCLIB | Artist, title and duration of the current track | Lyrics panel open |
+| YouTube Music | Your Global search query, or the artist you open; the video ID of a Global track, for its radio (also in the background while autoplay refills); the video ID of the playing track when LRCLIB has no lyrics for it | Global search, artist pages, Global autoplay, lyrics fallback |
+| YouTube and Google image servers (`i.ytimg.com`, `*.googleusercontent.com`, `*.ggpht.com`) | Artwork requests | Lists, artist pages and Now Playing |
+| LRCLIB | Artist, title, album (when known) and duration of the current track | Lyrics panel open |
 
 Nothing is sent to the developer. Your password is never stored or logged.
 
