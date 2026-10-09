@@ -59,23 +59,13 @@ No signing key is committed to this repository.
 
 versionCode is `major × 1,000,000 + minor × 1,000 + patch` (0.1.0 → 1000).
 
-The release key secrets (`KEYSTORE_FILE` as base64, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`) belong in the `release` environment (Settings → Environments → release), ideally with a required reviewer. The `main` branch must accept pushes from GitHub Actions for the bump commit.
+The signing keys live in two protected environments: `release` (`KEYSTORE_FILE` as base64, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`; main only, with a required reviewer) and `preview` (the same four names with a `PREVIEW_` prefix; main only). [`scripts/setup-publishing.sh`](scripts/setup-publishing.sh) creates the keys on the maintainer's computer and sets all of this up; [`docs/PUBLISHING.md`](docs/PUBLISHING.md) is the step-by-step guide. The `main` branch must accept pushes from GitHub Actions for the bump commit.
 
 ### Preview builds
 
-**Actions → Preview** builds `assemblePreview` and replaces the `preview` pre-release (`CyberJuke-preview.apk` + `.sha256`). It needs four repository secrets for the preview key, which is separate from the release key:
+**Actions → Preview** builds `assemblePreview` unsigned with a read-only token, then signs it with `apksigner` in the `preview` environment and replaces the `preview` pre-release (`CyberJuke-preview.apk` + `.sha256`). The preview key is separate from the release key. [`docs/TESTING.md`](docs/TESTING.md) is the phone checklist for a preview.
 
-```bash
-keytool -genkeypair -v -keystore preview.jks -storetype PKCS12 \
-  -alias cyberjuke-preview -keyalg RSA -keysize 4096 -validity 10000 \
-  -dname "CN=CyberJuke Preview"
-base64 -w0 preview.jks | gh secret set PREVIEW_KEYSTORE_FILE
-gh secret set PREVIEW_KEYSTORE_PASSWORD   # prompts; the store password you chose
-gh secret set PREVIEW_KEY_ALIAS --body cyberjuke-preview
-gh secret set PREVIEW_KEY_PASSWORD        # prompts; with PKCS12 it is the store password
-```
-
-Keep `preview.jks` somewhere safe outside the repository (`*.jks` is gitignored). Losing it means preview users must uninstall once.
+Keep both `.jks` files and their passwords backed up outside the repository (`*.jks` is gitignored). Losing the preview key means preview users must uninstall once; losing the release key means nobody can update the app.
 
 ## Dependencies
 

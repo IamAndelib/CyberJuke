@@ -162,6 +162,8 @@ CyberJuke is being prepared for [F-Droid](https://f-droid.org):
 
 The draft recipe and the submission steps are in [`docs/fdroid/`](docs/fdroid).
 
+Maintainers: the publishing steps (signing keys, test builds, releases, F-Droid submission) are in [`docs/PUBLISHING.md`](docs/PUBLISHING.md).
+
 ## Credits
 
 - **[Cyberspace](https://beta.cyberspace.online)** and its creator **[@genghis_khan](https://beta.cyberspace.online/genghis_khan)**, for the site, its look and the Jukebox.
