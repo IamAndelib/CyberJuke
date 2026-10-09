@@ -333,6 +333,9 @@ class JukePlayerPlugin : Plugin() {
             maybePlayCiTone(c)
             queueDirty = true
             lastQueueIds = null
+            // Tracks the page may not know (Global, a restored session) before the state that
+            // names them: on a cold start the page listened before the controller was here.
+            announceTracks(c)
             emitState(c)
             restartTicker(c)
         }, ContextCompat.getMainExecutor(ctx))
@@ -935,7 +938,7 @@ class JukePlayerPlugin : Plugin() {
         return StateEncoder.encode(c, queueIds)
     }
 
-    /** Describes the Global tracks in the queue to the web, once each (it can't look them up). */
+    /** Describes the tracks the web can't look up (Global, a restored session) to it, once each. */
     private fun announceTracks(c: MediaController) {
         if (!hasListeners("tracks")) return
         val arr = JSArray()

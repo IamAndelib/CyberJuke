@@ -7,7 +7,6 @@
   font-family: var(--font-display);
   /* Sized to the tile (ui.css), up to 17px. */
   font-size: clamp(13px, 4.4vw, 17px);
-  font-size: clamp(13px, var(--tile-fit), 17px);
   line-height: 1.15;
   overflow-wrap: break-word;
   hyphens: auto;

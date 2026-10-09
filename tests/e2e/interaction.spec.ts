@@ -318,7 +318,7 @@ test('a toast goes as soon as the user does something else: a scroll, a tap else
   await goneAtOnce();
 
   // Undo on the toast itself still works.
-  await heart.click();
+  await removed();
   await expect(heart).toHaveAttribute('aria-pressed', 'false');
   await toast.getByTestId('toast-action').click();
   await expect(heart).toHaveAttribute('aria-pressed', 'true');

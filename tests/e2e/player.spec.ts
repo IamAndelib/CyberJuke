@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { musicCalls, openNowPlaying, playAndOpen, playerCalls, setLyricsMode, start, touchDrag } from '../helpers';
+import { box, musicCalls, openNowPlaying, playAndOpen, playerCalls, setLyricsMode, start, touchDrag } from '../helpers';
 
 /** Mini player, Now Playing (controls, swipe, links), the queue, lyrics and Share. */
 
@@ -475,4 +475,25 @@ test('Up next from the keyboard: focus follows a moved row, and goes to the next
   await page.keyboard.press('Enter');
   await expect(page.locator(`[data-testid="upnext-row"][data-track-id="${id}"]`)).toHaveCount(0);
   await expect.poll(focused).toBe(`upnext-remove:${after}`);
+});
+
+test('in Now Playing an Undo message sits at the bottom, and Up next scrolls clear of it', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('track-play').first().click();
+  await openNowPlaying(page);
+  const rows = page.getByTestId('upnext-row');
+  await expect(rows.nth(3)).toBeVisible();
+  await rows.first().getByTestId('upnext-remove').click();
+  const toast = page.getByTestId('toast');
+  await expect(toast).toContainText('Removed from queue');
+  const t = await box(toast);
+  const vh = page.viewportSize()!.height;
+  expect(vh - (t.y + t.height)).toBeLessThanOrEqual(30);
+  // At the end of Up next, the last row's buttons are all above the message.
+  await page.locator('.np-scroll').evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  const last = rows.last();
+  for (const id of ['upnext-up', 'upnext-down', 'upnext-remove']) {
+    const b = await box(last.getByTestId(id));
+    expect(b.y + b.height, id).toBeLessThanOrEqual(t.y);
+  }
 });

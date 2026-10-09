@@ -205,6 +205,11 @@ class PlaybackService : MediaSessionService() {
                 NetBlock.active().first.takeIf { it > 0L }?.let { scheduleResume(it) }
             }
         }
+
+        // Paused in the app (or anywhere else) while a resume waited: no reason to stay awake.
+        override fun onResumeCancelled() {
+            handler.post { releaseResumeWakeLock() }
+        }
     }
 
     private val blockEnded = Runnable { resumeAfterBlock() }
@@ -238,7 +243,8 @@ class PlaybackService : MediaSessionService() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
         val info = ActivityManager.RunningAppProcessInfo()
         ActivityManager.getMyMemoryState(info)
-        return info.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE
+        // A visible window (on top or not) may start one too.
+        return info.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
     }
 
     /** When the list last played to its end (elapsedRealtime). */
@@ -1016,11 +1022,13 @@ class PlaybackService : MediaSessionService() {
             controllerInfo: MediaSession.ControllerInfo,
             intent: Intent,
         ): Boolean {
-            val key = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
-            } else {
+            // The untyped getter: the typed one is unreliable on Android 13 (androidx IntentCompat
+            // avoids it there too), and a media key must never crash the service.
+            val key = try {
                 @Suppress("DEPRECATION")
-                intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT)
+                intent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
+            } catch (e: Exception) {
+                null
             }
             val stop = key?.keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE || key?.keyCode == KeyEvent.KEYCODE_MEDIA_STOP
             if (key?.action == KeyEvent.ACTION_DOWN && stop && NetBlock.resumePending()) {

@@ -213,7 +213,9 @@ export class NativePlayer implements Player {
     if (from !== this.builtFrom) {
       this.builtFrom = from;
       queue = st.queueIds.map((id) => this.resolve(id));
-      this.unresolved = queue.some((t) => !t.ytId);
+      // A placeholder, or a track only native described (no genre, no post): named again
+      // once Liked, history or the catalog know it.
+      this.unresolved = queue.some((t) => !t.ytId || this.described.get(t.id) === t);
       const index = st.index >= 0 && st.index < queue.length ? st.index : -1;
       // Up next rows by the list index native gives (K1). Without one (an older native),
       // the id's next unused slot after the current track, then from the top.

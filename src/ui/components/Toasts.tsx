@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import { reducedMotion } from '../../core/motion';
+import { nowPlayingOpen } from '../nav';
 import { dismissAllToasts, dismissToast, holdToast, releaseToast, runToastAction, toasts } from '../../stores/toast';
 
 /** A drag shorter than this, or more vertical than sideways, isn't a swipe. */
@@ -14,11 +15,13 @@ const TOAST_GAP_PX = 18;
 const TOAST_GAP_ABOVE_BUTTON_PX = 12;
 
 /**
- * Where the toasts go (px from the bottom of the window): above whatever is docked under the
- * page (tab bar, mini player, the block banner), and above a back-to-top button showing there,
- * so a toast never sits on something the user may want to tap.
+ * Where the toasts go (CSS `bottom`): above whatever is docked under the page (tab bar, mini
+ * player, the block banner), and above a back-to-top button showing there, so a toast never
+ * sits on something the user may want to tap. Over Now Playing: at the bottom edge, where
+ * the sheet leaves room for it under its last row (now-playing.css).
  */
-function toastBottom(): number | null {
+function toastBottom(): string | null {
+  if (document.querySelector('.np.open')) return `calc(${TOAST_GAP_PX}px + var(--safe-bottom))`;
   const main = document.querySelector('.main');
   if (!main) return null;
   let bottom = innerHeight - main.getBoundingClientRect().bottom + TOAST_GAP_PX;
@@ -29,17 +32,19 @@ function toastBottom(): number | null {
     if (!r.width) continue;
     bottom = Math.max(bottom, innerHeight - r.top + TOAST_GAP_ABOVE_BUTTON_PX);
   }
-  return bottom;
+  return `${bottom}px`;
 }
 
 export function Toasts() {
   const list = toasts.value;
+  // Placed again when Now Playing opens or closes under a toast (Back closes it untouched).
+  const npOpen = nowPlayingOpen.value;
   const box = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (!list.length || !box.current) return;
     const bottom = toastBottom();
-    box.current.style.bottom = bottom == null ? '' : `${bottom}px`;
-  }, [list]);
+    box.current.style.bottom = bottom ?? '';
+  }, [list, npOpen]);
   // A toast goes as soon as the user does something else: a finger (or click) anywhere but on
   // a toast, or a wheel scroll. Only the user's own input counts; the app's own scrolling
   // (lyrics following the song, back-to-top) doesn't.

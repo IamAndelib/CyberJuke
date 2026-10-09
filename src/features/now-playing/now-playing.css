@@ -160,7 +160,8 @@
   height: 100%;
   overflow-y: auto;
   overscroll-behavior-y: none;
-  padding: var(--safe-top) calc(var(--safe-right)) calc(24px + var(--safe-bottom)) var(--safe-left);
+  /* At the bottom, room for a message (Toasts.tsx) under the last row of Up next. */
+  padding: var(--safe-top) calc(var(--safe-right)) calc(18px + 48px + 24px + var(--safe-bottom)) var(--safe-left);
 }
 .np-head {
   display: flex;

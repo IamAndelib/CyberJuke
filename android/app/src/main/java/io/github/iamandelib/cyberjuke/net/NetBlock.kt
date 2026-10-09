@@ -132,6 +132,9 @@ internal object NetBlock {
 
         /** Playback should start once the back-off ends ([wantResume]; any thread). */
         fun onResumeWanted() {}
+
+        /** It no longer should ([cancelResume]; any thread). */
+        fun onResumeCancelled() {}
     }
 
     /** The last limit YouTube put on us, for the Settings diagnostics line. */
@@ -230,7 +233,9 @@ internal object NetBlock {
 
     /** The user paused or stopped: no resume. */
     fun cancelResume() {
+        val was = resumeUntil
         resumeUntil = 0L
+        if (was > 0L) listeners.forEach { it.onResumeCancelled() }
     }
 
     /** True once if playback should resume now (and clears it); false if too late or not wanted. */

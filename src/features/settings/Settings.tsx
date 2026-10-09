@@ -315,14 +315,10 @@ function NetStatusLine() {
   );
 }
 
-/** "Checked today at 14:02", "Checked on 3 Oct". */
-function checkedText(at: number, now = Date.now()): string {
-  // A time, not "N min ago": the card isn't re-rendered as the minutes pass.
+/** "Checked 9 Oct, 14:02": a date and time, which stay true however long the card shows. */
+function checkedText(at: number): string {
   const d = new Date(at);
-  const today = new Date(now).toDateString() === d.toDateString();
-  return today
-    ? `Checked today at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-    : `Checked on ${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}`;
+  return `Checked ${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 }
 
 /** A newer release is out: at the top of Settings (the Settings tab shows a dot meanwhile). */

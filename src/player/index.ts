@@ -111,9 +111,10 @@ export const positionSample = computed<PositionSample>(() => {
 });
 
 let lastRecentId: string | null = null;
+// Recently played: a track once it plays (not the one the app reopens on, paused).
 effect(() => {
   const cur = currentTrack.value;
-  if (cur && cur.ytId && cur.id !== lastRecentId) {
+  if (cur && cur.ytId && isPlaying.value && cur.id !== lastRecentId) {
     lastRecentId = cur.id;
     addRecent(cur);
   }

@@ -19,11 +19,13 @@ function tooSoon(e: MouseEvent): boolean {
   return performance.now() - moved.t < SETTLE_MS && Math.abs(e.clientX - moved.x) < SAME_SPOT_PX && Math.abs(e.clientY - moved.y) < SAME_SPOT_PX;
 }
 
-/** Focus was on the star that moved: it goes to the same star in its new place. */
+/** Starred from the keyboard: focus goes to the same star in its new place, scrolled to. */
 function refocus(screen: Element | null, kind: TileKind, name: string): void {
   requestAnimationFrame(() => {
     const sel = `[data-testid="${kind}-fav"][data-${kind}="${CSS.escape(name)}"]`;
-    (screen ?? document).querySelector<HTMLElement>(sel)?.focus({ preventScroll: true });
+    const star = (screen ?? document).querySelector<HTMLElement>(sel);
+    star?.focus({ preventScroll: true });
+    star?.scrollIntoView({ block: 'nearest' });
   });
 }
 
@@ -60,10 +62,11 @@ export function FavTile({
         onClick={(e) => {
           if (tooSoon(e)) return;
           const star = e.currentTarget;
-          const focused = document.activeElement === star;
+          // A keyboard press (detail 0) keeps its focus; a tap shouldn't scroll the page.
+          const keyboard = e.detail === 0 && document.activeElement === star;
           moved = { x: e.clientX, y: e.clientY, t: performance.now() };
           onToggle();
-          if (focused) refocus(star.closest('.screen'), kind, name);
+          if (keyboard) refocus(star.closest('.screen'), kind, name);
         }}
         data-testid={`${kind}-fav`}
         {...data}

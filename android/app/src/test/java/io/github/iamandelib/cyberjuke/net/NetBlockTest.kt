@@ -158,6 +158,21 @@ class NetBlockTest {
     }
 
     @Test
+    fun listenersHearAResumeWantedAndCancelled() {
+        val events = mutableListOf<String>()
+        NetBlock.add(object : NetBlock.Listener {
+            override fun onBlocked(until: Long, reason: BlockReason) {}
+            override fun onUnblocked() {}
+            override fun onResumeWanted() { events += "wanted" }
+            override fun onResumeCancelled() { events += "cancelled" }
+        })
+        NetBlock.cancelResume() // nothing pending: nothing to hear
+        NetBlock.wantResume()
+        NetBlock.cancelResume()
+        assertEquals(listOf("wanted", "cancelled"), events)
+    }
+
+    @Test
     fun activeReportsUntilAndReasonOnlyWhileBlocked() {
         val s = BlockState()
         assertEquals(0L to null, s.active(5L))

@@ -134,11 +134,13 @@ describe('NativePlayer: a session native restored after a restart', () => {
         { id: 'B', ytId: tr('B').ytId, title: 'Old title', artist: 'Y', artworkUrl: '' },
       ],
     });
-    emit('state', state({ queueIds: ['A', 'M', 'B'], upNextIds: ['M', 'B'], upNextKinds: 'll', upNextIndex: [1, 2] }));
-    const m = p.state.value.upNext[0].track;
+    // Every track known (only from native): the catalog loading still names them in full.
+    emit('state', state({ trackId: 'M', queueIds: ['M', 'B'], upNextIds: ['B'], upNextKinds: 'l', upNextIndex: [1] }));
+    const m = p.state.value.current!;
     expect([m.title, m.by, m.membersOnly]).toEqual(['Members', 'poster', true]);
+    expect(p.state.value.upNext[0].track.title).toBe('Old title');
     (catalog.all as Signal<Track[]>).value = [tr('B')];
-    expect(p.state.value.upNext[1].track.title).toBe('Title B');
+    expect(p.state.value.upNext[0].track.title).toBe('Title B');
   });
 
   it('sends members-only to native, so a restored session still knows it', () => {

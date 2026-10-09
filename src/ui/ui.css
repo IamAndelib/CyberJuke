@@ -493,12 +493,6 @@
 .genre-cell {
   position: relative;
   min-width: 0;
-  /* A tile's name is sized to the tile, so a 12-letter word ("experimental") fits on one
-     line beside the star: the text box is the tile less 56px (padding, star, borders), and
-     a letter of the display font is about 0.67em wide. Older WebViews without container
-     units keep the vw size before it. */
-  container-type: inline-size;
-  --tile-fit: calc((100cqi - 56px) / 8);
 }
 .genre-tile {
   position: relative;
@@ -525,9 +519,26 @@
   color: var(--color-bg);
   text-shadow: none;
 }
-/* The name may wrap (and break a word longer than the tile) rather than run under the star. */
+/* The name may wrap (and break a word longer than the tile) rather than run under the star.
+   No theme's letter-spacing here: it is what makes a long word not fit. */
 .genre-tile > span {
   min-width: 0;
+  letter-spacing: 0;
+}
+/* A tile's name is sized to the tile, so a 12-letter word ("experimental") fits on one line
+   beside the star: the text box is the tile less 56px (padding, star, borders), and a letter
+   of the display font is about 0.67em wide. Older WebViews without container units keep the
+   screen-based size (genres.css, artists.css). */
+@supports (width: 1cqi) {
+  .genre-cell {
+    container-type: inline-size;
+  }
+  .genre-cell .genre-name {
+    font-size: clamp(13px, calc((100cqi - 56px) / 8), 17px);
+  }
+  .genre-cell .artist-name {
+    font-size: clamp(13px, calc((100cqi - 56px) / 8), 16px);
+  }
 }
 /* Star: its own 48px button over the tile's top-right corner. */
 .genre-fav {
