@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
@@ -93,6 +94,12 @@ class PlaybackService : MediaSessionService() {
     /** Bumped when the seed or list changes: a radio page fetched for the old one is dropped. */
     private var radioGen = 0
     private var radioInFlight = false
+
+    /** Retries since the radio last added items (an empty or failed page, L5); bounded. */
+    private var radioRetries = 0
+
+    /** No radio request before this (SystemClock.elapsedRealtime), after a failed page. */
+    private var radioNotBefore = 0L
 
     /** What the last "low" check acted on, so each low state is handled once. */
     private var lowKey: String? = null
@@ -410,6 +417,8 @@ class PlaybackService : MediaSessionService() {
         seedId = seed?.mediaId
         radioGen++
         radioInFlight = false
+        radioRetries = 0
+        radioNotBefore = 0L
         lowKey = null
         val ytId = seed?.takeIf { it.mediaId.startsWith(QueueCommands.GLOBAL_PREFIX) }?.let { JukeUris.ytIdOf(it) }
         radio = ytId?.let { RadioState(it, null) }
@@ -507,8 +516,17 @@ class PlaybackService : MediaSessionService() {
     /** One radio page at a time, never during a back-off (Y1); a bot check or 429 starts one. */
     private fun refillRadio(r: RadioState) {
         if (radioInFlight) return
-        if (NetBlock.isBlocked()) {
-            lowKey = null // try again on a later event, once the back-off is over
+        val wait = maxOf(
+            NetBlock.active().first - System.currentTimeMillis(),
+            radioNotBefore - SystemClock.elapsedRealtime(),
+        )
+        if (wait > 0) {
+            // Try again once the back-off (or the retry delay) is over, even with no event.
+            lowKey = null
+            if (radioRetries < RADIO_MAX_RETRIES) {
+                handler.removeCallbacks(lowCheck)
+                handler.postDelayed(lowCheck, wait + 1000L)
+            }
             return
         }
         radioInFlight = true
@@ -532,6 +550,8 @@ class PlaybackService : MediaSessionService() {
             Log.w(TAG, "Radio failed [$kind]: ${t.javaClass.simpleName}")
             kind.blockReason?.let { NetBlock.trip(it) }
             if (kind == FailureKind.BROKEN) PlayerBus.emitExtractorBroken(YtCompat.describe(t))
+            // L5: a failed page must not stall the radio; retry later (bounded).
+            retryRadio(delayMs = RADIO_RETRY_MS * (radioRetries + 1))
         }
         val page = result.getOrNull() ?: return
         val have = HashSet<String>()
@@ -558,9 +578,26 @@ class PlaybackService : MediaSessionService() {
         }
         Log.i(TAG, "Radio: ${items.size} new of ${page.items.size}, more=${page.next != null}")
         if (items.isNotEmpty() && autoplayEnabled && p.repeatMode == Player.REPEAT_MODE_OFF) {
+            radioRetries = 0
             queue.addAutoplay(items)
             queueChanged()
+        } else if (items.isEmpty() && radio != null) {
+            // L5: nothing new on this page (all duplicates) but the radio goes on: the next page.
+            retryRadio(delayMs = 0L)
         }
+    }
+
+    /** Checks the low state again after [delayMs], at most [RADIO_MAX_RETRIES] times in a row. */
+    private fun retryRadio(delayMs: Long) {
+        if (radioRetries >= RADIO_MAX_RETRIES) {
+            Log.w(TAG, "Radio: giving up after $radioRetries retries")
+            return
+        }
+        radioRetries++
+        radioNotBefore = SystemClock.elapsedRealtime() + delayMs
+        lowKey = null
+        handler.removeCallbacks(lowCheck)
+        handler.postDelayed(lowCheck, delayMs)
     }
 
     // ---- errors (Y1, Y5) ----------------------------------------------------------------------
@@ -903,6 +940,8 @@ class PlaybackService : MediaSessionService() {
 
     companion object {
         private const val TAG = "CyberJukeService"
+        private const val RADIO_MAX_RETRIES = 3
+        private const val RADIO_RETRY_MS = 15_000L
     }
 }
 
