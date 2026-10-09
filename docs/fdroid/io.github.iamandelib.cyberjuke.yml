@@ -1,8 +1,11 @@
 AntiFeatures:
   NonFreeNet:
-    en-US: Plays audio from YouTube (through NewPipeExtractor) and reads its track list from Cyberspace's non-free backend (Google Firestore). Global search, artist pages and Global radio use YouTube's music catalog; lyrics come from LRCLIB.
+    en-US: Plays audio from YouTube (through NewPipeExtractor) and reads its track
+      list from Cyberspace's non-free backend (Google Firestore). Global search, artist
+      pages and Global radio use YouTube's music catalog; lyrics come from LRCLIB.
 Categories:
   - Multimedia
+  - Online Media Player
 License: GPL-3.0-only
 AuthorName: IamAndelib
 SourceCode: https://github.com/IamAndelib/CyberJuke
@@ -16,30 +19,6 @@ Repo: https://github.com/IamAndelib/CyberJuke.git
 Binaries: https://github.com/IamAndelib/CyberJuke/releases/download/v%v/CyberJuke-%v.apk
 
 Builds:
-  - versionName: 1.0.1
-    versionCode: 1000001
-    commit: e1202316c5b05cfeca60e91f7f0bada38a18108a
-    subdir: android/app
-    sudo:
-      - echo 'deb https://deb.debian.org/debian trixie main' > /etc/apt/sources.list.d/trixie.list
-      - apt-get update
-      - apt-get install -y xz-utils
-      - apt-get install -y -t trixie openjdk-21-jdk-headless
-      - update-alternatives --auto java
-      - curl -fsSLo /tmp/node.tar.xz https://nodejs.org/dist/v22.22.0/node-v22.22.0-linux-x64.tar.xz
-      - echo '9aa8e9d2298ab68c600bd6fb86a6c13bce11a4eca1ba9b39d79fa021755d7c37  /tmp/node.tar.xz' | sha256sum -c -
-      - tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1
-      - rm /tmp/node.tar.xz
-    gradle:
-      - yes
-    prebuild:
-      - cd ../..
-      - npm ci --ignore-scripts
-      - npm run build
-      - npx cap sync android --deployment
-    scandelete:
-      - node_modules
-
   - versionName: 1.0.2
     versionCode: 1000002
     commit: 4a9b11c9076f3064780f78c9e75fc84ff6874eee
@@ -51,7 +30,8 @@ Builds:
       - apt-get install -y -t trixie openjdk-21-jdk-headless
       - update-alternatives --auto java
       - curl -fsSLo /tmp/node.tar.xz https://nodejs.org/dist/v22.22.0/node-v22.22.0-linux-x64.tar.xz
-      - echo '9aa8e9d2298ab68c600bd6fb86a6c13bce11a4eca1ba9b39d79fa021755d7c37  /tmp/node.tar.xz' | sha256sum -c -
+      - echo '9aa8e9d2298ab68c600bd6fb86a6c13bce11a4eca1ba9b39d79fa021755d7c37  /tmp/node.tar.xz'
+        | sha256sum -c -
       - tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1
       - rm /tmp/node.tar.xz
     gradle:

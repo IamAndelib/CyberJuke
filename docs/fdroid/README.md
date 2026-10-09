@@ -6,7 +6,7 @@ The store listing (title, descriptions, icon, feature graphic, screenshots, per-
 
 ## Before submitting
 
-The recipe starts at **v1.0.1**, the first release whose signed APK is reproducible. (1.0.0 is the same app, but its signing re-aligned two files, so F-Droid's build can't match it; see the CHANGELOG.)
+The recipe holds only the newest release (fdroiddata asks for that until an app is included; after that F-Droid's bot adds each new tag). Every release from **v1.0.1** on is reproducible; 1.0.0's signing re-aligned two files, so F-Droid's build can't match it (see the CHANGELOG). The file is exactly as `fdroid rewritemeta` writes it and passes `fdroid lint`.
 
 1. **Publish the release** with the Release workflow (Actions → Release → version, e.g. `1.0.1`). The workflow commits the version bump if needed, builds an unsigned APK, signs it in the protected `release` environment, checks that the signed APK is the unsigned build plus a signature, and tags the commit `v1.0.1`.
 2. **Fill in the recipe:**
