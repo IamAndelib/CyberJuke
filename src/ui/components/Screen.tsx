@@ -16,6 +16,19 @@ export const RESTORE_WAIT_MS = 1000;
 /** A finger that moves this far on back-to-top is scrolling, not tapping it. */
 export const TOTOP_MOVE_PX = 10;
 
+/** Sent to a screen's scroller to run its back-to-top (registered with the click guard, stopped by a touch). */
+const TO_TOP_EVENT = 'cyberjuke:totop';
+
+/**
+ * Back-to-top on the screen `el` scrolls (the tab bar's retap, P5), as its own button
+ * does it. False when `el` isn't a Screen's scroller.
+ */
+export function screenToTop(el: Element): boolean {
+  const e = new Event(TO_TOP_EVENT, { cancelable: true });
+  el.dispatchEvent(e);
+  return e.defaultPrevented;
+}
+
 /** scrollTop per scrollKey, for the whole app session. */
 const positions = new Map<string, number>();
 
@@ -266,6 +279,16 @@ export function Screen({
       pull.pulling = false;
       if (was) void release();
     };
+    // The system took the gesture over (an edge swipe, a second finger): no refresh, just spring back.
+    const onCancel = () => {
+      const was = pull.pulling;
+      pull.start = null;
+      pull.pulling = false;
+      if (was) {
+        setLabel('pull');
+        springTo(0);
+      }
+    };
     const onWheel = (e: WheelEvent) => {
       cancelRestore();
       interruptTop(e);
@@ -273,13 +296,13 @@ export function Screen({
     el.addEventListener('touchstart', onStart, { passive: true });
     el.addEventListener('touchmove', onMove, { passive: true });
     el.addEventListener('touchend', onEnd, { passive: true });
-    el.addEventListener('touchcancel', onEnd, { passive: true });
+    el.addEventListener('touchcancel', onCancel, { passive: true });
     el.addEventListener('wheel', onWheel, { passive: true });
     return () => {
       el.removeEventListener('touchstart', onStart);
       el.removeEventListener('touchmove', onMove);
       el.removeEventListener('touchend', onEnd);
-      el.removeEventListener('touchcancel', onEnd);
+      el.removeEventListener('touchcancel', onCancel);
       el.removeEventListener('wheel', onWheel);
       cancelAnimationFrame(pull.frame);
       clearTimeout(pull.timer);
@@ -314,6 +337,18 @@ export function Screen({
       done();
     };
   };
+  const toTopRef = useRef(toTop);
+  toTopRef.current = toTop;
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const on = (e: Event) => {
+      e.preventDefault();
+      toTopRef.current();
+    };
+    el.addEventListener(TO_TOP_EVENT, on);
+    return () => el.removeEventListener(TO_TOP_EVENT, on);
+  }, []);
   const onTopDown = (e: PointerEvent) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     // No focus move or compatibility mouse events.

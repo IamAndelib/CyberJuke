@@ -40,28 +40,22 @@ function buzz(): void {
 
 /**
  * The click a browser makes when the finger lifts after a long press goes to whatever
- * is under it by then (the menu that just opened): swallow it, wherever it lands.
+ * is under it by then (the menu that just opened): swallow it, wherever it lands and
+ * however long the finger stays down. The next touch (a new pointerdown) ends it, so a
+ * release that makes no click doesn't eat a later tap.
  */
-function swallowNextClick(): void {
-  let timer = setTimeout(() => off(), 1500);
+export function swallowNextClick(): void {
   const stop = (e: Event) => {
     e.preventDefault();
     e.stopPropagation();
     off();
   };
-  const up = () => {
-    document.removeEventListener('pointerup', up, true);
-    clearTimeout(timer);
-    // The click, if any, follows the finger lifting at once.
-    timer = setTimeout(() => off(), 400);
-  };
   const off = () => {
-    clearTimeout(timer);
     document.removeEventListener('click', stop, true);
-    document.removeEventListener('pointerup', up, true);
+    document.removeEventListener('pointerdown', off, true);
   };
   document.addEventListener('click', stop, true);
-  document.addEventListener('pointerup', up, true);
+  document.addEventListener('pointerdown', off, true);
 }
 
 /** The press in progress (one finger, one row at a time). */

@@ -143,6 +143,23 @@ test('a long press on a row opens its menu, and lifting the finger plays nothing
   await expect(page.getByTestId('mini-player')).toHaveCount(0);
 });
 
+test('however long the finger stays down, lifting it after a long press does nothing; the next tap works (P10)', async ({ page }) => {
+  await start(page);
+  const b = await box(page.getByTestId('track-play').nth(1));
+  const cdp = await page.context().newCDPSession(page);
+  const pt = [{ x: b.x + 40, y: b.y + b.height / 2, id: 1 }];
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt });
+  await expect(page.getByTestId('track-menu')).toBeVisible();
+  // Held well past the menu opening.
+  await elapsed(page, 2000);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+  await expect(page.getByTestId('track-menu')).toBeVisible();
+  await expect(page.getByTestId('mini-player')).toHaveCount(0);
+  await page.getByTestId('menu-like').click();
+  await expect(page.getByTestId('toast').last()).toContainText('Added to Liked');
+});
+
 test('a scroll that starts on a row never opens its menu (P10)', async ({ page }) => {
   await start(page);
   const b = await box(page.getByTestId('track-play').nth(1));

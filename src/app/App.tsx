@@ -23,6 +23,7 @@ import {
 import { ArtistChooser, MiniPlayer, NowPlaying, TrackMenu } from '../features/now-playing/PlayerUI';
 import { Toasts } from '../ui/components/Toasts';
 import { ConfirmSheet } from '../ui/components/ConfirmSheet';
+import { screenToTop } from '../ui/components/Screen';
 import { SearchFab } from '../features/search/SearchFab';
 import { scrollToTop } from '../ui/scrollToTop';
 import { reducedMotion } from '../core/motion';
@@ -66,11 +67,16 @@ function retapTab(t: Tab): void {
   lastRetap = now;
   const el = topScroller(t);
   if (el && el.scrollTop > 2 && !quick) {
-    scrollToTop(el, { reduced: reducedMotion() });
+    toTopOf(el);
     return;
   }
   if (stacks.value[t].length) popToRoot(t);
-  else if (el && el.scrollTop > 2) scrollToTop(el, { reduced: reducedMotion() });
+  else if (el && el.scrollTop > 2) toTopOf(el);
+}
+
+/** The screen's own back-to-top: the click guard knows it runs (M6), and a touch stops it. */
+function toTopOf(el: HTMLElement): void {
+  if (!screenToTop(el)) scrollToTop(el, { reduced: reducedMotion() });
 }
 
 function TabBar() {

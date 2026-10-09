@@ -72,6 +72,11 @@ async function finger(page: Page, x: number, y: number) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
       await cdp.detach();
     },
+    /** The system takes the gesture over (an edge swipe, a palm). */
+    async cancel() {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+      await cdp.detach();
+    },
   };
 }
 
@@ -156,6 +161,26 @@ test('pull to refresh: a short pull springs back, a sideways swipe is ignored', 
   expect(latest()).toBe(before);
 });
 
+test('pull to refresh: a pull the system takes over springs back without refreshing', async ({ page }) => {
+  await start(page);
+  const ptr = page.getByTestId('ptr');
+  // Any refresh at all, however short, is seen from inside the page.
+  await ptr.evaluate((el) => {
+    const w = window as unknown as { __refreshed: boolean };
+    w.__refreshed = false;
+    new MutationObserver(() => {
+      if (el.getAttribute('aria-busy') === 'true') w.__refreshed = true;
+    }).observe(el, { attributes: true, attributeFilter: ['aria-busy'] });
+  });
+  const f = await finger(page, 200, 320);
+  await f.move(0, 400);
+  await expect(ptr).toHaveText('[ release to refresh ]');
+  await f.cancel();
+  await expect.poll(() => offsetOf(page, 'screen-home')).toBe(0);
+  await expectStable(() => page.evaluate(() => (window as unknown as { __refreshed: boolean }).__refreshed), 600);
+  expect(await page.evaluate(() => (window as unknown as { __refreshed: boolean }).__refreshed)).toBe(false);
+});
+
 // ---- Back-to-top and the search button --------------------------------------------------
 
 test('a tap that stops back-to-top plays nothing; a tap after it does', async ({ page }) => {
@@ -186,6 +211,28 @@ test('a tap that stops back-to-top plays nothing; a tap after it does', async ({
   // Nothing moving now: a tap plays the row.
   await screen.getByTestId('track-play').nth(5).click();
   await expect(page.getByTestId('mini-player')).toBeVisible();
+});
+
+test('the scroll to the top from a tap on the tab you are on is stopped by a tap, which plays nothing (P5, M6)', async ({ page }) => {
+  await start(page);
+  const screen = page.getByTestId('screen-home');
+  await screen.evaluate((el) => el.scrollTo(0, el.clientHeight * 3));
+  await expect.poll(() => scrollTopOf(page, 'screen-home')).toBeGreaterThan(0);
+  const run = await screen.evaluate((el) => {
+    const touch = (target: Element, type: string) => target.dispatchEvent(new PointerEvent(type, { pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+    const from = el.scrollTop;
+    (document.querySelector('[data-testid="tab-home"]') as HTMLElement).click();
+    const play = [...el.querySelectorAll<HTMLElement>('[data-testid="track-play"]')].find((b) => b.getBoundingClientRect().top > 200)!;
+    touch(play, 'pointerdown');
+    touch(play, 'pointerup');
+    const click = new MouseEvent('click', { detail: 1, bubbles: true, cancelable: true });
+    play.dispatchEvent(click);
+    return { from, swallowed: click.defaultPrevented, at: el.scrollTop };
+  });
+  expect(run.swallowed).toBe(true);
+  expect(run.at).toBeGreaterThan(run.from / 2);
+  await expectStable(() => scrollTopOf(page, 'screen-home'), 400);
+  await expect(page.getByTestId('mini-player')).toHaveCount(0);
 });
 
 test('the back-to-top and search buttons show their press, and the search button tucks away scrolling down', async ({ page }) => {
