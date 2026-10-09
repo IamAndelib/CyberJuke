@@ -94,6 +94,10 @@ class JukePlayerPlugin : Plugin() {
     /** A `blocked` event was sent and no `unblocked` since. */
     private var announcedBlock = false
 
+    /** handleOnDestroy ran: no new controller, calls reject (L8). Main thread after the first. */
+    @Volatile
+    private var destroyed = false
+
     /** Autoplay items already described to the web in a `tracks` event. */
     private val announcedTracks = HashSet<String>()
 
@@ -147,10 +151,13 @@ class JukePlayerPlugin : Plugin() {
         if (!NetBlock.isBlocked()) announceUnblocked()
     }
 
+    /** Called on loader and JukeMusic threads: notify from the main thread like the others. */
     private val brokenListener = PlayerBus.ExtractorBrokenListener { message ->
-        val data = JSObject()
-        data.put("message", message)
-        notifyListeners("extractorBroken", data)
+        main.post {
+            val data = JSObject()
+            data.put("message", message)
+            notifyListeners("extractorBroken", data)
+        }
     }
 
     private val trackErrorListener = PlayerBus.TrackErrorListener { trackId, message, skipped ->
@@ -197,14 +204,21 @@ class JukePlayerPlugin : Plugin() {
         }
     }
 
-    /** A new 'state' listener (e.g. the web reloaded) gets the full queue on the next event. */
+    /**
+     * A new 'state' listener (e.g. the web reloaded) gets the full queue on the next event. A
+     * new 'state' or 'tracks' listener gets the radio tracks again (K4): whichever registers
+     * last, the `tracks` event reaches it.
+     */
     @PluginMethod(returnType = PluginMethod.RETURN_NONE)
     override fun addListener(call: PluginCall) {
         super.addListener(call)
-        if (call.getString("eventName") == "state") {
+        val event = call.getString("eventName")
+        if (event == "state" || event == "tracks") {
             main.post {
-                queueDirty = true
-                lastQueueIds = null
+                if (event == "state") {
+                    queueDirty = true
+                    lastQueueIds = null
+                }
                 announcedTracks.clear()
                 controller?.let { announceTracks(it) }
             }
@@ -212,6 +226,7 @@ class JukePlayerPlugin : Plugin() {
     }
 
     override fun handleOnDestroy() {
+        destroyed = true
         PlayerBus.remove(trackErrorListener)
         PlayerBus.removeBroken(brokenListener)
         NetBlock.remove(blockListener)
@@ -231,21 +246,30 @@ class JukePlayerPlugin : Plugin() {
     // ---- connection (main thread only) ------------------------------------------------------
 
     private fun connect() {
-        if (controllerFuture != null) return
+        if (controllerFuture != null || destroyed) return
         val ctx: Context = context
         val token = SessionToken(ctx, ComponentName(ctx, PlaybackService::class.java))
+        val futureRef = arrayOfNulls<ListenableFuture<MediaController>>(1)
         val future = MediaController.Builder(ctx, token)
             // Proves to PlaybackService that this is the plugin (the private queue commands).
             .setConnectionHints(ControllerKey.hints())
             .setListener(object : MediaController.Listener {
                 override fun onDisconnected(controller: MediaController) {
+                    // A late call for a controller already replaced must not drop the new one (L7).
+                    if (controllerFuture !== futureRef[0]) return
                     Log.w(TAG, "MediaController disconnected")
                     onControllerLost()
                 }
             })
             .buildAsync()
+        futureRef[0] = future
         controllerFuture = future
         future.addListener({
+            if (controllerFuture !== future) {
+                // Replaced or destroyed meanwhile.
+                MediaController.releaseFuture(future)
+                return@addListener
+            }
             val c = try {
                 future.get()
             } catch (e: Exception) {
@@ -296,6 +320,10 @@ class JukePlayerPlugin : Plugin() {
 
     private fun withController(call: PluginCall, action: (MediaController) -> Unit) {
         main.post {
+            if (destroyed) {
+                call.reject("Plugin destroyed")
+                return@post
+            }
             val c = controller
             if (c != null && c.isConnected) {
                 runAction(call, c, action)
