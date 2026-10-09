@@ -10,12 +10,9 @@ import { openArtistPage, useSearchContext, type Place } from '../../ui/nav';
 import { ErrorState } from '../../ui/components/TrackList';
 import { Screen } from '../../ui/components/Screen';
 import { refreshCatalog } from '../../ui/refresh';
-import { AZHead, GridSortRail } from '../../ui/components/GridSort';
-import { groupAZ } from '../../ui/azSections';
-import { useMemo } from 'preact/hooks';
-import { takeSections, useChunks } from '../../ui/useChunks';
+import { GridSortRail, TileGrid, TileSkeleton } from '../../ui/components/GridSort';
 import type { Artist } from '../../data/artists';
-import { artistsSort } from '../../stores/prefs';
+import { artistsSort, type GridSort } from '../../stores/prefs';
 
 /** An artist tile ([FavTile]); a star re-renders only this tile. */
 export function ArtistTile({ name, inGrid }: { name: string; inGrid?: boolean }) {
@@ -36,37 +33,13 @@ function FavArtists() {
   );
 }
 
-/** Grid tiles per chunk: the first screens render at once, the rest in idle time. */
-const GRID_CHUNK = 120;
-
-/** Every artist as tiles, Popular or A–Z, rendered in chunks. */
-export function ArtistTiles({ list, sort }: { list: Artist[]; sort: 'popular' | 'az' }) {
-  const sections = useMemo(() => (sort === 'az' ? groupAZ(list, (a) => a.name) : null), [list, sort]);
-  const { shown } = useChunks(list.length, `artists:${sort}`, GRID_CHUNK, { fill: true });
-  if (sections) {
-    return (
-      <div data-testid="artist-grid" data-sort="az">
-        {takeSections(sections, shown).map((sec) => (
-          <section class="az-section" key={sec.letter} data-testid="az-section" data-letter={sec.letter}>
-            <AZHead letter={sec.letter} />
-            <div class="genre-grid">
-              {sec.items.map((a) => (
-                <ArtistTile key={a.key} name={a.name} inGrid />
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
-    );
-  }
-  return (
-    <div class="genre-grid" data-testid="artist-grid" data-sort="popular">
-      {list.slice(0, shown).map((a) => (
-        <ArtistTile key={a.key} name={a.name} inGrid />
-      ))}
-    </div>
-  );
+/** Every artist as tiles, Popular or A–Z (perf.spec counts its renders by this name). */
+export function ArtistTiles({ list, sort }: { list: Artist[]; sort: GridSort }) {
+  return <TileGrid list={list} sort={sort} nameOf={artistName} tile={artistTile} testid="artist-grid" chunkKey="artists" />;
 }
+
+const artistName = (a: Artist) => a.name;
+const artistTile = (a: Artist) => <ArtistTile key={a.key} name={a.name} inGrid />;
 
 const NO_TRACKS: never[] = [];
 /** Here on the Artists tab: every artist, found by name (one array per catalog change). */
@@ -98,11 +71,7 @@ export function ArtistGrid() {
       {status === 'error' && !list.length ? (
         <ErrorState offline={!!catalog.error.value?.offline} message="Couldn't load artists." onRetry={() => void catalog.refresh()} />
       ) : !list.length ? (
-        <div class="genre-grid" aria-hidden="true" data-testid="artist-skeleton">
-          {Array.from({ length: 10 }, (_, i) => (
-            <div class="genre-tile skel-block" key={i} />
-          ))}
-        </div>
+        <TileSkeleton testid="artist-skeleton" />
       ) : (
         <ArtistTiles list={list} sort={sort} />
       )}

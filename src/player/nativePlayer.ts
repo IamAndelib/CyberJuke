@@ -3,7 +3,7 @@
  * this class only forwards commands and mirrors native state from events.
  */
 import { computed, effect, signal, untracked } from '@preact/signals';
-import { artworkUrl, type Track } from '../data/model';
+import { UNKNOWN_ARTIST, UNTITLED, artworkUrl, type Track } from '../data/model';
 import { history, knownTrack, liked, IPV4_MODES, type Ipv4Mode } from '../stores/library';
 import { catalog } from '../stores/catalog';
 import { toast } from '../stores/toast';
@@ -54,8 +54,8 @@ function fromNative(t: NativeTrack): Track | null {
   return {
     id: t.id,
     ytId: t.ytId,
-    title: typeof t.title === 'string' && t.title ? t.title : 'Untitled',
-    artist: typeof t.artist === 'string' && t.artist ? t.artist : 'Unknown artist',
+    title: typeof t.title === 'string' && t.title ? t.title : UNTITLED,
+    artist: typeof t.artist === 'string' && t.artist ? t.artist : UNKNOWN_ARTIST,
     genre: '',
     by: typeof t.by === 'string' ? t.by : '',
     postTitle: '',

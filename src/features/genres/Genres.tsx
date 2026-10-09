@@ -5,18 +5,15 @@ import { catalogGenre, genres, genresComplete } from '../../stores/genres';
 import { favoriteGenres, showNsfw } from '../../stores/library';
 import { useFavGenre } from '../../ui/useFavs';
 import { toggleFavoriteGenreWithUndo } from '../../stores/undo';
-import { useMemo } from 'preact/hooks';
-import { takeSections, useChunks } from '../../ui/useChunks';
 import { Icon } from '../../ui/icons';
 import { FavSection, FavTile, PageStar } from '../../ui/components/FavTile';
 import { openGenrePage, popPage, useSearchContext, type Place } from '../../ui/nav';
 import { ErrorState, PagedTracks, PlayShuffle } from '../../ui/components/TrackList';
 import { Screen } from '../../ui/components/Screen';
 import { refreshCatalog } from '../../ui/refresh';
-import { AZHead, GridSortRail } from '../../ui/components/GridSort';
-import { groupAZ } from '../../ui/azSections';
+import { GridSortRail, TileGrid, TileSkeleton } from '../../ui/components/GridSort';
 import type { GenreCount } from '../../stores/genres';
-import { genresSort } from '../../stores/prefs';
+import { genresSort, type GridSort } from '../../stores/prefs';
 import { usePaged } from '../../ui/usePaged';
 import { authScope } from '../../stores/feed';
 import { auth } from '../../data/auth';
@@ -63,11 +60,7 @@ export function GenreGrid() {
       {list.length ? (
         <GenreTiles list={list} sort={sort} />
       ) : status !== 'error' ? (
-        <div class="genre-grid" aria-hidden="true" data-testid="genre-skeleton">
-          {Array.from({ length: 10 }, (_, i) => (
-            <div class="genre-tile skel-block" key={i} />
-          ))}
-        </div>
+        <TileSkeleton testid="genre-skeleton" />
       ) : null}
       <p class="fineprint">Genres are free text chosen by each poster. Tap ☆ to pin a genre to the top.</p>
     </Screen>
@@ -87,37 +80,13 @@ function FavGenres() {
   );
 }
 
-/** Grid tiles per chunk: the first screens render at once, the rest in idle time. */
-const GRID_CHUNK = 120;
-
-/** Every genre as tiles, Popular or A–Z, rendered in chunks. */
-export function GenreTiles({ list, sort }: { list: GenreCount[]; sort: 'popular' | 'az' }) {
-  const sections = useMemo(() => (sort === 'az' ? groupAZ(list, (g) => g.name) : null), [list, sort]);
-  const { shown } = useChunks(list.length, `genres:${sort}`, GRID_CHUNK, { fill: true });
-  if (sections) {
-    return (
-      <div data-testid="genre-grid" data-sort="az">
-        {takeSections(sections, shown).map((sec) => (
-          <section class="az-section" key={sec.letter} data-testid="az-section" data-letter={sec.letter}>
-            <AZHead letter={sec.letter} />
-            <div class="genre-grid">
-              {sec.items.map((g) => (
-                <GenreTile key={g.name} name={g.name} inGrid />
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
-    );
-  }
-  return (
-    <div class="genre-grid" data-testid="genre-grid" data-sort="popular">
-      {list.slice(0, shown).map((g) => (
-        <GenreTile key={g.name} name={g.name} inGrid />
-      ))}
-    </div>
-  );
+/** Every genre as tiles, Popular or A–Z (perf.spec counts its renders by this name). */
+export function GenreTiles({ list, sort }: { list: GenreCount[]; sort: GridSort }) {
+  return <TileGrid list={list} sort={sort} nameOf={genreName} tile={genreTile} testid="genre-grid" chunkKey="genres" />;
 }
+
+const genreName = (g: GenreCount) => g.name;
+const genreTile = (g: GenreCount) => <GenreTile key={g.name} name={g.name} inGrid />;
 
 /** One genre's tracks, opened in place on the current tab. */
 export function GenreDetail({ genre }: { genre: string }) {

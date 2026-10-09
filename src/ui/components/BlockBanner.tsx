@@ -6,7 +6,8 @@
  */
 import { useEffect, useState } from 'preact/hooks';
 import { player } from '../../player';
-import { block, blockedText, BROKEN_TEXT, msToNextMinute, RELEASES_URL } from '../../stores/block';
+import { RELEASES_URL } from '../../data/model';
+import { block, blockedText, BROKEN_TEXT, msToNextMinute } from '../../stores/block';
 import { Icon } from '../icons';
 import { openExternal } from '../links';
 

@@ -12,11 +12,11 @@
  */
 import { computed, signal } from '@preact/signals';
 import { Capacitor } from '@capacitor/core';
+import { RELEASES_URL } from '../data/model';
 import { kv } from '../core/storage';
 import { logError } from '../core/log';
 import { settings } from './library';
 
-export const RELEASES_URL = 'https://github.com/IamAndelib/CyberJuke/releases';
 const LATEST_API = 'https://api.github.com/repos/IamAndelib/CyberJuke/releases/latest';
 /** Automatic checks: at most this often. */
 export const AUTO_CHECK_MS = 24 * 60 * 60 * 1000;

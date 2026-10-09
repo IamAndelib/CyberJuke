@@ -9,7 +9,7 @@
  *   UNAVAILABLE unless a test stub is installed as `window.__cyberjukeMusicStub`.
  */
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { artworkUrl, type Track } from './model';
+import { UNKNOWN_ARTIST, UNTITLED, artworkUrl, type Track } from './model';
 import { artistKey, cleanCredit, splitArtists } from './artists';
 import { Cache } from '../core/cache';
 import { TEST_HOOKS } from '../core/testHooks';
@@ -163,8 +163,8 @@ export function musicItemToTrack(item: MusicItem, fallbackArtist = ''): Track | 
   return {
     id: YTM_PREFIX + ytId,
     ytId,
-    title: (item.title ?? '').trim() || 'Untitled',
-    artist: cleanCredit(item.subtitle ?? '') || fallbackArtist || 'Unknown artist',
+    title: (item.title ?? '').trim() || UNTITLED,
+    artist: cleanCredit(item.subtitle ?? '') || fallbackArtist || UNKNOWN_ARTIST,
     genre: '',
     by: '',
     postTitle: '',

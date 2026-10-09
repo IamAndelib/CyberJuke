@@ -9,7 +9,7 @@ import { computed, signal } from '@preact/signals';
 import type { Track } from '../data/model';
 import { artistKey } from '../data/artists';
 import { auth } from '../data/auth';
-import { asTracks } from '../core/guards';
+import { asTrack, asTracks } from '../core/guards';
 import { jsonFile, kv, readJson, type JsonFile, type KV } from '../core/storage';
 import { addPlay, dayKey, decodeHistory, encodeHistory, pruneHistory, uniqueTracks, type HistoryEntry } from './history';
 
@@ -97,6 +97,8 @@ export const likedIds = computed(() => new Set(liked.value.map((t) => t.id)));
 let store: KV = kv;
 let historyFile: JsonFile<unknown> = jsonFile('data', 'history', (raw) => raw, { legacyKeys: HISTORY_LEGACY_KEYS });
 let likedFile: JsonFile<unknown> = jsonFile('data', 'liked', (raw) => raw, { legacyKeys: LIKED_LEGACY_KEYS });
+/** Members-only likes kept while signed out, for the account that liked them (dropMembersOnly). */
+const awayFile: JsonFile<unknown> = jsonFile('data', 'liked-away', (raw) => raw);
 
 /** Tests: use other storage. */
 export function setLibraryStorage(s: KV, history: JsonFile<unknown>, likes: JsonFile<unknown> = likedFile): void {
@@ -357,19 +359,73 @@ export function restoreHistory(old: HistoryEntry[], now = Date.now()): void {
   saveHistory(history.value);
 }
 
+/** Members-only likes put away at a sign-out: whose they are, and where each one was. */
+interface Away {
+  v: 1;
+  uid: string;
+  removed: Removed<Track>[];
+}
+
+function asAway(raw: unknown): Away | null {
+  const o = raw as Partial<Away> | null;
+  if (!o || o.v !== 1 || typeof o.uid !== 'string' || !Array.isArray(o.removed)) return null;
+  const removed: Removed<Track>[] = [];
+  for (const r of o.removed as Partial<Removed<unknown>>[]) {
+    const item = asTrack(r?.item);
+    if (!item || typeof r.index !== 'number') continue;
+    removed.push({ item, index: r.index, ...(typeof r.next === 'string' && { next: r.next }), ...(typeof r.prev === 'string' && { prev: r.prev }) });
+  }
+  return { v: 1, uid: o.uid, removed };
+}
+
+/** The away file's reads and writes, one at a time, in call order. */
+let awayJob: Promise<void> = Promise.resolve();
+const queueAway = (job: () => Promise<void>): Promise<void> => (awayJob = awayJob.then(job, job));
+
 /**
- * Signed out of Cyberspace: members-only tracks leave Liked and history (they can't
- * be opened signed out, and shouldn't stay on the phone).
+ * Signed out of Cyberspace: members-only tracks leave Liked and history (they can't be
+ * opened signed out). [uid], the account just signed out: its members-only likes are kept
+ * on the phone (in a file outside backups, like Liked) and come back when it signs in again
+ * (returnMembersOnly). Unknown (null), they go for good. Members-only plays always go.
  */
-export function dropMembersOnly(): void {
-  if (liked.value.some((t) => t.membersOnly)) {
-    liked.value = liked.value.filter((t) => !t.membersOnly);
+export function dropMembersOnly(uid: string | null = null): void {
+  const all = liked.value;
+  if (all.some((t) => t.membersOnly)) {
+    const removed = uid ? all.flatMap((t, i) => (t.membersOnly ? [removedFrom(all, i, trackId)] : [])) : [];
+    liked.value = all.filter((t) => !t.membersOnly);
     saveLiked(liked.value);
+    if (uid && removed.length) {
+      void queueAway(async () => {
+        const kept = asAway(await awayFile.load().catch(() => null));
+        // Another account's: replaced. The same one's (signed out twice): both kept.
+        const before = kept?.uid === uid ? kept.removed.filter((r) => !removed.some((x) => x.item.id === r.item.id)) : [];
+        await awayFile.save({ v: 1, uid, removed: [...removed, ...before] } satisfies Away);
+      });
+    }
   }
   if (history.value.some((e) => e.track.membersOnly)) {
     history.value = history.value.filter((e) => !e.track.membersOnly);
     saveHistory(history.value);
   }
+}
+
+/**
+ * Signed in as [uid]: its members-only likes from before the last sign-out go back where
+ * they were. Another account's are deleted unread.
+ */
+export function returnMembersOnly(uid: string): Promise<void> {
+  return queueAway(async () => {
+    const away = asAway(await awayFile.load().catch(() => null));
+    if (!away) return;
+    await awayFile.remove();
+    if (away.uid !== uid) return;
+    let list = liked.value;
+    // In their old order: each finds the neighbour it had, or the one put back before it.
+    for (const r of away.removed) if (!list.some((t) => t.id === r.item.id)) list = putBack(list, r, trackId);
+    if (list === liked.value) return;
+    liked.value = list;
+    saveLiked(list);
+  });
 }
 
 export function updateSettings(patch: Partial<Settings>): void {

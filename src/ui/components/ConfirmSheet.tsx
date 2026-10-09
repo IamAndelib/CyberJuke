@@ -1,9 +1,6 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
-import { useModal } from '../useModal';
-import { confirmRequest, type ConfirmRequest } from '../nav';
-
-/** How long a closing sheet keeps its content while it slides away (the sheet's 0.2s). */
-const CLOSE_MS = 220;
+import { useRef } from 'preact/hooks';
+import { useModal, useSheetContent } from '../useModal';
+import { confirmRequest } from '../nav';
 
 /**
  * M3: a confirm sheet (same look as the track menu) for actions that can't easily be
@@ -11,16 +8,9 @@ const CLOSE_MS = 220;
  */
 export function ConfirmSheet() {
   const req = confirmRequest.value;
-  // Keep the last request on screen while the sheet slides away.
-  const [shown, setShown] = useState<ConfirmRequest | null>(req);
-  useEffect(() => {
-    if (req) return setShown(req);
-    const id = setTimeout(() => setShown(null), CLOSE_MS);
-    return () => clearTimeout(id);
-  }, [req]);
-  const r = req ?? shown;
-  const close = () => (confirmRequest.value = null);
   const sheet = useRef<HTMLDivElement>(null);
+  const r = useSheetContent(req, sheet);
+  const close = () => (confirmRequest.value = null);
   useModal(req != null, sheet);
   return (
     <div class={'sheet-wrap' + (req ? ' open' : '')} aria-hidden={!req} inert={!req}>

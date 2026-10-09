@@ -46,6 +46,14 @@ export function isGlobal(t: Pick<Track, 'source'> | null | undefined): boolean {
 
 export const SITE_ORIGIN = 'https://beta.cyberspace.online';
 
+/** CyberJuke's own repository and its releases (the update check, Settings → About). */
+export const REPO_URL = 'https://github.com/IamAndelib/CyberJuke';
+export const RELEASES_URL = `${REPO_URL}/releases`;
+
+/** What a track without a title or artist shows (artists.ts skips the placeholder). */
+export const UNTITLED = 'Untitled';
+export const UNKNOWN_ARTIST = 'Unknown artist';
+
 const YT_ID = /^[A-Za-z0-9_-]{11}$/;
 const YT_HOSTS = new Set(['youtube.com', 'youtube-nocookie.com', 'youtu.be']);
 const PATH_PREFIXES = new Set(['live', 'shorts', 'embed', 'v', 'e']);
@@ -225,8 +233,8 @@ export function tracksFromDocument(doc: FsDocument): Track[] {
     out.push({
       id: audio.length > 1 ? `${id}-${index}` : id,
       ytId,
-      title: str(fields.title).trim() || 'Untitled',
-      artist: str(fields.artist).trim() || 'Unknown artist',
+      title: str(fields.title).trim() || UNTITLED,
+      artist: str(fields.artist).trim() || UNKNOWN_ARTIST,
       genre: (str(fields.genre) || str(f.audioAttachmentGenre)).trim(),
       by,
       postTitle,

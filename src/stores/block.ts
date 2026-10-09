@@ -164,7 +164,6 @@ export function netStatusText(
 }
 
 export const BROKEN_TEXT = 'YouTube changed something. Update CyberJuke when a new version is out.';
-export const RELEASES_URL = 'https://github.com/IamAndelib/CyberJuke/releases';
 
 /** The app's block state. */
 export const block = createBlockStore();

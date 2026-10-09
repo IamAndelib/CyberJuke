@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { AUTO_CHECK_MS, RELEASES_URL, RETRY_AFTER_FAILURE_MS, autoCheckDue, isFdroidInstaller, isNewer, parseVersion, releaseOf } from './updates';
+import { RELEASES_URL } from '../data/model';
+import { AUTO_CHECK_MS, RETRY_AFTER_FAILURE_MS, autoCheckDue, isFdroidInstaller, isNewer, parseVersion, releaseOf } from './updates';
 
 describe('versions', () => {
   it('compares x.y.z numerically, ignoring a leading v and a suffix', () => {

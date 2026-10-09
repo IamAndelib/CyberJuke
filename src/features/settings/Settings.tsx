@@ -13,6 +13,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { player } from '../../player';
 import { block, netStatusText } from '../../stores/block';
 import { AuthError, SIGN_UP_URL, auth, authErrorText } from '../../data/auth';
+import { RELEASES_URL, REPO_URL } from '../../data/model';
 import { toast } from '../../stores/toast';
 import { app, checkFailed, checkForUpdates, checking, installUnknown, lastCheck, updateAvailable } from '../../stores/updates';
 import { Screen } from '../../ui/components/Screen';
@@ -52,7 +53,6 @@ function Toggle({ on, onChange, label, testid }: { on: boolean; onChange: (v: bo
 }
 
 /** Where the code and the releases are (opened in the browser; github.com is allowlisted). */
-const REPO_URL = 'https://github.com/IamAndelib/CyberJuke';
 const QUALITIES = ['high', 'low'] as const;
 
 function A({ href, children }: { href: string; children: string }) {
@@ -536,7 +536,7 @@ export function Settings() {
           <A href={REPO_URL}>github.com/IamAndelib/CyberJuke</A>
         </p>
         <p data-testid="source-releases">
-          <A href={`${REPO_URL}/releases/latest`}>Latest release</A>
+          <A href={`${RELEASES_URL}/latest`}>Latest release</A>
         </p>
       </section>
     </Screen>

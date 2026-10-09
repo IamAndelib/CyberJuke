@@ -601,15 +601,6 @@
 .segmented.small button {
   min-width: 64px;
 }
-/* .pressed (usePress): held long enough to be seen, it sinks the button into its
-   checkered shadow and eases back out. */
-.totop-btn {
-  transition: transform 0.12s ease-out;
-}
-.totop-btn.pressed {
-  transform: translate(calc(var(--fab-shadow) / 2), calc(var(--fab-shadow) / 2)) scale(0.94);
-  transition: transform 0.05s ease-out;
-}
 /* Back-to-top: [^] bottom-centre, same hard checkered shadow as the search button.
    A zero-height sticky dock at the end of the scroller pins it to the scrollport's
    bottom edge (the top of the mini player or tab bar), centred, so it never meets the
@@ -627,7 +618,7 @@
   position: absolute;
   left: 50%;
   /* vertically centred on the search button */
-  bottom: calc(12px + 6px + (var(--fab) - var(--totop)) / 2);
+  bottom: calc(var(--fab-bottom) + (var(--fab) - var(--totop)) / 2);
   width: var(--totop);
   height: var(--totop);
   margin-left: calc(var(--totop) / -2 - var(--fab-shadow) / 2);
@@ -649,7 +640,10 @@
     transform 0.12s steps(3),
     visibility 0s;
 }
-.totop-btn {
+/* A pixel button (the search button, back-to-top): a solid block over a hard checkered
+   shadow, offset by its --fab-shadow. .pressed (usePress): held long enough to be seen, it
+   sinks into the shadow and eases back out. */
+.pixel-btn {
   position: relative;
   z-index: 1;
   display: flex;
@@ -664,8 +658,16 @@
   box-shadow:
     0 0 0 var(--border-w) var(--color-bg),
     0 0 0 calc(var(--border-w) * 2) var(--color-fg);
+  transition: transform 0.12s ease-out;
 }
-.totop-shadow {
+.pixel-btn:active {
+  transform: translate(calc(var(--fab-shadow) / 2), calc(var(--fab-shadow) / 2));
+}
+.pixel-btn.pressed {
+  transform: translate(calc(var(--fab-shadow) / 2), calc(var(--fab-shadow) / 2)) scale(0.94);
+  transition: transform 0.05s ease-out;
+}
+.pixel-shadow {
   position: absolute;
   inset: calc(var(--border-w) * -2);
   transform: translate(var(--fab-shadow), var(--fab-shadow));
@@ -674,17 +676,15 @@
   background-image: var(--dither);
   background-size: 4px 4px;
 }
-.totop-btn:active {
-  transform: translate(calc(var(--fab-shadow) / 2), calc(var(--fab-shadow) / 2));
-}
+
 /* Room under the last row for the back-to-top button. */
 .has-totop .screen-body {
-  padding-bottom: calc(24px + 12px + 6px + var(--fab));
+  padding-bottom: calc(24px + var(--fab-bottom) + var(--fab));
 }
 
 /* Leave room under the last row so the button never hides its ⋯ for good. */
 .has-fab .screen-body {
-  padding-bottom: calc(24px + 12px + var(--fab) + 18px);
+  padding-bottom: calc(24px + var(--fab-bottom) + var(--fab) + 12px);
 }
 
 /* ---- Global: covers, shelf, result rows, album header ------------------------------ */
@@ -697,9 +697,6 @@
 }
 .art-round {
   border-radius: 50%;
-}
-.art-cover.art-lg {
-  border-radius: calc(var(--radius-lg) - 2px);
 }
 .shelf {
   list-style: none;

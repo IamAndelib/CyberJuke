@@ -417,7 +417,7 @@ export function Screen({
           <div class={'totop' + (showTop ? ' on' : '')}>
             <button
               ref={topBtn}
-              class="totop-btn"
+              class="pixel-btn totop-btn"
               aria-label="Back to top"
               onPointerDown={onTopDown}
               onPointerMove={onTopMove}
@@ -430,7 +430,7 @@ export function Screen({
             >
               <Icon name="up" size={24} />
             </button>
-            <div class="totop-shadow" aria-hidden="true" />
+            <div class="pixel-shadow" aria-hidden="true" />
           </div>
         </div>
       )}

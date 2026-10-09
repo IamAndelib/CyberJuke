@@ -3,7 +3,7 @@
  * artist page's discography shelves and grid, album/playlist/artist result rows, and
  * the error box. Never names the provider.
  */
-import { useState } from 'preact/hooks';
+import { ArtFrame } from './Art';
 import type { ComponentChildren } from 'preact';
 import {
   RELEASE_LABEL,
@@ -31,18 +31,13 @@ import { openAlbumPage, openArtistPage, openReleasesPage, type AlbumRef } from '
 
 /** Square cover art (albums, playlists, artists) with the same pixel treatment as track art. */
 export function Cover({ url, size = 'md', round, class: cls }: { url?: string; size?: 'sm' | 'md' | 'lg'; round?: boolean; class?: string }) {
-  const [failedFor, setFailedFor] = useState<string | null>(null);
-  const failed = !url || failedFor === url;
   return (
-    <div class={`art art-cover art-${size}${round ? ' art-round' : ''}${cls ? ' ' + cls : ''}`} aria-hidden="true">
-      {failed ? (
-        <div class="art-ph">
-          <Icon name={round ? 'artists' : 'note'} size={size === 'lg' ? 72 : 24} />
-        </div>
-      ) : (
-        <img src={url} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setFailedFor(url!)} />
-      )}
-    </div>
+    <ArtFrame
+      url={url}
+      class={`art art-cover art-${size}${round ? ' art-round' : ''}${cls ? ' ' + cls : ''}`}
+      placeholder={round ? 'artists' : 'note'}
+      big={size === 'lg'}
+    />
   );
 }
 

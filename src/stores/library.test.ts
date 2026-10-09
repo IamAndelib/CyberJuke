@@ -18,6 +18,7 @@ const files = new Map<string, string>();
 };
 const HISTORY_FILE = 'cyberjuke.file:data/cyberjuke/history.json';
 const LIKED_FILE = 'cyberjuke.file:data/cyberjuke/liked.json';
+const AWAY_FILE = 'cyberjuke.file:data/cyberjuke/liked-away.json';
 
 const lib = await import('./library');
 const flush = () => new Promise((r) => setTimeout(r, 0));
@@ -195,6 +196,54 @@ describe('history in the library', () => {
     await flush();
     expect(JSON.parse(files.get(LIKED_FILE)!).map((t: { id: string }) => t.id)).toEqual(['b']);
     expect(Object.keys(JSON.parse(files.get(HISTORY_FILE)!).tracks)).toEqual(['d']);
+  });
+
+  it('signed out, members-only likes wait on the phone and come back, in place, when that account signs in again', async () => {
+    await lib.loadLibrary();
+    for (const t of [tr('p3'), tr('m2', { membersOnly: true }), tr('p1'), tr('m0', { membersOnly: true })]) lib.toggleLike(t);
+    expect(lib.liked.value.map((t) => t.id)).toEqual(['m0', 'p1', 'm2', 'p3']);
+    lib.dropMembersOnly('uid-1');
+    expect(lib.liked.value.map((t) => t.id)).toEqual(['p1', 'p3']);
+    await flush();
+    // Not in Liked's own file: only in the one kept for that account.
+    expect(files.get(LIKED_FILE)).not.toMatch(/m0|m2/);
+    expect(files.get(AWAY_FILE)).toMatch(/uid-1/);
+    // Liked again while signed out (public) or meanwhile: not doubled.
+    lib.toggleLike(tr('p4'));
+    await lib.returnMembersOnly('uid-1');
+    expect(lib.liked.value.map((t) => t.id)).toEqual(['p4', 'm0', 'p1', 'm2', 'p3']);
+    await flush();
+    expect(files.has(AWAY_FILE)).toBe(false);
+    expect(JSON.parse(files.get(LIKED_FILE)!).map((t: { id: string }) => t.id)).toEqual(['p4', 'm0', 'p1', 'm2', 'p3']);
+  });
+
+  it('never gives one account the members-only likes of another', async () => {
+    await lib.loadLibrary();
+    lib.toggleLike(tr('m1', { membersOnly: true }));
+    lib.dropMembersOnly('uid-1');
+    await flush();
+    await lib.returnMembersOnly('uid-2');
+    expect(lib.liked.value).toEqual([]);
+    await flush();
+    expect(files.has(AWAY_FILE)).toBe(false);
+    // Nor later to the first one: they went with the other sign-in.
+    await lib.returnMembersOnly('uid-1');
+    expect(lib.liked.value).toEqual([]);
+  });
+
+  it('keeps members-only likes from two sign-outs of one account, and drops them when it is not known whose they are', async () => {
+    await lib.loadLibrary();
+    lib.toggleLike(tr('m1', { membersOnly: true }));
+    lib.dropMembersOnly('uid-1');
+    await lib.returnMembersOnly('uid-1');
+    lib.toggleLike(tr('m2', { membersOnly: true }));
+    lib.dropMembersOnly('uid-1');
+    // Signed out, a start that finds members-only likes (no account known) drops only those.
+    lib.toggleLike(tr('m3', { membersOnly: true }));
+    lib.dropMembersOnly(null);
+    await flush();
+    await lib.returnMembersOnly('uid-1');
+    expect(lib.liked.value.map((t) => t.id)).toEqual(['m2', 'm1']);
   });
 
   it('records plays once per day and clears', async () => {

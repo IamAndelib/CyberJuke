@@ -11,6 +11,9 @@ async function signIn(page: Page, email = AUTH_USER.email, password = AUTH_USER.
   await page.getByTestId('signin-submit').click();
 }
 
+/** Where members-only likes wait while signed out (the browser stand-in for the app file). */
+const AWAY = 'cyberjuke.file:data/cyberjuke/liked-away.json';
+
 const homeRow = (page: Page, title: string) =>
   page.getByTestId('screen-home').getByTestId('track-row').filter({ has: page.getByTestId('track-title').getByText(title, { exact: true }) });
 
@@ -94,7 +97,8 @@ test('signing in shows [members] posts in Latest, search and Now Playing; signin
   // The members catalog is its own file.
   expect(stored).toContain('cyberjuke/catalog-members.json');
 
-  // Sign out: members posts are gone from Home, search, Liked, history, the lyrics cache and storage.
+  // Sign out: members posts are gone from Home, search, Liked, history, the lyrics cache and
+  // storage, apart from the like kept, out of sight, for this account's next sign-in.
   await page.getByTestId('tab-settings').click();
   // Sign out asks first (M3).
   await page.getByTestId('signout').click();
@@ -121,13 +125,45 @@ test('signing in shows [members] posts in Latest, search and Now Playing; signin
   await expect(page.getByTestId('search-results').or(page.getByTestId('search-empty'))).toBeVisible();
   await expect(page.getByTestId('search').getByTestId('track-title').getByText(MEMBERS_POSTS[1].title)).toHaveCount(0);
   await expect
-    .poll(() => page.evaluate((ids) => {
-      const all = JSON.stringify({ ...localStorage });
-      return ids.some((id) => all.includes(id)) || all.includes('cyberjuke/catalog-members.json');
-    }, MEMBERS_POSTS.map((p) => p.id)))
+    .poll(() => page.evaluate(([awayKey, ids]) => {
+      const { [awayKey]: away, ...rest } = { ...localStorage };
+      const all = JSON.stringify(rest);
+      return ids.some((id) => all.includes(id)) || all.includes('cyberjuke/catalog-members.json') || !away?.includes(ids[0]);
+    }, [AWAY, MEMBERS_POSTS.map((p) => p.id)] as const))
     .toBe(false);
   expect(backend.calls.members).toBe(before);
   await toastsGone(page);
+});
+
+test('a members-only like comes back, in its place, when the same account signs in again', async ({ page }) => {
+  await start(page);
+  await signIn(page);
+  await expect(page.getByTestId('signed-in')).toBeVisible();
+  await page.getByTestId('tab-home').click();
+  await waitForTracks(page);
+  // Liked: a public track, then a members-only one on top of it.
+  const firstPublic = page.getByTestId('screen-home').getByTestId('track-row').nth(MEMBERS_POSTS.length);
+  const publicTitle = (await firstPublic.getByTestId('track-title').textContent())!;
+  for (const row of [firstPublic, homeRow(page, MEMBERS_POSTS[0].title)]) {
+    await row.getByTestId('track-more').click();
+    await page.getByTestId('menu-like').click();
+  }
+  const liked = page.getByTestId('liked-list').getByTestId('track-title');
+  await page.getByTestId('tab-library').click();
+  await expect(liked).toHaveText([MEMBERS_POSTS[0].title, publicTitle]);
+
+  await page.getByTestId('tab-settings').click();
+  await page.getByTestId('signout').click();
+  await page.getByTestId('confirm-ok').click();
+  await expect(page.getByTestId('signin-form')).toBeVisible();
+  await page.getByTestId('tab-library').click();
+  await expect(liked).toHaveText([publicTitle]);
+
+  await signIn(page);
+  await expect(page.getByTestId('signed-in')).toBeVisible();
+  await page.getByTestId('tab-library').click();
+  await expect(liked).toHaveText([MEMBERS_POSTS[0].title, publicTitle]);
+  await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), AWAY)).toBeNull();
 });
 
 test('signed out at startup: members-only tracks restored from a backup are dropped', async ({ page }) => {

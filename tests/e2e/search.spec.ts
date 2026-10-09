@@ -328,7 +328,7 @@ test('Here on the Artists tab finds artists by name and opens the artist page', 
   await expect(page.getByTestId('here-empty')).toBeVisible();
 });
 
-test('Recent searches: [Clear all] empties the list, × removes one; Undo brings them back', async ({ page }) => {
+test('Recent searches: [Clear all] empties the list, Undo brings it back; × removes one', async ({ page }) => {
   await page.goto('/');
   for (const q of ['neon', 'drive']) {
     await openSearch(page);
@@ -345,11 +345,10 @@ test('Recent searches: [Clear all] empties the list, × removes one; Undo brings
   const t = page.getByTestId('toast').filter({ hasText: 'Recent searches cleared' });
   await t.getByTestId('toast-action').click();
   await expect(items).toHaveText([/drive/, /neon/]);
-  // One removed with ×: Undo puts it back in its place.
+  // One removed with ×: gone at once, no message.
   await page.getByTestId('recent-search-remove').first().click();
   await expect(items).toHaveText([/neon/]);
-  await page.getByTestId('toast').filter({ hasText: 'Removed “drive”' }).getByTestId('toast-action').click();
-  await expect(items).toHaveText([/drive/, /neon/]);
+  await expect(page.getByTestId('toast').filter({ hasText: 'drive' })).toHaveCount(0);
 });
 
 test('clearing the field shows the empty-query view at once, never results for the old query', async ({ page }) => {

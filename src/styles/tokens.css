@@ -10,6 +10,8 @@
   --tabbar-h: 60px;
   --mini-h: 64px;
   --fab: 56px;
+  /* The search button's bottom edge above .main's: a gap, plus its 6px shadow. */
+  --fab-bottom: calc(12px + 6px);
   --gutter: 16px;
   --dither: repeating-conic-gradient(var(--color-fg-dim) 0 25%, transparent 0 50%);
 

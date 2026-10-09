@@ -33,7 +33,7 @@ import { Marquee } from './Marquee';
 import { MembersTag } from '../../ui/components/TrackRow';
 import { LyricsPanel } from './Lyrics';
 import { UpNext } from './UpNext';
-import { useModal } from '../../ui/useModal';
+import { useModal, useSheetContent } from '../../ui/useModal';
 import { useLiked } from '../../ui/useFavs';
 import { shareTrack } from '../../ui/share';
 
@@ -705,41 +705,6 @@ function NpArtist({ track }: { track: Track }) {
       </button>
     </div>
   );
-}
-
-/** Longest a closing sheet keeps its content if no transitionend comes (hidden page, no transition). */
-const SHEET_CLEAR_MS = 400;
-
-/**
- * What a bottom sheet shows: `value` while open, and the last one while it slides away,
- * until the sheet's transform transition ends. So it never collapses to an empty strip
- * on the way out.
- */
-function useSheetContent<T>(value: T | null, sheet: { current: HTMLElement | null }): T | null {
-  const last = useRef(value);
-  const [, force] = useState(0);
-  if (value != null) last.current = value;
-  useEffect(() => {
-    const el = sheet.current;
-    if (value != null || last.current == null || !el) return;
-    const clear = () => {
-      if (last.current == null) return;
-      last.current = null;
-      force((n) => n + 1);
-    };
-    const onEnd = (e: TransitionEvent) => {
-      if (e.target === el && e.propertyName === 'transform') clear();
-    };
-    el.addEventListener('transitionend', onEnd);
-    const timer = setTimeout(clear, SHEET_CLEAR_MS);
-    return () => {
-      el.removeEventListener('transitionend', onEnd);
-      clearTimeout(timer);
-    };
-    // `sheet` is a stable ref; only opening and closing matter.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
-  return value ?? last.current;
 }
 
 /** Small sheet listing a track's credited artists (from Now Playing). */

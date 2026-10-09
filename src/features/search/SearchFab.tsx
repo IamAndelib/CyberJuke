@@ -61,14 +61,14 @@ export function SearchFab() {
     <div class="fab" ref={dock}>
       <button
         ref={btn}
-        class="fab-btn"
+        class="pixel-btn"
         aria-label={ctx ? `Search in ${ctx.label}` : 'Search the Jukebox'}
         onClick={() => openSearch(ctx)}
         data-testid="search-fab"
       >
         <Icon name="search" size={28} />
       </button>
-      <div class="fab-shadow" aria-hidden="true" />
+      <div class="pixel-shadow" aria-hidden="true" />
     </div>
   );
 }

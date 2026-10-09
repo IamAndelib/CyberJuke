@@ -7,10 +7,8 @@
  * so "AC/DC" stays whole while "Artist A / Artist B" splits.
  * Names are matched by `normalize` (accents, case and punctuation ignored).
  */
-import type { Track } from './model';
+import { UNKNOWN_ARTIST, type Track } from './model';
 import { normalize } from './search';
-
-const UNKNOWN_ARTIST = 'Unknown artist';
 
 /** "(feat. X)" / "[ft. X]" become ", X" so the brackets don't stick to the names. */
 const BRACKETED_FEAT = /[([]\s*(?:feat\.?|ft\.?|featuring)\s+([^)\]]*)[)\]]/gi;
