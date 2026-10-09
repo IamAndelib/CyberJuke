@@ -24,9 +24,13 @@ allprojects {
         google()
         mavenCentral()
         // NewPipeExtractor (and its nanojson dependency) are only published on JitPack.
-        maven {
-            url 'https://jitpack.io'
-            content { includeGroupByRegex 'com\\.github\\..*' }
+        // exclusiveContent both ways: TeamNewPipe artifacts come only from JitPack (a same-named
+        // artifact elsewhere can't shadow them), and JitPack serves nothing else.
+        exclusiveContent {
+            forRepository {
+                maven { url 'https://jitpack.io' }
+            }
+            filter { includeGroup 'com.github.TeamNewPipe' }
         }
     }
 }
