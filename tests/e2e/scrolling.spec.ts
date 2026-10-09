@@ -292,7 +292,7 @@ test('scrollbar: appears while scrolling, fades, and drags on a long list; A–Z
     screen.evaluate((el) => {
       const top = el.querySelector('.topbar')!.getBoundingClientRect().bottom + 8;
       let cur = '';
-      for (const h of el.querySelectorAll<HTMLElement>('.az-head')) if (h.getBoundingClientRect().top <= top) cur = h.dataset.letter!;
+      for (const h of el.querySelectorAll<HTMLElement>('.az-head')) if (h.offsetParent && h.getBoundingClientRect().top <= top) cur = h.dataset.letter!;
       return cur;
     });
 
@@ -340,4 +340,30 @@ test('scrollbar: no letter popup in Popular order; reduced motion has no fade tr
   await expect(screen.getByTestId('az-popup')).toHaveCount(0);
   const dur = await screen.getByTestId('scrollbar').evaluate((el) => parseFloat(getComputedStyle(el).transitionDuration));
   expect(dur).toBeLessThan(0.01);
+});
+
+test('A–Z letter: a letter whose genres are all in Favourites is skipped, not shown over the one before', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('grid-sort-az').click();
+  const screen = page.getByTestId('screen-genres');
+  const sections = screen.getByTestId('az-section');
+  await expect(sections.nth(2)).toBeVisible();
+  const [first, second] = [(await sections.nth(0).getAttribute('data-letter'))!, (await sections.nth(1).getAttribute('data-letter'))!];
+  // Every genre under the second letter starred (last first, so no tile slides under the next tap).
+  const stars = sections.nth(1).getByTestId('genre-fav');
+  for (let i = (await stars.count()) - 1; i >= 0; i--) await stars.nth(i).click();
+  await expect(screen.locator(`[data-testid="az-section"][data-letter="${second}"]`)).toBeHidden();
+  // Scrolled into the first letter's tiles: the letter is the first one.
+  await screen.evaluate((el, l) => {
+    const h = el.querySelector<HTMLElement>(`.az-head[data-letter="${l}"]`)!;
+    const head = el.querySelector('.topbar')!.getBoundingClientRect().height;
+    el.scrollTo(0, el.scrollTop + h.getBoundingClientRect().top - el.getBoundingClientRect().top - head + 30);
+  }, first);
+  // The letters are read again there (as after any resize).
+  const vp = page.viewportSize()!;
+  await page.setViewportSize({ width: vp.width, height: vp.height - 1 });
+  await nextFrame(page);
+  await nextFrame(page);
+  await expect(screen.locator('.az-pop-letter')).toHaveText(first);
 });

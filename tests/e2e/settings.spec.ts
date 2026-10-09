@@ -202,7 +202,7 @@ test('Updates: Check now finds a newer release (banner, dot on the tab), or says
   await waitForTracks(page);
   await page.getByTestId('tab-settings').click();
   await page.getByTestId('updates').getByTestId('updates-check').click();
-  await expect(page.getByTestId('updates-status')).toHaveText(/^Up to date \(\d+\.\d+\.\d+\)\. Checked just now\.$/);
+  await expect(page.getByTestId('updates-status')).toHaveText(/^Up to date \(\d+\.\d+\.\d+\)\. Checked today at \d{1,2}:\d{2}( [AP]M)?\.$/);
   await expect(page.getByTestId('update-banner')).toHaveCount(0);
   await expect(page.getByTestId('settings-update-dot')).toHaveCount(0);
 

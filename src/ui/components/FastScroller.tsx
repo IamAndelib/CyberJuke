@@ -70,10 +70,12 @@ export function FastScroller({
     const s = st.current;
     if (s.headsFor !== scroll) {
       const base = el.getBoundingClientRect().top - el.scrollTop;
-      s.heads = Array.from(el.querySelectorAll<HTMLElement>('.az-head')).map((h) => ({
-        top: h.getBoundingClientRect().top - base,
-        letter: h.dataset.letter ?? '',
-      }));
+      s.heads = [];
+      // Each letter's section (its heading leads it); not one with nothing left to show
+      // (every tile moved up to ★ Favourites: display none).
+      for (const sec of el.querySelectorAll<HTMLElement>('.az-section')) {
+        if (sec.offsetParent) s.heads.push({ top: sec.getBoundingClientRect().top - base, letter: sec.dataset.letter ?? '' });
+      }
       s.headsFor = scroll;
     }
     const line = el.scrollTop + head + 8;
@@ -205,10 +207,17 @@ export function FastScroller({
       ro.observe(el);
       for (const part of el.querySelectorAll(':scope > .screen-body, :scope > .topbar')) ro.observe(part);
     }
+    // Tiles moving between sections can leave the height as it was: the letters are read again.
+    const mo = new MutationObserver(() => {
+      st.current.headsFor = -1;
+    });
+    const body = el.querySelector(':scope > .screen-body');
+    if (body) mo.observe(body, { childList: true, subtree: true });
     schedule();
     return () => {
       el.removeEventListener('scroll', onScroll);
       ro?.disconnect();
+      mo.disconnect();
       // st holds plain timer state (not a DOM node); its latest values are what to clear.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       const s = st.current;
@@ -221,7 +230,7 @@ export function FastScroller({
       if (s.exclAt) setGestureExclusion(null);
       s.exclAt = 0;
     };
-    // Mount-only: `scroller` is a stable ref and `schedule` reads only refs (UX rework pending).
+    // Mount-only: `scroller` is a stable ref and `schedule` reads only refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -230,7 +239,7 @@ export function FastScroller({
     st.current.letter = '';
     if (!az) popup.current?.classList.remove('on');
     schedule();
-    // `schedule` reads only refs; the effect is about `az` (UX rework pending).
+    // `schedule` reads only refs; the effect is about `az`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [az]);
 

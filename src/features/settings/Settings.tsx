@@ -315,11 +315,9 @@ function NetStatusLine() {
   );
 }
 
-/** "Checked 5 min ago", "Checked today at 14:02", "Checked on 3 Oct". */
+/** "Checked today at 14:02", "Checked on 3 Oct". */
 function checkedText(at: number, now = Date.now()): string {
-  const mins = Math.round((now - at) / 60_000);
-  if (mins < 1) return 'Checked just now';
-  if (mins < 60) return `Checked ${mins} min ago`;
+  // A time, not "N min ago": the card isn't re-rendered as the minutes pass.
   const d = new Date(at);
   const today = new Date(now).toDateString() === d.toDateString();
   return today
