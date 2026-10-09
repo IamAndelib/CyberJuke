@@ -449,3 +449,30 @@ test('the Now Playing genre tag takes a tap a little above or below it (44px tar
   expect(hit).toBe(true);
   expect(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('[data-testid="np-genre"]') != null, [b.x + b.width / 2, b.y + b.height + 10])).toBe(true);
 });
+
+test('Up next from the keyboard: focus follows a moved row, and goes to the next row after a removal', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('track-play').first().click();
+  await openNowPlaying(page);
+  const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
+  const id = (await rows.nth(1).getAttribute('data-track-id'))!;
+  const focused = () => page.evaluate(() => {
+    const a = document.activeElement as HTMLElement | null;
+    return `${a?.dataset.testid}:${a?.closest('[data-testid="upnext-row"]')?.getAttribute('data-track-id')}`;
+  });
+  await rows.nth(1).getByTestId('upnext-down').focus();
+  await page.keyboard.press('Enter');
+  await expect(rows.nth(2)).toHaveAttribute('data-track-id', id);
+  await expect.poll(focused).toBe(`upnext-down:${id}`);
+  // Up from the top of the list: the Up button disables, so focus goes to Down.
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Enter');
+  await expect(rows.nth(1)).toHaveAttribute('data-track-id', id);
+  await expect.poll(focused).toBe(`upnext-up:${id}`);
+
+  const after = (await rows.nth(2).getAttribute('data-track-id'))!;
+  await rows.nth(1).getByTestId('upnext-remove').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator(`[data-testid="upnext-row"][data-track-id="${id}"]`)).toHaveCount(0);
+  await expect.poll(focused).toBe(`upnext-remove:${after}`);
+});

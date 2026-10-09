@@ -5,7 +5,7 @@ import { artistIndex, displayArtist } from '../../stores/artists';
 import { favoriteArtists } from '../../stores/library';
 import { useFavArtist } from '../../ui/useFavs';
 import { toggleFavoriteArtistWithUndo } from '../../stores/undo';
-import { Icon } from '../../ui/icons';
+import { FavSection, FavTile } from '../../ui/components/FavTile';
 import { openArtistPage, useSearchContext, type Place } from '../../ui/nav';
 import { ErrorState } from '../../ui/components/TrackList';
 import { Screen } from '../../ui/components/Screen';
@@ -16,29 +16,10 @@ import { takeSections, useChunks } from '../../ui/useChunks';
 import type { Artist } from '../../data/artists';
 import { artistsSort } from '../../stores/prefs';
 
-/**
- * An artist tile. In the main grid (`inGrid`) a favourite isn't shown: it sits in ★ Favourites
- * above instead, and comes back to its place here when unstarred. Only this tile re-renders.
- */
+/** An artist tile ([FavTile]); a star re-renders only this tile. */
 export function ArtistTile({ name, inGrid }: { name: string; inGrid?: boolean }) {
   const fav = useFavArtist(name);
-  if (inGrid && fav) return null;
-  return (
-    <div class={'genre-cell' + (fav ? ' fav' : '')} data-testid="artist-cell" data-artist={name}>
-      <button class="genre-tile" onClick={() => openArtistPage(name)} data-testid="artist-tile" data-artist={name}>
-        <span class="artist-name">{name}</span>
-      </button>
-      <button
-        class={'genre-fav' + (fav ? ' on' : '')}
-        aria-pressed={fav}
-        aria-label={fav ? `Remove ${name} from favourites` : `Add ${name} to favourites`}
-        onClick={() => toggleFavoriteArtistWithUndo(name)}
-        data-testid="artist-fav"
-      >
-        <Icon name={fav ? 'star' : 'starOutline'} size={20} />
-      </button>
-    </div>
-  );
+  return <FavTile kind="artist" name={name} fav={fav} inGrid={inGrid} onOpen={() => openArtistPage(name)} onToggle={() => toggleFavoriteArtistWithUndo(name)} />;
 }
 
 /** ★ Favourites above the grid, in the order added; follows every star at once. */
@@ -46,21 +27,11 @@ function FavArtists() {
   const favs = favoriteArtists.value;
   if (!favs.length) return null;
   return (
-    <>
-      <section data-testid="fav-artists">
-        <div class="section-head">
-          <h2 class="section-title">★ Favourites</h2>
-        </div>
-        <div class="genre-grid">
-          {favs.map((name) => (
-            <ArtistTile key={artistKey(name)} name={displayArtist(name)} />
-          ))}
-        </div>
-      </section>
-      <div class="section-head">
-        <h2 class="section-title">All artists</h2>
-      </div>
-    </>
+    <FavSection testid="fav-artists" allTitle="All artists">
+      {favs.map((name) => (
+        <ArtistTile key={artistKey(name)} name={displayArtist(name)} />
+      ))}
+    </FavSection>
   );
 }
 
@@ -96,11 +67,11 @@ export function ArtistTiles({ list, sort }: { list: Artist[]; sort: 'popular' | 
   );
 }
 
-/** The Artists tab's root: Favourites, then everyone on the Jukebox (Popular or A–Z). */
 const NO_TRACKS: never[] = [];
 /** Here on the Artists tab: every artist, found by name (one array per catalog change). */
 const artistPlaces = computed(() => artistIndex.value.artists.map((a): Place => ({ name: a.name, kind: 'artist' })));
 
+/** The Artists tab's root: Favourites, then everyone on the Jukebox (Popular or A–Z). */
 export function ArtistGrid() {
   const list = artistIndex.value.artists;
   // Here on this tab finds artists by name.

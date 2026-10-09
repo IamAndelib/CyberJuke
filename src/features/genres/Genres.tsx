@@ -8,6 +8,7 @@ import { toggleFavoriteGenreWithUndo } from '../../stores/undo';
 import { useMemo } from 'preact/hooks';
 import { takeSections, useChunks } from '../../ui/useChunks';
 import { Icon } from '../../ui/icons';
+import { FavSection, FavTile, PageStar } from '../../ui/components/FavTile';
 import { openGenrePage, popPage, useSearchContext, type Place } from '../../ui/nav';
 import { ErrorState, PagedTracks, PlayShuffle } from '../../ui/components/TrackList';
 import { Screen } from '../../ui/components/Screen';
@@ -20,36 +21,17 @@ import { authScope } from '../../stores/feed';
 import { auth } from '../../data/auth';
 import { list as listCtx, withRest } from '../../ui/playAll';
 
-/**
- * A genre tile. In the main grid (`inGrid`) a favourite isn't shown: it sits in ★ Favourites
- * above instead, and comes back to its place here when unstarred. Only this tile re-renders.
- */
+/** A genre tile ([FavTile]); a star re-renders only this tile. */
 export function GenreTile({ name, inGrid }: { name: string; inGrid?: boolean }) {
   const fav = useFavGenre(name);
-  if (inGrid && fav) return null;
-  return (
-    <div class={'genre-cell' + (fav ? ' fav' : '')} data-testid="genre-cell" data-genre={name}>
-      <button class="genre-tile" onClick={() => openGenrePage(name)} data-testid="genre-tile" data-genre={name}>
-        <span class="genre-name">{name}</span>
-      </button>
-      <button
-        class={'genre-fav' + (fav ? ' on' : '')}
-        aria-pressed={fav}
-        aria-label={fav ? `Remove ${name} from favourites` : `Add ${name} to favourites`}
-        onClick={() => toggleFavoriteGenreWithUndo(name)}
-        data-testid="genre-fav"
-      >
-        <Icon name={fav ? 'star' : 'starOutline'} size={20} />
-      </button>
-    </div>
-  );
+  return <FavTile kind="genre" name={name} fav={fav} inGrid={inGrid} onOpen={() => openGenrePage(name)} onToggle={() => toggleFavoriteGenreWithUndo(name)} />;
 }
 
-/** The Genres tab's root: Favourites, then every genre (Popular or A–Z). */
 const NO_TRACKS: never[] = [];
 /** Here on the Genres tab: every genre, found by name (one array per catalog change). */
 const genrePlaces = computed(() => genres.value.map((g): Place => ({ name: g.name, kind: 'genre', count: g.count })));
 
+/** The Genres tab's root: Favourites, then every genre (Popular or A–Z). */
 export function GenreGrid() {
   const list = genres.value;
   // Here on this tab finds genres by name.
@@ -98,21 +80,11 @@ function FavGenres() {
   const favs = favoriteGenres.value;
   if (!favs.length) return null;
   return (
-    <>
-      <section data-testid="fav-genres">
-        <div class="section-head">
-          <h2 class="section-title">★ Favourites</h2>
-        </div>
-        <div class="genre-grid">
-          {favs.map((name) => (
-            <GenreTile key={name} name={name} />
-          ))}
-        </div>
-      </section>
-      <div class="section-head">
-        <h2 class="section-title">All genres</h2>
-      </div>
-    </>
+    <FavSection testid="fav-genres" allTitle="All genres">
+      {favs.map((name) => (
+        <GenreTile key={name} name={name} />
+      ))}
+    </FavSection>
   );
 }
 
@@ -208,15 +180,5 @@ export function GenreDetail({ genre }: { genre: string }) {
 /** The genre page's star (starred here, on the grid or by an Undo: it follows). */
 function GenreFavButton({ genre }: { genre: string }) {
   const fav = useFavGenre(genre);
-  return (
-    <button
-      class={'icon-btn like' + (fav ? ' on' : '')}
-      aria-pressed={fav}
-      aria-label={fav ? `Remove ${genre} from favourites` : `Add ${genre} to favourites`}
-      onClick={() => toggleFavoriteGenreWithUndo(genre)}
-      data-testid="genre-page-fav"
-    >
-      <Icon name={fav ? 'star' : 'starOutline'} size={26} />
-    </button>
-  );
+  return <PageStar name={genre} fav={fav} onToggle={() => toggleFavoriteGenreWithUndo(genre)} testid="genre-page-fav" />;
 }

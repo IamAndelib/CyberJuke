@@ -14,6 +14,7 @@ import { CatalogError, PlayShuffle, Tracks } from '../../ui/components/TrackList
 import { list as listCtx } from '../../ui/playAll';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
+import { PageStar } from '../../ui/components/FavTile';
 import {
   ARTIST_SONGS_MAX,
   AlbumShelf,
@@ -151,28 +152,18 @@ export function ArtistPage({ name: raw }: { name: string }) {
   );
 }
 
+/** The artist page's star (starred here, on the grid or by an Undo: it follows). */
+function ArtistFavButton({ name }: { name: string }) {
+  const fav = useFavArtist(name);
+  return <PageStar name={name} fav={fav} onToggle={() => toggleFavoriteArtistWithUndo(name)} testid="artist-page-fav" />;
+}
+
 /**
  * Here search on an artist page covers everything on it: the artist's Jukebox tracks,
  * Top songs, and their full song list (read the first time Search shows Here, up to
  * ARTIST_SONGS_MAX songs, cached with the page), each song once, Jukebox first; plus
  * the releases on the page by title. Results update as the song list arrives.
  */
-/** The artist page's star (starred here, on the grid or by an Undo: it follows). */
-function ArtistFavButton({ name }: { name: string }) {
-  const fav = useFavArtist(name);
-  return (
-    <button
-      class={'icon-btn like' + (fav ? ' on' : '')}
-      aria-pressed={fav}
-      aria-label={fav ? `Remove ${name} from favourites` : `Add ${name} to favourites`}
-      onClick={() => toggleFavoriteArtistWithUndo(name)}
-      data-testid="artist-page-fav"
-    >
-      <Icon name={fav ? 'star' : 'starOutline'} size={26} />
-    </button>
-  );
-}
-
 function useArtistHere(name: string, page: Feed<Track, TopCursor, ArtistPageMeta>): void {
   const key = artistKey(name);
   /** Bumped on every change of the page or song list: Search's reads depend on it. */

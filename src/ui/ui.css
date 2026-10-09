@@ -499,6 +499,8 @@
   display: flex;
   align-items: center;
   width: 100%;
+  /* Both tiles of a row as tall as the taller one. */
+  height: 100%;
   min-height: 60px;
   padding: 10px 40px 10px 12px;
   border: var(--border-w) solid var(--color-fg);
@@ -516,6 +518,10 @@
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
+}
+/* The name may wrap (and break a word longer than the tile) rather than run under the star. */
+.genre-tile > span {
+  min-width: 0;
 }
 /* Star: its own 48px button over the tile's top-right corner. */
 .genre-fav {

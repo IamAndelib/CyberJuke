@@ -5,8 +5,11 @@
 }
 .genre-name {
   font-family: var(--font-display);
-  font-size: 17px;
+  /* A little smaller on narrow phones, so a word like "electronic" fits on its line; a
+     longer one is hyphenated, not cut anywhere. */
+  font-size: clamp(15px, 4.4vw, 17px);
   line-height: 1.15;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  hyphens: auto;
   text-transform: lowercase;
 }

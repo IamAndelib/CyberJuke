@@ -539,3 +539,47 @@ test('a toast never covers back-to-top or the block banner, and a plain one lets
   const t = await box(toast);
   expect(t.y + t.height).toBeLessThanOrEqual((await box(banner)).y);
 });
+
+test('a second tap where a starred tile was does not star the tile that took its place', async ({ page }) => {
+  await page.goto('/');
+  await genresLoaded(page);
+  const grid = page.getByTestId('genre-grid');
+  const favs = page.getByTestId('fav-genres').getByTestId('genre-tile');
+  // One favourite already: the next fills its row, so the grid below doesn't move.
+  const first = (await grid.getByTestId('genre-cell').nth(0).getAttribute('data-genre'))!;
+  await grid.getByTestId('genre-cell').nth(0).getByTestId('genre-fav').click();
+  await expect(favs).toHaveText([first]);
+  await expect(page.getByTestId('toast')).toHaveCount(0, { timeout: 5000 });
+  const genre = (await grid.getByTestId('genre-cell').nth(3).getAttribute('data-genre'))!;
+  const next = (await grid.getByTestId('genre-cell').nth(4).getAttribute('data-genre'))!;
+  const b = await box(grid.getByTestId('genre-cell').nth(3).getByTestId('genre-fav'));
+  // A double tap on the star: the first stars it (it moves up), the second lands on the next.
+  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  await elapsed(page, 150);
+  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  await elapsed(page, 300);
+  await expect(favs).toHaveText([first, genre]);
+  const nextStar = grid.locator(`[data-testid="genre-cell"][data-genre="${next}"]`).getByTestId('genre-fav');
+  await expect(nextStar).toHaveAttribute('aria-pressed', 'false');
+  // It took the starred one's place; a moment later, a tap there works again.
+  expect(Math.abs((await box(nextStar)).y - b.y)).toBeLessThan(2);
+  await elapsed(page, 800);
+  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  await expect(favs).toHaveText([first, genre, next]);
+});
+
+test('starring from the keyboard keeps focus on the star, which moves with its tile', async ({ page }) => {
+  await page.goto('/');
+  await genresLoaded(page);
+  const grid = page.getByTestId('genre-grid');
+  const genre = (await grid.getByTestId('genre-cell').nth(2).getAttribute('data-genre'))!;
+  const focused = () => page.evaluate(() => {
+    const a = document.activeElement as HTMLElement | null;
+    return a ? `${a.dataset.testid}:${a.closest('[data-genre]')?.getAttribute('data-genre')}:${a.closest('[data-testid="fav-genres"]') ? 'favs' : 'grid'}` : null;
+  });
+  await grid.locator(`[data-testid="genre-cell"][data-genre="${genre}"]`).getByTestId('genre-fav').focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(focused).toBe(`genre-fav:${genre}:favs`);
+  await page.keyboard.press('Enter');
+  await expect.poll(focused).toBe(`genre-fav:${genre}:grid`);
+});
