@@ -7,6 +7,7 @@
 - ★ Favourites on the Genres and Artists tabs gains or loses a tile the moment you tap, instead of after a scroll or the next visit.
 - Adding shows a short "‹name› added to Favourites" / "Added to Liked songs" message without Undo; removing still offers Undo.
 - Messages at the bottom can be swiped away, left or right.
+- Quick taps on a heart or star no longer stack "Added" and "Removed" messages: the newest replaces the one before it.
 
 ## [1.0.2] - 2026-10-09
 

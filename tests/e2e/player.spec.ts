@@ -213,6 +213,20 @@ test('a seek-bar drag held still before release still seeks, and the bar follows
   await expect.poll(async () => Number(await page.getByTestId('seek').inputValue())).toBeLessThan(80_000);
 });
 
+test('quick taps on the Now Playing heart leave one toast, about the last tap', async ({ page }) => {
+  await start(page);
+  await playAndOpen(page);
+  const heart = page.getByTestId('np-like');
+  for (let i = 0; i < 3; i++) await heart.click();
+  await expect(heart).toHaveAttribute('aria-pressed', 'true');
+  const toasts = page.getByTestId('toast');
+  await expect(toasts).toHaveCount(1);
+  await expect(toasts).toHaveText('Added to Liked songs');
+  await heart.click();
+  await expect(toasts).toHaveCount(1);
+  await expect(toasts).toContainText('Removed from Liked');
+});
+
 test('skipping past queued tracks keeps them next (tests/spec/queue-rules.json)', async ({ page }) => {
   await start(page);
   const titles = (await page.getByTestId('track-title').allTextContents()).map((t) => t.trim());

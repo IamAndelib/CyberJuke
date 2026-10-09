@@ -17,6 +17,8 @@ interface Toast {
   id: number;
   text: string;
   action?: ToastAction;
+  /** What it is about (a track's like, a genre's star): a newer toast about it replaces it. */
+  key?: string;
 }
 
 /** How long a toast with an action stays: long enough to reach for Undo. */
@@ -60,10 +62,13 @@ export function dropToastActions(match: (a: ToastAction) => boolean): void {
 
 /**
  * Show a short message at the bottom of the screen. With an `action` (e.g. Undo) the
- * toast takes taps and stays about 4 s, unless `ms` says otherwise. Returns its id.
+ * toast takes taps and stays about 4 s, unless `ms` says otherwise. A toast with a `key`
+ * replaces one with the same key (quick taps on a heart don't stack "Added" and "Removed").
+ * Returns its id.
  */
-export function toast(text: string, ms?: number, action?: ToastAction): number {
-  const t: Toast = action ? { id: nextId++, text, action } : { id: nextId++, text };
+export function toast(text: string, ms?: number, action?: ToastAction, key?: string): number {
+  const t: Toast = { id: nextId++, text, ...(action && { action }), ...(key != null && { key }) };
+  if (key != null) for (const old of toasts.peek()) if (old.key === key) dismissToast(old.id);
   // Keep at most two on screen; newest last.
   const kept = toasts.value.slice(-1);
   for (const old of toasts.value) if (!kept.includes(old)) dismissToast(old.id);

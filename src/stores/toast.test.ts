@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals';
-import { describe, expect, it } from 'vitest';
-import { dropToastActions, runToastAction, toast, toasts } from './toast';
+import { describe, expect, it, vi } from 'vitest';
+import { dismissToast, dropToastActions, holdToast, releaseToast, runToastAction, toast, toasts } from './toast';
 
 describe('toast actions', () => {
   it('an Undo goes (the text stays) once it is stale', async () => {
@@ -23,5 +23,39 @@ describe('toast actions', () => {
     dropToastActions((x) => x.membersOnly === true);
     expect(toasts.value.find((t) => t.id === a)?.action).toBeUndefined();
     expect(toasts.value.find((t) => t.id === b)?.action).toBeDefined();
+  });
+});
+
+describe('toasts about the same thing', () => {
+  it('replace each other instead of stacking (quick taps on a heart)', () => {
+    for (const t of toasts.peek()) dismissToast(t.id);
+    toast('Added to Liked songs', 1800, undefined, 'like:a');
+    toast('Removed from Liked', undefined, { label: 'Undo', run: () => {} }, 'like:a');
+    const last = toast('Added to Liked songs', 1800, undefined, 'like:a');
+    expect(toasts.value.map((t) => t.id)).toEqual([last]);
+    // About something else: shown alongside.
+    toast('Shoegaze added to Favourites', 1800, undefined, 'genre:Shoegaze');
+    expect(toasts.value.map((t) => t.text)).toEqual(['Added to Liked songs', 'Shoegaze added to Favourites']);
+  });
+});
+
+describe('a held toast', () => {
+  it("doesn't time out while held; let go, the rest of its time runs (1.5 s at least)", () => {
+    vi.useFakeTimers();
+    try {
+      for (const t of toasts.peek()) dismissToast(t.id);
+      const id = toast('Removed from Liked', 4000, { label: 'Undo', run: () => {} });
+      vi.advanceTimersByTime(3000);
+      holdToast(id);
+      vi.advanceTimersByTime(10_000);
+      expect(toasts.value.some((t) => t.id === id)).toBe(true);
+      releaseToast(id);
+      vi.advanceTimersByTime(1400);
+      expect(toasts.value.some((t) => t.id === id)).toBe(true);
+      vi.advanceTimersByTime(200);
+      expect(toasts.value.some((t) => t.id === id)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
