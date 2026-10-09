@@ -1,8 +1,8 @@
 name: Screenshots
 
 # Manual: renders every screen with Playwright and uploads the PNGs as an artifact.
-# Screenshots are no longer committed (media/web-screenshots/ is gitignored); the few used by
-# the README and the store listing live in media/screenshots/ and fastlane/.
+# Screenshots are not committed (test-results/ is gitignored); the ones used by the README and
+# the store listing are made by `npm run media` into media/ and fastlane/.
 on:
   workflow_dispatch:
 

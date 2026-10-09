@@ -11,7 +11,7 @@
 <li><b>Background playback:</b> notification, lock screen and headset controls; the queue keeps going with the screen off.</li>
 <li><b>Now Playing</b> with seek, shuffle, repeat, like, synced lyrics and an Up Next queue you can reorder.</li>
 <li><b>Library:</b> liked tracks and recently played, stored on your phone.</li>
-<li><b>Global search</b> (optional): any song, album, artist or playlist beyond the Jukebox, using YouTube Music data.</li>
+<li><b>Global search</b> (optional): any song, album, artist or playlist beyond the Jukebox, from YouTube's music catalog.</li>
 <li>"Posted by @user" opens the original post on Cyberspace.</li>
 <li>Cyberspace themes: Dark, Light, C64, VT320, Matrix, Crypt, Bubblegum and Brutalist. NSFW posts are hidden unless you turn them on.</li>
 </ul>
@@ -20,7 +20,7 @@
 <p>Without an account, CyberJuke shows the Jukebox's public posts. Signing in with your Cyberspace account also shows the members-only shared tracks. Your password goes only to Cyberspace's own login service (Firebase Auth, the same one the website uses) and is never stored. The login token is encrypted on the phone with an Android Keystore key, is excluded from backups, and is deleted when you sign out.</p>
 
 <p><b>Privacy</b></p>
-<p>No analytics, no tracking, no ads. CyberJuke talks only to Cyberspace's backend (the track list, and the login if you sign in), YouTube and YouTube Music (audio, artwork, Global search, artist pages and Global radio) and LRCLIB (lrclib.net) when you open lyrics. Your library, history and settings stay in the app's own storage (and your own Android backup, if you use one).</p>
+<p>No analytics, no tracking, no ads. CyberJuke talks only to Cyberspace's backend (the track list, and the login if you sign in), YouTube (audio, artwork, Global search, artist pages and Global radio) and LRCLIB (lrclib.net) when you open lyrics. Your library, history and settings stay in the app's own storage (and your own Android backup, if you use one).</p>
 
 <p><b>YouTube and NewPipe</b></p>
 <p>Every Jukebox track is a YouTube link. CyberJuke plays the audio with NewPipeExtractor, the library behind NewPipe, and Media3/ExoPlayer. This is why it has the NonFreeNet anti-feature, and it means:</p>

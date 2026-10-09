@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version without the leading v (e.g. 0.1.0)'
+        description: 'Version without the leading v (e.g. 1.0.0)'
         required: true
         type: string
       prerelease:
@@ -49,7 +49,7 @@ jobs:
             echo "::error title=Wrong branch::Run the release from main (got $GITHUB_REF)."; exit 1
           fi
           if [[ ! "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error title=Invalid version::'$VERSION' is not semver like 0.1.0 or 0.2.0-beta.1 (no leading v)"
+            echo "::error title=Invalid version::'$VERSION' is not semver like 1.0.0 or 1.1.0-beta.1 (no leading v)"
             exit 1
           fi
 
@@ -74,7 +74,7 @@ jobs:
           if (( 10#$minor > 999 || 10#$patch > 999 )); then
             echo "::error::minor and patch must be < 1000 for the versionCode scheme"; exit 1
           fi
-          # MAJOR*1000000 + MINOR*1000 + PATCH  (0.1.0 -> 1000, 1.2.3 -> 1002003)
+          # MAJOR*1000000 + MINOR*1000 + PATCH  (1.0.0 -> 1000000, 1.2.3 -> 1002003)
           code=$(( 10#$major * 1000000 + 10#$minor * 1000 + 10#$patch ))
           current_code=$(sed -nE 's/^\s*versionCode\s+([0-9]+)\s*$/\1/p' android/app/build.gradle)
           current_name=$(sed -nE 's/^\s*versionName\s+"([^"]+)"\s*$/\1/p' android/app/build.gradle)
@@ -84,7 +84,7 @@ jobs:
           echo "current: $current_name ($current_code), requested: $VERSION ($code)"
           # Equal is allowed only for the version already in the tree (first release, or a
           # retry after the bump commit landed but publishing failed: its tag doesn't exist),
-          # and for a final release after its own pre-release (0.2.0-beta.1 -> 0.2.0), which
+          # and for a final release after its own pre-release (1.1.0-beta.1 -> 1.1.0), which
           # shares the versionCode.
           if (( code < current_code )) || { (( code == current_code )) && [[ "$VERSION" != "$current_name" && "$current_name" != "$VERSION"-* ]]; }; then
             echo "::error title=Version not higher::$VERSION ($code) must be higher than the current $current_name ($current_code)."
@@ -94,7 +94,7 @@ jobs:
 
       - name: Check CHANGELOG.md
         run: |
-          # Needs a section headed "## [0.1.0]", "## 0.1.0" or "## v0.1.0".
+          # Needs a section headed "## [1.0.0]", "## 1.0.0" or "## v1.0.0".
           esc="${VERSION//./\\.}"
           if ! grep -Eq "^## \[?v?${esc}([] ]|$)" CHANGELOG.md; then
             echo "::error title=No changelog entry::Add a '## [$VERSION] - $(date +%F)' section to CHANGELOG.md on main first."
@@ -280,7 +280,7 @@ jobs:
         run: |
           found=false
           if [[ -f CHANGELOG.md ]]; then
-            # Section headed "## [0.1.0]", "## 0.1.0" or "## v0.1.0" (anything after is ignored)
+            # Section headed "## [1.0.0]", "## 1.0.0" or "## v1.0.0" (anything after is ignored)
             awk -v v="$VERSION" '
               BEGIN { esc = v; gsub(/\./, "\\.", esc) }
               /^## / {

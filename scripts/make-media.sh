@@ -3,6 +3,7 @@
 #   media/screenshots/*.png         README highlights, one per part of the app
 #   media/themes/<theme>.png        Home in each theme, and media/themes/themes.png (all 8)
 #   media/brand/social-preview.png  1280x640 card for GitHub's social preview
+#   fastlane/.../phoneScreenshots/  the store listing's screenshots (F-Droid), full size
 # The shots come from tests/screenshots/media.spec.ts: the app's own web build, at phone
 # size, with the test fixture's synthetic Jukebox (no real posts or people).
 # Needs ImageMagick (convert, montage) and the Playwright browser (npx playwright install chromium).
@@ -68,5 +69,14 @@ convert -size 1280x640 xc:'#000000' \
   "$tmp/rule.png" -geometry +0+600 -composite \
   "${PNG8[@]}" PNG8:media/brand/social-preview.png
 
+# ---- Store screenshots (F-Droid reads fastlane/metadata/android/en-US/images/) -------------
+STORE=fastlane/metadata/android/en-US/images/phoneScreenshots
+rm -f "$STORE"/*.png
+n=1
+for k in 01-home 02-now-playing 03-up-next 04-lyrics 05-artist 07-search 08-here-genres 09-library; do
+  convert "$SHOTS/media-$k.png" "${PNG8[@]}" "PNG8:$STORE/$n.png"
+  n=$((n + 1))
+done
+
 echo "Media written:"
-find media/screenshots media/themes media/brand/social-preview.png -name '*.png' -printf '  %8s  %p\n' | sort -k2
+find media/screenshots media/themes media/brand/social-preview.png "$STORE" -name '*.png' -printf '  %8s  %p\n' | sort -k2

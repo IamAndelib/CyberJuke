@@ -6,20 +6,19 @@ The store listing (title, descriptions, icon, feature graphic, screenshots, per-
 
 ## Before submitting
 
-1. **Publish v0.1.0** with the Release workflow (Actions → Release → version `0.1.0`). The workflow commits the version bump if needed, builds an unsigned APK, signs it in the protected `release` environment and tags the commit `v0.1.0`.
+1. **Publish v1.0.0** with the Release workflow (Actions → Release → version `1.0.0`). The workflow commits the version bump if needed, builds an unsigned APK, signs it in the protected `release` environment and tags the commit `v1.0.0`.
 2. **Fill in the recipe:**
-   - `commit:` the full hash of the `v0.1.0` tag: `git rev-parse v0.1.0^{commit}`.
-   - `AllowedAPKSigningKeys:` the SHA-256 of the release certificate, lowercase, without colons:
+   - `commit:` the full hash of the `v1.0.0` tag: `git rev-parse v1.0.0^{commit}`.
+   - `AllowedAPKSigningKeys:` already filled in with the release certificate's SHA-256. Check it against the published APK:
      ```bash
-     apksigner verify --print-certs CyberJuke-0.1.0.apk | sed -n 's/.*certificate SHA-256 digest: //p'
+     apksigner verify --print-certs CyberJuke-1.0.0.apk | sed -n 's/.*certificate SHA-256 digest: //p'
      ```
-3. **Check that the build is reproducible.** Build the tagged commit twice from clean clones (or once locally and compare with the GitHub APK):
+3. **Check that the build is reproducible:** run **Actions → Reproducible build check** with the tag `v1.0.0`. It rebuilds the tag unsigned, the way F-Droid does, and compares it with the signed APK on the release. To do the same by hand:
    ```bash
-   git clone https://github.com/IamAndelib/CyberJuke && cd CyberJuke && git checkout v0.1.0
+   git clone https://github.com/IamAndelib/CyberJuke && cd CyberJuke && git checkout v1.0.0
    npm ci --ignore-scripts && npm run build && npx cap sync android --deployment
    cd android && ./gradlew assembleRelease
-   pip install apksigcopier
-   apksigcopier compare CyberJuke-0.1.0.apk --unsigned app/build/outputs/apk/release/CyberJuke-0.1.0-release.apk
+   pipx run apksigcopier==1.1.1 compare CyberJuke-1.0.0.apk --unsigned app/build/outputs/apk/release/*.apk
    ```
    `diffoscope` shows the differences if the comparison fails. Use the same JDK (Temurin 21) as CI.
 4. **Lint the recipe** in an fdroiddata checkout, if you have `fdroidserver`:

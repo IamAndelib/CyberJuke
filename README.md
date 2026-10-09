@@ -77,7 +77,7 @@ apksigner verify --print-certs CyberJuke-<version>.apk   # from the Android SDK 
 `apksigner` must report `Verified using v2 scheme (APK Signature Scheme v2): true` and the release certificate:
 
 ```
-Signer #1 certificate SHA-256 digest: <published with the first release>
+Signer #1 certificate SHA-256 digest: 1c007729638d095f68160456af0fb9799d75ba4682faf18ca520a5842bb5ce61
 ```
 
 Releases are built by the `Release` workflow from a tagged commit with no caches and no install scripts, then signed in a separate job. The build is meant to be reproducible: building the tag yourself (see [Building](#building)) gives the same APK apart from the signature, which `apksigcopier compare` checks.

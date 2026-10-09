@@ -5,7 +5,7 @@ apply plugin: 'org.jetbrains.kotlin.android'
 
 // Versioning: literal values, so F-Droid's `AutoUpdateMode: Version` can read and bump them.
 // The Release workflow updates both lines in a commit before it builds and tags.
-// versionCode = major * 1000000 + minor * 1000 + patch  (0.1.0 -> 1000, 1.2.3 -> 1002003)
+// versionCode = major * 1000000 + minor * 1000 + patch  (1.0.0 -> 1000000, 1.2.3 -> 1002003)
 
 // Release signing for local builds: only configured when every env var is present. CI does
 // not use it: the Release workflow builds unsigned and signs with apksigner in a separate job.

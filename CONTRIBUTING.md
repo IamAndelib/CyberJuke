@@ -21,7 +21,8 @@ npm run dev          # the web UI in a browser (plays through a YouTube embed)
 npm run check        # typecheck + ESLint + unit tests: run before every commit
 npm run lint -- --fix   # fixes what ESLint can fix by itself
 npm run e2e          # Playwright e2e tests on a phone-sized Chromium
-npm run screenshots  # renders every screen into media/web-screenshots/ (not committed)
+npm run screenshots  # renders every screen into test-results/screenshots/ (not committed)
+npm run media        # regenerates the README and store images in media/ and fastlane/
 npm run sync         # build the web app and copy it into android/
 cd android && ./gradlew testDebugUnitTest   # Kotlin unit tests
 cd android && ./gradlew assembleDebug       # debug APK in android/app/build/outputs/apk/debug/
@@ -55,9 +56,9 @@ No signing key is committed to this repository.
 ## Releases (maintainers)
 
 1. Add a `## [x.y.z] - YYYY-MM-DD` section to `CHANGELOG.md` on `main` (move the Unreleased items into it).
-2. Run **Actions → Release** with the version. It checks the version is higher than the one in `android/app/build.gradle`, commits the bump (Gradle, `package.json`, and `fastlane/.../changelogs/<versionCode>.txt` if missing), builds an unsigned APK from that commit, then signs and publishes it in the protected `release` environment, tagging the commit `v<version>`.
+2. Run **Actions → Release** with the version. It checks the version is higher than the one in `android/app/build.gradle` (or equal to it, for a version the tree already carries that has no tag yet), commits the bump (Gradle, `package.json`, and `fastlane/.../changelogs/<versionCode>.txt` if missing), builds an unsigned APK from that commit, then signs and publishes it in the protected `release` environment, tagging the commit `v<version>`.
 
-versionCode is `major × 1,000,000 + minor × 1,000 + patch` (0.1.0 → 1000).
+versionCode is `major × 1,000,000 + minor × 1,000 + patch` (1.0.0 → 1000000, 1.2.3 → 1002003).
 
 The release key secrets are `KEYSTORE_FILE` (base64), `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`; the preview key uses the same four names with a `PREVIEW_` prefix. They can be repository secrets, or live in the `release` and `preview` environments for extra protection (main only, a required reviewer for releases). Only the signing jobs read them. [`scripts/setup-publishing.sh`](scripts/setup-publishing.sh) can create the keys on the maintainer's computer and set the environments up; [`docs/PUBLISHING.md`](docs/PUBLISHING.md) is the step-by-step guide. The `main` branch must accept pushes from GitHub Actions for the bump commit.
 
@@ -83,7 +84,7 @@ Look at `git log` for the tone. In short:
 - Subject: `Area: what changed`, in the imperative or as a short description, under about 72 characters. Areas in use: `Player`, `Data`, `Stores`, `UI`, `Android`, `Tests`, `CI`, `Build`, `Release`, `Docs`, `F-Droid`, `Repo`, or a screen name (`Artist page`, `Settings`).
 - Body: why, and anything a reviewer wouldn't see from the diff. Wrap at about 72 characters.
 - One logical change per commit; keep `npm run check` passing on each.
-- Don't commit build outputs, screenshots (`media/web-screenshots/`), keystores or `google-services.json`.
+- Don't commit build outputs, screenshots (`test-results/`), keystores or `google-services.json`.
 
 ## License
 

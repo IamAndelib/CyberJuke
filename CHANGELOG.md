@@ -2,7 +2,16 @@
 
 ## [Unreleased]
 
-Hardening for a public release and F-Droid.
+## [1.0.0] - 2026-10-09
+
+The first stable release.
+
+### The app
+- The Cyberspace Jukebox as a music app: the latest tracks as an endless list, Most saved, "Shuffle the Jukebox", genres and artists with Play all and Shuffle, and search (Here, Jukebox and Global).
+- Background playback through a native Media3 service, with notification, lock screen and headset controls; the queue keeps going with the screen off.
+- Now Playing with synced lyrics and an Up next you can reorder; liked tracks and recently played, stored on the device.
+- Optional sign-in for members-only shared tracks.
+- Eight Cyberspace themes: Dark, Light, C64, VT320, Matrix, Crypt, Bubblegum and Brutalist. NSFW posts are hidden by default; high and low audio quality.
 
 ### Autoplay and queue
 - **Autoplay:** when a list ends, similar songs keep playing. Jukebox tracks lead to Jukebox tracks picked by artist, genre and which artists the same posters share; Global tracks lead to that song's radio. A tap on Home, Most saved or search results starts a radio from that song; albums, Liked, history and genre pages play in order first. Settings → Autoplay turns it off.
@@ -46,7 +55,7 @@ Hardening for a public release and F-Droid.
 - Renovate keeps npm, Gradle, GitHub Actions and NewPipeExtractor up to date.
 
 ### F-Droid
-- Literal `versionCode`/`versionName` (0.1.0 = 1000); the Release workflow commits the bump before tagging.
+- Literal `versionCode`/`versionName` (1.0.0 = 1000000); the Release workflow commits the bump before tagging.
 - Fastlane store metadata: descriptions, icon, feature graphic, screenshots and per-version changelogs.
 - Reproducible builds: no dependency-metadata block in the APK, and a byte-identical web build.
 - A draft fdroiddata recipe in `docs/fdroid/`.
@@ -54,18 +63,3 @@ Hardening for a public release and F-Droid.
 ### Repository
 - Web screenshots are no longer committed (a workflow renders them as an artifact); the README images are in `media/screenshots/`.
 - New `CONTRIBUTING.md` and `SECURITY.md`; the README covers the architecture, privacy and data use, YouTube limitations and building.
-
-## [0.1.0] - 2026-10-05
-
-First release.
-
-- Latest Jukebox tracks as an endless list, "Shuffle the Jukebox", and genre browsing with Play all / Shuffle.
-- Library with liked tracks and recently played, stored on the device.
-- Background playback through a native Media3 service: notification, lock screen and headset controls. The queue keeps advancing with the screen off.
-- Now Playing screen with seek, shuffle, repeat, like, "Posted by @user" and an Up Next queue you can reorder.
-- Unplayable tracks are skipped automatically.
-- Cyberspace themes: Dark, Light, C64, VT320, Matrix, Crypt, Bubblegum, GRiD.
-- NSFW posts hidden by default.
-- High and low audio quality settings.
-
-Known limitation: with shuffle on, "Play next" adds the track to the queue but may not play it next.

@@ -80,8 +80,7 @@ jobs:
           if (( ${#unsigned[@]} != 1 || ${#signed[@]} != 1 )); then
             echo "::error::Expected one unsigned and one signed APK (got ${#unsigned[@]} and ${#signed[@]})"; exit 1
           fi
-          pip install --quiet 'apksigcopier==1.1.1'
-          if apksigcopier compare "${signed[0]}" --unsigned "${unsigned[0]}"; then
+          if pipx run 'apksigcopier==1.1.1' compare "${signed[0]}" --unsigned "${unsigned[0]}"; then
             echo "::notice title=Reproducible::$TAG rebuilds byte for byte (apart from the signature). F-Droid can ship the signed APK."
           else
             echo "::error title=Not reproducible::$TAG's rebuild differs from the signed APK. Compare them with diffoscope to see where."
