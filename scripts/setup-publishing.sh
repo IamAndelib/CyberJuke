@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One-time publishing setup for CyberJuke, run on the maintainer's own computer.
-# See docs/PUBLISHING.md.
+# See https://github.com/IamAndelib/CyberJuke/blob/main/docs/PUBLISHING.md
+# Runs from any folder: it needs nothing from the repository.
 #
 # It creates the preview and release signing keys (only if they don't exist yet), sets up
 # the protected "preview" and "release" GitHub environments, stores the keys in them as
@@ -9,8 +10,8 @@
 #
 # Needs: bash, Java's keytool (JDK 17+), the GitHub CLI (gh) logged in as the repo owner.
 #
-# Usage: bash scripts/setup-publishing.sh [--repo OWNER/NAME] [--keys-dir DIR] [--yes]
-#                                         [--no-build]
+# Usage: bash setup-publishing.sh [--repo OWNER/NAME] [--keys-dir DIR] [--yes]
+#                                 [--no-build]
 set -euo pipefail
 
 REPO="IamAndelib/CyberJuke"
@@ -78,8 +79,8 @@ b64_oneline() { base64 < "$1" | tr -d '\n\r'; }
 # ---- 1. Tools and login -------------------------------------------------------------------
 
 step "1/7  Checking tools and GitHub login"
-command -v keytool >/dev/null || die "keytool not found. Install a JDK 17 or newer (see docs/PUBLISHING.md, step 1)."
-command -v gh >/dev/null || die "The GitHub CLI (gh) is not installed. See https://cli.github.com and docs/PUBLISHING.md, step 1."
+command -v keytool >/dev/null || die "keytool not found. Install a JDK 17 or newer (see https://github.com/IamAndelib/CyberJuke/blob/main/docs/PUBLISHING.md, step 1)."
+command -v gh >/dev/null || die "The GitHub CLI (gh) is not installed. See https://cli.github.com and https://github.com/IamAndelib/CyberJuke/blob/main/docs/PUBLISHING.md, step 1."
 command -v base64 >/dev/null || die "base64 not found."
 gh auth status >/dev/null 2>&1 || die "gh is not logged in. Run: gh auth login"
 ME_LOGIN=$(gh api user --jq .login) || die "Couldn't read your GitHub account (gh api user)."
@@ -272,4 +273,5 @@ printf '\n%sDone.%s Back up NOW, to two places (e.g. a password manager and an o
 echo "  - $PREVIEW_JKS and its password"
 echo "  - $RELEASE_JKS and its password"
 echo "Losing the release key means no one can update the app without reinstalling it."
-echo "Next: docs/TESTING.md (test the preview), then docs/PUBLISHING.md step 6 (release)."
+echo "Next: test the preview with https://github.com/IamAndelib/CyberJuke/blob/main/docs/TESTING.md"
+echo "      then release: https://github.com/IamAndelib/CyberJuke/blob/main/docs/PUBLISHING.md (step 6)."

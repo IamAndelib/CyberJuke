@@ -1,6 +1,6 @@
 # Publishing CyberJuke: the maintainer's steps
 
-What you do on your side, in order. Steps 1–3 are once only. Every command runs in a terminal in your local copy of the repository.
+What you do on your side, in order. Steps 1–3 are once only. You don't need a copy of the code: just a terminal (on Windows, Git Bash).
 
 ## 1. Install the two tools (once)
 
@@ -21,10 +21,14 @@ gh auth login        # GitHub.com → HTTPS → log in with a web browser
 
 ## 2. Run the setup script (once)
 
+Open a terminal in any folder (for example the one you made for CyberJuke) and run:
+
 ```bash
-git pull
-bash scripts/setup-publishing.sh
+curl -fsSLO https://raw.githubusercontent.com/IamAndelib/CyberJuke/main/scripts/setup-publishing.sh
+bash setup-publishing.sh
 ```
+
+The first line downloads the script into that folder; the second runs it. (If you have the repository cloned, `bash scripts/setup-publishing.sh` does the same.)
 
 It asks before every change. In order, it:
 
