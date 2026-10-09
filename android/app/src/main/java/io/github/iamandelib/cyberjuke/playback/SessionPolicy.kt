@@ -2,6 +2,7 @@ package io.github.iamandelib.cyberjuke.playback
 
 import androidx.media3.common.Player
 import java.net.URI
+import java.security.MessageDigest
 
 /**
  * Who may do what with our MediaSession (S1), as pure functions (SessionPolicyTest).
@@ -16,6 +17,16 @@ import java.net.URI
  * transport commands only: play/pause, seek, next/previous, stop, plus reading the current
  * item. No timeline (the whole queue), no playlist metadata, no media item edits, no
  * shuffle/repeat/speed/volume changes and no custom commands.
+ *
+ * Within FULL, [grant] narrows two controllers further:
+ * - The private queue commands (QueueCommands, QUEUE_NEXT) go only to the JukePlayer plugin's
+ *   controller, which proves itself with a random per-process token in its connection hints
+ *   ([ControllerKey]). The media notification controller has our package and uid too, and any
+ *   app can make it send a custom command (Media3's CUSTOM_NOTIFICATION_ACTION intent).
+ * - The media notification controller gets no timeline: Media3 configures the platform
+ *   session (lock screen, system media controls, every notification listener) with its
+ *   commands, so with the timeline it would publish the whole queue. The platform session
+ *   keeps the current item, its metadata and the transport controls; it has no queue.
  */
 internal object SessionPolicy {
     enum class Access { FULL, TRANSPORT }
@@ -28,10 +39,30 @@ internal object SessionPolicy {
         val isMediaNotificationController: Boolean = false,
         val isAutoCompanionController: Boolean = false,
         val isAutomotiveController: Boolean = false,
+        /** The [ControllerKey] token from the controller's connection hints, if any. */
+        val connectionToken: String? = null,
     )
+
+    /** What a controller is given (see the class comment). */
+    enum class Grant {
+        /** The JukePlayer plugin: every player command plus the private queue commands. */
+        PLUGIN,
+
+        /** Auto, Automotive, trusted system controllers: player commands, no queue commands. */
+        FULL,
+
+        /** The media notification (and so the platform session): FULL minus the timeline. */
+        NOTIFICATION,
+
+        /** Everyone else: [TRANSPORT_COMMANDS], no session commands. */
+        TRANSPORT,
+    }
 
     /** Android's first app uid (Process.FIRST_APPLICATION_UID); below it are core system uids. */
     private const val FIRST_APPLICATION_UID = 10_000
+
+    /** UserHandle.PER_USER_RANGE: a uid is userId * this + appId (UserHandle.getAppId). */
+    private const val PER_USER_RANGE = 100_000
 
     /** System UI runs with an app uid but holds STATUS_BAR_SERVICE. */
     private val SYSTEM_UI_PACKAGES = setOf("com.android.systemui")
@@ -42,9 +73,32 @@ internal object SessionPolicy {
         }
         if (!c.isTrusted) return Access.TRANSPORT
         if (c.packageName == ownPackage) return Access.FULL
-        if (c.uid in 0 until FIRST_APPLICATION_UID) return Access.FULL
+        // Core system uids exist once per user (work profile, secondary users): compare app ids.
+        if (c.uid >= 0 && c.uid % PER_USER_RANGE < FIRST_APPLICATION_UID) return Access.FULL
         if (c.packageName in SYSTEM_UI_PACKAGES) return Access.FULL
         return Access.TRANSPORT
+    }
+
+    fun grant(c: Controller, ownPackage: String, processToken: String): Grant {
+        if (access(c, ownPackage) == Access.TRANSPORT) return Grant.TRANSPORT
+        if (c.isMediaNotificationController) return Grant.NOTIFICATION
+        if (c.isTrusted && c.packageName == ownPackage && tokenMatches(c.connectionToken, processToken)) {
+            return Grant.PLUGIN
+        }
+        return Grant.FULL
+    }
+
+    /** Only the plugin's controller may send QueueCommands and QUEUE_NEXT. */
+    fun mayUseQueueCommands(c: Controller, ownPackage: String, processToken: String): Boolean =
+        grant(c, ownPackage, processToken) == Grant.PLUGIN
+
+    /** Player commands the [Grant.NOTIFICATION] controller (and the platform session) lacks. */
+    val NOTIFICATION_HIDDEN_COMMANDS: Set<Int> = setOf(Player.COMMAND_GET_TIMELINE)
+
+    /** Constant-time comparison; an empty or missing token never matches. */
+    fun tokenMatches(presented: String?, expected: String): Boolean {
+        if (presented.isNullOrEmpty() || expected.isEmpty()) return false
+        return MessageDigest.isEqual(presented.toByteArray(), expected.toByteArray())
     }
 
     /** Player commands a TRANSPORT controller gets (intersected with what the player offers). */

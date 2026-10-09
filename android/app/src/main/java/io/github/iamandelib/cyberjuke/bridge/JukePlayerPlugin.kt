@@ -29,6 +29,7 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import com.google.common.util.concurrent.ListenableFuture
 import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.NetBlock
+import io.github.iamandelib.cyberjuke.playback.ControllerKey
 import io.github.iamandelib.cyberjuke.playback.JukeCommands
 import io.github.iamandelib.cyberjuke.playback.JukeTracks
 import io.github.iamandelib.cyberjuke.playback.JukeUris
@@ -234,6 +235,8 @@ class JukePlayerPlugin : Plugin() {
         val ctx: Context = context
         val token = SessionToken(ctx, ComponentName(ctx, PlaybackService::class.java))
         val future = MediaController.Builder(ctx, token)
+            // Proves to PlaybackService that this is the plugin (the private queue commands).
+            .setConnectionHints(ControllerKey.hints())
             .setListener(object : MediaController.Listener {
                 override fun onDisconnected(controller: MediaController) {
                     Log.w(TAG, "MediaController disconnected")

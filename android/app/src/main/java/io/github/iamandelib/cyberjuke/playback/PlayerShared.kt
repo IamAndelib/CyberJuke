@@ -7,6 +7,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.session.SessionCommand
 import org.json.JSONArray
 import org.json.JSONObject
+import java.security.SecureRandom
 import java.util.concurrent.CopyOnWriteArraySet
 
 /** Custom URI scheme for queue items. The real stream URL is resolved lazily at load time. */
@@ -85,6 +86,27 @@ internal object JukeTracks {
 
     private fun JSONObject.str(key: String): String? =
         if (isNull(key)) null else optString(key).takeIf { it.isNotEmpty() }
+}
+
+/**
+ * Identifies the JukePlayer plugin's MediaController to PlaybackService (S1): a random token,
+ * made once per process, sent in the controller's connection hints. Both live in the app
+ * process, so nothing outside it ever sees the token; the service grants the private queue
+ * commands only to a controller that presents it ([SessionPolicy.grant]).
+ */
+internal object ControllerKey {
+    const val HINT = "io.github.iamandelib.cyberjuke.CONTROLLER_KEY"
+
+    val token: String by lazy {
+        val bytes = ByteArray(32)
+        SecureRandom().nextBytes(bytes)
+        bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    /** Connection hints for the plugin's MediaController.Builder. */
+    fun hints(): Bundle = Bundle().apply { putString(HINT, token) }
+
+    fun of(hints: Bundle?): String? = hints?.getString(HINT)
 }
 
 /** Custom session commands between JukePlayerPlugin and PlaybackService. */

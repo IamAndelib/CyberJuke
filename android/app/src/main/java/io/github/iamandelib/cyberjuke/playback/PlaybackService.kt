@@ -623,30 +623,39 @@ class PlaybackService : MediaSessionService() {
         /**
          * S1: full access for our own app, the media notification, Android Auto/Automotive and
          * trusted system controllers; transport commands only for everyone else (see
-         * [SessionPolicy]). Our own app also gets the queueNext custom command.
+         * [SessionPolicy]). Only the JukePlayer plugin's controller gets the private queue
+         * commands, and the media notification gets no timeline (no platform queue).
          */
         override fun onConnectAsync(
             session: MediaSession,
             controller: MediaSession.ControllerInfo,
         ): ListenableFuture<MediaSession.ConnectionResult> {
-            val access = accessOf(session, controller)
-            Log.i(TAG, "Controller ${controller.packageName} uid=${controller.uid} access=$access")
+            val info = infoOf(session, controller)
+            val access = SessionPolicy.access(info, packageName)
+            val grant = SessionPolicy.grant(info, packageName, ControllerKey.token)
+            Log.i(TAG, "Controller ${controller.packageName} uid=${controller.uid} access=$access grant=$grant")
             val builder = MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
-            if (access == SessionPolicy.Access.FULL) {
-                if (isOwnApp(controller)) {
-                    builder.setAvailableSessionCommands(
-                        MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
-                            .add(JukeCommands.QUEUE_NEXT)
-                            .apply { QueueCommands.ALL.forEach { add(it) } }
-                            .build(),
-                    )
+            when (grant) {
+                SessionPolicy.Grant.PLUGIN -> builder.setAvailableSessionCommands(
+                    MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                        .add(JukeCommands.QUEUE_NEXT)
+                        .apply { QueueCommands.ALL.forEach { add(it) } }
+                        .build(),
+                )
+                SessionPolicy.Grant.FULL -> Unit
+                SessionPolicy.Grant.NOTIFICATION -> {
+                    val commands = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
+                    SessionPolicy.NOTIFICATION_HIDDEN_COMMANDS.forEach { commands.remove(it) }
+                    builder.setAvailablePlayerCommands(commands.build())
+                    builder.setAvailableSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS)
                 }
-            } else {
-                // Media3 intersects these with what the player currently offers.
-                val commands = Player.Commands.Builder()
-                SessionPolicy.TRANSPORT_COMMANDS.forEach { commands.add(it) }
-                builder.setAvailablePlayerCommands(commands.build())
-                builder.setAvailableSessionCommands(SessionCommands.EMPTY)
+                SessionPolicy.Grant.TRANSPORT -> {
+                    // Media3 intersects these with what the player currently offers.
+                    val commands = Player.Commands.Builder()
+                    SessionPolicy.TRANSPORT_COMMANDS.forEach { commands.add(it) }
+                    builder.setAvailablePlayerCommands(commands.build())
+                    builder.setAvailableSessionCommands(SessionCommands.EMPTY)
+                }
             }
             return Futures.immediateFuture(builder.build())
         }
@@ -659,7 +668,7 @@ class PlaybackService : MediaSessionService() {
         ): ListenableFuture<SessionResult> {
             val action = customCommand.customAction
             val ours = action == JukeCommands.ACTION_QUEUE_NEXT || QueueCommands.ALL.any { it.customAction == action }
-            if (!ours || !isOwnApp(controller)) {
+            if (!ours || !isPlugin(session, controller)) {
                 return super.onCustomCommand(session, controller, customCommand, args)
             }
             val p = player ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
@@ -702,7 +711,7 @@ class PlaybackService : MediaSessionService() {
             controller: MediaSession.ControllerInfo,
             mediaItems: MutableList<MediaItem>,
         ): ListenableFuture<MutableList<MediaItem>> {
-            val ciTone = if (isOwnApp(controller) && isDebuggable()) LaunchOptions.CI_TONE else null
+            val ciTone = if (isPlugin(mediaSession, controller) && isDebuggable()) LaunchOptions.CI_TONE else null
             val restored = mediaItems.mapNotNull { item -> sanitize(item, ciTone) }.toMutableList()
             if (restored.size != mediaItems.size) {
                 Log.w(TAG, "Dropped ${mediaItems.size - restored.size} item(s) without a valid id")
@@ -731,20 +740,19 @@ class PlaybackService : MediaSessionService() {
             .build()
     }
 
-    private fun isOwnApp(controller: MediaSession.ControllerInfo): Boolean =
-        controller.isTrusted && controller.packageName == packageName
+    /** The JukePlayer plugin's controller (it presents [ControllerKey]); never the notification's. */
+    private fun isPlugin(session: MediaSession, controller: MediaSession.ControllerInfo): Boolean =
+        SessionPolicy.mayUseQueueCommands(infoOf(session, controller), packageName, ControllerKey.token)
 
-    private fun accessOf(session: MediaSession, controller: MediaSession.ControllerInfo): SessionPolicy.Access =
-        SessionPolicy.access(
-            SessionPolicy.Controller(
-                packageName = controller.packageName,
-                uid = controller.uid,
-                isTrusted = controller.isTrusted,
-                isMediaNotificationController = session.isMediaNotificationController(controller),
-                isAutoCompanionController = session.isAutoCompanionController(controller),
-                isAutomotiveController = session.isAutomotiveController(controller),
-            ),
-            packageName,
+    private fun infoOf(session: MediaSession, controller: MediaSession.ControllerInfo) =
+        SessionPolicy.Controller(
+            packageName = controller.packageName,
+            uid = controller.uid,
+            isTrusted = controller.isTrusted,
+            isMediaNotificationController = session.isMediaNotificationController(controller),
+            isAutoCompanionController = session.isAutoCompanionController(controller),
+            isAutomotiveController = session.isAutomotiveController(controller),
+            connectionToken = ControllerKey.of(controller.connectionHints),
         )
 
     companion object {
