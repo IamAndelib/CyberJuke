@@ -194,6 +194,8 @@ class PlaybackService : MediaSessionService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             queue.onTransition()
+            val trimmed = queue.trimPlayedAuto(QueueCommands.KEEP_PLAYED_AUTO)
+            if (trimmed > 0) Log.i(TAG, "Trimmed $trimmed played autoplay item(s)")
             queueChanged()
             // A skip makes any pending prefetch for the old "next" stale.
             StreamResolver.cancelPrefetch()
@@ -264,6 +266,8 @@ class PlaybackService : MediaSessionService() {
 
         override fun itemAt(index: Int): MediaItem = p.getMediaItemAt(index)
 
+        override fun idAt(index: Int): String = p.getMediaItemAt(index).mediaId
+
         override fun isAutoAt(index: Int): Boolean =
             p.getMediaItemAt(index).mediaMetadata.extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) == true
 
@@ -278,8 +282,9 @@ class PlaybackService : MediaSessionService() {
             p.setMediaItems(tagged, start, positionMs.coerceAtLeast(0L))
         }
 
-        override fun appendAuto(items: List<MediaItem>) {
-            p.addMediaItems(items.map { tag(it) { putBoolean(QueueCommands.EXTRA_AUTOPLAY, true) } })
+        override fun insertAuto(at: Int?, items: List<MediaItem>) {
+            val tagged = items.map { tag(it) { putBoolean(QueueCommands.EXTRA_AUTOPLAY, true) } }
+            if (at == null) p.addMediaItems(tagged) else p.addMediaItems(at, tagged)
         }
 
         override fun removeAt(index: Int) = p.removeMediaItem(index)
@@ -343,7 +348,10 @@ class PlaybackService : MediaSessionService() {
     /** A new list (queued items stay next); autoplay starts over from the started track. */
     private fun setList(items: List<MediaItem>, start: Int, positionMs: Long, label: String, mode: String) {
         queue.setList(items, start, positionMs)
-        context = label to mode
+        // A new list starts the failure count over (the old list's failures say nothing here).
+        resetFailures()
+        // An empty list clears everything: no context, no seed, no radio (L4).
+        context = if (items.isEmpty()) null else label to mode
         val seed = items.getOrNull(start.coerceIn(0, (items.size - 1).coerceAtLeast(0)))
         reseed(seed)
         Log.i(TAG, "setList: ${items.size} item(s), mode=$mode, ${queue.pendingSerials.size} queued kept")
@@ -384,7 +392,37 @@ class PlaybackService : MediaSessionService() {
 
     /** A tap in Up next: on an autoplay item the radio continues from it. */
     private fun skipTo(p: ExoPlayer, index: Int) {
+        resetFailures()
         if (queue.skipTo(index)) reseed(p.currentMediaItem) else queueChanged()
+    }
+
+    private fun resetFailures() {
+        consecutiveFailures = 0
+        expiredRetried.clear()
+    }
+
+    /** Sign-out (K5): every item with one of [ids] goes; with nothing left to play, pause. */
+    private fun removeIds(p: ExoPlayer, ids: Set<String>) {
+        val r = queue.removeIds(ids)
+        Log.i(TAG, "removeIds: ${r.removed} item(s) removed, stopped=${r.stopped}")
+        if (r.stopped) p.pause()
+        if (p.mediaItemCount == 0) {
+            context = null
+            reseed(null)
+        } else {
+            queueChanged()
+        }
+    }
+
+    private fun restore(item: MediaItem, section: NativeQueue.Section, beforeId: String?) {
+        if (section == NativeQueue.Section.AUTO &&
+            (!autoplayEnabled || player?.repeatMode != Player.REPEAT_MODE_OFF)
+        ) {
+            Log.i(TAG, "restore: autoplay item dropped (autoplay off or repeat on)")
+            return
+        }
+        queue.restore(item, section, beforeId)
+        queueChanged()
     }
 
     /** Publishes the queue facts for the plugin's state and checks autoplay (posted, once). */
@@ -674,27 +712,69 @@ class PlaybackService : MediaSessionService() {
             val p = player ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
             fun tracks(): List<MediaItem>? = try {
                 JukeTracks.parse(JSONArray(args.getString(JukeCommands.ARG_TRACKS) ?: "[]"))
+            } catch (e: TooLargeException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "$action: bad tracks: ${e.javaClass.simpleName}")
                 null
             }
             val bad = Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
-            when (action) {
-                JukeCommands.ACTION_QUEUE_NEXT -> queueNext(p, tracks() ?: return bad)
-                QueueCommands.ACTION_SET_LIST -> setList(
-                    tracks() ?: return bad,
-                    args.getInt(QueueCommands.ARG_START, 0),
-                    args.getLong(QueueCommands.ARG_POSITION, 0L),
-                    args.getString(QueueCommands.ARG_LABEL) ?: "",
-                    if (args.getString(QueueCommands.ARG_MODE) == "radio") "radio" else "list",
-                )
-                QueueCommands.ACTION_ADD_AUTOPLAY -> addAutoplay(tracks() ?: return bad, args.getString(QueueCommands.ARG_SEED))
-                QueueCommands.ACTION_SET_AUTOPLAY -> setAutoplay(args.getBoolean(QueueCommands.ARG_ENABLED, true))
-                QueueCommands.ACTION_SKIP_TO -> {
-                    val index = args.getInt(QueueCommands.ARG_INDEX, -1)
-                    if (index !in 0 until p.mediaItemCount) return bad
-                    skipTo(p, index)
+            val stale = failure(QueueCommands.STALE_INDEX)
+            /** The item at [index] is the one the caller saw ([QueueCommands.ARG_EXPECT], K2). */
+            fun matches(index: Int): Boolean {
+                val expect = args.getString(QueueCommands.ARG_EXPECT) ?: return true
+                return p.getMediaItemAt(index).mediaId == expect
+            }
+            try {
+                when (action) {
+                    JukeCommands.ACTION_QUEUE_NEXT -> queueNext(p, tracks() ?: return bad)
+                    QueueCommands.ACTION_SET_LIST -> setList(
+                        tracks() ?: return bad,
+                        args.getInt(QueueCommands.ARG_START, 0),
+                        args.getLong(QueueCommands.ARG_POSITION, 0L),
+                        BridgeLimits.checkString(args.getString(QueueCommands.ARG_LABEL), "label") ?: "",
+                        if (args.getString(QueueCommands.ARG_MODE) == "radio") "radio" else "list",
+                    )
+                    QueueCommands.ACTION_ADD_AUTOPLAY -> addAutoplay(
+                        tracks() ?: return bad,
+                        BridgeLimits.checkString(args.getString(QueueCommands.ARG_SEED), "seedId"),
+                    )
+                    QueueCommands.ACTION_SET_AUTOPLAY -> setAutoplay(args.getBoolean(QueueCommands.ARG_ENABLED, true))
+                    QueueCommands.ACTION_SKIP_TO -> {
+                        val index = args.getInt(QueueCommands.ARG_INDEX, -1)
+                        if (index !in 0 until p.mediaItemCount) return bad
+                        if (!matches(index)) return stale
+                        skipTo(p, index)
+                    }
+                    QueueCommands.ACTION_REMOVE -> {
+                        val index = args.getInt(QueueCommands.ARG_INDEX, -1)
+                        if (index !in 0 until p.mediaItemCount) return bad
+                        if (!matches(index)) return stale
+                        p.removeMediaItem(index)
+                    }
+                    QueueCommands.ACTION_MOVE -> {
+                        val from = args.getInt(QueueCommands.ARG_FROM, -1)
+                        val to = args.getInt(QueueCommands.ARG_TO, -1)
+                        val n = p.mediaItemCount
+                        if (from !in 0 until n || to !in 0 until n) return bad
+                        if (!matches(from)) return stale
+                        if (from != to) p.moveMediaItem(from, to)
+                    }
+                    QueueCommands.ACTION_REMOVE_IDS -> {
+                        val ids = args.getStringArrayList(QueueCommands.ARG_IDS) ?: return bad
+                        BridgeLimits.checkCount(ids.size, "ids")
+                        ids.forEach { BridgeLimits.checkString(it, "id") }
+                        removeIds(p, ids.toHashSet())
+                    }
+                    QueueCommands.ACTION_RESTORE -> {
+                        val item = tracks()?.singleOrNull() ?: return bad
+                        val section = NativeQueue.Section.of(args.getString(QueueCommands.ARG_KIND)) ?: return bad
+                        restore(item, section, BridgeLimits.checkString(args.getString(QueueCommands.ARG_BEFORE), "beforeId"))
+                    }
                 }
+            } catch (e: TooLargeException) {
+                Log.w(TAG, "$action: too large")
+                return failure(QueueCommands.TOO_LARGE)
             }
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
@@ -719,6 +799,14 @@ class PlaybackService : MediaSessionService() {
             return Futures.immediateFuture(restored)
         }
     }
+
+    /** A failed custom command whose [QueueCommands.RESULT_CODE] the plugin rejects with. */
+    private fun failure(code: String): ListenableFuture<SessionResult> = Futures.immediateFuture(
+        SessionResult(
+            SessionError(SessionError.ERROR_BAD_VALUE, code),
+            Bundle().apply { putString(QueueCommands.RESULT_CODE, code) },
+        ),
+    )
 
     private fun sanitize(item: MediaItem, extraAllowed: String?): MediaItem? {
         val ytId = SessionPolicy.ytIdForIncoming(

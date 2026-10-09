@@ -54,10 +54,58 @@ internal object TrackExtras {
     fun get(mediaId: String): Extra? = synchronized(map) { map[mediaId] }
 }
 
+/** A bridge call over a size cap (K6): rejected with code TOO_LARGE. */
+internal class TooLargeException(message: String) : IllegalArgumentException(message)
+
+/**
+ * Size caps on what the bridge accepts (K6): at most [MAX_ITEMS] tracks or ids per call and
+ * [MAX_STRING] characters per string. Pure (BridgeLimitsTest).
+ */
+internal object BridgeLimits {
+    const val MAX_ITEMS = 2000
+    const val MAX_STRING = 2000
+
+    fun checkCount(n: Int, what: String) {
+        if (n > MAX_ITEMS) throw TooLargeException("TOO_LARGE: $n $what (max $MAX_ITEMS)")
+    }
+
+    fun checkString(s: String?, what: String): String? {
+        if (s != null && s.length > MAX_STRING) {
+            throw TooLargeException("TOO_LARGE: $what is ${s.length} characters (max $MAX_STRING)")
+        }
+        return s
+    }
+
+    /** The track count and every string value of a NativeTrack[] JSON array. */
+    fun checkTracks(arr: JSONArray?) {
+        if (arr == null) return
+        checkCount(arr.length(), "tracks")
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            for (key in o.keys()) {
+                val v = o.opt(key)
+                if (v is String) checkString(v, "track.$key")
+            }
+        }
+    }
+
+    /** A string array (ids): count and lengths. Non-strings are an error. */
+    fun idsOf(arr: JSONArray?): List<String> {
+        if (arr == null) return emptyList()
+        checkCount(arr.length(), "ids")
+        return (0 until arr.length()).map { i ->
+            val v = arr.opt(i) as? String ?: throw IllegalArgumentException("ids[$i] is not a string")
+            checkString(v, "ids[$i]")!!
+        }
+    }
+}
+
 /** NativeTrack JSON (the TS contract) to MediaItems; used by the plugin and the service. */
 internal object JukeTracks {
+    /** Throws [TooLargeException] over the caps, IllegalArgumentException on a bad track. */
     fun parse(arr: JSONArray?): List<MediaItem> {
         if (arr == null) return emptyList()
+        BridgeLimits.checkTracks(arr)
         val items = ArrayList<MediaItem>(arr.length())
         for (i in 0 until arr.length()) {
             items.add(toMediaItem(arr.getJSONObject(i)))

@@ -100,14 +100,17 @@ internal interface QueueHost<T> {
 
     fun itemAt(index: Int): T
 
+    /** The track id (mediaId) of the item at [index]. */
+    fun idAt(index: Int): String
+
     /** The item at [index] was added by autoplay. */
     fun isAutoAt(index: Int): Boolean
 
     /** Replaces the playlist ([serials] as in [insertTagged]); [start] becomes current. */
     fun setItems(items: List<T>, serials: List<Long>, start: Int, positionMs: Long)
 
-    /** Appends [items] tagged as autoplay. */
-    fun appendAuto(items: List<T>)
+    /** Inserts [items] tagged as autoplay at [at] (null = append). */
+    fun insertAuto(at: Int?, items: List<T>)
     fun removeAt(index: Int)
 
     /** A user jump to [index] (Player.seekTo(index, 0)). */
@@ -182,8 +185,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>) {
         // go after that block. With shuffle on the list position only matters once shuffle is
         // turned off again; the shuffle order is fixed up below.
         if (!host.shuffleEnabled) enforceLinearOrder()
-        var at = host.currentIndex + 1
-        while (at < host.count && host.serialAt(at) in pending) at++
+        val at = afterQueuedRun()
         host.insertTagged(at, items, serials)
         pending.addAll(serials)
         enforceShuffleOrder()
@@ -235,8 +237,157 @@ internal class NativeQueue<T>(private val host: QueueHost<T>) {
     /** Autoplay: appends [items] after everything else (shuffle never moves them). */
     fun addAutoplay(items: List<T>) {
         if (items.isEmpty()) return
-        host.appendAuto(items)
+        host.insertAuto(null, items)
         enforceShuffleOrder()
+    }
+
+    /** The parts of Up next: queued by the user, the list, autoplay. */
+    enum class Section {
+        QUEUED, LIST, AUTO;
+
+        companion object {
+            /** By the web's names ('queued' | 'list' | 'autoplay'). */
+            fun of(kind: String?): Section? = when (kind) {
+                "queued" -> QUEUED
+                "list" -> LIST
+                "autoplay" -> AUTO
+                else -> null
+            }
+        }
+    }
+
+    /**
+     * Undo of a removal (K3): puts [item] back in [section], right before the first item ahead
+     * of the current one (play order) that has id [beforeId] and sits in the same section; with
+     * no such item, at the end of that section. It never lands at or before the current item,
+     * and a queued item never lands after list items.
+     */
+    fun restore(item: T, section: Section, beforeId: String?) {
+        prune()
+        if (host.count == 0) {
+            when (section) {
+                Section.QUEUED -> queueNext(listOf(item))
+                Section.LIST -> host.insertTagged(null, listOf(item), listOf(0L))
+                Section.AUTO -> host.insertAuto(null, listOf(item))
+            }
+            return
+        }
+        if (!host.shuffleEnabled) enforceLinearOrder()
+        val up = upcoming()
+        val pend = pendingIndices().toHashSet()
+        fun sectionAt(i: Int) = when {
+            i in pend -> Section.QUEUED
+            host.isAutoAt(i) -> Section.AUTO
+            else -> Section.LIST
+        }
+        val anchor = beforeId?.let { id -> up.firstOrNull { sectionAt(it) == section && host.idAt(it) == id } }
+        when (section) {
+            Section.QUEUED -> {
+                val serial = nextSerial++
+                val at = anchor ?: afterQueuedRun()
+                // The pending order is the play order: the new serial goes before the anchor's.
+                val anchorSerial = anchor?.let { host.serialAt(it) }
+                val order = ArrayList<Long>(pending.size + 1)
+                for (sl in pending) {
+                    if (sl == anchorSerial) order.add(serial)
+                    order.add(sl)
+                }
+                if (serial !in order) order.add(serial)
+                pending.clear()
+                pending.addAll(order)
+                host.insertTagged(at, listOf(item), listOf(serial))
+                if (host.shuffleEnabled) enforceShuffleOrder() else enforceLinearOrder()
+            }
+            Section.AUTO -> {
+                // Autoplay plays in list order (shuffle never moves it): the list index is the place.
+                host.insertAuto(anchor, listOf(item))
+                enforceShuffleOrder()
+            }
+            Section.LIST -> if (!host.shuffleEnabled) {
+                // Linear: [current][queued][list][autoplay]; the end of the list part is the first
+                // autoplay item ahead (or the end).
+                val at = anchor ?: up.firstOrNull { sectionAt(it) == Section.AUTO } ?: host.count
+                host.insertTagged(at, listOf(item), listOf(0L))
+            } else {
+                restoreShuffledListItem(item, anchor)
+            }
+        }
+    }
+
+    /** Shuffle on: the list index only matters later; the shuffle order decides when it plays. */
+    private fun restoreShuffledListItem(item: T, anchor: Int?) {
+        val at = (0 until host.count).firstOrNull { host.isAutoAt(it) } ?: host.count
+        host.insertTagged(at, listOf(item), listOf(0L))
+        val order = host.shuffleOrder() ?: return
+        if (order.size != host.count) return
+        val anchorNow = anchor?.let { if (it >= at) it + 1 else it }
+        val rest = order.filter { it != at }.toMutableList()
+        val cur = host.currentIndex
+        val curPos = rest.indexOf(cur)
+        val pos = anchorNow?.let { rest.indexOf(it) }?.takeIf { it > curPos } ?: run {
+            // After the last list item ahead, else right after the current item's queued run.
+            val pend = pendingIndices().toHashSet()
+            var lastList = -1
+            for (k in curPos + 1 until rest.size) {
+                val i = rest[k]
+                if (i in pend) continue
+                if (host.isAutoAt(i)) break
+                lastList = k
+            }
+            if (lastList >= 0) {
+                lastList + 1
+            } else {
+                var q = curPos + 1
+                while (q < rest.size && rest[q] in pend) q++
+                q
+            }
+        }
+        rest.add(pos, at)
+        val desired = QueueOrder.arrange(rest.toIntArray(), cur, pendingIndices(), autoIndices())
+        if (!desired.contentEquals(order)) host.setShuffleOrder(desired)
+    }
+
+    /** The list index right after the current item and the queued items that follow it. */
+    private fun afterQueuedRun(): Int {
+        var at = host.currentIndex + 1
+        while (at < host.count && host.serialAt(at) in pending) at++
+        return at
+    }
+
+    /** What [removeIds] did. */
+    data class Removal(val removed: Int, val stopped: Boolean)
+
+    /**
+     * Removes every item whose id is in [ids] (K5). If the current item goes, the next item in
+     * play order that stays becomes current; with none, [Removal.stopped] is set (the caller
+     * pauses).
+     */
+    fun removeIds(ids: Set<String>): Removal {
+        if (ids.isEmpty() || host.count == 0) return Removal(0, false)
+        prune()
+        var stopped = false
+        val cur = host.currentIndex
+        if (cur in 0 until host.count && host.idAt(cur) in ids) {
+            val next = upcoming().firstOrNull { host.idAt(it) !in ids }
+            if (next != null) host.seekTo(next) else stopped = true
+        }
+        // A jump moves queued items (onTransition): look the indices up again.
+        val gone = (0 until host.count).filter { host.idAt(it) in ids }.sortedDescending()
+        for (i in gone) host.removeAt(i)
+        prune()
+        return Removal(gone.size, stopped)
+    }
+
+    /**
+     * Keeps at most [keep] played autoplay items behind the current one (a long radio session
+     * would otherwise grow forever); removes the oldest. Returns how many went.
+     */
+    fun trimPlayedAuto(keep: Int): Int {
+        val played = played().filter { host.isAutoAt(it) }
+        if (played.size <= keep) return 0
+        val gone = played.take(played.size - keep).sortedDescending()
+        for (i in gone) host.removeAt(i)
+        return gone.size
     }
 
     /** Autoplay items still to come (after the current one in play order). */
@@ -280,6 +431,18 @@ internal class NativeQueue<T>(private val host: QueueHost<T>) {
             }
         }
         return ((cur + 1) until n).toList()
+    }
+
+    /** List indices before the current item, in play order (oldest first). */
+    private fun played(): List<Int> {
+        val n = host.count
+        val cur = host.currentIndex
+        if (n == 0 || cur !in 0 until n) return emptyList()
+        if (host.shuffleEnabled) {
+            val order = host.shuffleOrder()
+            if (order != null && order.size == n) return order.toList().subList(0, order.indexOf(cur))
+        }
+        return (0 until cur).toList()
     }
 
     private fun autoIndices(): List<Int> = (0 until host.count).filter { host.isAutoAt(it) }

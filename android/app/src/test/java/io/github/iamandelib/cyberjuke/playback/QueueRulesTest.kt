@@ -55,6 +55,12 @@ class QueueRulesTest {
                 "setList" -> p.queue.setList(strings(s.getJSONArray("ids")), s.optInt("start", 0))
                 "queueNext" -> p.queue.queueNext(strings(s.getJSONArray("ids")))
                 "addAuto" -> p.queue.addAutoplay(strings(s.getJSONArray("ids")))
+                "restore" -> p.queue.restore(
+                    s.getString("id"),
+                    NativeQueue.Section.of(s.getString("kind")) ?: throw IllegalArgumentException("kind in $where"),
+                    if (s.isNull("beforeId")) null else s.getString("beforeId"),
+                )
+                "removeIds" -> p.queue.removeIds(strings(s.getJSONArray("ids")).toSet())
                 "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")))
                 "next" -> p.next()
                 "nextAuto" -> p.nextAuto()
@@ -74,7 +80,10 @@ class QueueRulesTest {
 
     private fun expect(p: FakePlayer, s: JSONObject, where: String) {
         val up = p.upNext()
-        if (s.has("current")) assertEquals("current in $where", s.getString("current"), p.ids.getOrNull(p.current))
+        if (s.has("current")) {
+            val want = if (s.isNull("current")) null else s.getString("current")
+            assertEquals("current in $where", want, p.ids.getOrNull(p.current))
+        }
         if (s.has("upNext")) assertEquals("upNext in $where", strings(s.getJSONArray("upNext")), up)
         if (s.has("upNextStartsWith")) {
             val want = strings(s.getJSONArray("upNextStartsWith"))
@@ -100,7 +109,7 @@ class QueueRulesTest {
     private fun strings(a: JSONArray) = (0 until a.length()).map { a.getString(it) }
 
     /** Just enough ExoPlayer for the queue logic; ids are unique within a case. */
-    private class FakePlayer(private val rnd: Random) : QueueHost<String> {
+    internal class FakePlayer(private val rnd: Random) : QueueHost<String> {
         val ids = ArrayList<String>()
         val serials = ArrayList<Long>()
         val auto = ArrayList<Boolean>()
@@ -171,6 +180,7 @@ class QueueRulesTest {
         }
 
         override fun itemAt(index: Int) = ids[index]
+        override fun idAt(index: Int) = ids[index]
         override fun isAutoAt(index: Int) = auto[index]
 
         override fun setItems(items: List<String>, serials: List<Long>, start: Int, positionMs: Long) {
@@ -185,16 +195,18 @@ class QueueRulesTest {
             emit(timelineChanged, transition)
         }
 
-        override fun appendAuto(items: List<String>) {
-            val pos = ids.size
-            ids.addAll(items)
-            items.forEach { serials.add(0L); auto.add(true) }
+        override fun insertAuto(at: Int?, items: List<String>) {
+            val pos = at ?: ids.size
+            ids.addAll(pos, items)
+            serials.addAll(pos, items.map { 0L })
+            auto.addAll(pos, items.map { true })
             orderInsert(pos, items.size)
             if (current < 0) {
                 current = 0
                 emit(timelineChanged, transition)
                 return
             }
+            if (pos <= current) current += items.size
             emit(timelineChanged)
         }
 

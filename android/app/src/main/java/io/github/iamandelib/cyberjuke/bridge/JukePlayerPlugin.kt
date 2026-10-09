@@ -29,17 +29,20 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import com.google.common.util.concurrent.ListenableFuture
 import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.NetBlock
+import io.github.iamandelib.cyberjuke.playback.BridgeLimits
 import io.github.iamandelib.cyberjuke.playback.ControllerKey
 import io.github.iamandelib.cyberjuke.playback.JukeCommands
 import io.github.iamandelib.cyberjuke.playback.JukeTracks
 import io.github.iamandelib.cyberjuke.playback.JukeUris
 import io.github.iamandelib.cyberjuke.playback.LaunchOptions
+import io.github.iamandelib.cyberjuke.playback.NativeQueue
 import io.github.iamandelib.cyberjuke.playback.NetPrefsStore
 import io.github.iamandelib.cyberjuke.playback.PlaybackService
 import io.github.iamandelib.cyberjuke.playback.PlayerBus
 import io.github.iamandelib.cyberjuke.playback.QueueCommands
 import io.github.iamandelib.cyberjuke.playback.QueueInfo
 import io.github.iamandelib.cyberjuke.playback.StreamResolver
+import io.github.iamandelib.cyberjuke.playback.TooLargeException
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.roundToInt
@@ -49,13 +52,23 @@ import kotlin.math.roundToInt
  *   setQueue, addItems, queueNext, removeItem, moveItem, play, pause, seekTo, skipToNext,
  *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, getState,
  *   getLaunchOptions, getBlockState, setNetworkPrefs, setGestureExclusion, addAutoplay,
- *   setAutoplay; events 'state', 'trackError', 'blocked', 'unblocked', 'extractorBroken',
+ *   setAutoplay, restore, removeIds; events 'state', 'trackError', 'blocked', 'unblocked', 'extractorBroken',
  *   'queueLow', 'tracks'.
  *
  * - setQueue keeps the tracks queued with queueNext next (P1) and starts autoplay over from
  *   the started track (a Global one gets its radio natively, refilled in the service).
  * - state also carries `upNextKinds` (one letter per upNextIds entry: q = queued by you,
- *   l = the list, a = autoplay), `context` ({ label, mode } or null) and `seedId`.
+ *   l = the list, a = autoplay), `upNextIndex` (K1: each entry's index in the list, always
+ *   sent), `context` ({ label, mode } or null) and `seedId`.
+ * - skipToIndex, removeItem and moveItem take an optional `expectId` (K2: the id the caller
+ *   sees at `index` / `from`); if the item there has another id the call rejects with code
+ *   STALE_INDEX and nothing changes. Checked in the service, on the player itself.
+ * - restore({ track, kind: 'queued' | 'list' | 'autoplay', beforeId }) (K3): Undo of a
+ *   removal, see [io.github.iamandelib.cyberjuke.playback.NativeQueue.restore].
+ * - removeIds({ ids }) (K5): removes every item with one of these ids; if the current one
+ *   goes, the next one that stays plays, or playback pauses when none is left.
+ * - Size caps (K6): more than 2000 tracks or ids, or a string over 2000 characters, rejects
+ *   with code TOO_LARGE.
  * - queueLow { left, seedId }: autoplay has `left` (<= 5) Jukebox tracks to go: the web side
  *   computes more and sends them with addAutoplay({ tracks, seedId }).
  * - tracks { tracks: NativeTrack[] }: autoplay items the service added itself (Global radio),
@@ -352,33 +365,27 @@ class JukePlayerPlugin : Plugin() {
      */
     @PluginMethod
     fun setQueue(call: PluginCall) {
-        val tracks = call.getArray("tracks")
-        val items = try {
-            parseTracks(tracks)
-        } catch (e: Exception) {
-            call.reject("Invalid tracks: ${e.message}")
-            return
-        }
+        val tracks = call.getArray("tracks") ?: return call.reject("tracks is required")
+        val items = parseTracksOrReject(call, tracks) ?: return
         val startIndex = intArg(call, "startIndex") ?: 0
         val positionMs = longArg(call, "positionMs") ?: 0L
         val playWhenReady = call.getBoolean("playWhenReady", true) ?: true
         val ctx = call.getObject("context")
+        val label = stringArg(call, ctx?.getString("label"), "context.label") ?: return
         Log.i(TAG, "BRIDGE setQueue n=${items.size}")
         withController(call) { c ->
-            if (items.isEmpty()) {
-                c.clearMediaItems()
-                call.resolve()
-                return@withController
-            }
+            // An empty list goes through SET_LIST too: it clears the seed, radio and context (L4).
             val args = Bundle().apply {
                 putString(QueueCommands.ARG_TRACKS, tracks.toString())
-                putInt(QueueCommands.ARG_START, startIndex.coerceIn(0, items.size - 1))
+                putInt(QueueCommands.ARG_START, startIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0)))
                 putLong(QueueCommands.ARG_POSITION, positionMs.coerceAtLeast(0L))
-                putString(QueueCommands.ARG_LABEL, ctx?.getString("label") ?: "")
+                putString(QueueCommands.ARG_LABEL, label)
                 putString(QueueCommands.ARG_MODE, ctx?.getString("mode") ?: "list")
             }
             sendCommand(call, c, QueueCommands.SET_LIST, args) {
-                if (refuseWhileBlocked(it)) {
+                if (items.isEmpty()) {
+                    // Nothing to load.
+                } else if (refuseWhileBlocked(it)) {
                     // Queue updated, but no extraction until the back-off ends.
                 } else {
                     it.playWhenReady = playWhenReady
@@ -397,12 +404,8 @@ class JukePlayerPlugin : Plugin() {
     @PluginMethod
     fun addAutoplay(call: PluginCall) {
         val tracks = call.getArray("tracks")
-        val count = try {
-            parseTracks(tracks).size
-        } catch (e: Exception) {
-            call.reject("Invalid tracks: ${e.message}")
-            return
-        }
+        val count = parseTracksOrReject(call, tracks)?.size ?: return
+        stringArg(call, call.getString("seedId"), "seedId") ?: return
         if (count == 0) {
             call.resolve()
             return
@@ -442,19 +445,20 @@ class JukePlayerPlugin : Plugin() {
             if (result.resultCode == SessionResult.RESULT_SUCCESS) {
                 runAction(call, c, then)
             } else {
-                call.reject("$name failed: result ${result.resultCode}")
+                // STALE_INDEX or TOO_LARGE from the service, as the reject code.
+                val code = result.extras.getString(QueueCommands.RESULT_CODE)
+                if (code != null) {
+                    call.reject("$name failed: $code", code)
+                } else {
+                    call.reject("$name failed: result ${result.resultCode}")
+                }
             }
         }, ContextCompat.getMainExecutor(context))
     }
 
     @PluginMethod
     fun addItems(call: PluginCall) {
-        val items = try {
-            parseTracks(call.getArray("tracks"))
-        } catch (e: Exception) {
-            call.reject("Invalid tracks: ${e.message}")
-            return
-        }
+        val items = parseTracksOrReject(call, call.getArray("tracks")) ?: return
         val index = intArg(call, "index")
         withController(call) { c ->
             if (items.isNotEmpty()) {
@@ -476,12 +480,8 @@ class JukePlayerPlugin : Plugin() {
     @PluginMethod
     fun queueNext(call: PluginCall) {
         val tracks = call.getArray("tracks")
-        val count = try {
-            parseTracks(tracks).size // validate here so bad input rejects with a clear message
-        } catch (e: Exception) {
-            call.reject("Invalid tracks: ${e.message}")
-            return
-        }
+        // Validate here so bad input rejects with a clear message.
+        val count = parseTracksOrReject(call, tracks)?.size ?: return
         if (count == 0) {
             call.resolve()
             return
@@ -490,29 +490,89 @@ class JukePlayerPlugin : Plugin() {
         withController(call) { c -> sendCommand(call, c, JukeCommands.QUEUE_NEXT, args) }
     }
 
+    /** `removeItem({ index, expectId? })`: done in the service, which checks `expectId` (K2). */
     @PluginMethod
     fun removeItem(call: PluginCall) {
         val index = intArg(call, "index") ?: return call.reject("index is required")
+        val expectId = stringArg(call, call.getString("expectId"), "expectId") ?: return
         withController(call) { c ->
             if (index !in 0 until c.mediaItemCount) {
                 call.reject("index out of range: $index")
             } else {
-                c.removeMediaItem(index)
-                call.resolve()
+                val args = Bundle().apply {
+                    putInt(QueueCommands.ARG_INDEX, index)
+                    putExpect(expectId)
+                }
+                sendCommand(call, c, QueueCommands.REMOVE, args)
             }
         }
     }
 
+    /** `moveItem({ from, to, expectId? })`: `expectId` is the id at `from` (K2). */
     @PluginMethod
     fun moveItem(call: PluginCall) {
         val from = intArg(call, "from") ?: return call.reject("from is required")
         val to = intArg(call, "to") ?: return call.reject("to is required")
+        val expectId = stringArg(call, call.getString("expectId"), "expectId") ?: return
         withController(call) { c ->
             val n = c.mediaItemCount
             if (from !in 0 until n || to !in 0 until n) {
                 call.reject("index out of range: from=$from to=$to count=$n")
             } else {
-                if (from != to) c.moveMediaItem(from, to)
+                val args = Bundle().apply {
+                    putInt(QueueCommands.ARG_FROM, from)
+                    putInt(QueueCommands.ARG_TO, to)
+                    putExpect(expectId)
+                }
+                sendCommand(call, c, QueueCommands.MOVE, args)
+            }
+        }
+    }
+
+    /**
+     * `restore({ track, kind: 'queued' | 'list' | 'autoplay', beforeId: string | null })`: Undo
+     * of a removal (K3). The track goes back into its section of Up next, right before the
+     * first entry after the current track with id `beforeId` in that section, else at the end
+     * of that section; never at or before the current track.
+     */
+    @PluginMethod
+    fun restore(call: PluginCall) {
+        val track = call.getObject("track") ?: return call.reject("track is required")
+        val arr = JSONArray().put(track)
+        parseTracksOrReject(call, arr) ?: return
+        val kind = call.getString("kind")
+        if (NativeQueue.Section.of(kind) == null) return call.reject("kind must be 'queued', 'list' or 'autoplay'")
+        val beforeId = stringArg(call, call.getString("beforeId"), "beforeId") ?: return
+        val args = Bundle().apply {
+            putString(QueueCommands.ARG_TRACKS, arr.toString())
+            putString(QueueCommands.ARG_KIND, kind)
+            if (beforeId.isNotEmpty()) putString(QueueCommands.ARG_BEFORE, beforeId)
+        }
+        withController(call) { c -> sendCommand(call, c, QueueCommands.RESTORE, args) }
+    }
+
+    /**
+     * `removeIds({ ids })` (K5, sign-out): removes every item with one of [ids]. If the current
+     * item goes, the next one that stays plays; with none left, playback pauses.
+     */
+    @PluginMethod
+    fun removeIds(call: PluginCall) {
+        val ids = try {
+            BridgeLimits.idsOf(call.getArray("ids") ?: return call.reject("ids is required"))
+        } catch (e: TooLargeException) {
+            return call.reject(e.message, QueueCommands.TOO_LARGE)
+        } catch (e: Exception) {
+            return call.reject("Invalid ids: ${e.message}")
+        }
+        if (ids.isEmpty()) return call.resolve()
+        val args = Bundle().apply { putStringArrayList(QueueCommands.ARG_IDS, ArrayList(ids)) }
+        withController(call) { c ->
+            sendCommand(call, c, QueueCommands.REMOVE_IDS, args) {
+                if (it.playbackState == Player.STATE_IDLE && it.mediaItemCount > 0 && it.playWhenReady &&
+                    !NetBlock.isBlocked()
+                ) {
+                    it.prepare()
+                }
                 call.resolve()
             }
         }
@@ -575,15 +635,20 @@ class JukePlayerPlugin : Plugin() {
         }
     }
 
+    /** `skipToIndex({ index, expectId? })`; the service checks `expectId` (K2). */
     @PluginMethod
     fun skipToIndex(call: PluginCall) {
         val index = intArg(call, "index") ?: return call.reject("index is required")
+        val expectId = stringArg(call, call.getString("expectId"), "expectId") ?: return
         withController(call) { c ->
             if (index !in 0 until c.mediaItemCount) {
                 call.reject("index out of range: $index")
             } else {
                 // In the service: queued tracks stay next; on an autoplay track the radio continues from it.
-                val args = Bundle().apply { putInt(QueueCommands.ARG_INDEX, index) }
+                val args = Bundle().apply {
+                    putInt(QueueCommands.ARG_INDEX, index)
+                    putExpect(expectId)
+                }
                 sendCommand(call, c, QueueCommands.SKIP_TO, args) {
                     if (it.playbackState == Player.STATE_IDLE && !NetBlock.isBlocked()) it.prepare()
                     call.resolve()
@@ -769,6 +834,7 @@ class JukePlayerPlugin : Plugin() {
         }
 
         val upNext = ArrayList<String>()
+        val upNextIndex = JSArray()
         val kinds = StringBuilder()
         val pending = QueueInfo.pendingSerials
         val timeline = c.currentTimeline
@@ -780,6 +846,7 @@ class JukePlayerPlugin : Plugin() {
             while (i != C.INDEX_UNSET && i != index && upNext.size < MAX_UP_NEXT && i < count) {
                 val item = c.getMediaItemAt(i)
                 upNext.add(item.mediaId)
+                upNextIndex.put(i)
                 val extras = item.mediaMetadata.extras
                 kinds.append(
                     when {
@@ -816,6 +883,7 @@ class JukePlayerPlugin : Plugin() {
         }
         state.put("upNextIds", JSArray(upNext))
         state.put("upNextKinds", kinds.toString())
+        state.put("upNextIndex", upNextIndex)
         val ctx = QueueInfo.context
         if (ctx != null && count > 0) {
             val o = JSObject()
@@ -857,7 +925,31 @@ class JukePlayerPlugin : Plugin() {
 
     // ---- helpers --------------------------------------------------------------------------
 
-    private fun parseTracks(arr: JSONArray?): List<MediaItem> = JukeTracks.parse(arr)
+    /** The tracks, or null after rejecting the call (TOO_LARGE over the caps, K6). */
+    private fun parseTracksOrReject(call: PluginCall, arr: JSONArray?): List<MediaItem>? = try {
+        JukeTracks.parse(arr)
+    } catch (e: TooLargeException) {
+        call.reject(e.message, QueueCommands.TOO_LARGE)
+        null
+    } catch (e: Exception) {
+        call.reject("Invalid tracks: ${e.message}")
+        null
+    }
+
+    /**
+     * An optional string argument checked against the cap: "" when absent, null after
+     * rejecting the call with TOO_LARGE.
+     */
+    private fun stringArg(call: PluginCall, value: String?, what: String): String? = try {
+        BridgeLimits.checkString(value, what) ?: ""
+    } catch (e: TooLargeException) {
+        call.reject(e.message, QueueCommands.TOO_LARGE)
+        null
+    }
+
+    private fun Bundle.putExpect(expectId: String) {
+        if (expectId.isNotEmpty()) putString(QueueCommands.ARG_EXPECT, expectId)
+    }
 
     /** JS numbers arrive as Integer, Long or Double; PluginCall.getInt/getLong are type-strict. */
     private fun numArg(call: PluginCall, key: String): Number? {
