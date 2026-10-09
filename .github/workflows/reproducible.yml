@@ -38,6 +38,16 @@ jobs:
           ref: refs/tags/${{ inputs.tag }}
           persist-credentials: false
 
+      # The checking scripts as of this workflow's commit (older tags may not have them).
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          path: .ci
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/sign-apk.sh
+            scripts/apk-compare.sh
+          sparse-checkout-cone-mode: false
+
       - uses: gradle/actions/wrapper-validation@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
 
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
@@ -64,6 +74,23 @@ jobs:
         working-directory: android
         run: bash ../scripts/gradlew-retry.sh assembleRelease --stacktrace
 
+      # The release's signing (scripts/sign-apk.sh), with a throwaway key: it must leave the
+      # APK as built, or no later release can be reproducible either.
+      - name: Check that signing keeps the APK as built
+        run: |
+          shopt -s nullglob
+          unsigned=(android/app/build/outputs/apk/release/*.apk)
+          (( ${#unsigned[@]} == 1 )) || { echo "::error::Expected one unsigned APK"; exit 1; }
+          export KEYSTORE="$RUNNER_TEMP/throwaway.jks" KEYSTORE_PASSWORD=throwaway KEY_PASSWORD=throwaway KEY_ALIAS=throwaway
+          keytool -genkeypair -keystore "$KEYSTORE" -storepass "$KEYSTORE_PASSWORD" -keypass "$KEY_PASSWORD" \
+            -alias "$KEY_ALIAS" -keyalg RSA -keysize 2048 -validity 1 -dname CN=throwaway >/dev/null 2>&1
+          bash .ci/scripts/sign-apk.sh "${unsigned[0]}" "$RUNNER_TEMP/selfsigned.apk" >/dev/null
+          if bash .ci/scripts/apk-compare.sh "$RUNNER_TEMP/selfsigned.apk" "${unsigned[0]}"; then
+            echo "::notice title=Signing::scripts/sign-apk.sh keeps the APK as built."
+          else
+            echo "::error title=Signing::scripts/sign-apk.sh changes the APK beyond adding a signature."; exit 1
+          fi
+
       - name: Download the signed APK from the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -80,7 +107,7 @@ jobs:
           if (( ${#unsigned[@]} != 1 || ${#signed[@]} != 1 )); then
             echo "::error::Expected one unsigned and one signed APK (got ${#unsigned[@]} and ${#signed[@]})"; exit 1
           fi
-          if pipx run 'apksigcopier==1.1.1' compare "${signed[0]}" --unsigned "${unsigned[0]}"; then
+          if bash .ci/scripts/apk-compare.sh "${signed[0]}" "${unsigned[0]}"; then
             echo "::notice title=Reproducible::$TAG rebuilds byte for byte (apart from the signature). F-Droid can ship the signed APK."
           else
             echo "::error title=Not reproducible::$TAG's rebuild differs from the signed APK. Compare them with diffoscope to see where."

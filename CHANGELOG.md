@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-09
+
+The same app as 1.0.0, released so that F-Droid can ship it.
+
+### Releases
+- The release APK is signed without re-aligning it (`apksigner --alignment-preserved`): it is now exactly the unsigned build plus a signature, so F-Droid's own build of the tag matches it and F-Droid can ship the GitHub-signed APK. 1.0.0's signing had re-padded two uncompressed files, which broke that comparison.
+- The Release workflow publishes nothing unless the signed APK passes that comparison (`apksigcopier compare`).
+
 ## [1.0.0] - 2026-10-09
 
 The first stable release.
