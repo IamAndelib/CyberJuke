@@ -606,6 +606,8 @@ class JukePlayerPlugin : Plugin() {
 
     @PluginMethod
     fun pause(call: PluginCall) {
+        // The user paused: a back-off that ends later must not start playback again.
+        NetBlock.cancelResume()
         withController(call) { c ->
             c.pause()
             call.resolve()
@@ -823,7 +825,8 @@ class JukePlayerPlugin : Plugin() {
     private fun refuseWhileBlocked(c: MediaController): Boolean {
         val (until, reason) = NetBlock.active()
         if (reason == null) return false
-        c.playWhenReady = false
+        // Already false in the usual case; the service only cancels a resume on a change.
+        if (c.playWhenReady) c.playWhenReady = false
         // The user asked to play: it starts once the back-off is over.
         NetBlock.wantResume()
         announceBlocked(until, reason, force = true)

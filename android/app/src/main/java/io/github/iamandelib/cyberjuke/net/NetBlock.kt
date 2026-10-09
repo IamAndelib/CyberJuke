@@ -74,7 +74,7 @@ internal class BlockState {
             level = maxOf(0, level - ((now - until) / DECAY_MS).toInt())
         }
         val step = LADDER_MIN[minOf(level, LADDER_MIN.size - 1)]
-        level = minOf(level + 1, LADDER_MIN.size)
+        level = minOf(level + 1, LADDER_MIN.size - 1)
         until = now + step * 60_000L
         this.reason = reason
         lastTripAt = now

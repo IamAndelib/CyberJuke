@@ -24,6 +24,7 @@ The first stable release.
 - ★ marks favourite genres and artists (♥ is only for liked tracks).
 - Long titles scroll in Now Playing and the mini player; long-press a row for its menu; swipe up on the mini player.
 - Smoother pull to refresh, sheets and scrolling; bigger touch targets; no accidental text selection; a tap that stops a scroll no longer plays a track.
+- Settings → Licenses lists every bundled library and opens their full license texts.
 - Recent searches (with Clear all); "Here" search on the Genres and Artists tabs; shorter Settings text; better contrast in the C64, Matrix, Crypt and Bubblegum themes.
 
 ### YouTube

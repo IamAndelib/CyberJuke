@@ -23,6 +23,11 @@ CyberJuke is copyright © 2026 IamAndelib and is licensed under the GNU General 
 | [Preact](https://github.com/preactjs/preact), [@preact/signals](https://github.com/preactjs/signals) | MIT | UI |
 | [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) | SIL OFL 1.1 | Font (`public/fonts/`, license in `public/fonts/OFL.txt`) |
 | [Departure Mono](https://departuremono.com) | SIL OFL 1.1 | Font (`public/fonts/`, license in `public/fonts/OFL.txt`) |
-| AndroidX libraries, Kotlin standard library | Apache-2.0 | Android runtime |
+| AndroidX libraries, Kotlin standard library, Guava, Okio | Apache-2.0 | Android runtime |
+| [desugar_jdk_libs](https://github.com/google/desugar_jdk_libs) | GPL-2.0 with the Classpath Exception | Newer Java APIs on older Android (needed by NewPipeExtractor) |
+| [nanojson](https://github.com/TeamNewPipe/nanojson) | Apache-2.0 | JSON parsing (NewPipeExtractor) |
+| [jsoup](https://jsoup.org) | MIT | HTML parsing (NewPipeExtractor) |
+| [Rhino](https://github.com/mozilla/rhino) | MPL-2.0 | JavaScript engine (NewPipeExtractor) |
+| [Protocol Buffers](https://github.com/protocolbuffers/protobuf) (javalite), JSR 305 annotations | BSD-3-Clause | NewPipeExtractor |
 
-NewPipeExtractor's own dependencies (Rhino, jsoup, nanojson and others) keep their own licenses.
+The app bundles the full texts of these licenses: Settings → Licenses → Full license texts (`public/licenses/THIRD-PARTY.txt`).

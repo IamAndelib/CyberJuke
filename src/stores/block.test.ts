@@ -123,6 +123,8 @@ describe('net status line', () => {
     expect(netStatusText(null, at)).toBeNull();
     expect(netStatusText({ autoIpv4: false }, at)).toBe('Connection: not used yet · no limits so far');
     expect(netStatusText({ family: 'IPv6', autoIpv4: false }, at)).toBe('Connection: IPv6 · no limits so far');
+    // Just switched: the last request was still IPv6, the next goes out on IPv4.
+    expect(netStatusText({ family: 'IPv6', autoIpv4: true }, at)).toBe('Connection: IPv4 (switched by Auto) · no limits so far');
     expect(
       netStatusText({ family: 'IPv4', autoIpv4: true, lastLimit: { at, reason: 'BOT_CHECK', surface: 'playback' } }, at + 60_000),
     ).toBe(`Connection: IPv4 (switched by Auto) · last limit ${time}, bot check`);

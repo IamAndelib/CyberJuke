@@ -26,10 +26,10 @@ function Blocked({ until }: { until: number }) {
       <button
         class="block-action"
         onClick={() => {
-          // Native lifts the back-off at once (and resumes playback it stopped); if YouTube
-          // still refuses, a new `blocked` event brings the banner back.
+          // Native lifts the back-off at once and says so with `unblocked` (which hides this),
+          // then resumes playback it stopped; if YouTube still refuses, a new `blocked` event
+          // brings the banner back. If the call fails, the banner stays.
           void player.retryNow();
-          block.onUnblocked();
         }}
         data-testid="block-retry"
       >

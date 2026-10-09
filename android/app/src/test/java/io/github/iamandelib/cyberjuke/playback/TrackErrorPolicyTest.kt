@@ -40,6 +40,8 @@ class TrackErrorPolicyTest {
         assertEquals(Action.Block(BlockReason.BOT_CHECK), decideFor(ReCaptchaException("captcha", "https://www.google.com/sorry")))
         val tryLater = ContentNotAvailableException("Got error UNPLAYABLE: \"This content isn't available, try again later.\"")
         assertEquals(FailureKind.RATE_LIMIT, YtCompat.classify(tryLater))
+        // Another video's player response swapped in: YouTube rate-limiting the IP.
+        assertEquals(FailureKind.RATE_LIMIT, YtCompat.classify(ExtractionException("VISIONOS player response is not valid")))
         // A 429 on a stream gets one fresh link first; a second one is a block.
         assertEquals(Action.ReResolve, TrackErrorPolicy.decide(Facts(kind = null, httpCode = 429)))
         assertEquals(

@@ -1,38 +1,59 @@
 package io.github.iamandelib.cyberjuke.net
 
+import okhttp3.Call
+import okhttp3.ConnectionPool
 import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 
 /**
- * One shared OkHttp client for extraction, audio streaming and lyrics. Extraction and
- * streaming must share it: googlevideo URLs are bound to the IP that resolved them, so both
- * have to leave through the same address family (see [NetPrefs]).
+ * The HTTP client for extraction, audio streaming and lyrics. Extraction and streaming must
+ * share it: googlevideo URLs are bound to the IP that resolved them, so both have to leave
+ * through the same address family (see [NetPrefs]).
+ *
+ * Two OkHttp clients behind it, each with its own connection pool: the system's choice of
+ * address, and IPv4 only. [client] picks one per request, so the moment [NetPrefs] switches to
+ * IPv4 every new request goes out on an IPv4 connection; a busy IPv6 connection (a track still
+ * streaming) can never be reused for it, and nothing has to be closed on the caller's thread.
  *
  * No Android types in this file: the JVM canary test (YouTubeCanaryTest) uses it as is.
  */
 internal object Http {
-    val client: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .dns(NetPrefs.dns)
-            .addNetworkInterceptor(Families.interceptor)
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            // Everything we fetch is https: never follow a redirect down to http (L5).
-            .followSslRedirects(false)
-            .build()
+    private fun build(dns: Dns): OkHttpClient = OkHttpClient.Builder()
+        .dns(dns)
+        .connectionPool(ConnectionPool())
+        .addNetworkInterceptor(Families.interceptor)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        // Everything we fetch is https: never follow a redirect down to http (L5).
+        .followSslRedirects(false)
+        .build()
+
+    private val system = lazy { build(Dns.SYSTEM) }
+    private val ipv4 = lazy { build(NetPrefs.ipv4Dns) }
+
+    /** The client for a request made now. */
+    fun current(): OkHttpClient = if (NetPrefs.preferIpv4) ipv4.value else system.value
+
+    // OkHttp 4's Call.Factory is a plain Kotlin interface, not a fun interface: no SAM lambda.
+    val client: Call.Factory = object : Call.Factory {
+        override fun newCall(request: Request): Call = current().newCall(request)
     }
 
-    /** Drops pooled connections, so the next request resolves (and picks a family) again. */
+    /** Drops idle pooled connections, so the next request resolves again (a new network). */
     fun evictConnections() {
-        try {
-            client.connectionPool.evictAll()
-        } catch (_: Exception) {
+        for (c in listOf(system, ipv4)) {
+            if (!c.isInitialized()) continue
+            try {
+                c.value.connectionPool.evictAll()
+            } catch (_: Exception) {
+            }
         }
     }
 }
@@ -55,7 +76,7 @@ internal object Families {
 
     val interceptor = Interceptor { chain ->
         val address = chain.connection()?.socket()?.inetAddress
-        if (address != null && Hosts.isYouTubeMedia(chain.request().url.host)) record(familyOf(address))
+        if (address != null && Hosts.isYouTubeTraffic(chain.request().url.host)) record(familyOf(address))
         chain.proceed(chain.request())
     }
 
@@ -130,10 +151,9 @@ internal object NetPrefs {
     /** AUTO, and not on IPv4 yet: a limit over IPv6 may switch. */
     fun canSwitchToIpv4(): Boolean = mode == Ipv4Mode.AUTO && !autoActive
 
-    // OkHttp 4's Dns is a plain Kotlin interface, not a fun interface: no SAM lambda.
-    val dns: Dns = object : Dns {
-        override fun lookup(hostname: String): List<InetAddress> =
-            order(Dns.SYSTEM.lookup(hostname), preferIpv4)
+    /** IPv4 addresses only, where a host has any ([Http]'s IPv4 client). */
+    val ipv4Dns: Dns = object : Dns {
+        override fun lookup(hostname: String): List<InetAddress> = order(Dns.SYSTEM.lookup(hostname), true)
     }
 
     /** IPv4 addresses only when [preferIpv4] and there are any; otherwise unchanged. */
@@ -145,7 +165,7 @@ internal object NetPrefs {
 
     /**
      * Applies a saved or chosen mode and AUTO memory. Returns true if the family in force
-     * changed (pooled connections are dropped then; the caller drops cached stream URLs).
+     * changed (the caller drops cached stream URLs then).
      */
     @Synchronized
     fun load(mode: Ipv4Mode, memory: Map<String, Long>): Boolean {
@@ -210,11 +230,8 @@ internal object NetPrefs {
 
     private fun remembered(key: String): Boolean = (autoUntil[key] ?: 0L) > clock()
 
-    private fun applied(before: Boolean): Boolean {
-        if (preferIpv4 == before) return false
-        Http.evictConnections()
-        return true
-    }
+    /** [Http] picks its client per request, so a change applies from the next request on. */
+    private fun applied(before: Boolean): Boolean = preferIpv4 != before
 
     /** Tests only. */
     @Synchronized
@@ -234,6 +251,12 @@ internal object Hosts {
 
     /** youtube.com and its subdomains: they get the SOCS consent cookie. */
     fun isYouTube(host: String?): Boolean = host != null && isUnder(host.lowercase(), "youtube.com")
+
+    /** YouTube's own traffic, for [Families]: media hosts and the InnerTube API (googleapis). */
+    fun isYouTubeTraffic(host: String?): Boolean {
+        val h = host?.lowercase() ?: return false
+        return isYouTubeMedia(h) || isUnder(h, "youtubei.googleapis.com")
+    }
 
     /** Hosts the stream resolver passes raw manifest/segment URLs to with YouTube headers. */
     fun isYouTubeMedia(host: String?): Boolean {

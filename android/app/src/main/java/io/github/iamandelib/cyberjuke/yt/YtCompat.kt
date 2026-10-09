@@ -214,9 +214,18 @@ internal object YtCompat {
         // try again later." on every video: a rate limit, not a broken track.
         is ContentNotAvailableException -> if (isTryAgainLater(t)) FailureKind.RATE_LIMIT else FailureKind.CONTENT
         is IOException -> FailureKind.NETWORK
-        is ExtractionException -> if (hasIoCause(t)) FailureKind.NETWORK else FailureKind.BROKEN
+        // YouTube swaps in another video's player response when it rate-limits an IP (the
+        // extractor's own note on isPlayerResponseNotValid): a limit, not a broken parser.
+        is ExtractionException -> when {
+            hasIoCause(t) -> FailureKind.NETWORK
+            isSwappedPlayerResponse(t) -> FailureKind.RATE_LIMIT
+            else -> FailureKind.BROKEN
+        }
         else -> if (hasIoCause(t)) FailureKind.NETWORK else FailureKind.OTHER
     }
+
+    private fun isSwappedPlayerResponse(t: Throwable): Boolean =
+        t.message?.contains("player response is not valid", ignoreCase = true) == true
 
     private fun isTryAgainLater(t: Throwable): Boolean =
         t.message?.contains("try again later", ignoreCase = true) == true

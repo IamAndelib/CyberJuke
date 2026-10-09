@@ -4,7 +4,7 @@ import io.github.iamandelib.cyberjuke.net.Hosts
 import io.github.iamandelib.cyberjuke.net.Http
 import io.github.iamandelib.cyberjuke.net.NetBlock
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.OkHttpClient
+import okhttp3.Call
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.schabi.newpipe.extractor.downloader.Downloader
@@ -15,7 +15,7 @@ import java.io.InterruptedIOException
 import java.util.concurrent.atomic.AtomicInteger
 
 /** NewPipeExtractor [Downloader] backed by OkHttp (modelled on NewPipe's DownloaderImpl). */
-internal class DownloaderImpl private constructor(private val client: OkHttpClient) : Downloader() {
+internal class DownloaderImpl private constructor(private val client: Call.Factory) : Downloader() {
 
     override fun execute(request: Request): Response {
         // A cancelled load (ExoPlayer interrupts the loader thread on a skip) stops here, so

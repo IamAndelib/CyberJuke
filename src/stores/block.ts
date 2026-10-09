@@ -154,7 +154,8 @@ export function netStatusText(
   now: number,
 ): string | null {
   if (!s) return null;
-  const family = s.family ? `${s.family}${s.autoIpv4 ? ' (switched by Auto)' : ''}` : s.autoIpv4 ? 'IPv4 (switched by Auto)' : 'not used yet';
+  // Auto's switch applies from the next request: say IPv4 even if the last one was IPv6.
+  const family = s.autoIpv4 ? 'IPv4 (switched by Auto)' : (s.family ?? 'not used yet');
   const l = s.lastLimit;
   const limit = l
     ? `last limit ${when(l.at, now)}, ${REASON_TEXT[l.reason] ?? 'limit'}${l.surface === 'music' ? ' (music)' : ''}`

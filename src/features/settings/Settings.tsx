@@ -16,7 +16,7 @@ import { AuthError, SIGN_UP_URL, auth, authErrorText } from '../../data/auth';
 import { toast } from '../../stores/toast';
 import { Screen } from '../../ui/components/Screen';
 import { openExternal } from '../../ui/links';
-import { askConfirm } from '../../ui/nav';
+import { askConfirm, usePageActive } from '../../ui/nav';
 
 function Swatch({ id }: { id: ThemeId }) {
   const on = settings.value.theme === id;
@@ -260,6 +260,32 @@ function Account() {
   );
 }
 
+/** The full third-party license texts, bundled with the app; loaded when opened. */
+function LicenseTexts() {
+  const [text, setText] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const load = (open: boolean) => {
+    if (!open || text != null) return;
+    setFailed(false);
+    fetch('./licenses/THIRD-PARTY.txt')
+      .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then(setText)
+      .catch(() => setFailed(true));
+  };
+  return (
+    <details onToggle={(e) => load((e.currentTarget as HTMLDetailsElement).open)} data-testid="license-texts">
+      <summary>Full license texts</summary>
+      {text != null ? (
+        <pre class="license-text">{text}</pre>
+      ) : failed ? (
+        <p>Couldn't open them. They are also in the source repository.</p>
+      ) : (
+        <p class="dim">Loading…</p>
+      )}
+    </details>
+  );
+}
+
 const IPV4_LABELS: Record<Ipv4Mode, string> = { auto: 'Auto', always: 'Always', off: 'Off' };
 
 /** How the app reaches YouTube, for bug reports ("Tracks stopped playing" asks for it). */
@@ -267,7 +293,11 @@ function NetStatusLine() {
   const [text, setText] = useState<string | null>(null);
   const ipv4 = settings.value.ipv4;
   const blocked = block.blocked.value;
+  // Tabs stay mounted: ask again each time Settings comes back into view (Auto may have
+  // switched meanwhile, without a block).
+  const active = usePageActive();
   useEffect(() => {
+    if (!active) return;
     let live = true;
     void player.netStatus().then((s) => {
       if (live) setText(netStatusText(s, Date.now()));
@@ -275,7 +305,7 @@ function NetStatusLine() {
     return () => {
       live = false;
     };
-  }, [ipv4, blocked]);
+  }, [ipv4, blocked, active]);
   if (!text) return null;
   return (
     <p class="setting-desc net-status" data-testid="net-status">
@@ -406,8 +436,13 @@ export function Settings() {
         </details>
         <details>
           <summary>Libraries</summary>
-          <p>Preact (MIT), @preact/signals (MIT), Capacitor (MIT), NewPipeExtractor (GPL-3.0).</p>
+          <p data-testid="libraries">
+            NewPipeExtractor (GPL-3.0); AndroidX Media3 and other AndroidX libraries, OkHttp, Okio, Kotlin, Guava and
+            nanojson (Apache-2.0); Preact, @preact/signals, Capacitor and jsoup (MIT); Rhino (MPL-2.0); Protocol
+            Buffers and JSR 305 (BSD-3-Clause); desugar_jdk_libs (GPL-2.0 with the Classpath Exception).
+          </p>
         </details>
+        <LicenseTexts />
       </section>
 
       <section class="card prose" data-testid="source-code">

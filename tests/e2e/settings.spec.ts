@@ -108,6 +108,21 @@ test('the connection line shows how YouTube is reached, for bug reports', async 
   expect(await line.evaluate((el) => getComputedStyle(el).userSelect)).toBe('text');
 });
 
+test('the connection line is fresh each time Settings is shown (Auto may switch without a block)', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as unknown as { __cyberjukeNetStatus: unknown }).__cyberjukeNetStatus = { ipv4: 'auto', autoIpv4: false };
+  });
+  await page.goto('/');
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('net-status')).toHaveText('Connection: not used yet · no limits so far');
+  await page.getByTestId('tab-home').click();
+  await page.evaluate(() => {
+    (window as unknown as { __cyberjukeNetStatus: unknown }).__cyberjukeNetStatus = { family: 'IPv6', ipv4: 'auto', autoIpv4: true };
+  });
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('net-status')).toHaveText('Connection: IPv4 (switched by Auto) · no limits so far');
+});
+
 test('Account is the first card and says "members-only shared tracks"', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('tab-settings').click();
@@ -139,4 +154,18 @@ test('Source code: the last card links to the repository and its latest release'
   await card.getByTestId('source-releases').getByRole('link').click();
   const opened = await page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
   expect(opened).toEqual(['https://github.com/IamAndelib/CyberJuke', 'https://github.com/IamAndelib/CyberJuke/releases/latest']);
+});
+
+test('Licenses: every bundled library is listed and the full texts open in the app', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('tab-settings').click();
+  await page.getByText('Libraries', { exact: true }).click();
+  for (const name of ['NewPipeExtractor', 'Media3', 'OkHttp', 'Kotlin', 'Rhino', 'jsoup', 'Protocol Buffers', 'desugar_jdk_libs']) {
+    await expect(page.getByTestId('libraries')).toContainText(name);
+  }
+  await page.getByTestId('license-texts').locator('summary').click();
+  const text = page.getByTestId('license-texts').locator('pre');
+  for (const t of ['Apache License', 'Mozilla Public License Version 2.0', 'GNU GENERAL PUBLIC LICENSE', 'CLASSPATH', 'Copyright (c) 2015-present Jason Miller', 'Copyright 2008 Google Inc.']) {
+    await expect(text).toContainText(t);
+  }
 });

@@ -80,3 +80,33 @@ test('a pause tapped right after starting a track stays paused', async ({ page }
   await page.waitForFunction(() => new Promise((r) => setTimeout(() => r(true), 1500)));
   await expect(toggle).toHaveAttribute('aria-label', 'Play');
 });
+
+test('a late real click after a supplied one is dropped even when the control is gone', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-grid').getByTestId('genre-tile').first().click();
+  const back = page.getByTestId('genre-back');
+  const box = (await back.boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await pressWithoutClick(back);
+  await expect(page.getByTestId('screen-genre')).toHaveCount(0); // the supplied click went Back
+  // Whatever is under the finger now (a probe here) must not get the same tap's late click.
+  await page.evaluate(
+    ([px, py]) => {
+      const probe = document.createElement('div');
+      probe.id = 'probe';
+      probe.dataset.clicks = '0';
+      Object.assign(probe.style, { position: 'fixed', left: `${px - 20}px`, top: `${py - 20}px`, width: '40px', height: '40px', zIndex: '9999' });
+      probe.addEventListener('click', () => (probe.dataset.clicks = String(Number(probe.dataset.clicks) + 1)));
+      document.body.append(probe);
+    },
+    [x, y],
+  );
+  await page.mouse.click(x, y);
+  await expect(page.locator('#probe')).toHaveAttribute('data-clicks', '0');
+  // A real tap later, elsewhere, works as usual.
+  await page.waitForTimeout(450);
+  await page.mouse.click(x, y);
+  await expect(page.locator('#probe')).toHaveAttribute('data-clicks', '1');
+});

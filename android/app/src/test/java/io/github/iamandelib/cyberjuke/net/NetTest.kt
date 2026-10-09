@@ -2,6 +2,8 @@ package io.github.iamandelib.cyberjuke.net
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.After
 import org.junit.Test
@@ -80,6 +82,20 @@ class NetTest {
     }
 
     @Test
+    fun afterTheSwitchRequestsUseTheIpv4ClientAndItsOwnPool() {
+        NetPrefs.clock = { 0L }
+        NetPrefs.onNetwork("wifi")
+        val before = Http.current()
+        NetPrefs.switchToIpv4Automatically()
+        val after = Http.current()
+        assertNotSame(before, after)
+        // A busy IPv6 connection (a track still streaming) can't be picked up by IPv4 requests.
+        assertNotSame(before.connectionPool, after.connectionPool)
+        NetPrefs.setMode(Ipv4Mode.OFF)
+        assertSame(before, Http.current())
+    }
+
+    @Test
     fun limitPolicy() {
         assertEquals(LimitPolicy.Action.SWITCH_TO_IPV4, LimitPolicy.decide(viaIpv6 = true, canSwitchToIpv4 = true, retried = false))
         assertEquals(LimitPolicy.Action.SWITCH_TO_IPV4, LimitPolicy.decide(viaIpv6 = true, canSwitchToIpv4 = true, retried = true))
@@ -106,6 +122,11 @@ class NetTest {
         assertTrue(Hosts.isYouTubeMedia("rr3---sn-abc.googlevideo.com"))
         assertFalse(Hosts.isYouTubeMedia("googlevideo.com.evil.example"))
         assertFalse(Hosts.isYouTubeMedia(null))
+        // The visionOS player request goes to googleapis: its address family counts too.
+        assertTrue(Hosts.isYouTubeTraffic("youtubei.googleapis.com"))
+        assertTrue(Hosts.isYouTubeTraffic("rr3---sn-abc.googlevideo.com"))
+        assertFalse(Hosts.isYouTubeTraffic("www.googleapis.com"))
+        assertFalse(Hosts.isYouTubeTraffic("lrclib.net"))
     }
 
     @Test

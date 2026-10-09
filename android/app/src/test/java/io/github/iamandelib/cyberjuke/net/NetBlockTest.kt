@@ -38,6 +38,11 @@ class NetBlockTest {
         now = 0L
         repeat(3) { now = s2.trip(BlockReason.BOT_CHECK, now)!! }
         assertEquals(3 * min, s2.trip(BlockReason.BOT_CHECK, now + 60 * min)!! - (now + 60 * min))
+        // At the top (30 minutes), half an hour clean relaxes one step too: 10, not 30 again.
+        val top = BlockState()
+        now = 0L
+        repeat(5) { now = top.trip(BlockReason.BOT_CHECK, now)!! }
+        assertEquals(10 * min, top.trip(BlockReason.BOT_CHECK, now + 30 * min)!! - (now + 30 * min))
         // Hours later: back to the bottom.
         val s3 = BlockState()
         now = 0L

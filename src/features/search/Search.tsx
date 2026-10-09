@@ -76,11 +76,11 @@ function Bridge({ q, to = 'global' }: { q: string; to?: 'jukebox' | 'global' }) 
 }
 
 /** Shown while a Here list is still growing (an artist's full song list). */
-function HereLoading() {
+function HereLoading({ text = 'Searching all songs…' }: { text?: string }) {
   return (
     <p class="section-note dim here-loading" role="status" data-testid="here-loading">
       <span class="spinner" aria-hidden="true" />
-      Searching all songs…
+      {text}
     </p>
   );
 }
@@ -137,7 +137,14 @@ function PlaceResults({ q, ctx, places }: { q: string; ctx: SearchContext; place
   const hits = useMemo(() => (q.trim() ? searchTitles(places, (p) => p.name, q, MAX_PLACES) : all), [places, all, q]);
   const { shown, sentinel, more } = useChunks(hits.length, q.trim() ? null : `search:places:${ctx.label}`);
   const what = ctx.label.toLowerCase();
-  if (!places.length) return <HereLoading />;
+  if (!places.length) {
+    // The genres and artists come from the Jukebox: if it couldn't load, say so (and retry).
+    if (catalog.status.value === 'error') {
+      const err = catalog.error.value ?? { message: "Couldn't load the Jukebox.", offline: false };
+      return <ErrorState {...err} onRetry={() => void catalog.refresh()} />;
+    }
+    return <HereLoading text={`Loading ${what}…`} />;
+  }
   if (!hits.length) {
     return (
       <>

@@ -321,3 +321,14 @@
 .account-in .setting-name {
   overflow-wrap: anywhere;
 }
+
+/* The bundled third-party license texts: plain text, wrapped, selectable. */
+.license-text {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+}

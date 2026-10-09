@@ -3,6 +3,7 @@ package io.github.iamandelib.cyberjuke.playback
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
@@ -124,6 +125,11 @@ class PlaybackService : MediaSessionService() {
      */
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
+            // The new network's kind first: its IPv4 memory must apply before a lifted block
+            // resumes playback (onCapabilitiesChanged comes later).
+            runCatching { connectivity().getNetworkCapabilities(network) }.getOrNull()?.let {
+                if (NetPrefs.onNetwork(networkKey(it))) StreamResolver.clear()
+            }
             if (NetEpoch.onNetwork(network.toString())) onNetworkChanged(newNetwork = true)
         }
 
@@ -138,6 +144,8 @@ class PlaybackService : MediaSessionService() {
         }
     }
     private var networkCallbackRegistered = false
+
+    private fun connectivity() = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
     private fun networkKey(caps: NetworkCapabilities): String = when {
         caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> "vpn"
@@ -188,6 +196,12 @@ class PlaybackService : MediaSessionService() {
             return
         }
         if (!NetBlock.takeResume() || p.mediaItemCount == 0) return
+        // Another app is playing now: leave it be (and keep our audio focus request out of it).
+        val audio = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        if (audio?.isMusicActive == true) {
+            Log.i(TAG, "Back-off over, but other audio is playing: not resuming")
+            return
+        }
         Log.i(TAG, "Back-off over: resuming")
         when (p.playbackState) {
             Player.STATE_IDLE -> p.prepare()
@@ -202,6 +216,10 @@ class PlaybackService : MediaSessionService() {
         // Before anything touches the network: the IPv4 setting applies to extraction and streams.
         NetPrefsStore.load(this)
         NetBlock.add(blockListener)
+        // A back-off already running (the service was restarted): resume when it ends.
+        NetBlock.active().first.takeIf { it > 0L }?.let { until ->
+            handler.postDelayed(blockEnded, (until - System.currentTimeMillis()).coerceAtLeast(0L) + BLOCK_END_SLACK_MS)
+        }
         YtDataSpecResolver.allowCiTone = isDebuggable()
         try {
             (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
@@ -259,6 +277,8 @@ class PlaybackService : MediaSessionService() {
             p.playbackState == Player.STATE_ENDED || p.playbackState == Player.STATE_IDLE
         ) {
             Log.i(TAG, "Task removed while not playing: stopping service")
+            // Swiped away: nothing may start playing by itself later.
+            NetBlock.cancelResume()
             pauseAllPlayersAndStopSelf()
         }
     }
@@ -269,6 +289,7 @@ class PlaybackService : MediaSessionService() {
         handler.removeCallbacks(lowCheck)
         handler.removeCallbacks(blockEnded)
         NetBlock.remove(blockListener)
+        NetBlock.cancelResume()
         radioExecutor.shutdownNow()
         StreamResolver.cancelPrefetch()
         if (networkCallbackRegistered) {

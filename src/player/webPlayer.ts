@@ -4,6 +4,7 @@
  */
 import { signal } from '@preact/signals';
 import type { Track } from '../data/model';
+import { block } from '../stores/block';
 import { toast } from '../stores/toast';
 import { TEST_HOOKS } from '../core/testHooks';
 import { Queue } from './queue';
@@ -413,6 +414,8 @@ export class WebPlayer implements Player {
 
   async retryNow(): Promise<void> {
     if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['retryNow']);
+    // Native would answer with `unblocked`.
+    block.onUnblocked();
   }
 
   async netStatus(): Promise<NetStatus | null> {

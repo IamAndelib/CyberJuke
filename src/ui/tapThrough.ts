@@ -35,7 +35,8 @@ interface Press {
 let press: Press | null = null;
 let pendingFor: HTMLElement | null = null;
 let pendingTimer = 0;
-let supplied: { el: HTMLElement; at: number } | null = null;
+let supplied: { el: HTMLElement; at: number; x: number; y: number } | null = null;
+let pendingAt = { x: 0, y: 0 };
 
 /** The control a finger landed on, if it's one of the app's chrome controls. */
 export function tapThroughControl(target: EventTarget | null): HTMLElement | null {
@@ -78,11 +79,12 @@ if (typeof window !== 'undefined') {
       if (!p.el.isConnected || !p.el.contains(e.target as Node)) return;
       clearTimeout(pendingTimer);
       pendingFor = p.el;
+      pendingAt = { x: e.clientX, y: e.clientY };
       pendingTimer = window.setTimeout(() => {
         const el = pendingFor;
         pendingFor = null;
         if (!el || !el.isConnected || tapThroughControl(el) !== el) return;
-        supplied = { el, at: performance.now() };
+        supplied = { el, at: performance.now(), ...pendingAt };
         el.click();
       }, CLICK_WAIT_MS);
     },
@@ -97,9 +99,15 @@ if (typeof window !== 'undefined') {
         pendingFor = null;
         return;
       }
-      // A real click arriving after one was supplied for the same tap: drop it.
+      // A real click arriving after one was supplied for the same tap: drop it. Also when the
+      // supplied click already removed or moved the control (Back, Undo): then the late click
+      // lands where the finger was, on whatever is there now.
       const s = supplied;
-      if (s && e.detail > 0 && e.target instanceof Node && s.el.contains(e.target) && performance.now() - s.at < LATE_CLICK_MS) {
+      const same =
+        s != null &&
+        e.target instanceof Node &&
+        (s.el.contains(e.target) || Math.hypot(e.clientX - s.x, e.clientY - s.y) < TAP_SLOP_PX);
+      if (s && same && e.detail > 0 && performance.now() - s.at < LATE_CLICK_MS) {
         supplied = null;
         e.preventDefault();
         e.stopImmediatePropagation();

@@ -154,3 +154,17 @@ test('the CSP check catches a violation (self-test)', async ({ page, csp }) => {
   expect(csp.join('\n')).toMatch(/img-src/);
   csp.length = 0; // expected here; the fixture fails a test that leaves any
 });
+
+test('Here on the Genres tab says the Jukebox could not load (with Retry), not "searching" forever', async ({ page, backend }) => {
+  backend.offline = true;
+  await page.goto('/');
+  await page.context().setOffline(true);
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('search-fab').click();
+  await expect(page.getByTestId('here-loading')).toHaveCount(0);
+  await expect(page.getByTestId('search').getByTestId('offline')).toBeVisible();
+  backend.offline = false;
+  await page.context().setOffline(false);
+  await page.getByTestId('search').getByTestId('retry').click();
+  await expect(page.getByTestId('here-places').getByTestId('here-place').first()).toBeVisible();
+});
