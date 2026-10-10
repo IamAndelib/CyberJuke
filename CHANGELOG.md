@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-10
+
+### Build
+- The app builds with Debian's Node.js too, as F-Droid builds it (the Capacitor config is now plain JSON); the APK is the same either way. No changes in the app itself.
+
 ## [1.1.1] - 2026-10-10
 
 ### The app
