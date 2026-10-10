@@ -12,7 +12,11 @@
 
 const PROJECT_PATH = 'projects/cyberspace-cyberspace/databases/(default)/documents';
 
-export const AUTH_USER = { email: 'nightowl@example.com', password: 'correct horse battery', username: 'nightowl', uid: 'fakeUid0001' };
+export const AUTH_USER = { email: 'nightowl@example.com', password: 'correct horse battery', username: 'nightowl', uid: 'fakeUid0001', refreshToken: 'fake-refresh' };
+/** A second account, for what each account keeps apart from the other. */
+export const AUTH_USER_B = { email: 'moth@example.com', password: 'another battery staple', username: 'moth', uid: 'fakeUid0002', refreshToken: 'moth-refresh' };
+const AUTH_USERS = [AUTH_USER, AUTH_USER_B];
+export const authUser = (by: (u: typeof AUTH_USER) => boolean) => AUTH_USERS.find(by);
 
 /** Members-only posts, newer than every public post (newest first). */
 export const MEMBERS_POSTS = [

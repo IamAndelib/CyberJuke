@@ -1,4 +1,4 @@
-import { AUTH_USER, BANNED_POST, expect, MEMBERS_POSTS, test } from '../fixtures';
+import { AUTH_USER, AUTH_USER_B, BANNED_POST, expect, MEMBERS_POSTS, test } from '../fixtures';
 import type { Page } from '@playwright/test';
 import { playerCalls, seedStorage, start, toastsGone, waitForTracks } from '../helpers';
 
@@ -11,8 +11,8 @@ async function signIn(page: Page, email = AUTH_USER.email, password = AUTH_USER.
   await page.getByTestId('signin-submit').click();
 }
 
-/** Where members-only likes wait while signed out (the browser stand-in for the app file). */
-const AWAY = 'cyberjuke.file:data/cyberjuke/liked-away.json';
+/** Where members-only likes and plays wait while signed out, per account (the browser stand-in for the app file). */
+const KEPT = 'cyberjuke.file:data/cyberjuke/members-kept.json';
 
 const homeRow = (page: Page, title: string) =>
   page.getByTestId('screen-home').getByTestId('track-row').filter({ has: page.getByTestId('track-title').getByText(title, { exact: true }) });
@@ -125,45 +125,84 @@ test('signing in shows [members] posts in Latest, search and Now Playing; signin
   await expect(page.getByTestId('search-results').or(page.getByTestId('search-empty'))).toBeVisible();
   await expect(page.getByTestId('search').getByTestId('track-title').getByText(MEMBERS_POSTS[1].title)).toHaveCount(0);
   await expect
-    .poll(() => page.evaluate(([awayKey, ids]) => {
-      const { [awayKey]: away, ...rest } = { ...localStorage };
+    .poll(() => page.evaluate(([keptKey, ids]) => {
+      const { [keptKey]: kept, ...rest } = { ...localStorage };
       const all = JSON.stringify(rest);
-      return ids.some((id) => all.includes(id)) || all.includes('cyberjuke/catalog-members.json') || !away?.includes(ids[0]);
-    }, [AWAY, MEMBERS_POSTS.map((p) => p.id)] as const))
+      return ids.some((id) => all.includes(id)) || all.includes('cyberjuke/catalog-members.json') || !kept?.includes(ids[0]);
+    }, [KEPT, MEMBERS_POSTS.map((p) => p.id)] as const))
     .toBe(false);
   expect(backend.calls.members).toBe(before);
   await toastsGone(page);
 });
 
-test('a members-only like comes back, in its place, when the same account signs in again', async ({ page }) => {
-  await start(page);
-  await signIn(page);
-  await expect(page.getByTestId('signed-in')).toBeVisible();
-  await page.getByTestId('tab-home').click();
-  await waitForTracks(page);
-  // Liked: a public track, then a members-only one on top of it.
-  const firstPublic = page.getByTestId('screen-home').getByTestId('track-row').nth(MEMBERS_POSTS.length);
-  const publicTitle = (await firstPublic.getByTestId('track-title').textContent())!;
-  for (const row of [firstPublic, homeRow(page, MEMBERS_POSTS[0].title)]) {
-    await row.getByTestId('track-more').click();
-    await page.getByTestId('menu-like').click();
-  }
+test('members-only likes and plays come back for the account that had them, and only for it', async ({ page }) => {
   const liked = page.getByTestId('liked-list').getByTestId('track-title');
-  await page.getByTestId('tab-library').click();
-  await expect(liked).toHaveText([MEMBERS_POSTS[0].title, publicTitle]);
+  const recent = page.getByTestId('recent-list').getByTestId('track-title');
+  /** Like these rows on Home (in this order), then play the last one. */
+  const likeAndPlay = async (titles: string[]) => {
+    await page.getByTestId('tab-home').click();
+    await waitForTracks(page);
+    for (const t of titles) {
+      await homeRow(page, t).getByTestId('track-more').click();
+      await page.getByTestId('menu-like').click();
+    }
+    await homeRow(page, titles.at(-1)!).getByTestId('track-play').click();
+    await expect(page.getByTestId('mini-title')).toHaveText(titles.at(-1)!);
+  };
+  const library = async () => {
+    await page.getByTestId('tab-library').click();
+    await page.getByTestId('lib-liked').click();
+    const l = await liked.allTextContents();
+    await page.getByTestId('lib-recent').click();
+    const r = await recent.allTextContents();
+    return { liked: l.map((x) => x.trim()), recent: r.map((x) => x.trim()) };
+  };
+  const signOut = async () => {
+    await page.getByTestId('tab-settings').click();
+    await page.getByTestId('signout').click();
+    await page.getByTestId('confirm-ok').click();
+    await expect(page.getByTestId('signin-form')).toBeVisible();
+  };
+  const signInAs = async (u: { email: string; password: string; username: string }) => {
+    await signIn(page, u.email, u.password);
+    await expect(page.getByTestId('account-name')).toHaveText('@' + u.username);
+  };
+  const [a, b] = [MEMBERS_POSTS[0].title, MEMBERS_POSTS[1].title];
 
-  await page.getByTestId('tab-settings').click();
-  await page.getByTestId('signout').click();
-  await page.getByTestId('confirm-ok').click();
-  await expect(page.getByTestId('signin-form')).toBeVisible();
-  await page.getByTestId('tab-library').click();
-  await expect(liked).toHaveText([publicTitle]);
+  await start(page);
+  const publicTitle = (await page.getByTestId('screen-home').getByTestId('track-title').first().textContent())!.trim();
+  // Account A: a public like, then a members-only one on top, played.
+  await signInAs(AUTH_USER);
+  await likeAndPlay([publicTitle, a]);
+  expect(await library()).toMatchObject({ liked: [a, publicTitle], recent: [a] });
 
-  await signIn(page);
-  await expect(page.getByTestId('signed-in')).toBeVisible();
-  await page.getByTestId('tab-library').click();
-  await expect(liked).toHaveText([MEMBERS_POSTS[0].title, publicTitle]);
-  await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), AWAY)).toBeNull();
+  // (Signed out, the queue goes on to the next public track: that one is played too.)
+  await signOut();
+  let lib = await library();
+  expect(lib.liked).toEqual([publicTitle]);
+  expect(lib.recent).not.toContain(a);
+
+  // Account B sees none of A's, and keeps its own.
+  await signInAs(AUTH_USER_B);
+  lib = await library();
+  expect(lib.liked).toEqual([publicTitle]);
+  expect(lib.recent).not.toContain(a);
+  await likeAndPlay([b]);
+  lib = await library();
+  expect(lib.liked).toEqual([b, publicTitle]);
+  expect(lib.recent[0]).toBe(b);
+  await signOut();
+
+  // A again: A's like (in its place) and play, never B's.
+  await signInAs(AUTH_USER);
+  await expect.poll(async () => (await library()).liked).toEqual([a, publicTitle]);
+  lib = await library();
+  expect(lib.recent).toContain(a);
+  expect(lib.recent).not.toContain(b);
+  // B's are still kept for B, A's no longer (they're back in the app).
+  const kept = () => page.evaluate((k) => localStorage.getItem(k) ?? '', KEPT);
+  await expect.poll(kept).toContain(AUTH_USER_B.uid);
+  expect(await kept()).not.toContain(AUTH_USER.uid);
 });
 
 test('signed out at startup: members-only tracks restored from a backup are dropped', async ({ page }) => {

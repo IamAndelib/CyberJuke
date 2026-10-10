@@ -1,4 +1,4 @@
-- Members-only tracks you liked come back when you sign in again with the same account.
+- Members-only tracks you liked or played come back when you sign in again, kept apart for each account.
 - No notification permission prompt.
 - Seek bar: a scroll that starts on it no longer moves the thumb.
 - Swiping Now Playing down closes it in one motion.

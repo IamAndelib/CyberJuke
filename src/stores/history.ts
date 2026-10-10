@@ -36,6 +36,12 @@ export function pruneHistory(entries: HistoryEntry[], now: number): HistoryEntry
   return sorted.slice(0, Math.min(HISTORY_MAX, recentCount + HISTORY_EXTRA));
 }
 
+/** Only the plays within the last HISTORY_DAYS days (none of the older extras pruneHistory keeps). */
+export function withinHistoryDays(entries: HistoryEntry[], now: number): HistoryEntry[] {
+  const cutoff = now - HISTORY_DAYS * DAY_MS;
+  return entries.filter((e) => e.playedAt >= cutoff);
+}
+
 /** Record a play. Returns the same array when nothing changes (already on top today). */
 export function addPlay(entries: HistoryEntry[], track: Track, now: number): HistoryEntry[] {
   const today = dayKey(now);

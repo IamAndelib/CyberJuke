@@ -7,8 +7,8 @@
   - sharedpref/cyberjuke_secure.xml: the SecureStore ciphertext (Cyberspace refresh token). Its
     Keystore key never leaves the device, so a copy is useless elsewhere anyway.
   - files/cyberjuke/: the web side's data files (catalog-public.json, catalog-members.json,
-    history.json, liked.json, liked-away.json: members-only likes kept for their account's next
-    sign-in). The members-only catalog, and history and liked tracks that can contain
+    history.json, liked.json, members-kept.json: each account's members-only likes and plays,
+    kept for its next sign-in). The members-only catalog, and history and liked tracks that can contain
     members-only tracks, must not end up in a cloud backup or on another device. (Liked was in
     CapacitorStorage.xml before 1.1.1; the app moves it on first start.)
   - sharedpref/last_session.xml: where in the last queue playback was. The queue itself is in

@@ -5,7 +5,7 @@
 ## [1.1.1] - 2026-10-10
 
 ### The app
-- Members-only tracks you liked come back to Liked, where they were, when you sign in again with the same account (signing out hides them; they wait on the phone, outside backups, and signing in with another account deletes them).
+- Members-only tracks you liked or played come back when you sign in again: to Liked where they were, and to Recently played (plays from its last 3 days). Signing out hides them; they wait on the phone, outside backups, apart for each account, so signing in with another account shows none of them and deletes none of them.
 - No notification permission prompt on the first play: the playback controls don't need it.
 
 ### Fixed

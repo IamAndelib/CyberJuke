@@ -14,7 +14,7 @@ import { stubMusic, type MusicStubOptions } from './music';
 import { stubYouTube } from './youtube';
 
 export { expect };
-export { ATTACHMENT_ONLY_GENRE, AUTH_USER, BANNED_POST, MEMBERS_POSTS } from './data';
+export { ATTACHMENT_ONLY_GENRE, AUTH_USER, AUTH_USER_B, BANNED_POST, MEMBERS_POSTS } from './data';
 export type { Backend } from './backend';
 
 interface Options {

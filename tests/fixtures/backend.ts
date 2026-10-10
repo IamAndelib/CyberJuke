@@ -1,5 +1,5 @@
 import type { Page, Route } from '@playwright/test';
-import { AUTH_USER, buildDataset, type Dataset } from './data';
+import { authUser, buildDataset, type Dataset } from './data';
 import { isPublicQuery, runQuery, type StructuredQuery } from './firestore';
 
 /**
@@ -65,28 +65,32 @@ export async function stubBackend(page: Page, opts: BackendOptions = {}): Promis
     if (String(body.email).startsWith('offline')) return route.abort('internetdisconnected');
     if (String(body.email).startsWith('busy'))
       return route.fulfill(json(400, { error: { code: 400, message: 'TOO_MANY_ATTEMPTS_TRY_LATER : Access to this account has been temporarily disabled' } }));
-    if (body.email !== AUTH_USER.email || body.password !== AUTH_USER.password)
-      return route.fulfill(json(400, { error: { code: 400, message: 'INVALID_LOGIN_CREDENTIALS' } }));
+    const user = authUser((u) => u.email === body.email && u.password === body.password);
+    if (!user) return route.fulfill(json(400, { error: { code: 400, message: 'INVALID_LOGIN_CREDENTIALS' } }));
     const idToken = `fake-id-${++issued}`;
     valid.add(idToken);
-    return route.fulfill(json(200, { idToken, refreshToken: 'fake-refresh', expiresIn: '3600', localId: AUTH_USER.uid, email: AUTH_USER.email, registered: true }));
+    return route.fulfill(json(200, { idToken, refreshToken: user.refreshToken, expiresIn: '3600', localId: user.uid, email: user.email, registered: true }));
   });
 
   await page.route(/^https:\/\/securetoken\.googleapis\.com\//, async (route) => {
     if (preflight(route)) return;
     b.calls.refresh++;
     const form = new URLSearchParams(route.request().postData() ?? '');
-    if (form.get('grant_type') !== 'refresh_token' || form.get('refresh_token') !== 'fake-refresh')
+    const user = authUser((u) => u.refreshToken === form.get('refresh_token'));
+    if (form.get('grant_type') !== 'refresh_token' || !user)
       return route.fulfill(json(400, { error: { code: 400, message: 'INVALID_REFRESH_TOKEN' } }));
     const idToken = `fake-id-${++issued}`;
     valid.add(idToken);
-    return route.fulfill(json(200, { id_token: idToken, refresh_token: 'fake-refresh', expires_in: '3600', user_id: AUTH_USER.uid }));
+    return route.fulfill(json(200, { id_token: idToken, refresh_token: user.refreshToken, expires_in: '3600', user_id: user.uid }));
   });
 
   await page.route(/^https:\/\/firestore\.googleapis\.com\/v1\/projects\/[^/]+\/databases\/\(default\)\/documents\/users\//, async (route) => {
     if (preflight(route)) return;
     b.calls.userDoc++;
-    return route.fulfill(json(200, { name: 'users/' + AUTH_USER.uid, fields: { username: { stringValue: AUTH_USER.username } } }));
+    const uid = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() ?? '');
+    const user = authUser((u) => u.uid === uid);
+    if (!user) return route.fulfill(json(404, { error: { code: 404, message: 'NOT_FOUND' } }));
+    return route.fulfill(json(200, { name: 'users/' + user.uid, fields: { username: { stringValue: user.username } } }));
   });
 
   await page.route(/^https:\/\/firestore\.googleapis\.com\/.*:runQuery/, async (route) => {

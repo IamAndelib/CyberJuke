@@ -60,7 +60,8 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] Sign in: tracks marked **[members]** appear.
 - [ ] Close the app completely and reopen it: you're still signed in.
 - [ ] Sign out: the [members] tracks disappear everywhere, including Liked and the queue.
-- [ ] Sign in again with the same account: the [members] tracks you had liked are back in Liked, where they were.
+- [ ] Sign in again with the same account: the [members] tracks you had liked are back in Liked, where they were, and the ones you played are back in Recently played.
+- [ ] With a second account: sign out, sign in as the other one (none of the first account's [members] likes or plays show), like and play something, sign out, and sign in as the first again: its own are back, the other's aren't.
 
 ## Rough conditions
 - [ ] Airplane mode: an offline notice appears. Airplane mode off: lists load again by themselves.

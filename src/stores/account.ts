@@ -3,8 +3,9 @@
  * the source cache, the Jukebox feeds, the new-tracks baseline and both saved catalogs,
  * then fetches the whole catalog again for the new state. Signing out (and starting
  * signed out) also drops members-only tracks from Liked, history and the lyrics cache;
- * that account's members-only likes come back when it signs in again. While signed in, genre pages
- * read the catalog (exact genre match), since the members query has no genre filter.
+ * each account's members-only likes and plays come back when it signs in again. While
+ * signed in, genre pages read the catalog (exact genre match), since the members query
+ * has no genre filter.
  */
 import { auth } from '../data/auth';
 import { source } from '../data';
@@ -57,7 +58,7 @@ export function startAccount(): void {
   auth.onChange((signedIn, reason) => {
     if (!signedIn) {
       // Members-only posts leave the app after signing out (S8), and no Undo on screen
-      // brings them back; only that account's likes wait, out of sight, for its next sign-in.
+      // brings them back; only that account's likes and plays wait, out of sight, for its next sign-in.
       dropToastActions((a) => a.membersOnly === true);
       dropMembersOnly(uid);
       void lyrics.dropMembersOnly();

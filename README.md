@@ -104,7 +104,7 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 
 | What | Where |
 |---|---|
-| Liked tracks and recently played | App files, excluded from backups (they can hold members-only tracks). Signing out removes members-only tracks from both; your members-only likes are kept on the phone, out of sight, and come back when you sign in again with the same account (signing in with another account deletes them) |
+| Liked tracks and recently played | App files, excluded from backups (they can hold members-only tracks). Signing out removes members-only tracks from both. They are kept on the phone, out of sight and apart for each account, and come back when that account signs in again: likes always, plays while they are still within Recently played's 3 days |
 | Settings, favourite genres and artists, recent searches | App data (Capacitor Preferences). Android may include these in your own Google backup |
 | The cached Jukebox catalog and lyrics | App data and cache. The catalog is dropped on sign-in and sign-out; signing out drops members-only tracks' lyrics |
 | What was playing last (the queue and where in it), so the app reopens on it | App files, excluded from backups; signing out removes members-only tracks from it |

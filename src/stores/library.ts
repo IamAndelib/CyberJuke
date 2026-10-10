@@ -11,7 +11,7 @@ import { artistKey } from '../data/artists';
 import { auth } from '../data/auth';
 import { asTrack, asTracks } from '../core/guards';
 import { jsonFile, kv, readJson, type JsonFile, type KV } from '../core/storage';
-import { addPlay, dayKey, decodeHistory, encodeHistory, pruneHistory, uniqueTracks, type HistoryEntry } from './history';
+import { addPlay, dayKey, decodeHistory, encodeHistory, pruneHistory, uniqueTracks, withinHistoryDays, type HistoryEntry } from './history';
 
 export const THEMES = ['dark', 'light', 'c64', 'vt320', 'matrix', 'crypt', 'bubblegum', 'brutalist'] as const;
 export type ThemeId = (typeof THEMES)[number];
@@ -97,8 +97,8 @@ export const likedIds = computed(() => new Set(liked.value.map((t) => t.id)));
 let store: KV = kv;
 let historyFile: JsonFile<unknown> = jsonFile('data', 'history', (raw) => raw, { legacyKeys: HISTORY_LEGACY_KEYS });
 let likedFile: JsonFile<unknown> = jsonFile('data', 'liked', (raw) => raw, { legacyKeys: LIKED_LEGACY_KEYS });
-/** Members-only likes kept while signed out, for the account that liked them (dropMembersOnly). */
-const awayFile: JsonFile<unknown> = jsonFile('data', 'liked-away', (raw) => raw);
+/** Members-only likes and plays kept while signed out, per account (dropMembersOnly). */
+const keptFile: JsonFile<unknown> = jsonFile('data', 'members-kept', (raw) => raw);
 
 /** Tests: use other storage. */
 export function setLibraryStorage(s: KV, history: JsonFile<unknown>, likes: JsonFile<unknown> = likedFile): void {
@@ -359,72 +359,110 @@ export function restoreHistory(old: HistoryEntry[], now = Date.now()): void {
   saveHistory(history.value);
 }
 
-/** Members-only likes put away at a sign-out: whose they are, and where each one was. */
-interface Away {
-  v: 1;
-  uid: string;
-  removed: Removed<Track>[];
+/** One account's members-only records put away at a sign-out: likes with where each one was, and plays. */
+interface KeptAccount {
+  liked: Removed<Track>[];
+  plays: HistoryEntry[];
 }
 
-function asAway(raw: unknown): Away | null {
-  const o = raw as Partial<Away> | null;
-  if (!o || o.v !== 1 || typeof o.uid !== 'string' || !Array.isArray(o.removed)) return null;
-  const removed: Removed<Track>[] = [];
-  for (const r of o.removed as Partial<Removed<unknown>>[]) {
+function asRemovedTracks(x: unknown): Removed<Track>[] {
+  const out: Removed<Track>[] = [];
+  for (const r of Array.isArray(x) ? (x as Partial<Removed<unknown>>[]) : []) {
     const item = asTrack(r?.item);
     if (!item || typeof r.index !== 'number') continue;
-    removed.push({ item, index: r.index, ...(typeof r.next === 'string' && { next: r.next }), ...(typeof r.prev === 'string' && { prev: r.prev }) });
+    out.push({ item, index: r.index, ...(typeof r.next === 'string' && { next: r.next }), ...(typeof r.prev === 'string' && { prev: r.prev }) });
   }
-  return { v: 1, uid: o.uid, removed };
+  return out;
 }
 
-/** The away file's reads and writes, one at a time, in call order. */
-let awayJob: Promise<void> = Promise.resolve();
-const queueAway = (job: () => Promise<void>): Promise<void> => (awayJob = awayJob.then(job, job));
+/** The kept file by account uid; anything unreadable reads as nothing kept. */
+function asKept(raw: unknown, now: number): Map<string, KeptAccount> {
+  const out = new Map<string, KeptAccount>();
+  const o = raw as { v?: unknown; accounts?: unknown } | null;
+  if (!o || o.v !== 1 || !o.accounts || typeof o.accounts !== 'object') return out;
+  for (const [uid, a] of Object.entries(o.accounts as Record<string, { liked?: unknown; plays?: unknown } | null>)) {
+    const entry = { liked: asRemovedTracks(a?.liked), plays: withinHistoryDays(decodeHistory(a?.plays, now), now) };
+    if (entry.liked.length || entry.plays.length) out.set(uid, entry);
+  }
+  return out;
+}
+
+async function loadKept(now: number): Promise<Map<string, KeptAccount>> {
+  return asKept(await keptFile.load().catch(() => null), now);
+}
+
+/** Writes what is kept; plays past the history's days go (no account keeps them longer). */
+async function saveKept(kept: Map<string, KeptAccount>, now: number): Promise<void> {
+  const accounts: Record<string, { liked: Removed<Track>[]; plays: unknown }> = {};
+  for (const [uid, a] of kept) {
+    const plays = withinHistoryDays(a.plays, now);
+    if (a.liked.length || plays.length) accounts[uid] = { liked: a.liked, plays: encodeHistory(plays) };
+  }
+  if (Object.keys(accounts).length) await keptFile.save({ v: 1, accounts });
+  else await keptFile.remove();
+}
+
+/** The kept file's reads and writes, one at a time, in call order. */
+let keptJob: Promise<void> = Promise.resolve();
+const queueKept = (job: () => Promise<void>): Promise<void> => (keptJob = keptJob.then(job, job));
 
 /**
  * Signed out of Cyberspace: members-only tracks leave Liked and history (they can't be
- * opened signed out). [uid], the account just signed out: its members-only likes are kept
- * on the phone (in a file outside backups, like Liked) and come back when it signs in again
- * (returnMembersOnly). Unknown (null), they go for good. Members-only plays always go.
+ * opened signed out). [uid], the account just signed out: its members-only likes and plays
+ * are kept on the phone for it, apart from every other account's (in a file outside
+ * backups, like Liked and history), and come back when it signs in again
+ * (returnMembersOnly). Unknown (null), they go for good.
  */
 export function dropMembersOnly(uid: string | null = null): void {
   const all = liked.value;
+  const likes = uid ? all.flatMap((t, i) => (t.membersOnly ? [removedFrom(all, i, trackId)] : [])) : [];
+  const plays = uid ? history.value.filter((e) => e.track.membersOnly) : [];
   if (all.some((t) => t.membersOnly)) {
-    const removed = uid ? all.flatMap((t, i) => (t.membersOnly ? [removedFrom(all, i, trackId)] : [])) : [];
     liked.value = all.filter((t) => !t.membersOnly);
     saveLiked(liked.value);
-    if (uid && removed.length) {
-      void queueAway(async () => {
-        const kept = asAway(await awayFile.load().catch(() => null));
-        // Another account's: replaced. The same one's (signed out twice): both kept.
-        const before = kept?.uid === uid ? kept.removed.filter((r) => !removed.some((x) => x.item.id === r.item.id)) : [];
-        await awayFile.save({ v: 1, uid, removed: [...removed, ...before] } satisfies Away);
-      });
-    }
   }
   if (history.value.some((e) => e.track.membersOnly)) {
     history.value = history.value.filter((e) => !e.track.membersOnly);
     saveHistory(history.value);
   }
+  if (!uid || (!likes.length && !plays.length)) return;
+  void queueKept(async () => {
+    const now = Date.now();
+    const kept = await loadKept(now);
+    // Signed out twice without signing in again in between: both sign-outs' records are kept.
+    const before = kept.get(uid);
+    kept.set(uid, {
+      liked: [...likes, ...(before?.liked ?? []).filter((r) => !likes.some((x) => x.item.id === r.item.id))],
+      plays: mergeHistory(plays, before?.plays ?? [], now),
+    });
+    await saveKept(kept, now);
+  });
 }
 
 /**
- * Signed in as [uid]: its members-only likes from before the last sign-out go back where
- * they were. Another account's are deleted unread.
+ * Signed in as [uid]: its members-only likes from before its last sign-out go back where
+ * they were, and its plays back into history (those still within its days). Every other
+ * account's stay kept for it.
  */
 export function returnMembersOnly(uid: string): Promise<void> {
-  return queueAway(async () => {
-    const away = asAway(await awayFile.load().catch(() => null));
-    if (!away) return;
-    await awayFile.remove();
-    if (away.uid !== uid) return;
+  return queueKept(async () => {
+    const now = Date.now();
+    const kept = await loadKept(now);
+    const mine = kept.get(uid);
+    if (!mine) return;
+    kept.delete(uid);
+    await saveKept(kept, now);
     let list = liked.value;
     // In their old order: each finds the neighbour it had, or the one put back before it.
-    for (const r of away.removed) if (!list.some((t) => t.id === r.item.id)) list = putBack(list, r, trackId);
-    if (list === liked.value) return;
-    liked.value = list;
-    saveLiked(list);
+    for (const r of mine.liked) if (!list.some((t) => t.id === r.item.id)) list = putBack(list, r, trackId);
+    if (list !== liked.value) {
+      liked.value = list;
+      saveLiked(list);
+    }
+    if (mine.plays.length) {
+      history.value = mergeHistory(history.value, mine.plays, now);
+      saveHistory(history.value);
+    }
   });
 }
 
