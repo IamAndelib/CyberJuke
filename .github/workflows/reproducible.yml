@@ -8,9 +8,15 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to check (e.g. v1.0.0)'
+        description: 'Release tag to check (e.g. v1.0.0); with against = pinned-node, any branch or commit'
         required: true
         type: string
+      against:
+        description: "release: the signed APK on that tag's release. pinned-node: a build of the same commit with the pinned Node.js (needs debian_node)"
+        required: false
+        default: release
+        type: choice
+        options: [release, pinned-node]
       debian_node:
         description: "Build the web part with Debian's nodejs from this suite instead (e.g. trixie-backports), as the F-Droid recipe can"
         required: false
@@ -24,6 +30,7 @@ env:
   JAVA_VERSION: '21'
   TAG: ${{ inputs.tag }}
   DEBIAN_NODE: ${{ inputs.debian_node }}
+  AGAINST: ${{ inputs.against }}
   # The image F-Droid's buildserver runs (the recipe adds trixie for JDK 21).
   DEBIAN_IMAGE: debian:bookworm
 
@@ -35,15 +42,18 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Check the tag name
+      - name: Check the inputs
         run: |
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+          if [[ "$AGAINST" == pinned-node ]]; then
+            [[ -n "$DEBIAN_NODE" ]] || { echo "::error::against = pinned-node compares with debian_node: set it"; exit 1; }
+            [[ "$TAG" =~ ^[0-9A-Za-z._/-]+$ ]] || { echo "::error::'$TAG' is not a ref"; exit 1; }
+          elif [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::'$TAG' is not a release tag like v1.0.0"; exit 1
           fi
 
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          ref: refs/tags/${{ inputs.tag }}
+          ref: ${{ inputs.against == 'pinned-node' && inputs.tag || format('refs/tags/{0}', inputs.tag) }}
           persist-credentials: false
 
       # The checking scripts as of this workflow's commit (older tags may not have them).
@@ -67,6 +77,25 @@ jobs:
       - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
         with:
           cache-disabled: true
+
+      # against = pinned-node: first the build the Release workflow makes (pinned Node.js),
+      # kept as the reference, then the tree is cleaned for the Debian one below.
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        if: env.AGAINST == 'pinned-node'
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Reference build with the pinned Node.js ${{ env.NODE_VERSION }}
+        if: env.AGAINST == 'pinned-node'
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+          npx cap sync android --deployment
+          bash scripts/jitpack-warm.sh
+          (cd android && bash ../scripts/gradlew-retry.sh assembleRelease --stacktrace)
+          mkdir -p "$RUNNER_TEMP/ref"
+          mv android/app/build/outputs/apk/release/*.apk "$RUNNER_TEMP/ref/CyberJuke-pinned.apk"
+          git clean -xdfq -e .ci
+          (cd android && ./gradlew --stop) || true
 
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         if: env.DEBIAN_NODE == ''
@@ -134,6 +163,7 @@ jobs:
           fi
 
       - name: Download the signed APK from the release
+        if: env.AGAINST != 'pinned-node'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -141,7 +171,21 @@ jobs:
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'CyberJuke-*.apk' --dir signed
           ls -l signed
 
+      - name: Compare with the pinned Node.js build
+        if: env.AGAINST == 'pinned-node'
+        run: |
+          shopt -s nullglob
+          unsigned=(android/app/build/outputs/apk/release/*.apk)
+          mkdir -p signed && cp "$RUNNER_TEMP/ref/CyberJuke-pinned.apk" signed/
+          (( ${#unsigned[@]} == 1 )) || { echo "::error::Expected one unsigned APK"; exit 1; }
+          if cmp -s signed/CyberJuke-pinned.apk "${unsigned[0]}"; then
+            echo "::notice title=Same APK::Debian's nodejs ($DEBIAN_NODE) builds $TAG byte for byte like Node.js $NODE_VERSION."
+          else
+            echo "::error title=Different APK::Debian's nodejs ($DEBIAN_NODE) and Node.js $NODE_VERSION build different APKs."; exit 1
+          fi
+
       - name: Compare (apksigcopier)
+        if: env.AGAINST != 'pinned-node'
         run: |
           shopt -s nullglob
           unsigned=(android/app/build/outputs/apk/release/*.apk)
