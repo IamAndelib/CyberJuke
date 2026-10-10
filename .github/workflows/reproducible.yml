@@ -98,9 +98,15 @@ jobs:
             apt-get update -qq
             apt-get install -y -qq -t "$SUITE" nodejs npm >/dev/null
             echo "::notice title=Node used::$(node --version), npm $(npm --version), from $SUITE"
-            npm ci --ignore-scripts
-            npm run build
-            npx cap sync android --deployment
+            # A failure says where, as annotations (the job log may not be at hand).
+            run() {
+              "$@" > /tmp/out.txt 2>&1 && return 0
+              tail -n 15 /tmp/out.txt | while IFS= read -r l; do echo "::error title=$1 $2 failed::${l:0:300}"; done
+              exit 1
+            }
+            run npm ci --ignore-scripts
+            run npm run build
+            run npx cap sync android --deployment
             chown -R "$HOST_ID" /w
           '
       - name: Wait for JitPack to build the pinned NewPipeExtractor
