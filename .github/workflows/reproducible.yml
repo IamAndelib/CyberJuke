@@ -31,8 +31,8 @@ env:
   TAG: ${{ inputs.tag }}
   DEBIAN_NODE: ${{ inputs.debian_node }}
   AGAINST: ${{ inputs.against }}
-  # The image F-Droid's buildserver runs (the recipe adds trixie for JDK 21).
-  DEBIAN_IMAGE: debian:bookworm
+  # The Debian F-Droid's buildserver runs (JDK 21 is its default, so trixie).
+  DEBIAN_IMAGE: debian:trixie
 
 jobs:
   compare:
