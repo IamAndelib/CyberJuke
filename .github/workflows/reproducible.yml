@@ -11,6 +11,11 @@ on:
         description: 'Release tag to check (e.g. v1.0.0)'
         required: true
         type: string
+      debian_node:
+        description: "Build the web part with Debian's nodejs from this suite instead (e.g. trixie-backports), as the F-Droid recipe can"
+        required: false
+        default: ''
+        type: string
 
 permissions: {}
 
@@ -18,6 +23,9 @@ env:
   NODE_VERSION: '22.22.0' # exact: the F-Droid recipe pins the same build (reproducible APKs)
   JAVA_VERSION: '21'
   TAG: ${{ inputs.tag }}
+  DEBIAN_NODE: ${{ inputs.debian_node }}
+  # The image F-Droid's buildserver runs (the recipe adds trixie for JDK 21).
+  DEBIAN_IMAGE: debian:bookworm
 
 jobs:
   compare:
@@ -61,12 +69,40 @@ jobs:
           cache-disabled: true
 
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        if: env.DEBIAN_NODE == ''
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - run: npm ci --ignore-scripts
-      - run: npm run build
-      - run: npx cap sync android --deployment
+      - if: env.DEBIAN_NODE == ''
+        run: npm ci --ignore-scripts
+      - if: env.DEBIAN_NODE == ''
+        run: npm run build
+      - if: env.DEBIAN_NODE == ''
+        run: npx cap sync android --deployment
+
+      # The F-Droid recipe's way: nodejs and npm from a Debian suite, in the buildserver's image.
+      - name: Web build with Debian's nodejs (${{ env.DEBIAN_NODE }})
+        if: env.DEBIAN_NODE != ''
+        run: |
+          [[ "$DEBIAN_NODE" =~ ^[a-z]+(-[a-z]+)?$ ]] || { echo "::error::'$DEBIAN_NODE' is not a Debian suite name"; exit 1; }
+          docker run --rm -v "$PWD:/w" -w /w -e SUITE="$DEBIAN_NODE" -e HOST_ID="$(id -u):$(id -g)" "$DEBIAN_IMAGE" bash -ec '
+            for s in bookworm-backports trixie trixie-backports forky sid; do
+              echo "deb http://deb.debian.org/debian $s main" > /etc/apt/sources.list.d/$s.list
+            done
+            apt-get update -qq
+            for s in bookworm bookworm-backports trixie trixie-backports forky sid; do
+              v=$(apt-cache madison nodejs | grep " $s/main " | head -n 1 | cut -d"|" -f2 | tr -d " ")
+              echo "::notice title=Debian nodejs::$s: ${v:-none}"
+            done
+            find /etc/apt/sources.list.d -name "*.list" ! -name "$SUITE.list" -delete
+            apt-get update -qq
+            apt-get install -y -qq -t "$SUITE" nodejs npm >/dev/null
+            echo "::notice title=Node used::$(node --version), npm $(npm --version), from $SUITE"
+            npm ci --ignore-scripts
+            npm run build
+            npx cap sync android --deployment
+            chown -R "$HOST_ID" /w
+          '
       - name: Wait for JitPack to build the pinned NewPipeExtractor
         run: bash scripts/jitpack-warm.sh
 
