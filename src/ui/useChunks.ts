@@ -53,8 +53,7 @@ export function useChunks(total: number, key: string | null, step = CHUNK, opts:
     const io = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && grow(), { rootMargin: '800px 0px' });
     io.observe(el);
     return () => io.disconnect();
-    // `grow` reads only total/step/key, all listed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `grow` reads only total/step/key, all listed.
   }, [shown, total, key, step, opts.fill]);
 
   return { shown, sentinel, more: shown < total };

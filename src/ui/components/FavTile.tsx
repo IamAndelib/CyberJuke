@@ -22,7 +22,7 @@ function tooSoon(e: MouseEvent): boolean {
 /** Starred from the keyboard: focus goes to the same star in its new place, scrolled to. */
 function refocus(screen: Element | null, kind: TileKind, name: string): void {
   requestAnimationFrame(() => {
-    const sel = `[data-testid="${kind}-fav"][data-${kind}="${CSS.escape(name)}"]`;
+    const sel = `.genre-fav[data-${kind}="${CSS.escape(name)}"]`;
     const star = (screen ?? document).querySelector<HTMLElement>(sel);
     star?.focus({ preventScroll: true });
     star?.scrollIntoView({ block: 'nearest' });

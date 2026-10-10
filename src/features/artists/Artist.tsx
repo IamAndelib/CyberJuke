@@ -32,8 +32,9 @@ import {
   type ArtistPageMeta,
   type TopCursor,
 } from '../../ui/components/Music';
-import { feeds, fillFeed, isFilling, type Feed } from '../../stores/feed';
+import { feedKey, feeds, fillFeed, isFilling, type Feed } from '../../stores/feed';
 import { useFeed } from '../../ui/usePaged';
+import { plural } from '../../core/text';
 
 function ShelfSkeleton() {
   return (
@@ -64,7 +65,7 @@ export function ArtistPage({ name: raw }: { name: string }) {
   const catalogFailed = !catalogReady && catalog.status.value === 'error';
   const ctx = listCtx(name);
 
-  const page = useFeed(`artistpage:${key}`, artistPageLoader(name), MUSIC_TRACK_OPTS);
+  const page = useFeed(feedKey.artistPage(key), artistPageLoader(name), MUSIC_TRACK_OPTS);
   useArtistHere(name, page.feed);
   const meta = page.snap.meta;
   const failed = page.snap.status === 'error';
@@ -86,7 +87,7 @@ export function ArtistPage({ name: raw }: { name: string }) {
       <section data-testid="artist-jukebox">
         <div class="section-head">
           <h2 class="section-title">Shared on the Jukebox</h2>
-          {jukebox.length > 0 && <span class="dim small">{`${jukebox.length} track${jukebox.length === 1 ? '' : 's'}`}</span>}
+          {jukebox.length > 0 && <span class="dim small">{plural(jukebox.length, 'track')}</span>}
         </div>
         {catalogFailed ? (
           // P7: a failed catalog says so and offers Retry, instead of an endless skeleton.
@@ -187,8 +188,7 @@ function useArtistHere(name: string, page: Feed<Track, TopCursor, ArtistPageMeta
       offPage();
       offSongs?.();
     };
-    // `songsKey` is fixed for a given `songs` feed, and `rev` is a stable signal (written, not read).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `songsKey` is fixed for a given `songs` feed, and `rev` is a stable signal (written, not read).
   }, [page, songs]);
 
   const merged = useRef<{ inputs: Track[][]; out: Track[] } | null>(null);

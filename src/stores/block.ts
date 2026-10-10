@@ -12,6 +12,7 @@
  */
 import { computed, signal, type ReadonlySignal } from '@preact/signals';
 import type { BlockReason, BlockedEvent } from '../player/native';
+import type { NetStatus } from '../player/types';
 
 interface BlockState {
   until: number;
@@ -150,7 +151,7 @@ function when(at: number, now: number): string {
  * last limit 14:02, bot check (music)". Null when there is nothing to show (the web player).
  */
 export function netStatusText(
-  s: { family?: 'IPv4' | 'IPv6'; autoIpv4: boolean; lastLimit?: { at: number; reason: string; surface: string } } | null,
+  s: Pick<NetStatus, 'family' | 'autoIpv4' | 'lastLimit'> | null,
   now: number,
 ): string | null {
   if (!s) return null;

@@ -9,7 +9,7 @@ import { toast } from '../stores/toast';
 import { TEST_HOOKS } from '../core/testHooks';
 import { Queue } from './queue';
 import type { RepeatMode } from './native';
-import type { Ipv4Mode } from '../stores/library';
+import type { Ipv4Mode, Quality } from '../stores/library';
 import { AUTOPLAY_LOW, EMPTY_STATE, LIST_CONTEXT, livePosition, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
 
 /* Minimal typings for the parts of the IFrame API we use. */
@@ -373,7 +373,6 @@ export class WebPlayer implements Player {
   }
 
   async restore(track: Track, kind: UpNextKind, beforeId: string | null): Promise<void> {
-    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['restore', { id: track.id, kind, beforeId }]);
     if (!this.q.current) return this.playList([track], 0);
     // Autoplay rows don't come back while autoplay is off or repeat is on (they'd be dropped).
     if (kind === 'autoplay' && (!this.autoplayOn || this.q.repeat !== 'off')) return;
@@ -383,7 +382,6 @@ export class WebPlayer implements Player {
 
   async addAutoplay(tracks: Track[], seedId: string): Promise<void> {
     if (!tracks.length || !this.autoplayOn || this.q.repeat !== 'off' || this.seed?.id !== seedId) return;
-    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['addAutoplay', tracks.map((t) => t.id)]);
     const wasEmpty = !this.q.current;
     this.q.addAuto(tracks);
     this.publish();
@@ -391,7 +389,6 @@ export class WebPlayer implements Player {
   }
 
   async setAutoplay(enabled: boolean): Promise<void> {
-    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setAutoplay', enabled]);
     this.autoplayOn = enabled;
     if (!enabled) this.q.dropAuto();
     this.publish();
@@ -402,7 +399,7 @@ export class WebPlayer implements Player {
     return () => this.lowListeners.delete(cb);
   }
 
-  async setQuality(q: 'high' | 'low'): Promise<void> {
+  async setQuality(q: Quality): Promise<void> {
     // The IFrame API ignores quality requests nowadays; kept for interface parity.
     this.yt?.setPlaybackQuality?.(q === 'low' ? 'small' : 'default');
   }

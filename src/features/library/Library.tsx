@@ -12,6 +12,7 @@ import { TrackRow } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
 import { askConfirm, selectTab, useSearchContext } from '../../ui/nav';
 import { list } from '../../ui/playAll';
+import { plural } from '../../core/text';
 
 const SECTIONS = ['liked', 'recent'] as const;
 const section = signal<(typeof SECTIONS)[number]>('liked');
@@ -25,7 +26,7 @@ function confirmClear(): void {
   askConfirm({
     title: 'Clear listening history?',
     body: 'Everything under Recently played goes.',
-    confirm: `Clear ${n} play${n === 1 ? '' : 's'}`,
+    confirm: `Clear ${plural(n, 'play')}`,
     run: clearHistoryWithUndo,
     testid: 'confirm-clear',
   });

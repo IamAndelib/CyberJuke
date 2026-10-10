@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Track } from './model';
-import { buildIndex, editDistance, matchWord, mergeTracks, normalize, searchGenres, searchTitles, searchTracks, words } from './search';
+import { buildIndex, editDistance, matchWord, mergeTracks, searchGenres, searchTitles, searchTracks } from './search';
+import { normalize, words } from './text';
 
 let n = 0;
 function t(p: Partial<Track>): Track {
@@ -247,6 +248,10 @@ describe('mergeTracks (artist page "Here")', () => {
     expect(merged.filter((x) => normalize(x.title) === 'blinding lights')).toHaveLength(1);
     expect(merged.filter((x) => x.title === 'Starboy')).toHaveLength(2); // within one list nothing is dropped
     expect(mergeTracks([[all[2]], [all[3]]])).toHaveLength(1);
+    // The first artist is read as the artist pages read it: a bracketed feat., a "/" credit, " - Topic".
+    for (const artist of ['The Weeknd (feat. Daft Punk)', 'The Weeknd/ Daft Punk', 'The Weeknd - Topic']) {
+      expect(mergeTracks([[all[2]], [g({ ytId: 'StarBoyX001', title: 'Starboy', artist })]]), artist).toHaveLength(1);
+    }
     // A different song by the same artist stays.
     expect(mergeTracks([[shared], [g({ ytId: 'SaveTearsRx', title: 'Save Your Tears (Remix)', artist: 'The Weeknd' })]])).toHaveLength(2);
   });

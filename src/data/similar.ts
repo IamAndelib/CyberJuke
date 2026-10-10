@@ -19,7 +19,7 @@
  */
 import { isGlobal, type Track } from './model';
 import { artistKey, splitArtists } from './artists';
-import { normalize, words } from './search';
+import { normalize, words } from './text';
 
 const W_ARTIST = 3;
 const W_GENRE = 2.5;

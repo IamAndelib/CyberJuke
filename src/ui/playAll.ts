@@ -9,14 +9,11 @@
 import type { Track } from '../data/model';
 import { player, type PlayContext } from '../player';
 
-/** Where a list was started from (C2). */
-export type PlayCtx = PlayContext;
-
-export const radio = (label: string): PlayCtx => ({ label, mode: 'radio' });
-export const list = (label: string): PlayCtx => ({ label, mode: 'list' });
+export const radio = (label: string): PlayContext => ({ label, mode: 'radio' });
+export const list = (label: string): PlayContext => ({ label, mode: 'list' });
 
 /** Start `tracks` at `i`. */
-export function playFrom(tracks: Track[], i: number, ctx: PlayCtx): Promise<void> {
+export function playFrom(tracks: Track[], i: number, ctx: PlayContext): Promise<void> {
   return player.playList(tracks, i, ctx);
 }
 
@@ -24,7 +21,7 @@ export function playFrom(tracks: Track[], i: number, ctx: PlayCtx): Promise<void
  * P3, the Play and Shuffle buttons: Play always plays in order with shuffle off;
  * Shuffle always turns shuffle on (from a random track).
  */
-export async function playAll(tracks: Track[], { shuffle, ctx }: { shuffle: boolean; ctx: PlayCtx }): Promise<void> {
+export async function playAll(tracks: Track[], { shuffle, ctx }: { shuffle: boolean; ctx: PlayContext }): Promise<void> {
   if (!tracks.length) return;
   if (!shuffle) {
     await player.setShuffle(false);

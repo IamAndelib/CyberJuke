@@ -218,8 +218,7 @@ export function FastScroller({
       el.removeEventListener('scroll', onScroll);
       ro?.disconnect();
       mo.disconnect();
-      // st holds plain timer state (not a DOM node); its latest values are what to clear.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- st holds plain timer state (not a DOM node); its latest values are what to clear.
       const s = st.current;
       cancelAnimationFrame(s.frame);
       s.frame = 0;
@@ -230,8 +229,7 @@ export function FastScroller({
       if (s.exclAt) setGestureExclusion(null);
       s.exclAt = 0;
     };
-    // Mount-only: `scroller` is a stable ref and `schedule` reads only refs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Mount-only: `scroller` is a stable ref and `schedule` reads only refs.
   }, []);
 
   useEffect(() => {
@@ -239,8 +237,7 @@ export function FastScroller({
     st.current.letter = '';
     if (!az) popup.current?.classList.remove('on');
     schedule();
-    // `schedule` reads only refs; the effect is about `az`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `schedule` reads only refs; the effect is about `az`.
   }, [az]);
 
   const scrollToPointer = (clientY: number) => {

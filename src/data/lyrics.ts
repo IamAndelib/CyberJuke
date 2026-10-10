@@ -23,13 +23,8 @@ interface LyricLine {
   text: string;
 }
 
-export interface Lyrics {
-  found: boolean;
-  source?: string;
-  synced?: LyricLine[];
-  plain?: string;
-  instrumental?: boolean;
-}
+/** Lyrics as shown: the plugin's answer after normalizeLyrics (lines checked and in order). */
+export type Lyrics = LyricsResult;
 
 const LYRICS_CACHE_MAX = 300;
 export const NOT_FOUND_TTL_MS = 7 * 24 * 60 * 60 * 1000;

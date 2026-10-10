@@ -193,11 +193,6 @@ export class Feed<T, C, M = undefined> {
 /** Feeds being filled by `fillFeed`. */
 const filling = new WeakSet<Feed<unknown, unknown, unknown>>();
 
-/** Whether `fillFeed` is loading this feed's pages right now. */
-function isBeingFilled(feed: Feed<unknown, unknown, unknown>): boolean {
-  return filling.has(feed);
-}
-
 /**
  * Whether a feed being filled up to `max` items still has pages to come: loading,
  * or loaded with more pages, no error and fewer than `max` items.
@@ -278,7 +273,7 @@ export class FeedCache {
     if (this.map.size <= this.max) return;
     for (const [k, feed] of this.map) {
       if (this.map.size <= this.max) break;
-      if (k === key || feed.watched || feed.busyLoading || isBeingFilled(feed)) continue;
+      if (k === key || feed.watched || feed.busyLoading || filling.has(feed)) continue;
       this.map.delete(k);
     }
   }
@@ -315,8 +310,19 @@ export function authScope(signedIn: boolean): 'm' | 'p' {
   return signedIn ? 'm' : 'p';
 }
 
+/**
+ * Cache keys of the feeds that are looked up from more than one place. Jukebox lists carry
+ * the sign-in state ([authScope]) and the NSFW setting; an artist page is keyed by artistKey.
+ */
+export const feedKey = {
+  home: (signedIn: boolean, genre: string | null, nsfw: boolean) => `home:${authScope(signedIn)}:${genre ?? ''}:${nsfw}`,
+  genre: (signedIn: boolean, genre: string, nsfw: boolean) => `genre:${authScope(signedIn)}:${genre}:${nsfw}`,
+  artistPage: (key: string) => `artistpage:${key}`,
+};
+
 /** Prefixes of every feed of Jukebox posts (Home, genre pages). */
-export const JUKEBOX_FEED_PREFIXES = ['home:', 'genre:'] as const;
+export const HOME_FEED_PREFIX = 'home:';
+export const JUKEBOX_FEED_PREFIXES = [HOME_FEED_PREFIX, 'genre:'] as const;
 
 /** The app-wide cache. */
 export const feeds = new FeedCache();

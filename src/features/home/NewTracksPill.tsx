@@ -11,13 +11,14 @@ import { FRESHNESS_LIMIT } from '../../data/firestore';
 import { SMOOTH_SCROLL_MS, scrollAnimating } from '../../ui/clickGuard';
 import { Icon } from '../../ui/icons';
 import { reducedMotion } from '../../core/motion';
+import { plural } from '../../core/text';
 
 /** The fade-out; the pill unmounts after it (or after this long without a transitionend). */
 const PILL_FADE_MS = 200;
 
 function newTracksLabel(count: number): string {
   if (count >= FRESHNESS_LIMIT) return `${FRESHNESS_LIMIT}+ new tracks`;
-  return `${count} new track${count === 1 ? '' : 's'}`;
+  return plural(count, 'new track');
 }
 
 /** Resolve once `el` has stopped scrolling: at its `scrollend`, or after `ms`. Immediately if it isn't moving. */

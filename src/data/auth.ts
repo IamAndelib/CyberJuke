@@ -181,7 +181,7 @@ interface FirebaseErrorBody {
   error?: { message?: string } | string;
 }
 
-function errorMessage(json: unknown): string | undefined {
+function firebaseErrorMessage(json: unknown): string | undefined {
   const b = json as FirebaseErrorBody | null;
   if (!b) return undefined;
   if (typeof b.error === 'string') return b.error;
@@ -294,7 +294,7 @@ export function createAuth(deps: AuthDeps): Auth {
       if (mine !== epoch || !session) return null;
       const j = r.json as { id_token?: string; refresh_token?: string; expires_in?: string | number; user_id?: string } | null;
       if (!r.ok || !j?.id_token) {
-        const code = authErrorCode(errorMessage(r.json));
+        const code = authErrorCode(firebaseErrorMessage(r.json));
         // The server rejected the login itself: sign out. Anything else (a 5xx, a 400
         // without one of these codes, a proxy's error page) is retried later.
         if (code === 'SESSION_EXPIRED' || code === 'USER_DISABLED' || code === 'USER_NOT_FOUND') {
@@ -357,7 +357,7 @@ export function createAuth(deps: AuthDeps): Auth {
       });
       const j = r.json as { idToken?: string; refreshToken?: string; expiresIn?: string; localId?: string; email?: string } | null;
       if (!r.ok || !j?.idToken || !j.refreshToken || !j.localId) {
-        throw new AuthError(r.ok ? 'UNKNOWN' : authErrorCode(errorMessage(r.json)));
+        throw new AuthError(r.ok ? 'UNKNOWN' : authErrorCode(firebaseErrorMessage(r.json)));
       }
       const name = (await username(j.localId, j.idToken)) ?? j.email ?? e;
       epoch++;

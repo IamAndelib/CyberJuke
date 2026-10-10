@@ -3,8 +3,8 @@
  * this class only forwards commands and mirrors native state from events.
  */
 import { computed, effect, signal, untracked } from '@preact/signals';
-import { UNKNOWN_ARTIST, UNTITLED, artworkUrl, type Track } from '../data/model';
-import { history, knownTrack, liked, IPV4_MODES, type Ipv4Mode } from '../stores/library';
+import { UNKNOWN_ARTIST, UNTITLED, artworkUrl, makeTrack, type Track } from '../data/model';
+import { history, knownTrack, liked, IPV4_MODES, type Ipv4Mode, type Quality } from '../stores/library';
 import { catalog } from '../stores/catalog';
 import { toast } from '../stores/toast';
 import { YT_ID_RE, parseNativeState } from '../core/guards';
@@ -51,37 +51,21 @@ const catalogById = computed(() => new Map(catalog.all.value.map((t) => [t.id, t
  */
 function fromNative(t: NativeTrack): Track | null {
   if (!t || typeof t.id !== 'string' || !t.id || typeof t.ytId !== 'string' || !YT_ID_RE.test(t.ytId)) return null;
-  return {
+  return makeTrack({
     id: t.id,
     ytId: t.ytId,
     title: typeof t.title === 'string' && t.title ? t.title : UNTITLED,
     artist: typeof t.artist === 'string' && t.artist ? t.artist : UNKNOWN_ARTIST,
-    genre: '',
     by: typeof t.by === 'string' ? t.by : '',
-    postTitle: '',
     postUrl: typeof t.postUrl === 'string' ? t.postUrl : '',
-    createdAt: '',
-    nsfw: false,
     artworkUrl: artworkUrl(t.ytId),
     ...(t.membersOnly === true && { membersOnly: true }),
     ...(t.id.startsWith('ytm:') && { source: 'ytmusic' as const }),
-  };
+  });
 }
 
 function placeholder(id: string): Track {
-  return {
-    id,
-    ytId: '',
-    title: 'Unknown track',
-    artist: '',
-    genre: '',
-    by: '',
-    postTitle: '',
-    postUrl: '',
-    createdAt: '',
-    nsfw: false,
-    artworkUrl: '',
-  };
+  return makeTrack({ id, ytId: '', title: 'Unknown track', artist: '' });
 }
 
 export class NativePlayer implements Player {
@@ -421,7 +405,7 @@ export class NativePlayer implements Player {
     return () => this.lowListeners.delete(cb);
   }
 
-  setQuality = (quality: 'high' | 'low') => JukePlayer.setQuality({ quality });
+  setQuality = (quality: Quality) => JukePlayer.setQuality({ quality });
   setNetworkPrefs = (prefs: { ipv4: Ipv4Mode }) => JukePlayer.setNetworkPrefs({ ipv4: prefs.ipv4 });
   retryNow = () => JukePlayer.retryNow();
 

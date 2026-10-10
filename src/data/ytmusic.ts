@@ -9,11 +9,11 @@
  *   UNAVAILABLE unless a test stub is installed as `window.__cyberjukeMusicStub`.
  */
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { UNKNOWN_ARTIST, UNTITLED, artworkUrl, type Track } from './model';
+import { UNKNOWN_ARTIST, UNTITLED, artworkUrl, makeTrack, type Track } from './model';
 import { artistKey, cleanCredit, splitArtists } from './artists';
 import { Cache } from '../core/cache';
 import { TEST_HOOKS } from '../core/testHooks';
-import { isObj, parseMusicItems, parseMusicPage } from '../core/guards';
+import { YT_ID_RE, isHttpsUrl, isObj, parseMusicItems, parseMusicPage } from '../core/guards';
 
 // ---- Plugin contract (keep in sync with MusicPlugin.kt) ------------------------------
 
@@ -77,7 +77,6 @@ interface LyricsRequest {
   ytId: string;
   title: string;
   artist: string;
-  album?: string;
   durationSec?: number;
 }
 export interface LyricsResult {
@@ -140,12 +139,11 @@ export function isEndOfList(e: unknown): boolean {
 // ---- Mapping --------------------------------------------------------------------------
 
 const YTM_PREFIX = 'ytm:';
-const YT_ID = /^[A-Za-z0-9_-]{11}$/;
 
 function idFromUrl(url: string): string | undefined {
   try {
     const v = new URL(url).searchParams.get('v');
-    return v && YT_ID.test(v) ? v : undefined;
+    return v && YT_ID_RE.test(v) ? v : undefined;
   } catch {
     return undefined;
   }
@@ -158,22 +156,16 @@ function idFromUrl(url: string): string | undefined {
  */
 export function musicItemToTrack(item: MusicItem, fallbackArtist = ''): Track | null {
   if (item.kind !== 'song') return null;
-  const ytId = item.ytId && YT_ID.test(item.ytId) ? item.ytId : idFromUrl(item.url);
+  const ytId = item.ytId && YT_ID_RE.test(item.ytId) ? item.ytId : idFromUrl(item.url);
   if (!ytId) return null;
-  return {
+  return makeTrack({
     id: YTM_PREFIX + ytId,
     ytId,
     title: (item.title ?? '').trim() || UNTITLED,
     artist: cleanCredit(item.subtitle ?? '') || fallbackArtist || UNKNOWN_ARTIST,
-    genre: '',
-    by: '',
-    postTitle: '',
-    postUrl: '',
-    createdAt: '',
-    nsfw: false,
     artworkUrl: artworkUrl(ytId),
     source: 'ytmusic',
-  };
+  });
 }
 
 export function musicTracks(items: MusicItem[], fallbackArtist = ''): Track[] {
@@ -289,10 +281,10 @@ export interface MusicClient {
   artistReleases(token: string): Promise<Release[]>;
   /** One page of a song's radio (not cached: each page is asked for once). */
   radio(ytId: string, next?: string): Promise<MusicPage>;
-  /** A cached, still-fresh search result, if any (lets screens render instantly on remount). */
-  peekSearch(query: string, filter: MusicFilter): MusicPage | undefined;
-  clear(): void;
 }
+
+/** Global search and the rest go through the app's plugin: in the browser there is none. */
+const noPlugin = () => new MusicError('UNAVAILABLE', 'UNAVAILABLE: Global search needs the Android app');
 
 interface MusicClientDeps {
   /** The plugin to call, or null when there is none (web without a stub). */
@@ -308,7 +300,7 @@ export function createMusicClient(deps: MusicClientDeps): MusicClient {
   function call<T>(key: string, run: (p: JukeMusicPlugin) => Promise<T>): Promise<T> {
     const start = () => {
       const p = deps.plugin();
-      if (!p) throw new MusicError('UNAVAILABLE', 'UNAVAILABLE: Global search needs the Android app');
+      if (!p) throw noPlugin();
       return Promise.resolve().then(() => run(p));
     };
     return cache.load(key, start, { mapError: toMusicError }) as Promise<T>;
@@ -327,7 +319,7 @@ export function createMusicClient(deps: MusicClientDeps): MusicClient {
     artistReleases: (token) => call(`ar|${token}`, (p) => p.artistReleases({ token }).then((r) => parseReleases((r as { releases?: unknown } | null)?.releases))),
     radio: (ytId, next) => {
       const p = deps.plugin();
-      if (!p) return Promise.reject(new MusicError('UNAVAILABLE', 'UNAVAILABLE: Global search needs the Android app'));
+      if (!p) return Promise.reject(noPlugin());
       return Promise.resolve()
         .then(() => p.radio(next ? { ytId, next } : { ytId }))
         .then(parseMusicPage)
@@ -335,12 +327,8 @@ export function createMusicClient(deps: MusicClientDeps): MusicClient {
           throw toMusicError(e);
         });
     },
-    peekSearch: (query, filter) => cache.get(sKey(query, filter)) as MusicPage | undefined,
-    clear: () => cache.clear(),
   };
 }
-
-const KINDS: readonly ReleaseKind[] = ['album', 'ep', 'single', 'live'];
 
 /** Releases from the plugin: a kind, a title and a URL each, or dropped. */
 function parseReleases(x: unknown): Release[] {
@@ -349,11 +337,11 @@ function parseReleases(x: unknown): Release[] {
   for (const r of x) {
     if (!isObj(r) || typeof r.url !== 'string' || !r.url || typeof r.title !== 'string') continue;
     out.push({
-      kind: KINDS.includes(r.kind as ReleaseKind) ? (r.kind as ReleaseKind) : 'album',
+      kind: SHELF_ORDER.includes(r.kind as ReleaseKind) ? (r.kind as ReleaseKind) : 'album',
       title: r.title,
       url: r.url,
       ...(typeof r.year === 'string' && r.year && { year: r.year }),
-      ...(typeof r.thumbnailUrl === 'string' && /^https:\/\//.test(r.thumbnailUrl) && { thumbnailUrl: r.thumbnailUrl }),
+      ...(isHttpsUrl(r.thumbnailUrl) && { thumbnailUrl: r.thumbnailUrl }),
     });
   }
   return out;
@@ -365,7 +353,7 @@ function parseAlbumPage(x: unknown): AlbumPage {
     ...parseMusicPage(o),
     title: typeof o.title === 'string' ? o.title : '',
     subtitle: typeof o.subtitle === 'string' ? o.subtitle : '',
-    ...(typeof o.thumbnailUrl === 'string' && /^https:\/\//.test(o.thumbnailUrl) && { thumbnailUrl: o.thumbnailUrl }),
+    ...(isHttpsUrl(o.thumbnailUrl) && { thumbnailUrl: o.thumbnailUrl }),
   };
 }
 
@@ -374,7 +362,7 @@ function parseArtistPage(x: unknown): ArtistPageResult {
   const more = isObj(o.more) ? o.more : {};
   return {
     name: typeof o.name === 'string' ? o.name : '',
-    ...(typeof o.thumbnailUrl === 'string' && /^https:\/\//.test(o.thumbnailUrl) && { thumbnailUrl: o.thumbnailUrl }),
+    ...(isHttpsUrl(o.thumbnailUrl) && { thumbnailUrl: o.thumbnailUrl }),
     topSongs: parseMusicItems(o.topSongs),
     ...(typeof o.topSongsPlaylistUrl === 'string' && o.topSongsPlaylistUrl && { topSongsPlaylistUrl: o.topSongsPlaylistUrl }),
     releases: parseReleases(o.releases),

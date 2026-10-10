@@ -1,6 +1,6 @@
 import { artistKey } from '../../data/artists';
 import { SHELF_LABEL, musicErrorText, type MusicErrorCode, type Release } from '../../data/ytmusic';
-import { feeds } from '../../stores/feed';
+import { feedKey, feeds } from '../../stores/feed';
 import { Icon } from '../../ui/icons';
 import { popPage, type ReleasesRef } from '../../ui/nav';
 import { Screen } from '../../ui/components/Screen';
@@ -27,7 +27,7 @@ export function ReleasesPage({ release }: { release: ReleasesRef }) {
   // A Retry reloads the artist page for fresh tokens; its cached feed then reloads too.
   const { feed, snap } = useFeed<Release, never>(
     `releases:${token}:${kind}`,
-    releasesLoader(release, () => feeds.delete(`artistpage:${artistKey(artist)}`)),
+    releasesLoader(release, () => feeds.delete(feedKey.artistPage(artistKey(artist)))),
   );
   const title = SHELF_LABEL[kind];
   const n = snap.items.length;

@@ -5,7 +5,8 @@ import { catalog } from '../../stores/catalog';
 import type { Paged } from '../usePaged';
 import { useChunks } from '../useChunks';
 import { Icon } from '../icons';
-import { playAll, playFrom, type PlayCtx } from '../playAll';
+import { playAll, playFrom } from '../playAll';
+import type { PlayContext } from '../../player';
 import { SkeletonRows, TrackRow } from './TrackRow';
 
 export { playFrom };
@@ -15,7 +16,7 @@ export { playFrom };
  * shown rows are the start, so row i is item i), else the rows themselves. One function
  * for the list's lifetime (it reads the latest props), so the rows' memo holds.
  */
-function useRowPlayer(tracks: Track[], ctx: PlayCtx, queue?: () => Track[]): (i: number) => void {
+function useRowPlayer(tracks: Track[], ctx: PlayContext, queue?: () => Track[]): (i: number) => void {
   const latest = useRef({ tracks, ctx, queue });
   latest.current = { tracks, ctx, queue };
   return useCallback((i: number) => {
@@ -37,7 +38,7 @@ export function Tracks({
   chunkKey = null,
 }: {
   tracks: Track[];
-  ctx: PlayCtx;
+  ctx: PlayContext;
   queue?: () => Track[];
   hideGenre?: boolean;
   showSaves?: boolean;
@@ -61,7 +62,7 @@ export function Tracks({
  * A long list rendered in chunks of 60 as you scroll; tapping a row plays the whole
  * list from there. `chunkKey` remembers how many rows were shown (scroll memory).
  */
-export function ChunkedTracks({ tracks, ctx, chunkKey, testid }: { tracks: Track[]; ctx: PlayCtx; chunkKey: string; testid?: string }) {
+export function ChunkedTracks({ tracks, ctx, chunkKey, testid }: { tracks: Track[]; ctx: PlayContext; chunkKey: string; testid?: string }) {
   const { shown, sentinel, more } = useChunks(tracks.length, chunkKey);
   const play = useRowPlayer(tracks, ctx);
   return (
@@ -123,7 +124,7 @@ export function PagedTracks({
   chunkKey = null,
 }: {
   paged: Paged;
-  ctx: PlayCtx;
+  ctx: PlayContext;
   queue?: () => Track[];
   empty?: ComponentChildren;
   hideGenre?: boolean;
@@ -187,7 +188,7 @@ export function PlayShuffle({
   shuffleTestid = `${testid}-shuffle`,
 }: {
   tracks: Track[] | (() => Track[]);
-  ctx: PlayCtx;
+  ctx: PlayContext;
   testid: string;
   disabled?: boolean;
   playTestid?: string;

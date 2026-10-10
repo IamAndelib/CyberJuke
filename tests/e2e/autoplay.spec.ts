@@ -3,7 +3,7 @@ import { expect, test } from '../fixtures';
 import { expectStable, musicCalls, openNowPlaying, openSearch, start } from '../helpers';
 import { genreFamilies } from '../../src/data/similar';
 import { artistKey, splitArtists } from '../../src/data/artists';
-import { words } from '../../src/data/search';
+import { words } from '../../src/data/text';
 
 /** Autoplay (Wave 1d): radios from feeds, lists that continue, Global radios, and the queue rules. */
 

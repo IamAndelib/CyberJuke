@@ -2,11 +2,21 @@
 
 ## [Unreleased]
 
-## [1.1.1] - 2026-10-09
+## [1.1.1] - 2026-10-10
+
+### The app
+- Members-only tracks you liked come back to Liked, where they were, when you sign in again with the same account (signing out hides them; they wait on the phone, outside backups, and signing in with another account deletes them).
+- No notification permission prompt on the first play: the playback controls don't need it.
 
 ### Fixed
 - A scroll that starts on the seek bar no longer makes the thumb jump to your finger and back: the bar now waits to see which way the finger moves. Sideways drags the thumb, up or down scrolls Now Playing; a tap still seeks to that spot.
 - Swiping Now Playing down closes it in one smooth motion, on from where your finger let go (it paused briefly, then sped off).
+- A track whose stream server fails gets a fresh link instead of retrying the dead one, and an outage that keeps coming back stops retrying by itself after a few tries.
+- Liked is no longer in Android's cloud backup (it can hold members-only tracks), like history.
+- Global autoplay keeps going when a radio runs out of new songs.
+- Lyrics for the next track wait until its length is known, so the right version is found.
+- Messages stay clear of the search button and move above the mini player or a banner; a pull to refresh that fails says so; Genres says when the catalog couldn't load.
+- Recently played plays each track once from the one you tap; play/pause shows at once.
 
 ## [1.1.0] - 2026-10-09
 

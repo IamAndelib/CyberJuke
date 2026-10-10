@@ -1,6 +1,7 @@
 /**
  * Player facade. On Android the native JukePlayer plugin plays audio (and owns the
- * queue); in the browser a hidden YouTube IFrame player is used. Every command goes
+ * queue). In the browser the web player drives the YouTube IFrame API, which only the
+ * e2e stub provides (the CSP blocks the real embed). Every command goes
  * through safePlayer (a failure is a toast, never an unhandled rejection).
  *
  * Components read the narrow computeds below rather than `player.state`, so a
@@ -121,10 +122,6 @@ effect(() => {
 });
 
 /** The Autoplay setting (C3); on unless turned off. */
-function autoplayEnabled(): boolean {
-  return (settings.value as { autoplay?: boolean }).autoplay !== false;
-}
-
 let autoplay: Autoplay | null = null;
 
 /** Start autoplay (AP4): it answers the player's "running low" signals. Once. */
@@ -159,7 +156,7 @@ export function startPlayerPrefs(): void {
   startAutoplay();
   effect(() => {
     const { quality, ipv4 } = settings.value;
-    const auto = autoplayEnabled();
+    const auto = settings.value.autoplay;
     // Only the settings are followed: what the player calls read (its state) isn't.
     untracked(() => {
       if (quality !== lastQuality) {

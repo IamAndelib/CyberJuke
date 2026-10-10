@@ -6,6 +6,7 @@
 import { computed, signal } from '@preact/signals';
 import type { Track } from '../data/model';
 import { catalog, genreCounts } from './catalog';
+import type { GenreCount } from '../data/search';
 import { favoriteGenres } from './library';
 
 const seen = new Map<string, Track>();
@@ -21,10 +22,6 @@ export function recordTracks(tracks: Track[]): void {
   if (changed) seenVersion.value++;
 }
 
-export interface GenreCount {
-  name: string;
-  count: number;
-}
 
 /** True once the list comes from the full catalog rather than the seen-so-far pages. */
 export const genresComplete = computed(() => catalog.tracks.value.length > 0);

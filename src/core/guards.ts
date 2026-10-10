@@ -3,8 +3,7 @@
  * state, music pages), Firestore responses, and lists read back from storage. Each
  * returns well-typed data or drops what doesn't fit; none of them throw.
  */
-import type { Track, TrackOrigin } from '../data/model';
-import type { FsDocument, FsRunQueryRow } from '../data/model';
+import type { FsDocument, FsRunQueryRow, Track, TrackOrigin } from '../data/model';
 import type { NativeState, RepeatMode } from '../player/native';
 import type { MusicItem, MusicPage } from '../data/ytmusic';
 
@@ -17,6 +16,12 @@ const finite = (x: unknown): number | undefined => (typeof x === 'number' && Num
 const strings = (x: unknown): string[] => (Array.isArray(x) ? x.filter(isStr) : []);
 
 export const YT_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+
+/** Up next lists at most this many tracks (native sends as many: StateEncoder.MAX_UP_NEXT). */
+export const UP_NEXT_MAX = 50;
+
+/** An https URL (what the app loads images and links from). */
+export const isHttpsUrl = (x: unknown): x is string => isStr(x) && x.startsWith('https://');
 const REPEAT: readonly RepeatMode[] = ['off', 'all', 'one'];
 
 // ---- Native bridge ---------------------------------------------------------------------
@@ -33,7 +38,7 @@ export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [
   const unchanged = x.queueIdsUnchanged === true && !Array.isArray(x.queueIds);
   const queueIds = unchanged ? prevQueueIds.slice() : strings(x.queueIds);
   const index = typeof x.index === 'number' && Number.isInteger(x.index) && x.index >= -1 && x.index < queueIds.length ? x.index : -1;
-  const upNextIds = strings(x.upNextIds).slice(0, 50);
+  const upNextIds = strings(x.upNextIds).slice(0, UP_NEXT_MAX);
   const kinds = isStr(x.upNextKinds) ? x.upNextKinds : '';
   // K1: one list index per upNext id; -1 where it's missing or doesn't fit (the id is then looked up).
   const rawIndex = Array.isArray(x.upNextIndex) ? x.upNextIndex : [];
@@ -75,7 +80,7 @@ export function parseMusicItem(x: unknown): MusicItem | null {
   if (isStr(x.ytId) && YT_ID_RE.test(x.ytId)) item.ytId = x.ytId;
   const dur = finite(x.durationSec);
   if (dur !== undefined && dur >= 0) item.durationSec = dur;
-  if (isStr(x.thumbnailUrl) && /^https:\/\//.test(x.thumbnailUrl)) item.thumbnailUrl = x.thumbnailUrl;
+  if (isHttpsUrl(x.thumbnailUrl)) item.thumbnailUrl = x.thumbnailUrl;
   const n = finite(x.itemCount);
   if (n !== undefined && n >= 0) item.itemCount = n;
   if (isStr(x.artistUrl)) item.artistUrl = x.artistUrl;
@@ -115,11 +120,8 @@ export function parseRunQueryRows(x: unknown): FsRunQueryRow[] | null {
       const doc: FsDocument = { name: d.name };
       if (isObj(d.fields)) doc.fields = d.fields as FsDocument['fields'];
       if (isStr(d.createTime)) doc.createTime = d.createTime;
-      if (isStr(d.updateTime)) doc.updateTime = d.updateTime;
       row.document = doc;
     }
-    if (isStr(r.readTime)) row.readTime = r.readTime;
-    if (r.done === true) row.done = true;
     out.push(row);
   }
   return out;

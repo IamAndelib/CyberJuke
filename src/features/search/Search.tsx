@@ -1,13 +1,13 @@
 import { computed, signal } from '@preact/signals';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Track } from '../../data/model';
-import { buildIndex, searchGenres, searchTitles, searchTracks } from '../../data/search';
+import { MAX_RESULTS, buildIndex, searchGenres, searchTitles, searchTracks } from '../../data/search';
 import { musicTracks, type MusicFilter, type MusicItem } from '../../data/ytmusic';
 import { catalog } from '../../stores/catalog';
 import { genres } from '../../stores/genres';
 import { addRecentSearch, clearRecentSearches, loadRecentSearches, recentSearches, removeRecentSearch, restoreRecentSearches } from '../../stores/searches';
 import { toast } from '../../stores/toast';
-import { isFavoriteArtist, isFavoriteGenre } from '../../stores/library';
+import { useFavArtist, useFavGenre } from '../../ui/useFavs';
 import { useChunks } from '../../ui/useChunks';
 import { Icon } from '../../ui/icons';
 import {
@@ -31,6 +31,7 @@ import { CoverRow, GlobalError, LoadMore, MUSIC_ITEM_OPTS, MusicRow, searchLoade
 import { useFeed } from '../../ui/usePaged';
 import { globalFeeds } from '../../stores/feed';
 import { list, radio } from '../../ui/playAll';
+import { plural } from '../../core/text';
 
 const DEBOUNCE_MS = 120;
 const GLOBAL_DEBOUNCE_MS = 400;
@@ -87,11 +88,6 @@ function HereLoading({ text = 'Searching all songs…' }: { text?: string }) {
   );
 }
 
-/**
- * Here: the tracks of the place Search was opened from, filtered like Jukebox. The
- * list may still be growing (`ctx.loading`); matching releases (`ctx.albums`) show
- * as a cover row above the tracks.
- */
 const NO_ALBUMS: AlbumRef[] = [];
 
 /** How many name matches Here shows at most. */
@@ -99,7 +95,10 @@ const MAX_PLACES = 100;
 
 /** One genre or artist found by name; a tap opens its page. */
 function PlaceRow({ place }: { place: Place }) {
-  const fav = place.kind === 'genre' ? isFavoriteGenre(place.name) : isFavoriteArtist(place.name);
+  // Each star follows only its own item (useFavs), like the tiles'.
+  const favGenre = useFavGenre(place.name);
+  const favArtist = useFavArtist(place.name);
+  const fav = place.kind === 'genre' ? favGenre : favArtist;
   return (
     <li>
       <button
@@ -119,7 +118,7 @@ function PlaceRow({ place }: { place: Place }) {
         </span>
         {place.count != null && (
           <span class="dim small">
-            {place.count} track{place.count === 1 ? '' : 's'}
+            {plural(place.count, 'track')}
           </span>
         )}
         <span class="place-go" aria-hidden="true">
@@ -161,7 +160,7 @@ function PlaceResults({ q, ctx, places }: { q: string; ctx: SearchContext; place
       <div class="section-head">
         <h2 class="section-title">{ctx.label}</h2>
         <span class="dim small" data-testid="search-count">
-          {q.trim() ? `${hits.length} match${hits.length === 1 ? '' : 'es'}` : `${hits.length} ${what}`}
+          {q.trim() ? plural(hits.length, 'match', 'matches') : `${hits.length} ${what}`}
         </span>
       </div>
       <ul class="place-list">
@@ -180,6 +179,11 @@ function HereResults({ q, ctx }: { q: string; ctx: SearchContext }) {
   return <TrackHereResults q={q} ctx={ctx} />;
 }
 
+/**
+ * Here: the tracks of the place Search was opened from, filtered like Jukebox. The
+ * list may still be growing (`ctx.loading`); matching releases (`ctx.albums`) show
+ * as a cover row above the tracks.
+ */
 function TrackHereResults({ q, ctx }: { q: string; ctx: SearchContext }) {
   const tracks = read(ctx.tracks);
   const loading = ctx.loading ? read(ctx.loading) : false;
@@ -232,7 +236,7 @@ function TrackHereResults({ q, ctx }: { q: string; ctx: SearchContext }) {
           <div class="section-head">
             <h2 class="section-title">In {ctx.label}</h2>
             <span class="dim small" data-testid="search-count">
-              {hits.length === 100 ? 'top 100' : `${hits.length} match${hits.length === 1 ? '' : 'es'}`}
+              {hits.length === MAX_RESULTS ? `top ${MAX_RESULTS}` : plural(hits.length, 'match', 'matches')}
             </span>
           </div>
           {loading && <HereLoading />}
@@ -298,7 +302,7 @@ function JukeboxResults({ q }: { q: string }) {
           <div class="section-head">
             <h2 class="section-title">Tracks</h2>
             <span class="dim small" data-testid="search-count">
-              {hits.length === 100 ? 'top 100' : `${hits.length} match${hits.length === 1 ? '' : 'es'}`}
+              {hits.length === MAX_RESULTS ? `top ${MAX_RESULTS}` : plural(hits.length, 'match', 'matches')}
             </span>
           </div>
           <Tracks tracks={hits} ctx={SEARCH_CTX} />
@@ -343,10 +347,9 @@ function GlobalList({ q, filter }: { q: string; filter: MusicFilter }) {
   }
   if (snap.status === 'error' && snap.error) return <GlobalError error={snap.error} onRetry={() => feed.retry()} />;
   const items = snap.items;
-  const songs = filter === 'songs' ? musicTracks(items) : [];
-  const rows = filter === 'songs' ? [] : items.filter((i) => i.kind !== 'song');
-  shown.current = songs.length || rows.length ? { filter, items } : null;
-  if (!songs.length && !rows.length) {
+  const any = filter === 'songs' ? musicTracks(items).length > 0 : items.some((i) => i.kind !== 'song');
+  shown.current = any ? { filter, items } : null;
+  if (!any) {
     return (
       <EmptyState title="No matches" testid="global-empty">
         Nothing found for “{q.trim()}”.
@@ -355,15 +358,7 @@ function GlobalList({ q, filter }: { q: string; filter: MusicFilter }) {
   }
   return (
     <div data-testid="global-results" data-filter={filter}>
-      {filter === 'songs' ? (
-        <Tracks tracks={songs} ctx={GLOBAL_CTX} />
-      ) : (
-        <ul class="list" data-testid="music-list">
-          {rows.map((it) => (
-            <MusicRow key={it.kind + it.url} item={it} />
-          ))}
-        </ul>
-      )}
+      <GlobalItems items={items} filter={filter} />
       {snap.hasMore ? (
         <LoadMore busy={snap.loadingMore} error={!!snap.error} onClick={() => feed.loadMore()} />
       ) : (

@@ -8,7 +8,7 @@
  * Names are matched by `normalize` (accents, case and punctuation ignored).
  */
 import { UNKNOWN_ARTIST, type Track } from './model';
-import { normalize } from './search';
+import { normalize } from './text';
 
 /** "(feat. X)" / "[ft. X]" become ", X" so the brackets don't stick to the names. */
 const BRACKETED_FEAT = /[([]\s*(?:feat\.?|ft\.?|featuring)\s+([^)\]]*)[)\]]/gi;

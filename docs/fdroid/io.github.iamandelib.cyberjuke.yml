@@ -2,7 +2,8 @@ AntiFeatures:
   NonFreeNet:
     en-US: Plays audio from YouTube (through NewPipeExtractor) and reads its track
       list from Cyberspace's non-free backend (Google Firestore). Global search, artist
-      pages and Global radio use YouTube's music catalog; lyrics come from LRCLIB.
+      pages and Global radio use YouTube's music catalog; lyrics come from LRCLIB, or
+      else from YouTube Music.
 Categories:
   - Multimedia
   - Online Media Player

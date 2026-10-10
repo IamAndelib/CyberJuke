@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { holdInert, isHeldInert, releaseInert } from './inert';
 
 /** What sits behind a sheet: the app and, when it is up, Now Playing. */
-const BEHIND = '.app, [data-testid="now-playing"]';
+const BEHIND = '.app, .np';
 
 /**
  * A sheet that is modal for real while [open]:
@@ -38,8 +38,7 @@ export function useModal(open: boolean, sheet: { current: HTMLElement | null }, 
       for (const b of made) releaseInert(b, owner);
       giveFocusBack(el, before, page);
     };
-    // `sheet` is a stable ref; only opening and closing matter.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `sheet` is a stable ref; only opening and closing matter.
   }, [open]);
 }
 
@@ -91,8 +90,7 @@ export function useSheetContent<T>(value: T | null, sheet: { current: HTMLElemen
       el.removeEventListener('transitionend', onEnd);
       clearTimeout(timer);
     };
-    // `sheet` is a stable ref; only opening and closing matter.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `sheet` is a stable ref; only opening and closing matter.
   }, [value]);
   return value ?? last.current;
 }

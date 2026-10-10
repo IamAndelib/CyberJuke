@@ -1,6 +1,6 @@
 import { expect, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { openNowPlaying, playerCalls, seedStorage, start, waitForTracks } from '../helpers';
+import { opened, openNowPlaying, playerCalls, recordOpens, seedStorage, start, waitForTracks } from '../helpers';
 
 /**
  * When things go wrong: YouTube limiting the network or changing something (Y1),
@@ -11,18 +11,6 @@ import { openNowPlaying, playerCalls, seedStorage, start, waitForTracks } from '
 type Block = { blocked(e: { until: number; reason: string }): void; unblocked(): void; extractorBroken(e: { message: string }): void };
 const blockHook = (page: Page, fn: (b: Block) => void) => page.evaluate(`(${fn.toString()})(window.__cyberjukeBlock)`);
 
-/** Record window.open instead of opening anything. */
-async function recordOpens(page: Page) {
-  await page.addInitScript(() => {
-    const w = window as unknown as { __opened: string[] };
-    w.__opened = [];
-    window.open = ((url: string) => {
-      w.__opened.push(String(url));
-      return null;
-    }) as typeof window.open;
-  });
-}
-const opened = (page: Page) => page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
 
 test('a block shows the banner with a countdown above the mini player; dismiss, unblock, Open in YouTube', async ({ page }) => {
   await recordOpens(page);

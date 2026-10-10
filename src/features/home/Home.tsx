@@ -14,7 +14,7 @@ import { refreshCatalog } from '../../ui/refresh';
 import { NewTracksPill } from './NewTracksPill';
 import { Rail, RailRow, type RailItem } from '../../ui/components/Rail';
 import { usePaged } from '../../ui/usePaged';
-import { authScope } from '../../stores/feed';
+import { feedKey } from '../../stores/feed';
 import { auth } from '../../data/auth';
 import { list as listCtx, playAll, radio, withRest } from '../../ui/playAll';
 
@@ -169,9 +169,8 @@ export function Home() {
   const sort = homeSort.value;
   const nsfw = showNsfw.value;
   // Latest stays loaded while Most saved is shown, so switching back is instant.
-  const scope = authScope(auth.state.value.status === 'signedIn');
-  const feedKey = `home:${scope}:${g ?? ''}:${nsfw}`;
-  const paged = usePaged(feedKey, (c) => (g == null ? source.latest(c) : source.byGenre(g, c)));
+  const key = feedKey.home(auth.state.value.status === 'signedIn', g, nsfw);
+  const paged = usePaged(key, (c) => (g == null ? source.latest(c) : source.byGenre(g, c)));
   // P2: a tap plays from the whole list (the cached catalog), not only the loaded pages.
   const queue = () => withRest(paged.tracks, g == null ? catalog.tracks.value : catalogGenre(g));
   return (
@@ -189,7 +188,7 @@ export function Home() {
       <ShuffleHero />
       <GenreChips />
       <SortRail />
-      {sort === 'latest' ? <PagedTracks paged={paged} ctx={radio(g == null ? 'Home · Latest' : `Home · ${g}`)} queue={queue} chunkKey={feedKey} /> : <MostSaved genre={g} />}
+      {sort === 'latest' ? <PagedTracks paged={paged} ctx={radio(g == null ? 'Home · Latest' : `Home · ${g}`)} queue={queue} chunkKey={key} /> : <MostSaved genre={g} />}
     </Screen>
   );
 }

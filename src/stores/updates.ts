@@ -13,7 +13,7 @@
 import { computed, signal } from '@preact/signals';
 import { Capacitor } from '@capacitor/core';
 import { RELEASES_URL } from '../data/model';
-import { kv } from '../core/storage';
+import { kv, readJson } from '../core/storage';
 import { logError } from '../core/log';
 import { settings } from './library';
 
@@ -38,14 +38,14 @@ const FDROID_INSTALLERS = new Set([
   'org.fdroid.fdroid.debug',
 ]);
 
-export interface Release {
+export interface AppRelease {
   version: string;
   url: string;
 }
 
 interface Saved {
   checkedAt: number;
-  latest: Release | null;
+  latest: AppRelease | null;
 }
 
 /** "1.2.3" (a leading v, and a suffix like "-preview", are ignored); null if not one. */
@@ -76,8 +76,8 @@ export function autoCheckDue(checkedAt: number, now = Date.now(), failedAt = 0):
   return !checkedAt || now - checkedAt >= AUTO_CHECK_MS || now < checkedAt;
 }
 
-/** GitHub's latest-release answer as a Release (a stable x.y.z tag), or null. */
-export function releaseOf(json: unknown): Release | null {
+/** GitHub's latest-release answer as an AppRelease (a stable x.y.z tag), or null. */
+export function releaseOf(json: unknown): AppRelease | null {
   const o = (json ?? {}) as { tag_name?: unknown; html_url?: unknown; draft?: unknown; prerelease?: unknown };
   if (typeof o.tag_name !== 'string' || o.draft === true || o.prerelease === true) return null;
   const p = parseVersion(o.tag_name);
@@ -100,13 +100,12 @@ export const checkFailed = signal(false);
 export const installUnknown = signal(false);
 
 /** A newer release than this install is out. */
-export const updateAvailable = computed<Release | null>(() => {
+export const updateAvailable = computed<AppRelease | null>(() => {
   const r = lastCheck.value.latest;
   const a = app.value;
   return r && a.fdroid === false && isNewer(r.version, a.version) ? r : null;
 });
 
-const store = kv;
 /** When the last check failed (Date.now()), 0 after a success. */
 let failedAt = 0;
 
@@ -124,7 +123,7 @@ export async function checkForUpdates(): Promise<void> {
     lastCheck.value = { checkedAt: Date.now(), latest };
     checkFailed.value = false;
     failedAt = 0;
-    void store.set(K_UPDATES, JSON.stringify(lastCheck.peek())).catch(() => {});
+    void kv.set(K_UPDATES, JSON.stringify(lastCheck.peek())).catch(() => {});
   } catch (e) {
     checkFailed.value = true;
     failedAt = Date.now();
@@ -166,14 +165,11 @@ export async function startUpdates(appInfo?: AppInfo): Promise<void> {
       logError('getAppInfo', e);
     }
   }
-  try {
-    const saved = JSON.parse((await store.get(K_UPDATES)) ?? 'null') as Saved | null;
-    if (saved && typeof saved.checkedAt === 'number') {
-      const latest = saved.latest && typeof saved.latest.version === 'string' && typeof saved.latest.url === 'string' ? saved.latest : null;
-      lastCheck.value = { checkedAt: saved.checkedAt, latest };
-    }
-  } catch {
-    // A broken saved check: ask again.
+  // A broken saved check reads as none: ask again.
+  const saved = await readJson<Partial<Saved> | null>(kv, K_UPDATES, null);
+  if (saved && typeof saved.checkedAt === 'number') {
+    const latest = saved.latest && typeof saved.latest.version === 'string' && typeof saved.latest.url === 'string' ? saved.latest : null;
+    lastCheck.value = { checkedAt: saved.checkedAt, latest };
   }
   maybeAutoCheck();
   document.addEventListener('visibilitychange', () => {

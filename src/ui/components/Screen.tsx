@@ -164,8 +164,7 @@ export function Screen({
       ro.observe(body.current);
     }
     return done;
-    // Runs per scroll key; `updateTop` reads only refs and the `backToTop` prop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Runs per scroll key; `updateTop` reads only refs and the `backToTop` prop.
   }, [scrollKey]);
 
   // Touch and wheel, as passive native listeners: pull-to-refresh, and stopping a
@@ -306,8 +305,7 @@ export function Screen({
       cancelAnimationFrame(pull.frame);
       clearTimeout(pull.timer);
     };
-    // Mount-only: everything it uses is a ref (`onRefresh` goes through `refresh`).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Mount-only: everything it uses is a ref (`onRefresh` goes through `refresh`).
   }, []);
 
   useEffect(

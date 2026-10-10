@@ -35,7 +35,6 @@ export function usePress(ref: RefObject<HTMLElement | null>): void {
       el.removeEventListener('pointerdown', down);
       for (const t of ['pointerup', 'pointercancel', 'pointerleave'] as const) el.removeEventListener(t, up);
     };
-    // Mount-only: `ref` is a stable ref object.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Mount-only: `ref` is a stable ref object.
   }, []);
 }

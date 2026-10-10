@@ -1,6 +1,6 @@
-/** Small UI preferences (sort orders), persisted with Capacitor Preferences. */
+/** Small UI preferences (sort orders), persisted in Preferences (core/storage kv). */
 import { signal, type Signal } from '@preact/signals';
-import { Preferences } from '@capacitor/preferences';
+import { kv } from '../core/storage';
 
 export type GridSort = 'popular' | 'az';
 const GRID_SORTS: readonly GridSort[] = ['popular', 'az'];
@@ -21,12 +21,12 @@ function bind<T extends string>(sig: Signal<T>, key: string, allowed: readonly T
       first = false;
       return;
     }
-    Preferences.set({ key, value: v }).catch(() => {});
+    kv.set(key, v).catch(() => {});
   });
   // A choice made before loading finished wins over the stored one.
   const before = sig.value;
-  Preferences.get({ key })
-    .then(({ value }) => {
+  kv.get(key)
+    .then((value) => {
       if (sig.value !== before || !value || !(allowed as readonly string[]).includes(value)) return;
       applying = true;
       sig.value = value as T;

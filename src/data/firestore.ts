@@ -36,7 +36,7 @@ const SHUFFLE_PAGES = 4;
 export const CATALOG_PAGE_SIZE = 300;
 /** Safety stop for catalog paging (300 * 40 = 12,000 posts). */
 const CATALOG_MAX_PAGES = 40;
-/** Field mask for catalog requests: only what parseDoc and the counts need. */
+/** Field mask for catalog requests: only what tracksFromDocument and the counts need. */
 export const CATALOG_FIELDS = [
   'attachments',
   'audioAttachmentGenre',
@@ -56,7 +56,7 @@ const FRESHNESS_FIELDS = ['createdAt'] as const;
 /** Extra fields members requests ask for: the ban flags (filtered here) and isPublic. */
 const MEMBERS_EXTRA_FIELDS = ['isPublic', 'isBanned', 'isShadowBanned'] as const;
 export const MEMBERS_CATALOG_FIELDS = [...CATALOG_FIELDS, ...MEMBERS_EXTRA_FIELDS] as const;
-export const MEMBERS_FRESHNESS_FIELDS = ['createdAt', 'isBanned', 'isShadowBanned'] as const;
+export const MEMBERS_FRESHNESS_FIELDS = [...FRESHNESS_FIELDS, 'isBanned', 'isShadowBanned'] as const;
 
 /** The freshness check's field mask: NSFW hidden adds isNSFW, so NSFW posts aren't counted. */
 function freshnessFields(members: boolean, includeNsfw: boolean): readonly string[] {
@@ -141,11 +141,6 @@ export class FirestoreError extends Error {
   }
 }
 
-interface RawPage {
-  tracks: Track[];
-  cursor: Cursor | null;
-}
-
 /** What the source needs from the Cyberspace login (./auth). */
 interface SourceAuth {
   signedIn(): boolean;
@@ -166,7 +161,7 @@ interface FirestoreSourceOptions {
 
 export class FirestoreSource implements TrackSource {
   /** Raw pages by query body (fresh for CACHE_TTL_MS, at most CACHE_MAX_PAGES; loads in progress shared). */
-  private readonly cache: Cache<string, RawPage>;
+  private readonly cache: Cache<string, Page>;
   private readonly showNsfw: () => boolean;
   private readonly fetchFn: typeof fetch;
   private readonly auth: SourceAuth | undefined;
@@ -208,7 +203,7 @@ export class FirestoreSource implements TrackSource {
     const seen = new Set<string>();
     let cursor: Cursor | null = null;
     for (let i = 0; i < SHUFFLE_PAGES; i++) {
-      const p: RawPage = await this.raw(null, cursor);
+      const p: Page = await this.raw(null, cursor);
       for (const t of this.filter(p.tracks)) {
         if (!seen.has(t.id)) {
           seen.add(t.id);
@@ -288,7 +283,7 @@ export class FirestoreSource implements TrackSource {
     return this.showNsfw() ? tracks.slice() : tracks.filter((t) => !t.nsfw);
   }
 
-  private raw(genre: string | null, cursor: Cursor | null): Promise<RawPage> {
+  private raw(genre: string | null, cursor: Cursor | null): Promise<Page> {
     const members = this.members();
     const body = JSON.stringify(buildQuery({ genre, cursor, members }));
     return this.cache.load(body, () => this.request(body, members), {
@@ -298,7 +293,7 @@ export class FirestoreSource implements TrackSource {
     });
   }
 
-  private async request(body: string, members: boolean, limit = PAGE_SIZE): Promise<RawPage> {
+  private async request(body: string, members: boolean, limit = PAGE_SIZE): Promise<Page> {
     const rows = await this.rows(body, members);
     // The cursor comes from every row, so hidden (banned) posts don't end paging early.
     return { tracks: tracksFromRows(rows), cursor: nextCursor(rows, limit) };

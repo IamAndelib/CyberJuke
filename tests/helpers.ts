@@ -64,7 +64,26 @@ export async function openNowPlaying(page: Page): Promise<void> {
 /** Calls the fake JukeMusic plugin received (and shares). */
 export const musicCalls = (page: Page) => page.evaluate(() => (window as unknown as { __cyberjukeMusicCalls: unknown[][] }).__cyberjukeMusicCalls);
 /** Calls the web player made that the native plugin would receive. */
-export const playerCalls = (page: Page) => page.evaluate(() => (window as unknown as { __cyberjukePlayerCalls?: unknown[][] }).__cyberjukePlayerCalls ?? []);
+export const playerCalls = (page: Page) => page.evaluate(() => window.__cyberjukePlayerCalls ?? []);
+
+declare global {
+  interface Window {
+    /** recordOpens: the URLs window.open was asked for. */
+    __opened?: string[];
+  }
+}
+
+/** Record window.open instead of opening anything (read them with [opened]). */
+export async function recordOpens(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const urls: string[] = (window.__opened = []);
+    window.open = ((url: string) => {
+      urls.push(String(url));
+      return null;
+    }) as typeof window.open;
+  });
+}
+export const opened = (page: Page) => page.evaluate(() => window.__opened ?? []);
 
 export const setLyricsMode = (page: Page, mode: string) => page.evaluate((m) => ((window as unknown as { __cyberjukeLyricsMode: string }).__cyberjukeLyricsMode = m), mode);
 

@@ -100,6 +100,8 @@ test('a favourite star tap re-renders the star, not the grid or page around it',
   await page.getByTestId('tab-artists').click();
   // Every tile rendered (the grid fills in chunks).
   await expect.poll(() => page.getByTestId('artist-cell').count(), { timeout: 15_000 }).toBeGreaterThan(300);
+  // Its last chunk renders in idle time, which can come late on a busy machine.
+  await quiet();
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
   const results: Record<string, unknown> = {};
 

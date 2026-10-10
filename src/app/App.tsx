@@ -51,6 +51,8 @@ const TAB_ITEMS: { id: Tab; label: string; icon: IconName }[] = [
 const PAGE_ENTER_MS = 180;
 /** P5: a second tap on the active tab within this long pops to its root. */
 const RETAP_MS = 700;
+/** Scrolled further than this, a re-tap scrolls up first (less: it is at the top). */
+const AT_TOP_PX = 2;
 
 /** The scroller of the page showing on a tab. */
 function topScroller(t: Tab): HTMLElement | null {
@@ -68,12 +70,12 @@ function retapTab(t: Tab): void {
   const quick = now - lastRetap < RETAP_MS;
   lastRetap = now;
   const el = topScroller(t);
-  if (el && el.scrollTop > 2 && !quick) {
+  if (el && el.scrollTop > AT_TOP_PX && !quick) {
     toTopOf(el);
     return;
   }
   if (stacks.value[t].length) popToRoot(t);
-  else if (el && el.scrollTop > 2) toTopOf(el);
+  else if (el && el.scrollTop > AT_TOP_PX) toTopOf(el);
 }
 
 /** The screen's own back-to-top: the click guard knows it runs (M6), and a touch stops it. */
@@ -204,6 +206,8 @@ const TabPane = memo(function TabPane({ t, active }: { t: Tab; active: boolean }
  */
 /** Now Playing's hold on the app's `inert` (ui/inert.ts). */
 const NOW_PLAYING = {};
+/** Longest Now Playing's opening transition takes, if no transitionend comes (now-playing.css). */
+const NP_OPEN_MAX_MS = 450;
 
 function useInertUnderNowPlaying(app: { current: HTMLElement | null }): void {
   useEffect(() => {
@@ -233,7 +237,7 @@ function useInertUnderNowPlaying(app: { current: HTMLElement | null }): void {
         };
         return;
       }
-      const np = document.querySelector<HTMLElement>('[data-testid="now-playing"]');
+      const np = document.querySelector<HTMLElement>('.np');
       let timer = 0;
       let frame = 0;
       const settle = () => {
@@ -246,7 +250,7 @@ function useInertUnderNowPlaying(app: { current: HTMLElement | null }): void {
       };
       np?.addEventListener('transitionend', onEnd);
       if (reducedMotion()) frame = requestAnimationFrame(settle);
-      else timer = window.setTimeout(settle, 450);
+      else timer = window.setTimeout(settle, NP_OPEN_MAX_MS);
       cancel = () => {
         np?.removeEventListener('transitionend', onEnd);
         clearTimeout(timer);
@@ -257,8 +261,7 @@ function useInertUnderNowPlaying(app: { current: HTMLElement | null }): void {
       cancel?.();
       dispose();
     };
-    // `app` is a stable ref object.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `app` is a stable ref object.
   }, []);
 }
 

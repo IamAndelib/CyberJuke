@@ -3,6 +3,7 @@ import { currentId, player, playContext, repeatMode, shuffleOn, upNextSections, 
 import { toast } from '../../stores/toast';
 import { Icon } from '../../ui/icons';
 import { Art } from '../../ui/components/Art';
+import { plural } from '../../core/text';
 
 type Kind = UpNextKind;
 
@@ -16,7 +17,7 @@ interface Refocus {
   kind: Kind;
   index: number | null;
   /** Its button: this one, else (disabled at the end of the section) the other arrow, else Remove. */
-  button: string;
+  button: RowButton;
   /** Not before this row (the one removed: id and index) has gone. */
   gone?: [string, number];
   /** Given up after this (the player didn't follow). */
@@ -24,16 +25,18 @@ interface Refocus {
 }
 const REFOCUS_MS = 2000;
 
-const rowAt = (id: string, index: number) => `[data-testid="upnext-row"][data-track-id="${CSS.escape(id)}"][data-index="${index}"]`;
+type RowButton = 'up' | 'down' | 'remove';
+
+const rowAt = (id: string, index: number) => `li[data-section][data-track-id="${CSS.escape(id)}"][data-index="${index}"]`;
 
 function focusRow(root: HTMLElement, r: Refocus): boolean {
   if (r.gone && root.querySelector(rowAt(...r.gone))) return false;
   const index = r.index == null ? '' : `[data-index="${r.index}"]`;
-  const row = root.querySelector(`[data-testid="upnext-row"][data-section="${r.kind}"][data-track-id="${CSS.escape(r.id)}"]${index}`);
+  const row = root.querySelector(`li[data-section="${r.kind}"][data-track-id="${CSS.escape(r.id)}"]${index}`);
   if (!row) return false;
-  const pick = [r.button, r.button === 'upnext-up' ? 'upnext-down' : 'upnext-up', 'upnext-remove'];
+  const pick: RowButton[] = [r.button, r.button === 'up' ? 'down' : 'up', 'remove'];
   for (const b of pick) {
-    const el = row.querySelector<HTMLButtonElement>(`[data-testid="${b}"]:not(:disabled)`);
+    const el = row.querySelector<HTMLButtonElement>(`[data-role="${b}"]:not(:disabled)`);
     if (el) {
       el.focus({ preventScroll: true });
       return true;
@@ -83,7 +86,7 @@ export function UpNext() {
     });
     return true;
   };
-  const move = (e: Event, it: UpItem, kind: Kind, to: UpItem, button: string) => {
+  const move = (e: Event, it: UpItem, kind: Kind, to: UpItem, button: RowButton) => {
     if (guarded()) return;
     keepFocus(e, { id: it.track.id, kind, index: to.index, button });
     void player.move(it.index, to.index, it.track.id);
@@ -126,7 +129,8 @@ export function UpNext() {
                     class="icon-btn"
                     aria-label={`Move ${it.track.title} up`}
                     disabled={k === 0}
-                    onClick={(e) => move(e, it, kind, items[k - 1], 'upnext-up')}
+                    onClick={(e) => move(e, it, kind, items[k - 1], 'up')}
+                    data-role="up"
                     data-testid="upnext-up"
                   >
                     <Icon name="up" size={20} />
@@ -135,7 +139,8 @@ export function UpNext() {
                     class="icon-btn"
                     aria-label={`Move ${it.track.title} down`}
                     disabled={k === items.length - 1}
-                    onClick={(e) => move(e, it, kind, items[k + 1], 'upnext-down')}
+                    onClick={(e) => move(e, it, kind, items[k + 1], 'down')}
+                    data-role="down"
                     data-testid="upnext-down"
                   >
                     <Icon name="down" size={20} />
@@ -147,8 +152,9 @@ export function UpNext() {
                 aria-label={`Remove ${it.track.title} from queue`}
                 onClick={(e) => {
                   const near = items[k + 1] ?? items[k - 1];
-                  if (remove(it, kind, items[k + 1]?.track.id ?? null)) keepFocus(e, near ? { id: near.track.id, kind, index: null, button: 'upnext-remove', gone: [it.track.id, it.index] } : null);
+                  if (remove(it, kind, items[k + 1]?.track.id ?? null)) keepFocus(e, near ? { id: near.track.id, kind, index: null, button: 'remove', gone: [it.track.id, it.index] } : null);
                 }}
+                data-role="remove"
                 data-testid="upnext-remove"
               >
                 <Icon name="close" size={20} />
@@ -165,7 +171,7 @@ export function UpNext() {
     <section ref={root} class="upnext" data-testid="up-next">
       <div class="section-head">
         <h3 class="section-title">Up next</h3>
-        <span class="dim small">{shuffle ? 'Shuffled · turn shuffle off to reorder' : `${total} track${total === 1 ? '' : 's'}`}</span>
+        <span class="dim small">{shuffle ? 'Shuffled · turn shuffle off to reorder' : plural(total, 'track')}</span>
       </div>
       {total === 0 ? (
         <div class="dim small upnext-empty">{repeatMode.value === 'all' ? 'Queue repeats from the top.' : 'Nothing queued. ⋯ → Add to queue plays a track next.'}</div>

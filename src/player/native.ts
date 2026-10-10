@@ -3,6 +3,7 @@
  * The native engineer implements exactly this; do not change it unilaterally.
  */
 import { registerPlugin } from '@capacitor/core';
+import type { Quality } from '../stores/library';
 
 export interface NativeTrack { id: string; ytId: string; title: string; artist: string; artworkUrl: string; by?: string; postUrl?: string; membersOnly?: boolean }
 export type RepeatMode = 'off' | 'all' | 'one';
@@ -69,7 +70,7 @@ interface JukePlayerPlugin {
   skipToIndex(o: { index: number; expectId?: string }): Promise<void>;
   setShuffle(o: { enabled: boolean }): Promise<void>;
   setRepeat(o: { mode: RepeatMode }): Promise<void>;
-  setQuality(o: { quality: 'high' | 'low' }): Promise<void>;
+  setQuality(o: { quality: Quality }): Promise<void>;
   getState(): Promise<NativeState>;
   /** From an Android intent extra (debuggable builds), used by the CI smoke test. */
   getLaunchOptions(): Promise<{ autoplay?: 'latest' }>;

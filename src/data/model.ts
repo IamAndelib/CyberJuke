@@ -3,6 +3,7 @@
  * Pure functions only: no network, no globals. Unit-tested against
  * real fixtures in __fixtures__/runquery-sample.json.
  */
+import { YT_ID_RE } from '../core/guards';
 
 export interface Track {
   /** Firestore doc id, plus `-<attachmentIndex>` when the post has several audio attachments. */
@@ -39,6 +40,11 @@ export interface Track {
 
 export type TrackOrigin = 'jukebox' | 'ytmusic';
 
+/** A track that isn't a Jukebox post (Global, from native, a placeholder): the post fields left empty. */
+export function makeTrack(t: Pick<Track, 'id' | 'ytId' | 'title' | 'artist'> & Partial<Track>): Track {
+  return { genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '', ...t };
+}
+
 /** True for tracks from Global search (not shared on the Jukebox). */
 export function isGlobal(t: Pick<Track, 'source'> | null | undefined): boolean {
   return t?.source === 'ytmusic';
@@ -54,7 +60,6 @@ export const RELEASES_URL = `${REPO_URL}/releases`;
 export const UNTITLED = 'Untitled';
 export const UNKNOWN_ARTIST = 'Unknown artist';
 
-const YT_ID = /^[A-Za-z0-9_-]{11}$/;
 const YT_HOSTS = new Set(['youtube.com', 'youtube-nocookie.com', 'youtu.be']);
 const PATH_PREFIXES = new Set(['live', 'shorts', 'embed', 'v', 'e']);
 
@@ -96,7 +101,7 @@ export function parseYouTubeId(src: string | null | undefined): string | null {
   const id = m[0];
   // If the segment was longer, the next char must be a separator, not more id chars.
   if (candidate.length > 11 && /[A-Za-z0-9_-]/.test(candidate[11])) return null;
-  return YT_ID.test(id) ? id : null;
+  return YT_ID_RE.test(id) ? id : null;
 }
 
 export function artworkUrl(ytId: string): string {
@@ -137,14 +142,11 @@ export interface FsDocument {
   name: string;
   fields?: Record<string, FsValue>;
   createTime?: string;
-  updateTime?: string;
 }
 
+/** A runQuery result row; rows without a document (readTime, done) carry nothing we read. */
 export interface FsRunQueryRow {
   document?: FsDocument;
-  readTime?: string;
-  skippedResults?: number;
-  done?: boolean;
 }
 
 function str(v: FsValue | undefined): string {

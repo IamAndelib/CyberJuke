@@ -7,7 +7,7 @@
 <li><b>Latest tracks</b> posted to the Jukebox as an endless list, and <b>Most saved</b> this month or all time.</li>
 <li><b>Search</b> every Jukebox track by title, artist or genre, with typo tolerance. It works offline once the catalog is cached.</li>
 <li><b>Shuffle the Jukebox:</b> one tap for a random mix.</li>
-<li><b>Genres</b> and <b>artists</b> in A–Z or popular order, with favorites. An artist page shows what Cyberspace people shared, then the artist's top songs, albums, EPs and singles.</li>
+<li><b>Genres</b> and <b>artists</b> in A–Z or popular order, with favourites. An artist page shows what Cyberspace people shared, then the artist's top songs, albums, live albums, EPs and singles.</li>
 <li><b>Background playback:</b> notification, lock screen and headset controls; the queue keeps going with the screen off.</li>
 <li><b>Now Playing</b> with seek, shuffle, repeat, like, synced lyrics and an Up Next queue you can reorder.</li>
 <li><b>Library:</b> liked tracks and recently played, stored on your phone.</li>

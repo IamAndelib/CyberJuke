@@ -1,7 +1,9 @@
 /** Runs the shared queue rule table (also run against the native queue by QueueRulesTest). */
 import { describe, expect, it } from 'vitest';
 import rules from '../../tests/spec/queue-rules.json';
-import { Queue, type RepeatMode, type Section } from './queue';
+import { Queue } from './queue';
+import type { RepeatMode } from './native';
+import type { UpNextKind as Section } from './types';
 
 type Step = { op: string; [k: string]: unknown };
 interface Case {

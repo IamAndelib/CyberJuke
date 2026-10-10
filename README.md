@@ -92,7 +92,7 @@ Releases are built by the `Release` workflow from a tagged commit with no caches
 | **Track list** | Reads the same public post data the Cyberspace website shows on its Jukebox page, through `src/data/firestore.ts`. All data access goes through the `TrackSource` interface in `src/data/source.ts`, so it can be swapped for the [official Cyberspace API](https://api.cyberspace.online) by changing one file. |
 | **Playback** | Every Jukebox track is a YouTube link. A native Android player (`android/app/src/main/java/.../playback/`; Capacitor plugins in `bridge/`, YouTube code in `yt/`, lyrics in `lyrics/`, HTTP and back-off in `net/`) resolves the audio stream with [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) and plays it with Media3/ExoPlayer in a media session. The queue lives in that native service, which is what keeps music going with the screen off. The web side talks to it through a Capacitor plugin (`src/player/native.ts`). |
 | **Global search, artist pages** | YouTube Music data, read on the phone through the `JukeMusic` plugin (`src/data/ytmusic.ts` on the web side): the artist's own page for top songs and the discography, NewPipeExtractor for search, albums and playlists. Results are cached for 10 minutes. |
-| **Lyrics** | Looked up on [LRCLIB](https://lrclib.net) when the lyrics panel is open, and cached on the phone. |
+| **Lyrics** | Looked up on [LRCLIB](https://lrclib.net) when the lyrics panel is open, else the lyrics YouTube Music shows (from LyricFind), and cached on the phone. |
 | **Update check** | Asks GitHub's API for the latest release: at most once a day while the app is open (Settings → Updates; can be turned off), or when you tap Check now. Never for installs from F-Droid. |
 | **Sign-in** | Optional. `src/data/auth.ts` signs in with Cyberspace's own login (Firebase Auth, email and password, over plain HTTPS; no Firebase SDK). Signed in, requests carry your login token and use the same query the site uses for members. |
 
@@ -105,8 +105,8 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 | What | Where |
 |---|---|
 | Liked tracks and recently played | App files, excluded from backups (they can hold members-only tracks). Signing out removes members-only tracks from both; your members-only likes are kept on the phone, out of sight, and come back when you sign in again with the same account (signing in with another account deletes them) |
-| Settings, favorite genres and artists, recent searches | App data (Capacitor Preferences). Android may include these in your own Google backup |
-| The cached Jukebox catalog and lyrics | App data and cache; cleared on sign-out |
+| Settings, favourite genres and artists, recent searches | App data (Capacitor Preferences). Android may include these in your own Google backup |
+| The cached Jukebox catalog and lyrics | App data and cache. The catalog is dropped on sign-in and sign-out; signing out drops members-only tracks' lyrics |
 | What was playing last (the queue and where in it), so the app reopens on it | App files, excluded from backups; signing out removes members-only tracks from it |
 | Login token, user id and @username (only if you sign in) | Encrypted with an Android Keystore key; excluded from Android cloud and device-transfer backups |
 | Stream URLs, YouTube Music results | Memory only |
@@ -120,7 +120,7 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 | YouTube | The video ID of the track being played or prefetched | Playback |
 | YouTube Music | Your Global search query, or the artist you open; the video ID of a Global track, for its radio (also in the background while autoplay refills); the video ID of the playing track when LRCLIB has no lyrics for it | Global search, artist pages, Global autoplay, lyrics fallback |
 | YouTube and Google image servers (`i.ytimg.com`, `*.googleusercontent.com`, `*.ggpht.com`) | Artwork requests | Lists, artist pages and Now Playing |
-| LRCLIB | Artist, title, album (when known) and duration of the current track | Lyrics panel open |
+| LRCLIB | Artist, title and duration of the current track | Lyrics panel open |
 | GitHub (`api.github.com`) | A request for the latest CyberJuke release (nothing about you or your library) | At most once a day when the app opens or comes back (an hour after a failed check), or **Check now**; never for F-Droid installs; off with Settings → Updates |
 
 Nothing is sent to the developer. Your password is never stored or logged.

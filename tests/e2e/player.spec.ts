@@ -318,8 +318,9 @@ test('a swipe down closes Now Playing in one motion: on from the finger, never b
   for (let i = 1; i < frames.length; i++) expect(frames[i][1], `frame ${i}`).toBeGreaterThanOrEqual(frames[i - 1][1] - 0.5);
   // Straight on from the finger: well under way 80 ms after the release (the old close stood
   // still that long, then sped off: two steps), and all the way down.
-  const at = (ms: number) => frames.filter(([t]) => t <= ms).at(-1)![1];
-  expect((at(80) - start0) / (sheet - start0)).toBeGreaterThan(0.3);
+  // (The first frame from 80 ms on: on a busy machine none may come sooner.)
+  const from = (ms: number) => frames.find(([t]) => t >= ms)![1];
+  expect((from(80) - start0) / (sheet - start0)).toBeGreaterThan(0.3);
   expect(frames.at(-1)![1]).toBeGreaterThanOrEqual(sheet - 1);
 });
 

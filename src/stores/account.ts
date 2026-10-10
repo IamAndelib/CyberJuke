@@ -8,7 +8,7 @@
  */
 import { auth } from '../data/auth';
 import { source } from '../data';
-import { FirestoreError, FirestoreSource } from '../data/firestore';
+import { FirestoreError } from '../data/firestore';
 import type { Track } from '../data/model';
 import { feeds, JUKEBOX_FEED_PREFIXES } from './feed';
 import { lyrics } from '../data/lyrics';
@@ -16,8 +16,6 @@ import { catalog } from './catalog';
 import { dropMembersOnly, returnMembersOnly } from './library';
 import { freshness } from './newTracks';
 import { dropToastActions, toast } from './toast';
-
-const fs = source instanceof FirestoreSource ? source : null;
 
 /** One genre's tracks from the catalog (NSFW included; the source filters). */
 async function catalogGenreTracks(genre: string): Promise<Track[]> {
@@ -28,11 +26,11 @@ async function catalogGenreTracks(genre: string): Promise<Track[]> {
   return all.filter((t) => t.genre === genre);
 }
 
-if (fs) fs.genreTracks = catalogGenreTracks;
+source.genreTracks = catalogGenreTracks;
 
 /** Forget everything loaded in the other sign-in state and load the catalog again. */
 async function resetForSignIn(): Promise<void> {
-  fs?.invalidateAll();
+  source.invalidateAll?.();
   feeds.deletePrefix(...JUKEBOX_FEED_PREFIXES);
   freshness.reset();
   await catalog.reset();

@@ -70,7 +70,7 @@ function A({ href, children }: { href: string; children: string }) {
 }
 
 /** "Check for new tracks": how often Home asks whether anything new was posted. */
-function CheckEvery() {
+function CheckEverySetting() {
   const cur = settings.value.checkEvery;
   const onKey = arrowChoice(CHECK_EVERY_OPTIONS, cur, (v) => updateSettings({ checkEvery: v }));
   return (
@@ -467,7 +467,7 @@ export function Settings() {
           </div>
           <Toggle on={s.autoplay} onChange={(v) => updateSettings({ autoplay: v })} label="Autoplay" testid="autoplay-toggle" />
         </div>
-        <CheckEvery />
+        <CheckEverySetting />
       </section>
 
       <Updates />

@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { cssVar, playerCalls, seedStorage, SETTINGS_KEY, start, waitForTracks } from '../helpers';
+import { cssVar, opened, playerCalls, recordOpens, seedStorage, SETTINGS_KEY, start, waitForTracks } from '../helpers';
 
 /** Settings: themes, NSFW, the new-tracks interval, the IPv4 setting and the card order. */
 
@@ -92,7 +92,7 @@ test('an old "Prefer IPv4: on" becomes Always', async ({ page }) => {
 
 test('the connection line shows how YouTube is reached, for bug reports', async ({ page }) => {
   await page.addInitScript(() => {
-    (window as unknown as { __cyberjukeNetStatus: unknown }).__cyberjukeNetStatus = {
+    window.__cyberjukeNetStatus = {
       family: 'IPv4',
       ipv4: 'auto',
       autoIpv4: true,
@@ -110,14 +110,14 @@ test('the connection line shows how YouTube is reached, for bug reports', async 
 
 test('the connection line is fresh each time Settings is shown (Auto may switch without a block)', async ({ page }) => {
   await page.addInitScript(() => {
-    (window as unknown as { __cyberjukeNetStatus: unknown }).__cyberjukeNetStatus = { ipv4: 'auto', autoIpv4: false };
+    window.__cyberjukeNetStatus = { ipv4: 'auto', autoIpv4: false };
   });
   await page.goto('/');
   await page.getByTestId('tab-settings').click();
   await expect(page.getByTestId('net-status')).toHaveText('Connection: not used yet · no limits so far');
   await page.getByTestId('tab-home').click();
   await page.evaluate(() => {
-    (window as unknown as { __cyberjukeNetStatus: unknown }).__cyberjukeNetStatus = { family: 'IPv6', ipv4: 'auto', autoIpv4: true };
+    window.__cyberjukeNetStatus = { family: 'IPv6', ipv4: 'auto', autoIpv4: true };
   });
   await page.getByTestId('tab-settings').click();
   await expect(page.getByTestId('net-status')).toHaveText('Connection: IPv4 (switched by Auto) · no limits so far');
@@ -136,14 +136,7 @@ test('Account is the first card and says "members-only shared tracks"', async ({
 });
 
 test('Source code: the last card links to the repository and its latest release', async ({ page }) => {
-  await page.addInitScript(() => {
-    const w = window as unknown as { __opened: string[] };
-    w.__opened = [];
-    window.open = ((url: string) => {
-      w.__opened.push(String(url));
-      return null;
-    }) as typeof window.open;
-  });
+  await recordOpens(page);
   await page.goto('/');
   await page.getByTestId('tab-settings').click();
   const card = page.getByTestId('source-code');
@@ -152,8 +145,7 @@ test('Source code: the last card links to the repository and its latest release'
   expect(await page.getByTestId('screen-settings').locator('section.card').last().getAttribute('data-testid')).toBe('source-code');
   await card.getByTestId('source-repo').getByRole('link').click();
   await card.getByTestId('source-releases').getByRole('link').click();
-  const opened = await page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
-  expect(opened).toEqual(['https://github.com/IamAndelib/CyberJuke', 'https://github.com/IamAndelib/CyberJuke/releases/latest']);
+  expect(await opened(page)).toEqual(['https://github.com/IamAndelib/CyberJuke', 'https://github.com/IamAndelib/CyberJuke/releases/latest']);
 });
 
 test('Licenses: every bundled library is listed and the full texts open in the app', async ({ page }) => {

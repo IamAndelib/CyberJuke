@@ -1,8 +1,8 @@
 /**
  * The error model. A failure that reaches a screen is a LoadError: the error's own
  * message, whether the connection was lost, and the code some sources attach
- * (MusicError's BOT_CHECK, NETWORK, UNAVAILABLE). The sources' error classes
- * (FirestoreError, AuthError, MusicError) carry `offline` and `code` for this; what
+ * (MusicError's BOT_CHECK, NETWORK, UNAVAILABLE). The sources' error classes carry
+ * these (FirestoreError `offline`, AuthError both, MusicError `code` only); what
  * each source's failures say to the user stays with that source (authErrorText,
  * musicErrorText).
  */

@@ -27,8 +27,9 @@
  * Up next is three sections, in play order: queued by you, the rest of the list,
  * autoplay (see sections()).
  */
-
-export type RepeatMode = 'off' | 'all' | 'one';
+import { UP_NEXT_MAX } from '../core/guards';
+import type { RepeatMode } from './native';
+import type { UpNextKind as Section } from './types';
 
 interface Identified {
   id: string;
@@ -52,7 +53,6 @@ const RESTART_THRESHOLD_MS = 3000;
 /** Tracks kept behind the current one in play order; older played autoplay tracks go. */
 export const KEEP_PLAYED = 50;
 
-export type Section = 'queued' | 'list' | 'autoplay';
 
 type PrevResult = 'restart' | 'moved';
 
@@ -88,14 +88,14 @@ export class Queue<T extends Identified> {
   }
 
   /** The next tracks in actual play order (respects shuffle), at most `max`. */
-  upNext(max = 50): T[] {
+  upNext(max = UP_NEXT_MAX): T[] {
     if (!this.cur) return this.order.slice(0, max).map((e) => e.item);
     const p = this.order.indexOf(this.cur);
     return this.order.slice(p + 1, p + 1 + max).map((e) => e.item);
   }
 
   /** List indices of upNext(), so a UI can address items in list order. */
-  upNextIndices(max = 50): number[] {
+  upNextIndices(max = UP_NEXT_MAX): number[] {
     const p = this.cur ? this.order.indexOf(this.cur) : -1;
     return this.order.slice(p + 1, p + 1 + max).map((e) => this.list.indexOf(e));
   }
@@ -125,7 +125,7 @@ export class Queue<T extends Identified> {
    * Up next (at most `max` tracks) as its three sections: the leading run of queued
    * tracks, then the list, then autoplay.
    */
-  sections(max = 50): QueueSections<T> {
+  sections(max = UP_NEXT_MAX): QueueSections<T> {
     const out: QueueSections<T> = { queued: [], list: [], autoplay: [] };
     const p = this.cur ? this.order.indexOf(this.cur) : -1;
     let leading = true;

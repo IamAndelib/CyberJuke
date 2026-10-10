@@ -109,7 +109,7 @@ describe('nextCursor', () => {
 
   it('returns null on a short page (end of results)', () => {
     expect(nextCursor(rows, PAGE_SIZE)).toBeNull();
-    expect(nextCursor([{ readTime: 'x' }])).toBeNull();
+    expect(nextCursor([{}])).toBeNull();
   });
 });
 
@@ -283,7 +283,7 @@ describe('freshness check (newerThan)', () => {
         JSON.stringify([
           { document: { name: 'a', fields: { createdAt: { timestampValue: '2026-10-08T12:00:00Z' } } } },
           { document: { name: 'b', fields: { createdAt: { timestampValue: '2026-10-08T13:00:00Z' } } } },
-          { readTime: 'x' },
+          {},
         ]),
         { status: 200 },
       );

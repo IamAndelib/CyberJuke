@@ -26,7 +26,7 @@ export const THEME_LABELS: Record<ThemeId, string> = {
   brutalist: 'Brutalist',
 };
 
-type Quality = 'high' | 'low';
+export type Quality = 'high' | 'low';
 
 /** Minutes between checks for new tracks; 0 = only when I refresh. */
 type CheckEvery = 5 | 15 | 30 | 60 | 0;
@@ -228,7 +228,7 @@ export function toggleFavoriteGenre(name: string): boolean {
  * else at `index`. Neighbours are matched by key, so other changes meanwhile (another
  * removal, a new like on top) don't shift it.
  */
-interface Removed<T> {
+export interface Removed<T> {
   item: T;
   index: number;
   next?: string;

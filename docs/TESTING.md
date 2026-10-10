@@ -12,6 +12,7 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] A Home track plays. So do a genre track, an artist page track and a **Global** search result.
 - [ ] With the screen off and the app in the background, music keeps playing and moves on to the next track.
 - [ ] Notification and lock screen: play/pause, next and previous work, and they show the title and artwork. *(These changed: the lock screen no longer lists the queue.)*
+- [ ] On a fresh install (Android 13 or newer), the first play asks for no permission, and the notification still shows its controls.
 - [ ] Unplugging headphones or disconnecting Bluetooth pauses playback.
 - [ ] Switch between Wi-Fi and mobile data **during** a song: playback continues, or resumes by itself within a few seconds. No "YouTube is limiting requests" banner.
 - [ ] Turn on airplane mode during a song until it stops, then off again: it carries on by itself.
@@ -45,7 +46,8 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] Long-press a track row: its menu opens, and releasing your finger doesn't tap anything in the menu.
 - [ ] Long titles scroll slowly in Now Playing and in the mini player.
 - [ ] Long-pressing text (headers, titles) doesn't select it.
-- [ ] Swipe up on the mini player: Now Playing opens. Swipe Now Playing down: it closes.
+- [ ] Swipe up on the mini player: Now Playing opens. Swipe Now Playing down and let go: it carries on down and closes in one motion.
+- [ ] In Now Playing, start a scroll (up or down) on the seek bar: the page scrolls and the thumb doesn't move. A sideways drag seeks; a tap seeks to that spot.
 - [ ] Unlike a track, unfavourite (★) a genre or artist, and clear history: each one offers **Undo**. Clearing history and signing out ask you first.
 - [ ] Liking a track or favouriting (★) a genre or artist shows a short "added" message with no Undo, and the star or heart fills at once, even with a long Artists list. On the Genres and Artists tabs the starred tile moves up into ★ Favourites straight away (not also left in the grid), and unstarring puts it back in its place.
 - [ ] Swipe an **Undo** message at the bottom (e.g. after unliking) left, then another right: each one goes. A short drag springs back. A swipe that starts on **Undo** doesn't undo. Right after a swipe, one tap on ♥ or a ★ works (a fast flick too).
@@ -58,6 +60,7 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] Sign in: tracks marked **[members]** appear.
 - [ ] Close the app completely and reopen it: you're still signed in.
 - [ ] Sign out: the [members] tracks disappear everywhere, including Liked and the queue.
+- [ ] Sign in again with the same account: the [members] tracks you had liked are back in Liked, where they were.
 
 ## Rough conditions
 - [ ] Airplane mode: an offline notice appears. Airplane mode off: lists load again by themselves.

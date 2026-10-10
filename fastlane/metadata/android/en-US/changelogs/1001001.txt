@@ -1,2 +1,5 @@
-- The seek bar no longer jumps when a scroll starts on it: sideways drags the thumb, up or down scrolls, a tap still seeks there
-- Swiping Now Playing down closes it in one smooth motion
+- Members-only tracks you liked come back when you sign in again with the same account.
+- No notification permission prompt.
+- Seek bar: a scroll that starts on it no longer moves the thumb.
+- Swiping Now Playing down closes it in one motion.
+- A failing stream server gets a fresh link; Liked is kept out of cloud backups; Global autoplay keeps going; lyrics, messages and refresh fixes.

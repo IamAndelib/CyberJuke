@@ -90,7 +90,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['tests/**/*.ts', '*.config.{ts,js}', 'scripts/**/*.{js,mjs}'],
+    files: ['tests/**/*.ts', '*.config.{ts,js}'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
   {
@@ -99,11 +99,9 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_', ignoreRestSiblings: true },
       ],
-      // Warnings for now: these still fire in the current tree (auto-fixable with --fix).
-      // Raise to 'error' once the count is 0.
-      '@typescript-eslint/consistent-type-imports': ['warn', { fixStyle: 'inline-type-imports' }],
-      '@typescript-eslint/no-explicit-any': 'warn',
-      'no-console': ['warn', { allow: ['warn', 'error', 'info'] }],
+      '@typescript-eslint/consistent-type-imports': ['error', { fixStyle: 'inline-type-imports' }],
+      '@typescript-eslint/no-explicit-any': 'error',
+      'no-console': ['error', { allow: ['warn', 'error', 'info'] }],
       eqeqeq: ['error', 'smart'],
       'prefer-const': 'error',
       'no-var': 'error',

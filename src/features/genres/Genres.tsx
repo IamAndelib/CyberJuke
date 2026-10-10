@@ -12,12 +12,13 @@ import { ErrorState, PagedTracks, PlayShuffle } from '../../ui/components/TrackL
 import { Screen } from '../../ui/components/Screen';
 import { refreshCatalog } from '../../ui/refresh';
 import { GridSortRail, TileGrid, TileSkeleton } from '../../ui/components/GridSort';
-import type { GenreCount } from '../../stores/genres';
+import type { GenreCount } from '../../data/search';
 import { genresSort, type GridSort } from '../../stores/prefs';
 import { usePaged } from '../../ui/usePaged';
-import { authScope } from '../../stores/feed';
+import { feedKey } from '../../stores/feed';
 import { auth } from '../../data/auth';
 import { list as listCtx, withRest } from '../../ui/playAll';
+import { plural } from '../../core/text';
 
 /** A genre tile ([FavTile]); a star re-renders only this tile. */
 export function GenreTile({ name, inGrid }: { name: string; inGrid?: boolean }) {
@@ -91,9 +92,8 @@ const genreTile = (g: GenreCount) => <GenreTile key={g.name} name={g.name} inGri
 /** One genre's tracks, opened in place on the current tab. */
 export function GenreDetail({ genre }: { genre: string }) {
   const nsfw = showNsfw.value;
-  const scope = authScope(auth.state.value.status === 'signedIn');
-  const feedKey = `genre:${scope}:${genre}:${nsfw}`;
-  const paged = usePaged(feedKey, async (c) => {
+  const key = feedKey.genre(auth.state.value.status === 'signedIn', genre, nsfw);
+  const paged = usePaged(key, async (c) => {
     const p = await source.byGenre(genre, c);
     // Some posts only carry the genre on the attachment, which the query can't see:
     // fall back to the local catalog rather than showing an empty genre. Opened
@@ -125,7 +125,7 @@ export function GenreDetail({ genre }: { genre: string }) {
       title={genre}
       subtitle={
         count != null && count > 0
-          ? `${count} track${count === 1 ? '' : 's'}`
+          ? plural(count, 'track')
           : has
             ? `${paged.tracks.length}${paged.hasMore ? '+' : ''} tracks`
             : 'Genre'
@@ -140,7 +140,7 @@ export function GenreDetail({ genre }: { genre: string }) {
       scrollKey={`genre:${genre}`}
     >
       <PlayShuffle tracks={full} ctx={ctx} testid="genre" disabled={!has} playTestid="genre-play-all" shuffleTestid="genre-shuffle" />
-      <PagedTracks paged={paged} ctx={ctx} queue={full} hideGenre chunkKey={feedKey} />
+      <PagedTracks paged={paged} ctx={ctx} queue={full} hideGenre chunkKey={key} />
     </Screen>
   );
 }

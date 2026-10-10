@@ -17,7 +17,7 @@ npx playwright install chromium   # once, for the e2e tests
 ## Day to day
 
 ```bash
-npm run dev          # the web UI in a browser (plays through a YouTube embed)
+npm run dev          # the web UI in a browser (playback needs the app: the CSP blocks embeds)
 npm run check        # typecheck + ESLint + unit tests: run before every commit
 npm run lint -- --fix   # fixes what ESLint can fix by itself
 npm run e2e          # Playwright e2e tests on a phone-sized Chromium
@@ -28,7 +28,7 @@ cd android && ./gradlew testDebugUnitTest   # Kotlin unit tests
 cd android && ./gradlew assembleDebug       # debug APK in android/app/build/outputs/apk/debug/
 ```
 
-- **ESLint** fails on errors only. A few rules are warnings while the existing code is cleaned up (`react-hooks/exhaustive-deps`, `consistent-type-imports`, `no-explicit-any`); please don't add new ones.
+- **ESLint** allows no warnings (`--max-warnings=0`). Where a rule has to be switched off for a line, the `eslint-disable` comment says why after `--`.
 - **e2e tests** run against the production build with Firestore, the native player and sign-in stubbed by a shared fixture, so they work offline and give the same results every run. Tests tagged `@live` talk to the real Cyberspace backend; CI leaves them out.
 - **Kotlin tests** are plain JVM tests under `android/app/src/test/`. The YouTube canary (`-Pcanary=true`) needs the network and is run daily by CI, not by default.
 

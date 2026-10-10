@@ -12,33 +12,18 @@
  *  - +2 when the whole query appears in the title or artist as a phrase starting at a
  *    word boundary; ties go to Jukebox tracks before Global ones, then the newest post.
  */
+import { cleanCredit, splitArtists } from './artists';
 import { isGlobal, type Track } from './model';
+import { normalize, words } from './text';
 
-const MAX_RESULTS = 100;
+/** The most tracks a search returns. */
+export const MAX_RESULTS = 100;
 const MAX_GENRES = 8;
 const PHRASE_BONUS = 2;
 
 const W_TITLE = 3;
 const W_ARTIST = 3;
 const W_GENRE = 2;
-
-/** Letters NFKD leaves alone but people type without the diacritic. */
-const FOLD: Record<string, string> = { ß: 'ss', æ: 'ae', œ: 'oe', ø: 'o', ł: 'l', đ: 'd', ð: 'd', þ: 'th', ı: 'i' };
-
-export function normalize(s: string): string {
-  return s
-    .normalize('NFKD')
-    .replace(/\p{M}+/gu, '')
-    .toLowerCase()
-    .replace(/[ßæœøłđðþı]/g, (c) => FOLD[c] ?? c)
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .trim();
-}
-
-export function words(s: string): string[] {
-  const n = normalize(s);
-  return n ? n.split(' ') : [];
-}
 
 /** Optimal-string-alignment distance (Damerau-Levenshtein with adjacent swaps), capped. */
 export function editDistance(a: string, b: string, max = Infinity): number {
@@ -146,8 +131,7 @@ export function searchTracks(index: SearchIndex, query: string, limit = MAX_RESU
 
 /** Identity for de-duplicating one song across lists: normalized title and first credited artist. */
 function songKey(t: Track): string {
-  const first = t.artist.split(/\s*(?:[,;]|\s\/\s|\s(?:feat\.?|ft\.?|featuring)\s)\s*/i)[0] ?? '';
-  return normalize(t.title) + '|' + normalize(first);
+  return normalize(t.title) + '|' + normalize(splitArtists(cleanCredit(t.artist))[0] ?? '');
 }
 
 /**
@@ -177,6 +161,13 @@ export function mergeTracks(lists: readonly (readonly Track[])[], limit = Infini
   return out;
 }
 
+/** How well [text] matches the query words (0: not at all), with the phrase bonus. */
+function scoreTitle(qWords: string[], needle: string, text: string): number {
+  const norm = normalize(text);
+  const s = scoreFields(qWords, [{ words: norm ? norm.split(' ') : [], weight: 1 }]);
+  return s === 0 ? 0 : (' ' + norm + ' ').includes(needle) ? s + PHRASE_BONUS : s;
+}
+
 /** Items whose title matches the query (every word, typo-tolerant), best first; ties keep their order. */
 export function searchTitles<T>(items: readonly T[], title: (item: T) => string, query: string, limit = MAX_GENRES): T[] {
   const qWords = words(query);
@@ -184,28 +175,28 @@ export function searchTitles<T>(items: readonly T[], title: (item: T) => string,
   const needle = ' ' + qWords.join(' ');
   const hits: { item: T; s: number; i: number }[] = [];
   items.forEach((item, i) => {
-    const norm = normalize(title(item));
-    let s = scoreFields(qWords, [{ words: norm ? norm.split(' ') : [], weight: 1 }]);
-    if (s === 0) return;
-    if ((' ' + norm + ' ').includes(needle)) s += PHRASE_BONUS;
-    hits.push({ item, s, i });
+    const s = scoreTitle(qWords, needle, title(item));
+    if (s > 0) hits.push({ item, s, i });
   });
   hits.sort((a, b) => b.s - a.s || a.i - b.i);
   return hits.slice(0, limit).map((h) => h.item);
 }
 
+/** A genre and how many tracks have it. */
+export interface GenreCount {
+  name: string;
+  count: number;
+}
+
 /** Genre names matching the query, best first (ties: more tracks first). */
-export function searchGenres(genres: { name: string; count: number }[], query: string, limit = MAX_GENRES): string[] {
+export function searchGenres(genres: GenreCount[], query: string, limit = MAX_GENRES): string[] {
   const qWords = words(query);
   if (!qWords.length) return [];
   const needle = ' ' + qWords.join(' ');
   const hits: { name: string; s: number; count: number }[] = [];
   for (const g of genres) {
-    const norm = normalize(g.name);
-    let s = scoreFields(qWords, [{ words: norm ? norm.split(' ') : [], weight: 1 }]);
-    if (s === 0) continue;
-    if ((' ' + norm + ' ').includes(needle)) s += PHRASE_BONUS;
-    hits.push({ name: g.name, s, count: g.count });
+    const s = scoreTitle(qWords, needle, g.name);
+    if (s > 0) hits.push({ name: g.name, s, count: g.count });
   }
   hits.sort((a, b) => b.s - a.s || b.count - a.count || a.name.localeCompare(b.name));
   return hits.slice(0, limit).map((h) => h.name);

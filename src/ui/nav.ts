@@ -12,6 +12,7 @@ import { computed, effect, signal, untracked, useComputed, type ReadonlySignal }
 import { createContext } from 'preact';
 import { useContext, useEffect, useRef } from 'preact/hooks';
 import type { Track } from '../data/model';
+import type { ReleaseKind } from '../data/ytmusic';
 
 export type Tab = 'home' | 'genres' | 'artists' | 'library' | 'settings';
 const TABS: readonly Tab[] = ['home', 'genres', 'artists', 'library', 'settings'];
@@ -32,7 +33,7 @@ export interface ReleasesRef {
   artist: string;
   /** The artist's channel: a Retry reloads their page for fresh tokens. */
   channelId: string;
-  kind: 'album' | 'ep' | 'single' | 'live';
+  kind: ReleaseKind;
   /** Opaque, and may expire native-side (then the grid offers Retry). */
   token: string;
 }
@@ -91,9 +92,7 @@ export const confirmRequest = signal<ConfirmRequest | null>(null);
  */
 export function openNowPlayingWhen(hasTrack: ReadonlySignal<boolean>, waitMs = 5000): void {
   const open = () => {
-    menuTrack.value = null;
-    artistChoice.value = null;
-    confirmRequest.value = null;
+    closeOverlays();
     nowPlayingOpen.value = true;
   };
   if (hasTrack.peek()) {

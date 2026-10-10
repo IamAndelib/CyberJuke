@@ -3,7 +3,7 @@
  * artist. Resolved once with the plugin's artist() search and kept in Preferences.
  * Only exact matches are stored; a name with no exact match is retried next session.
  */
-import { Preferences } from '@capacitor/preferences';
+import { kv, readJson } from '../core/storage';
 import { Cache } from '../core/cache';
 import { artistKey } from '../data/artists';
 import { music, resolveArtistChannel, type MusicClient } from '../data/ytmusic';
@@ -64,9 +64,6 @@ export function createArtistChannels(deps: ArtistChannelDeps): ArtistChannelStor
 
 export const artistChannels = createArtistChannels({
   client: music,
-  load: async () => {
-    const { value } = await Preferences.get({ key: K_CHANNELS });
-    return value ? (JSON.parse(value) as Record<string, string>) : {};
-  },
-  save: (map) => void Preferences.set({ key: K_CHANNELS, value: JSON.stringify(map) }).catch(() => {}),
+  load: () => readJson<Record<string, string>>(kv, K_CHANNELS, {}),
+  save: (map) => void kv.set(K_CHANNELS, JSON.stringify(map)).catch(() => {}),
 });

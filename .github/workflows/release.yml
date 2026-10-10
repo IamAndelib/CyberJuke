@@ -39,6 +39,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write # push the version bump commit to main
+      actions: read # check that CI passed on the commit being released
     outputs:
       sha: ${{ steps.commit.outputs.sha }}
       code: ${{ steps.ver.outputs.code }}
@@ -56,8 +57,26 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: main
+          # The parent too: a retry after the bump commit checks the commit under it.
+          fetch-depth: 2
           # This job pushes the bump commit; the build job checks out without credentials.
           persist-credentials: true
+
+      - name: Fail unless CI passed on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          # A bump commit pushed by an earlier run of this workflow gets no CI run of its own
+          # (pushes with the workflow token start no workflows): the commit under it counts.
+          if [[ "$(git log -1 --format=%s)" == "Release v$VERSION" ]]; then sha=$(git rev-parse HEAD^); fi
+          result=$(gh run list --workflow ci.yml --commit "$sha" --json status,conclusion \
+            -q '[.[] | select(.status == "completed")][0].conclusion // "none"')
+          if [[ "$result" != "success" ]]; then
+            echo "::error title=CI not green::CI on $sha is '$result'. Release only a commit whose CI passed."
+            exit 1
+          fi
+          echo "CI passed on $sha"
 
       - name: Fail if the tag already exists
         run: |
@@ -110,6 +129,9 @@ jobs:
           # F-Droid shows fastlane/metadata/android/en-US/changelogs/<versionCode>.txt.
           # Write it from the CHANGELOG section if it is missing (F-Droid's limit is 500 chars).
           cl="fastlane/metadata/android/en-US/changelogs/${CODE}.txt"
+          if [[ -f "$cl" ]] && (( $(wc -c < "$cl") > 500 )); then
+            echo "::error title=Changelog too long::$cl is over F-Droid's 500 characters."; exit 1
+          fi
           if [[ ! -f "$cl" ]]; then
             awk -v v="$VERSION" '
               BEGIN { esc = v; gsub(/\./, "\\.", esc) }

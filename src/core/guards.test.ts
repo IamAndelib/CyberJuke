@@ -102,7 +102,7 @@ describe('parseMusicPage', () => {
 describe('parseRunQueryRows', () => {
   it('keeps rows, dropping documents without a name', () => {
     const rows = parseRunQueryRows([{ document: { name: 'n', fields: { a: { stringValue: 'x' } } }, readTime: 't' }, { document: { fields: {} } }, 4, { done: true }]);
-    expect(rows).toEqual([{ document: { name: 'n', fields: { a: { stringValue: 'x' } } }, readTime: 't' }, {}, { done: true }]);
+    expect(rows).toEqual([{ document: { name: 'n', fields: { a: { stringValue: 'x' } } } }, {}, {}]);
     expect(parseRunQueryRows({ error: 1 })).toBeNull();
   });
 });

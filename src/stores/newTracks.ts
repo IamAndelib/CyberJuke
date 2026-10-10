@@ -5,18 +5,15 @@
 import { effect } from '@preact/signals';
 import { exposeForTests } from '../core/testHooks';
 import { source } from '../data';
-import { FirestoreSource } from '../data/firestore';
-import { feeds } from './feed';
+import { HOME_FEED_PREFIX, feeds } from './feed';
 import { catalog } from './catalog';
 import { createFreshness } from './freshness';
 import { settings, showNsfw } from './library';
 import { online, onReconnect } from '../core/network';
 
-const fs = source instanceof FirestoreSource ? source : null;
-
 export const freshness = createFreshness({
   // While NSFW is hidden, NSFW posts don't count as new.
-  newerThan: (since) => (fs ? fs.newerThan(since, { includeNsfw: showNsfw.value }) : Promise.resolve({ count: 0, newest: null })),
+  newerThan: (since) => source.newerThan?.(since, { includeNsfw: showNsfw.value }) ?? Promise.resolve({ count: 0, newest: null }),
   fallbackBaseline: () => catalog.all.value[0]?.createdAt ?? null,
   // New posts show up everywhere: the catalog (search, Artists, Most saved) adds them.
   onFound: () => void catalog.refresh({ force: true }),
@@ -25,10 +22,8 @@ export const freshness = createFreshness({
   isOnline: () => online.value,
 });
 
-if (fs) fs.onLatest = (newest) => freshness.seen(newest);
+source.onLatest = (newest) => freshness.seen(newest);
 
-/** Home feeds share this key prefix (Home.tsx: `home:<m|p>:<genre>:<nsfw>`). */
-const HOME_FEED_PREFIX = 'home:';
 
 /**
  * The pill was tapped: drop the cached Latest pages and the source cache, reload the
@@ -36,7 +31,7 @@ const HOME_FEED_PREFIX = 'home:';
  */
 export async function refreshLatest(): Promise<void> {
   freshness.dismiss();
-  fs?.invalidateAll();
+  source.invalidateAll?.();
   const jobs: Promise<unknown>[] = [];
   for (const [key, feed] of feeds.entries(HOME_FEED_PREFIX)) {
     if (feed.watched) jobs.push(feed.refresh());

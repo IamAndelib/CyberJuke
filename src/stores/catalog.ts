@@ -21,10 +21,11 @@
  */
 import { computed, signal, type ReadonlySignal } from '@preact/signals';
 import type { Track } from '../data/model';
+import type { GenreCount } from '../data/search';
 import type { TrackSource } from '../data/source';
 import { source } from '../data';
 import { auth } from '../data/auth';
-import { errorMessage, isOffline, type LoadError } from '../core/errors';
+import { toLoadError, type LoadError } from '../core/errors';
 import { isObj, isTrackFull } from '../core/guards';
 import { kv, textFile, type TextFile } from '../core/storage';
 import { showNsfw } from './library';
@@ -195,7 +196,7 @@ export function createCatalog(deps: CatalogDeps): Catalog {
       persist(k);
     } catch (e) {
       if (g !== gen) return;
-      error.value = { message: errorMessage(e), offline: isOffline(e) };
+      error.value = toLoadError(e);
       // With a cache we keep showing it; only an empty catalog is an error state.
       status.value = all.value.length ? 'ready' : 'error';
     }
@@ -249,7 +250,7 @@ export function mostSaved(tracks: Track[], opts: { genre?: string | null; range:
 }
 
 /** Genres in `tracks`, most-used first (ties alphabetical). */
-export function genreCounts(tracks: Track[]): { name: string; count: number }[] {
+export function genreCounts(tracks: Track[]): GenreCount[] {
   const counts = new Map<string, number>();
   for (const t of tracks) if (t.genre) counts.set(t.genre, (counts.get(t.genre) ?? 0) + 1);
   return [...counts]

@@ -151,8 +151,7 @@ function useSwipeUpToOpen(ref: { current: HTMLDivElement | null }): void {
       el.removeEventListener('touchend', onEnd);
       el.removeEventListener('touchcancel', onEnd);
     };
-    // Mount-only: `ref` is a stable ref to the mini player.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Mount-only: `ref` is a stable ref to the mini player.
   }, []);
 }
 
@@ -363,6 +362,10 @@ const SWIPE_CLOSE_VELOCITY = 0.5; // px/ms
  * so its first frames move at the finger's speed (the curve starts at about 2.4 × its average
  * speed), at least EXIT_MIN_SPEED, within EXIT_MIN_MS..EXIT_MAX_MS.
  */
+/** A swipe down starts once the finger has moved this far down, more than sideways. */
+const SWIPE_SLOP_PX = 8;
+/** Moved up this far first: the content is being scrolled, not the sheet. */
+const SWIPE_UP_PX = 4;
 const EXIT_EASE = 'cubic-bezier(0.25, 0.6, 0.45, 1)';
 const EXIT_START_SLOPE = 2.4;
 const EXIT_MIN_SPEED = 1.2; // px/ms
@@ -408,9 +411,9 @@ function useSwipeToClose(ref: { current: HTMLDivElement | null }): void {
       const dx = p.clientX - start.x;
       const d = p.clientY - start.y;
       if (!dragging) {
-        if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(d)) return void (start = null); // horizontal
-        if (d < -4) return void (start = null); // scrolling the content up
-        if (d < 8) return;
+        if (Math.abs(dx) > SWIPE_SLOP_PX && Math.abs(dx) > Math.abs(d)) return void (start = null); // horizontal
+        if (d < -SWIPE_UP_PX) return void (start = null); // scrolling the content up
+        if (d < SWIPE_SLOP_PX) return;
         dragging = true;
         el.classList.add('dragging');
       }
@@ -485,8 +488,7 @@ function useSwipeToClose(ref: { current: HTMLDivElement | null }): void {
       el.removeEventListener('touchend', onEnd);
       el.removeEventListener('touchcancel', onEnd);
     };
-    // Mount-only: `ref` is a stable ref object to the sheet, which never remounts.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Mount-only: `ref` is a stable ref object to the sheet, which never remounts.
   }, []);
 }
 

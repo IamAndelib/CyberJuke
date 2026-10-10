@@ -96,14 +96,12 @@ describe('client', () => {
     await c.search('daft punk', 'songs');
     await c.search(' Daft Punk ', 'songs');
     expect(plugin.search).toHaveBeenCalledTimes(1);
-    expect(c.peekSearch('daft punk', 'songs')?.next).toBe('tok1');
     await c.search('daft punk', 'albums');
     expect(plugin.search).toHaveBeenCalledTimes(2);
     tick(m.MUSIC_CACHE_TTL_MS - 1);
     await c.search('daft punk', 'songs');
     expect(plugin.search).toHaveBeenCalledTimes(2);
     tick(1);
-    expect(c.peekSearch('daft punk', 'songs')).toBeUndefined();
     await c.search('daft punk', 'songs');
     expect(plugin.search).toHaveBeenCalledTimes(3);
   });

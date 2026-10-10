@@ -47,8 +47,7 @@ function useLyrics(track: Track, durationMs: number): [LyricsOutcome | null, () 
     if (durationMs > 0) return;
     const id = setTimeout(() => setWaitedFor(track.id), LYRICS_DURATION_WAIT_MS);
     return () => clearTimeout(id);
-    // Only whether a duration is known matters, not its value.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only whether a duration is known matters, not its value.
   }, [track.id, durationMs > 0]);
   useEffect(() => {
     let live = true;
@@ -64,8 +63,7 @@ function useLyrics(track: Track, durationMs: number): [LyricsOutcome | null, () 
     return () => {
       live = false;
     };
-    // Keyed by the track's id: a new Track object for the same id (or a duration update) mustn't refetch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Keyed by the track's id: a new Track object for the same id (or a duration update) mustn't refetch.
   }, [track.id, !!track.ytId, durReady, attempt]);
   return [state.id === track.id ? state.outcome : null, () => setAttempt((n) => n + 1)];
 }
@@ -77,8 +75,7 @@ export function LyricsPanel({ track }: { track: Track }) {
   // Back online after a failure: try again by itself.
   useEffect(() => {
     if (isOnline && failed) retry();
-    // Only the connection coming back counts, not a new failure.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only the connection coming back counts, not a new failure.
   }, [isOnline]);
   let body;
   if (!outcome) body = <LyricsState text="[ fetching lyrics… ]" busy />;
@@ -185,8 +182,7 @@ function SyncedLyrics({ lyrics }: { lyrics: Lyrics }) {
       for (const t of ['wheel', 'touchstart', 'touchmove'] as const) el.removeEventListener(t, pauseAuto);
       if (resume.current) clearTimeout(resume.current);
     };
-    // Mount-only: `pauseAuto` reads only refs (and `centre`, which reads only refs).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Mount-only: `pauseAuto` reads only refs (and `centre`, which reads only refs).
   }, []);
 
   useLayoutEffect(() => {
