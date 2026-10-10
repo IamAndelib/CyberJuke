@@ -20,21 +20,17 @@ Repo: https://github.com/IamAndelib/CyberJuke.git
 Binaries: https://github.com/IamAndelib/CyberJuke/releases/download/v%v/CyberJuke-%v.apk
 
 Builds:
-  - versionName: 1.1.1
-    versionCode: 1001001
-    commit: 543b881a73038f23c1924fceeaaf45138124c0a7
+  - versionName: 1.1.2
+    versionCode: 1001002
+    commit: f8a45560bba59744a71ab86922fedaeb67d5335c
     subdir: android/app
     sudo:
       - echo 'deb https://deb.debian.org/debian trixie main' > /etc/apt/sources.list.d/trixie.list
+      - echo 'deb https://deb.debian.org/debian forky main' > /etc/apt/sources.list.d/forky.list
       - apt-get update
-      - apt-get install -y xz-utils
       - apt-get install -y -t trixie openjdk-21-jdk-headless
+      - apt-get install -y -t forky nodejs npm
       - update-alternatives --auto java
-      - curl -fsSLo /tmp/node.tar.xz https://nodejs.org/dist/v22.22.0/node-v22.22.0-linux-x64.tar.xz
-      - echo '9aa8e9d2298ab68c600bd6fb86a6c13bce11a4eca1ba9b39d79fa021755d7c37  /tmp/node.tar.xz'
-        | sha256sum -c -
-      - tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1
-      - rm /tmp/node.tar.xz
     gradle:
       - yes
     prebuild:
@@ -49,5 +45,5 @@ AllowedAPKSigningKeys: 1c007729638d095f68160456af0fb9799d75ba4682faf18ca520a5842
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$
-CurrentVersion: 1.1.1
-CurrentVersionCode: 1001001
+CurrentVersion: 1.1.2
+CurrentVersionCode: 1001002
