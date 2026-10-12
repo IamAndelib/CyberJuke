@@ -147,8 +147,41 @@ class TrackErrorPolicyTest {
         // ...but failing at the same spot again, it's the file: skip it instead of looping.
         assertEquals(Action.Skip, TrackErrorPolicy.decide(midTrack.copy(failuresHere = 1)))
         assertEquals(Action.PauseAtEnd, TrackErrorPolicy.decide(midTrack.copy(failuresHere = 1, hasNext = false)))
-        // With the network down, it waits however often it failed there.
-        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(midTrack.copy(failuresHere = 5, networkValidated = false)))
+        // With the network down too: the first time there an outage, the second the file's.
+        val down = midTrack.copy(networkValidated = false)
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(down))
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(down.copy(failuresHere = 1)))
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(down.copy(playedThisItem = false, failuresHere = 1)))
+    }
+
+    @Test
+    fun onlyTheUnclearFailureCountsAtItsSpot() {
+        val unclear = Facts(kind = null, ioOther = true)
+        assertEquals(true, TrackErrorPolicy.countsAtSpot(unclear))
+        // A reset socket during a connection failure is that connection failure: an outage
+        // every time, never counted toward a skip.
+        assertEquals(false, TrackErrorPolicy.countsAtSpot(unclear.copy(ioNetwork = true)))
+        assertEquals(false, TrackErrorPolicy.countsAtSpot(unclear.copy(httpCode = 503)))
+        assertEquals(false, TrackErrorPolicy.countsAtSpot(unclear.copy(kind = FailureKind.NETWORK)))
+        assertEquals(false, TrackErrorPolicy.countsAtSpot(unclear.copy(blocked = true)))
+        assertEquals(false, TrackErrorPolicy.countsAtSpot(Facts(kind = null)))
+    }
+
+    @Test
+    fun aTrackPausedOnAfterPlayingKeepsItsFormat() {
+        val outage = Action.Pause(resume = true)
+        // Played (or past its start) and paused on: it loads again in the same format.
+        assertEquals(true, TrackErrorPolicy.keepsFormat(outage, isCurrent = true, played = true, positionMs = 0L))
+        assertEquals(true, TrackErrorPolicy.keepsFormat(outage, isCurrent = true, played = false, positionMs = 40_000L))
+        assertEquals(true, TrackErrorPolicy.keepsFormat(Action.Pause(resume = false), true, true, 1L))
+        assertEquals(true, TrackErrorPolicy.keepsFormat(Action.Block(BlockReason.RATE_LIMIT), true, true, 1L))
+        assertEquals(true, TrackErrorPolicy.keepsFormat(Action.WaitBlocked, true, true, 1L))
+        // Never started: the rung of the moment is fine.
+        assertEquals(false, TrackErrorPolicy.keepsFormat(outage, isCurrent = true, played = false, positionMs = 0L))
+        // An upcoming item, or a skip / re-resolve (which keeps its own itag): nothing to keep.
+        assertEquals(false, TrackErrorPolicy.keepsFormat(outage, isCurrent = false, played = true, positionMs = 5L))
+        assertEquals(false, TrackErrorPolicy.keepsFormat(Action.Skip, true, true, 5L))
+        assertEquals(false, TrackErrorPolicy.keepsFormat(Action.ReResolve, true, true, 5L))
     }
 
     @Test

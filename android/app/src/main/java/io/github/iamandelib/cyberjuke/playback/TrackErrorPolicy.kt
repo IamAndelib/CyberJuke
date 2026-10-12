@@ -131,12 +131,28 @@ internal object TrackErrorPolicy {
             if (f.ioNetwork) return outage(f)
             // Not clearly the network: an outage only when the next track would fail too. Then a
             // good track is not skipped, and a flapping link doesn't stop playback.
-            // But the same failure at the same spot again, with the network up, is the file
-            // (broken at that point): skip it rather than loop on it.
-            if (f.ioOther && !f.networkValidated) return outage(f)
-            if (f.ioOther && f.playedThisItem && f.failuresHere + 1 < MAX_FAILURES_HERE) return outage(f)
+            // But the same failure at the same spot again is the file (broken at that point):
+            // skip it rather than loop on it.
+            if (f.ioOther && (!f.networkValidated || f.playedThisItem) && f.failuresHere + 1 < MAX_FAILURES_HERE) {
+                return outage(f)
+            }
         }
         return perVideo(f)
+    }
+
+    /**
+     * Whether [f] is decided by the unclear I/O failure, so it counts at its spot
+     * ([FailureSpot], [Facts.failuresHere]): not a resolver, HTTP or plain connection failure.
+     */
+    fun countsAtSpot(f: Facts): Boolean = f.ioOther && f.kind == null && f.httpCode == null && !f.ioNetwork && !f.blocked
+
+    /**
+     * After [action], the failed item keeps its format when it loads again from its start: it
+     * is paused on, it is the current one and it was playing ([played], or a position past 0).
+     */
+    fun keepsFormat(action: Action, isCurrent: Boolean, played: Boolean, positionMs: Long): Boolean {
+        val pausedOn = action is Action.Pause || action is Action.Block || action == Action.WaitBlocked
+        return pausedOn && isCurrent && (played || positionMs > 0L)
     }
 
     private fun outage(f: Facts, freshLink: Boolean = false) =

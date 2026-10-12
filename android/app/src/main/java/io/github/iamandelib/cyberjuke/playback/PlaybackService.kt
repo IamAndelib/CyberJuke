@@ -370,11 +370,7 @@ class PlaybackService : MediaSessionService() {
         }
         Log.i(TAG, "Resuming after a back-off or an outage")
         when (p.playbackState) {
-            Player.STATE_IDLE -> {
-                // Loaded again from its start: it keeps the format it was playing.
-                JukeUris.ytIdOf(p.currentMediaItem)?.let { StreamResolver.keepFormat(it) }
-                p.prepare()
-            }
+            Player.STATE_IDLE -> p.prepare()
             Player.STATE_ENDED -> return
             else -> Unit
         }
@@ -1000,9 +996,8 @@ class PlaybackService : MediaSessionService() {
         val ioOther = error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED ||
             error.findCause<EOFException>() != null || error.findCause<SocketException>() != null
         val isCurrent = index == p.currentMediaItemIndex
-        // A track broken at one spot fails there again after each resume (READY in between).
-        val failuresHere = if (ioOther) failureSpot.onFailure(trackId, if (isCurrent) p.currentPosition else 0L) else 0
-        val facts = TrackErrorPolicy.Facts(
+        val positionMs = if (isCurrent) p.currentPosition.coerceAtLeast(0L) else 0L
+        val known = TrackErrorPolicy.Facts(
             kind = resolve?.kind,
             httpCode = http?.responseCode,
             urlAgeMs = served?.let { now - it.resolvedAtMs },
@@ -1017,17 +1012,28 @@ class PlaybackService : MediaSessionService() {
             ioOther = ioOther,
             networkValidated = isNetworkValidated(),
             playedThisItem = trackId == lastReadyId,
-            failuresHere = failuresHere,
             isCurrent = isCurrent,
             hasNext = p.hasNextMediaItem(),
             consecutiveFailures = consecutiveFailures,
             outagePauses = outagePauses,
         )
+        // A track broken at one spot fails there again after each resume (READY in between).
+        // Counted only where the unclear failure decides (not a connection failure, say).
+        val facts = if (TrackErrorPolicy.countsAtSpot(known)) {
+            known.copy(failuresHere = failureSpot.onFailure(trackId, positionMs))
+        } else {
+            known
+        }
         val message = resolve?.message
             ?: http?.let { "HTTP ${it.responseCode}: ${error.errorCodeName}" }
             ?: "${error.errorCodeName}: ${error.message ?: error.cause?.message ?: "unknown error"}"
         val action = TrackErrorPolicy.decide(facts)
         Log.w(TAG, "Player error ${error.errorCodeName} -> ${action.javaClass.simpleName}")
+        // Paused on a track that was playing: when it loads again (from byte 0, so not a
+        // mid-stream load), it keeps its format, whatever Auto's rung says by then.
+        if (TrackErrorPolicy.keepsFormat(action, isCurrent, facts.playedThisItem, positionMs)) {
+            ytId?.let { StreamResolver.keepFormat(it) }
+        }
 
         when (action) {
             TrackErrorPolicy.Action.WaitBlocked -> {
