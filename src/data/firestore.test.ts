@@ -12,6 +12,7 @@ import {
   MEMBERS_FRESHNESS_FIELDS,
   nextCursor,
   PAGE_SIZE,
+  REQUEST_TIMEOUT_MS,
   RUN_QUERY_URL,
   shuffled,
 } from './firestore';
@@ -543,3 +544,94 @@ describe('field mask of Latest and genre pages', () => {
   });
 });
 
+// ---- A request that never answers ----------------------------------------------------
+
+describe('request timeout', () => {
+  /** A fetch that never answers; it rejects (AbortError) once its signal aborts, like the real one. */
+  const hanging = () =>
+    vi.fn(
+      (_u: string, init: RequestInit) =>
+        new Promise<Response>((_, reject) => init.signal?.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError')))),
+    );
+  /** Whether `p` has settled, and its error, without waiting for it. */
+  const watch = (p: Promise<unknown>) => {
+    const w = { settled: false, error: undefined as unknown };
+    p.catch((e) => (w.error = e)).finally(() => (w.settled = true));
+    return w;
+  };
+
+  it(`fails after ${REQUEST_TIMEOUT_MS / 1000} s by default, as an error (not offline), and aborts the request`, async () => {
+    vi.useFakeTimers();
+    try {
+      const f = hanging();
+      const w = watch(new FirestoreSource({ fetch: f as any }).latest());
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1);
+      expect(w.settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(w.settled).toBe(true);
+      expect(w.error).toBeInstanceOf(FirestoreError);
+      expect(w.error).toMatchObject({ status: 0, offline: false });
+      expect((f.mock.calls[0][1].signal as AbortSignal).aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('fails a request whose fetch ignores the abort, and the next call asks again', async () => {
+    vi.useFakeTimers();
+    try {
+      const f = vi.fn(() => new Promise<Response>(() => {}));
+      const src = new FirestoreSource({ fetch: f as any, timeoutMs: 1000 });
+      const w = watch(src.latest());
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(w.error).toMatchObject({ name: 'FirestoreError', offline: false });
+      void src.latest().catch(() => {});
+      await vi.advanceTimersByTimeAsync(0);
+      expect(f).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(1000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('covers an answer whose body never arrives', async () => {
+    vi.useFakeTimers();
+    try {
+      const f = vi.fn(async () => ({ ok: true, status: 200, json: () => new Promise(() => {}) }));
+      const w = watch(new FirestoreSource({ fetch: f as any, timeoutMs: 1000 }).latest());
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(w.error).toMatchObject({ name: 'FirestoreError', offline: false });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('covers waiting for the ID token (signed in)', async () => {
+    vi.useFakeTimers();
+    try {
+      const auth = { signedIn: () => true, token: vi.fn(() => new Promise<string>(() => {})), refreshNow: vi.fn(async () => null) };
+      const f = mockFetch(rows);
+      const w = watch(new FirestoreSource({ fetch: f as any, auth, timeoutMs: 1000 }).latest());
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(w.error).toMatchObject({ name: 'FirestoreError', offline: false });
+      expect(f).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('an answer in time leaves no timer behind', async () => {
+    vi.useFakeTimers();
+    try {
+      await new FirestoreSource({ fetch: mockFetch(rows) as any, timeoutMs: 1000 }).latest();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a lost connection still reads as offline', async () => {
+    const src = new FirestoreSource({ fetch: (async () => Promise.reject(new TypeError('Failed to fetch'))) as any, timeoutMs: 1000 });
+    await expect(src.latest()).rejects.toMatchObject({ offline: true });
+  });
+});

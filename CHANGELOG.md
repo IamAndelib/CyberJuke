@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- A list that gets no answer from Cyberspace stops loading after 15 seconds and offers Retry, instead of showing placeholders forever.
+
 ## [1.1.2] - 2026-10-10
 
 ### Build

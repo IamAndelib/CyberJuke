@@ -6,6 +6,16 @@ import { FirestoreSource } from './firestore';
 export { shuffled } from './firestore';
 import type { TrackSource } from './source';
 import { showNsfw } from '../stores/library';
+import { TEST_HOOKS } from '../core/testHooks';
 import { auth } from './auth';
 
-export const source: TrackSource = new FirestoreSource({ showNsfw: () => showNsfw.value, auth });
+declare global {
+  interface Window {
+    /** e2e: a shorter request timeout (ms), set before the app loads. */
+    __cyberjukeRequestTimeoutMs?: number;
+  }
+}
+
+const testTimeout = TEST_HOOKS && typeof window !== 'undefined' ? window.__cyberjukeRequestTimeoutMs : undefined;
+
+export const source: TrackSource = new FirestoreSource({ showNsfw: () => showNsfw.value, auth, ...(testTimeout && { timeoutMs: testTimeout }) });
