@@ -38,6 +38,7 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 - **Library**: liked tracks and recently played, stored on your phone.
 - **Background playback**: the notification, lock screen and headset buttons all work, and the queue keeps going with the screen off. Tapping the notification opens Now Playing.
 - **Listening cache**: the music you play and the next track are kept on the phone (128, 256 or 512 MB, in Settings), so a sudden drop in the signal doesn't stop the music, and liked songs are saved so they play offline. CyberJuke is made for online listening: offline, only the liked songs already saved play.
+- **Crossfade** (optional): the end of a track blends into the next, over 3, 6 or 10 seconds (Settings → Crossfade).
 - **Picks up where you left off**: the app opens on what you last played, paused at the same spot, even after Android stopped it.
 - **Update notices**: Settings → Updates checks for a new release once a day (or on request) and shows it in Settings with a download link. Installs from F-Droid update through F-Droid instead.
 - **Now Playing**: seek, shuffle, repeat, like, synced lyrics, share, "Playing from …", and an Up Next queue you can reorder.
