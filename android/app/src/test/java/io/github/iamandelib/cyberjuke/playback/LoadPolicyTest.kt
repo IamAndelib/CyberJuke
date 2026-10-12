@@ -6,9 +6,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.EOFException
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 class LoadPolicyTest {
     @Test
@@ -33,6 +37,59 @@ class LoadPolicyTest {
     }
 
     @Test
+    fun onlyThePlayingAndTheNextTrackOpenTheirStream() {
+        val pair = setOf("current____", "next_______")
+        assertTrue(OpenGate.mayOpen("current____", pair))
+        assertTrue(OpenGate.mayOpen("next_______", pair))
+        // The track after next, prepared early: waits (no extraction, no idle connection).
+        assertFalse(OpenGate.mayOpen("after_next_", pair))
+        // Nothing set yet (or the list emptied): no gate.
+        assertTrue(OpenGate.mayOpen("anything___", emptySet()))
+    }
+
+    @Test
+    fun aWaitingOpenGoesOnOnceItsTurnComes() {
+        val gate = OpenGate()
+        gate.allow(setOf("a", "b"))
+        gate.await("a") // its turn: no wait
+        val done = CountDownLatch(1)
+        val t = Thread {
+            gate.await("c")
+            done.countDown()
+        }
+        t.start()
+        assertFalse(done.await(200, TimeUnit.MILLISECONDS))
+        // Skipped on: "c" is next now.
+        gate.allow(setOf("b", "c"))
+        assertTrue(done.await(5, TimeUnit.SECONDS))
+        t.join(5_000)
+    }
+
+    @Test
+    fun aCancelledLoadStopsWaiting() {
+        val gate = OpenGate()
+        gate.allow(setOf("a", "b"))
+        val thrown = AtomicReference<Throwable?>()
+        val started = CountDownLatch(1)
+        val t = Thread {
+            started.countDown()
+            try {
+                gate.await("c")
+            } catch (e: Throwable) {
+                thrown.set(e)
+            }
+        }
+        t.start()
+        assertTrue(started.await(5, TimeUnit.SECONDS))
+        Thread.sleep(100)
+        // ExoPlayer's Loader interrupts a load it cancels or releases.
+        t.interrupt()
+        t.join(5_000)
+        assertFalse(t.isAlive)
+        assertTrue(thrown.get() is InterruptedIOException)
+    }
+
+    @Test
     fun onlyTheNextItemLoadsAhead() {
         // Playing item 3, item 4 next: 3 and 4 load, 5 and on wait.
         assertTrue(LoadAhead.mayLoad(3, 3, 4))
@@ -50,17 +107,28 @@ class LoadPolicyTest {
     }
 
     @Test
-    fun onlyABrokenConnectionGetsTheLongerRunOfRetries() {
-        // A reset socket or an HTTP transport error: six retries, capped back-off.
-        assertTrue(LoadRetry.isNetwork(httpStatus = false, resolver = false, httpTransport = true, transportCause = false))
-        assertTrue(LoadRetry.isNetwork(httpStatus = false, resolver = false, httpTransport = false, transportCause = true))
-        // An HTTP status (5xx) or the resolver: the default count.
-        assertFalse(LoadRetry.isNetwork(httpStatus = true, resolver = false, httpTransport = true, transportCause = false))
-        assertFalse(LoadRetry.isNetwork(httpStatus = false, resolver = true, httpTransport = false, transportCause = true))
-        // Anything else (a parser error): the default count.
-        assertFalse(LoadRetry.isNetwork(httpStatus = false, resolver = false, httpTransport = false, transportCause = false))
+    fun aBrokenConnectionOrAResolverNetworkFailureBacksOffLonger() {
+        // A reset socket, an HTTP transport error, or the resolver not reaching YouTube (after a
+        // change of network): the capped back-off.
+        assertTrue(LoadRetry.isNetwork(httpStatus = false, resolverNetwork = false, httpTransport = true, transportCause = false))
+        assertTrue(LoadRetry.isNetwork(httpStatus = false, resolverNetwork = false, httpTransport = false, transportCause = true))
+        assertTrue(LoadRetry.isNetwork(httpStatus = false, resolverNetwork = true, httpTransport = false, transportCause = false))
+        // An HTTP status (5xx), or anything else (a parser error): the default delays.
+        assertFalse(LoadRetry.isNetwork(httpStatus = true, resolverNetwork = false, httpTransport = true, transportCause = true))
+        assertFalse(LoadRetry.isNetwork(httpStatus = false, resolverNetwork = false, httpTransport = false, transportCause = false))
         assertEquals(listOf(1_000L, 2_000L, 4_000L, 8_000L, 8_000L, 8_000L), (1..6).map { LoadRetry.retryDelayMs(it, network = true) })
-        assertEquals(listOf(0L, 1_000L, 2_000L, null), (1..4).map { LoadRetry.retryDelayMs(it, network = false) })
+    }
+
+    @Test
+    fun noErrorTheDefaultWouldRetryIsEverGivenUpOnEarly() {
+        // Giving up (TIME_UNSET) would stop the loader for good: after a handover the link would
+        // never be fetched again. Every count gets a delay; the minimum retry count decides when
+        // the player hears of it.
+        assertEquals(listOf(0L, 1_000L, 2_000L, 3_000L, 4_000L, 5_000L, 5_000L, 5_000L), (1..8).map { LoadRetry.retryDelayMs(it, network = false) })
+        for (n in 1..20) {
+            assertTrue(LoadRetry.retryDelayMs(n, network = true) > 0L)
+            assertTrue(LoadRetry.retryDelayMs(n, network = false) >= 0L)
+        }
     }
 
     @Test

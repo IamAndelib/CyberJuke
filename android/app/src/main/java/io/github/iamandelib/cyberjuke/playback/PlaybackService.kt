@@ -522,6 +522,7 @@ class PlaybackService : MediaSessionService() {
         }
         radio.shutdown()
         StreamResolver.cancelPrefetch()
+        YtDataSpecResolver.gate.allow(emptySet())
         if (networkCallbackRegistered) {
             try {
                 connectivity().unregisterNetworkCallback(networkCallback)
@@ -826,10 +827,17 @@ class PlaybackService : MediaSessionService() {
         if (p == null || p.mediaItemCount == 0) {
             lc.currentIndex = C.INDEX_UNSET
             lc.nextIndex = C.INDEX_UNSET
+            YtDataSpecResolver.gate.allow(emptySet())
             return
         }
-        lc.nextIndex = p.nextMediaItemIndex
+        val next = p.nextMediaItemIndex
+        lc.nextIndex = next
         lc.currentIndex = p.currentMediaItemIndex
+        // The same pair may open its stream; the item after next, prepared early, waits.
+        val ids = HashSet<String>(2)
+        JukeUris.ytIdOf(p.currentMediaItem)?.let { ids.add(it) }
+        if (next != C.INDEX_UNSET) JukeUris.ytIdOf(p.getMediaItemAt(next))?.let { ids.add(it) }
+        YtDataSpecResolver.gate.allow(ids)
     }
 
     /**

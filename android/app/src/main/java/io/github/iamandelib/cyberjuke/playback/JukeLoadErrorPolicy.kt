@@ -12,9 +12,9 @@ import io.github.iamandelib.cyberjuke.net.BlockedException
 /**
  * Don't keep retrying what can never succeed or would make things worse: unavailable videos,
  * bot checks, a running back-off, and HTTP 403/410/429 (429 must never be retried; 403/410 are
- * handled by re-resolving in PlaybackService). A broken connection is retried more often than
- * ExoPlayer's default, with a capped back-off ([LoadRetry]), while the buffer keeps playing;
- * everything else keeps the default count.
+ * handled by re-resolving in PlaybackService). Everything else is retried [LoadRetry.NETWORK_RETRIES]
+ * times before the player hears of it, while the buffer keeps playing; a network failure with a
+ * capped back-off ([LoadRetry]), the rest with the default delays.
  */
 @OptIn(UnstableApi::class)
 internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
@@ -28,21 +28,19 @@ internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
         if (http != null && http.responseCode in NO_RETRY_HTTP) return C.TIME_UNSET
         // What the default never retries (a malformed file, a missing one) stays that way.
         if (super.getRetryDelayMsFor(loadErrorInfo) == C.TIME_UNSET) return C.TIME_UNSET
-        // Only a broken connection gets the longer run of retries; an HTTP status (5xx) or the
-        // resolver's network failure (an extraction each time) keeps the default count.
+        // A broken connection, or the resolver not reaching YouTube (a new network), waits
+        // with the capped back-off; anything else with the default delays. Never given up on
+        // here: the minimum retry count decides when it reaches the player.
         val network = LoadRetry.isNetwork(
             httpStatus = http != null,
-            resolver = resolve != null,
+            resolverNetwork = resolve != null, // a permanent one returned above
             httpTransport = e.findCause<HttpDataSource.HttpDataSourceException>() != null,
             transportCause = LoadRetry.hasTransportCause(e),
         )
-        return LoadRetry.retryDelayMs(loadErrorInfo.errorCount, network) ?: C.TIME_UNSET
+        return LoadRetry.retryDelayMs(loadErrorInfo.errorCount, network)
     }
 
-    /**
-     * The error reaches the player only after this many retries (and once it needs the data).
-     * It can't tell errors apart: [getRetryDelayMsFor] gives up sooner on the others.
-     */
+    /** The error reaches the player only after this many retries (and once it needs the data). */
     override fun getMinimumLoadableRetryCount(dataType: Int): Int =
         maxOf(super.getMinimumLoadableRetryCount(dataType), LoadRetry.NETWORK_RETRIES)
 

@@ -1,9 +1,12 @@
 package io.github.iamandelib.cyberjuke.playback
 
 import java.io.EOFException
+import java.io.InterruptedIOException
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 /**
  * How far ahead the player buffers (PlaybackService's DefaultLoadControl). Audio is about 1 MB
@@ -35,41 +38,32 @@ internal object BufferPolicy {
 }
 
 /**
- * Retries of a failed load (JukeLoadErrorPolicy). A network error (the connection failed, was
- * reset or stalled: not an HTTP status, not the resolver) is tried again [NETWORK_RETRIES] times,
- * with a capped back-off, before it reaches the player, while the buffer covers the gap. Every
- * other error keeps ExoPlayer's default: [DEFAULT_RETRIES], waiting 1 s more each time up to 5 s.
- * Pure (LoadPolicyTest).
+ * Retries of a failed load (JukeLoadErrorPolicy). Whatever ExoPlayer's default would retry is
+ * retried here too, never given up on early: the minimum retry count ([NETWORK_RETRIES]) decides
+ * when an error reaches the player (once it needs the data). A network-class error (the
+ * connection failed, was reset or stalled, or the resolver couldn't reach YouTube, as after a
+ * change of network) waits with a capped back-off ([delayMs]); any other with ExoPlayer's default,
+ * 1 s more each time up to 5 s. Pure (LoadPolicyTest).
  */
 internal object LoadRetry {
     const val NETWORK_RETRIES = 6
-
-    /** ExoPlayer's default minimum retry count. */
-    const val DEFAULT_RETRIES = 3
 
     const val MAX_DELAY_MS = 8_000L
 
     /** 1 s, 2 s, 4 s, then [MAX_DELAY_MS], for the [errorCount]th error in a row (from 1). */
     fun delayMs(errorCount: Int): Long = (1_000L shl (errorCount - 1).coerceIn(0, 4)).coerceAtMost(MAX_DELAY_MS)
 
-    /**
-     * The wait before retrying the [errorCount]th error in a row, or null to give up now (the
-     * player gets the error at once). The policy's minimum retry count is [NETWORK_RETRIES] for
-     * every load (it can't tell errors apart), so other errors give up here after
-     * [DEFAULT_RETRIES], as they did by default.
-     */
-    fun retryDelayMs(errorCount: Int, network: Boolean): Long? = when {
-        network -> delayMs(errorCount)
-        errorCount > DEFAULT_RETRIES -> null
-        else -> minOf((errorCount - 1).coerceAtLeast(0) * 1_000L, 5_000L)
-    }
+    /** The wait before retrying the [errorCount]th error in a row (always retried). */
+    fun retryDelayMs(errorCount: Int, network: Boolean): Long =
+        if (network) delayMs(errorCount) else minOf((errorCount - 1).coerceAtLeast(0) * 1_000L, 5_000L)
 
     /**
-     * A network-class failure: the transport broke ([httpTransport]: an HTTP data source error
-     * without a status; or [transportCause]), and it is neither an HTTP status nor the resolver's.
+     * A network-class failure: not an HTTP status, and the transport broke ([httpTransport]: an
+     * HTTP data source error without a status; or [transportCause]) or the resolver failed on
+     * the network ([resolverNetwork]: ResolveException of kind NETWORK).
      */
-    fun isNetwork(httpStatus: Boolean, resolver: Boolean, httpTransport: Boolean, transportCause: Boolean): Boolean =
-        !httpStatus && !resolver && (httpTransport || transportCause)
+    fun isNetwork(httpStatus: Boolean, resolverNetwork: Boolean, httpTransport: Boolean, transportCause: Boolean): Boolean =
+        !httpStatus && (resolverNetwork || httpTransport || transportCause)
 
     /** A reset or refused socket, a timeout, an unknown host or a stream that ended early among [t]'s causes. */
     fun hasTransportCause(t: Throwable): Boolean {
@@ -101,4 +95,46 @@ internal object LoadAhead {
      */
     fun mayLoad(loadingIndex: Int, currentIndex: Int, nextIndex: Int): Boolean =
         loadingIndex == UNSET || currentIndex == UNSET || loadingIndex == currentIndex || loadingIndex == nextIndex
+}
+
+/**
+ * Which tracks may open their stream: the playing one and the next (by ytId, the pair
+ * [LoadAhead] lets load). OneAheadLoadControl stops loading beyond them, but ExoPlayer still
+ * prepares the item after next, and preparing opens its source: an extraction, and a connection
+ * left idle. Its resolution waits here instead (YtDataSpecResolver, on the loader thread) until
+ * the pair includes it, woken when the pair changes, never polled; the interrupt of a cancelled
+ * or released load ends the wait. Nothing set (empty): no gate. Thread-safe. Pure (LoadPolicyTest).
+ */
+internal class OpenGate {
+    private val lock = ReentrantLock()
+    private val changed = lock.newCondition()
+
+    @Volatile
+    private var allowed: Set<String> = emptySet()
+
+    /** The tracks that may open now (main thread); empty lets everything through. */
+    fun allow(ytIds: Set<String>) = lock.withLock {
+        allowed = ytIds
+        changed.signalAll()
+    }
+
+    /** Blocks until [ytId] may open. Throws InterruptedIOException if the load is cancelled meanwhile. */
+    @Throws(InterruptedIOException::class)
+    fun await(ytId: String) {
+        if (mayOpen(ytId, allowed)) return
+        lock.withLock {
+            while (!mayOpen(ytId, allowed)) {
+                try {
+                    changed.await()
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw InterruptedIOException("Load cancelled while waiting for its turn")
+                }
+            }
+        }
+    }
+
+    companion object {
+        fun mayOpen(ytId: String, allowed: Set<String>): Boolean = allowed.isEmpty() || ytId in allowed
+    }
 }
