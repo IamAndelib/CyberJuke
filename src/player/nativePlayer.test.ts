@@ -162,6 +162,17 @@ describe('NativePlayer: play/pause', () => {
     expect(fake.plugin.play).toHaveBeenCalledTimes(1);
     expect(p.state.value.isPlaying).toBe(true);
   });
+
+  it('shows the wait for the network while native says so, until the user takes over', async () => {
+    const p = new NativePlayer();
+    emit('state', state({ isPlaying: false, queueIds: ['A'], upNextIds: [], upNextKinds: '', waitingForNetwork: true }));
+    expect(p.state.value.waitingForNetwork).toBe(true);
+    emit('state', state({ isPlaying: false, queueIds: ['A'], upNextIds: [], upNextKinds: '' }));
+    expect(p.state.value.waitingForNetwork).toBe(false);
+    emit('state', state({ isPlaying: false, queueIds: ['A'], upNextIds: [], upNextKinds: '', waitingForNetwork: true }));
+    await p.toggle();
+    expect(p.state.value.waitingForNetwork).toBe(false);
+  });
 });
 
 describe('NativePlayer: edits (K2)', () => {

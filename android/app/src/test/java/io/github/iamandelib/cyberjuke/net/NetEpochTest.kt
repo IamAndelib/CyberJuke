@@ -34,4 +34,31 @@ class NetEpochTest {
         assertTrue(e.onAddresses("102", setOf("192.168.1.9")))
         assertEquals(3, e.generation)
     }
+
+    @Test
+    fun aChangeSaysWhichAddressFamiliesChanged() {
+        val e = NetEpochState()
+        e.onNetwork("100")
+        assertEquals(emptySet<Family>(), e.addressesChanged("100", setOf("192.168.1.5", "2001:db8::a", "fe80::1")))
+        // A new (temporary) IPv6 address: URLs bound to IPv4 still work.
+        assertEquals(setOf(Family.IPV6), e.addressesChanged("100", setOf("192.168.1.5", "2001:db8::b", "fe80::1")))
+        assertEquals(1, e.generation)
+        // A new IPv4 address only.
+        assertEquals(setOf(Family.IPV4), e.addressesChanged("100", setOf("192.168.1.6", "2001:db8::b", "fe80::1")))
+        // Both at once, and the same again (no change).
+        assertEquals(NetEpochState.ALL_FAMILIES, e.addressesChanged("100", setOf("10.0.0.2", "2001:db8::c")))
+        assertEquals(emptySet<Family>(), e.addressesChanged("100", setOf("10.0.0.2", "2001:db8::c")))
+        // Another network: everything.
+        assertEquals(NetEpochState.ALL_FAMILIES, e.addressesChanged("101", setOf("10.0.0.2")))
+        assertEquals(4, e.generation)
+    }
+
+    @Test
+    fun addressFamiliesFromTheirText() {
+        assertEquals(Family.IPV4, NetEpochState.familyOf("203.0.113.9"))
+        assertEquals(Family.IPV6, NetEpochState.familyOf("2001:db8::1"))
+        assertEquals(Family.IPV6, NetEpochState.familyOf("fe80::1%wlan0"))
+        // An IPv6 address that only went away counts too.
+        assertEquals(setOf(Family.IPV6), NetEpochState.changedFamilies(setOf("1.2.3.4", "2001:db8::1"), setOf("1.2.3.4")))
+    }
 }

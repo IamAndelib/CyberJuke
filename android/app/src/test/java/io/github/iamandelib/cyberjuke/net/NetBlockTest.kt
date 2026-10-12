@@ -158,6 +158,42 @@ class NetBlockTest {
     }
 
     @Test
+    fun waitingForNetworkIsAnOutagesPendingResumeOnly() {
+        var now = 0L
+        NetBlock.clock = { now }
+        val heard = mutableListOf<Boolean>()
+        NetBlock.add(object : NetBlock.Listener {
+            override fun onBlocked(until: Long, reason: BlockReason) {}
+            override fun onUnblocked() {}
+            override fun onWaitingChanged(waiting: Boolean) { heard += waiting }
+        })
+        assertFalse(NetBlock.waitingForNetwork())
+        // A back-off's resume is no wait for the network.
+        NetBlock.wantResume()
+        assertFalse(NetBlock.waitingForNetwork())
+        // An outage's is; a second pause changes nothing to hear.
+        NetBlock.wantResume(outage = true)
+        assertTrue(NetBlock.waitingForNetwork())
+        NetBlock.wantResume(outage = true)
+        // Resuming takes it.
+        assertTrue(NetBlock.takeResume())
+        assertFalse(NetBlock.waitingForNetwork())
+        // The user's pause cancels it.
+        NetBlock.wantResume(outage = true)
+        NetBlock.cancelResume()
+        assertFalse(NetBlock.waitingForNetwork())
+        // A back-off after the outage turns it into the back-off's resume.
+        NetBlock.wantResume(outage = true)
+        NetBlock.wantResume()
+        assertFalse(NetBlock.waitingForNetwork())
+        // Past the window it is over.
+        NetBlock.wantResume(outage = true)
+        now = NetBlock.RESUME_WINDOW_MS + 1
+        assertFalse(NetBlock.waitingForNetwork())
+        assertEquals(listOf(true, false, true, false, true, false, true), heard)
+    }
+
+    @Test
     fun listenersHearAResumeWantedAndCancelled() {
         val events = mutableListOf<String>()
         NetBlock.add(object : NetBlock.Listener {

@@ -97,6 +97,123 @@ class TrackErrorPolicyTest {
     }
 
     @Test
+    fun anUnclearIoFailureIsAnOutageWhenTheNetworkIsDown() {
+        // A reset connection or an early end of stream, and no validated network: the next
+        // track would fail too, so pause and resume instead of skipping a good track.
+        val noNetwork = Facts(kind = null, ioOther = true, networkValidated = false)
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(noNetwork))
+        // ...also with failures before it: no five-in-a-row stop on a flapping link.
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(noNetwork.copy(consecutiveFailures = 4)))
+        // ...and for an upcoming item at the end of the list.
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(noNetwork.copy(isCurrent = false, hasNext = false)))
+    }
+
+    @Test
+    fun anUnclearIoFailureIsAnOutageWhenThisTrackWasPlaying() {
+        // Its stream worked until now: the link dropped, not the file.
+        val midTrack = Facts(kind = null, ioOther = true, networkValidated = true, playedThisItem = true)
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(midTrack))
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(midTrack.copy(consecutiveFailures = 4)))
+    }
+
+    @Test
+    fun anUnclearIoFailureOnAFreshTrackWithTheNetworkUpIsTheTracks() {
+        // Never played, and the network is fine: this file, so skip it as before.
+        val fresh = Facts(kind = null, ioOther = true, networkValidated = true, playedThisItem = false)
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(fresh))
+        assertEquals(Action.Stop, TrackErrorPolicy.decide(fresh.copy(consecutiveFailures = 4)))
+        assertEquals(Action.PauseAtEnd, TrackErrorPolicy.decide(fresh.copy(hasNext = false)))
+        // A plain per-video failure is unchanged by the network's state.
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(Facts(kind = null, networkValidated = false)))
+    }
+
+    @Test
+    fun anUnclearIoFailureNeverOverridesWhatAStatusOrTheResolverSays() {
+        val down = Facts(kind = null, ioOther = true, networkValidated = false, playedThisItem = true)
+        // An HTTP status is its own answer (a refusal, an expired link).
+        assertEquals(Action.ReResolve, TrackErrorPolicy.decide(down.copy(httpCode = 403, urlAgeMs = 3L * 3600_000L)))
+        assertEquals(Action.ReResolve, TrackErrorPolicy.decide(down.copy(httpCode = 429)))
+        // So is the resolver's kind.
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(down.copy(kind = FailureKind.CONTENT)))
+        assertEquals(Action.Block(BlockReason.BOT_CHECK), TrackErrorPolicy.decide(down.copy(kind = FailureKind.BOT_CHECK)))
+        assertEquals(Action.Pause(resume = false), TrackErrorPolicy.decide(down.copy(kind = FailureKind.BROKEN)))
+    }
+
+    @Test
+    fun aTrackBrokenAtOneSpotIsSkippedTheSecondTimeThere() {
+        // The network is up and the track played up to here: once an outage...
+        val midTrack = Facts(kind = null, ioOther = true, networkValidated = true, playedThisItem = true)
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(midTrack.copy(failuresHere = 0)))
+        // ...but failing at the same spot again, it's the file: skip it instead of looping.
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(midTrack.copy(failuresHere = 1)))
+        assertEquals(Action.PauseAtEnd, TrackErrorPolicy.decide(midTrack.copy(failuresHere = 1, hasNext = false)))
+        // With the network down too: the first time there an outage, the second the file's.
+        val down = midTrack.copy(networkValidated = false)
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(down))
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(down.copy(failuresHere = 1)))
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(down.copy(playedThisItem = false, failuresHere = 1)))
+    }
+
+    @Test
+    fun onlyTheUnclearFailureCountsAtItsSpot() {
+        val unclear = Facts(kind = null, ioOther = true)
+        assertEquals(true, TrackErrorPolicy.countsAtSpot(unclear))
+        // A reset socket during a connection failure is that connection failure: an outage
+        // every time, never counted toward a skip.
+        assertEquals(false, TrackErrorPolicy.countsAtSpot(unclear.copy(ioNetwork = true)))
+        assertEquals(false, TrackErrorPolicy.countsAtSpot(unclear.copy(httpCode = 503)))
+        assertEquals(false, TrackErrorPolicy.countsAtSpot(unclear.copy(kind = FailureKind.NETWORK)))
+        assertEquals(false, TrackErrorPolicy.countsAtSpot(unclear.copy(blocked = true)))
+        assertEquals(false, TrackErrorPolicy.countsAtSpot(Facts(kind = null)))
+    }
+
+    @Test
+    fun aTrackPausedOnAfterPlayingKeepsItsFormat() {
+        val outage = Action.Pause(resume = true)
+        // Played (or past its start) and paused on: it loads again in the same format.
+        assertEquals(true, TrackErrorPolicy.keepsFormat(outage, isCurrent = true, played = true, positionMs = 0L))
+        assertEquals(true, TrackErrorPolicy.keepsFormat(outage, isCurrent = true, played = false, positionMs = 40_000L))
+        assertEquals(true, TrackErrorPolicy.keepsFormat(Action.Pause(resume = false), true, true, 1L))
+        assertEquals(true, TrackErrorPolicy.keepsFormat(Action.Block(BlockReason.RATE_LIMIT), true, true, 1L))
+        assertEquals(true, TrackErrorPolicy.keepsFormat(Action.WaitBlocked, true, true, 1L))
+        // Never started: the rung of the moment is fine.
+        assertEquals(false, TrackErrorPolicy.keepsFormat(outage, isCurrent = true, played = false, positionMs = 0L))
+        // An upcoming item, or a skip / re-resolve (which keeps its own itag): nothing to keep.
+        assertEquals(false, TrackErrorPolicy.keepsFormat(outage, isCurrent = false, played = true, positionMs = 5L))
+        assertEquals(false, TrackErrorPolicy.keepsFormat(Action.Skip, true, true, 5L))
+        assertEquals(false, TrackErrorPolicy.keepsFormat(Action.ReResolve, true, true, 5L))
+    }
+
+    @Test
+    fun failuresCountPerSpotOfOneTrack() {
+        val spot = FailureSpot()
+        assertEquals(0, spot.onFailure("a", 60_000L))
+        // Resumed, played the buffer up to about the same place, failed again.
+        assertEquals(1, spot.onFailure("a", 75_000L))
+        assertEquals(2, spot.onFailure("a", 70_000L))
+        // Well past it (more than 30 s on): a new spot.
+        assertEquals(0, spot.onFailure("a", 110_000L))
+        // Another track, or a cleared one: starts over.
+        assertEquals(0, spot.onFailure("b", 110_000L))
+        spot.clear()
+        assertEquals(0, spot.onFailure("b", 110_000L))
+    }
+
+    @Test
+    fun theOutageStreakLeavesRoomForTheScheduledTries() {
+        // ResumeSchedule tries six times within its window (ResumeScheduleTest); the network
+        // callback may add one or two.
+        val tries = 6
+        assertEquals(true, TrackErrorPolicy.MAX_OUTAGE_RESUMES > tries + 1)
+        val unclear = Facts(kind = null, ioOther = true, networkValidated = false)
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(unclear.copy(outagePauses = tries)))
+        assertEquals(
+            Action.Pause(resume = false),
+            TrackErrorPolicy.decide(unclear.copy(outagePauses = TrackErrorPolicy.MAX_OUTAGE_RESUMES - 1)),
+        )
+    }
+
+    @Test
     fun forbiddenOnAFreshUrlGetsOneFreshLinkThenBlocks() {
         val fresh = Facts(kind = null, httpCode = 403, urlAgeMs = 5_000L)
         // Retry once before calling it a block: the extraction tells whether we're blocked.

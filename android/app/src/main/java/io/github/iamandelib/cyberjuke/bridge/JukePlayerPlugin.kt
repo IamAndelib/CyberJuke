@@ -30,6 +30,7 @@ import io.github.iamandelib.cyberjuke.net.Family
 import io.github.iamandelib.cyberjuke.net.Ipv4Mode
 import io.github.iamandelib.cyberjuke.net.NetBlock
 import io.github.iamandelib.cyberjuke.net.NetPrefs
+import io.github.iamandelib.cyberjuke.playback.AudioQuality
 import io.github.iamandelib.cyberjuke.playback.BridgeLimits
 import io.github.iamandelib.cyberjuke.playback.ControllerKey
 import io.github.iamandelib.cyberjuke.playback.JukeTracks
@@ -88,6 +89,8 @@ import kotlin.math.roundToInt
  *   when play()/setQueue is refused during one. unblocked {}: the back-off ran out or was lifted
  *   (new network, IPv4 setting changed, retryNow), or playback worked again.
  *   extractorBroken { message }: YouTube changed something (parse failure).
+ * - state's `waitingForNetwork`: an outage paused playback, and it resumes by itself once the
+ *   network is back (NetBlock.waitingForNetwork); sent again whenever it changes.
  * - While blocked, setQueue/play still update the queue but do not prepare (no extraction):
  *   playback stays paused with isBuffering false. Once the back-off ends, the service resumes
  *   playback it stopped (or a play() it refused), within NetBlock.RESUME_WINDOW_MS.
@@ -164,6 +167,11 @@ class JukePlayerPlugin : Plugin() {
 
         override fun onUnblocked() {
             main.post { announceUnblocked() }
+        }
+
+        // `waitingForNetwork` changed while paused: no player event would carry it.
+        override fun onWaitingChanged(waiting: Boolean) {
+            main.post { controller?.let { emitState(it) } }
         }
     }
 
@@ -698,13 +706,10 @@ class JukePlayerPlugin : Plugin() {
         }
     }
 
+    /** `setQuality({ quality: 'auto' | 'high' | 'low' })`; an unknown value is 'auto'. */
     @PluginMethod
     fun setQuality(call: PluginCall) {
-        StreamResolver.quality = when (call.getString("quality")) {
-            "high" -> StreamResolver.Quality.HIGH
-            "low" -> StreamResolver.Quality.LOW
-            else -> return call.reject("quality must be 'high' or 'low'")
-        }
+        StreamResolver.quality = AudioQuality.of(call.getString("quality"))
         PlayerPrefsStore.setQuality(context, StreamResolver.quality)
         // Takes effect from the next resolution (next track / next prepare).
         call.resolve()

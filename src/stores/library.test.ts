@@ -32,7 +32,7 @@ describe('theme migration', () => {
   it('migrates a saved GRiD theme to Brutalist and saves it', async () => {
     store.set('settings', JSON.stringify({ theme: 'grid', showNsfw: true, quality: 'low' }));
     await lib.loadLibrary();
-    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: true });
+    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: true, version: 2 });
     await flush();
     expect(JSON.parse(store.get('settings')!).theme).toBe('brutalist');
   });
@@ -65,6 +65,40 @@ describe('theme migration', () => {
     store.set('settings', JSON.stringify({ ipv4: 'sometimes' }));
     await lib.loadLibrary();
     expect(lib.settings.value.ipv4).toBe('auto');
+  });
+
+  it('turns a saved High (the old default) into Auto once, and saves it', async () => {
+    store.set('settings', JSON.stringify({ theme: 'dark', quality: 'high' }));
+    await lib.loadLibrary();
+    expect(lib.settings.value.quality).toBe('auto');
+    expect(lib.settings.value.version).toBe(lib.SETTINGS_VERSION);
+    await flush();
+    expect(JSON.parse(store.get('settings')!)).toMatchObject({ quality: 'auto', version: 2 });
+    // Once: High chosen after the upgrade stays High.
+    lib.updateSettings({ quality: 'high' });
+    await flush();
+    await lib.loadLibrary();
+    expect(lib.settings.value.quality).toBe('high');
+  });
+
+  it('keeps a saved Low through the upgrade', async () => {
+    store.set('settings', JSON.stringify({ theme: 'dark', quality: 'low' }));
+    await lib.loadLibrary();
+    expect(lib.settings.value.quality).toBe('low');
+    await flush();
+    expect(JSON.parse(store.get('settings')!)).toMatchObject({ quality: 'low', version: 2 });
+  });
+
+  it('defaults to Auto, and an unknown quality falls back to it', async () => {
+    await lib.loadLibrary();
+    expect(lib.settings.value.quality).toBe('auto');
+    // Nothing saved yet: nothing to migrate, nothing written.
+    await flush();
+    expect(store.has('settings')).toBe(false);
+    store.set('settings', JSON.stringify({ quality: 'ultra', version: 2 }));
+    await lib.loadLibrary();
+    expect(lib.settings.value.quality).toBe('auto');
+    expect(lib.QUALITIES).toEqual(['auto', 'high', 'low']);
   });
 
   it('lists Brutalist and not GRiD', () => {

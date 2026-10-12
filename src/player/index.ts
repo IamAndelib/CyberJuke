@@ -43,6 +43,8 @@ export const isPlaying = computed(() => state.value.isPlaying);
 export const isBuffering = computed(() => state.value.isBuffering);
 /** Playing and not buffering: the position moves. */
 export const isAdvancing = computed(() => state.value.isPlaying && !state.value.isBuffering);
+/** The connection dropped and playback paused; native resumes it by itself once it's back. */
+export const waitingForNetwork = computed(() => state.value.waitingForNetwork);
 export const shuffleOn = computed(() => state.value.shuffle);
 export const repeatMode = computed(() => state.value.repeat);
 /** The current track's length (0 until known). */

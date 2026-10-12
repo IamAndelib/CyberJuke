@@ -23,6 +23,9 @@ internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
     @Volatile
     var allowCiTone = false
 
+    /** Only the playing track and the next one open their stream ([OpenGate]; PlaybackService sets it). */
+    val gate = OpenGate()
+
     override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
         val ytId = JukeUris.ytIdOf(dataSpec.uri)
         if (ytId == LaunchOptions.CI_TONE && allowCiTone) {
@@ -31,6 +34,8 @@ internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
         val url: String
         val headers = HashMap(dataSpec.httpRequestHeaders)
         if (ytId != null) {
+            // The track after next waits for its turn (prepared early, it would extract now).
+            gate.await(ytId)
             // A load that starts past byte 0 resumes a track: keep its itag (same file).
             val stream = StreamResolver.resolve(ytId, midStream = dataSpec.position > 0)
             url = stream.url

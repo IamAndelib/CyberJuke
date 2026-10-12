@@ -3,10 +3,12 @@ import {
   CHECK_EVERY_OPTIONS,
   THEME_LABELS,
   IPV4_MODES,
+  QUALITIES,
   THEMES,
   settings,
   updateSettings,
   type Ipv4Mode,
+  type Quality,
   type ThemeId,
 } from '../../stores/library';
 import { useEffect, useState } from 'preact/hooks';
@@ -52,9 +54,14 @@ function Toggle({ on, onChange, label, testid }: { on: boolean; onChange: (v: bo
   );
 }
 
-/** Where the code and the releases are (opened in the browser; github.com is allowlisted). */
-const QUALITIES = ['high', 'low'] as const;
+const QUALITY_LABELS: Record<Quality, string> = { auto: 'Auto', high: 'High', low: 'Low' };
+const QUALITY_DESCS: Record<Quality, string> = {
+  auto: 'Best quality the connection can keep up with',
+  high: 'Always the best audio',
+  low: 'Uses the least data',
+};
 
+/** Where the code and the releases are (opened in the browser; github.com is allowlisted). */
 function A({ href, children }: { href: string; children: string }) {
   return (
     <a
@@ -415,12 +422,20 @@ export function Settings() {
           </div>
           <Toggle on={s.showNsfw} onChange={(v) => updateSettings({ showNsfw: v })} label="Show NSFW tracks" testid="nsfw-toggle" />
         </div>
-        <div class="setting">
+        <div class="setting stack">
           <div class="setting-text">
             <div class="setting-name">Audio quality</div>
-            <div class="setting-desc">Low saves data.</div>
+            <div class="setting-desc" id="quality-desc" data-testid="quality-desc">
+              {QUALITY_DESCS[s.quality]}
+            </div>
           </div>
-          <div class="segmented small" role="radiogroup" aria-label="Audio quality" onKeyDown={arrowChoice(QUALITIES, s.quality, (q) => updateSettings({ quality: q }))}>
+          <div
+            class="seg-grid three"
+            role="radiogroup"
+            aria-label="Audio quality"
+            aria-describedby="quality-desc"
+            onKeyDown={arrowChoice(QUALITIES, s.quality, (q) => updateSettings({ quality: q }))}
+          >
             {QUALITIES.map((q) => (
               <button
                 key={q}
@@ -432,7 +447,7 @@ export function Settings() {
                 onClick={() => updateSettings({ quality: q })}
                 data-testid={`quality-${q}`}
               >
-                {q === 'high' ? 'High' : 'Low'}
+                {QUALITY_LABELS[q]}
               </button>
             ))}
           </div>
