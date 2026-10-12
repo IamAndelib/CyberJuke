@@ -41,19 +41,6 @@ internal class ManifestOnlyException(
     val mimeType: String,
 ) : IOException("No progressive stream for $ytId, only a manifest ($mimeType)")
 
-internal data class ResolvedStream(
-    val ytId: String,
-    val url: String,
-    val headers: Map<String, String>,
-    val description: String,
-    val resolvedAtMs: Long,
-    val itag: Int,
-    /** [NetEpoch.generation] when the extraction started: older ones are bound to an old IP. */
-    val netGen: Int = 0,
-    /** The video's quality ladder ([QualityLadder]) as bitrates, best first; empty for a fallback stream. */
-    val ladderBps: List<Int> = emptyList(),
-)
-
 /**
  * Turns a YouTube id into a playable stream URL using NewPipeExtractor (via [YtCompat]).
  * Blocking; called on ExoPlayer's loader thread through ResolvingDataSource, so stream
@@ -67,7 +54,8 @@ internal data class ResolvedStream(
  *   ([BlockedException]). A bot check or rate limit switches to IPv4 or retries once, then
  *   trips it ([YtGuard]); a successful extraction ends the unproven state.
  * - Re-resolving mid-track keeps the same itag ([reResolve], or a load that starts past byte 0),
- *   so the resumed bytes belong to the same file. Streams are also cached by itag for that.
+ *   so the resumed bytes belong to the same file. Streams are also cached by itag for that. A
+ *   track loaded again from the start after an outage keeps its format too ([keepFormat]).
  * - Quality: the audio-only formats make a ladder ([QualityLadder]); HIGH and LOW are its top
  *   and bottom, AUTO the rung [autoRung] (set between tracks by PlaybackService's
  *   [QualityGovernor]). Every rung of an extraction is cached, so a step costs no request.
@@ -90,7 +78,7 @@ internal object StreamResolver {
     @Volatile
     var autoRung: Int = 0
 
-    private val cache = TtlLru<String, ResolvedStream>(MAX_CACHE)
+    private val cache = StreamUrlCache(MAX_CACHE)
 
     /**
      * The stream last handed out per video (for the itag, the URL's age and expiry), kept
@@ -101,6 +89,9 @@ internal object StreamResolver {
 
     /** ytId -> itag to prefer on the next extraction (set by [reResolve]). */
     private val pins = ConcurrentHashMap<String, Int>()
+
+    /** ytId -> the itag the current track keeps until the next track ([keepFormat]). */
+    private val kept = ConcurrentHashMap<String, Int>()
 
     private val inFlight = ConcurrentHashMap<String, FutureTask<ResolvedStream>>()
 
@@ -113,15 +104,10 @@ internal object StreamResolver {
         },
     )
 
-    /** The cache key of a video's [rung] ([QualityLadder.LOWEST]: its bottom one). */
-    private fun rungKey(ytId: String, rung: Int) = if (rung == QualityLadder.LOWEST) "$ytId|low" else "$ytId|r$rung"
-
     private fun currentRung(): Int = QualityLadder.rungFor(quality, autoRung)
 
-    /** [rung] of [ytId] from the cache; a rung past the video's ladder is its bottom one. */
-    private fun cached(ytId: String, rung: Int, now: Long): ResolvedStream? =
-        cache.get(rungKey(ytId, rung), now)
-            ?: cache.get(rungKey(ytId, QualityLadder.LOWEST), now)?.takeIf { rung >= it.ladderBps.size }
+    /** In-flight keys: one per rung, or per itag for a pinned format. */
+    private fun rungKey(ytId: String, rung: Int) = "$ytId|r$rung"
 
     private fun itagKey(ytId: String, itag: Int) = "$ytId|i$itag"
 
@@ -137,10 +123,10 @@ internal object StreamResolver {
         NetBlock.check()
         val rung = currentRung()
         val k = rungKey(ytId, rung)
-        // A resume keeps the file it was playing: a cached stream of another itag won't do.
-        val keep = if (midStream) served.get(ytId, now())?.itag?.takeIf { it > 0 } else null
-        val hit = cached(ytId, rung, now())?.takeIf { keep == null || it.itag == keep }
-            ?: keep?.let { cache.get(itagKey(ytId, it), now()) }
+        // A resume keeps the file it was playing (so does a track kept through an outage): a
+        // cached stream of another itag won't do.
+        val keep = kept[ytId] ?: if (midStream) served.get(ytId, now())?.itag?.takeIf { it > 0 } else null
+        val hit = cache.get(ytId, rung, keep, now())
         if (hit != null) return serve(hit)
         val prefer = pins.remove(ytId) ?: keep
         val flight = if (prefer != null) itagKey(ytId, prefer) else k
@@ -181,7 +167,7 @@ internal object StreamResolver {
     }
 
     private fun extract(ytId: String, rung: Int, preferItag: Int?): ResolvedStream {
-        if (preferItag == null) cached(ytId, rung, now())?.let { return it }
+        if (preferItag == null) cache.get(ytId, rung, null, now())?.let { return it }
         val gen = NetEpoch.generation
         val started = now()
         val extracted = try {
@@ -203,31 +189,23 @@ internal object StreamResolver {
         Log.i(TAG, "resolve($ytId) -> ${stream.description} in ${now() - started}ms")
         if (NetEpoch.generation == gen) {
             // Not cached when the network changed meanwhile: the URL is bound to the old IP.
-            put(itagKey(ytId, stream.itag), stream)
             val ladder = ladderOf(extracted)
-            if (ladder.isEmpty()) {
-                // A fallback stream: the same whatever the rung ([cached]).
-                val fallback = if (preferItag == null) {
-                    stream
-                } else {
-                    runCatching { choose(ytId, extracted, rung, null, gen) }.getOrNull()
-                }
-                fallback?.takeIf { Hosts.isAllowedMediaUrl(it.url) }?.let { put(rungKey(ytId, QualityLadder.LOWEST), it) }
-            } else {
-                // Every rung: Auto steps between tracks without another extraction.
-                val bps = ladder.map { it.bitrate }
-                ladder.forEachIndexed { i, c ->
-                    val s = if (c.itag == stream.itag && c.url == stream.url) stream else rungStream(ytId, c, i, bps, stream.resolvedAtMs, gen)
-                    if (!Hosts.isAllowedMediaUrl(s.url)) return@forEachIndexed
-                    put(rungKey(ytId, i), s)
-                    if (i == ladder.lastIndex) put(rungKey(ytId, QualityLadder.LOWEST), s)
-                }
+            val bps = ladder.map { it.bitrate }
+            // Every rung: Auto steps between tracks without another extraction.
+            val rungs = ladder.mapIndexed { i, c ->
+                (if (c.itag == stream.itag && c.url == stream.url) stream else rungStream(ytId, c, i, bps, stream.resolvedAtMs, gen))
+                    .takeIf { Hosts.isAllowedMediaUrl(it.url) }
             }
+            // No ladder: a fallback stream, the same whatever the rung.
+            val fallback = when {
+                ladder.isNotEmpty() -> null
+                preferItag == null -> stream
+                else -> runCatching { choose(ytId, extracted, rung, null, gen) }.getOrNull()
+            }?.takeIf { Hosts.isAllowedMediaUrl(it.url) }
+            cache.putExtraction(ytId, stream, rungs, fallback)
         }
         return stream
     }
-
-    private fun put(key: String, s: ResolvedStream) = cache.put(key, s, StreamUrls.cacheUntil(s.url, s.resolvedAtMs))
 
     /** The audio-only formats as a quality ladder, original language track preferred. */
     private fun ladderOf(ex: YtCompat.Extracted): List<YtCompat.Candidate> {
@@ -295,8 +273,22 @@ internal object StreamResolver {
      */
     fun reResolve(ytId: String) {
         lastServed(ytId)?.itag?.takeIf { it > 0 }?.let { pins[ytId] = it }
-        cache.removeIf { it.startsWith("$ytId|") }
+        cache.removeVideo(ytId)
     }
+
+    /**
+     * [ytId] (the current track) is about to load again from its start, after an outage or a
+     * back-off: it keeps the format it was playing until another track plays ([releaseFormats]).
+     * Its load starts at byte 0 then, so without this the rung could pick another file mid-song.
+     */
+    fun keepFormat(ytId: String) {
+        val itag = lastServed(ytId)?.itag?.takeIf { it > 0 } ?: return
+        kept.clear()
+        kept[ytId] = itag
+    }
+
+    /** Another track plays: no format is kept any more. */
+    fun releaseFormats() = kept.clear()
 
     /** Drops every cached URL (e.g. the IPv4 setting changed: URLs are bound to the IP). */
     fun clear() {
@@ -309,10 +301,7 @@ internal object StreamResolver {
      * (googlevideo binds a URL to the address that resolved it). A URL bound to the other
      * family, or to none, still works and is kept.
      */
-    fun dropBoundTo(families: Set<Family>) {
-        if (families.isEmpty()) return
-        cache.removeValuesIf { s -> StreamUrls.familyOf(s.url)?.let { it in families } == true }
-    }
+    fun dropBoundTo(families: Set<Family>) = cache.dropBoundTo(families)
 
     /**
      * Best effort: warm the cache for an upcoming item on a background thread. Only the latest
@@ -320,7 +309,7 @@ internal object StreamResolver {
      */
     fun prefetch(ytId: String) {
         if (NetBlock.isQuiet()) return
-        if (cached(ytId, currentRung(), now()) != null) return
+        if (cache.get(ytId, currentRung(), kept[ytId], now()) != null) return
         prefetcher.submit(ytId) {
             try {
                 resolve(ytId)

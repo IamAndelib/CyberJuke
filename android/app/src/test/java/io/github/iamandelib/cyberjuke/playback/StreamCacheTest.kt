@@ -115,6 +115,55 @@ class StreamCacheTest {
         assertEquals(true, PrefetchPolicy.delayMs(3_000L, min3) > 0L)
     }
 
+    /** A fake extraction of [ytId]: rungs of itags 251, 250, 249 (best first). */
+    private fun rungs(ytId: String): List<ResolvedStream> {
+        val bps = listOf(160_000, 70_000, 50_000)
+        return listOf(251, 250, 249).map { itag ->
+            ResolvedStream(ytId, "https://rr1---sn-x.googlevideo.com/videoplayback?expire=1999999999&itag=$itag", emptyMap(), "", 0L, itag, 0, bps)
+        }
+    }
+
+    @Test
+    fun everyRungOfAnExtractionIsCachedAndAShortLadderServesItsBottom() {
+        val cache = StreamUrlCache(100)
+        val r = rungs("v")
+        cache.putExtraction("v", r[0], r, null)
+        assertEquals(251, cache.get("v", 0, null, 0L)?.itag)
+        assertEquals(250, cache.get("v", 1, null, 0L)?.itag)
+        assertEquals(249, cache.get("v", 2, null, 0L)?.itag)
+        // A rung past this video's ladder, and Low: its bottom one.
+        assertEquals(249, cache.get("v", 5, null, 0L)?.itag)
+        assertEquals(249, cache.get("v", QualityLadder.LOWEST, null, 0L)?.itag)
+        assertNull(cache.get("w", 0, null, 0L))
+        cache.removeVideo("v")
+        assertNull(cache.get("v", 0, null, 0L))
+    }
+
+    @Test
+    fun aKeptFormatWinsOverTheRungAfterAStep() {
+        // Playing 251 (rung 1); Auto stepped down meanwhile; an outage resume loads it again
+        // from byte 0 (not mid-stream): it must stay 251, not switch file mid-song.
+        val cache = StreamUrlCache(100)
+        val r = rungs("v")
+        cache.putExtraction("v", r[0], r, null)
+        assertEquals(250, cache.get("v", 1, null, 0L)?.itag) // what the new rung alone would give
+        assertEquals(251, cache.get("v", 1, 251, 0L)?.itag)
+        // The kept format isn't cached any more: nothing, so the resolver extracts it again.
+        val other = StreamUrlCache(100)
+        other.putExtraction("v", r[1], listOf(null, r[1], r[2]), null)
+        assertNull(other.get("v", 1, 251, 0L))
+        assertEquals(250, other.get("v", 1, 250, 0L)?.itag)
+    }
+
+    @Test
+    fun aFallbackStreamServesEveryRung() {
+        val cache = StreamUrlCache(100)
+        val muxed = ResolvedStream("v", "https://rr1---sn-x.googlevideo.com/videoplayback?expire=1999999999&itag=18", emptyMap(), "", 0L, 18)
+        cache.putExtraction("v", muxed, emptyList(), muxed)
+        assertEquals(18, cache.get("v", 0, null, 0L)?.itag)
+        assertEquals(18, cache.get("v", 3, null, 0L)?.itag)
+    }
+
     @Test
     fun cachedUrlsCanBeDroppedByWhatTheyAreBoundTo() {
         val lru = TtlLru<String, String>(10)

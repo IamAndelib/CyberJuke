@@ -367,7 +367,11 @@ class PlaybackService : MediaSessionService() {
         }
         Log.i(TAG, "Resuming after a back-off or an outage")
         when (p.playbackState) {
-            Player.STATE_IDLE -> p.prepare()
+            Player.STATE_IDLE -> {
+                // Loaded again from its start: it keeps the format it was playing.
+                JukeUris.ytIdOf(p.currentMediaItem)?.let { StreamResolver.keepFormat(it) }
+                p.prepare()
+            }
             Player.STATE_ENDED -> return
             else -> Unit
         }
@@ -608,6 +612,7 @@ class PlaybackService : MediaSessionService() {
             prefetchedKey = null
             Log.i(TAG, "Transition to ${mediaItem?.mediaId} (${JukeUris.ytIdOf(mediaItem)}), reason=$reason")
             if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) rebuffers.onJump(SystemClock.elapsedRealtime())
+            StreamResolver.releaseFormats()
             governQuality(mediaItem)
             schedulePrefetch()
         }

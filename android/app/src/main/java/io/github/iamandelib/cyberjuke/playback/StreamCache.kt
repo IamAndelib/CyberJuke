@@ -107,6 +107,75 @@ internal class TtlLru<K, V>(private val maxEntries: Int) {
     fun size(): Int = map.size
 }
 
+internal data class ResolvedStream(
+    val ytId: String,
+    val url: String,
+    val headers: Map<String, String>,
+    val description: String,
+    val resolvedAtMs: Long,
+    val itag: Int,
+    /** [io.github.iamandelib.cyberjuke.net.NetEpoch.generation] when the extraction started: older ones are bound to an old IP. */
+    val netGen: Int = 0,
+    /** The video's quality ladder ([QualityLadder]) as bitrates, best first; empty for a fallback stream. */
+    val ladderBps: List<Int> = emptyList(),
+)
+
+/**
+ * [StreamResolver]'s URL cache (memory only, Y4): each video's streams by rung of its quality
+ * ladder, and by itag. Every rung of an extraction goes in, so Auto steps between tracks without
+ * another extraction. Thread-safe. Pure (StreamCacheTest).
+ */
+internal class StreamUrlCache(maxEntries: Int) {
+    private val lru = TtlLru<String, ResolvedStream>(maxEntries)
+
+    private fun rungKey(ytId: String, rung: Int) = if (rung == QualityLadder.LOWEST) "$ytId|low" else "$ytId|r$rung"
+
+    private fun itagKey(ytId: String, itag: Int) = "$ytId|i$itag"
+
+    /**
+     * The stream to serve for [ytId] at [rung] (a rung past the video's ladder is its bottom
+     * one), or null. With [keepItag] only that format will do (a resume, or a track kept in its
+     * format through an outage, [StreamResolver.keepFormat]): a rung of another itag is passed over.
+     */
+    fun get(ytId: String, rung: Int, keepItag: Int?, now: Long): ResolvedStream? {
+        val byRung = lru.get(rungKey(ytId, rung), now)
+            ?: lru.get(rungKey(ytId, QualityLadder.LOWEST), now)?.takeIf { rung >= it.ladderBps.size }
+        if (keepItag == null) return byRung
+        return byRung?.takeIf { it.itag == keepItag } ?: lru.get(itagKey(ytId, keepItag), now)
+    }
+
+    /**
+     * One extraction of [ytId]: [served], the stream handed out, and [rungs], the ladder's
+     * streams best first (null where one may not be served). Without a ladder, [fallback] is what
+     * every rung gets.
+     */
+    fun putExtraction(ytId: String, served: ResolvedStream, rungs: List<ResolvedStream?>, fallback: ResolvedStream?) {
+        put(itagKey(ytId, served.itag), served)
+        if (rungs.isEmpty()) {
+            fallback?.let { put(rungKey(ytId, QualityLadder.LOWEST), it) }
+            return
+        }
+        rungs.forEachIndexed { i, s ->
+            if (s == null) return@forEachIndexed
+            put(rungKey(ytId, i), s)
+            if (i == rungs.lastIndex) put(rungKey(ytId, QualityLadder.LOWEST), s)
+        }
+    }
+
+    private fun put(key: String, s: ResolvedStream) = lru.put(key, s, StreamUrls.cacheUntil(s.url, s.resolvedAtMs))
+
+    /** Drops every stream of [ytId] (expired or rejected). */
+    fun removeVideo(ytId: String) = lru.removeIf { it.startsWith("$ytId|") }
+
+    /** Drops the streams whose URL is bound to one of [families] ([StreamUrls.familyOf]). */
+    fun dropBoundTo(families: Set<Family>) {
+        if (families.isEmpty()) return
+        lru.removeValuesIf { s -> StreamUrls.familyOf(s.url)?.let { it in families } == true }
+    }
+
+    fun clear() = lru.clear()
+}
+
 /**
  * Runs at most one background task, the latest: submitting a new key cancels the previous task
  * if it has not started yet. A task already running is left to finish (not interrupted: it may

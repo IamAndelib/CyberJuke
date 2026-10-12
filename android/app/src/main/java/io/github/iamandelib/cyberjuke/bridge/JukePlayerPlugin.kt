@@ -610,7 +610,11 @@ class JukePlayerPlugin : Plugin() {
             val needsLoad = c.playbackState == Player.STATE_IDLE || c.playbackState == Player.STATE_ENDED
             if (c.mediaItemCount > 0 && !(needsLoad && refuseWhileBlocked(c))) {
                 when (c.playbackState) {
-                    Player.STATE_IDLE -> c.prepare()
+                    Player.STATE_IDLE -> {
+                        // Loaded again from its start (after an outage): same format as before.
+                        JukeUris.ytIdOf(c.currentMediaItem)?.let { StreamResolver.keepFormat(it) }
+                        c.prepare()
+                    }
                     // Played to the end: on to what was added since, else the last track again.
                     Player.STATE_ENDED -> if (c.hasNextMediaItem()) c.seekToNextMediaItem() else c.seekTo(c.currentMediaItemIndex, 0L)
                     else -> Unit
