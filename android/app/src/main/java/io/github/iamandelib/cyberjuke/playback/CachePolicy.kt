@@ -291,6 +291,10 @@ internal object PlaybackNeed {
     fun needsNetwork(l: Load): Boolean {
         if (l.idle) return false
         if (l.buffering) return true
+        // The current track just finished loading and the next isn't prepared yet: isLoading
+        // drops for a moment before the next load starts, and a save begun now would compete
+        // with it.
+        if (l.hasNext && l.nextDurationMs <= 0 && l.durationMs > 0 && l.bufferedPositionMs >= l.durationMs - SLACK_MS) return true
         // Not loading (the buffer's size cap, or a load error on the next track): nothing comes
         // over the network until it loads again, and a save can't slow it down.
         if (!l.isLoading) return false

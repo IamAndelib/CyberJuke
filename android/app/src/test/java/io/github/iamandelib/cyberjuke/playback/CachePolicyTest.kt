@@ -248,6 +248,11 @@ class CachePolicyTest {
         // The player stopped loading with the next track not all there (the buffer's size cap,
         // or a load error on it): nothing is coming over the network until it loads again.
         assertFalse(PlaybackNeed.needsNetwork(ready.copy(isLoading = false, totalBufferedMs = 190_000 + 60_000)))
+        // The gap between the current track's load and the next one's: the next isn't prepared,
+        // so playback is about to need the network even though nothing is loading this instant.
+        assertTrue(PlaybackNeed.needsNetwork(ready.copy(isLoading = false, nextDurationMs = -1, totalBufferedMs = 190_000)))
+        // A long track stopped by the buffer cap partway through: not that boundary, the saver may go.
+        assertFalse(PlaybackNeed.needsNetwork(ready.copy(isLoading = false, nextDurationMs = -1, durationMs = 3_600_000, bufferedPositionMs = 600_000, totalBufferedMs = 590_000)))
         assertFalse(PlaybackNeed.needsNetwork(ready.copy(isLoading = false, bufferedPositionMs = 120_000, totalBufferedMs = 110_000)))
         // A stall always counts, loading or not.
         assertTrue(PlaybackNeed.needsNetwork(ready.copy(isLoading = false, buffering = true)))
