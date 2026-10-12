@@ -4,8 +4,9 @@ import { isFeedQuery, start, waitForTracks } from '../helpers';
 
 /**
  * Launch: Home's Latest is always fetched fresh, so the work is in asking for it first.
- * The query goes out before the first render, the catalog waits until it has answered,
- * and a query that never answers ends in the error state, not an endless skeleton.
+ * The query goes out before the first render, the catalog's download waits until it has
+ * answered (its saved copy doesn't), and a query that never answers ends in the error
+ * state, not an endless skeleton.
  */
 
 declare global {
@@ -38,7 +39,7 @@ test.describe('a Latest page that takes a while', () => {
   });
 });
 
-test('the catalog download waits until Latest has answered', async ({ page }) => {
+test('the catalog download (network) waits until Latest has answered', async ({ page }) => {
   const events: string[] = [];
   await page.route(/firestore\.googleapis\.com\/.*:runQuery/, async (route) => {
     const q = queryOf(route);
@@ -53,6 +54,30 @@ test('the catalog download waits until Latest has answered', async ({ page }) =>
   await start(page);
   await expect.poll(() => events.includes('catalog')).toBe(true);
   expect(events.indexOf('latest')).toBeLessThan(events.indexOf('catalog'));
+});
+
+test('a saved catalog shows on the next launch without waiting for Latest', async ({ page }) => {
+  let hold = false;
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  await page.route(/firestore\.googleapis\.com\/.*:runQuery/, async (route) => {
+    if (hold && isFirstPage(queryOf(route))) await held;
+    return route.fallback().catch(() => {});
+  });
+  await start(page);
+  // The first launch downloads the catalog and saves it.
+  await expect.poll(() => page.evaluate(() => Object.keys(localStorage).some((k) => k.includes('catalog-public')))).toBe(true);
+  hold = true;
+  await page.reload();
+  const home = page.getByTestId('screen-home');
+  await page.getByTestId('sort-saved').click();
+  // Well before the 5 s that the catalog's download may wait for Latest.
+  await expect(home.getByTestId('saved-list').getByTestId('track-row').first()).toBeVisible({ timeout: 3000 });
+  // Latest hasn't answered yet.
+  await page.getByTestId('sort-latest').click();
+  await expect(home.getByTestId('skeleton').first()).toBeVisible();
+  release();
+  await waitForTracks(page);
 });
 
 test.describe('a Latest request that never answers', () => {

@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### The app
-- Home's latest tracks show up sooner when the app opens: it asks Cyberspace for them while it starts, for about half the data, and loads genres and Most saved just after. They're still always the newest posts, never a saved copy.
+- Home's latest tracks show up sooner when the app opens: it asks Cyberspace for them while it starts, for about half the data, and brings genres and Most saved up to date just after. They're still always the newest posts, never a saved copy.
 
 ### Fixed
 - A list that gets no answer from Cyberspace stops loading after 15 seconds and offers Retry, instead of showing placeholders forever.
