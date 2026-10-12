@@ -37,7 +37,6 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -88,9 +87,6 @@ class PlaybackService : MediaSessionService() {
 
     /** Loads the playing item and the next one only; told which they are ([updateLoadAhead]). */
     private var oneAhead: OneAheadLoadControl? = null
-
-    /** The same meter the player's loads report to: Auto quality reads its estimate. */
-    private var bandwidthMeter: DefaultBandwidthMeter? = null
 
     /** Auto quality's rung, decided as each track starts. */
     private val governor = QualityGovernor()
@@ -436,14 +432,10 @@ class PlaybackService : MediaSessionService() {
                 .build(),
         )
         oneAhead = loadControl
-        // Given to the player, so Auto quality reads the estimate its own loads make.
-        val meter = DefaultBandwidthMeter.Builder(this).build()
-        bandwidthMeter = meter
 
         val exo = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
             .setLoadControl(loadControl)
-            .setBandwidthMeter(meter)
             .setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
@@ -532,7 +524,6 @@ class PlaybackService : MediaSessionService() {
         }
         mediaSession = null
         player = null
-        bandwidthMeter = null
         super.onDestroy()
     }
 
@@ -702,16 +693,15 @@ class PlaybackService : MediaSessionService() {
 
     /**
      * A track started: Auto's rung for the tracks resolved from now on (one step at most, from
-     * this track's ladder and the bandwidth estimate). This track keeps the format it has.
+     * this track's ladder and the rebuffers so far). This track keeps the format it has.
      */
     private fun governQuality(item: MediaItem?) {
         if (StreamResolver.quality != AudioQuality.AUTO) return
         val ladder = JukeUris.ytIdOf(item)?.let { StreamResolver.lastServed(it) }?.ladderBps ?: emptyList()
-        val estimate = bandwidthMeter?.bitrateEstimate ?: 0L
         val before = StreamResolver.autoRung
-        val rung = governor.onTrackStarted(SystemClock.elapsedRealtime(), estimate, ladder)
+        val rung = governor.onTrackStarted(SystemClock.elapsedRealtime(), ladder)
         StreamResolver.autoRung = rung
-        if (rung != before) Log.i(TAG, "Auto quality: rung ${before + 1} -> ${rung + 1} (estimate ${estimate / 1000} kbps)")
+        if (rung != before) Log.i(TAG, "Auto quality: rung ${before + 1} -> ${rung + 1}")
     }
 
     // ---- "Add to queue" (play next, FIFO) ----------------------------------------------------

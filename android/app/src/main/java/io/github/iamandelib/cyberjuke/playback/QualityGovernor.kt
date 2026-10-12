@@ -2,17 +2,19 @@ package io.github.iamandelib.cyberjuke.playback
 
 /**
  * Auto quality: the [QualityLadder] rung the next tracks play at. It moves one rung at a time,
- * and only between tracks (a playing track keeps its format: the pinned itag):
- * - down: two rebuffers within [REBUFFER_WINDOW_MS]. Only stalls step down: the bandwidth
- *   estimate also counts the time a load sat idle (paused by a full buffer, or by the user), so
- *   a low one says little;
- * - up: [CALM_MS] without a rebuffer (or a step), and an estimate above [UP_FACTOR] x the next
- *   rung up. Recovery from the bottom to the top therefore takes several tracks, never one jump;
+ * and only between tracks (a playing track keeps its format: the pinned itag), on stalls alone:
+ * - down: two rebuffers within [REBUFFER_WINDOW_MS];
+ * - up: [CALM_MS] without a rebuffer (or a step). Recovery from the bottom to the top therefore
+ *   takes several tracks, never one jump, and a link that can't keep up stalls again and steps
+ *   back down;
  * - never back the other way within [HOLD_TRACKS] tracks of a step (hysteresis).
+ *
+ * No bandwidth estimate: ExoPlayer's also counts the time a load sat idle (a full buffer, a
+ * pause), so it says little about what the link can carry.
  *
  * The rung is kept as stepped, not clamped to one video's ladder: a video with fewer rungs
  * plays its own bottom one ([QualityLadder.index]) and leaves the rung for the next video as it
- * was. Pure and O(1): the clock and the estimate are passed in (QualityGovernorTest). Main thread.
+ * was. Pure and O(1): the clock is passed in (QualityGovernorTest). Main thread.
  */
 internal class QualityGovernor {
     /** The rung for tracks resolved from now on: 0 is the top. */
@@ -41,10 +43,9 @@ internal class QualityGovernor {
 
     /**
      * A track started at [now]. [ladderBps] is its ladder's bitrates, best first (empty when
-     * unknown), [estimateBps] the bandwidth estimate in bits per second (<= 0: unknown).
-     * Returns [rung], one step from before at most.
+     * unknown). Returns [rung], one step from before at most.
      */
-    fun onTrackStarted(now: Long, estimateBps: Long, ladderBps: List<Int>): Int {
+    fun onTrackStarted(now: Long, ladderBps: List<Int>): Int {
         if (tracksSinceStep < HOLD_TRACKS) tracksSinceStep++
         if (calmSince == UNSET) calmSince = now
         if (ladderBps.size < 2) return rung
@@ -54,8 +55,7 @@ internal class QualityGovernor {
         val held = tracksSinceStep < HOLD_TRACKS
         when {
             rebuffering && cur < ladderBps.lastIndex && !(held && lastStep < 0) -> step(now, rung + 1, +1)
-            cur > 0 && now - calmSince >= CALM_MS && estimateBps > UP_FACTOR * ladderBps[cur - 1] &&
-                !(held && lastStep > 0) -> step(now, rung - 1, -1)
+            cur > 0 && now - calmSince >= CALM_MS && !(held && lastStep > 0) -> step(now, rung - 1, -1)
         }
         return rung
     }
@@ -77,9 +77,6 @@ internal class QualityGovernor {
 
         /** This long without a rebuffer (or a step) before a step up. */
         const val CALM_MS = 5L * 60_000L
-
-        /** An estimate above this many times the next rung's bitrate steps up. */
-        const val UP_FACTOR = 2.5
 
         /** No step back the other way within this many tracks of a step. */
         const val HOLD_TRACKS = 2
