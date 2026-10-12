@@ -25,8 +25,11 @@ import {
 import { artistChannels } from '../../stores/artistChannels';
 import type { Track } from '../../data/model';
 import type { LoadError } from '../../core/errors';
+import { online } from '../../core/network';
+import { OFFLINE } from '../../core/offlineText';
 import type { FeedLoader, FeedOptions } from '../../stores/feed';
 import { Icon } from '../icons';
+import { OfflineState } from './OfflineGate';
 import { openAlbumPage, openArtistPage, openReleasesPage, type AlbumRef } from '../nav';
 
 /** Square cover art (albums, playlists, artists) with the same pixel treatment as track art. */
@@ -217,7 +220,9 @@ export function MusicRow({ item }: { item: MusicItem }) {
   );
 }
 
+/** A Global list that failed: offline, the offline state; online, [ NO SIGNAL ] and why. */
 export function GlobalError({ error, onRetry, testid = 'global-error' }: { error: LoadError; onRetry?: () => void; testid?: string }) {
+  if (!online.value) return <OfflineState body={OFFLINE.global} onRedial={onRetry} alert compact />;
   return (
     <div class="state compact" role="alert" data-testid={testid} data-code={error.code}>
       <div class="state-glyph" aria-hidden="true">

@@ -13,6 +13,7 @@ import { activeLine, lyrics as client, type Lyrics, type LyricsOutcome } from '.
 import type { Track } from '../../data/model';
 import { durationMs, isAdvancing, livePosition, player, type PlayerState } from '../../player';
 import { online } from '../../core/network';
+import { OFFLINE } from '../../core/offlineText';
 import { smoothScrolling } from '../../ui/clickGuard';
 import { reducedMotion } from '../../core/motion';
 import { useTickValue } from '../../ui/useTick';
@@ -83,7 +84,7 @@ export function LyricsPanel({ track }: { track: Track }) {
     body =
       // Offline only when the device is: a failed request while online offers Retry.
       !isOnline ? (
-        <LyricsState text="Lyrics unavailable offline" />
+        <LyricsState text={OFFLINE.lyrics} />
       ) : (
         <LyricsState text="Lyrics unavailable right now">
           <button class="link-btn" onClick={retry} data-testid="lyrics-retry">

@@ -17,6 +17,16 @@ export function onReconnect(fn: () => void): () => void {
   return () => reconnect.delete(fn);
 }
 
+/** Ask the OS again (Redial: a change its listener missed). True when online. */
+export async function recheckNetwork(): Promise<boolean> {
+  try {
+    online.value = (await Network.getStatus()).connected;
+  } catch {
+    // Keep what we had.
+  }
+  return online.peek();
+}
+
 let watching = false;
 
 export function watchNetwork(): void {

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### The app
+- Offline, the app says plainly that music needs a connection: the top bar reads "no carrier · connect to play", and lists that can only lead to music (Home, genres, artists, albums, Search) ask you to connect instead of showing rows that won't play. Their **Redial** button checks again, and they come back by themselves once you're online.
+- Library stays as it is offline, its tracks dimmed. Tapping a track, Play, Shuffle or the Jukebox shuffle while offline says "No carrier. Connect to play." and leaves the player as it was.
+- When the connection drops mid-track, the message says so ("Signal lost") instead of blaming the track, and whether it picks up by itself once you're back.
+
 ## [1.1.2] - 2026-10-10
 
 ### Build

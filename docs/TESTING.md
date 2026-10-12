@@ -64,7 +64,9 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] With a second account: sign out, sign in as the other one (none of the first account's [members] likes or plays show), like and play something, sign out, and sign in as the first again: its own are back, the other's aren't.
 
 ## Rough conditions
-- [ ] Airplane mode: an offline notice appears. Airplane mode off: lists load again by themselves.
+- [ ] Airplane mode: the top bar reads "[ offline ] no carrier · connect to play", and Home, a genre, an artist page, the Genres and Artists grids and Search show **[ NO CARRIER ]** instead of their rows. Airplane mode off: lists load again by themselves.
+- [ ] Airplane mode, then tap a track in Library (its rows are dimmed), Play, or the Jukebox shuffle: "No carrier. Connect to play.", and nothing starts. The mini player's Play does the same; Pause still works.
+- [ ] Play a track, then turn on airplane mode until it stops: the message starts with "Signal lost" (not "Can't play"). Airplane mode off: it carries on by itself.
 - [ ] While music plays, swipe the app away from recent apps, then reopen it: Now Playing and Up next show the right tracks (no "Unknown track").
 - [ ] Skip quickly through 10 tracks: no "YouTube is limiting requests" banner.
 - [ ] If that banner ever appears, write down the time and your network. It's YouTube limiting your connection, and the app waits instead of hammering it.

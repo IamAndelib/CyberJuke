@@ -8,6 +8,7 @@ import { Icon } from '../icons';
 import { playAll, playFrom } from '../playAll';
 import type { PlayContext } from '../../player';
 import { SkeletonRows, TrackRow } from './TrackRow';
+import { OfflineState } from './OfflineGate';
 
 export { playFrom };
 
@@ -89,14 +90,16 @@ export function EmptyState({ title, children, testid = 'empty' }: { title: strin
   );
 }
 
+/** A load that failed, with Retry; for lost connection, the offline state (Redial retries). */
 export function ErrorState({ offline, message, onRetry }: { offline: boolean; message: string; onRetry: () => void }) {
+  if (offline) return <OfflineState onRedial={onRetry} alert />;
   return (
-    <div class="state" data-testid={offline ? 'offline' : 'error'} role="alert">
+    <div class="state" data-testid="error" role="alert">
       <div class="state-glyph" aria-hidden="true">
-        {offline ? '[ NO CARRIER ]' : '[ ERROR ]'}
+        [ ERROR ]
       </div>
-      <div class="state-title">{offline ? "You're offline" : "Couldn't load the Jukebox"}</div>
-      <div class="state-body">{offline ? 'Check your connection and try again.' : message}</div>
+      <div class="state-title">Couldn't load the Jukebox</div>
+      <div class="state-body">{message}</div>
       <button class="btn" onClick={onRetry} data-testid="retry">
         <Icon name="refresh" size={18} /> Retry
       </button>
