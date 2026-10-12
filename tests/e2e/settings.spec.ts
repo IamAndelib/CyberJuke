@@ -104,6 +104,38 @@ test('Audio quality: Auto by default, three choices that say what they do, sent 
   await expect(page.getByTestId('quality-low')).toHaveAttribute('aria-checked', 'true');
 });
 
+test('Crossfade: Off by default, four choices, sent to the player and kept', async ({ page }) => {
+  await page.goto('/');
+  const sent = async () => (await playerCalls(page)).filter((c) => c[0] === 'setCrossfade').map((c) => c[1]);
+  await expect.poll(sent).toEqual([{ ms: 0 }]);
+  await page.getByTestId('tab-settings').click();
+  const group = page.getByRole('radiogroup', { name: 'Crossfade' });
+  await expect(group.getByRole('radio')).toHaveText(['Off', '3 s', '6 s', '10 s']);
+  await expect(group).toHaveAccessibleDescription('Blends the end of a track into the next.');
+  await expect(page.getByTestId('crossfade-0')).toHaveAttribute('aria-checked', 'true');
+  await page.getByTestId('crossfade-6000').click();
+  await expect(page.getByTestId('crossfade-6000')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('crossfade-0')).toHaveAttribute('aria-checked', 'false');
+  // Arrow keys move the choice, as in the other radio groups.
+  await page.getByTestId('crossfade-6000').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('crossfade-10000')).toHaveAttribute('aria-checked', 'true');
+  await expect.poll(sent).toEqual([{ ms: 0 }, { ms: 6000 }, { ms: 10000 }]);
+  await page.reload();
+  await expect.poll(sent).toEqual([{ ms: 10000 }]);
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('crossfade-10000')).toHaveAttribute('aria-checked', 'true');
+});
+
+test('a saved unknown crossfade is Off', async ({ page }) => {
+  await seedStorage(page, { [SETTINGS_KEY]: { theme: 'dark', crossfadeMs: 4000, version: 2 } });
+  await page.goto('/');
+  const sent = async () => (await playerCalls(page)).filter((c) => c[0] === 'setCrossfade').map((c) => c[1]);
+  await expect.poll(sent).toEqual([{ ms: 0 }]);
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('crossfade-0')).toHaveAttribute('aria-checked', 'true');
+});
+
 test('a saved High (the old default) becomes Auto; a saved Low stays', async ({ page }) => {
   await seedStorage(page, { [SETTINGS_KEY]: { theme: 'dark', showNsfw: false, quality: 'high' } });
   await page.goto('/');
