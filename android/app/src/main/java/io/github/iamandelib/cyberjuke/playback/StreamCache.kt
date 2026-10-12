@@ -125,6 +125,8 @@ internal data class ResolvedStream(
     val ladderBps: List<Int> = emptyList(),
     /** An audio-only format: kept in the listening cache (a muxed fallback, with video, isn't). */
     val audioOnly: Boolean = false,
+    /** Played from the listening cache: its key there (no URL, [url] is empty). */
+    val cacheKey: String? = null,
 )
 
 /**

@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.playback
 
+import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.playback.LikedSaverPolicy.Facts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -244,6 +245,17 @@ class CachePolicyTest {
         assertFalse(PlaybackNeed.needsNetwork(ready.copy(hasNext = false, totalBufferedMs = 190_000)))
         // Nothing prepared (a restored session before Play), or the list ended: nothing needed.
         assertFalse(PlaybackNeed.needsNetwork(ready.copy(idle = true, durationMs = -1, bufferedPositionMs = 0)))
+        // The player stopped loading with the next track not all there (the buffer's size cap,
+        // or a load error on it): nothing is coming over the network until it loads again.
+        assertFalse(PlaybackNeed.needsNetwork(ready.copy(isLoading = false, totalBufferedMs = 190_000 + 60_000)))
+        // The gap between the current track's load and the next one's: the next isn't prepared,
+        // so playback is about to need the network even though nothing is loading this instant.
+        assertTrue(PlaybackNeed.needsNetwork(ready.copy(isLoading = false, nextDurationMs = -1, totalBufferedMs = 190_000)))
+        // A long track stopped by the buffer cap partway through: not that boundary, the saver may go.
+        assertFalse(PlaybackNeed.needsNetwork(ready.copy(isLoading = false, nextDurationMs = -1, durationMs = 3_600_000, bufferedPositionMs = 600_000, totalBufferedMs = 590_000)))
+        assertFalse(PlaybackNeed.needsNetwork(ready.copy(isLoading = false, bufferedPositionMs = 120_000, totalBufferedMs = 110_000)))
+        // A stall always counts, loading or not.
+        assertTrue(PlaybackNeed.needsNetwork(ready.copy(isLoading = false, buffering = true)))
     }
 
     @Test
@@ -267,6 +279,40 @@ class CachePolicyTest {
         assertNull(LikedSaverPolicy.recheckInMs(f.copy(playbackNeedsNetwork = true)))
         assertNull(LikedSaverPolicy.recheckInMs(f.copy(busy = true)))
         assertNull(LikedSaverPolicy.recheckInMs(f.copy(sinceLastMs = LikedSaverPolicy.MIN_GAP_MS)))
+    }
+
+    @Test
+    fun aBackOffOrABrokenExtractorIsNoFaultOfTheSong() {
+        // The song itself: given up on. The connection: a strike (three and it's given up on).
+        assertEquals(SaveFailure.GIVE_UP, SaveFailure.of(FailureKind.CONTENT))
+        assertEquals(SaveFailure.GIVE_UP, SaveFailure.of(FailureKind.OTHER))
+        assertEquals(SaveFailure.STRIKE, SaveFailure.of(FailureKind.NETWORK))
+        // YouTube backing off, or the extractor broken for every video: wait, no strike.
+        for (k in listOf(FailureKind.BOT_CHECK, FailureKind.RATE_LIMIT, FailureKind.BROKEN)) {
+            assertEquals(k.toString(), SaveFailure.WAIT, SaveFailure.of(k))
+        }
+    }
+
+    @Test
+    fun deniedSongsAreNeverPickedAndOnlyTheCandidateIsAsked() {
+        val asked = ArrayList<String>()
+        val f = Facts(liked, saved = setOf("new00000000"), denied = { asked.add(it); it == "mid00000000" })
+        assertEquals("old00000000", LikedSaverPolicy.next(f))
+        // Saved ones aren't asked about; the search stops at the first that may go.
+        assertEquals(listOf("mid00000000", "old00000000"), asked)
+    }
+
+    @Test
+    fun aResumeStaysInTheVeryFileItWasPlaying() {
+        val a = CacheKeys.of("dQw4w9WgXcQ", 251, 3_000_000L)
+        val b = CacheKeys.of("dQw4w9WgXcQ", 251, 3_100_000L)
+        // The same format, another file: not swapped in mid-song.
+        assertNull(CacheKeys.pickKey(listOf(b), keepKey = a, rungItag = 251, wantedBps = 0))
+        assertEquals(a, CacheKeys.pickKey(listOf(b, a), keepKey = a, rungItag = 251, wantedBps = 0))
+        // Not resuming: by format, as pick decides (most recent first).
+        assertEquals(b, CacheKeys.pickKey(listOf(b, a), keepKey = null, rungItag = 251, wantedBps = 0))
+        assertEquals(b, CacheKeys.pickKey(listOf(CacheKeys.of("dQw4w9WgXcQ", 140, 2_000_000L), b), keepKey = null, rungItag = 251, wantedBps = 160_000))
+        assertNull(CacheKeys.pickKey(emptyList(), keepKey = null, rungItag = null, wantedBps = 0))
     }
 
     @Test
