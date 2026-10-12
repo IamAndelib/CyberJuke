@@ -116,6 +116,18 @@ class CachePolicyTest {
     }
 
     @Test
+    fun onlyAFewNewLikesAreFreshABulkChangeIsBackfill() {
+        val l = CacheLedger(10 * mb)
+        l.setLiked(listOf("a0000000000"), known = true)
+        // Three liked at once (a burst of hearts): still "just now".
+        val three = listOf("d0000000000", "c0000000000", "b0000000000")
+        assertEquals(three, l.setLiked(three + "a0000000000"))
+        // Four or more at once (a sign-in bringing back likes, a restore): the backfill's.
+        val more = listOf("h0000000000", "g0000000000", "f0000000000", "e0000000000")
+        assertEquals(emptyList<String>(), l.setLiked(more + three + "a0000000000"))
+    }
+
+    @Test
     fun likesSinceTheLastListAreFresh() {
         val l = CacheLedger(10 * mb)
         // Nothing to compare with: none is fresh (a backlog is not "liked just now").
@@ -181,7 +193,7 @@ class CachePolicyTest {
     @Test
     fun nothingWhileOfflineQuietLoadingBusyOrFull() {
         val base = Facts(liked, saved = emptySet(), fresh = setOf("new00000000"))
-        for (f in listOf(base.copy(online = false), base.copy(quiet = true), base.copy(playerLoading = true), base.copy(busy = true))) {
+        for (f in listOf(base.copy(online = false), base.copy(quiet = true), base.copy(playbackNeedsNetwork = true), base.copy(busy = true))) {
             assertNull(f.toString(), LikedSaverPolicy.next(f))
         }
         // Full of liked songs: the backlog waits (a fresh like still goes).
@@ -204,10 +216,138 @@ class CachePolicyTest {
         val f = Facts(liked, saved = emptySet())
         assertTrue(LikedSaverPolicy.keepGoing(f, fresh = false))
         // The current track starts loading (a rebuffer, a skip, a new list): playback comes first.
-        assertFalse(LikedSaverPolicy.keepGoing(f.copy(playerLoading = true), fresh = true))
+        assertFalse(LikedSaverPolicy.keepGoing(f.copy(playbackNeedsNetwork = true), fresh = true))
         // A back-off, the connection gone, or Wi-Fi left for mobile data during a backfill.
         assertFalse(LikedSaverPolicy.keepGoing(f.copy(quiet = true), fresh = true))
         assertFalse(LikedSaverPolicy.keepGoing(f.copy(online = false), fresh = true))
         assertFalse(LikedSaverPolicy.keepGoing(f.copy(unmetered = false), fresh = false))
+    }
+
+    // ---- the review's fixes ----
+
+    @Test
+    fun aGatedLoadIsNotPlaybackNeedingTheNetwork() {
+        // isLoading stays true while the track after next waits at the OpenGate: ignored.
+        val ready = PlaybackNeed.Load(
+            idle = false, buffering = false, positionMs = 10_000, durationMs = 200_000,
+            bufferedPositionMs = 200_000, totalBufferedMs = 190_000 + 180_000, hasNext = true, nextDurationMs = 180_000,
+            isLoading = true,
+        )
+        assertFalse(PlaybackNeed.needsNetwork(ready))
+        // A stall, the current track not all there, or the next one not yet: playback first.
+        assertTrue(PlaybackNeed.needsNetwork(ready.copy(buffering = true)))
+        assertTrue(PlaybackNeed.needsNetwork(ready.copy(bufferedPositionMs = 120_000, totalBufferedMs = 110_000)))
+        assertTrue(PlaybackNeed.needsNetwork(ready.copy(totalBufferedMs = 190_000 + 60_000)))
+        assertTrue(PlaybackNeed.needsNetwork(ready.copy(nextDurationMs = -1)))
+        assertTrue(PlaybackNeed.needsNetwork(ready.copy(durationMs = -1)))
+        // No next track: the current one whole is enough.
+        assertFalse(PlaybackNeed.needsNetwork(ready.copy(hasNext = false, totalBufferedMs = 190_000)))
+        // Nothing prepared (a restored session before Play), or the list ended: nothing needed.
+        assertFalse(PlaybackNeed.needsNetwork(ready.copy(idle = true, durationMs = -1, bufferedPositionMs = 0)))
+    }
+
+    @Test
+    fun aFreshLikeSkipsTheGapOnlyOnItsFirstTry() {
+        val f = Facts(liked, saved = emptySet(), fresh = setOf("mid00000000"), unmetered = false, sinceLastMs = 1_000L)
+        assertEquals("mid00000000", LikedSaverPolicy.next(f))
+        // Tried and not saved: again, but only after the gap (still on any network).
+        val tried = f.copy(tried = setOf("mid00000000"))
+        assertNull(LikedSaverPolicy.next(tried))
+        assertEquals("mid00000000", LikedSaverPolicy.next(tried.copy(sinceLastMs = LikedSaverPolicy.MIN_GAP_MS)))
+    }
+
+    @Test
+    fun theOneRecheckIsOnlyForWorkTheGapHoldsBack() {
+        val f = Facts(liked, saved = emptySet(), sinceLastMs = 10_000L)
+        assertEquals(LikedSaverPolicy.MIN_GAP_MS - 10_000L, LikedSaverPolicy.recheckInMs(f))
+        // Nothing to do, or something else in the way (an event will come): no timer.
+        assertNull(LikedSaverPolicy.recheckInMs(f.copy(saved = liked.toSet())))
+        assertNull(LikedSaverPolicy.recheckInMs(f.copy(unmetered = false)))
+        assertNull(LikedSaverPolicy.recheckInMs(f.copy(online = false)))
+        assertNull(LikedSaverPolicy.recheckInMs(f.copy(playbackNeedsNetwork = true)))
+        assertNull(LikedSaverPolicy.recheckInMs(f.copy(busy = true)))
+        assertNull(LikedSaverPolicy.recheckInMs(f.copy(sinceLastMs = LikedSaverPolicy.MIN_GAP_MS)))
+    }
+
+    @Test
+    fun aSongThatKeepsFailingIsGivenUpOn() {
+        val s = SaveStrikes()
+        assertFalse(s.stopped("a0000000000"))
+        assertFalse(s.stopped("a0000000000"))
+        assertTrue(s.stopped("a0000000000"))
+        assertFalse(s.stopped("b0000000000"))
+    }
+
+    @Test
+    fun theKeyNamesTheFileLengthWhenTheUrlSaysIt() {
+        val k = CacheKeys.of("dQw4w9WgXcQ", 251, 3_456_789L)
+        assertEquals("yt:dQw4w9WgXcQ:251:3456789", k)
+        assertEquals("dQw4w9WgXcQ", CacheKeys.ytIdOf(k))
+        assertEquals(251, CacheKeys.itagOf(k))
+        assertTrue(CacheKeys.isYt(k))
+        // Another file under the same format (a re-encode, a dubbed track): another key.
+        assertFalse(k == CacheKeys.of("dQw4w9WgXcQ", 251, 3_456_790L))
+        assertEquals("yt:dQw4w9WgXcQ:251", CacheKeys.of("dQw4w9WgXcQ", 251, null))
+        assertFalse(CacheKeys.isYt("yt:dQw4w9WgXcQ:251:x"))
+        assertFalse(CacheKeys.isYt("yt:dQw4w9WgXcQ:251:0"))
+        assertEquals(3_456_789L, StreamUrls.clen("https://rr1---sn-x.googlevideo.com/videoplayback?itag=251&clen=3456789&dur=212.1"))
+        assertNull(StreamUrls.clen("https://rr1---sn-x.googlevideo.com/videoplayback?itag=251"))
+    }
+
+    @Test
+    fun onlineALowerCopyDoesNotStandInForTheQualityAsked() {
+        // High (or Auto at the top rung): a 128 kbps copy won't do for a 160 kbps rung.
+        val wantHigh = CacheKeys.wantedBps(AudioQuality.HIGH, 0, rungItag = 251, ladderBps = emptyList(), online = true)
+        assertEquals(160_000, wantHigh)
+        assertNull(CacheKeys.pick(listOf(140), keep = null, rungItag = 251, wantedBps = wantHigh))
+        assertEquals(251, CacheKeys.pick(listOf(140, 251), keep = null, rungItag = 251, wantedBps = wantHigh))
+        // An AAC 256 kbps copy is at least as good.
+        assertEquals(141, CacheKeys.pick(listOf(141), keep = null, rungItag = 251, wantedBps = wantHigh))
+        // Without a link yet: the ladder's rung, else High wants a top-class copy.
+        assertEquals(64_000, CacheKeys.wantedBps(AudioQuality.AUTO, 2, rungItag = null, ladderBps = listOf(160_000, 128_000, 64_000, 48_000), online = true))
+        assertEquals(CacheKeys.TOP_CLASS_BPS, CacheKeys.wantedBps(AudioQuality.HIGH, 0, rungItag = null, ladderBps = emptyList(), online = true))
+        assertNull(CacheKeys.pick(listOf(250), keep = null, rungItag = null, wantedBps = CacheKeys.TOP_CLASS_BPS))
+        // Low, Auto lower down, or offline: any whole copy.
+        assertEquals(0, CacheKeys.wantedBps(AudioQuality.LOW, 0, rungItag = 251, ladderBps = emptyList(), online = true))
+        assertEquals(0, CacheKeys.wantedBps(AudioQuality.HIGH, 0, rungItag = 251, ladderBps = emptyList(), online = false))
+        assertEquals(140, CacheKeys.pick(listOf(140), keep = null, rungItag = 251, wantedBps = 0))
+        // A resume stays in its file whatever the setting.
+        assertEquals(140, CacheKeys.pick(listOf(140), keep = 140, rungItag = 251, wantedBps = wantHigh))
+        // A format of unknown bitrate only when any will do.
+        assertNull(CacheKeys.pick(listOf(9999), keep = null, rungItag = null, wantedBps = 64_000))
+    }
+
+    @Test
+    fun aMissIsRememberedBriefly() {
+        var now = 0L
+        val m = CacheMisses(clock = { now })
+        assertFalse(m.recent("a0000000000"))
+        m.missed("a0000000000")
+        assertTrue(m.recent("a0000000000"))
+        now += CacheMisses.SKIP_MS
+        assertFalse(m.recent("a0000000000"))
+    }
+
+    @Test
+    fun membersOnlyAudioIsTaggedAndGoesAtSignOut() {
+        val m = MembersAudio()
+        m.mark("mem00000001")
+        // Tagged once it reaches the cache (the tag list is written then).
+        assertTrue(m.onCached("mem00000001"))
+        assertFalse(m.onCached("mem00000001"))
+        assertFalse(m.onCached("pub00000001"))
+        // A tag from an earlier run (the file), not marked in this one.
+        m.load(listOf("mem00000002"))
+        assertEquals(setOf("mem00000001", "mem00000002"), m.tagged())
+        assertFalse(m.denied("mem00000001"))
+        // Signed out: every tagged or known one goes, and none comes back in until a sign-in.
+        assertEquals(setOf("mem00000001", "mem00000002"), m.signOut())
+        assertEquals(emptySet<String>(), m.tagged())
+        assertTrue(m.denied("mem00000001"))
+        assertTrue(m.denied("mem00000002"))
+        assertFalse(m.denied("pub00000001"))
+        assertFalse(m.onCached("mem00000001"))
+        m.signIn()
+        assertFalse(m.denied("mem00000001"))
     }
 }

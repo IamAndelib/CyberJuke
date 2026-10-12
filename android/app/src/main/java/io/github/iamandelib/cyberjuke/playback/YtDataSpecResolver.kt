@@ -54,8 +54,9 @@ internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
 
     /**
      * The request for [stream] (of [ytId]) from [dataSpec]: its URL and headers, and for an
-     * audio-only stream the cache key `yt:<ytId>:<itag>`, so it is read from and written to the
-     * listening cache (a muxed fallback, with video, is not kept). The liked saver's too.
+     * audio-only stream the cache key `yt:<ytId>:<itag>:<clen>` ([CacheKeys]), so it is read from
+     * and written to the listening cache (a muxed fallback, with video, is not kept). The liked
+     * saver's too.
      */
     @Throws(IOException::class)
     fun streamSpec(dataSpec: DataSpec, ytId: String, stream: ResolvedStream): DataSpec {
@@ -63,7 +64,7 @@ internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
         headers.putAll(stream.headers)
         val spec = requestSpec(dataSpec, stream.url, headers, rn = true)
         if (!stream.audioOnly || stream.itag <= 0) return spec
-        return spec.buildUpon().setKey(CacheKeys.of(ytId, stream.itag)).build()
+        return spec.buildUpon().setKey(CacheKeys.of(ytId, stream.itag, StreamUrls.clen(stream.url))).build()
     }
 
     private fun requestSpec(dataSpec: DataSpec, url: String, headers: Map<String, String>, rn: Boolean): DataSpec {

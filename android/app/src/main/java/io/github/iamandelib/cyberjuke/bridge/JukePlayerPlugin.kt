@@ -60,13 +60,15 @@ import kotlin.math.roundToInt
  *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, getState,
  *   getAppInfo, getLaunchOptions, getBlockState, setNetworkPrefs, retryNow, getNetStatus,
  *   setGestureExclusion, addAutoplay, setAutoplay, restore, removeIds, setLikedIds,
- *   setCacheLimit, clearCache, dropCached, cachedIds; events 'state', 'trackError', 'blocked',
- *   'unblocked', 'extractorBroken', 'queueLow', 'tracks', 'openNowPlaying', 'cacheChanged'.
+ *   setCacheLimit, clearCache, signedOut, signedIn, cachedIds; events 'state', 'trackError',
+ *   'blocked', 'unblocked', 'extractorBroken', 'queueLow', 'tracks', 'openNowPlaying',
+ *   'cacheChanged'.
  *
- * - The listening cache ([AudioCache]): setLikedIds({ ytIds }) (newest like first),
- *   setCacheLimit({ mb }), clearCache(), dropCached({ ytIds }) (sign-out: members-only audio),
- *   cachedIds() -> { ytIds }: the liked songs saved whole, which play offline. cacheChanged
- *   { ytIds } sends that set again when it changes, at most every 2 s.
+ * - The listening cache ([AudioCache]): setLikedIds({ ytIds, membersOnly? }) (newest like
+ *   first), setCacheLimit({ mb }), clearCache(), signedOut() (members-only audio goes, and stays
+ *   out until signedIn()), cachedIds() -> { ytIds }: the liked songs saved whole, which play
+ *   offline. cacheChanged { ytIds } sends that set again when it changes, at most every 2 s.
+ *   The upkeep calls resolve once done, and reject when there is no cache.
  * - trackError is { trackId, message, skipped, kind: 'network' | 'track', resumes }: 'network'
  *   when the connection failed (paused on the item; `resumes`: it plays on by itself once the
  *   network is back), 'track' when the track itself did.
@@ -765,17 +767,33 @@ class JukePlayerPlugin : Plugin() {
     }
 
     // ---- the listening cache ----------------------------------------------------------------
-    // Its upkeep runs on the one background thread (Background), after any save in progress.
+    // Its upkeep runs on the one background thread (Background). A liked save in progress there
+    // is stopped first, so the call never waits behind it; the call resolves once the work is
+    // done, and rejects when there is no cache (it couldn't be opened).
+
+    /** Runs [work] on the background thread, after stopping a liked save; resolves when it's done. */
+    private fun upkeep(call: PluginCall, what: String, work: () -> Boolean) {
+        AudioCache.cancelSave?.invoke()
+        Background.run(what) {
+            try {
+                if (work()) call.resolve() else call.reject("No listening cache")
+            } catch (e: Exception) {
+                call.reject("$what failed: ${e.javaClass.simpleName}")
+            }
+        }
+    }
 
     /**
-     * `setLikedIds({ ytIds })`: the liked songs, newest like first (at most BRIDGE_MAX_ITEMS).
-     * Kept in the cache last, and saved for offline; one liked since the last call is saved now.
+     * `setLikedIds({ ytIds, membersOnly? })`: the liked songs, newest like first (at most
+     * BRIDGE_MAX_ITEMS), and which of them are members-only. Kept in the cache last, and saved
+     * for offline; a few liked since the last call are saved now.
      */
     @PluginMethod
     fun setLikedIds(call: PluginCall) {
-        val ids = ytIdsArg(call) ?: return
-        Background.run("setLikedIds") { AudioCache.setLiked(ids) }
-        call.resolve()
+        val ids = ytIdsArg(call, "ytIds") ?: return
+        val members = if (call.data.has("membersOnly")) ytIdsArg(call, "membersOnly") ?: return else emptyList()
+        AudioCache.markMembers(members)
+        upkeep(call, "setLikedIds") { AudioCache.setLiked(ids) }
     }
 
     /** `setCacheLimit({ mb: 128 | 256 | 512 })`; anything else is 256. A smaller one evicts at once. */
@@ -783,22 +801,28 @@ class JukePlayerPlugin : Plugin() {
     fun setCacheLimit(call: PluginCall) {
         val mb = AudioCache.sizeOf(call.intArg("mb") ?: AudioCache.DEFAULT_MB)
         PlayerPrefsStore.setCacheMb(context, mb)
-        Background.run("setCacheLimit") { AudioCache.setLimitMb(mb) }
-        call.resolve()
+        upkeep(call, "setCacheLimit") { AudioCache.setLimitMb(mb) }
     }
 
     /** `clearCache()`: Settings' Clear cache. Playback goes on; liked songs are saved again on Wi-Fi. */
     @PluginMethod
     fun clearCache(call: PluginCall) {
-        Background.run("clearCache") { AudioCache.clear() }
-        call.resolve()
+        upkeep(call, "clearCache") { AudioCache.clear() }
     }
 
-    /** `dropCached({ ytIds })`: signed out, the audio of these (members-only) videos goes. */
+    /**
+     * `signedOut()`: signed out (or starting signed out). The cached audio of every members-only
+     * track goes, and none is cached again until `signedIn()`. Cheap when there is none.
+     */
     @PluginMethod
-    fun dropCached(call: PluginCall) {
-        val ids = ytIdsArg(call) ?: return
-        Background.run("dropCached") { AudioCache.drop(ids) }
+    fun signedOut(call: PluginCall) {
+        upkeep(call, "signedOut") { AudioCache.signedOut() }
+    }
+
+    /** `signedIn()`: members-only audio may be cached again. */
+    @PluginMethod
+    fun signedIn(call: PluginCall) {
+        AudioCache.signedIn()
         call.resolve()
     }
 
@@ -809,16 +833,16 @@ class JukePlayerPlugin : Plugin() {
         call.resolve(savedIds(ids))
     }
 
-    /** The call's `ytIds` (valid ones only), or null after rejecting it (missing, TOO_LARGE). */
-    private fun ytIdsArg(call: PluginCall): List<String>? {
-        val arr = call.getArray("ytIds") ?: return null.also { call.reject("ytIds is required") }
+    /** The call's [key] ids (valid ones only), or null after rejecting it (missing, TOO_LARGE). */
+    private fun ytIdsArg(call: PluginCall, key: String): List<String>? {
+        val arr = call.getArray(key) ?: return null.also { call.reject("$key is required") }
         return try {
             BridgeLimits.idsOf(arr).filter { SessionPolicy.isValidYtId(it) }
         } catch (e: TooLargeException) {
             call.reject(e.message, QueueCommands.TOO_LARGE)
             null
         } catch (e: Exception) {
-            call.reject("Invalid ytIds: ${e.message}")
+            call.reject("Invalid $key: ${e.message}")
             null
         }
     }

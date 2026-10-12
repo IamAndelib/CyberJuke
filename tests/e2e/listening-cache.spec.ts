@@ -33,8 +33,11 @@ test('offline, Liked plays its saved songs from the tapped one; unsaved rows are
   await page.getByTestId('tab-library').click();
   const rows = page.getByTestId('liked-list').getByTestId('track-row');
   await expect(rows).toHaveCount(3);
-  // Liked is sent to native, newest like first.
-  await expect.poll(async () => (await playerCalls(page)).filter((c) => c[0] === 'setLikedIds').map((c) => c[1])).toEqual([['abcdefghij1', 'abcdefghij2', 'abcdefghij3']]);
+  // Liked is sent to native, newest like first; starting signed out, at once again before
+  // signedOut (native drops any members-only audio).
+  const cacheCalls = async () => (await playerCalls(page)).filter((c) => c[0] === 'setLikedIds' || c[0] === 'signedOut');
+  const likedIds = ['abcdefghij1', 'abcdefghij2', 'abcdefghij3'];
+  await expect.poll(cacheCalls).toEqual([['setLikedIds', likedIds], ['setLikedIds', likedIds], ['signedOut']]);
   await saved(page, ['abcdefghij1', 'abcdefghij3']);
 
   await setOffline(page, backend, true);

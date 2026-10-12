@@ -36,6 +36,9 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
@@ -170,9 +173,32 @@ class PlaybackService : MediaSessionService() {
         object : LikedSaver.Host {
             override fun loadingPair(): Set<String> = loadingIds
 
-            override fun playerLoading(): Boolean = player?.isLoading == true
+            override fun playbackNeedsNetwork(): Boolean = player?.let { PlaybackNeed.needsNetwork(loadOf(it)) } == true
         },
     )
+
+    private val window = Timeline.Window()
+
+    /** What the player has buffered, for [PlaybackNeed] (its isLoading says little: see there). */
+    private fun loadOf(p: ExoPlayer): PlaybackNeed.Load {
+        val next = p.nextMediaItemIndex
+        val nextDuration = if (next == C.INDEX_UNSET || next >= p.currentTimeline.windowCount) {
+            -1L
+        } else {
+            p.currentTimeline.getWindow(next, window).durationMs.takeIf { it != C.TIME_UNSET } ?: -1L
+        }
+        return PlaybackNeed.Load(
+            idle = p.playbackState == Player.STATE_IDLE || p.playbackState == Player.STATE_ENDED,
+            buffering = p.playbackState == Player.STATE_BUFFERING,
+            positionMs = p.currentPosition.coerceAtLeast(0L),
+            durationMs = p.duration.takeIf { it != C.TIME_UNSET } ?: -1L,
+            bufferedPositionMs = p.bufferedPosition,
+            totalBufferedMs = p.totalBufferedDuration,
+            hasNext = next != C.INDEX_UNSET,
+            nextDurationMs = nextDuration,
+            isLoading = p.isLoading,
+        )
+    }
 
     /** "<current mediaId>><next ytId>" already prefetched, so each pair is warmed once. */
     private var prefetchedKey: String? = null
@@ -199,6 +225,7 @@ class PlaybackService : MediaSessionService() {
             // Online, and on Wi-Fi: the liked saver's backfill (it acts on a change only).
             val validated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
             val unmetered = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+            AudioCache.online = validated
             handler.post { likedSaver.onNetwork(validated, unmetered) }
             // Online again (validated): playback an outage stopped picks up again.
             // (Validated fires again and again on a network that's up: at most every few seconds.)
@@ -211,6 +238,7 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onLost(network: Network) {
+            AudioCache.online = false
             handler.post { likedSaver.onNetwork(validated = false, unmetered = false) }
         }
 
@@ -484,6 +512,13 @@ class PlaybackService : MediaSessionService() {
         queueHost = ExoQueueHost(exo)
         queue = NativeQueue(queueHost)
         exo.addListener(PlayerListener())
+        // A load finished (a track all buffered; isLoading may stay true for a gated one): the
+        // liked saver looks again, as playback may not need the network any more.
+        exo.addAnalyticsListener(object : AnalyticsListener {
+            override fun onLoadCompleted(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData) {
+                likedSaver.check()
+            }
+        })
         player = exo
 
         // A tap on the media notification (or the lock screen's player) opens Now Playing.
@@ -505,7 +540,9 @@ class PlaybackService : MediaSessionService() {
         setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this).build())
         restoreLastSession()
         // The network as it is now (the callback then tells of changes).
-        runCatching { connectivity().let { it.getNetworkCapabilities(it.activeNetwork) } }.getOrNull()?.let {
+        val caps = runCatching { connectivity().let { it.getNetworkCapabilities(it.activeNetwork) } }.getOrNull()
+        AudioCache.online = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) ?: isNetworkValidated()
+        caps?.let {
             likedSaver.onNetwork(
                 it.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
                 it.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
@@ -569,8 +606,7 @@ class PlaybackService : MediaSessionService() {
         }
         mediaSession = null
         player = null
-        // After the player: nothing reads the cache any more (a save still running fails and stops).
-        AudioCache.release()
+        // The listening cache stays open for the process's life (AudioCache): nothing to release here.
         super.onDestroy()
     }
 
@@ -587,6 +623,8 @@ class PlaybackService : MediaSessionService() {
                 now = now,
             )
             if (rebuffer) governor.onRebuffer(now)
+            // A stall stops a liked save; ready (or idle), one may start.
+            likedSaver.check()
             if (playbackState == Player.STATE_ENDED) endedAt = now
             // Loading again (a restored session's first Play, or a retry): autoplay may top up.
             if (playbackState != Player.STATE_IDLE) {
@@ -619,9 +657,9 @@ class PlaybackService : MediaSessionService() {
             if (isPlaying) handler.postDelayed(savePositionTick, POSITION_SAVE_MS)
         }
 
-        /** Playback needs the network: a liked save gives way; done loading, one may start. */
+        /** Loading started or stopped: the liked saver looks again (it goes by [PlaybackNeed]). */
         override fun onIsLoadingChanged(isLoading: Boolean) {
-            if (isLoading) likedSaver.giveWay() else likedSaver.check()
+            likedSaver.check()
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
@@ -885,6 +923,8 @@ class PlaybackService : MediaSessionService() {
         if (next != C.INDEX_UNSET) JukeUris.ytIdOf(p.getMediaItemAt(next))?.let { ids.add(it) }
         loadingIds = ids
         YtDataSpecResolver.gate.allow(ids)
+        // Another pair to load (a skip, a new list): the liked saver looks again.
+        likedSaver.check()
     }
 
     /**

@@ -195,17 +195,17 @@ describe('listening cache setting', () => {
 describe('members-only tracks dropped at a sign-out', () => {
   const tr = (id: string, membersOnly = false) => ({ id, ytId: id.padEnd(11, 'x'), title: id, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '', ...(membersOnly && { membersOnly: true }) });
 
-  it('tells its listeners which ones left Liked and history, every time', async () => {
+  it('tells its listeners after each drop, once Liked and history hold none', async () => {
     files.set(LIKED_FILE, JSON.stringify([tr('pub'), tr('mem1', true)]));
     await lib.loadLibrary();
     lib.addRecent(tr('mem2', true));
     const seen: string[][] = [];
-    const off = lib.onMembersOnlyDropped((tracks) => seen.push(tracks.map((t) => t.id)));
+    const off = lib.onMembersOnlyDropped(() => seen.push([...lib.liked.value.map((t) => t.id), ...lib.history.value.map((e) => e.track.id)]));
     lib.dropMembersOnly();
-    expect(seen).toEqual([['mem1', 'mem2']]);
-    // Nothing left to drop: still told (the cache may hold queued or catalog ones).
+    expect(seen).toEqual([['pub']]);
+    // Nothing left to drop: still told (native drops whatever members-only audio it tagged).
     lib.dropMembersOnly();
-    expect(seen).toEqual([['mem1', 'mem2'], []]);
+    expect(seen).toHaveLength(2);
     off();
     lib.dropMembersOnly();
     expect(seen).toHaveLength(2);

@@ -124,7 +124,10 @@ internal object JukeTracks {
         val id = o.str("id") ?: throw IllegalArgumentException("track.id missing")
         val ytId = o.str("ytId") ?: throw IllegalArgumentException("track.ytId missing ($id)")
         if (!SessionPolicy.isValidYtId(ytId)) throw IllegalArgumentException("track.ytId invalid ($id)")
-        TrackExtras.put(id, o.str("by"), o.str("postUrl"), o.optBoolean("membersOnly", false), restored)
+        val membersOnly = o.optBoolean("membersOnly", false)
+        TrackExtras.put(id, o.str("by"), o.str("postUrl"), membersOnly, restored)
+        // Its audio is tagged in the listening cache, so a sign-out removes it.
+        if (membersOnly) AudioCache.markMembers(listOf(ytId))
         val extras = Bundle().apply { putString(JukeUris.EXTRA_YT_ID, ytId) }
         val metadata = MediaMetadata.Builder()
             .setTitle(o.str("title"))

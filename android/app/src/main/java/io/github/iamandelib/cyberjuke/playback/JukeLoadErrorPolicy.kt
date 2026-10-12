@@ -3,11 +3,13 @@ package io.github.iamandelib.cyberjuke.playback
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.FileDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import io.github.iamandelib.cyberjuke.findCause
 import io.github.iamandelib.cyberjuke.net.BlockedException
+import java.io.FileNotFoundException
 
 /**
  * Don't keep retrying what can never succeed or would make things worse: unavailable videos,
@@ -26,6 +28,12 @@ internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
         if (resolve != null && resolve.permanent) return C.TIME_UNSET
         val http = e.findCause<HttpDataSource.InvalidResponseCodeException>()
         if (http != null && http.responseCode in NO_RETRY_HTTP) return C.TIME_UNSET
+        // A listening-cache file gone (low storage) or broken: the cache drops it, the retry
+        // fetches the bytes (the default never retries a missing file: a dead track).
+        LoadRetry.cacheFileRetryMs(
+            ytLoad = JukeUris.ytIdOf(loadErrorInfo.loadEventInfo.dataSpec.uri) != null,
+            fileError = e.findCause<FileNotFoundException>() != null || e.findCause<FileDataSource.FileDataSourceException>() != null,
+        )?.let { return it }
         // What the default never retries (a malformed file, a missing one) stays that way.
         if (super.getRetryDelayMsFor(loadErrorInfo) == C.TIME_UNSET) return C.TIME_UNSET
         // A broken connection, or the resolver not reaching YouTube (a new network), waits

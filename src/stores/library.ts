@@ -440,14 +440,14 @@ async function saveKept(kept: Map<string, KeptAccount>, now: number): Promise<vo
 let keptJob: Promise<void> = Promise.resolve();
 const queueKept = (job: () => Promise<void>): Promise<void> => (keptJob = keptJob.then(job, job));
 
-const membersDropped = new Set<(tracks: Track[]) => void>();
+const membersDropped = new Set<() => void>();
 
 /**
- * Called on every dropMembersOnly (a sign-out, or starting signed out) with the members-only
- * tracks it takes out of Liked and history (maybe none): the listening cache drops their
- * audio. Returns an unsubscribe.
+ * Called after every dropMembersOnly (a sign-out, or starting signed out), once Liked and
+ * history hold no members-only track: the listening cache drops their audio. Returns an
+ * unsubscribe.
  */
-export function onMembersOnlyDropped(cb: (tracks: Track[]) => void): () => void {
+export function onMembersOnlyDropped(cb: () => void): () => void {
   membersDropped.add(cb);
   return () => membersDropped.delete(cb);
 }
@@ -461,8 +461,6 @@ export function onMembersOnlyDropped(cb: (tracks: Track[]) => void): () => void 
  */
 export function dropMembersOnly(uid: string | null = null): void {
   const all = liked.value;
-  const gone = [...all.filter((t) => t.membersOnly), ...history.value.filter((e) => e.track.membersOnly).map((e) => e.track)];
-  for (const cb of membersDropped) cb(gone);
   const likes = uid ? all.flatMap((t, i) => (t.membersOnly ? [removedFrom(all, i, trackId)] : [])) : [];
   const plays = uid ? history.value.filter((e) => e.track.membersOnly) : [];
   if (all.some((t) => t.membersOnly)) {
@@ -473,6 +471,7 @@ export function dropMembersOnly(uid: string | null = null): void {
     history.value = history.value.filter((e) => !e.track.membersOnly);
     saveHistory(history.value);
   }
+  for (const cb of membersDropped) cb();
   if (!uid || (!likes.length && !plays.length)) return;
   void queueKept(async () => {
     const now = Date.now();

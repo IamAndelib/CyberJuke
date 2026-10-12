@@ -99,17 +99,24 @@ interface JukePlayerPlugin {
     lastLimit?: { at: number; reason: string; surface: string };
   }>;
   /**
-   * The listening cache: the liked songs, newest like first (at most BRIDGE_MAX_ITEMS). Native
-   * keeps them in the cache last, saves one liked since the last call at once and older ones on
-   * Wi-Fi, so they play offline.
+   * The listening cache: the liked songs, newest like first (at most BRIDGE_MAX_ITEMS), and which
+   * of them are members-only (their audio is tagged, so a sign-out removes it). Native keeps them
+   * in the cache last, saves a few liked since the last call at once and older ones on Wi-Fi, so
+   * they play offline. The upkeep calls (this, setCacheLimit, clearCache, signedOut) resolve once
+   * done, and reject when there is no cache.
    */
-  setLikedIds(o: { ytIds: string[] }): Promise<void>;
+  setLikedIds(o: { ytIds: string[]; membersOnly: string[] }): Promise<void>;
   /** The listening cache's size; 128, 256 or 512 (anything else is 256). A smaller one evicts at once. */
   setCacheLimit(o: { mb: number }): Promise<void>;
   /** Empties the listening cache. Playback goes on. */
   clearCache(): Promise<void>;
-  /** Signed out: the cached audio of these (members-only) videos goes (at most BRIDGE_MAX_ITEMS). */
-  dropCached(o: { ytIds: string[] }): Promise<void>;
+  /**
+   * Signed out (or starting signed out): the cached audio of every members-only track goes, and
+   * none is cached again until signedIn(). Cheap when there is none.
+   */
+  signedOut(): Promise<void>;
+  /** Signed in: members-only audio may be cached again. */
+  signedIn(): Promise<void>;
   /** The liked songs saved whole on the phone, by ytId: they play offline. */
   cachedIds(): Promise<{ ytIds: string[] }>;
   /** Keep a screen area (CSS px relative to the WebView) out of the system back gesture; null clears it. */

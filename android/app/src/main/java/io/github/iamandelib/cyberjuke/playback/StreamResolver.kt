@@ -187,14 +187,20 @@ internal object StreamResolver {
      * The listening cache's key for [ytId] when a copy of it is saved whole ([AudioCache]), to
      * play from it with no extraction and no request (also during a back-off: nothing is asked
      * of YouTube); else null. A resume, or a track kept through an outage ([keepFormat]), only in
-     * its own format; otherwise the one the quality setting asks for when known, else any.
-     * Recorded as served, so a later resume keeps that file.
+     * its own format; otherwise the one the quality setting asks for when known, else, online,
+     * one at least as good as the setting asks ([CacheKeys.wantedBps]); offline any. Not a copy
+     * just found missing ([AudioCache.misses]): its retry goes to the network. Recorded as
+     * served, so a later resume keeps that file.
      */
     fun cachedKey(ytId: String, midStream: Boolean): String? {
+        if (AudioCache.misses.recent(ytId)) return null
         val keep = kept[ytId] ?: if (midStream) served.get(ytId, now())?.itag?.takeIf { it > 0 } else null
-        val rungItag = cache.get(ytId, currentRung(), null, now())?.itag
-        val itag = AudioCache.wholeItag(ytId, keep, rungItag) ?: return null
+        val rungStream = cache.get(ytId, currentRung(), null, now())
         val before = served.get(ytId, now())
+        val ladder = before?.ladderBps?.takeIf { it.isNotEmpty() } ?: rungStream?.ladderBps ?: emptyList()
+        val wanted = CacheKeys.wantedBps(quality, autoRung, rungStream?.itag, ladder, AudioCache.online)
+        val key = AudioCache.wholeKey(ytId, keep, rungStream?.itag, wanted) ?: return null
+        val itag = CacheKeys.itagOf(key) ?: return null
         // No URL: nothing is requested for it.
         serve(
             ResolvedStream(
@@ -205,11 +211,11 @@ internal object StreamResolver {
                 resolvedAtMs = now(),
                 itag = itag,
                 netGen = NetEpoch.generation,
-                ladderBps = before?.ladderBps ?: emptyList(),
+                ladderBps = ladder,
                 audioOnly = true,
             ),
         )
-        return CacheKeys.of(ytId, itag)
+        return key
     }
 
     private fun serve(s: ResolvedStream): ResolvedStream {

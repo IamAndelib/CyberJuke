@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { Signal } from '@preact/signals';
 import type { Track } from '../data/model';
 
 vi.mock('@capacitor/preferences', () => ({ Preferences: { get: async () => ({ value: null }), set: async () => {}, remove: async () => {} } }));
@@ -17,6 +16,7 @@ const fake = vi.hoisted(() => {
     listeners,
     calls,
     of: (name: string) => calls.filter(([n]) => n === name).map(([, o]) => o),
+    names: () => calls.map(([n]) => n),
     plugin: {
       addListener: (ev: string, cb: (e: unknown) => void) => {
         listeners.set(ev, cb);
@@ -25,24 +25,18 @@ const fake = vi.hoisted(() => {
       setLikedIds: cmd('setLikedIds'),
       setCacheLimit: cmd('setCacheLimit'),
       clearCache: cmd('clearCache'),
-      dropCached: cmd('dropCached'),
+      signedOut: cmd('signedOut'),
+      signedIn: cmd('signedIn'),
       cachedIds: () => Promise.resolve({ ytIds: ['aaaaaaaaaaa'] }),
     },
   };
 });
-const queue = vi.hoisted(() => ({ tracks: [] as Track[] }));
 
 vi.mock('./native', async (orig) => ({ ...(await orig<object>()), JukePlayer: fake.plugin }));
-vi.mock('./index', () => ({ player: { state: { peek: () => ({ queue: queue.tracks }) } } }));
-vi.mock('../stores/catalog', async () => {
-  const { signal } = await import('@preact/signals');
-  return { catalog: { all: signal<Track[]>([]) } };
-});
 
-const { catalog } = await import('../stores/catalog');
 const lib = await import('../stores/library');
 const { savedOffline } = await import('../stores/savedOffline');
-const { LIKED_SEND_DELAY_MS, clearListeningCache, startListeningCache, ytIdsOf } = await import('./listeningCache');
+const { LIKED_SEND_DELAY_MS, clearListeningCache, likedPayload, startListeningCache, ytIdsOf } = await import('./listeningCache');
 
 const t = (id: string, membersOnly = false): Track => ({ id, ytId: id.padEnd(11, 'x'), membersOnly }) as Track;
 
@@ -57,7 +51,7 @@ afterAll(() => {
 
 describe('the listening cache wiring', () => {
   it('at start sends Liked (newest first) and the size, and asks what is saved', async () => {
-    expect(fake.of('setLikedIds')).toEqual([{ ytIds: ['bxxxxxxxxxx', 'axxxxxxxxxx'] }]);
+    expect(fake.of('setLikedIds')).toEqual([{ ytIds: ['bxxxxxxxxxx', 'axxxxxxxxxx'], membersOnly: [] }]);
     expect(fake.of('setCacheLimit')).toEqual([{ mb: 256 }]);
     await vi.waitFor(() => expect([...savedOffline.value]).toEqual(['aaaaaaaaaaa']));
   });
@@ -93,16 +87,21 @@ describe('the listening cache wiring', () => {
     expect(savedOffline.value.size).toBe(0);
   });
 
-  it('signing out drops the cached audio of members-only tracks: liked, played, queued or in the catalog', () => {
-    fake.calls.length = 0;
+  it('says which liked songs are members-only', () => {
+    expect(likedPayload([t('m1', true), t('pub'), t('m1', true)])).toEqual({ ytIds: ['m1xxxxxxxxx', 'pubxxxxxxxx'], membersOnly: ['m1xxxxxxxxx'] });
+  });
+
+  it('signing out sends the new Liked at once, then signedOut, so native drops members-only audio', () => {
     lib.liked.value = [t('m1', true), t('pub')];
-    lib.addRecent(t('m2', true));
-    queue.tracks = [t('m3', true), t('pub2')];
-    (catalog.all as Signal<Track[]>).value = [t('m4', true), t('m1', true), t('pub3')];
+    vi.advanceTimersByTime(LIKED_SEND_DELAY_MS);
+    fake.calls.length = 0;
     lib.dropMembersOnly();
-    expect(fake.of('dropCached')).toHaveLength(1);
-    expect(fake.of('dropCached')[0].ytIds.sort()).toEqual(['m1xxxxxxxxx', 'm2xxxxxxxxx', 'm3xxxxxxxxx', 'm4xxxxxxxxx']);
-    expect(lib.liked.value.map((x) => x.id)).toEqual(['pub']);
+    // No debounce: native has the Liked without m1 before it drops members-only audio.
+    expect(fake.names()).toEqual(['setLikedIds', 'signedOut']);
+    expect(fake.of('setLikedIds')).toEqual([{ ytIds: ['pubxxxxxxxx'], membersOnly: [] }]);
+    // And nothing more after the delay.
+    vi.advanceTimersByTime(LIKED_SEND_DELAY_MS);
+    expect(fake.names()).toEqual(['setLikedIds', 'signedOut']);
   });
 
   it('Clear cache asks native', async () => {

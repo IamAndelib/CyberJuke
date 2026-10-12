@@ -2,10 +2,11 @@
  * The native listening cache: the audio of recently played and next tracks, and of liked songs,
  * on the phone only, up to the size chosen in Settings. Liked songs are saved so they play
  * offline (`savedOffline`). This wires the page's side of it:
- *  - the liked songs (newest like first), sent at start and when Liked changes (a burst of
- *    likes sends once);
+ *  - the liked songs (newest like first) and which are members-only, sent at start and when
+ *    Liked changes (a burst of likes sends once);
  *  - the size setting, sent at start and on change, and Clear cache;
- *  - signing out drops the cached audio of members-only tracks;
+ *  - signing out (and starting signed out): Liked at once, then `signedOut()`, so native drops
+ *    every members-only track's audio and caches none until a sign-in;
  *  - which liked songs are saved: asked at start, then native says when that changes.
  * In the browser there is no cache: nothing is saved (dev/test builds expose
  * `window.__cyberjukeCache` so the e2e suite can say what is, and record the calls).
@@ -15,12 +16,11 @@ import { effect } from '@preact/signals';
 import { YT_ID_RE } from '../core/guards';
 import { logError } from '../core/log';
 import { TEST_HOOKS, exposeForTests } from '../core/testHooks';
+import { auth } from '../data/auth';
 import type { Track } from '../data/model';
-import { catalog } from '../stores/catalog';
 import { liked, onMembersOnlyDropped, settings, type CacheMb } from '../stores/library';
 import { setSavedOffline } from '../stores/savedOffline';
 import { BRIDGE_MAX_ITEMS, JukePlayer } from './native';
-import { player } from './index';
 
 /** A burst of likes (or Undo) sends the list once, this long after the last change. */
 export const LIKED_SEND_DELAY_MS = 1000;
@@ -46,9 +46,17 @@ export function ytIdsOf(tracks: readonly Track[]): string[] {
   return out;
 }
 
-function sendLiked(ytIds: string[]): void {
-  if (native) JukePlayer.setLikedIds({ ytIds }).catch(fail('cache.setLikedIds'));
-  else record(['setLikedIds', ytIds]);
+/** What setLikedIds sends for `tracks`: their ids, and the members-only ones among them. */
+export function likedPayload(tracks: readonly Track[]): { ytIds: string[]; membersOnly: string[] } {
+  const ytIds = ytIdsOf(tracks);
+  const sent = new Set(ytIds);
+  const membersOnly = ytIdsOf(tracks.filter((t) => t.membersOnly && sent.has(t.ytId)));
+  return { ytIds, membersOnly };
+}
+
+function sendLiked(o: { ytIds: string[]; membersOnly: string[] }): void {
+  if (native) JukePlayer.setLikedIds(o).catch(fail('cache.setLikedIds'));
+  else record(['setLikedIds', o.ytIds]);
 }
 
 function sendLimit(mb: CacheMb): void {
@@ -56,13 +64,14 @@ function sendLimit(mb: CacheMb): void {
   else record(['setCacheLimit', { mb }]);
 }
 
-/** Signed out: the audio of these members-only videos goes (BRIDGE_MAX_ITEMS a call). */
-function dropCached(ytIds: string[]): void {
-  for (let i = 0; i < ytIds.length; i += BRIDGE_MAX_ITEMS) {
-    const ids = ytIds.slice(i, i + BRIDGE_MAX_ITEMS);
-    if (native) JukePlayer.dropCached({ ytIds: ids }).catch(fail('cache.dropCached'));
-    else record(['dropCached', ids]);
-  }
+function sendSignedOut(): void {
+  if (native) JukePlayer.signedOut().catch(fail('cache.signedOut'));
+  else record(['signedOut']);
+}
+
+function sendSignedIn(): void {
+  if (native) JukePlayer.signedIn().catch(fail('cache.signedIn'));
+  else record(['signedIn']);
 }
 
 /** Settings' Clear cache: everything goes; playback goes on, and liked songs are saved again on Wi-Fi. */
@@ -84,21 +93,24 @@ export function startListeningCache(): void {
   // Liked, newest like first: at once, then a short while after the last change.
   let sent: string | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
-  effect(() => {
-    const ids = ytIdsOf(liked.value);
-    const key = ids.join(',');
-    if (key === sent) return;
+  const send = (o: { ytIds: string[]; membersOnly: string[] }, key: string) => {
     if (timer) clearTimeout(timer);
-    if (sent === null) {
-      sent = key;
-      sendLiked(ids);
+    timer = null;
+    sent = key;
+    sendLiked(o);
+  };
+  const keyOf = (o: { ytIds: string[]; membersOnly: string[] }) => o.ytIds.join(',') + '|' + o.membersOnly.join(',');
+  effect(() => {
+    const o = likedPayload(liked.value);
+    const key = keyOf(o);
+    if (key === sent) {
+      if (timer) clearTimeout(timer);
+      timer = null;
       return;
     }
-    timer = setTimeout(() => {
-      timer = null;
-      sent = key;
-      sendLiked(ids);
-    }, LIKED_SEND_DELAY_MS);
+    if (sent === null) return send(o, key);
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => send(o, key), LIKED_SEND_DELAY_MS);
   });
 
   let lastMb: CacheMb | null = null;
@@ -109,13 +121,16 @@ export function startListeningCache(): void {
     sendLimit(mb);
   });
 
-  // Signed out: the members-only tracks it drops from Liked and history, and those still in the
-  // queue or the catalog (played, or loaded ahead, without being liked or played to the end).
-  onMembersOnlyDropped((dropped) => {
-    const queued = player.state.peek().queue;
-    const members = [...dropped, ...queued, ...catalog.all.peek()].filter((t) => t.membersOnly);
-    const ids = ytIdsOfAll(members);
-    if (ids.length) dropCached(ids);
+  // Signed out (or starting signed out), the members-only tracks just left Liked: native hears
+  // the new Liked first, at once, then drops all members-only audio.
+  onMembersOnlyDropped(() => {
+    const o = likedPayload(liked.peek());
+    send(o, keyOf(o));
+    sendSignedOut();
+  });
+  if (auth.signedIn()) sendSignedIn();
+  auth.onChange((signedIn) => {
+    if (signedIn) sendSignedIn();
   });
 
   if (!native) {
@@ -126,9 +141,4 @@ export function startListeningCache(): void {
   JukePlayer.cachedIds()
     .then((r) => setSavedOffline(Array.isArray(r?.ytIds) ? r.ytIds : []))
     .catch(fail('cache.cachedIds'));
-}
-
-/** Like ytIdsOf, without the cap (dropCached sends them in parts). */
-function ytIdsOfAll(tracks: readonly Track[]): string[] {
-  return [...new Set(tracks.map((t) => t.ytId).filter((id) => YT_ID_RE.test(id)))];
 }

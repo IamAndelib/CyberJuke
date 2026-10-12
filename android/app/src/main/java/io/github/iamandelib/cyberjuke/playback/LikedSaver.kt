@@ -18,11 +18,13 @@ import java.io.IOException
  * just played); older likes are filled in one at a time, newest first, on Wi-Fi only.
  *
  * Lives in PlaybackService, so it only runs while the service already does (the app is open or
- * playing): no job, no alarm, nothing that wakes the phone. Event-driven, never on a timer:
- * asked again when the player stops loading, the network or the liked list changes, a back-off
- * ends or a save finishes. Downloads run on the one background thread ([Background]), one at a
- * time, through a [CacheWriter] (only the bytes not yet cached are fetched), and give way at
- * once when playback needs the network ([giveWay]).
+ * playing): no job, no alarm, nothing that wakes the phone. Event-driven: asked again when
+ * playback's loading changes, the network or the liked list changes, a back-off ends or a save
+ * finishes. Its one timer ([recheck]) is a single postDelayed for the end of the gap between two
+ * extractions, only while a save waits for it; cancelled by [stop]. Downloads run on the one
+ * background thread ([Background]), one at a time, through a [CacheWriter] (only the bytes not
+ * yet cached are fetched), and give way at once when playback needs the network ([giveWay],
+ * [PlaybackNeed]).
  *
  * Main thread, except [SaveJob.run].
  */
@@ -32,24 +34,30 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         /** The videos the player loads anyway (the playing track and the next). */
         fun loadingPair(): Set<String>
 
-        /** The player is loading (playback needs the network now). */
-        fun playerLoading(): Boolean
+        /** Playback needs the network now ([PlaybackNeed]). */
+        fun playbackNeedsNetwork(): Boolean
     }
 
     private var online = false
     private var unmetered = false
     private var stopped = false
 
-    /** Liked this session: saved on any network. */
+    /** Liked just now this session: saved on any network. */
     private val fresh = HashSet<String>()
 
-    /** Couldn't be saved this session (unavailable, no audio-only format, refused). */
+    /** Fresh ones already tried once: their retries wait for the gap. */
+    private val tried = HashSet<String>()
+
+    /** Couldn't be saved this service's life (unavailable, refused, stopped three times). */
     private val failed = HashSet<String>()
+    private val strikes = SaveStrikes()
 
     /** When the last save extracted (elapsedRealtime); 0 = none yet. */
     private var lastExtractionAt = 0L
 
     private var job: SaveJob? = null
+
+    private val recheck = Runnable { check() }
 
     /** The cache's liked list or saved set changed (any thread). */
     val cacheListener = AudioCache.Listener { handler.post { check() } }
@@ -57,7 +65,9 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
     val likedListener = AudioCache.LikedListener { freshIds ->
         handler.post {
             fresh.addAll(freshIds)
-            fresh.retainAll(AudioCache.liked.toSet())
+            val liked = AudioCache.liked.toSet()
+            fresh.retainAll(liked)
+            tried.retainAll(liked)
             check()
         }
     }
@@ -72,13 +82,19 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
 
     /** Something the policy depends on changed: start a save, or stop the running one. */
     fun check() {
+        handler.removeCallbacks(recheck)
         if (stopped) return
         val f = facts()
         job?.let { running ->
             if (!LikedSaverPolicy.keepGoing(f, running.fresh)) running.cancel()
             return
         }
-        val ytId = LikedSaverPolicy.next(f) ?: return
+        val ytId = LikedSaverPolicy.next(f)
+        if (ytId == null) {
+            // Held back by the gap alone: one re-check when it ends (no other event may come).
+            LikedSaverPolicy.recheckInMs(f)?.let { handler.postDelayed(recheck, it) }
+            return
+        }
         start(ytId, ytId in fresh)
     }
 
@@ -87,49 +103,68 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         job?.cancel()
     }
 
-    /** The service is going: nothing more starts, the running save stops. */
+    /** The service is going: nothing more starts, the running save stops, no re-check is left. */
     fun stop() {
         stopped = true
+        handler.removeCallbacks(recheck)
         job?.cancel()
     }
 
-    private fun facts() = LikedSaverPolicy.Facts(
-        liked = AudioCache.liked,
-        saved = AudioCache.savedLiked,
-        fresh = fresh,
-        skip = host.loadingPair() + failed,
-        online = online,
-        unmetered = unmetered,
-        quiet = NetBlock.isQuiet(),
-        playerLoading = host.playerLoading(),
-        busy = job != null,
-        likedFull = AudioCache.likedFull,
-        sinceLastMs = if (lastExtractionAt == 0L) Long.MAX_VALUE else SystemClock.elapsedRealtime() - lastExtractionAt,
-    )
+    private fun facts(): LikedSaverPolicy.Facts {
+        val liked = AudioCache.liked
+        return LikedSaverPolicy.Facts(
+            liked = liked,
+            saved = AudioCache.savedLiked,
+            fresh = fresh,
+            tried = tried,
+            skip = host.loadingPair() + failed + liked.filter { AudioCache.isDenied(it) },
+            online = online,
+            unmetered = unmetered,
+            quiet = NetBlock.isQuiet(),
+            playbackNeedsNetwork = host.playbackNeedsNetwork(),
+            busy = job != null,
+            likedFull = AudioCache.likedFull,
+            sinceLastMs = if (lastExtractionAt == 0L) Long.MAX_VALUE else SystemClock.elapsedRealtime() - lastExtractionAt,
+        )
+    }
 
     private fun start(ytId: String, isFresh: Boolean) {
         lastExtractionAt = SystemClock.elapsedRealtime()
+        if (isFresh) tried.add(ytId)
         val j = SaveJob(ytId, isFresh)
         job = j
         Background.run("Liked save") {
-            val outcome = j.run()
-            handler.post { finished(j, outcome) }
+            var outcome = Outcome.STOPPED
+            try {
+                outcome = j.run()
+            } catch (e: Exception) {
+                Log.w(TAG, "Liked save failed: ${e.javaClass.simpleName}")
+            } finally {
+                // Always back on the main thread, whatever happened: the saver is never stuck busy.
+                handler.post { finished(j, outcome) }
+            }
         }
     }
 
     private fun finished(j: SaveJob, outcome: Outcome) {
         if (job === j) job = null
         when (outcome) {
-            Outcome.SAVED -> fresh.remove(j.ytId)
+            Outcome.SAVED -> {
+                fresh.remove(j.ytId)
+                tried.remove(j.ytId)
+            }
             Outcome.FAILED -> failed.add(j.ytId)
-            Outcome.STOPPED -> Unit
+            // Not cancelled, yet not saved (a dropped connection, an exception): three times and
+            // it is given up on, so a song that can't be saved isn't tried forever.
+            Outcome.STOPPED -> if (strikes.stopped(j.ytId)) failed.add(j.ytId)
+            Outcome.CANCELLED -> Unit
         }
         check()
     }
 
-    private enum class Outcome { SAVED, FAILED, STOPPED }
+    private enum class Outcome { SAVED, FAILED, STOPPED, CANCELLED }
 
-    /** One song into the cache. Cancelled from the main thread; runs on [Background]'s thread. */
+    /** One song into the cache. Cancelled from any thread; runs on [Background]'s thread. */
     private class SaveJob(val ytId: String, val fresh: Boolean) {
         @Volatile
         private var cancelled = false
@@ -143,7 +178,17 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         }
 
         fun run(): Outcome {
-            if (cancelled || NetBlock.isQuiet()) return Outcome.STOPPED
+            AudioCache.cancelSave = { cancel() }
+            try {
+                return save()
+            } finally {
+                AudioCache.cancelSave = null
+            }
+        }
+
+        private fun save(): Outcome {
+            if (cancelled) return Outcome.CANCELLED
+            if (NetBlock.isQuiet()) return Outcome.STOPPED
             if (AudioCache.isWhole(ytId)) return Outcome.SAVED
             val stream = try {
                 // An extraction, like playing it would be (it counts toward YouTube's limits,
@@ -154,28 +199,30 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             } catch (e: ManifestOnlyException) {
                 return Outcome.FAILED
             } catch (e: IOException) {
-                return Outcome.STOPPED
+                return if (cancelled) Outcome.CANCELLED else Outcome.STOPPED
             }
             // Only an audio-only format is kept in the cache.
             if (!stream.audioOnly || stream.itag <= 0) return Outcome.FAILED
-            if (cancelled) return Outcome.STOPPED
+            if (cancelled) return Outcome.CANCELLED
             val source = AudioCache.downloadSource() ?: return Outcome.STOPPED
             return try {
                 val spec = YtDataSpecResolver.streamSpec(DataSpec.Builder().setUri(JukeUris.forYt(ytId)).build(), ytId, stream)
                 val w = CacheWriter(source, spec, null, null)
                 writer = w
-                if (cancelled) return Outcome.STOPPED
+                if (cancelled) return Outcome.CANCELLED
                 w.cache()
-                Log.i(TAG, "Saved $ytId")
+                // No id: R8 keeps info logs out of release builds, and this needs none.
+                Log.i(TAG, "Liked song saved")
                 Outcome.SAVED
             } catch (e: IOException) {
-                // Refused (an expired link, a block): not again this session. Anything else
-                // (cancelled, the connection) tries again later.
-                if (!cancelled && e.findCause<HttpDataSource.InvalidResponseCodeException>() != null) {
-                    Log.w(TAG, "Liked save refused")
-                    Outcome.FAILED
-                } else {
-                    Outcome.STOPPED
+                when {
+                    cancelled -> Outcome.CANCELLED
+                    // Refused (an expired link, a block): not again this service's life.
+                    e.findCause<HttpDataSource.InvalidResponseCodeException>() != null -> {
+                        Log.w(TAG, "Liked save refused")
+                        Outcome.FAILED
+                    }
+                    else -> Outcome.STOPPED
                 }
             } finally {
                 writer = null

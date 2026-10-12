@@ -23,6 +23,11 @@ internal object StreamUrls {
 
     fun itag(url: String): Int? = ITAG.find(url)?.groupValues?.get(1)?.toIntOrNull()
 
+    private val CLEN = Regex("""[?&/]clen[=/](\d{1,12})(?:[&/]|$)""")
+
+    /** The file's length in bytes (googlevideo's `clen`), or null when the URL doesn't say. */
+    fun clen(url: String): Long? = CLEN.find(url)?.groupValues?.get(1)?.toLongOrNull()?.takeIf { it > 0 }
+
     private val IP = Regex("""[?&/]ip[=/]([0-9A-Fa-f.:%]{2,64})(?:[&/]|$)""")
 
     /**

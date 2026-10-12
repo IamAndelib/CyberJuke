@@ -2,6 +2,7 @@ package io.github.iamandelib.cyberjuke.playback
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.EOFException
@@ -172,5 +173,14 @@ class LoadPolicyTest {
         assertEquals(LoadRetry.MAX_DELAY_MS, LoadRetry.delayMs(Int.MAX_VALUE))
         // All six retries take about half a minute: what two minutes of buffer cover easily.
         assertEquals(31_000L, (1..LoadRetry.NETWORK_RETRIES).sumOf { LoadRetry.delayMs(it) })
+    }
+
+    @Test
+    fun aCacheFileThatWentAwayIsRetriedSoon() {
+        // A YouTube load whose cache file was deleted (low storage) or broken: retried at once-ish
+        // (the cache drops the span, the retry fetches it), not a dead track.
+        assertEquals(LoadRetry.CACHE_RETRY_MS, LoadRetry.cacheFileRetryMs(ytLoad = true, fileError = true))
+        assertNull(LoadRetry.cacheFileRetryMs(ytLoad = false, fileError = true))
+        assertNull(LoadRetry.cacheFileRetryMs(ytLoad = true, fileError = false))
     }
 }

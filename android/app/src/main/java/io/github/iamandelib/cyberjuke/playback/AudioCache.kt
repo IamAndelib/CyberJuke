@@ -28,13 +28,20 @@ import java.util.concurrent.CopyOnWriteArraySet
  * (128, 256 or 512 MB); over it, [CacheLedger]'s order decides what goes.
  *
  * - One [SimpleCache] for the process (it refuses a second one on the same folder), opened on
- *   first use off the main thread and released when the playback service goes.
- * - Keys are `yt:<ytId>:<itag>` ([CacheKeys]), set by [YtDataSpecResolver]; only those go
- *   through the cache ([CacheRouter]), so the CI tone and HLS are untouched.
+ *   first use off the main thread and kept open for the process's life: never released, so
+ *   nothing blocks the main thread in onDestroy, and nothing is lost when the process dies
+ *   (every span is indexed as it is written).
+ * - Keys are `yt:<ytId>:<itag>:<clen>` ([CacheKeys]), set by [YtDataSpecResolver]; only those
+ *   go through the cache ([CacheRouter]), so the CI tone and HLS are untouched.
  * - A track saved whole plays from it with no extraction and no request
  *   ([StreamResolver.cachedKey]).
  * - Which liked songs are saved whole is kept up to date from the span callbacks and sent to
  *   the page as `cacheChanged` (only when that set changes).
+ * - Members-only audio is tagged as it comes in ([MembersAudio], the tags in a file beside the
+ *   cache), so signing out ([signedOut]) removes all of it, and none comes back in until a
+ *   sign-in.
+ * - No googlevideo URL is kept: the upstream ([CacheMissGuard]) reports the URL it was asked
+ *   for, so the cache never records a redirect.
  *
  * Threads: the ledger and the saved set are only touched under the cache's own lock (its span
  * callbacks hold it; everything else takes it). The main thread only reads the published
@@ -49,6 +56,9 @@ internal object AudioCache {
     /** The liked list, newest first, beside the cache (also never backed up). */
     private const val LIKED_FILE = "audio-liked"
 
+    /** The tags of members-only audio in the cache, beside it. */
+    private const val MEMBERS_FILE = "audio-members"
+
     const val DEFAULT_MB = 256
     val SIZES_MB = listOf(128, 256, 512)
     private const val MB = 1024L * 1024L
@@ -58,7 +68,7 @@ internal object AudioCache {
         fun onSavedChanged()
     }
 
-    /** The liked list changed; [fresh]: liked since the last list (just now). Any thread. */
+    /** The liked list changed; [fresh]: liked just now. Any thread. */
     fun interface LikedListener {
         fun onLikedChanged(fresh: List<String>)
     }
@@ -76,7 +86,6 @@ internal object AudioCache {
 
     @Volatile
     private var cache: SimpleCache? = null
-    private var database: StandaloneDatabaseProvider? = null
 
     /** The limit in MB (Settings), kept to apply when the cache opens. */
     @Volatile
@@ -90,6 +99,20 @@ internal object AudioCache {
 
     /** The liked list came from the page or the file (until then no like is "fresh"). */
     private var likedKnown = false
+
+    /** Members-only audio (thread-safe itself). */
+    private val members = MembersAudio()
+
+    /** Copies just found missing: not served from the cache for a moment ([CacheMissGuard]). */
+    val misses = CacheMisses()
+
+    /** The device has a validated network (PlaybackService): online, a lower copy doesn't stand in. */
+    @Volatile
+    var online: Boolean = true
+
+    /** Stops the liked save in progress, if any (LikedSaver sets it while one runs). */
+    @Volatile
+    var cancelSave: (() -> Unit)? = null
 
     /** The liked songs saved whole (a snapshot; any thread). */
     @Volatile
@@ -122,20 +145,17 @@ internal object AudioCache {
         val ctx = appContext ?: return null
         return try {
             // Before the cache's own init thread replays the spans into the evictor: the liked
-            // order and the limit must already be there (a service started without the page,
-            // from a media button, must not evict liked songs as if they weren't).
-            ledger.clearEntries()
-            saved.clear()
-            savedLiked = emptySet()
+            // order, the members-only tags and the limit must already be there (a service
+            // started without the page, from a media button, must not evict liked songs as if
+            // they weren't).
+            readIds(ctx, MEMBERS_FILE)?.let { members.load(it) }
             if (!likedKnown) {
-                readLikedFile(ctx)?.let { ledger.setLiked(it, known = false) }
+                readIds(ctx, LIKED_FILE)?.let { ledger.setLiked(it, known = false) }
                 liked = ledger.liked
                 likedKnown = liked.isNotEmpty()
             }
             ledger.limit = limitMb * MB
-            val db = StandaloneDatabaseProvider(ctx)
-            val c = SimpleCache(File(ctx.cacheDir, DIR), JukeCacheEvictor(), db)
-            database = db
+            val c = SimpleCache(File(ctx.cacheDir, DIR), JukeCacheEvictor(), StandaloneDatabaseProvider(ctx))
             cache = c
             c
         } catch (e: Exception) {
@@ -144,44 +164,41 @@ internal object AudioCache {
         }
     }
 
-    /** The playback service is going: the index is written and the folder freed. */
-    @Synchronized
-    fun release() {
-        val c = cache ?: return
-        cache = null
-        try {
-            c.release()
-        } catch (e: Exception) {
-            Log.w(TAG, "Cache release failed: ${e.javaClass.simpleName}")
-        }
-        runCatching { database?.close() }
-        database = null
-    }
-
-    /** Runs [block] with the open cache, under its lock; null without one (or released meanwhile). */
+    /** Runs [block] with the open cache, under its lock; null without one. */
     private fun <T> locked(block: (SimpleCache) -> T): T? {
         val c = open() ?: return null
-        return try {
-            synchronized(c) { block(c) }
-        } catch (e: IllegalStateException) { // released meanwhile
-            null
-        }
+        return synchronized(c) { block(c) }
     }
 
     // ---- reading -----------------------------------------------------------------------------
 
-    /** The formats of [ytId] saved whole, most recently used first. Under the lock. */
-    private fun wholeItags(c: Cache, ytId: String): List<Int> = ledger.keysOf(ytId).filter { key ->
+    /** The keys of [ytId] saved whole, most recently used first. Under the lock. */
+    private fun wholeKeys(c: Cache, ytId: String): List<String> = ledger.keysOf(ytId).filter { key ->
         val length = c.getContentMetadata(key).get(ContentMetadata.KEY_CONTENT_LENGTH, -1L)
         CacheKeys.isWhole(length) { c.isCached(key, 0L, it) }
-    }.mapNotNull { CacheKeys.itagOf(it) }
+    }
 
-    /** The format of [ytId] to play from the cache ([CacheKeys.pick]), or null. Loader thread. */
-    fun wholeItag(ytId: String, keep: Int?, rungItag: Int?): Int? =
-        locked { c -> CacheKeys.pick(wholeItags(c, ytId), keep, rungItag) }
+    /**
+     * The key of [ytId]'s copy to play from the cache ([CacheKeys.pick]: [keep], [rungItag],
+     * at least [wantedBps]), or null to load it as usual. Loader thread.
+     */
+    fun wholeKey(ytId: String, keep: Int?, rungItag: Int?, wantedBps: Int): String? {
+        if (members.denied(ytId)) return null
+        return locked { c ->
+            val keys = wholeKeys(c, ytId)
+            val itag = CacheKeys.pick(keys.mapNotNull { CacheKeys.itagOf(it) }, keep, rungItag, wantedBps)
+            keys.firstOrNull { CacheKeys.itagOf(it) == itag }
+        }
+    }
 
     /** Whether [ytId] is saved whole (any format). */
-    fun isWhole(ytId: String): Boolean = locked { c -> wholeItags(c, ytId).isNotEmpty() } == true
+    fun isWhole(ytId: String): Boolean = locked { c -> wholeKeys(c, ytId).isNotEmpty() } == true
+
+    /** Signed out: this video's audio may not be cached ([MembersAudio.denied]). */
+    fun isDenied(ytId: String): Boolean = members.denied(ytId)
+
+    /** These videos are members-only (queue items, liked tracks): their audio is tagged in the cache. */
+    fun markMembers(ytIds: Collection<String>) = ytIds.forEach { members.mark(it) }
 
     /**
      * The liked songs saved whole, opening the cache if needed (the page asks at start): once
@@ -189,13 +206,13 @@ internal object AudioCache {
      */
     fun savedLikedNow(): Set<String> = locked { savedLiked } ?: emptySet()
 
-    // ---- the page's settings ------------------------------------------------------------------
+    // ---- the page's settings (off the main thread; false: no cache) ---------------------------
 
     /**
      * The liked videos, newest like first. Liked songs are evicted last, least recently liked
      * first; an unliked one is an ordinary listening entry from now on.
      */
-    fun setLiked(ytIds: List<String>) {
+    fun setLiked(ytIds: List<String>): Boolean {
         val fresh = locked { c ->
             val known = likedKnown
             likedKnown = true
@@ -206,41 +223,51 @@ internal object AudioCache {
             refreshSaved(c, liked, dropped)
             publish()
             justLiked
-        } ?: return
-        appContext?.let { writeLikedFile(it, liked) }
+        } ?: return false
+        appContext?.let { writeIds(it, LIKED_FILE, liked) }
         likedListeners.forEach { it.onLikedChanged(fresh) }
+        return true
     }
 
-    /** The size limit; a smaller one evicts at once. Call off the main thread (it may delete files). */
-    fun setLimitMb(mb: Int) {
+    /** The size limit; a smaller one evicts at once (it may delete files). */
+    fun setLimitMb(mb: Int): Boolean {
         limitMb = sizeOf(mb)
-        locked { c ->
+        return locked { c ->
             ledger.limit = limitMb * MB
             evict(c, 0L, null)
             publish()
-        }
+        } != null
     }
 
-    /** Clear cache (Settings): everything goes. Playback goes on (from the network). Off the main thread. */
-    fun clear() {
-        locked { c -> c.keys.toList().forEach { c.removeResource(it) } }
-        Log.i(TAG, "Cleared")
+    /** Clear cache (Settings): everything goes. Playback goes on (from the network). */
+    fun clear(): Boolean {
+        val done = locked { c -> c.keys.toList().forEach { c.removeResource(it) } } != null
+        if (done) Log.i(TAG, "Cleared")
+        return done
     }
 
-    /** Signed out: the audio of these (members-only) videos goes. Off the main thread. */
-    fun drop(ytIds: Collection<String>) {
-        locked { c -> ytIds.forEach { id -> ledger.keysOf(id).forEach { c.removeResource(it) } } }
+    /**
+     * Signed out (or starting signed out): every tagged or known members-only video's audio goes,
+     * and none may come back in until [signedIn]. Cheap when there is none.
+     */
+    fun signedOut(): Boolean {
+        val gone = members.signOut()
+        val done = locked { c -> gone.forEach { id -> ledger.keysOf(id).forEach { c.removeResource(it) } } } != null
+        appContext?.let { writeIds(it, MEMBERS_FILE, emptyList()) }
+        if (gone.isNotEmpty()) Log.i(TAG, "Members-only audio removed")
+        return done
     }
 
-    /** A source that writes what it reads into the cache, for the liked saver; null without a cache. */
+    fun signedIn() = members.signIn()
+
+    /**
+     * A source that writes what it reads into the cache, for the liked saver; null without a
+     * cache. Without FLAG_BLOCK_ON_CACHE it never waits for a span playback is writing: it reads
+     * past it from the network instead (not cached then).
+     */
     fun downloadSource(): CacheDataSource? {
         val c = open() ?: return null
-        return CacheDataSource.Factory()
-            .setCache(c)
-            .setUpstreamDataSourceFactory(OkHttpDataSource.Factory(Http.streaming))
-            // Never waits for a span playback is writing (it reads past it instead).
-            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-            .createDataSource()
+        return CacheDataSource(c, CacheMissGuard(OkHttpDataSource.Factory(Http.streaming).createDataSource()), 0)
     }
 
     /** Playback's data sources: YouTube audio through the cache, the rest straight to [upstream]. */
@@ -256,7 +283,7 @@ internal object AudioCache {
     private fun refreshSaved(c: Cache, ytIds: Collection<String>, changedAlready: Boolean = false) {
         var changed = changedAlready
         for (id in ytIds) {
-            val whole = ledger.isLiked(id) && wholeItags(c, id).isNotEmpty()
+            val whole = ledger.isLiked(id) && wholeKeys(c, id).isNotEmpty()
             changed = (if (whole) saved.add(id) else saved.remove(id)) || changed
         }
         if (!changed) return
@@ -280,6 +307,15 @@ internal object AudioCache {
 
         override fun onSpanAdded(cache: Cache, span: CacheSpan) {
             ledger.onAdded(span.key, span.length, span.lastTouchTimestamp)
+            val ytId = CacheKeys.ytIdOf(span.key)
+            // Signed out, members-only audio that slipped in (a load already under way) goes.
+            if (ytId != null && members.denied(ytId)) {
+                cache.removeResource(span.key)
+                return
+            }
+            if (ytId != null && members.onCached(ytId)) {
+                appContext?.let { writeIds(it, MEMBERS_FILE, members.tagged().toList()) }
+            }
             evict(cache, 0L, span.key)
             changed(cache, span.key)
         }
@@ -300,22 +336,26 @@ internal object AudioCache {
         }
     }
 
-    // ---- the liked list on disk ---------------------------------------------------------------
+    // ---- id lists on disk (beside the cache: never backed up) ---------------------------------
 
-    private fun readLikedFile(ctx: Context): List<String>? = try {
-        File(ctx.cacheDir, LIKED_FILE).takeIf { it.isFile }?.readLines()?.filter { SessionPolicy.isValidYtId(it) }
+    private fun readIds(ctx: Context, name: String): List<String>? = try {
+        File(ctx.cacheDir, name).takeIf { it.isFile }?.readLines()?.filter { SessionPolicy.isValidYtId(it) }
     } catch (e: IOException) {
         null
     }
 
-    private fun writeLikedFile(ctx: Context, ids: List<String>) {
+    private fun writeIds(ctx: Context, name: String, ids: List<String>) {
         try {
-            val f = File(ctx.cacheDir, LIKED_FILE)
-            val tmp = File(ctx.cacheDir, "$LIKED_FILE.tmp")
+            val f = File(ctx.cacheDir, name)
+            if (ids.isEmpty()) {
+                f.delete()
+                return
+            }
+            val tmp = File(ctx.cacheDir, "$name.tmp")
             tmp.writeText(ids.joinToString("\n"))
             if (!tmp.renameTo(f)) tmp.delete()
         } catch (e: IOException) {
-            Log.w(TAG, "Liked list not written: ${e.javaClass.simpleName}")
+            Log.w(TAG, "Id list not written: ${e.javaClass.simpleName}")
         }
     }
 }
@@ -326,7 +366,9 @@ internal class CacheMissException : IOException("Not in the listening cache any 
 /**
  * [AudioCache.dataSourceFactory]'s sources: a load with a YouTube cache key ([CacheKeys]) goes
  * through the cache (reads what's there, writes what it fetches), anything else (the CI tone,
- * HLS) straight to the upstream. Without a cache, everything goes straight.
+ * HLS) straight to the upstream, as does a members-only video while signed out. Without a cache,
+ * everything goes straight. A cache read error is not hidden (no FLAG_IGNORE_CACHE_ON_ERROR): the
+ * load fails, the cache drops the broken span, and the retry fetches it.
  */
 @OptIn(UnstableApi::class)
 internal class CacheRouter(private val cached: DataSource?, private val plain: DataSource) : DataSource {
@@ -338,7 +380,10 @@ internal class CacheRouter(private val cached: DataSource?, private val plain: D
     }
 
     override fun open(dataSpec: DataSpec): Long {
-        val ds = if (cached != null && CacheKeys.isYt(dataSpec.key)) cached else plain
+        val key = dataSpec.key
+        val viaCache = cached != null && key != null && CacheKeys.isYt(key) &&
+            CacheKeys.ytIdOf(key)?.let { AudioCache.isDenied(it) } != true
+        val ds = if (viaCache) cached else plain
         current = ds
         return ds.open(dataSpec)
     }
@@ -359,33 +404,44 @@ internal class CacheRouter(private val cached: DataSource?, private val plain: D
     class Factory(private val upstream: DataSource.Factory) : DataSource.Factory {
         override fun createDataSource(): DataSource {
             val c = AudioCache.open()
-            val cached = c?.let {
-                CacheDataSource(it, CacheMissGuard(upstream.createDataSource()), CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-            }
+            val cached = c?.let { CacheDataSource(it, CacheMissGuard(upstream.createDataSource()), 0) }
             return CacheRouter(cached, upstream.createDataSource())
         }
     }
 }
 
 /**
- * The cache's upstream. A track played from the cache keeps our own `cyberjuke://` URI (it has
- * no stream URL): if any of it is missing after all, reading fails at once ([CacheMissException],
- * no request), and the load's retry resolves it as usual.
+ * The cache's upstream.
+ * - A track played from the cache keeps our own `cyberjuke://` URI (it has no stream URL): if
+ *   any of it is missing after all, reading fails at once ([CacheMissException], no request), the
+ *   video is skipped by the cache for a moment ([AudioCache.misses]), and the load's retry
+ *   resolves it as usual.
+ * - It reports the URL it was asked for, never one a redirect led to, so the cache doesn't store
+ *   a googlevideo URL in its index (stream URLs stay in memory only).
  */
 @OptIn(UnstableApi::class)
 internal class CacheMissGuard(private val inner: DataSource) : DataSource {
+    private var asked: Uri? = null
+
     override fun addTransferListener(transferListener: TransferListener) = inner.addTransferListener(transferListener)
 
     override fun open(dataSpec: DataSpec): Long {
-        if (dataSpec.uri.scheme == JukeUris.SCHEME) throw CacheMissException()
+        if (dataSpec.uri.scheme == JukeUris.SCHEME) {
+            JukeUris.ytIdOf(dataSpec.uri)?.let { AudioCache.misses.missed(it) }
+            throw CacheMissException()
+        }
+        asked = dataSpec.uri
         return inner.open(dataSpec)
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int = inner.read(buffer, offset, length)
 
-    override fun getUri(): Uri? = inner.uri
+    override fun getUri(): Uri? = asked
 
     override fun getResponseHeaders(): Map<String, List<String>> = inner.responseHeaders
 
-    override fun close() = inner.close()
+    override fun close() {
+        asked = null
+        inner.close()
+    }
 }
