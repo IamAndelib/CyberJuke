@@ -6,7 +6,10 @@ import io.github.iamandelib.cyberjuke.net.FailureKind
 /**
  * The decision part of PlaybackService's error handling, as a pure function (TrackErrorPolicyTest).
  * Only real per-video failures skip ahead; a block, a network failure or a broken extractor
- * pauses on the item, because every other track would fail the same way. A stream refusal
+ * pauses on the item, because every other track would fail the same way. So does an I/O
+ * failure that is not clearly the network (a reset connection, a stream that ends early) when
+ * the next track would fail too: no validated network, or this track had been playing. A
+ * stream refusal
  * (429, or 403 on a fresh URL) gets one fresh link first, over IPv4 when it came over IPv6 and
  * the setting is Auto; only a second refusal is a block.
  */
@@ -16,8 +19,12 @@ internal object TrackErrorPolicy {
 
     const val MAX_CONSECUTIVE_FAILURES = 5
 
-    /** Outage pauses on one item in a row (nothing played between) that still resume by themselves. */
-    const val MAX_OUTAGE_RESUMES = 3
+    /**
+     * Outage pauses on one item in a row (nothing played between) that still resume by
+     * themselves. Room for [ResumeSchedule]'s tries within its window (six) and a couple of
+     * network-callback resumes; the window ends the streak in any case.
+     */
+    const val MAX_OUTAGE_RESUMES = 8
 
     data class Facts(
         /** From the resolver ([ResolveException.kind]) or null for a stream (HTTP) failure. */
@@ -40,6 +47,15 @@ internal object TrackErrorPolicy {
         val blocked: Boolean = false,
         /** Generic I/O failure while streaming (connection failed, timeout). */
         val ioNetwork: Boolean = false,
+        /**
+         * Another I/O failure with no HTTP status: unspecified, a stream that ended early, a
+         * reset connection. The network, or this file: [networkValidated] and [playedThisItem] tell.
+         */
+        val ioOther: Boolean = false,
+        /** The device has a validated network now. */
+        val networkValidated: Boolean = true,
+        /** The last item that played (reached READY) is this one: its stream worked until now. */
+        val playedThisItem: Boolean = false,
         val isCurrent: Boolean = true,
         val hasNext: Boolean = true,
         /** Per-video failures in a row before this one. */
@@ -106,7 +122,12 @@ internal object TrackErrorPolicy {
                 else -> Unit
             }
         }
-        if (f.kind == null && f.httpCode == null && f.ioNetwork) return outage(f)
+        if (f.kind == null && f.httpCode == null) {
+            if (f.ioNetwork) return outage(f)
+            // Not clearly the network: an outage only when the next track would fail too. Then a
+            // good track is not skipped, and a flapping link doesn't stop playback.
+            if (f.ioOther && (!f.networkValidated || f.playedThisItem)) return outage(f)
+        }
         return perVideo(f)
     }
 

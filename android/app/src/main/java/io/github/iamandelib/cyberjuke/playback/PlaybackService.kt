@@ -55,6 +55,8 @@ import io.github.iamandelib.cyberjuke.net.NetBlock
 import io.github.iamandelib.cyberjuke.net.NetEpoch
 import io.github.iamandelib.cyberjuke.net.NetPrefs
 import org.json.JSONArray
+import java.io.EOFException
+import java.net.SocketException
 
 /**
  * Foreground media service: ExoPlayer + MediaSession. The default Media3 notification
@@ -74,6 +76,17 @@ class PlaybackService : MediaSessionService() {
 
     /** mediaIds already re-resolved once after an HTTP 403/410 (expired stream URL). */
     private val expiredRetried = HashSet<String>()
+
+    /** The last item that reached READY (its stream worked): TrackErrorPolicy.Facts.playedThisItem. */
+    private var lastReadyId: String? = null
+
+    /**
+     * Retries after an outage pause while the network stays validated (a weak link stalled
+     * the track: no callback will come). One postDelayed at most, only while that pause is
+     * pending; cancelled on a pause by the user, becoming noisy, stop and onDestroy.
+     */
+    private val resumeSchedule = ResumeSchedule()
+    private val outageRetry = Runnable { retryAfterOutage() }
 
     /** "Add to queue" bookkeeping (pure, shared rule with the web: QueueRulesTest). */
     private lateinit var queue: NativeQueue<MediaItem>
@@ -191,6 +204,13 @@ class PlaybackService : MediaSessionService() {
         Log.i(TAG, "Default network changed (generation ${NetEpoch.generation}): stream URLs dropped")
     }
 
+    private fun isNetworkValidated(): Boolean = try {
+        val cm = connectivity()
+        cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+    } catch (e: Exception) { // SecurityException without ACCESS_NETWORK_STATE
+        true
+    }
+
     /** Resumes playback a back-off stopped once it ends (lifted early, or ran out). */
     private val blockListener = object : NetBlock.Listener {
         override fun onBlocked(until: Long, reason: BlockReason) {
@@ -287,6 +307,7 @@ class PlaybackService : MediaSessionService() {
             Log.i(TAG, "Audio output changed while a resume was pending: cancelled")
             NetBlock.cancelResume()
             releaseResumeWakeLock()
+            stopOutageRetry()
         }
     }
     private var noisyRegistered = false
@@ -438,6 +459,7 @@ class PlaybackService : MediaSessionService() {
             Log.i(TAG, "Task removed while not playing: stopping service")
             // Swiped away: nothing may start playing by itself later.
             NetBlock.cancelResume()
+            stopOutageRetry()
             pauseAllPlayersAndStopSelf()
         }
     }
@@ -453,6 +475,7 @@ class PlaybackService : MediaSessionService() {
         handler.removeCallbacks(prefetchCheck)
         handler.removeCallbacks(lowCheck)
         handler.removeCallbacks(blockEnded)
+        stopOutageRetry()
         NetBlock.remove(blockListener)
         NetBlock.cancelResume()
         releaseResumeWakeLock()
@@ -491,6 +514,7 @@ class PlaybackService : MediaSessionService() {
             if (playbackState == Player.STATE_READY) {
                 consecutiveFailures = 0
                 outagePauses = 0
+                lastReadyId = player?.currentMediaItem?.mediaId
                 player?.currentMediaItem?.mediaId?.let { expiredRetried.remove(it) }
                 // No NetBlock.success() here: READY from a cached URL or buffered bytes proves
                 // nothing about YouTube; a successful extraction or InnerTube request does (M1).
@@ -498,6 +522,8 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            // Playing again: an outage's tries are over.
+            if (isPlaying) stopOutageRetry()
             schedulePrefetch()
             // Where it stopped, and while it plays every few seconds (a crash loses no more).
             handler.removeCallbacks(savePositionTick)
@@ -517,6 +543,7 @@ class PlaybackService : MediaSessionService() {
             if (!playWhenReady && !NetBlock.isBlocked()) {
                 NetBlock.cancelResume()
                 releaseResumeWakeLock()
+                stopOutageRetry()
             }
         }
 
@@ -883,6 +910,10 @@ class PlaybackService : MediaSessionService() {
             blocked = error.findCause<BlockedException>() != null,
             ioNetwork = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
                 error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+            ioOther = error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED ||
+                error.findCause<EOFException>() != null || error.findCause<SocketException>() != null,
+            networkValidated = isNetworkValidated(),
+            playedThisItem = trackId == lastReadyId,
             isCurrent = index == p.currentMediaItemIndex,
             hasNext = p.hasNextMediaItem(),
             consecutiveFailures = consecutiveFailures,
@@ -967,12 +998,61 @@ class PlaybackService : MediaSessionService() {
         if (wasPlaying) ownPause = true
         p.pause()
         if (!wasPlaying) return
-        NetBlock.wantResume()
-        if (!afterBlock) return // an outage: back when the network is validated again
+        NetBlock.wantResume(outage = !afterBlock)
+        if (!afterBlock) {
+            // An outage: back when the network is validated again, or on the next try while
+            // it stays validated (a weak link).
+            resumeSchedule.onOutagePause(SystemClock.elapsedRealtime())
+            armOutageRetry()
+            return
+        }
+        stopOutageRetry()
         // The resume's timer and wake lock, now that it is wanted. A back-off that already
         // ran out by the time its error surfaced (at a track change): try again at once.
         val until = NetBlock.active().first
         if (until > 0L) scheduleResume(until) else handler.post { resumeAfterBlock() }
+    }
+
+    /** The next outage try (one pending at most); past the window, the wait is given up. */
+    private fun armOutageRetry() {
+        handler.removeCallbacks(outageRetry)
+        val delay = resumeSchedule.delayMs(SystemClock.elapsedRealtime())
+        if (delay != null) {
+            handler.postDelayed(outageRetry, delay)
+            return
+        }
+        resumeSchedule.stop()
+        if (NetBlock.waitingForNetwork()) {
+            Log.i(TAG, "Network still not back: no longer resuming by itself")
+            NetBlock.cancelResume()
+        }
+    }
+
+    /**
+     * An outage try: with a validated network, resume (resumeAfterBlock's checks apply: other
+     * audio, headphones gone, Android 12+ background start). A new outage pause arms the next
+     * try; without a validated network the callback resumes, and the try after it is armed.
+     */
+    private fun retryAfterOutage() {
+        if (!NetBlock.waitingForNetwork()) {
+            resumeSchedule.stop()
+            return
+        }
+        val now = SystemClock.elapsedRealtime()
+        resumeSchedule.attempted(now)
+        if (isNetworkValidated()) {
+            Log.i(TAG, "Outage: trying again")
+            lastNetResumeAt = now
+            resumeAfterBlock()
+            // Refused (another app playing, headphones gone, background): the tries are over.
+            if (!NetBlock.waitingForNetwork() && player?.playWhenReady != true) resumeSchedule.stop()
+        }
+        if (NetBlock.waitingForNetwork()) armOutageRetry()
+    }
+
+    private fun stopOutageRetry() {
+        handler.removeCallbacks(outageRetry)
+        resumeSchedule.stop()
     }
 
     /** A real per-video failure: [action] is TrackErrorPolicy's Skip, PauseAtEnd or Stop. */
@@ -1063,6 +1143,7 @@ class PlaybackService : MediaSessionService() {
                 Log.i(TAG, "Pause key while a resume was pending: cancelled")
                 NetBlock.cancelResume()
                 releaseResumeWakeLock()
+                stopOutageRetry()
             }
             return false
         }
