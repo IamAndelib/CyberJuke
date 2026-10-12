@@ -77,13 +77,18 @@ class TrackErrorPolicyTest {
     @Test
     fun brokenExtractorAndNetworkPauseWithoutSkipping() {
         assertEquals(FailureKind.BROKEN, YtCompat.classify(ParsingException("Could not get name")))
-        assertEquals(Action.Pause(resume = false), decideFor(ParsingException("Could not get name")))
+        // Not the connection: the web names the track, as for any other failure.
+        assertEquals(Action.Pause(resume = false, network = false), decideFor(ParsingException("Could not get name")))
         assertEquals(FailureKind.NETWORK, YtCompat.classify(SocketTimeoutException()))
         assertEquals(FailureKind.NETWORK, YtCompat.classify(ExtractionException("wrapped", IOException("reset"))))
         assertEquals(Action.Pause(resume = true), decideFor(IOException("offline")))
         assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(Facts(kind = null, ioNetwork = true)))
         // A server error: the resume asks for a fresh link (another server), not the dead URL.
         assertEquals(Action.Pause(resume = true, freshLink = true), TrackErrorPolicy.decide(Facts(kind = null, httpCode = 503)))
+        // Each outage tells the web it was the connection, not the track.
+        for (f in listOf(Facts(kind = FailureKind.NETWORK), Facts(kind = null, ioNetwork = true), Facts(kind = null, httpCode = 503))) {
+            assertEquals(true, (TrackErrorPolicy.decide(f) as Action.Pause).network)
+        }
     }
 
     @Test
@@ -94,6 +99,8 @@ class TrackErrorPolicyTest {
         assertEquals(Action.Pause(resume = false), TrackErrorPolicy.decide(Facts(kind = null, ioNetwork = true, outagePauses = last)))
         assertEquals(Action.Pause(resume = false, freshLink = true), TrackErrorPolicy.decide(Facts(kind = null, httpCode = 502, outagePauses = last)))
         assertEquals(Action.Pause(resume = false), TrackErrorPolicy.decide(Facts(kind = FailureKind.NETWORK, outagePauses = last)))
+        // Still the connection, so the web says to press Play once back online.
+        assertEquals(true, (TrackErrorPolicy.decide(Facts(kind = null, ioNetwork = true, outagePauses = last)) as Action.Pause).network)
     }
 
     @Test
