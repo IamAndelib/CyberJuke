@@ -101,20 +101,112 @@ class QualityGovernorTest {
     }
 
     @Test
-    fun noReversalWithinTwoTracksOfAStep() {
+    fun noStepUpWithinTwoTracksOfAStepDown() {
         val g = QualityGovernor()
         stall(g, 0L)
         g.onTrackStarted(0L, ladder) // down to 1
         // A long track: five calm minutes, but only one track since the step.
         assertEquals(1, g.onTrackStarted(6 * min, ladder))
-        // The second track since: up again...
+        // The second track since: up again.
         assertEquals(0, g.onTrackStarted(10 * min, ladder))
-        // ...and stalls right after that step don't reverse it.
+    }
+
+    @Test
+    fun aStallRightAfterAStepUpStepsBackDownAtOnce() {
+        val g = QualityGovernor()
+        stall(g, 0L)
+        g.onTrackStarted(0L, ladder) // down to 1
+        g.onTrackStarted(6 * min, ladder)
+        assertEquals(0, g.onTrackStarted(10 * min, ladder)) // up: a probe
+        // The very next track stalls: down again, no hold (a stall is never held back).
         stall(g, 11 * min)
-        assertEquals(0, g.onTrackStarted(11 * min, ladder))
-        // Two tracks on, stalls step down again.
-        stall(g, 12 * min)
-        assertEquals(1, g.onTrackStarted(12 * min, ladder))
+        assertEquals(1, g.onTrackStarted(11 * min, ladder))
+        // And a step up still waits its hold (and now longer calm).
+        assertEquals(1, g.onTrackStarted(30 * min, ladder))
+    }
+
+    @Test
+    fun eachFailedProbeDoublesTheCalmBeforeTheNextUpToFortyMinutes() {
+        val g = QualityGovernor()
+        stall(g, 0L)
+        g.onTrackStarted(0L, ladder) // down to 1, at 0
+        var now = 0L
+        val waits = ArrayList<Long>()
+        repeat(5) {
+            // Tracks every minute until it steps up; then the first one after stalls.
+            val from = now
+            while (g.rung == 1) {
+                now += 1 * min
+                g.onTrackStarted(now, ladder)
+            }
+            waits.add((now - from) / min)
+            now += 1 * min
+            g.onTrackStarted(now, ladder) // the new rung plays from here
+            stall(g, now + 1 * min)
+            now += 1 * min
+            assertEquals(1, g.onTrackStarted(now, ladder)) // stalled: back down (the 2nd track)
+        }
+        // 5, 10, 20, 40, then 40 minutes: no longer a stall every quarter of an hour.
+        assertEquals(listOf(5L, 10L, 20L, 40L, 40L), waits)
+        assertEquals(QualityGovernor.MAX_CALM_MS, g.calmNeededMs)
+    }
+
+    @Test
+    fun aProbeThatHoldsOrAChangedSettingStartsOver() {
+        val g = QualityGovernor()
+        stall(g, 0L)
+        g.onTrackStarted(0L, ladder)
+        g.onTrackStarted(4 * min, ladder)
+        g.onTrackStarted(5 * min, ladder) // up: probe 1
+        stall(g, 6 * min)
+        g.onTrackStarted(6 * min, ladder) // stalled: failed
+        assertEquals(10 * min, g.calmNeededMs)
+        g.onTrackStarted(13 * min, ladder)
+        assertEquals(0, g.onTrackStarted(16 * min, ladder)) // up after 10 calm min: probe 2
+        // Three tracks at the top without a stall: it held.
+        g.onTrackStarted(20 * min, ladder)
+        g.onTrackStarted(24 * min, ladder)
+        g.onTrackStarted(28 * min, ladder)
+        assertEquals(0, g.rung)
+        assertEquals(QualityGovernor.CALM_MS, g.calmNeededMs)
+        // A failed probe again, then the user picks Auto anew: back to five minutes.
+        stall(g, 30 * min)
+        g.onTrackStarted(30 * min, ladder) // down (not a probe's failure)
+        assertEquals(QualityGovernor.CALM_MS, g.calmNeededMs)
+        g.onTrackStarted(33 * min, ladder)
+        g.onTrackStarted(35 * min, ladder) // up
+        stall(g, 36 * min)
+        g.onTrackStarted(36 * min, ladder) // failed
+        assertEquals(10 * min, g.calmNeededMs)
+        g.onSettingChanged()
+        assertEquals(QualityGovernor.CALM_MS, g.calmNeededMs)
+    }
+
+    @Test
+    fun aLinkThatCantKeepTheTopNoLongerStallsEveryQuarterHour() {
+        // Four-minute tracks; the rung decided as a track starts plays from the next one. The
+        // link carries rung 2 but stalls twice in every track at rung 1 (the top is 0).
+        val g = QualityGovernor()
+        stall(g, 0L)
+        g.onTrackStarted(0L, ladder) // 1
+        stall(g, 4 * min)
+        var decided = g.onTrackStarted(4 * min, ladder) // 2
+        var now = 4 * min
+        val stalledTracks = ArrayList<Long>()
+        while (now < 4 * 60 * min) {
+            val playing = decided
+            now += 4 * min
+            if (playing <= 1) {
+                stalledTracks.add(now / min)
+                stall(g, now)
+            }
+            decided = g.onTrackStarted(now, ladder)
+        }
+        // Stalled tracks in four hours: 16, 32, 56, then every 44 min (a probe after 40 calm
+        // minutes), further and further apart; probing every 5 minutes stalled every 16.
+        assertEquals(listOf(16L, 32L, 56L, 100L, 144L, 188L, 232L), stalledTracks)
+        val gaps = stalledTracks.zipWithNext { a, b -> b - a }
+        assertTrue("gaps $gaps", gaps.zipWithNext().all { (a, b) -> b >= a })
     }
 
     @Test

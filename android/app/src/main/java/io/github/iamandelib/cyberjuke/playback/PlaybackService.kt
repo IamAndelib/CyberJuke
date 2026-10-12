@@ -91,6 +91,9 @@ class PlaybackService : MediaSessionService() {
     /** Auto quality's rung, decided as each track starts. */
     private val governor = QualityGovernor()
 
+    /** The setting the governor last saw (a change starts its probing over). */
+    private var governedQuality: AudioQuality? = null
+
     /** Tells a rebuffer from the buffering of a seek, a skip or a list change. */
     private val rebuffers = RebufferDetector()
 
@@ -696,7 +699,13 @@ class PlaybackService : MediaSessionService() {
      * this track's ladder and the rebuffers so far). This track keeps the format it has.
      */
     private fun governQuality(item: MediaItem?) {
-        if (StreamResolver.quality != AudioQuality.AUTO) return
+        val quality = StreamResolver.quality
+        // The user changed the setting since the last track: probing starts over.
+        if (quality != governedQuality) {
+            governedQuality = quality
+            governor.onSettingChanged()
+        }
+        if (quality != AudioQuality.AUTO) return
         val ladder = JukeUris.ytIdOf(item)?.let { StreamResolver.lastServed(it) }?.ladderBps ?: emptyList()
         val before = StreamResolver.autoRung
         val rung = governor.onTrackStarted(SystemClock.elapsedRealtime(), ladder)
