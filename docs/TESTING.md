@@ -65,7 +65,9 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] With a second account: sign out, sign in as the other one (none of the first account's [members] likes or plays show), like and play something, sign out, and sign in as the first again: its own are back, the other's aren't.
 
 ## Rough conditions
-- [ ] Airplane mode: an offline notice appears. Airplane mode off: lists load again by themselves.
+- [ ] Airplane mode: the top bar reads "[ offline ] no carrier · connect to play", and Home, a genre, an artist page, the Genres and Artists grids and Search show **[ NO CARRIER ]** instead of their rows. Airplane mode off: lists load again by themselves.
+- [ ] Airplane mode, then tap a track in Library (its rows are dimmed), Play, or the Jukebox shuffle: "No carrier. Connect to play.", and nothing starts. The mini player's Play does the same; Pause still works.
+- [ ] Play a track, then turn on airplane mode until it stops: the message starts with "Signal lost" (not "Can't play"). Airplane mode off: it carries on by itself.
 - [ ] **Rough network.** Throttle the connection (a phone hotspot on 2G/3G, or a router's bandwidth limit) and play for 15 minutes: no track is skipped and playback doesn't stop; any stall is short and picks up by itself.
 - [ ] Walk out of Wi-Fi range (or block the router's internet while Wi-Fi stays connected) mid-song: the song keeps playing for a minute or two from what's buffered. If it does stop, Now Playing and the mini player show **Waiting for carrier…** in place of the time and the artist, and it plays on by itself once you're back in range (it keeps trying for 9 minutes, also when Wi-Fi still says connected).
 - [ ] Wi-Fi ↔ mobile data handover mid-song, a few times in a row: playback continues or resumes by itself; the next track starts without a long wait.

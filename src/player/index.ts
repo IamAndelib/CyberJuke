@@ -17,9 +17,12 @@ import { toast } from '../stores/toast';
 import { auth } from '../data/auth';
 import { music, musicTracks } from '../data/ytmusic';
 import { logError } from '../core/log';
+import { online } from '../core/network';
+import { OFFLINE } from '../core/offlineText';
 import { exposeForTests } from '../core/testHooks';
 import { createAutoplay, type Autoplay } from './autoplay';
 import { NativePlayer } from './nativePlayer';
+import { offlineGuard } from './offlineGuard';
 import { safePlayer } from './safePlayer';
 import { nsfwAutoplayIds, type PlayContext, type Player, type UpItem, type UpNextItem, type UpNextSections } from './types';
 import { WebPlayer } from './webPlayer';
@@ -31,7 +34,18 @@ function commandFailed(message: string): void {
   toast(block.blocked.peek() ? 'Playback is paused while YouTube is limiting requests' : message);
 }
 
-export const player: Player = safePlayer(Capacitor.isNativePlatform() ? new NativePlayer() : new WebPlayer(), commandFailed);
+/**
+ * Whether playback can start now. Offline nothing can play, so it says so (a toast) and
+ * returns false. Every play action goes through it: the player's own commands below, and
+ * actions made of several commands (Play and Shuffle) before their first one.
+ */
+export function canStartPlayback(): boolean {
+  if (online.peek()) return true;
+  toast(OFFLINE.tap);
+  return false;
+}
+
+export const player: Player = offlineGuard(safePlayer(Capacitor.isNativePlatform() ? new NativePlayer() : new WebPlayer(), commandFailed), canStartPlayback);
 
 const state = player.state;
 

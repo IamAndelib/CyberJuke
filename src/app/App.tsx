@@ -3,6 +3,7 @@ import { memo } from 'preact/compat';
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import { hasCurrent } from '../player';
 import { online } from '../core/network';
+import { OFFLINE } from '../core/offlineText';
 import { BlockBanner } from '../ui/components/BlockBanner';
 import { Icon, type IconName } from '../ui/icons';
 import {
@@ -290,7 +291,7 @@ export function App() {
     <div ref={app} class={'app' + (hasPlayer ? ' has-player' : '') + (showFab ? ' has-fab' : '')}>
       {!online.value && (
         <div class="offline-banner" role="status" data-testid="offline-banner">
-          [ offline ] showing what's already loaded
+          {OFFLINE.banner}
         </div>
       )}
       <main class="main">

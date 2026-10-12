@@ -180,6 +180,22 @@ describe('createCatalog', () => {
     expect(s.cat.error.value).toBeNull();
   });
 
+  it('a failure while the device is offline counts as offline, whatever the error says', async () => {
+    const { online } = await import('../core/network');
+    const s = setup();
+    s.setFail(new Error('Failed to fetch'));
+    online.value = false;
+    try {
+      await s.cat.refresh();
+    } finally {
+      online.value = true;
+    }
+    expect(s.cat.error.value).toEqual({ message: 'Failed to fetch', offline: true });
+    // Online, the same failure is an error, not "offline".
+    await s.cat.refresh();
+    expect(s.cat.error.value?.offline).toBe(false);
+  });
+
   it('offline with a cache keeps showing the cache', async () => {
     const now = Date.UTC(2026, 9, 8);
     const s = setup({ stored: { v: 1, fullAt: now - FULL_AFTER_MS - 1, checkedAt: 0, tracks: [t('a', D(1))] }, start: now });

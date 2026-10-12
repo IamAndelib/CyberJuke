@@ -1,6 +1,6 @@
 import { expect, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { opened, openNowPlaying, playerCalls, recordOpens, seedStorage, start, waitForTracks } from '../helpers';
+import { opened, openNowPlaying, openSearch, playerCalls, recordOpens, seedStorage, start, waitForTracks } from '../helpers';
 
 /**
  * When things go wrong: YouTube limiting the network or changing something (Y1),
@@ -81,6 +81,151 @@ test('"YouTube changed something" links to the releases and can be dismissed', a
   expect(await opened(page)).toEqual(['https://github.com/IamAndelib/CyberJuke/releases']);
   await page.getByTestId('broken-dismiss').click();
   await expect(banner).toHaveCount(0);
+});
+
+/** The device loses (or gets back) its connection: the browser's and the stub backend's. */
+async function setOffline(page: Page, backend: { offline: boolean }, off: boolean): Promise<void> {
+  backend.offline = off;
+  await page.context().setOffline(off);
+}
+
+const BANNER = '[ offline ] no carrier · connect to play';
+const NO_CARRIER = /^\[ NO CARRIER \]Line's deadConnect to the internet to load the Jukebox\.\s*Redial$/;
+const NO_CARRIER_GLOBAL = /^\[ NO CARRIER \]Line's deadConnect to the internet to search Global\.\s*Redial$/;
+const TAP_TOAST = 'No carrier. Connect to play.';
+
+test('offline, lists that only lead to music ask to connect, and come back by themselves', async ({ page, backend }) => {
+  await start(page);
+  await setOffline(page, backend, true);
+  await expect(page.getByTestId('offline-banner')).toHaveText(BANNER);
+
+  // Home: Latest and Most saved; the Shuffle hero and the genre chips stay.
+  const home = page.getByTestId('screen-home');
+  await expect(home.getByTestId('offline')).toHaveText(NO_CARRIER);
+  await expect(home.getByTestId('track-row')).toHaveCount(0);
+  await expect(home.getByTestId('shuffle-all')).toBeVisible();
+  await expect(home.getByTestId('genre-chips')).toBeVisible();
+  await page.getByTestId('sort-saved').click();
+  await expect(home.getByTestId('offline')).toHaveText(NO_CARRIER);
+  await expect(home.getByTestId('track-row')).toHaveCount(0);
+  await page.getByTestId('sort-latest').click();
+  // Redial while still offline: still no carrier.
+  await home.getByTestId('retry').click();
+  await expect(home.getByTestId('retry')).toHaveAttribute('aria-busy', 'false');
+  await expect(home.getByTestId('offline')).toBeVisible();
+
+  // The Genres and Artists grids.
+  await page.getByTestId('tab-genres').click();
+  const genres = page.getByTestId('screen-genres');
+  await expect(genres.getByTestId('offline')).toHaveText(NO_CARRIER);
+  await expect(genres.getByTestId('genre-tile')).toHaveCount(0);
+  await page.getByTestId('tab-artists').click();
+  const artists = page.getByTestId('screen-artists');
+  await expect(artists.getByTestId('offline')).toHaveText(NO_CARRIER);
+  await expect(artists.getByTestId('artist-tile')).toHaveCount(0);
+
+  // Search: the Jukebox and Global.
+  await openSearch(page);
+  const search = page.getByTestId('search');
+  await page.getByTestId('mode-jukebox').click();
+  await expect(search.getByTestId('offline')).toHaveText(NO_CARRIER);
+  await expect(search.getByTestId('track-row')).toHaveCount(0);
+  await page.getByTestId('mode-global').click();
+  await page.getByTestId('search-input').fill('Lumen');
+  await expect(search.getByTestId('offline')).toHaveText(NO_CARRIER_GLOBAL);
+  await expect(search.getByTestId('global-results')).toHaveCount(0);
+
+  // Back online: each comes back without a tap, the banner goes.
+  await setOffline(page, backend, false);
+  await expect(page.getByTestId('offline-banner')).toHaveCount(0);
+  await expect(search.getByTestId('global-results')).toBeVisible();
+  await expect(search.getByTestId('offline')).toHaveCount(0);
+  await page.getByTestId('search-close').click();
+  await expect(artists.getByTestId('artist-tile').first()).toBeVisible();
+  await page.getByTestId('tab-genres').click();
+  await expect(genres.getByTestId('genre-tile').first()).toBeVisible();
+  await page.getByTestId('tab-home').click();
+  await waitForTracks(page);
+  await expect(home.getByTestId('offline')).toHaveCount(0);
+});
+
+test('offline, an open genre page and artist page ask to connect, then show their rows again', async ({ page, backend }) => {
+  await start(page);
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-tile').first().click();
+  const genre = page.getByTestId('screen-genre');
+  await expect(genre.getByTestId('track-row').first()).toBeVisible();
+  await setOffline(page, backend, true);
+  await expect(genre.getByTestId('offline')).toHaveText(NO_CARRIER);
+  await expect(genre.getByTestId('track-row')).toHaveCount(0);
+  await expect(genre.getByTestId('genre-play-all')).toHaveCount(0);
+  await setOffline(page, backend, false);
+  await expect(genre.getByTestId('track-row').first()).toBeVisible();
+
+  await page.getByTestId('tab-artists').click();
+  await page.getByTestId('artist-grid').getByTestId('artist-tile').first().click();
+  const artist = page.getByTestId('screen-artist');
+  await expect(artist.getByTestId('artist-jukebox')).toBeVisible();
+  await setOffline(page, backend, true);
+  await expect(artist.getByTestId('offline')).toHaveText(NO_CARRIER);
+  await expect(artist.getByTestId('artist-jukebox')).toHaveCount(0);
+  await setOffline(page, backend, false);
+  await expect(artist.getByTestId('artist-jukebox')).toBeVisible();
+});
+
+test('offline, Shuffle and Play say to connect and leave the player as it was', async ({ page, backend }) => {
+  await start(page);
+  await page.getByTestId('track-play').first().click();
+  const toggle = page.getByTestId('mini-toggle');
+  await expect(toggle).toHaveAttribute('aria-label', 'Pause');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-label', 'Play');
+  const title = await page.getByTestId('mini-title').textContent();
+  const queued = (await playerCalls(page)).filter((c) => c[0] === 'setQueue').length;
+
+  await setOffline(page, backend, true);
+  await toggle.click();
+  await expect(page.getByTestId('toast')).toHaveText(TAP_TOAST);
+  await expect(toggle).toHaveAttribute('aria-label', 'Play');
+  await page.getByTestId('shuffle-all').click();
+  await expect(page.getByTestId('toast')).toHaveText(TAP_TOAST);
+  await expect(page.getByTestId('shuffle-all')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.getByTestId('mini-title')).toHaveText(title!);
+  await expect(toggle).toHaveAttribute('aria-label', 'Play');
+  expect((await playerCalls(page)).filter((c) => c[0] === 'setQueue')).toHaveLength(queued);
+
+  // Back online, Play plays.
+  await setOffline(page, backend, false);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-label', 'Pause');
+});
+
+test('offline, Library stays, its rows dimmed; a tap says to connect', async ({ page, backend }) => {
+  const track = (id: string) => ({ id, ytId: 'abcdefghij' + id.slice(-1), title: 'Track ' + id, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '2026-01-01T00:00:00Z', nsfw: false, artworkUrl: '' });
+  await seedStorage(page, { 'CapacitorStorage.liked': [track('l1'), track('l2')] });
+  await page.goto('/');
+  await page.getByTestId('tab-library').click();
+  const rows = page.getByTestId('liked-list').getByTestId('track-row');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first().getByTestId('track-play')).not.toHaveAttribute('aria-disabled');
+
+  await setOffline(page, backend, true);
+  await expect(rows).toHaveCount(2);
+  for (const play of await rows.getByTestId('track-play').all()) await expect(play).toHaveAttribute('aria-disabled', 'true');
+  await expect(rows.first()).toHaveClass(/\boff\b/);
+  // Tapped anyway (Playwright clicks what's aria-disabled only with force).
+  await rows.first().getByTestId('track-play').click({ force: true });
+  await expect(page.getByTestId('toast')).toHaveText(TAP_TOAST);
+  await page.getByTestId('lib-play-all').click();
+  await expect(page.getByTestId('toast')).toHaveText(TAP_TOAST);
+  await expect(page.getByTestId('mini-player')).toHaveCount(0);
+  expect((await playerCalls(page)).filter((c) => c[0] === 'setQueue')).toHaveLength(0);
+
+  await setOffline(page, backend, false);
+  await expect(rows.first().getByTestId('track-play')).not.toHaveAttribute('aria-disabled');
+  // The other row: a second tap on the same one this soon counts as a double tap (M9).
+  await rows.nth(1).getByTestId('track-play').click();
+  await expect(page.getByTestId('mini-player')).toBeVisible();
 });
 
 test('lists that failed while offline load again when the connection comes back', async ({ page, backend }) => {

@@ -26,6 +26,7 @@ import type { TrackSource } from '../data/source';
 import { source } from '../data';
 import { auth } from '../data/auth';
 import { toLoadError, type LoadError } from '../core/errors';
+import { online } from '../core/network';
 import { isObj, isTrackFull } from '../core/guards';
 import { kv, textFile, type TextFile } from '../core/storage';
 import { showNsfw } from './library';
@@ -196,7 +197,7 @@ export function createCatalog(deps: CatalogDeps): Catalog {
       persist(k);
     } catch (e) {
       if (g !== gen) return;
-      error.value = toLoadError(e);
+      error.value = toLoadError(e, !online.peek());
       // With a cache we keep showing it; only an empty catalog is an error state.
       status.value = all.value.length ? 'ready' : 'error';
     }

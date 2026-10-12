@@ -192,6 +192,10 @@
 .row.is-current .row-title {
   color: var(--color-accent);
 }
+/* Offline: nothing plays (the ⋯ menu still works). */
+.row.off .row-main {
+  opacity: 0.45;
+}
 .row.is-current::before {
   content: '';
   position: absolute;

@@ -10,6 +10,7 @@ import { FavSection, FavTile, PageStar } from '../../ui/components/FavTile';
 import { openGenrePage, popPage, useSearchContext, type Place } from '../../ui/nav';
 import { ErrorState, PagedTracks, PlayShuffle } from '../../ui/components/TrackList';
 import { Screen } from '../../ui/components/Screen';
+import { OfflineGate } from '../../ui/components/OfflineGate';
 import { refreshCatalog } from '../../ui/refresh';
 import { GridSortRail, TileGrid, TileSkeleton } from '../../ui/components/GridSort';
 import type { GenreCount } from '../../data/search';
@@ -53,16 +54,18 @@ export function GenreGrid() {
       right={<GridSortRail sort={genresSort} testid="genres-sort" />}
       azScroller={sort === 'az' && list.length > 0}
     >
-      <FavGenres />
-      {/* The catalog failed: said so even over the genres seen on Home meanwhile (a part). */}
-      {status === 'error' && !complete && (
-        <ErrorState offline={!!catalog.error.value?.offline} message="Couldn't load genres." onRetry={() => void catalog.refresh()} />
-      )}
-      {list.length ? (
-        <GenreTiles list={list} sort={sort} />
-      ) : status !== 'error' ? (
-        <TileSkeleton testid="genre-skeleton" />
-      ) : null}
+      <OfflineGate>
+        <FavGenres />
+        {/* The catalog failed: said so even over the genres seen on Home meanwhile (a part). */}
+        {status === 'error' && !complete && (
+          <ErrorState offline={!!catalog.error.value?.offline} message="Couldn't load genres." onRetry={() => void catalog.refresh()} />
+        )}
+        {list.length ? (
+          <GenreTiles list={list} sort={sort} />
+        ) : status !== 'error' ? (
+          <TileSkeleton testid="genre-skeleton" />
+        ) : null}
+      </OfflineGate>
       <p class="fineprint">Genres are free text chosen by each poster. Tap ☆ to pin a genre to the top.</p>
     </Screen>
   );
@@ -139,8 +142,10 @@ export function GenreDetail({ genre }: { genre: string }) {
       onRefresh={paged.refresh}
       scrollKey={`genre:${genre}`}
     >
-      <PlayShuffle tracks={full} ctx={ctx} testid="genre" disabled={!has} playTestid="genre-play-all" shuffleTestid="genre-shuffle" />
-      <PagedTracks paged={paged} ctx={ctx} queue={full} hideGenre chunkKey={key} />
+      <OfflineGate>
+        <PlayShuffle tracks={full} ctx={ctx} testid="genre" disabled={!has} playTestid="genre-play-all" shuffleTestid="genre-shuffle" />
+        <PagedTracks paged={paged} ctx={ctx} queue={full} hideGenre chunkKey={key} />
+      </OfflineGate>
     </Screen>
   );
 }

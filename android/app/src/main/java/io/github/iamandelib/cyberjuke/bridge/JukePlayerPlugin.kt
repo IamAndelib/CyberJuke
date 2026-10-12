@@ -59,6 +59,9 @@ import kotlin.math.roundToInt
  *   'trackError', 'blocked', 'unblocked', 'extractorBroken', 'queueLow', 'tracks',
  *   'openNowPlaying'.
  *
+ * - trackError is { trackId, message, skipped, kind: 'network' | 'track', resumes }: 'network'
+ *   when the connection failed (paused on the item; `resumes`: it plays on by itself once the
+ *   network is back), 'track' when the track itself did.
  * - setQueue keeps the tracks queued with queueNext next (P1) and starts autoplay over from
  *   the started track (a Global one gets its radio natively, refilled in the service).
  * - state also carries `upNextKinds` (one letter per upNextIds entry: q = queued by you,
@@ -189,11 +192,13 @@ class JukePlayerPlugin : Plugin() {
     }
 
     /** Already on the main thread (PlayerBus): notified at once, before the state it led to. */
-    private val trackErrorListener = PlayerBus.TrackErrorListener { trackId, message, skipped ->
+    private val trackErrorListener = PlayerBus.TrackErrorListener { trackId, message, skipped, network, resumes ->
         val data = JSObject()
         data.put("trackId", trackId)
         data.put("message", message)
         data.put("skipped", skipped)
+        data.put("kind", if (network) "network" else "track")
+        data.put("resumes", resumes)
         notifyListeners("trackError", data)
     }
 

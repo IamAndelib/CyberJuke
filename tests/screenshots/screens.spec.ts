@@ -266,6 +266,32 @@ test('account: sign-in, an error, signed in, members-only rows (dark)', async ({
   await shot(page, 'home-members');
 });
 
+for (const theme of ['dark', 'c64'] as const) {
+  test(`offline: Home, Library, Global search (${theme})`, async ({ page, backend }) => {
+    await open(page, theme);
+    // Played once (so Recently played has it), then paused.
+    await page.getByTestId('track-play').first().click();
+    await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Pause');
+    await page.getByTestId('mini-toggle').click();
+    backend.offline = true;
+    await page.context().setOffline(true);
+    await expect(page.getByTestId('offline-banner')).toBeVisible();
+    await settle(page);
+    await shot(page, `offline-home-${theme}`);
+    await page.getByTestId('tab-library').click();
+    await page.getByTestId('lib-recent').click();
+    await settle(page);
+    await shot(page, `offline-library-${theme}`);
+    await page.getByTestId('search-fab').click();
+    await page.getByTestId('mode-global').click();
+    await page.getByTestId('search-input').fill('Lumen');
+    await expect(page.getByTestId('search').getByTestId('offline')).toBeVisible();
+    await page.getByTestId('search-input').blur();
+    await settle(page);
+    await shot(page, `offline-search-global-${theme}`);
+  });
+}
+
 for (const theme of THEMES) {
   test(`home and Now Playing (${theme})`, async ({ page }) => {
     await open(page, theme);

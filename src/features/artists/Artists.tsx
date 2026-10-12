@@ -9,6 +9,7 @@ import { FavSection, FavTile } from '../../ui/components/FavTile';
 import { openArtistPage, useSearchContext, type Place } from '../../ui/nav';
 import { ErrorState } from '../../ui/components/TrackList';
 import { Screen } from '../../ui/components/Screen';
+import { OfflineGate } from '../../ui/components/OfflineGate';
 import { refreshCatalog } from '../../ui/refresh';
 import { GridSortRail, TileGrid, TileSkeleton } from '../../ui/components/GridSort';
 import type { Artist } from '../../data/artists';
@@ -67,14 +68,16 @@ export function ArtistGrid() {
       right={<GridSortRail sort={artistsSort} testid="artists-sort" />}
       azScroller={sort === 'az' && list.length > 0}
     >
-      <FavArtists />
-      {status === 'error' && !list.length ? (
-        <ErrorState offline={!!catalog.error.value?.offline} message="Couldn't load artists." onRetry={() => void catalog.refresh()} />
-      ) : !list.length ? (
-        <TileSkeleton testid="artist-skeleton" />
-      ) : (
-        <ArtistTiles list={list} sort={sort} />
-      )}
+      <OfflineGate>
+        <FavArtists />
+        {status === 'error' && !list.length ? (
+          <ErrorState offline={!!catalog.error.value?.offline} message="Couldn't load artists." onRetry={() => void catalog.refresh()} />
+        ) : !list.length ? (
+          <TileSkeleton testid="artist-skeleton" />
+        ) : (
+          <ArtistTiles list={list} sort={sort} />
+        )}
+      </OfflineGate>
       <p class="fineprint">Everyone whose music has been shared on the Jukebox. Tap ☆ to pin an artist to the top.</p>
     </Screen>
   );

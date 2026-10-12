@@ -86,8 +86,9 @@ internal object TrackErrorPolicy {
          * Pause on the item without skipping. [resume]: an outage, so it plays on by itself once
          * the network is back (not for a broken extractor, nor an outage that keeps coming back).
          * [freshLink]: the stream's server failed, so that resume must not reuse its URL.
+         * [network]: an outage (the connection failed, not the track); false for a broken extractor.
          */
-        data class Pause(val resume: Boolean, val freshLink: Boolean = false) : Action()
+        data class Pause(val resume: Boolean, val freshLink: Boolean = false, val network: Boolean = true) : Action()
 
         /** Per-video failure: skip the current item (or drop an upcoming one). */
         object Skip : Action()
@@ -104,7 +105,7 @@ internal object TrackErrorPolicy {
         f.kind?.blockReason?.let { return Action.Block(it) }
         when (f.kind) {
             FailureKind.NETWORK -> return outage(f)
-            FailureKind.BROKEN -> return Action.Pause(resume = false)
+            FailureKind.BROKEN -> return Action.Pause(resume = false, network = false)
             else -> Unit
         }
         f.httpCode?.let { code ->
