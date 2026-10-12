@@ -4,6 +4,7 @@ import androidx.media3.common.C
 import androidx.media3.common.Player
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
+import io.github.iamandelib.cyberjuke.net.NetBlock
 import io.github.iamandelib.cyberjuke.playback.QueueCommands
 import io.github.iamandelib.cyberjuke.playback.QueueInfo
 import org.json.JSONObject
@@ -91,6 +92,8 @@ internal object StateEncoder {
             state.put("context", JSONObject.NULL)
         }
         state.put("seedId", (if (count > 0) QueueInfo.seedId else null) ?: JSONObject.NULL)
+        // An outage paused playback; it resumes by itself once the network is back.
+        state.put("waitingForNetwork", count > 0 && NetBlock.waitingForNetwork())
         return state
     }
 }
