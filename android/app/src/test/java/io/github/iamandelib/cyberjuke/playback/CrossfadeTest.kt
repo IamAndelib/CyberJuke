@@ -50,8 +50,8 @@ class CrossfadeTest {
 
     @Test
     fun thePrimeComesBeforeTheFadeByThePrerollAndTheLoadTime() {
-        // 4 min, 6 s: hand-over at 234 s, preroll 1.2 s before it, the tail made 1.5 s before that.
-        assertEquals(4 * min - 6_000L - 1_200L - 1_500L, CrossfadePlan.primeAtMs(6_000L, 4 * min))
+        // 4 min, 6 s: hand-over at 234 s, preroll 2.5 s before it, the tail made 1.5 s before that.
+        assertEquals(4 * min - 6_000L - 2_500L - 1_500L, CrossfadePlan.primeAtMs(6_000L, 4 * min))
         assertNull(CrossfadePlan.primeAtMs(0L, 4 * min))
         assertNull(CrossfadePlan.primeAtMs(6_000L, -1L))
         // The shortest track that fades (3 s, a 1 s fade): never before its start.
@@ -78,8 +78,8 @@ class CrossfadeTest {
         assertEquals(CrossfadePlan.Skip.TOO_SHORT, why(facts(durationMs = 2_000L, positionMs = 0L)))
         assertEquals(CrossfadePlan.Skip.TOO_SHORT, why(facts(durationMs = -1L)))
         // Seeked to within the last moments: no time to load the tail.
-        assertEquals(CrossfadePlan.Skip.TOO_LATE, why(facts(positionMs = 4 * min - 6_000L - 1_600L)))
-        assertTrue(CrossfadePlan.decide(facts(positionMs = 4 * min - 6_000L - 1_700L)) is CrossfadePlan.Decision.Fade)
+        assertEquals(CrossfadePlan.Skip.TOO_LATE, why(facts(positionMs = 4 * min - 6_000L - 2_900L)))
+        assertTrue(CrossfadePlan.decide(facts(positionMs = 4 * min - 6_000L - 3_000L)) is CrossfadePlan.Decision.Fade)
         // The next track couldn't start at once: a normal transition, never a stall.
         assertEquals(CrossfadePlan.Skip.NEXT_NOT_READY, why(facts(nextDurationMs = -1L)))
         assertEquals(CrossfadePlan.Skip.NEXT_NOT_READY, why(facts(nextBufferedMs = 8_499L)))
@@ -140,72 +140,146 @@ class CrossfadeTest {
 
     // ---- TailAlign ------------------------------------------------------------------------
 
-    /** Samples every 50 ms from a tail that starts [latencies] ms late (one per start); returns the seeks. */
-    private fun align(latencies: List<Long>, steps: Int): Pair<TailAlign, List<Long>> {
+    /**
+     * Samples every 50 ms over a 2.35 s preroll (to the swap) from a tail that starts
+     * [latencies] ms late (one per start), with [noise] added to its read position at each
+     * step and [early] added while it has run less than 500 ms (the coarse first estimate).
+     * Returns the aligner and the seeks.
+     */
+    private fun align(
+        latencies: List<Long>,
+        noise: (Int) -> Long = { 0L },
+        early: Long = 0L,
+        swapAtMs: Long = 2_350L,
+    ): Pair<TailAlign, List<Long>> {
         val a = TailAlign()
         val seeks = ArrayList<Long>()
         var anchorPos = 0L
         var anchorAt = 0L
         var starts = 0
-        for (i in 1..steps) {
-            val now = i * 50L
-            val main = now
-            val tail = anchorPos + (now - anchorAt - latencies[minOf(starts, latencies.lastIndex)]).coerceAtLeast(0L)
-            val s = a.sample(main, tail)
+        var i = 0
+        var now = 50L
+        while (now <= swapAtMs) {
+            val ran = now - anchorAt - latencies[minOf(starts, latencies.lastIndex)]
+            var tail = anchorPos + ran.coerceAtLeast(0L)
+            if (ran in 1L..499L) tail += early
+            if (ran > 0L) tail += noise(i)
+            val s = a.sample(now, now, tail, swapAtMs - now)
             if (s is TailAlign.Step.Seek) {
                 seeks.add(s.toMs)
                 anchorPos = s.toMs
                 anchorAt = now
                 starts++
             }
+            i++
+            now += 50L
         }
         return a to seeks
     }
 
     @Test
     fun aTailThatStartsInTimeNeedsNoSeek() {
-        val (a, seeks) = align(listOf(10L), 6)
+        val (a, seeks) = align(listOf(10L))
+        assertTrue(seeks.isEmpty())
+        assertEquals(10L, a.driftMs)
+        assertTrue(a.handOverOk)
+    }
+
+    @Test
+    fun aTailThatStartsLateIsSentAheadByItsDelayOnceSettled() {
+        // 300 ms (Bluetooth): running at 350, settled at 950, three samples: sent 300 ms ahead at
+        // 1050, then lined up well before the swap.
+        val (a, seeks) = align(listOf(300L))
+        assertEquals(listOf(1_050L + 300L), seeks)
+        assertEquals(0L, a.driftMs)
+        assertEquals(1, a.seeks)
+        assertTrue(a.handOverOk)
+    }
+
+    @Test
+    fun theCoarseFirstEstimateAndNoisyReadsCauseNoSeek() {
+        // 80 ms off for its first half second (and below zero at first), then reads a few ms
+        // stale either way with an outlier now and then: one read alone would say 40 ms off and
+        // send it away, the median of settled samples says it is lined up.
+        val jitter = listOf(0L, 12L, -12L, 7L, 40L, 3L, -9L, 11L)
+        // (The swap comes right after such an outlier.)
+        val (a, seeks) = align(listOf(0L), noise = { jitter[it % jitter.size] }, early = -80L, swapAtMs = 2_250L)
         assertTrue(seeks.isEmpty())
         assertTrue(a.handOverOk)
     }
 
     @Test
-    fun aTailThatStartsLateIsSentAheadByItsDelay() {
-        // 300 ms (Bluetooth): measured once it runs steadily, then sent 300 ms ahead of the main player.
-        val (a, seeks) = align(listOf(300L), 20)
-        assertEquals(listOf(400L + 300L), seeks)
-        assertEquals(0L, a.driftMs)
+    fun noMeasureUntilTheTailHasRunSteadilyForAWhile() {
+        val a = TailAlign()
+        assertEquals(TailAlign.Step.Wait, a.sample(50L, 50L, 0L, 2_000L))
+        assertEquals(TailAlign.Step.Wait, a.sample(100L, 100L, 0L, 2_000L)) // not started yet
+        var now = 150L
+        while (now < 150L + TailAlign.SETTLE_MS + 100L) {
+            assertEquals(TailAlign.Step.Wait, a.sample(now, now, now - 100L, 2_000L))
+            now += 50L
+        }
+        assertNull(a.driftMs)
+        assertFalse(a.handOverOk)
+        // A stall (no progress twice) voids what was gathered: it settles again from scratch.
+        val stalledAt = now - 150L
+        assertEquals(TailAlign.Step.Wait, a.sample(now, now, stalledAt, 2_000L))
+        assertEquals(TailAlign.Step.Wait, a.sample(now + 50L, now + 50L, stalledAt, 2_000L))
+        now += 100L
+        repeat(5) {
+            assertEquals(TailAlign.Step.Wait, a.sample(now, now, now - 100L, 2_000L))
+            now += 50L
+        }
+        assertNull(a.driftMs)
+    }
+
+    @Test
+    fun neverASeekTooCloseToTheSwapOnlyAJudgement() {
+        // Measured only 550 ms before the swap, 100 ms off: no seek (no time to settle and
+        // measure again), so no fade.
+        val a = TailAlign()
+        var now = 0L
+        while (now <= 1_000L) {
+            val s = a.sample(now, now, now - 100L, 1_300L - now)
+            assertFalse(s is TailAlign.Step.Seek)
+            now += 50L
+        }
+        assertEquals(100L, a.driftMs)
+        assertEquals(0, a.seeks)
+        assertFalse(a.handOverOk)
+    }
+
+    @Test
+    fun onceLinedUpItOnlyJudges() {
+        // Lined up, then the reads wander 40 ms off near the swap: no late seek, and no hand-over.
+        val a = TailAlign()
+        var now = 0L
+        while (now <= 800L) {
+            a.sample(now, now, now, 2_000L - now)
+            now += 50L
+        }
+        assertTrue(a.handOverOk)
+        while (now <= 1_200L) {
+            assertFalse(a.sample(now, now, now - 40L, 2_000L - now) is TailAlign.Step.Seek)
+            now += 50L
+        }
+        assertEquals(0, a.seeks)
+        assertEquals(40L, a.driftMs)
+        assertFalse(a.handOverOk)
+        // Within 30 ms the swap's ramp hides it.
+        while (now <= 1_500L) {
+            a.sample(now, now, now - 25L, 2_000L - now)
+            now += 50L
+        }
         assertTrue(a.handOverOk)
     }
 
     @Test
-    fun noMeasureUntilTheTailRunsSteadily() {
-        val a = TailAlign()
-        assertEquals(TailAlign.Step.Wait, a.sample(50L, 0L))
-        assertEquals(TailAlign.Step.Wait, a.sample(100L, 0L)) // not started yet
-        assertEquals(TailAlign.Step.Wait, a.sample(150L, 40L)) // one steady step
-        assertNull(a.driftMs)
-        assertFalse(a.handOverOk)
-        assertEquals(TailAlign.Step.Aligned, a.sample(200L, 190L))
-        assertEquals(10L, a.driftMs)
-    }
-
-    @Test
     fun aTailThatCantBeLinedUpIsNotHandedOver() {
-        // A start delay that grows each time: two seeks, then it stays off.
-        val (a, seeks) = align(listOf(100L, 200L, 300L), 40)
-        assertEquals(TailAlign.MAX_SEEKS, seeks.size)
+        // A start delay that grows with each start: one seek, then no time for another.
+        val (a, seeks) = align(listOf(100L, 200L))
+        assertEquals(1, seeks.size)
         assertEquals(100L, a.driftMs)
         assertFalse(a.handOverOk)
-        // Ahead of the main player is off too.
-        val b = TailAlign()
-        b.sample(0L, 0L)
-        b.sample(50L, 50L)
-        b.sample(100L, 100L)
-        assertTrue(b.handOverOk)
-        // 25 ms ahead: sent back by as much.
-        assertEquals(TailAlign.Step.Seek(125L), b.sample(150L, 175L))
-        assertFalse(b.handOverOk)
     }
 
     // ---- Crossfader ----------------------------------------------------------------------
@@ -312,6 +386,12 @@ class CrossfadeTest {
         override fun advance() {
             advances++
             onAdvance()
+        }
+
+        val judgements = ArrayList<Triple<Long?, Int, Boolean>>()
+
+        override fun judged(driftMs: Long?, seeks: Int, handedOver: Boolean) {
+            judgements.add(Triple(driftMs, seeks, handedOver))
         }
 
         override fun newTail(positionMs: Long, events: Crossfader.TailEvents): Crossfader.Tail? {
@@ -454,35 +534,40 @@ class CrossfadeTest {
 
     @Test
     fun aLateTailIsSentAheadAndTheFadeGoesOn() {
-        // A Bluetooth-like start delay of 300 ms: sent 300 ms ahead once, then lined up.
+        // A Bluetooth-like start delay of 300 ms: settled and measured, sent 300 ms ahead once,
+        // then settled and lined up before the swap.
         val (h, c) = started(latencies = listOf(300L))
         h.play(swapAt - 10L)
         val tail = h.tail!!
         assertEquals(1, tail.seeks.size)
-        assertEquals(prerollAt + 400L + 300L, tail.seeks.single())
+        assertEquals(prerollAt + 1_050L + 300L, tail.seeks.single())
         assertEquals(0L, h.position - tail.positionMs)
         h.play(handOverAt)
         assertEquals(1, h.advances)
         assertEquals(Crossfader.Phase.FADING, c.phase)
+        // Told (debug builds log it): lined up after one seek, handed over.
+        assertEquals(listOf(Triple<Long?, Int, Boolean>(0L, 1, true)), h.judgements)
     }
 
     @Test
     fun aTailThatCantBeLinedUpMeansNoFade() {
-        // The delay grows with each start: never within 20 ms by the swap.
-        val (h, c) = started(latencies = listOf(100L, 200L, 300L))
+        // The delay grows with each start: 100 ms off at the swap, with no time for a second seek.
+        val (h, c) = started(latencies = listOf(100L, 200L))
         h.play(dur)
         assertEquals(0, h.advances)
         assertTrue(h.mainVolumes.isEmpty()) // the outgoing track never left the main player
         assertStopped(h, c)
-        assertEquals(TailAlign.MAX_SEEKS, h.tails.single().seeks.size)
+        assertEquals(1, h.tails.single().seeks.size)
+        assertEquals(listOf(Triple<Long?, Int, Boolean>(100L, 1, false)), h.judgements)
     }
 
     @Test
     fun aTailTooSlowToMeasureByTheSwapMeansNoFade() {
-        val (h, c) = started(latencies = listOf(1_100L))
+        val (h, c) = started(latencies = listOf(1_800L))
         h.play(dur)
         assertEquals(0, h.advances)
         assertStopped(h, c)
+        assertEquals(listOf(Triple<Long?, Int, Boolean>(null, 0, false)), h.judgements)
     }
 
     @Test
@@ -738,13 +823,13 @@ class CrossfadeTest {
     fun aResumeNearTheEndPrimesAtOnceIfThereIsTimeElseNot() {
         val (h, c) = started()
         c.onHalted()
-        h.position = handOverAt - 1_700L
+        h.position = handOverAt - 3_000L
         c.onResumed()
         assertEquals(Crossfader.Phase.PRIMED, c.phase)
 
         val (h2, c2) = started()
         c2.onHalted()
-        h2.position = handOverAt - 1_600L
+        h2.position = handOverAt - 2_900L
         c2.onResumed()
         assertEquals(Crossfader.Phase.NONE, c2.phase)
         assertTrue(h2.tails.isEmpty())
@@ -752,26 +837,26 @@ class CrossfadeTest {
 
     @Test
     fun aPrimeThatFallsDuringAFadeComesOnceTheFadeIsOver() {
-        // A 7.5 s next track: the fade into it is 2.5 s, and its own prime (2.3 s in) comes
+        // A 9.3 s next track: the fade into it is 3 s, and its own prime (2.3 s in) comes
         // while that fade still runs.
         val (h, c) = started(settingMs = 3_000)
-        h.f = h.f.copy(nextDurationMs = 7_500L, nextBufferedMs = 7_500L)
+        h.f = h.f.copy(nextDurationMs = 9_300L, nextBufferedMs = 9_300L)
         h.onAdvance = {
             h.item = "t${h.advances}"
             h.next = "n${h.advances}"
             h.position = 0L
-            h.f = h.f.copy(durationMs = 7_500L)
+            h.f = h.f.copy(durationMs = 9_300L)
         }
-        h.play(dur - 2_500L)
+        h.play(dur - 3_000L)
         assertEquals(Crossfader.Phase.FADING, c.phase)
         assertEquals(1, h.tails.size)
-        h.play(2_400L)
+        h.play(2_900L)
         assertEquals(1, h.tails.size) // not during the fade
         // Once that fade is over, the short track gets its own tail, and fades into the next.
-        h.play(2_600L)
+        h.play(3_100L)
         assertEquals(2, h.tails.size)
         assertEquals(Crossfader.Phase.PRIMED, c.phase)
-        h.play(5_000L)
+        h.play(6_300L)
         assertEquals(2, h.advances)
     }
 

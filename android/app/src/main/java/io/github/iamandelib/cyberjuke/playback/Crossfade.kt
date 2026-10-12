@@ -20,10 +20,10 @@ internal object CrossfadePlan {
 
     /**
      * The tail plays this long, muted, before the hand-over: its sound is already flowing then,
-     * and it has time to be lined up with the main player ([TailAlign]), twice over a Bluetooth
-     * output's start delay.
+     * and it has time to be lined up with the main player ([TailAlign]): to settle and be
+     * measured, and over a Bluetooth output's start delay once more after a seek.
      */
-    const val PREROLL_MS = 1_200L
+    const val PREROLL_MS = 2_500L
 
     /** The hand-over itself: the outgoing track moves from the main player to the tail over this long. */
     const val SWAP_MS = 150L
@@ -145,14 +145,20 @@ internal object CrossfadePlan {
  * Lines the tail up with the main player during the preroll. A player's position counts what
  * has been heard, so a tail started at the main player's position lags it by its own start
  * delay (the output's latency: tens of ms on the speaker, a few hundred over Bluetooth), and the
- * hand-over would play that sliver twice. Fed a sample of both positions every step: once the
- * tail has run steadily for two steps, the drift (main − tail) is measured; over [ALIGNED_MS],
- * the tail is sent ahead by the delay learned so far (a seek starts it again, with the same
- * delay), at most [MAX_SEEKS] times. The hand-over only happens within [HAND_OVER_MS]. Pure.
+ * hand-over would play that sliver twice.
+ *
+ * Fed both positions every step. A position is only an estimate at first (Media3 trusts the
+ * output's timestamps after up to half a second, then corrects slowly), and each read may be a
+ * few ms old, so the drift (main − tail) is only measured once the tail has run steadily for
+ * [SETTLE_MS], as the median of its last [SAMPLES] samples. Over [ALIGNED_MS], the tail is sent
+ * ahead by the delay learned so far (a seek starts it again, with the same delay), at most
+ * [MAX_SEEKS] times, and only while there is time to settle and measure again before the swap
+ * (never in its last [NO_SEEK_MS]): after that, and once it was lined up, it only judges. The
+ * hand-over only happens within [HAND_OVER_MS] (the swap's ramp hides that much). Pure.
  */
 internal class TailAlign {
     sealed interface Step {
-        /** Not measured yet (the tail hasn't run steadily since it started). */
+        /** Not measured yet, or only judging now. */
         data object Wait : Step
 
         /** Seek the tail here (a muted tail: nobody hears it). */
@@ -161,28 +167,59 @@ internal class TailAlign {
         data object Aligned : Step
     }
 
-    /** The latest drift, main − tail, in ms; null until measured (again, after a seek). */
+    /** The drift, main − tail, in ms (the median of the latest samples); null until measured (again, after a seek). */
     var driftMs: Long? = null
+        private set
+
+    var seeks = 0
         private set
 
     /** How far ahead of the main player the tail must start: its start delay, learned. */
     private var leadMs = 0L
-    private var seeks = 0
-    private var lastTailMs = -1L
-    private var steady = 0
+    private var lastTailMs: Long? = null
 
-    fun sample(mainMs: Long, tailMs: Long): Step {
-        steady = if (lastTailMs >= 0L && tailMs - lastTailMs >= MIN_ADVANCE_MS) steady + 1 else 0
+    /** When the tail was first seen running steadily; -1 while it isn't. */
+    private var runningSince = -1L
+
+    /** Samples in a row without progress. */
+    private var still = 0
+    private val samples = ArrayDeque<Long>()
+    private var aligned = false
+
+    /** A step's sample, at [now] (the clock), with [toSwapMs] left until the swap. */
+    fun sample(now: Long, mainMs: Long, tailMs: Long, toSwapMs: Long): Step {
+        val advancing = lastTailMs?.let { tailMs - it >= MIN_ADVANCE_MS } == true
         lastTailMs = tailMs
-        if (steady < STEADY_STEPS) return Step.Wait
-        val d = mainMs - tailMs
+        if (!advancing) {
+            // One odd read is skipped; not started yet, or stalled: what was gathered is void.
+            if (++still >= STALL_STEPS) {
+                runningSince = -1L
+                samples.clear()
+            }
+            return Step.Wait
+        }
+        still = 0
+        if (runningSince < 0L) runningSince = now
+        if (now - runningSince < SETTLE_MS) return Step.Wait
+        samples.addLast(mainMs - tailMs)
+        if (samples.size > SAMPLES) samples.removeFirst()
+        if (samples.size < MIN_SAMPLES) return Step.Wait
+        val d = samples.sorted()[samples.size / 2]
         driftMs = d
-        if (kotlin.math.abs(d) <= ALIGNED_MS) return Step.Aligned
-        if (seeks >= MAX_SEEKS) return Step.Wait
+        if (kotlin.math.abs(d) <= ALIGNED_MS) {
+            aligned = true
+            return Step.Aligned
+        }
+        if (aligned || seeks >= MAX_SEEKS) return Step.Wait
+        val lead = leadMs + d
+        // Time to start again, settle and measure before the swap, or only judge from now on.
+        if (toSwapMs < maxOf(NO_SEEK_MS, kotlin.math.abs(lead) + SETTLE_MS + MIN_SAMPLES * STEP_MS)) return Step.Wait
         seeks++
-        leadMs += d
-        lastTailMs = -1L
-        steady = 0
+        leadMs = lead
+        lastTailMs = null
+        runningSince = -1L
+        still = 0
+        samples.clear()
         driftMs = null
         return Step.Seek(mainMs + leadMs)
     }
@@ -192,13 +229,26 @@ internal class TailAlign {
 
     companion object {
         const val ALIGNED_MS = 15L
-        const val HAND_OVER_MS = 20L
+        const val HAND_OVER_MS = 30L
         const val MAX_SEEKS = 2
 
-        /** A running tail moves about a step (50 ms) between samples; a waiting one doesn't. */
+        /** The tail runs steadily this long before its drift counts. */
+        const val SETTLE_MS = 600L
+
+        /** The drift is the median of this many latest samples, from [MIN_SAMPLES] on. */
+        const val SAMPLES = 5
+        const val MIN_SAMPLES = 3
+
+        /** No seek this close to the swap: the tail couldn't settle again in time. */
+        const val NO_SEEK_MS = 400L
+
+        /** A running tail moves about a step between samples; a waiting one doesn't. */
         const val MIN_ADVANCE_MS = 10L
 
-        const val STEADY_STEPS = 2
+        /** This many samples in a row without progress: it isn't running (yet, or any more). */
+        const val STALL_STEPS = 2
+
+        private const val STEP_MS = CrossfadePlan.STEP_MS
     }
 }
 
@@ -266,6 +316,9 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
 
         /** A paused tail of the current track at [positionMs], loading; null when it can't be made. */
         fun newTail(positionMs: Long, events: TailEvents): Tail?
+
+        /** At the swap: how well the tail was lined up ([driftMs], null: never measured), and whether it was handed over. */
+        fun judged(driftMs: Long?, seeks: Int, handedOver: Boolean)
     }
 
     interface Tail {
@@ -309,6 +362,7 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
     private var tail: Tail? = null
     private var align = TailAlign()
     private var fadeMs = 0L
+    private var startAtMs = 0L
     private var swapAt = 0L
     private var startedAt = 0L
 
@@ -464,6 +518,7 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         tail = t
         align = TailAlign()
         fadeMs = d.fadeMs
+        startAtMs = d.startAtMs
         plannedNext = host.nextItem()
         phase = Phase.PRIMED
         host.at(d.startAtMs - CrossfadePlan.PREROLL_MS) { preroll(g) }
@@ -490,7 +545,9 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         }
         // Not lined up (a jump would be heard), or the next track no longer ready: the track
         // ends the usual way.
-        if (!align.handOverOk || !CrossfadePlan.canHandOver(host.facts(settingMs), fadeMs)) {
+        val ok = align.handOverOk && CrossfadePlan.canHandOver(host.facts(settingMs), fadeMs)
+        host.judged(align.driftMs, align.seeks, ok)
+        if (!ok) {
             stop()
             return
         }
@@ -503,7 +560,8 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         when (phase) {
             Phase.PREROLL -> {
                 if (t == null) return
-                val s = align.sample(host.positionMs(), t.positionMs)
+                val main = host.positionMs()
+                val s = align.sample(host.now(), main, t.positionMs, startAtMs - CrossfadePlan.SWAP_MS - main)
                 if (s is TailAlign.Step.Seek) t.seekTo(s.toMs)
             }
             Phase.SWAP -> {

@@ -142,6 +142,11 @@ internal class ExoCrossfadeHost(
         }
     }
 
+    /** Debug builds only (R8 strips info logs from the others); no ids. */
+    override fun judged(driftMs: Long?, seeks: Int, handedOver: Boolean) {
+        Log.i(TAG, "Crossfade tail: drift ${driftMs ?: "unmeasured"} ms after $seeks seek(s), handed over=$handedOver")
+    }
+
     private companion object {
         const val TAG = "CyberJukeCrossfade"
     }
