@@ -33,6 +33,7 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -361,8 +362,9 @@ class PlaybackService : MediaSessionService() {
             Log.w(TAG, "No network callback: ${e.javaClass.simpleName}")
         }
 
-        // DefaultDataSource handles asset:// (CI test tone) and delegates http(s) to OkHttp.
-        val upstream = DefaultDataSource.Factory(this, OkHttpDataSource.Factory(Http.client))
+        // DefaultDataSource handles asset:// (CI test tone) and delegates http(s) to OkHttp,
+        // with the streaming timeouts (a stall is noticed, and retried, while the buffer plays).
+        val upstream = DefaultDataSource.Factory(this, OkHttpDataSource.Factory(Http.streaming))
         val dataSourceFactory = ResolvingDataSource.Factory(upstream, YtDataSpecResolver)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
             .setLoadErrorHandlingPolicy(JukeLoadErrorPolicy())
@@ -372,8 +374,22 @@ class PlaybackService : MediaSessionService() {
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
 
+        // A deeper buffer than Media3's default (BufferPolicy): short drops are never heard.
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                BufferPolicy.MIN_MS,
+                BufferPolicy.MAX_MS,
+                BufferPolicy.START_MS,
+                BufferPolicy.AFTER_REBUFFER_MS,
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .setBackBuffer(BufferPolicy.BACK_MS, /* retainBackBufferFromKeyframe = */ false)
+            .setTargetBufferBytes(BufferPolicy.TARGET_BYTES)
+            .build()
+
         val exo = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)

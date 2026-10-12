@@ -12,7 +12,8 @@ import io.github.iamandelib.cyberjuke.net.BlockedException
 /**
  * Don't keep retrying what can never succeed or would make things worse: unavailable videos,
  * bot checks, a running back-off, and HTTP 403/410/429 (429 must never be retried; 403/410 are
- * handled by re-resolving in PlaybackService). Network failures keep ExoPlayer's retries.
+ * handled by re-resolving in PlaybackService). Network failures are retried more often than
+ * ExoPlayer's default, with a capped back-off ([LoadRetry]), while the buffer keeps playing.
  */
 @OptIn(UnstableApi::class)
 internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
@@ -24,8 +25,14 @@ internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
         if (resolve != null && resolve.permanent) return C.TIME_UNSET
         val http = e.findCause<HttpDataSource.InvalidResponseCodeException>()
         if (http != null && http.responseCode in NO_RETRY_HTTP) return C.TIME_UNSET
-        return super.getRetryDelayMsFor(loadErrorInfo)
+        // What the default never retries (a malformed file, a missing one) stays that way.
+        if (super.getRetryDelayMsFor(loadErrorInfo) == C.TIME_UNSET) return C.TIME_UNSET
+        return LoadRetry.delayMs(loadErrorInfo.errorCount)
     }
+
+    /** The error reaches the player only after this many retries (and once it needs the data). */
+    override fun getMinimumLoadableRetryCount(dataType: Int): Int =
+        maxOf(super.getMinimumLoadableRetryCount(dataType), LoadRetry.NETWORK_RETRIES)
 
     private companion object {
         val NO_RETRY_HTTP = setOf(403, 410, 429)
