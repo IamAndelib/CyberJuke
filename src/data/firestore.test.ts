@@ -12,10 +12,11 @@ import {
   MEMBERS_FRESHNESS_FIELDS,
   nextCursor,
   PAGE_SIZE,
+  REQUEST_TIMEOUT_MS,
   RUN_QUERY_URL,
   shuffled,
 } from './firestore';
-import type { FsRunQueryRow } from './model';
+import { tracksFromRows, type FsRunQueryRow } from './model';
 
 const rows = fixture as unknown as FsRunQueryRow[];
 
@@ -130,7 +131,8 @@ describe('FirestoreSource', () => {
     const [url, init] = f.mock.calls[0];
     expect(url).toBe(RUN_QUERY_URL);
     expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body as string)).toEqual(buildQuery({}));
+    // Only the fields a track is made of (the catalog's mask): about half the bytes.
+    expect(JSON.parse(init.body as string)).toEqual(buildQuery({ select: CATALOG_FIELDS }));
     expect(page.tracks).toHaveLength(11);
     expect(page.tracks.some((t) => t.nsfw)).toBe(false);
     expect(page.cursor).toBeNull();
@@ -177,7 +179,7 @@ describe('FirestoreSource', () => {
     await src.byGenre('folk');
     await src.latest({ createdAt: 't', name: 'n' });
     expect(f).toHaveBeenCalledTimes(3);
-    expect(JSON.parse(f.mock.calls[1][1].body as string)).toEqual(buildQuery({ genre: 'folk' }));
+    expect(JSON.parse(f.mock.calls[1][1].body as string)).toEqual(buildQuery({ genre: 'folk', select: CATALOG_FIELDS }));
   });
 
   it('invalidate() only drops entries older than the minimum refresh age', async () => {
@@ -403,12 +405,12 @@ describe('FirestoreSource (members)', () => {
     const auth = fakeAuth();
     const src = new FirestoreSource({ fetch: f as any, auth });
     await src.latest();
-    expect(JSON.parse(f.mock.calls[0][1].body as string)).toEqual(buildQuery({ members: true }));
+    expect(JSON.parse(f.mock.calls[0][1].body as string)).toEqual(buildQuery({ members: true, select: MEMBERS_CATALOG_FIELDS }));
     expect((f.mock.calls[0][1].headers as Record<string, string>).Authorization).toBe('Bearer tok-1');
     auth.setSignedIn(false);
     src.invalidateAll();
     await src.latest();
-    expect(JSON.parse(f.mock.calls[1][1].body as string)).toEqual(buildQuery({}));
+    expect(JSON.parse(f.mock.calls[1][1].body as string)).toEqual(buildQuery({ select: CATALOG_FIELDS }));
     expect((f.mock.calls[1][1].headers as Record<string, string>).Authorization).toBeUndefined();
   });
 
@@ -494,5 +496,142 @@ describe('FirestoreSource (members)', () => {
     expect(page.tracks.length).toBeGreaterThan(0);
     expect(page.tracks.every((t) => t.genre === g && !t.nsfw)).toBe(true);
     expect((await src.byGenre(g, { createdAt: 't', name: 'n' })).tracks).toEqual([]);
+  });
+});
+
+// ---- Latest and genre pages: the field mask ------------------------------------------
+
+describe('field mask of Latest and genre pages', () => {
+  /** A row with only the fields of `mask`, as Firestore answers a masked query. */
+  const masked = (r: FsRunQueryRow, mask: readonly string[]): FsRunQueryRow =>
+    r.document ? { ...r, document: { ...r.document, fields: Object.fromEntries(Object.entries(r.document.fields ?? {}).filter(([k]) => mask.includes(k))) } } : r;
+
+  it('keeps every field a track is made of', () => {
+    // The fixture's posts are whole documents, with fields the app never reads.
+    expect(rows.some((r) => Object.keys(r.document?.fields ?? {}).some((k) => !(CATALOG_FIELDS as readonly string[]).includes(k)))).toBe(true);
+    const full = tracksFromRows(rows);
+    expect(full.some((t) => t.saves !== undefined)).toBe(true);
+    expect(full.some((t) => t.nsfw)).toBe(true);
+    expect(tracksFromRows(rows.map((r) => masked(r, CATALOG_FIELDS)))).toEqual(full);
+  });
+
+  it('signed in, keeps what marks members-only posts and hides banned ones', () => {
+    const docs = [
+      post('pub', '2026-10-08T12:05:00Z', { isPublic: { booleanValue: true } }),
+      post('mem', '2026-10-08T12:04:00Z', { isPublic: { booleanValue: false } }),
+      post('ban', '2026-10-08T12:03:00Z', { isBanned: { booleanValue: true } }),
+      post('shadow', '2026-10-08T12:02:00Z', { isShadowBanned: { booleanValue: true } }),
+      post('nsfw', '2026-10-08T12:01:00Z', { isNSFW: { booleanValue: true } }),
+    ];
+    const full = tracksFromRows(docs);
+    expect(full.map((t) => [t.id, !!t.membersOnly, t.nsfw])).toEqual([
+      ['pub', false, false],
+      ['mem', true, false],
+      ['nsfw', false, true],
+    ]);
+    expect(tracksFromRows(docs.map((r) => masked(r, MEMBERS_CATALOG_FIELDS)))).toEqual(full);
+  });
+
+  it('genre pages and later pages ask with the mask too', async () => {
+    const f = mockFetch(rows);
+    const src = new FirestoreSource({ fetch: f as any });
+    await src.byGenre('folk', { createdAt: 't', name: 'n' });
+    await src.latest({ createdAt: 't', name: 'n' });
+    expect(f).toHaveBeenCalledTimes(2);
+    for (const call of f.mock.calls) {
+      expect(JSON.parse(call[1].body as string).structuredQuery.select).toEqual({ fields: CATALOG_FIELDS.map((fieldPath) => ({ fieldPath })) });
+    }
+  });
+});
+
+// ---- A request that never answers ----------------------------------------------------
+
+describe('request timeout', () => {
+  /** A fetch that never answers; it rejects (AbortError) once its signal aborts, like the real one. */
+  const hanging = () =>
+    vi.fn(
+      (_u: string, init: RequestInit) =>
+        new Promise<Response>((_, reject) => init.signal?.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError')))),
+    );
+  /** Whether `p` has settled, and its error, without waiting for it. */
+  const watch = (p: Promise<unknown>) => {
+    const w = { settled: false, error: undefined as unknown };
+    p.catch((e) => (w.error = e)).finally(() => (w.settled = true));
+    return w;
+  };
+
+  it(`fails after ${REQUEST_TIMEOUT_MS / 1000} s by default, as an error (not offline), and aborts the request`, async () => {
+    vi.useFakeTimers();
+    try {
+      const f = hanging();
+      const w = watch(new FirestoreSource({ fetch: f as any }).latest());
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1);
+      expect(w.settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(w.settled).toBe(true);
+      expect(w.error).toBeInstanceOf(FirestoreError);
+      expect(w.error).toMatchObject({ status: 0, offline: false });
+      expect((f.mock.calls[0][1].signal as AbortSignal).aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('fails a request whose fetch ignores the abort, and the next call asks again', async () => {
+    vi.useFakeTimers();
+    try {
+      const f = vi.fn(() => new Promise<Response>(() => {}));
+      const src = new FirestoreSource({ fetch: f as any, timeoutMs: 1000 });
+      const w = watch(src.latest());
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(w.error).toMatchObject({ name: 'FirestoreError', offline: false });
+      void src.latest().catch(() => {});
+      await vi.advanceTimersByTimeAsync(0);
+      expect(f).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(1000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('covers an answer whose body never arrives', async () => {
+    vi.useFakeTimers();
+    try {
+      const f = vi.fn(async () => ({ ok: true, status: 200, json: () => new Promise(() => {}) }));
+      const w = watch(new FirestoreSource({ fetch: f as any, timeoutMs: 1000 }).latest());
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(w.error).toMatchObject({ name: 'FirestoreError', offline: false });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('covers waiting for the ID token (signed in)', async () => {
+    vi.useFakeTimers();
+    try {
+      const auth = { signedIn: () => true, token: vi.fn(() => new Promise<string>(() => {})), refreshNow: vi.fn(async () => null) };
+      const f = mockFetch(rows);
+      const w = watch(new FirestoreSource({ fetch: f as any, auth, timeoutMs: 1000 }).latest());
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(w.error).toMatchObject({ name: 'FirestoreError', offline: false });
+      expect(f).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('an answer in time leaves no timer behind', async () => {
+    vi.useFakeTimers();
+    try {
+      await new FirestoreSource({ fetch: mockFetch(rows) as any, timeoutMs: 1000 }).latest();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a lost connection still reads as offline', async () => {
+    const src = new FirestoreSource({ fetch: (async () => Promise.reject(new TypeError('Failed to fetch'))) as any, timeoutMs: 1000 });
+    await expect(src.latest()).rejects.toMatchObject({ offline: true });
   });
 });

@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { box, expectStable, nextFrame, openNowPlaying, playAndOpen, scrollTo, scrollTopOf, start, waitForTracks } from '../helpers';
+import { box, expectStable, isFeedQuery, nextFrame, openNowPlaying, playAndOpen, scrollTo, scrollTopOf, start, waitForTracks } from '../helpers';
 
 /**
  * Motion and touch: text selection, the marquee, press feedback, pull-to-refresh,
@@ -145,7 +145,7 @@ test('pull to refresh: follows the finger on a rubber band with no re-render, th
 
 test('pull to refresh: a short pull springs back, a sideways swipe is ignored', async ({ page, backend }) => {
   await start(page);
-  const latest = () => backend.queries.filter((q) => !q.select && !q.startAt).length;
+  const latest = () => backend.queries.filter((q) => isFeedQuery(q) && !q.startAt).length;
   const before = latest();
   let f = await finger(page, 200, 320);
   await f.move(0, 70);

@@ -161,6 +161,26 @@ describe('createCatalog', () => {
     expect(s.cat.tracks.value).toHaveLength(1);
   });
 
+  it('restoreSaved() shows a saved catalog, even a stale one, without any request', async () => {
+    const now = Date.UTC(2026, 9, 8);
+    const s = setup({ stored: { v: 1, fullAt: now - 2 * FULL_AFTER_MS, checkedAt: now - 2 * FULL_AFTER_MS, tracks: [t('a', D(1)), t('b', D(2))] }, start: now });
+    await s.cat.restoreSaved();
+    expect(s.source.catalog).not.toHaveBeenCalled();
+    expect(s.cat.status.value).toBe('ready');
+    expect(s.cat.tracks.value.map((x) => x.id)).toEqual(['b', 'a']);
+    // The refresh after it reads nothing twice and fetches what is stale.
+    await s.cat.refresh();
+    expect(s.storage.get).toHaveBeenCalledTimes(2);
+    expect(s.calls).toEqual([undefined]);
+  });
+
+  it('restoreSaved() with nothing saved stays idle (no request, no error)', async () => {
+    const s = setup();
+    await s.cat.restoreSaved();
+    expect(s.source.catalog).not.toHaveBeenCalled();
+    expect(s.cat.status.value).toBe('idle');
+  });
+
   it('ignores a corrupt or wrong-version cache', async () => {
     const s = setup({ stored: { v: 2, tracks: [t('zz', D(1))] } });
     await s.cat.refresh();

@@ -13,10 +13,12 @@
 - Liked songs are saved in it too, so they play offline: a song you like is saved right away, and older likes one at a time, on Wi-Fi only, while the app is open or playing.
 - Offline, Library → Liked plays the liked songs already saved, from the one you tap; the others are dimmed and say "Not saved yet. Needs a connection." The top bar reads "no carrier · your liked songs still play" and opens Liked, and anything else you try to play says so, with a button to Liked. With nothing saved yet, it asks you to connect, as before.
 - **Crossfade** (Settings → Crossfade): the end of a track blends into the next, over 3, 6 or 10 seconds. Off by default. It fades only when a track ends by itself: a skip, Repeat one, or a moment without connection changes tracks the usual way, and short tracks get a shorter fade.
+- Home's latest tracks show up sooner when the app opens: it asks Cyberspace for them while it starts, for about half the data, and brings genres and Most saved up to date just after. They're still always the newest posts, never a saved copy.
 
 ### Fixed
 - A dropped or reset connection no longer skips good tracks, and a flapping connection no longer stops playback after five "failed" tracks: it waits and carries on instead.
 - After a change of network (or of address on the same one), the next track's stream link is fetched again right away, and links the change didn't break are kept, so the next track starts sooner.
+- A list that gets no answer from Cyberspace stops loading after 15 seconds and offers Retry, instead of showing placeholders forever.
 
 ## [1.1.2] - 2026-10-10
 

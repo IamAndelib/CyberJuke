@@ -144,7 +144,7 @@ function write(key: string, value: unknown): void {
   store.set(key, JSON.stringify(value)).catch(() => {});
 }
 
-/** loadLibrary ran: history may be written, and later loads replace the library outright. */
+/** loadLists ran: Liked and history may be written, and later loads replace them outright. */
 let loadedOnce = false;
 
 /** Like saveHistory: not before the file was first read (that load replaces Liked anyway). */
@@ -153,30 +153,46 @@ function saveLiked(tracks: Track[]): void {
 }
 
 function saveHistory(entries: HistoryEntry[]): void {
-  // Before the file was first read, a write would replace the history in it: loadLibrary
+  // Before the file was first read, a write would replace the history in it: loadLists
   // merges what was played meanwhile and saves then.
   if (!loadedOnce) return;
   void historyFile.save(encodeHistory(entries));
 }
 
+/**
+ * Read the whole library. At startup the app reads the small keys first (loadSettings,
+ * before the first render) and Liked and history (loadLists) alongside, without waiting.
+ */
 export async function loadLibrary(): Promise<void> {
-  const [l, h, s, g, a] = await Promise.all([
-    likedFile.load().catch(() => null),
-    historyFile.load().catch(() => null),
-    readJson<Partial<Settings>>(store, K_SETTINGS, {}),
-    readJson<unknown>(store, K_FAV_GENRES, []),
-    readJson<unknown>(store, K_FAV_ARTISTS, []),
-  ]);
-  liked.value = asTracks(l);
-  // A play recorded before the first read (the app reopened mid-song) is kept, not overwritten.
+  await Promise.all([loadSettings(), loadLists()]);
+}
+
+/** Liked and history, from their files. A like or play from before the first read is kept. */
+export async function loadLists(): Promise<void> {
+  const [l, h] = await Promise.all([likedFile.load().catch(() => null), historyFile.load().catch(() => null)]);
+  // The screen shows before the first read is done: what was liked or played meanwhile
+  // (the app reopened mid-song) is kept, not overwritten.
+  const earlyLikes = loadedOnce ? [] : liked.value;
   const early = loadedOnce ? [] : history.value;
   loadedOnce = true;
+  const likes = asTracks(l);
+  liked.value = earlyLikes.length ? [...earlyLikes, ...likes.filter((t) => !earlyLikes.some((e) => e.id === t.id))] : likes;
+  if (earlyLikes.length) saveLiked(liked.value);
   history.value = early.length ? mergeHistory(early, decodeHistory(h, Date.now()), Date.now()) : decodeHistory(h, Date.now());
   // Rewrites a migrated (old-shape) history in the current one, and keeps early plays; skipped when unchanged.
   if (h != null || early.length) saveHistory(history.value);
   // There but unreadable (not missing): what's played now is kept in memory, and the
   // file is read again later and merged, never replaced.
   if (historyFile.unreadable) retryHistory(0);
+}
+
+/** The settings and favourites: small keys, read before the first render (the theme, the NSFW setting). */
+export async function loadSettings(): Promise<void> {
+  const [s, g, a] = await Promise.all([
+    readJson<Partial<Settings>>(store, K_SETTINGS, {}),
+    readJson<unknown>(store, K_FAV_GENRES, []),
+    readJson<unknown>(store, K_FAV_ARTISTS, []),
+  ]);
   favoriteGenres.value = Array.isArray(g)
     ? [...new Set(g.filter((x): x is string => typeof x === 'string' && x.trim() !== ''))]
     : [];
