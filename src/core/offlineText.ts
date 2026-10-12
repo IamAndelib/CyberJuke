@@ -17,6 +17,8 @@ export const OFFLINE = {
   tap: 'No carrier. Connect to play.',
   /** The connection dropped mid-track and the player won't pick up by itself. */
   lostWaits: "Signal lost. Press play once you're back online.",
+  /** In place of the time (Now Playing) and the artist (mini player) while native waits for the network. */
+  waiting: 'Waiting for carrier…',
   pullAgain: 'No carrier. Connect and pull again.',
   lyrics: "No carrier. Lyrics load when you're back online.",
 } as const;

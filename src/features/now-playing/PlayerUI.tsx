@@ -29,6 +29,7 @@ import { positionNow, useTickValue } from '../../ui/useTick';
 import { splitArtists } from '../../data/artists';
 import { isGlobal, type Track } from '../../data/model';
 import { reducedMotion } from '../../core/motion';
+import { OFFLINE } from '../../core/offlineText';
 import { Art } from '../../ui/components/Art';
 import { Marquee } from './Marquee';
 import { MembersTag } from '../../ui/components/TrackRow';
@@ -37,9 +38,6 @@ import { UpNext } from './UpNext';
 import { useModal, useSheetContent } from '../../ui/useModal';
 import { useLiked } from '../../ui/useFavs';
 import { shareTrack } from '../../ui/share';
-
-/** In place of the time (Now Playing) and the artist (mini player) while the connection is gone. */
-const WAITING_TEXT = 'Waiting for carrier…';
 
 function fmt(ms: number): string {
   if (!isFinite(ms) || ms < 0) ms = 0;
@@ -163,7 +161,7 @@ function useSwipeUpToOpen(ref: { current: HTMLDivElement | null }): void {
 function MiniSub({ artist }: { artist: string }) {
   return waitingForNetwork.value ? (
     <span class="mini-artist" data-testid="mini-waiting">
-      {WAITING_TEXT}
+      {OFFLINE.waiting}
     </span>
   ) : (
     <span class="mini-artist">{artist}</span>
@@ -363,7 +361,7 @@ function SeekBar() {
       <div class="seek-times">
         {waitingForNetwork.value ? (
           <span role="status" data-testid="np-waiting">
-            {WAITING_TEXT}
+            {OFFLINE.waiting}
           </span>
         ) : (
           <>
