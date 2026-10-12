@@ -137,17 +137,18 @@ internal object StreamResolver {
 
     /**
      * Blocking. Throws [ResolveException], [ManifestOnlyException] or [BlockedException].
-     * [midStream]: the load starts past byte 0 (a resume), so keep the itag in use.
+     * [midStream]: the load starts past byte 0 (a resume), so keep the itag in use. [itag]: that
+     * format, whatever else applies (the crossfade's tail plays the file the track played).
      */
     @Throws(IOException::class)
-    fun resolve(ytId: String, midStream: Boolean = false): ResolvedStream {
+    fun resolve(ytId: String, midStream: Boolean = false, itag: Int? = null): ResolvedStream {
         // Y1: no request during a back-off, and no stale URL either (a 403 on it would be one).
         NetBlock.check()
         val rung = currentRung()
         val k = rungKey(ytId, rung)
         // A resume keeps the file it was playing (so does a track kept through an outage): a
         // cached stream of another itag won't do.
-        val keep = kept[ytId] ?: if (midStream) served.get(ytId, now())?.itag?.takeIf { it > 0 } else null
+        val keep = itag ?: keptItag(ytId, midStream)
         val hit = cache.get(ytId, rung, keep, now())
         if (hit != null) return serve(hit)
         val prefer = pins.remove(ytId) ?: keep
@@ -187,14 +188,15 @@ internal object StreamResolver {
      * The listening cache's key for [ytId] when a copy of it is saved whole ([AudioCache]), to
      * play from it with no extraction and no request (also during a back-off: nothing is asked
      * of YouTube); else null. A resume, or a track kept through an outage ([keepFormat]), only in
-     * its own format; otherwise the one the quality setting asks for when known, else, online,
-     * one at least as good as the setting asks ([CacheKeys.wantedBps]); offline any. Not a copy
+     * its own format (as is an [itag] asked for); otherwise the one the quality setting asks for
+     * when known, else, online, one at least as good as the setting asks ([CacheKeys.wantedBps]);
+     * offline any. Not a copy
      * just found missing ([AudioCache.misses]): its retry goes to the network. Recorded as
      * served, so a later resume keeps that file.
      */
-    fun cachedKey(ytId: String, midStream: Boolean): String? {
+    fun cachedKey(ytId: String, midStream: Boolean, itag: Int? = null): String? {
         if (AudioCache.misses.recent(ytId)) return null
-        val keep = kept[ytId] ?: if (midStream) served.get(ytId, now())?.itag?.takeIf { it > 0 } else null
+        val keep = itag ?: keptItag(ytId, midStream)
         val rungStream = cache.get(ytId, currentRung(), null, now())
         val before = served.get(ytId, now())
         val ladder = before?.ladderBps?.takeIf { it.isNotEmpty() } ?: rungStream?.ladderBps ?: emptyList()
@@ -217,6 +219,10 @@ internal object StreamResolver {
         )
         return key
     }
+
+    /** The itag a load of [ytId] must keep: a kept format's, or for a resume the one served. */
+    private fun keptItag(ytId: String, midStream: Boolean): Int? =
+        kept[ytId] ?: if (midStream) served.get(ytId, now())?.itag?.takeIf { it > 0 } else null
 
     private fun serve(s: ResolvedStream): ResolvedStream {
         served.put(s.ytId, s, s.resolvedAtMs + SERVED_TTL_MS)

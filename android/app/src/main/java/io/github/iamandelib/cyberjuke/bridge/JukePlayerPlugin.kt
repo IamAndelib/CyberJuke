@@ -36,6 +36,7 @@ import io.github.iamandelib.cyberjuke.playback.AudioQuality
 import io.github.iamandelib.cyberjuke.playback.Background
 import io.github.iamandelib.cyberjuke.playback.BridgeLimits
 import io.github.iamandelib.cyberjuke.playback.ControllerKey
+import io.github.iamandelib.cyberjuke.playback.CrossfadePlan
 import io.github.iamandelib.cyberjuke.playback.JukeTracks
 import io.github.iamandelib.cyberjuke.playback.JukeUris
 import io.github.iamandelib.cyberjuke.playback.LaunchOptions
@@ -57,7 +58,7 @@ import kotlin.math.roundToInt
 /**
  * Capacitor bridge to PlaybackService. Contract (TS side):
  *   setQueue, queueNext, removeItem, moveItem, play, pause, seekTo, skipToNext,
- *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, getState,
+ *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, setCrossfade, getState,
  *   getAppInfo, getLaunchOptions, getBlockState, setNetworkPrefs, retryNow, getNetStatus,
  *   setGestureExclusion, addAutoplay, setAutoplay, restore, removeIds, setLikedIds,
  *   setCacheLimit, clearCache, signedOut, signedIn, cachedIds; events 'state', 'trackError',
@@ -764,6 +765,17 @@ class JukePlayerPlugin : Plugin() {
         PlayerPrefsStore.setQuality(context, StreamResolver.quality)
         // Takes effect from the next resolution (next track / next prepare).
         call.resolve()
+    }
+
+    /**
+     * `setCrossfade({ ms: 0 | 3000 | 6000 | 10000 })`: Off, or the fade between tracks that end by
+     * themselves (the service saves it). Anything else rejects.
+     */
+    @PluginMethod
+    fun setCrossfade(call: PluginCall) {
+        val ms = CrossfadePlan.valid(call.intArg("ms")) ?: return call.reject("ms must be 0, 3000, 6000 or 10000")
+        val args = Bundle().apply { putInt(QueueCommands.ARG_MS, ms) }
+        withController(call) { c -> sendCommand(call, c, QueueCommands.SET_CROSSFADE, args) }
     }
 
     // ---- the listening cache ----------------------------------------------------------------

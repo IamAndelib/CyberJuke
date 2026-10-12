@@ -4,7 +4,7 @@
  */
 import { computed, effect, signal, untracked } from '@preact/signals';
 import { UNKNOWN_ARTIST, UNTITLED, artworkUrl, makeTrack, type Track } from '../data/model';
-import { history, knownTrack, liked, IPV4_MODES, type Ipv4Mode, type Quality } from '../stores/library';
+import { history, knownTrack, liked, IPV4_MODES, type CrossfadeMs, type Ipv4Mode, type Quality } from '../stores/library';
 import { catalog } from '../stores/catalog';
 import { toast } from '../stores/toast';
 import { YT_ID_RE, parseNativeState } from '../core/guards';
@@ -409,6 +409,7 @@ export class NativePlayer implements Player {
   }
 
   setQuality = (quality: Quality) => JukePlayer.setQuality({ quality });
+  setCrossfade = (ms: CrossfadeMs) => JukePlayer.setCrossfade({ ms });
   setNetworkPrefs = (prefs: { ipv4: Ipv4Mode }) => JukePlayer.setNetworkPrefs({ ipv4: prefs.ipv4 });
   retryNow = () => JukePlayer.retryNow();
 

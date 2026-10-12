@@ -1,6 +1,6 @@
 import type { ReadonlySignal } from '@preact/signals';
 import type { Track } from '../data/model';
-import type { Ipv4Mode, Quality } from '../stores/library';
+import type { CrossfadeMs, Ipv4Mode, Quality } from '../stores/library';
 import type { RepeatMode } from './native';
 
 export type { RepeatMode };
@@ -143,6 +143,8 @@ export interface Player {
   /** Called when autoplay needs more tracks (native: the `queueLow` event). Returns an unsubscribe. */
   onQueueLow(cb: (e: QueueLow) => void): () => void;
   setQuality(q: Quality): Promise<void>;
+  /** Crossfade between tracks (native only; the web player ignores it). */
+  setCrossfade(ms: CrossfadeMs): Promise<void>;
   /** Y6: the IPv4 setting for YouTube requests (native only; the web player ignores it). */
   setNetworkPrefs(prefs: { ipv4: Ipv4Mode }): Promise<void>;
   /** The block banner's "Try now": lift YouTube's back-off now (playback it stopped resumes). */

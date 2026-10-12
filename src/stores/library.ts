@@ -34,6 +34,10 @@ export const QUALITIES: readonly Quality[] = ['auto', 'high', 'low'];
 export type CacheMb = 128 | 256 | 512;
 export const CACHE_SIZES: readonly CacheMb[] = [128, 256, 512];
 
+/** Crossfade between tracks that end by themselves, in ms; 0 = Off (Settings → Crossfade). */
+export type CrossfadeMs = 0 | 3000 | 6000 | 10000;
+export const CROSSFADES: readonly CrossfadeMs[] = [0, 3000, 6000, 10000];
+
 /** Minutes between checks for new tracks; 0 = only when I refresh. */
 type CheckEvery = 5 | 15 | 30 | 60 | 0;
 export const CHECK_EVERY_OPTIONS: readonly CheckEvery[] = [5, 15, 30, 60, 0];
@@ -62,6 +66,8 @@ export interface Settings {
   checkUpdates: boolean;
   /** How much music the phone may keep (the listening cache): liked songs to play offline, recent and next tracks. */
   cacheMb: CacheMb;
+  /** Blends the end of a track into the next (native only; the browser player ignores it). */
+  crossfadeMs: CrossfadeMs;
   /** The saved format's version: each migration below runs once. */
   version: number;
 }
@@ -84,6 +90,7 @@ const DEFAULT_SETTINGS: Settings = {
   autoplay: true,
   checkUpdates: true,
   cacheMb: 256,
+  crossfadeMs: 0,
   version: SETTINGS_VERSION,
 };
 
@@ -204,6 +211,8 @@ export async function loadLibrary(): Promise<void> {
   if (!CHECK_EVERY_OPTIONS.includes(merged.checkEvery)) merged.checkEvery = DEFAULT_SETTINGS.checkEvery;
   // Saved before the listening cache (or unknown): the default size.
   if (!CACHE_SIZES.includes(merged.cacheMb)) merged.cacheMb = DEFAULT_SETTINGS.cacheMb;
+  // Saved before Crossfade (or unknown): Off.
+  if (!CROSSFADES.includes(merged.crossfadeMs)) merged.crossfadeMs = DEFAULT_SETTINGS.crossfadeMs;
   settings.value = merged;
   if (migrated || preferIpv4 !== undefined || upgraded) write(K_SETTINGS, merged);
 }

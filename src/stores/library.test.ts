@@ -32,7 +32,7 @@ describe('theme migration', () => {
   it('migrates a saved GRiD theme to Brutalist and saves it', async () => {
     store.set('settings', JSON.stringify({ theme: 'grid', showNsfw: true, quality: 'low' }));
     await lib.loadLibrary();
-    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: true, cacheMb: 256, version: 2 });
+    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: true, cacheMb: 256, crossfadeMs: 0, version: 2 });
     await flush();
     expect(JSON.parse(store.get('settings')!).theme).toBe('brutalist');
   });
@@ -188,6 +188,28 @@ describe('listening cache setting', () => {
       store.set('settings', JSON.stringify({ cacheMb: junk, version: 2 }));
       await lib.loadLibrary();
       expect(lib.settings.value.cacheMb).toBe(256);
+    }
+  });
+});
+
+describe('crossfade setting', () => {
+  it('is Off unless one of the lengths was chosen, and keeps a choice', async () => {
+    expect(lib.CROSSFADES).toEqual([0, 3000, 6000, 10000]);
+    await lib.loadLibrary();
+    expect(lib.settings.value.crossfadeMs).toBe(0);
+    // Saved before the setting existed: Off, nothing else changes.
+    store.set('settings', JSON.stringify({ theme: 'vt320', quality: 'low', cacheMb: 512, version: 2 }));
+    await lib.loadLibrary();
+    expect(lib.settings.value).toMatchObject({ crossfadeMs: 0, theme: 'vt320', quality: 'low', cacheMb: 512 });
+    lib.updateSettings({ crossfadeMs: 6000 });
+    await flush();
+    expect(JSON.parse(store.get('settings')!)).toMatchObject({ crossfadeMs: 6000 });
+    await lib.loadLibrary();
+    expect(lib.settings.value.crossfadeMs).toBe(6000);
+    for (const junk of [5000, '3000', 3, null, -1, 10001]) {
+      store.set('settings', JSON.stringify({ crossfadeMs: junk, version: 2 }));
+      await lib.loadLibrary();
+      expect(lib.settings.value.crossfadeMs).toBe(0);
     }
   });
 });

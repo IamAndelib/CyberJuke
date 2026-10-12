@@ -3,7 +3,7 @@
  * The native engineer implements exactly this; do not change it unilaterally.
  */
 import { registerPlugin } from '@capacitor/core';
-import type { Quality } from '../stores/library';
+import type { CrossfadeMs, Quality } from '../stores/library';
 
 export interface NativeTrack { id: string; ytId: string; title: string; artist: string; artworkUrl: string; by?: string; postUrl?: string; membersOnly?: boolean }
 export type RepeatMode = 'off' | 'all' | 'one';
@@ -77,6 +77,11 @@ interface JukePlayerPlugin {
   setRepeat(o: { mode: RepeatMode }): Promise<void>;
   /** 'auto' steps between bitrates as the connection allows, between tracks; an unknown value is 'auto'. */
   setQuality(o: { quality: Quality }): Promise<void>;
+  /**
+   * Crossfade: 0 (Off) or the fade, in ms, between tracks that end by themselves (not on a
+   * skip, repeat-one or an outage; shrunk on short tracks). Saved natively; anything else rejects.
+   */
+  setCrossfade(o: { ms: CrossfadeMs }): Promise<void>;
   getState(): Promise<NativeState>;
   /** From an Android intent extra (debuggable builds), used by the CI smoke test. */
   getLaunchOptions(): Promise<{ autoplay?: 'latest' }>;

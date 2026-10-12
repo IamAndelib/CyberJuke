@@ -91,6 +91,9 @@ class PlaybackService : MediaSessionService() {
     /** Loads the playing item and the next one only; told which they are ([updateLoadAhead]). */
     private var oneAhead: OneAheadLoadControl? = null
 
+    /** The crossfade between tracks (Settings → Crossfade; Off by default). */
+    private var crossfade: Crossfader? = null
+
     /** Auto quality's rung, decided as each track starts. */
     private val governor = QualityGovernor()
 
@@ -470,7 +473,8 @@ class PlaybackService : MediaSessionService() {
         AudioCache.addListener(likedSaver.cacheListener)
         AudioCache.addLikedListener(likedSaver.likedListener)
         val upstream = DefaultDataSource.Factory(this, OkHttpDataSource.Factory(Http.streaming))
-        val dataSourceFactory = ResolvingDataSource.Factory(AudioCache.dataSourceFactory(upstream), YtDataSpecResolver)
+        val cacheSources = AudioCache.dataSourceFactory(upstream)
+        val dataSourceFactory = ResolvingDataSource.Factory(cacheSources, YtDataSpecResolver)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
             .setLoadErrorHandlingPolicy(JukeLoadErrorPolicy())
 
@@ -512,6 +516,14 @@ class PlaybackService : MediaSessionService() {
         queueHost = ExoQueueHost(exo)
         queue = NativeQueue(queueHost)
         exo.addListener(PlayerListener())
+        // Crossfade (Settings): the outgoing track's last seconds on a second, bare player that
+        // exists only during a fade (CrossfadeTail); the queue and the session stay on this one.
+        val fader = Crossfader(
+            ExoCrossfadeHost(this, exo, handler, cacheSources, audioAttributes),
+            PlayerPrefsStore.crossfadeMs(this),
+        )
+        exo.addListener(CrossfadeEvents(fader))
+        crossfade = fader
         // A load finished (a track all buffered; isLoading may stay true for a gated one): the
         // liked saver looks again, as playback may not need the network any more.
         exo.addAnalyticsListener(object : AnalyticsListener {
@@ -600,6 +612,9 @@ class PlaybackService : MediaSessionService() {
             }
             networkCallbackRegistered = false
         }
+        // Its tail shares the player's playback thread: released first.
+        crossfade?.release()
+        crossfade = null
         mediaSession?.let { session ->
             session.player.release()
             session.release()
@@ -851,6 +866,12 @@ class PlaybackService : MediaSessionService() {
             queue.dropUpcomingAuto()
         }
         queueChanged()
+    }
+
+    /** The Crossfade setting (validated): saved, and in use at once (a change stops a fade under way). */
+    private fun setCrossfade(ms: Int) {
+        PlayerPrefsStore.setCrossfadeMs(this, ms)
+        crossfade?.setSetting(ms)
     }
 
     /** A tap in Up next: on an autoplay item the radio continues from it. */
@@ -1436,6 +1457,9 @@ class PlaybackService : MediaSessionService() {
                         BridgeLimits.checkString(args.getString(QueueCommands.ARG_SEED), "seedId"),
                     )
                     QueueCommands.ACTION_SET_AUTOPLAY -> setAutoplay(args.getBoolean(QueueCommands.ARG_ENABLED, true))
+                    QueueCommands.ACTION_SET_CROSSFADE -> setCrossfade(
+                        CrossfadePlan.valid(args.getInt(QueueCommands.ARG_MS, -1)) ?: return bad,
+                    )
                     QueueCommands.ACTION_SKIP_TO -> {
                         val index = args.getInt(QueueCommands.ARG_INDEX, -1)
                         if (index !in 0 until p.mediaItemCount) return bad

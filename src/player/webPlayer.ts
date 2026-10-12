@@ -9,7 +9,7 @@ import { toast } from '../stores/toast';
 import { TEST_HOOKS, exposeForTests } from '../core/testHooks';
 import { Queue } from './queue';
 import type { RepeatMode } from './native';
-import type { Ipv4Mode, Quality } from '../stores/library';
+import type { CrossfadeMs, Ipv4Mode, Quality } from '../stores/library';
 import { AUTOPLAY_LOW, EMPTY_STATE, LIST_CONTEXT, livePosition, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
 
 /* Minimal typings for the parts of the IFrame API we use. */
@@ -410,6 +410,11 @@ export class WebPlayer implements Player {
     if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setQuality', { quality: q }]);
     // The IFrame API ignores quality requests nowadays; kept for interface parity.
     this.yt?.setPlaybackQuality?.(q === 'low' ? 'small' : 'default');
+  }
+
+  async setCrossfade(ms: CrossfadeMs): Promise<void> {
+    // The IFrame player has no crossfade; e2e checks the call the native plugin would get.
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setCrossfade', { ms }]);
   }
 
   async setNetworkPrefs(prefs: { ipv4: Ipv4Mode }): Promise<void> {

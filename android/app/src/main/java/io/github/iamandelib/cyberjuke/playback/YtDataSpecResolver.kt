@@ -27,22 +27,34 @@ internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
     /** Only the playing track and the next one open their stream ([OpenGate]; PlaybackService sets it). */
     val gate = OpenGate()
 
-    override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
+    override fun resolveDataSpec(dataSpec: DataSpec): DataSpec = resolve(dataSpec, gated = true, itag = null)
+
+    /**
+     * The crossfade's tail (CrossfadeTail): the outgoing track's own file, [itag] (null: as
+     * usual). It doesn't wait at the [gate]: that track has just stopped being the playing one,
+     * and it is the stream already open, not one ahead.
+     */
+    class Pinned(private val itag: Int?) : ResolvingDataSource.Resolver {
+        override fun resolveDataSpec(dataSpec: DataSpec): DataSpec =
+            YtDataSpecResolver.resolve(dataSpec, gated = false, itag = itag)
+    }
+
+    private fun resolve(dataSpec: DataSpec, gated: Boolean, itag: Int?): DataSpec {
         val ytId = JukeUris.ytIdOf(dataSpec.uri)
         if (ytId == LaunchOptions.CI_TONE && allowCiTone) {
             return dataSpec.buildUpon().setUri(Uri.parse(LaunchOptions.CI_TONE_ASSET)).build()
         }
         if (ytId != null) {
             // The track after next waits for its turn (prepared early, it would extract now).
-            gate.await(ytId)
+            if (gated) gate.await(ytId)
             val midStream = dataSpec.position > 0
             // Saved whole in the listening cache: played from it, no extraction, no request. Its
             // URI stays ours (it has no stream URL): see CacheMissGuard.
-            StreamResolver.cachedKey(ytId, midStream)?.let { key ->
+            StreamResolver.cachedKey(ytId, midStream, itag)?.let { key ->
                 return dataSpec.buildUpon().setKey(key).build()
             }
             // A load that starts past byte 0 resumes a track: keep its itag (same file).
-            return streamSpec(dataSpec, ytId, StreamResolver.resolve(ytId, midStream))
+            return streamSpec(dataSpec, ytId, StreamResolver.resolve(ytId, midStream, itag))
         }
         // An HLS manifest, variant or segment (the manifest-only fallback): no cache key, so it
         // is never cached.
