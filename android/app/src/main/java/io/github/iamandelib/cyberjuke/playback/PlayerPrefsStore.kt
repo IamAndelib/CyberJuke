@@ -21,10 +21,10 @@ internal object PlayerPrefsStore {
         prefs(context).edit().putBoolean(KEY_AUTOPLAY, enabled).apply()
     }
 
-    fun quality(context: Context): StreamResolver.Quality =
-        if (prefs(context).getString(KEY_QUALITY, null) == "low") StreamResolver.Quality.LOW else StreamResolver.Quality.HIGH
+    /** Nothing saved yet, or something unknown: Auto. */
+    fun quality(context: Context): AudioQuality = AudioQuality.of(prefs(context).getString(KEY_QUALITY, null))
 
-    fun setQuality(context: Context, quality: StreamResolver.Quality) {
-        prefs(context).edit().putString(KEY_QUALITY, if (quality == StreamResolver.Quality.LOW) "low" else "high").apply()
+    fun setQuality(context: Context, quality: AudioQuality) {
+        prefs(context).edit().putString(KEY_QUALITY, quality.key).apply()
     }
 }

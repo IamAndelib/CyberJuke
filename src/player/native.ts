@@ -70,6 +70,7 @@ interface JukePlayerPlugin {
   skipToIndex(o: { index: number; expectId?: string }): Promise<void>;
   setShuffle(o: { enabled: boolean }): Promise<void>;
   setRepeat(o: { mode: RepeatMode }): Promise<void>;
+  /** 'auto' steps between bitrates as the connection allows, between tracks; an unknown value is 'auto'. */
   setQuality(o: { quality: Quality }): Promise<void>;
   getState(): Promise<NativeState>;
   /** From an Android intent extra (debuggable builds), used by the CI smoke test. */

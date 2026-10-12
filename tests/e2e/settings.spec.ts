@@ -83,6 +83,38 @@ test('IPv4: Auto by default, sent to the player at start and on change, and kept
   await expect(page.getByTestId('net-status')).toHaveCount(0);
 });
 
+test('Audio quality: Auto by default, three choices that say what they do, sent to the player and kept', async ({ page }) => {
+  await page.goto('/');
+  const sent = async () => (await playerCalls(page)).filter((c) => c[0] === 'setQuality').map((c) => c[1]);
+  await expect.poll(sent).toEqual([{ quality: 'auto' }]);
+  await page.getByTestId('tab-settings').click();
+  const group = page.getByRole('radiogroup', { name: 'Audio quality' });
+  await expect(group.getByRole('radio')).toHaveText(['Auto', 'High', 'Low']);
+  await expect(page.getByTestId('quality-auto')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('quality-desc')).toHaveText('Best quality the connection can keep up with');
+  await page.getByTestId('quality-high').click();
+  await expect(page.getByTestId('quality-desc')).toHaveText('Always the best audio');
+  await page.getByTestId('quality-low').click();
+  await expect(page.getByTestId('quality-low')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('quality-desc')).toHaveText('Uses the least data');
+  await expect.poll(sent).toEqual([{ quality: 'auto' }, { quality: 'high' }, { quality: 'low' }]);
+  await page.reload();
+  await expect.poll(sent).toEqual([{ quality: 'low' }]);
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('quality-low')).toHaveAttribute('aria-checked', 'true');
+});
+
+test('a saved High (the old default) becomes Auto; a saved Low stays', async ({ page }) => {
+  await seedStorage(page, { [SETTINGS_KEY]: { theme: 'dark', showNsfw: false, quality: 'high' } });
+  await page.goto('/');
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('quality-auto')).toHaveAttribute('aria-checked', 'true');
+  await page.evaluate((k) => localStorage.setItem(k, JSON.stringify({ theme: 'dark', showNsfw: false, quality: 'low' })), SETTINGS_KEY);
+  await page.reload();
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('quality-low')).toHaveAttribute('aria-checked', 'true');
+});
+
 test('an old "Prefer IPv4: on" becomes Always', async ({ page }) => {
   await seedStorage(page, { [SETTINGS_KEY]: { theme: 'dark', preferIpv4: true } });
   await page.goto('/');
@@ -219,11 +251,11 @@ test('Updates: the automatic check is a setting that persists', async ({ page })
 test('radio groups and the Library tabs are one Tab stop each, worked with the arrow keys', async ({ page }) => {
   await start(page);
   await page.getByTestId('tab-settings').click();
-  await page.getByTestId('quality-high').focus();
+  await page.getByTestId('quality-auto').focus();
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByTestId('quality-low')).toHaveAttribute('aria-checked', 'true');
-  await expect(page.getByTestId('quality-low')).toBeFocused();
-  await expect(page.getByTestId('quality-high')).toHaveAttribute('tabindex', '-1');
+  await expect(page.getByTestId('quality-high')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('quality-high')).toBeFocused();
+  await expect(page.getByTestId('quality-auto')).toHaveAttribute('tabindex', '-1');
   await page.getByTestId('ipv4-auto').focus();
   await page.keyboard.press('End');
   await expect(page.locator('[data-testid^="ipv4-"]').last()).toHaveAttribute('aria-checked', 'true');

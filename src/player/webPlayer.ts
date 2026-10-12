@@ -400,6 +400,8 @@ export class WebPlayer implements Player {
   }
 
   async setQuality(q: Quality): Promise<void> {
+    // e2e checks the call the native plugin would get.
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setQuality', { quality: q }]);
     // The IFrame API ignores quality requests nowadays; kept for interface parity.
     this.yt?.setPlaybackQuality?.(q === 'low' ? 'small' : 'default');
   }

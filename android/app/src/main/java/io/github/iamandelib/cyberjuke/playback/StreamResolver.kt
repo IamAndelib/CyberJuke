@@ -50,6 +50,8 @@ internal data class ResolvedStream(
     val itag: Int,
     /** [NetEpoch.generation] when the extraction started: older ones are bound to an old IP. */
     val netGen: Int = 0,
+    /** The video's quality ladder ([QualityLadder]) as bitrates, best first; empty for a fallback stream. */
+    val ladderBps: List<Int> = emptyList(),
 )
 
 /**
@@ -66,6 +68,9 @@ internal data class ResolvedStream(
  *   trips it ([YtGuard]); a successful extraction ends the unproven state.
  * - Re-resolving mid-track keeps the same itag ([reResolve], or a load that starts past byte 0),
  *   so the resumed bytes belong to the same file. Streams are also cached by itag for that.
+ * - Quality: the audio-only formats make a ladder ([QualityLadder]); HIGH and LOW are its top
+ *   and bottom, AUTO the rung [autoRung] (set between tracks by PlaybackService's
+ *   [QualityGovernor]). Every rung of an extraction is cached, so a step costs no request.
  * - A change of network ([NetEpoch]) drops the cached URLs bound to the address family that
  *   changed ([dropBoundTo]); a URL extracted during the change is not cached.
  * - Only https URLs are served ([Hosts.isAllowedMediaUrl]).
@@ -78,10 +83,12 @@ internal object StreamResolver {
     const val USE_POST_BODY = true
     val POST_BODY = byteArrayOf(0x78, 0)
 
-    enum class Quality { HIGH, LOW }
-
     @Volatile
-    var quality: Quality = Quality.HIGH
+    var quality: AudioQuality = AudioQuality.AUTO
+
+    /** AUTO's rung for tracks resolved from now on (0 = the top); PlaybackService sets it. */
+    @Volatile
+    var autoRung: Int = 0
 
     private val cache = TtlLru<String, ResolvedStream>(MAX_CACHE)
 
@@ -106,7 +113,15 @@ internal object StreamResolver {
         },
     )
 
-    private fun key(ytId: String, q: Quality) = "$ytId|${q.name}"
+    /** The cache key of a video's [rung] ([QualityLadder.LOWEST]: its bottom one). */
+    private fun rungKey(ytId: String, rung: Int) = if (rung == QualityLadder.LOWEST) "$ytId|low" else "$ytId|r$rung"
+
+    private fun currentRung(): Int = QualityLadder.rungFor(quality, autoRung)
+
+    /** [rung] of [ytId] from the cache; a rung past the video's ladder is its bottom one. */
+    private fun cached(ytId: String, rung: Int, now: Long): ResolvedStream? =
+        cache.get(rungKey(ytId, rung), now)
+            ?: cache.get(rungKey(ytId, QualityLadder.LOWEST), now)?.takeIf { rung >= it.ladderBps.size }
 
     private fun itagKey(ytId: String, itag: Int) = "$ytId|i$itag"
 
@@ -120,17 +135,17 @@ internal object StreamResolver {
     fun resolve(ytId: String, midStream: Boolean = false): ResolvedStream {
         // Y1: no request during a back-off, and no stale URL either (a 403 on it would be one).
         NetBlock.check()
-        val q = quality
-        val k = key(ytId, q)
+        val rung = currentRung()
+        val k = rungKey(ytId, rung)
         // A resume keeps the file it was playing: a cached stream of another itag won't do.
         val keep = if (midStream) served.get(ytId, now())?.itag?.takeIf { it > 0 } else null
-        val hit = cache.get(k, now())?.takeIf { keep == null || it.itag == keep }
+        val hit = cached(ytId, rung, now())?.takeIf { keep == null || it.itag == keep }
             ?: keep?.let { cache.get(itagKey(ytId, it), now()) }
         if (hit != null) return serve(hit)
         val prefer = pins.remove(ytId) ?: keep
         val flight = if (prefer != null) itagKey(ytId, prefer) else k
         for (attempt in 0..1) {
-            val task = FutureTask(Callable { extract(ytId, q, k, prefer) })
+            val task = FutureTask(Callable { extract(ytId, rung, prefer) })
             val running = inFlight.putIfAbsent(flight, task)
             val mine = running == null
             val job = running ?: task
@@ -165,8 +180,8 @@ internal object StreamResolver {
         return s
     }
 
-    private fun extract(ytId: String, q: Quality, k: String, preferItag: Int?): ResolvedStream {
-        if (preferItag == null) cache.get(k, now())?.let { return it }
+    private fun extract(ytId: String, rung: Int, preferItag: Int?): ResolvedStream {
+        if (preferItag == null) cached(ytId, rung, now())?.let { return it }
         val gen = NetEpoch.generation
         val started = now()
         val extracted = try {
@@ -181,53 +196,65 @@ internal object StreamResolver {
             if (kind == FailureKind.BROKEN) PlayerBus.emitExtractorBroken(reason)
             throw ResolveException(ytId, reason, e, kind)
         }
-        val stream = choose(ytId, extracted, q, preferItag, gen)
+        val stream = choose(ytId, extracted, rung, preferItag, gen)
         if (!Hosts.isAllowedMediaUrl(stream.url)) {
             throw ResolveException(ytId, "NO_STREAM: not an https googlevideo URL", null, FailureKind.CONTENT)
         }
         Log.i(TAG, "resolve($ytId) -> ${stream.description} in ${now() - started}ms")
         if (NetEpoch.generation == gen) {
             // Not cached when the network changed meanwhile: the URL is bound to the old IP.
-            val until = StreamUrls.cacheUntil(stream.url, stream.resolvedAtMs)
-            cache.put(itagKey(ytId, stream.itag), stream, until)
-            val byQuality = if (preferItag == null) {
-                stream
+            put(itagKey(ytId, stream.itag), stream)
+            val ladder = ladderOf(extracted)
+            if (ladder.isEmpty()) {
+                // A fallback stream: the same whatever the rung ([cached]).
+                val fallback = if (preferItag == null) {
+                    stream
+                } else {
+                    runCatching { choose(ytId, extracted, rung, null, gen) }.getOrNull()
+                }
+                fallback?.takeIf { Hosts.isAllowedMediaUrl(it.url) }?.let { put(rungKey(ytId, QualityLadder.LOWEST), it) }
             } else {
-                runCatching { choose(ytId, extracted, q, null, gen) }.getOrNull()
-            }
-            byQuality?.takeIf { Hosts.isAllowedMediaUrl(it.url) }?.let {
-                cache.put(k, it, StreamUrls.cacheUntil(it.url, it.resolvedAtMs))
-                cache.put(itagKey(ytId, it.itag), it, StreamUrls.cacheUntil(it.url, it.resolvedAtMs))
+                // Every rung: Auto steps between tracks without another extraction.
+                val bps = ladder.map { it.bitrate }
+                ladder.forEachIndexed { i, c ->
+                    val s = if (c.itag == stream.itag && c.url == stream.url) stream else rungStream(ytId, c, i, bps, stream.resolvedAtMs, gen)
+                    if (!Hosts.isAllowedMediaUrl(s.url)) return@forEachIndexed
+                    put(rungKey(ytId, i), s)
+                    if (i == ladder.lastIndex) put(rungKey(ytId, QualityLadder.LOWEST), s)
+                }
             }
         }
         return stream
     }
 
-    private fun choose(ytId: String, ex: YtCompat.Extracted, q: Quality, preferItag: Int?, gen: Int): ResolvedStream {
+    private fun put(key: String, s: ResolvedStream) = cache.put(key, s, StreamUrls.cacheUntil(s.url, s.resolvedAtMs))
+
+    /** The audio-only formats as a quality ladder, original language track preferred. */
+    private fun ladderOf(ex: YtCompat.Extracted): List<YtCompat.Candidate> {
+        val originals = ex.audio.filter { it.originalTrack }
+        return QualityLadder.rank(originals.ifEmpty { ex.audio }, { it.bitrate }, { it.mimeType })
+    }
+
+    private fun rungStream(ytId: String, c: YtCompat.Candidate, i: Int, bps: List<Int>, now: Long, gen: Int) =
+        stream(ytId, c, "audio ${c.mimeType} ${c.bitrate / 1000}kbps rung ${i + 1}/${bps.size}", now, gen, bps)
+
+    private fun choose(ytId: String, ex: YtCompat.Extracted, rung: Int, preferItag: Int?, gen: Int): ResolvedStream {
         val now = now()
+
+        val ladder = ladderOf(ex)
+        val bps = ladder.map { it.bitrate }
 
         // 0. Resuming: the same format as before, if it is still offered.
         if (preferItag != null && preferItag > 0) {
             (ex.audio + ex.muxed).firstOrNull { it.itag == preferItag }?.let { pick ->
-                return stream(ytId, pick, "same itag $preferItag ${pick.mimeType}", now, gen)
+                return stream(ytId, pick, "same itag $preferItag ${pick.mimeType}", now, gen, bps)
             }
         }
 
-        // 1. Progressive audio-only, original language track preferred.
-        val originals = ex.audio.filter { it.originalTrack }
-        val audio = originals.ifEmpty { ex.audio }
-        if (audio.isNotEmpty()) {
-            // Unknown bitrate (-1) sorts as "worst" for HIGH and is avoided for LOW.
-            val sorted = audio.sortedWith(
-                compareByDescending<YtCompat.Candidate> { it.bitrate }
-                    .thenByDescending { YtCompat.isPreferredContainer(it.mimeType) }
-                    .thenByDescending { it.mimeType == MimeTypes.AUDIO_MP4 },
-            )
-            val pick = when (q) {
-                Quality.HIGH -> sorted.first()
-                Quality.LOW -> sorted.lastOrNull { it.bitrate > 0 } ?: sorted.last()
-            }
-            return stream(ytId, pick, "audio ${pick.mimeType} ${pick.bitrate / 1000}kbps", now, gen)
+        // 1. Progressive audio-only: the ladder's rung for the setting.
+        if (ladder.isNotEmpty()) {
+            val i = QualityLadder.index(ladder.size, rung)
+            return rungStream(ytId, ladder[i], i, bps, now, gen)
         }
 
         // 2. Lowest progressive muxed (audio+video) stream; ExoPlayer just plays its audio.
@@ -241,7 +268,14 @@ internal object StreamResolver {
         throw ResolveException(ytId, "NO_STREAM: no playable stream found for $ytId", null, FailureKind.CONTENT)
     }
 
-    private fun stream(ytId: String, c: YtCompat.Candidate, description: String, now: Long, gen: Int) = ResolvedStream(
+    private fun stream(
+        ytId: String,
+        c: YtCompat.Candidate,
+        description: String,
+        now: Long,
+        gen: Int,
+        ladderBps: List<Int> = emptyList(),
+    ) = ResolvedStream(
         ytId = ytId,
         url = c.url,
         headers = YtCompat.streamHeaders(c.url),
@@ -249,6 +283,7 @@ internal object StreamResolver {
         resolvedAtMs = now,
         itag = if (c.itag > 0) c.itag else StreamUrls.itag(c.url) ?: -1,
         netGen = gen,
+        ladderBps = ladderBps,
     )
 
     /** The stream last served for [ytId] (any quality, kept a day, even once expired), or null. */
@@ -285,7 +320,7 @@ internal object StreamResolver {
      */
     fun prefetch(ytId: String) {
         if (NetBlock.isQuiet()) return
-        if (cache.get(key(ytId, quality), now()) != null) return
+        if (cached(ytId, currentRung(), now()) != null) return
         prefetcher.submit(ytId) {
             try {
                 resolve(ytId)

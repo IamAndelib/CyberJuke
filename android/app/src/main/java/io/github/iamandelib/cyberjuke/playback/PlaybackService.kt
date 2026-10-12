@@ -37,6 +37,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -81,6 +82,16 @@ class PlaybackService : MediaSessionService() {
 
     /** The last item that reached READY (its stream worked): TrackErrorPolicy.Facts.playedThisItem. */
     private var lastReadyId: String? = null
+
+    /** The same meter the player's loads report to: Auto quality reads its estimate. */
+    private var bandwidthMeter: DefaultBandwidthMeter? = null
+
+    /** Auto quality's rung, decided as each track starts. */
+    private val governor = QualityGovernor()
+
+    /** For telling a rebuffer from a seek or the first load. */
+    private var lastPlaybackState = Player.STATE_IDLE
+    private var lastSeekAt = 0L
 
     /**
      * Retries after an outage pause while the network stays validated (a weak link stalled
@@ -416,10 +427,14 @@ class PlaybackService : MediaSessionService() {
             .setBackBuffer(BufferPolicy.BACK_MS, /* retainBackBufferFromKeyframe = */ false)
             .setTargetBufferBytes(BufferPolicy.TARGET_BYTES)
             .build()
+        // Given to the player, so Auto quality reads the estimate its own loads make.
+        val meter = DefaultBandwidthMeter.Builder(this).build()
+        bandwidthMeter = meter
 
         val exo = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
             .setLoadControl(loadControl)
+            .setBandwidthMeter(meter)
             .setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
@@ -507,6 +522,7 @@ class PlaybackService : MediaSessionService() {
         }
         mediaSession = null
         player = null
+        bandwidthMeter = null
         super.onDestroy()
     }
 
@@ -514,7 +530,15 @@ class PlaybackService : MediaSessionService() {
 
     private inner class PlayerListener : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_ENDED) endedAt = SystemClock.elapsedRealtime()
+            val now = SystemClock.elapsedRealtime()
+            // Playing, then stalled to fill the buffer again: not a seek's, nor the first load's.
+            if (playbackState == Player.STATE_BUFFERING && lastPlaybackState == Player.STATE_READY &&
+                player?.playWhenReady == true && now - lastSeekAt > SEEK_GRACE_MS
+            ) {
+                governor.onRebuffer(now)
+            }
+            lastPlaybackState = playbackState
+            if (playbackState == Player.STATE_ENDED) endedAt = now
             // Loading again (a restored session's first Play, or a retry): autoplay may top up.
             if (playbackState != Player.STATE_IDLE) {
                 handler.removeCallbacks(lowCheck)
@@ -562,7 +586,10 @@ class PlaybackService : MediaSessionService() {
             reason: Int,
         ) {
             schedulePrefetch()
-            if (reason == Player.DISCONTINUITY_REASON_SEEK) savePosition()
+            if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                lastSeekAt = SystemClock.elapsedRealtime()
+                savePosition()
+            }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -574,6 +601,7 @@ class PlaybackService : MediaSessionService() {
             StreamResolver.cancelPrefetch()
             prefetchedKey = null
             Log.i(TAG, "Transition to ${mediaItem?.mediaId} (${JukeUris.ytIdOf(mediaItem)}), reason=$reason")
+            governQuality(mediaItem)
             schedulePrefetch()
         }
 
@@ -647,6 +675,22 @@ class PlaybackService : MediaSessionService() {
         if (key == prefetchedKey) return
         prefetchedKey = key
         StreamResolver.prefetch(ytId)
+    }
+
+    // ---- Auto quality ---------------------------------------------------------------------------
+
+    /**
+     * A track started: Auto's rung for the tracks resolved from now on (one step at most, from
+     * this track's ladder and the bandwidth estimate). This track keeps the format it has.
+     */
+    private fun governQuality(item: MediaItem?) {
+        if (StreamResolver.quality != AudioQuality.AUTO) return
+        val ladder = JukeUris.ytIdOf(item)?.let { StreamResolver.lastServed(it) }?.ladderBps ?: emptyList()
+        val estimate = bandwidthMeter?.bitrateEstimate ?: 0L
+        val before = StreamResolver.autoRung
+        val rung = governor.onTrackStarted(SystemClock.elapsedRealtime(), estimate, ladder)
+        StreamResolver.autoRung = rung
+        if (rung != before) Log.i(TAG, "Auto quality: rung ${before + 1} -> ${rung + 1} (estimate ${estimate / 1000} kbps)")
     }
 
     // ---- "Add to queue" (play next, FIFO) ----------------------------------------------------
@@ -1361,5 +1405,8 @@ class PlaybackService : MediaSessionService() {
 
         /** While playing, the position is saved this often. */
         private const val POSITION_SAVE_MS = 15_000L
+
+        /** Buffering this soon after a seek is the seek's, not a rebuffer. */
+        private const val SEEK_GRACE_MS = 2_000L
     }
 }

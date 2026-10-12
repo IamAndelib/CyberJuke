@@ -30,6 +30,7 @@ import io.github.iamandelib.cyberjuke.net.Family
 import io.github.iamandelib.cyberjuke.net.Ipv4Mode
 import io.github.iamandelib.cyberjuke.net.NetBlock
 import io.github.iamandelib.cyberjuke.net.NetPrefs
+import io.github.iamandelib.cyberjuke.playback.AudioQuality
 import io.github.iamandelib.cyberjuke.playback.BridgeLimits
 import io.github.iamandelib.cyberjuke.playback.ControllerKey
 import io.github.iamandelib.cyberjuke.playback.JukeTracks
@@ -698,13 +699,10 @@ class JukePlayerPlugin : Plugin() {
         }
     }
 
+    /** `setQuality({ quality: 'auto' | 'high' | 'low' })`; an unknown value is 'auto'. */
     @PluginMethod
     fun setQuality(call: PluginCall) {
-        StreamResolver.quality = when (call.getString("quality")) {
-            "high" -> StreamResolver.Quality.HIGH
-            "low" -> StreamResolver.Quality.LOW
-            else -> return call.reject("quality must be 'high' or 'low'")
-        }
+        StreamResolver.quality = AudioQuality.of(call.getString("quality"))
         PlayerPrefsStore.setQuality(context, StreamResolver.quality)
         // Takes effect from the next resolution (next track / next prepare).
         call.resolve()
