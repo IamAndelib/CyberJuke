@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { expectStable, nextFrame, openSearch, scrollTo, scrollTopOf, start, waitForTracks } from '../helpers';
+import { expectStable, isFeedQuery, nextFrame, openSearch, scrollTo, scrollTopOf, start, waitForTracks } from '../helpers';
 
 /** Scroll memory, back-to-top, and the overlay scrollbar / A–Z fast scroller. */
 
@@ -69,7 +69,7 @@ test('Home keeps its loaded pages and scroll position across tab switches', asyn
   });
   // Let a page that was already on its way land.
   const count = await expectStable(() => rows.count(), 800);
-  const firstPages = () => backend.queries.filter((q) => !q.startAt && !q.select).length;
+  const firstPages = () => backend.queries.filter((q) => !q.startAt && isFeedQuery(q)).length;
   const fetched = firstPages();
   await page.getByTestId('tab-library').click();
   await expect(page.getByTestId('screen-library')).toBeVisible();

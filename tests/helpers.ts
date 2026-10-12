@@ -10,6 +10,12 @@ export async function waitForTracks(page: Page): Promise<void> {
   await expect(page.locator('[data-testid="skeleton"]:visible')).toHaveCount(0);
 }
 
+/**
+ * A Latest or genre page (PAGE_SIZE rows), not a catalog page (300) or the freshness
+ * check (25). All three send a field mask, so the size tells them apart.
+ */
+export const isFeedQuery = (q: { limit?: number } | null | undefined): boolean => q?.limit === 24;
+
 /** Load the app and wait for Home's first page. */
 export async function start(page: Page, path = '/'): Promise<void> {
   await page.goto(path);

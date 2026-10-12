@@ -5,6 +5,7 @@
  *  - only query shapes that have composite indexes (latest, latest-by-genre, and the
  *    catalog: latest with a field mask, optionally `createdAt > since`);
  *  - results cached in memory for ~5 minutes; in-flight requests are de-duplicated;
+ *  - only the fields a track is made of are asked for (CATALOG_FIELDS);
  *  - no polling of the feed itself: the only periodic request is the freshness check
  *    (`newerThan`: a createdAt-only field mask, at most FRESHNESS_LIMIT rows), run in
  *    the foreground at the user's chosen interval.
@@ -36,7 +37,10 @@ const SHUFFLE_PAGES = 4;
 export const CATALOG_PAGE_SIZE = 300;
 /** Safety stop for catalog paging (300 * 40 = 12,000 posts). */
 const CATALOG_MAX_PAGES = 40;
-/** Field mask for catalog requests: only what tracksFromDocument and the counts need. */
+/**
+ * Field mask for Jukebox requests (Latest, genre pages and the catalog): only what
+ * tracksFromDocument and the counts need. A field it starts to read goes here too.
+ */
 export const CATALOG_FIELDS = [
   'attachments',
   'audioAttachmentGenre',
@@ -285,7 +289,8 @@ export class FirestoreSource implements TrackSource {
 
   private raw(genre: string | null, cursor: Cursor | null): Promise<Page> {
     const members = this.members();
-    const body = JSON.stringify(buildQuery({ genre, cursor, members }));
+    // The catalog's mask: the same query shapes (and indexes), about half the bytes.
+    const body = JSON.stringify(buildQuery({ genre, cursor, members, select: members ? MEMBERS_CATALOG_FIELDS : CATALOG_FIELDS }));
     return this.cache.load(body, () => this.request(body, members), {
       stored: (page) => {
         if (genre == null && cursor == null && page.tracks[0]?.createdAt) this.onLatest?.(page.tracks[0].createdAt);
