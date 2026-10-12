@@ -84,6 +84,11 @@ export interface Catalog {
    */
   refresh(opts?: { force?: boolean }): Promise<void>;
   /**
+   * Show the saved catalog, if there is one, without any request (refresh() reads it
+   * too, first). Never rejects.
+   */
+  restoreSaved(): Promise<void>;
+  /**
    * Sign-in state changed: forget everything (memory and both saved catalogs), drop
    * the result of any fetch still running, and do a full refresh.
    */
@@ -215,6 +220,9 @@ export function createCatalog(deps: CatalogDeps): Catalog {
       });
       inflight = mine;
       return mine;
+    },
+    restoreSaved() {
+      return restore(key());
     },
     async reset() {
       gen++;
