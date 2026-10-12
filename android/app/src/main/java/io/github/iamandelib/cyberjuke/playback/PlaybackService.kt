@@ -83,6 +83,9 @@ class PlaybackService : MediaSessionService() {
     /** The last item that reached READY (its stream worked): TrackErrorPolicy.Facts.playedThisItem. */
     private var lastReadyId: String? = null
 
+    /** Loads the playing item and the next one only; told which they are ([updateLoadAhead]). */
+    private var oneAhead: OneAheadLoadControl? = null
+
     /** The same meter the player's loads report to: Auto quality reads its estimate. */
     private var bandwidthMeter: DefaultBandwidthMeter? = null
 
@@ -415,18 +418,22 @@ class PlaybackService : MediaSessionService() {
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
 
-        // A deeper buffer than Media3's default (BufferPolicy): short drops are never heard.
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                BufferPolicy.MIN_MS,
-                BufferPolicy.MAX_MS,
-                BufferPolicy.START_MS,
-                BufferPolicy.AFTER_REBUFFER_MS,
-            )
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .setBackBuffer(BufferPolicy.BACK_MS, /* retainBackBufferFromKeyframe = */ false)
-            .setTargetBufferBytes(BufferPolicy.TARGET_BYTES)
-            .build()
+        // A deeper buffer than Media3's default (BufferPolicy): short drops are never heard. Only
+        // the playing item and the next one load (OneAheadLoadControl).
+        val loadControl = OneAheadLoadControl(
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    BufferPolicy.MIN_MS,
+                    BufferPolicy.MAX_MS,
+                    BufferPolicy.START_MS,
+                    BufferPolicy.AFTER_REBUFFER_MS,
+                )
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .setBackBuffer(BufferPolicy.BACK_MS, /* retainBackBufferFromKeyframe = */ false)
+                .setTargetBufferBytes(BufferPolicy.TARGET_BYTES)
+                .build(),
+        )
+        oneAhead = loadControl
         // Given to the player, so Auto quality reads the estimate its own loads make.
         val meter = DefaultBandwidthMeter.Builder(this).build()
         bandwidthMeter = meter
@@ -783,6 +790,7 @@ class PlaybackService : MediaSessionService() {
 
     /** Publishes the queue facts for the plugin's state and checks autoplay (posted, once). */
     private fun queueChanged() {
+        updateLoadAhead()
         QueueInfo.pendingSerials = queue.pendingSerials.toSet()
         QueueInfo.context = context
         QueueInfo.seedId = seedId
@@ -792,6 +800,19 @@ class PlaybackService : MediaSessionService() {
         sessionDirty = true
         handler.removeCallbacks(saveSession)
         handler.postDelayed(saveSession, SESSION_SAVE_DELAY_MS)
+    }
+
+    /** Tells the load control which items play now and next (in play order: shuffle, repeat). */
+    private fun updateLoadAhead() {
+        val lc = oneAhead ?: return
+        val p = player
+        if (p == null || p.mediaItemCount == 0) {
+            lc.currentIndex = C.INDEX_UNSET
+            lc.nextIndex = C.INDEX_UNSET
+            return
+        }
+        lc.nextIndex = p.nextMediaItemIndex
+        lc.currentIndex = p.currentMediaItemIndex
     }
 
     /**

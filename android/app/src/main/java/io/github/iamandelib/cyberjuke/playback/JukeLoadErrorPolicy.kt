@@ -12,8 +12,9 @@ import io.github.iamandelib.cyberjuke.net.BlockedException
 /**
  * Don't keep retrying what can never succeed or would make things worse: unavailable videos,
  * bot checks, a running back-off, and HTTP 403/410/429 (429 must never be retried; 403/410 are
- * handled by re-resolving in PlaybackService). Network failures are retried more often than
- * ExoPlayer's default, with a capped back-off ([LoadRetry]), while the buffer keeps playing.
+ * handled by re-resolving in PlaybackService). A broken connection is retried more often than
+ * ExoPlayer's default, with a capped back-off ([LoadRetry]), while the buffer keeps playing;
+ * everything else keeps the default count.
  */
 @OptIn(UnstableApi::class)
 internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
@@ -27,10 +28,21 @@ internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
         if (http != null && http.responseCode in NO_RETRY_HTTP) return C.TIME_UNSET
         // What the default never retries (a malformed file, a missing one) stays that way.
         if (super.getRetryDelayMsFor(loadErrorInfo) == C.TIME_UNSET) return C.TIME_UNSET
-        return LoadRetry.delayMs(loadErrorInfo.errorCount)
+        // Only a broken connection gets the longer run of retries; an HTTP status (5xx) or the
+        // resolver's network failure (an extraction each time) keeps the default count.
+        val network = LoadRetry.isNetwork(
+            httpStatus = http != null,
+            resolver = resolve != null,
+            httpTransport = e.findCause<HttpDataSource.HttpDataSourceException>() != null,
+            transportCause = LoadRetry.hasTransportCause(e),
+        )
+        return LoadRetry.retryDelayMs(loadErrorInfo.errorCount, network) ?: C.TIME_UNSET
     }
 
-    /** The error reaches the player only after this many retries (and once it needs the data). */
+    /**
+     * The error reaches the player only after this many retries (and once it needs the data).
+     * It can't tell errors apart: [getRetryDelayMsFor] gives up sooner on the others.
+     */
     override fun getMinimumLoadableRetryCount(dataType: Int): Int =
         maxOf(super.getMinimumLoadableRetryCount(dataType), LoadRetry.NETWORK_RETRIES)
 

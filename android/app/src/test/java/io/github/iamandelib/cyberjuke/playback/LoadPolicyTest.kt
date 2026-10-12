@@ -1,8 +1,14 @@
 package io.github.iamandelib.cyberjuke.playback
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.EOFException
+import java.io.IOException
+import java.net.SocketException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 
 class LoadPolicyTest {
     @Test
@@ -24,6 +30,47 @@ class LoadPolicyTest {
         // Two minutes ahead, half a minute behind (Media3's default ahead is 50 s).
         assertEquals(120_000, BufferPolicy.MIN_MS)
         assertEquals(30_000, BufferPolicy.BACK_MS)
+    }
+
+    @Test
+    fun onlyTheNextItemLoadsAhead() {
+        // Playing item 3, item 4 next: 3 and 4 load, 5 and on wait.
+        assertTrue(LoadAhead.mayLoad(3, 3, 4))
+        assertTrue(LoadAhead.mayLoad(4, 3, 4))
+        assertFalse(LoadAhead.mayLoad(5, 3, 4))
+        assertFalse(LoadAhead.mayLoad(6, 3, 4))
+        // Shuffle: next in play order, whatever its index.
+        assertTrue(LoadAhead.mayLoad(0, 3, 0))
+        assertFalse(LoadAhead.mayLoad(4, 3, 0))
+        // The last item (nothing next): only it.
+        assertFalse(LoadAhead.mayLoad(0, 7, LoadAhead.UNSET))
+        // Unknown: nothing is held back.
+        assertTrue(LoadAhead.mayLoad(LoadAhead.UNSET, 3, 4))
+        assertTrue(LoadAhead.mayLoad(9, LoadAhead.UNSET, LoadAhead.UNSET))
+    }
+
+    @Test
+    fun onlyABrokenConnectionGetsTheLongerRunOfRetries() {
+        // A reset socket or an HTTP transport error: six retries, capped back-off.
+        assertTrue(LoadRetry.isNetwork(httpStatus = false, resolver = false, httpTransport = true, transportCause = false))
+        assertTrue(LoadRetry.isNetwork(httpStatus = false, resolver = false, httpTransport = false, transportCause = true))
+        // An HTTP status (5xx) or the resolver: the default count.
+        assertFalse(LoadRetry.isNetwork(httpStatus = true, resolver = false, httpTransport = true, transportCause = false))
+        assertFalse(LoadRetry.isNetwork(httpStatus = false, resolver = true, httpTransport = false, transportCause = true))
+        // Anything else (a parser error): the default count.
+        assertFalse(LoadRetry.isNetwork(httpStatus = false, resolver = false, httpTransport = false, transportCause = false))
+        assertEquals(listOf(1_000L, 2_000L, 4_000L, 8_000L, 8_000L, 8_000L), (1..6).map { LoadRetry.retryDelayMs(it, network = true) })
+        assertEquals(listOf(0L, 1_000L, 2_000L, null), (1..4).map { LoadRetry.retryDelayMs(it, network = false) })
+    }
+
+    @Test
+    fun transportFailuresAreFoundAmongTheCauses() {
+        assertTrue(LoadRetry.hasTransportCause(IOException("wrapped", SocketException("Connection reset"))))
+        assertTrue(LoadRetry.hasTransportCause(SocketTimeoutException("read timed out")))
+        assertTrue(LoadRetry.hasTransportCause(IOException(UnknownHostException("rr1---sn.googlevideo.com"))))
+        assertTrue(LoadRetry.hasTransportCause(RuntimeException(EOFException())))
+        assertFalse(LoadRetry.hasTransportCause(IOException("Unexpected response")))
+        assertFalse(LoadRetry.hasTransportCause(IllegalStateException("parser")))
     }
 
     @Test
