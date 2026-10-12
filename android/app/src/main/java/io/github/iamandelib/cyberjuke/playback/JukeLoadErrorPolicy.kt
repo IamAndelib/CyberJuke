@@ -28,12 +28,17 @@ internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
         if (resolve != null && resolve.permanent) return C.TIME_UNSET
         val http = e.findCause<HttpDataSource.InvalidResponseCodeException>()
         if (http != null && http.responseCode in NO_RETRY_HTTP) return C.TIME_UNSET
-        // A listening-cache file gone (low storage) or broken: the cache drops it, the retry
-        // fetches the bytes (the default never retries a missing file: a dead track).
+        // A listening-cache file gone (low storage) or unreadable: the retry fetches the bytes from
+        // the network, not from the cache (the video is skipped there for a moment); the default
+        // never retries a missing file: a dead track.
+        val ytId = JukeUris.ytIdOf(loadErrorInfo.loadEventInfo.dataSpec.uri)
         LoadRetry.cacheFileRetryMs(
-            ytLoad = JukeUris.ytIdOf(loadErrorInfo.loadEventInfo.dataSpec.uri) != null,
+            ytLoad = ytId != null,
             fileError = e.findCause<FileNotFoundException>() != null || e.findCause<FileDataSource.FileDataSourceException>() != null,
-        )?.let { return it }
+        )?.let { delay ->
+            ytId?.let { AudioCache.misses.missed(it) }
+            return delay
+        }
         // What the default never retries (a malformed file, a missing one) stays that way.
         if (super.getRetryDelayMsFor(loadErrorInfo) == C.TIME_UNSET) return C.TIME_UNSET
         // A broken connection, or the resolver not reaching YouTube (a new network), waits

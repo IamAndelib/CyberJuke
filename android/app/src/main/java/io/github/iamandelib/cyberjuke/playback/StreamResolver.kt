@@ -194,12 +194,13 @@ internal object StreamResolver {
      */
     fun cachedKey(ytId: String, midStream: Boolean): String? {
         if (AudioCache.misses.recent(ytId)) return null
-        val keep = kept[ytId] ?: if (midStream) served.get(ytId, now())?.itag?.takeIf { it > 0 } else null
-        val rungStream = cache.get(ytId, currentRung(), null, now())
         val before = served.get(ytId, now())
+        // A resume (or a track kept through an outage) only in the very file it was playing.
+        val keepKey = if (kept[ytId] != null || midStream) before?.let { keyOf(it) } ?: return null else null
+        val rungStream = cache.get(ytId, currentRung(), null, now())
         val ladder = before?.ladderBps?.takeIf { it.isNotEmpty() } ?: rungStream?.ladderBps ?: emptyList()
         val wanted = CacheKeys.wantedBps(quality, autoRung, rungStream?.itag, ladder, AudioCache.online)
-        val key = AudioCache.wholeKey(ytId, keep, rungStream?.itag, wanted) ?: return null
+        val key = AudioCache.wholeKey(ytId, keepKey, rungStream?.itag, wanted) ?: return null
         val itag = CacheKeys.itagOf(key) ?: return null
         // No URL: nothing is requested for it.
         serve(
@@ -213,10 +214,15 @@ internal object StreamResolver {
                 netGen = NetEpoch.generation,
                 ladderBps = ladder,
                 audioOnly = true,
+                cacheKey = key,
             ),
         )
         return key
     }
+
+    /** The cache key of the file [s] is (its own when it came from the cache), or null. */
+    private fun keyOf(s: ResolvedStream): String? =
+        s.cacheKey ?: if (s.audioOnly && s.itag > 0) CacheKeys.of(s.ytId, s.itag, StreamUrls.clen(s.url)) else null
 
     private fun serve(s: ResolvedStream): ResolvedStream {
         served.put(s.ytId, s, s.resolvedAtMs + SERVED_TTL_MS)

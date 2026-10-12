@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.playback
 
+import io.github.iamandelib.cyberjuke.net.FailureKind
 import java.util.TreeSet
 
 /**
@@ -84,6 +85,17 @@ internal object CacheKeys {
         if (rungItag != null && rungItag in whole) return rungItag
         if (wantedBps <= 0) return whole.firstOrNull()
         return whole.firstOrNull { itag -> nominalBps(itag)?.let { it >= wantedBps * CLOSE_ENOUGH } == true }
+    }
+
+    /**
+     * The key to play, of the [whole] ones (most recently used first): a resume only in the very
+     * file it was playing ([keepKey]: its format and its length), never another file of the same
+     * format; otherwise by format, as [pick] decides.
+     */
+    fun pickKey(whole: List<String>, keepKey: String?, rungItag: Int?, wantedBps: Int): String? {
+        if (keepKey != null) return keepKey.takeIf { it in whole }
+        val itag = pick(whole.mapNotNull { itagOf(it) }, null, rungItag, wantedBps) ?: return null
+        return whole.firstOrNull { itagOf(it) == itag }
     }
 }
 
@@ -245,10 +257,11 @@ internal class CacheLedger(limitBytes: Long) {
 
 /**
  * Whether playback needs the network now, so the liked saver must wait or give way. The
- * player's own isLoading says little here: a track after next waiting at the OpenGate keeps it
- * true almost all the time, also while paused. What counts: a stall, or the playing track or the
- * next one not all buffered yet. Nothing prepared (a restored session before Play) or the list
- * ended: nothing needed. Pure (CachePolicyTest).
+ * player's isLoading alone says too much: a track after next waiting at the OpenGate keeps it
+ * true almost all the time, also while paused. What counts: a stall; or, while it loads, the
+ * playing track or the next one not all buffered yet. Not loading (the buffer is full to its cap,
+ * a load failed), nothing prepared (a restored session before Play) or the list ended: nothing
+ * needed. Pure (CachePolicyTest).
  */
 internal object PlaybackNeed {
     /** Buffered to within this of the end counts as all there. */
@@ -268,18 +281,45 @@ internal object PlaybackNeed {
         val hasNext: Boolean,
         /** The next track's length; <= 0 while unknown (not prepared yet). */
         val nextDurationMs: Long,
-        /** The player's isLoading, which this deliberately ignores. */
-        val isLoading: Boolean = false,
+        /**
+         * The player's isLoading. True doesn't mean playback needs the network (a gated load keeps
+         * it true); false means it isn't using it.
+         */
+        val isLoading: Boolean = true,
     )
 
     fun needsNetwork(l: Load): Boolean {
         if (l.idle) return false
-        if (l.buffering || l.durationMs <= 0) return true
+        if (l.buffering) return true
+        // Not loading (the buffer's size cap, or a load error on the next track): nothing comes
+        // over the network until it loads again, and a save can't slow it down.
+        if (!l.isLoading) return false
+        if (l.durationMs <= 0) return true
         if (l.bufferedPositionMs < l.durationMs - SLACK_MS) return true
         if (!l.hasNext) return false
         if (l.nextDurationMs <= 0) return true
         val nextBuffered = l.totalBufferedMs - (l.durationMs - l.positionMs).coerceAtLeast(0L)
         return nextBuffered < l.nextDurationMs - SLACK_MS
+    }
+}
+
+/**
+ * What a save that failed to resolve its song means for that song: [GIVE_UP] (the video itself:
+ * unavailable), [STRIKE] (the connection: counts toward [SaveStrikes]), [WAIT] (YouTube backing
+ * off, or the extractor broken for every video: no fault of the song, no strike). Pure.
+ */
+internal enum class SaveFailure {
+    GIVE_UP,
+    STRIKE,
+    WAIT,
+    ;
+
+    companion object {
+        fun of(kind: FailureKind): SaveFailure = when {
+            kind.blockReason != null || kind == FailureKind.BROKEN -> WAIT
+            kind == FailureKind.NETWORK -> STRIKE
+            else -> GIVE_UP
+        }
     }
 }
 
@@ -383,7 +423,8 @@ internal class MembersAudio {
  *   network ([PlaybackNeed]): playback always comes first (a running save gives way, [keepGoing]).
  *
  * Event-driven: asked again when something it depends on changes. The one timer is
- * [recheckInMs]: a single re-check when the gap alone holds back work that is waiting.
+ * [recheckInMs]: a one-shot re-check at the end of the gap, pending only while the gap alone
+ * holds back a save that could start.
  */
 internal object LikedSaverPolicy {
     /** At least this long between two backfill extractions (YouTube request volume). */
@@ -411,6 +452,8 @@ internal object LikedSaverPolicy {
         val likedFull: Boolean = false,
         /** Since the last saver extraction; Long.MAX_VALUE when none yet. */
         val sinceLastMs: Long = Long.MAX_VALUE,
+        /** Members-only while signed out: never saved. Asked only of a candidate. */
+        val denied: (String) -> Boolean = { false },
     )
 
     /** The video to save now, or null. */
@@ -418,7 +461,9 @@ internal object LikedSaverPolicy {
 
     private fun pick(f: Facts, sinceLastMs: Long): String? {
         if (f.busy || !f.online || f.quiet || f.playbackNeedsNetwork) return null
-        val todo = f.liked.asSequence().filter { it !in f.saved && it !in f.skip }
+        // Each candidate's denied answer is asked once (and only for those looked at).
+        val denied = HashMap<String, Boolean>()
+        val todo = f.liked.asSequence().filter { it !in f.saved && it !in f.skip && !denied.getOrPut(it) { f.denied(it) } }
         todo.firstOrNull { it in f.fresh && it !in f.tried }?.let { return it }
         if (sinceLastMs < MIN_GAP_MS) return null
         todo.firstOrNull { it in f.fresh }?.let { return it }

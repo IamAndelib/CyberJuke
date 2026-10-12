@@ -179,16 +179,13 @@ internal object AudioCache {
     }
 
     /**
-     * The key of [ytId]'s copy to play from the cache ([CacheKeys.pick]: [keep], [rungItag],
-     * at least [wantedBps]), or null to load it as usual. Loader thread.
+     * The key of [ytId]'s copy to play from the cache ([CacheKeys.pickKey]: a resume only in the
+     * very file it was playing, [keepKey]; else by [rungItag], at least [wantedBps]), or null to
+     * load it as usual. Loader thread.
      */
-    fun wholeKey(ytId: String, keep: Int?, rungItag: Int?, wantedBps: Int): String? {
+    fun wholeKey(ytId: String, keepKey: String?, rungItag: Int?, wantedBps: Int): String? {
         if (members.denied(ytId)) return null
-        return locked { c ->
-            val keys = wholeKeys(c, ytId)
-            val itag = CacheKeys.pick(keys.mapNotNull { CacheKeys.itagOf(it) }, keep, rungItag, wantedBps)
-            keys.firstOrNull { CacheKeys.itagOf(it) == itag }
-        }
+        return locked { c -> CacheKeys.pickKey(wholeKeys(c, ytId), keepKey, rungItag, wantedBps) }
     }
 
     /** Whether [ytId] is saved whole (any format). */
@@ -197,8 +194,28 @@ internal object AudioCache {
     /** Signed out: this video's audio may not be cached ([MembersAudio.denied]). */
     fun isDenied(ytId: String): Boolean = members.denied(ytId)
 
-    /** These videos are members-only (queue items, liked tracks): their audio is tagged in the cache. */
-    fun markMembers(ytIds: Collection<String>) = ytIds.forEach { members.mark(it) }
+    /**
+     * These videos are members-only (queue items, liked tracks): their audio is tagged in the
+     * cache. Audio already there is tagged now (signed in) or removed now (signed out), off the
+     * calling thread (it may be the main one); a cache not open yet does both as it opens, when
+     * it counts its spans.
+     */
+    fun markMembers(ytIds: Collection<String>) {
+        if (ytIds.isEmpty()) return
+        ytIds.forEach { members.mark(it) }
+        val c = cache ?: return
+        Background.run("markMembers") {
+            var tagged = false
+            synchronized(c) {
+                for (id in ytIds) {
+                    val keys = ledger.keysOf(id)
+                    if (keys.isEmpty()) continue
+                    if (members.denied(id)) keys.forEach { c.removeResource(it) } else tagged = members.onCached(id) || tagged
+                }
+            }
+            if (tagged) appContext?.let { writeIds(it, MEMBERS_FILE, members.tagged().toList()) }
+        }
+    }
 
     /**
      * The liked songs saved whole, opening the cache if needed (the page asks at start): once
@@ -366,7 +383,8 @@ internal class CacheMissException : IOException("Not in the listening cache any 
 /**
  * [AudioCache.dataSourceFactory]'s sources: a load with a YouTube cache key ([CacheKeys]) goes
  * through the cache (reads what's there, writes what it fetches), anything else (the CI tone,
- * HLS) straight to the upstream, as does a members-only video while signed out. Without a cache,
+ * HLS) straight to the upstream, as does a members-only video while signed out or one whose
+ * copy was just found missing or unreadable ([AudioCache.misses]). Without a cache,
  * everything goes straight. A cache read error is not hidden (no FLAG_IGNORE_CACHE_ON_ERROR): the
  * load fails, the cache drops the broken span, and the retry fetches it.
  */
@@ -381,8 +399,10 @@ internal class CacheRouter(private val cached: DataSource?, private val plain: D
 
     override fun open(dataSpec: DataSpec): Long {
         val key = dataSpec.key
+        // Not a members-only video while signed out, nor one whose cached copy was just found
+        // missing or unreadable (its retry reads the network, not the same file).
         val viaCache = cached != null && key != null && CacheKeys.isYt(key) &&
-            CacheKeys.ytIdOf(key)?.let { AudioCache.isDenied(it) } != true
+            CacheKeys.ytIdOf(key)?.let { AudioCache.isDenied(it) || AudioCache.misses.recent(it) } != true
         val ds = if (viaCache) cached else plain
         current = ds
         return ds.open(dataSpec)
