@@ -23,6 +23,8 @@ import androidx.media3.exoplayer.RenderersFactory
 import androidx.media3.exoplayer.audio.MediaCodecAudioRenderer
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import io.github.iamandelib.cyberjuke.net.NetBlock
 
 /**
@@ -70,10 +72,14 @@ internal class ExoCrossfadeHost(
         )
     }
 
-    override fun currentItem(): Any? {
+    override fun currentItem(): Any? = uidOf(main.currentMediaItemIndex)
+
+    override fun nextItem(): Any? = uidOf(main.nextMediaItemIndex)
+
+    private fun uidOf(index: Int): Any? {
         val t = main.currentTimeline
-        if (t.isEmpty || main.currentMediaItemIndex >= t.windowCount) return null
-        return t.getWindow(main.currentMediaItemIndex, window).uid
+        if (t.isEmpty || index == C.INDEX_UNSET || index >= t.windowCount) return null
+        return t.getWindow(index, window).uid
     }
 
     override fun positionMs(): Long = main.currentPosition.coerceAtLeast(0L)
@@ -124,8 +130,10 @@ internal class ExoCrossfadeHost(
     override fun newTail(positionMs: Long, events: Crossfader.TailEvents): Crossfader.Tail? {
         val item = main.currentMediaItem ?: return null
         val ytId = JukeUris.ytIdOf(item) ?: return null
-        // The file the track played (an Auto step at the transition must not swap it mid-song).
-        val itag = StreamResolver.lastServed(ytId)?.itag?.takeIf { it > 0 }
+        // The file the track played (an Auto step at the transition must not swap it mid-song),
+        // and only an audio-only one (a muxed fallback isn't in the listening cache).
+        val served = StreamResolver.lastServed(ytId)?.takeIf { it.audioOnly && it.itag > 0 } ?: return null
+        val itag = served.itag
         return try {
             CrossfadeTail(context, main.playbackLooper, dataSources, audioAttributes, item, itag, positionMs, events)
         } catch (e: RuntimeException) {
@@ -144,8 +152,10 @@ internal class ExoCrossfadeHost(
  * then (made at the prime, released when the fade ends or stops). Audio only (one renderer), a
  * small buffer, the main player's playback thread (no thread of its own), the same sources (the
  * listening cache serves the bytes the main player already fetched), the same file ([itag], see
- * [YtDataSpecResolver.Pinned]). Never in the media session; no audio focus and no becoming-noisy
- * handling of its own: it only plays while the main player does, and stops with it.
+ * [YtDataSpecResolver.Pinned]: only what is cached, never an extraction), and no retries (a
+ * failed load means no fade). Never in the media session; no audio focus, no becoming-noisy
+ * handling and no wake lock of its own: it only plays while the main player does, and stops
+ * with it.
  */
 @OptIn(UnstableApi::class)
 internal class CrossfadeTail(
@@ -154,7 +164,7 @@ internal class CrossfadeTail(
     dataSources: DataSource.Factory,
     audioAttributes: AudioAttributes,
     item: MediaItem,
-    itag: Int?,
+    itag: Int,
     positionMs: Long,
     private val events: Crossfader.TailEvents,
 ) : Crossfader.Tail {
@@ -170,6 +180,7 @@ internal class CrossfadeTail(
             .setTargetBufferBytes(BUFFER_BYTES)
             .build()
         val sources = DefaultMediaSourceFactory(ResolvingDataSource.Factory(dataSources, YtDataSpecResolver.Pinned(itag)))
+            .setLoadErrorHandlingPolicy(NoRetry)
         player = ExoPlayer.Builder(app)
             .setRenderersFactory(audioOnly)
             .setMediaSourceFactory(sources)
@@ -177,6 +188,9 @@ internal class CrossfadeTail(
             .setPlaybackLooper(playbackLooper)
             .setAudioAttributes(audioAttributes, /* handleAudioFocus = */ false)
             .setHandleAudioBecomingNoisy(false)
+            // No wake lock of its own (the default would hold one): the main player's covers it.
+            .setWakeMode(C.WAKE_MODE_NONE)
+            .setUsePlatformDiagnostics(false)
             .build()
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -196,13 +210,22 @@ internal class CrossfadeTail(
 
     override val isReady: Boolean get() = player.playbackState == Player.STATE_READY
 
+    override val positionMs: Long get() = player.currentPosition
+
     override fun play() = player.play()
+
+    override fun seekTo(positionMs: Long) = player.seekTo(positionMs)
 
     override fun setVolume(v: Float) {
         player.volume = v.coerceIn(0f, 1f)
     }
 
     override fun release() = player.release()
+
+    /** A fade is optional: a failed load is never retried, the tail just goes (no fade). */
+    private object NoRetry : DefaultLoadErrorHandlingPolicy() {
+        override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long = C.TIME_UNSET
+    }
 
     private companion object {
         const val TAG = "CyberJukeCrossfade"
@@ -249,9 +272,9 @@ internal class CrossfadeEvents(private val fader: Crossfader) : Player.Listener 
         if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) fader.onQueueChanged() else fader.onDurationKnown()
     }
 
-    override fun onRepeatModeChanged(repeatMode: Int) = fader.onQueueChanged()
+    override fun onRepeatModeChanged(repeatMode: Int) = fader.onOrderChanged()
 
-    override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = fader.onQueueChanged()
+    override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = fader.onOrderChanged()
 
     private companion object {
         const val NEAR_START_MS = 1_000L

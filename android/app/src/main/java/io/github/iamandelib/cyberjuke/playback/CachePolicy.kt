@@ -4,6 +4,27 @@ import io.github.iamandelib.cyberjuke.net.FailureKind
 import java.util.TreeSet
 
 /**
+ * Which file a load must keep (StreamResolver). A resume keeps the file it was playing, so does a
+ * track kept through an outage ([StreamResolver.keepFormat]), and the crossfade's tail asks for
+ * its outgoing track's own format, which beats both. Pure (FormatKeepTest).
+ */
+internal object FormatKeep {
+    /**
+     * The itag a stream link must be of: a [kept] format's, else for a resume the one served;
+     * null: any rung. (The tail's own links: [StreamResolver.cachedStream], its itag only.)
+     */
+    fun itag(kept: Int?, midStream: Boolean, servedItag: Int?): Int? =
+        kept ?: if (midStream) servedItag?.takeIf { it > 0 } else null
+
+    /** Only one saved copy will do: the file that was playing ([keepKey]). */
+    fun mustKeep(asked: Int?, kept: Boolean, midStream: Boolean): Boolean = asked != null || kept || midStream
+
+    /** The served file's key [servedKey], when it is of the [asked] itag (if any); null: no saved copy will do. */
+    fun keepKey(asked: Int?, servedKey: String?): String? =
+        servedKey?.takeIf { asked == null || CacheKeys.itagOf(it) == asked }
+}
+
+/**
  * The listening cache's keys (AudioCache): `yt:<ytId>:<itag>:<clen>`, one per video, format
  * and file, instead of the stream URL, which expires and changes with every extraction. The
  * file's length (`clen` in the stream URL) is part of it, so another file under the same format

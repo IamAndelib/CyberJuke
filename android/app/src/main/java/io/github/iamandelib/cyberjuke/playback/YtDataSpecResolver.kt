@@ -27,34 +27,22 @@ internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
     /** Only the playing track and the next one open their stream ([OpenGate]; PlaybackService sets it). */
     val gate = OpenGate()
 
-    override fun resolveDataSpec(dataSpec: DataSpec): DataSpec = resolve(dataSpec, gated = true, itag = null)
-
-    /**
-     * The crossfade's tail (CrossfadeTail): the outgoing track's own file, [itag] (null: as
-     * usual). It doesn't wait at the [gate]: that track has just stopped being the playing one,
-     * and it is the stream already open, not one ahead.
-     */
-    class Pinned(private val itag: Int?) : ResolvingDataSource.Resolver {
-        override fun resolveDataSpec(dataSpec: DataSpec): DataSpec =
-            YtDataSpecResolver.resolve(dataSpec, gated = false, itag = itag)
-    }
-
-    private fun resolve(dataSpec: DataSpec, gated: Boolean, itag: Int?): DataSpec {
+    override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
         val ytId = JukeUris.ytIdOf(dataSpec.uri)
         if (ytId == LaunchOptions.CI_TONE && allowCiTone) {
             return dataSpec.buildUpon().setUri(Uri.parse(LaunchOptions.CI_TONE_ASSET)).build()
         }
         if (ytId != null) {
             // The track after next waits for its turn (prepared early, it would extract now).
-            if (gated) gate.await(ytId)
+            gate.await(ytId)
             val midStream = dataSpec.position > 0
             // Saved whole in the listening cache: played from it, no extraction, no request. Its
             // URI stays ours (it has no stream URL): see CacheMissGuard.
-            StreamResolver.cachedKey(ytId, midStream, itag)?.let { key ->
+            StreamResolver.cachedKey(ytId, midStream)?.let { key ->
                 return dataSpec.buildUpon().setKey(key).build()
             }
             // A load that starts past byte 0 resumes a track: keep its itag (same file).
-            return streamSpec(dataSpec, ytId, StreamResolver.resolve(ytId, midStream, itag))
+            return streamSpec(dataSpec, ytId, StreamResolver.resolve(ytId, midStream))
         }
         // An HLS manifest, variant or segment (the manifest-only fallback): no cache key, so it
         // is never cached.
@@ -62,6 +50,25 @@ internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
         val headers = HashMap(dataSpec.httpRequestHeaders)
         headers.putAll(YtCompat.streamHeaders(url))
         return requestSpec(dataSpec, url, headers, rn = false)
+    }
+
+    /**
+     * The crossfade's tail (CrossfadeTail): the outgoing track's own file, [itag], and only from
+     * what is already at hand: its copy saved whole in the listening cache, or its stream link
+     * still cached (the bytes then mostly come from the listening cache too). Never an
+     * extraction, never during a back-off: otherwise the load fails, and there is no fade. It
+     * doesn't wait at the [gate]: that track is the one that was just playing.
+     */
+    class Pinned(private val itag: Int) : ResolvingDataSource.Resolver {
+        override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
+            val ytId = JukeUris.ytIdOf(dataSpec.uri) ?: throw IOException("Crossfade: not a YouTube track")
+            StreamResolver.cachedKey(ytId, midStream = true, itag = itag)?.let { key ->
+                return dataSpec.buildUpon().setKey(key).build()
+            }
+            val stream = StreamResolver.cachedStream(ytId, itag)
+                ?: throw IOException("Crossfade: the track's stream isn't at hand")
+            return YtDataSpecResolver.streamSpec(dataSpec, ytId, stream)
+        }
     }
 
     /**

@@ -137,18 +137,17 @@ internal object StreamResolver {
 
     /**
      * Blocking. Throws [ResolveException], [ManifestOnlyException] or [BlockedException].
-     * [midStream]: the load starts past byte 0 (a resume), so keep the itag in use. [itag]: that
-     * format, whatever else applies (the crossfade's tail plays the file the track played).
+     * [midStream]: the load starts past byte 0 (a resume), so keep the itag in use.
      */
     @Throws(IOException::class)
-    fun resolve(ytId: String, midStream: Boolean = false, itag: Int? = null): ResolvedStream {
+    fun resolve(ytId: String, midStream: Boolean = false): ResolvedStream {
         // Y1: no request during a back-off, and no stale URL either (a 403 on it would be one).
         NetBlock.check()
         val rung = currentRung()
         val k = rungKey(ytId, rung)
         // A resume keeps the file it was playing (so does a track kept through an outage): a
         // cached stream of another itag won't do.
-        val keep = itag ?: keptItag(ytId, midStream)
+        val keep = FormatKeep.itag(kept[ytId], midStream, served.get(ytId, now())?.itag)
         val hit = cache.get(ytId, rung, keep, now())
         if (hit != null) return serve(hit)
         val prefer = pins.remove(ytId) ?: keep
@@ -199,8 +198,8 @@ internal object StreamResolver {
         val before = served.get(ytId, now())
         // A resume, a track kept through an outage, or the crossfade tail's pinned [itag]: only
         // in the very file it was playing.
-        val keepKey = if (itag != null || kept[ytId] != null || midStream) {
-            before?.let { keyOf(it) }?.takeIf { itag == null || CacheKeys.itagOf(it) == itag } ?: return null
+        val keepKey = if (FormatKeep.mustKeep(itag, kept[ytId] != null, midStream)) {
+            FormatKeep.keepKey(itag, before?.let { keyOf(it) }) ?: return null
         } else {
             null
         }
@@ -227,9 +226,14 @@ internal object StreamResolver {
         return key
     }
 
-    /** The itag a load of [ytId] must keep: a kept format's, or for a resume the one served. */
-    private fun keptItag(ytId: String, midStream: Boolean): Int? =
-        kept[ytId] ?: if (midStream) served.get(ytId, now())?.itag?.takeIf { it > 0 } else null
+    /**
+     * The crossfade's tail: [ytId]'s stream link in [itag] if one is still cached, else null.
+     * Never an extraction, and nothing during a back-off (a request then would be one).
+     */
+    fun cachedStream(ytId: String, itag: Int): ResolvedStream? {
+        if (NetBlock.isBlocked()) return null
+        return cache.get(ytId, currentRung(), itag, now())?.takeIf { it.itag == itag }?.let { serve(it) }
+    }
 
     /** The cache key of the file [s] is (its own when it came from the cache), or null. */
     private fun keyOf(s: ResolvedStream): String? =

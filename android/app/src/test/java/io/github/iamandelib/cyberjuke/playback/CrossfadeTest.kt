@@ -50,12 +50,12 @@ class CrossfadeTest {
 
     @Test
     fun thePrimeComesBeforeTheFadeByThePrerollAndTheLoadTime() {
-        // 4 min, 6 s: hand-over at 234 s, preroll 300 ms before it, the tail made 1.5 s before that.
-        assertEquals(4 * min - 6_000L - 300L - 1_500L, CrossfadePlan.primeAtMs(6_000L, 4 * min))
+        // 4 min, 6 s: hand-over at 234 s, preroll 1.2 s before it, the tail made 1.5 s before that.
+        assertEquals(4 * min - 6_000L - 1_200L - 1_500L, CrossfadePlan.primeAtMs(6_000L, 4 * min))
         assertNull(CrossfadePlan.primeAtMs(0L, 4 * min))
         assertNull(CrossfadePlan.primeAtMs(6_000L, -1L))
-        // The shortest track that fades (3 s, a 1 s fade) still primes after its start.
-        assertEquals(200L, CrossfadePlan.primeAtMs(10_000L, 3_000L))
+        // The shortest track that fades (3 s, a 1 s fade): never before its start.
+        assertEquals(0L, CrossfadePlan.primeAtMs(10_000L, 3_000L))
         assertNull(CrossfadePlan.primeAtMs(10_000L, 2_999L))
     }
 
@@ -78,8 +78,8 @@ class CrossfadeTest {
         assertEquals(CrossfadePlan.Skip.TOO_SHORT, why(facts(durationMs = 2_000L, positionMs = 0L)))
         assertEquals(CrossfadePlan.Skip.TOO_SHORT, why(facts(durationMs = -1L)))
         // Seeked to within the last moments: no time to load the tail.
-        assertEquals(CrossfadePlan.Skip.TOO_LATE, why(facts(positionMs = 4 * min - 6_000L - 700L)))
-        assertTrue(CrossfadePlan.decide(facts(positionMs = 4 * min - 6_000L - 800L)) is CrossfadePlan.Decision.Fade)
+        assertEquals(CrossfadePlan.Skip.TOO_LATE, why(facts(positionMs = 4 * min - 6_000L - 1_600L)))
+        assertTrue(CrossfadePlan.decide(facts(positionMs = 4 * min - 6_000L - 1_700L)) is CrossfadePlan.Decision.Fade)
         // The next track couldn't start at once: a normal transition, never a stall.
         assertEquals(CrossfadePlan.Skip.NEXT_NOT_READY, why(facts(nextDurationMs = -1L)))
         assertEquals(CrossfadePlan.Skip.NEXT_NOT_READY, why(facts(nextBufferedMs = 8_499L)))
@@ -138,18 +138,113 @@ class CrossfadeTest {
         assertEquals(1f, CrossfadePlan.progress(0L, 0L, 0L), 0f)
     }
 
+    // ---- TailAlign ------------------------------------------------------------------------
+
+    /** Samples every 50 ms from a tail that starts [latencies] ms late (one per start); returns the seeks. */
+    private fun align(latencies: List<Long>, steps: Int): Pair<TailAlign, List<Long>> {
+        val a = TailAlign()
+        val seeks = ArrayList<Long>()
+        var anchorPos = 0L
+        var anchorAt = 0L
+        var starts = 0
+        for (i in 1..steps) {
+            val now = i * 50L
+            val main = now
+            val tail = anchorPos + (now - anchorAt - latencies[minOf(starts, latencies.lastIndex)]).coerceAtLeast(0L)
+            val s = a.sample(main, tail)
+            if (s is TailAlign.Step.Seek) {
+                seeks.add(s.toMs)
+                anchorPos = s.toMs
+                anchorAt = now
+                starts++
+            }
+        }
+        return a to seeks
+    }
+
+    @Test
+    fun aTailThatStartsInTimeNeedsNoSeek() {
+        val (a, seeks) = align(listOf(10L), 6)
+        assertTrue(seeks.isEmpty())
+        assertTrue(a.handOverOk)
+    }
+
+    @Test
+    fun aTailThatStartsLateIsSentAheadByItsDelay() {
+        // 300 ms (Bluetooth): measured once it runs steadily, then sent 300 ms ahead of the main player.
+        val (a, seeks) = align(listOf(300L), 20)
+        assertEquals(listOf(400L + 300L), seeks)
+        assertEquals(0L, a.driftMs)
+        assertTrue(a.handOverOk)
+    }
+
+    @Test
+    fun noMeasureUntilTheTailRunsSteadily() {
+        val a = TailAlign()
+        assertEquals(TailAlign.Step.Wait, a.sample(50L, 0L))
+        assertEquals(TailAlign.Step.Wait, a.sample(100L, 0L)) // not started yet
+        assertEquals(TailAlign.Step.Wait, a.sample(150L, 40L)) // one steady step
+        assertNull(a.driftMs)
+        assertFalse(a.handOverOk)
+        assertEquals(TailAlign.Step.Aligned, a.sample(200L, 190L))
+        assertEquals(10L, a.driftMs)
+    }
+
+    @Test
+    fun aTailThatCantBeLinedUpIsNotHandedOver() {
+        // A start delay that grows each time: two seeks, then it stays off.
+        val (a, seeks) = align(listOf(100L, 200L, 300L), 40)
+        assertEquals(TailAlign.MAX_SEEKS, seeks.size)
+        assertEquals(100L, a.driftMs)
+        assertFalse(a.handOverOk)
+        // Ahead of the main player is off too.
+        val b = TailAlign()
+        b.sample(0L, 0L)
+        b.sample(50L, 50L)
+        b.sample(100L, 100L)
+        assertTrue(b.handOverOk)
+        // 25 ms ahead: sent back by as much.
+        assertEquals(TailAlign.Step.Seek(125L), b.sample(150L, 175L))
+        assertFalse(b.handOverOk)
+    }
+
     // ---- Crossfader ----------------------------------------------------------------------
 
-    private class FakeTail(val positionMs: Long, val events: Crossfader.TailEvents) : Crossfader.Tail {
+    /** A tail whose sound starts [latencies] ms after it is played or seeked (one per start). */
+    private class FakeTail(
+        val startMs: Long,
+        val events: Crossfader.TailEvents,
+        private val clock: () -> Long,
+        private val latencies: List<Long>,
+    ) : Crossfader.Tail {
         override var isReady = true
         var playing = false
         var level = 0f
         var released = false
         val volumes = ArrayList<Float>()
+        val seeks = ArrayList<Long>()
+        private var anchorPos = startMs
+        private var anchorAt = 0L
+        private var starts = 0
+
+        override val positionMs: Long
+            get() = if (!playing) anchorPos else anchorPos + (clock() - anchorAt - latency()).coerceAtLeast(0L)
+
+        private fun latency() = latencies[minOf(starts - 1, latencies.lastIndex).coerceAtLeast(0)]
 
         override fun play() {
             check(!released)
             playing = true
+            anchorAt = clock()
+            starts++
+        }
+
+        override fun seekTo(positionMs: Long) {
+            check(!released)
+            seeks.add(positionMs)
+            anchorPos = positionMs
+            anchorAt = clock()
+            starts++
         }
 
         override fun setVolume(v: Float) {
@@ -169,6 +264,7 @@ class CrossfadeTest {
     private class FakeHost : Crossfader.Host {
         var f = CrossfadeTest().facts(positionMs = 0L)
         var item: Any? = "a"
+        var next: Any? = "b"
         var position = 0L
         var clock = 0L
         var mainLevel = 1f
@@ -177,12 +273,16 @@ class CrossfadeTest {
         val posted = ArrayList<Pair<Long, Runnable>>()
         val tails = ArrayList<FakeTail>()
         var advances = 0
-        var onAdvance: () -> Unit = {}
+        var onAdvance: () -> Unit = { item = next; next = "n$advances"; position = 0L }
         var makeTail = true
+        var latencies = listOf(0L)
+        override var baseVolume = 1f
 
         override fun facts(settingMs: Long) = f.copy(settingMs = settingMs, positionMs = position)
 
         override fun currentItem(): Any? = item
+
+        override fun nextItem(): Any? = next
 
         override fun positionMs() = position
 
@@ -204,8 +304,6 @@ class CrossfadeTest {
 
         override fun now() = clock
 
-        override val baseVolume = 1f
-
         override fun setMainVolume(v: Float) {
             mainLevel = v
             mainVolumes.add(v)
@@ -218,7 +316,7 @@ class CrossfadeTest {
 
         override fun newTail(positionMs: Long, events: Crossfader.TailEvents): Crossfader.Tail? {
             if (!makeTail) return null
-            return FakeTail(positionMs, events).also { tails.add(it) }
+            return FakeTail(positionMs, events, { clock }, latencies).also { tails.add(it) }
         }
 
         /** Plays until [to] (or until the item changes): messages as the position passes them, steps as the clock does. */
@@ -244,9 +342,13 @@ class CrossfadeTest {
 
     private val dur = 4 * min
     private val handOverAt = dur - 6_000L
+    private val prerollAt = handOverAt - CrossfadePlan.PREROLL_MS
+    private val primeAt = prerollAt - CrossfadePlan.PREP_MS
+    private val swapAt = handOverAt - CrossfadePlan.SWAP_MS
 
-    private fun started(settingMs: Int = 6_000): Pair<FakeHost, Crossfader> {
+    private fun started(settingMs: Int = 6_000, latencies: List<Long> = listOf(0L)): Pair<FakeHost, Crossfader> {
         val h = FakeHost()
+        h.latencies = latencies
         val c = Crossfader(h, settingMs)
         c.onReady()
         return h to c
@@ -257,6 +359,7 @@ class CrossfadeTest {
         val (h, c) = started()
         h.onAdvance = {
             h.item = "b"
+            h.next = "c"
             c.onItemChanged() // our own: ignored
             c.onSeek(nearStart = true)
             c.onBuffering()
@@ -268,12 +371,12 @@ class CrossfadeTest {
         return h to c
     }
 
-    /** Nothing of the fade is left: no tail, no step, the main player at full volume. */
+    /** Nothing of the fade is left: no tail, no step, the main player at its own volume. */
     private fun assertStopped(h: FakeHost, c: Crossfader) {
         assertEquals(Crossfader.Phase.NONE, c.phase)
         assertTrue(h.tails.all { it.released })
         assertTrue("no step left", h.posted.isEmpty())
-        assertEquals(1f, h.mainLevel, 0f)
+        assertEquals(h.baseVolume, h.mainLevel, 0f)
     }
 
     @Test
@@ -295,24 +398,33 @@ class CrossfadeTest {
     @Test
     fun aFadeFromPrimeToEnd() {
         val (h, c) = started()
-        assertEquals(listOf(handOverAt - 300L - 1_500L), h.messages.map { it.first })
+        assertEquals(listOf(primeAt), h.messages.map { it.first })
 
-        h.play(handOverAt - 1_800L)
+        h.play(primeAt)
         // Primed: a paused tail where the preroll starts.
         assertEquals(Crossfader.Phase.PRIMED, c.phase)
         val tail = h.tail!!
-        assertEquals(handOverAt - 300L, tail.positionMs)
+        assertEquals(prerollAt, tail.startMs)
         assertFalse(tail.playing)
-        assertTrue(h.posted.isEmpty()) // no timer before the fade
+        assertTrue(h.posted.isEmpty()) // no timer before the preroll
 
-        h.play(handOverAt - 300L)
-        // Preroll: playing, muted.
+        h.play(prerollAt)
+        // Preroll: playing, muted, lined up (in time already: no seek).
         assertEquals(Crossfader.Phase.PREROLL, c.phase)
         assertTrue(tail.playing)
         assertEquals(0f, tail.level, 0f)
+        h.play(swapAt - 10L)
+        assertTrue(tail.seeks.isEmpty())
+        assertTrue(h.mainVolumes.isEmpty())
         assertEquals(0, h.advances)
 
-        h.onAdvance = { h.item = "b"; h.position = 0L }
+        // The swap: the outgoing track moves from the main player to the tail in three steps.
+        h.play(swapAt + 100L)
+        assertEquals(Crossfader.Phase.SWAP, c.phase)
+        assertEquals(2f / 3f, tail.level, 0.01f)
+        assertEquals(1f / 3f, h.mainLevel, 0.01f)
+        assertEquals(0, h.advances)
+
         h.play(handOverAt)
         // The hand-over: the tail at full volume, the main player silent and on the next track.
         assertEquals(Crossfader.Phase.FADING, c.phase)
@@ -320,29 +432,79 @@ class CrossfadeTest {
         assertEquals(1f, tail.level, 0f)
         assertEquals(0f, h.mainLevel, 0f)
         assertEquals(1, h.posted.size)
+        val atHandOver = tail.volumes.size
+        val mainAtHandOver = h.mainVolumes.size
 
         h.play(3_000L)
         assertEquals(CrossfadePlan.outGain(0.5f), tail.level, 0.02f)
         assertEquals(CrossfadePlan.inGain(0.5f), h.mainLevel, 0.02f)
-        // Steps every 50 ms only: about 60 in 3 s.
-        assertTrue(tail.volumes.size in 55..65)
+        // Steps every 50 ms only: 60 in 3 s.
+        assertTrue(tail.volumes.size - atHandOver in 58..61)
 
         h.play(6_000L)
         // Over: the tail released, no step left, full volume.
         assertStopped(h, c)
         assertEquals(1, h.tails.size)
-        // The volume only ever went up on the main player, and down on the tail.
-        assertEquals(h.mainVolumes.sorted(), h.mainVolumes)
-        assertEquals(tail.volumes.drop(1).sortedDescending(), tail.volumes.drop(1))
+        // During the fade the volume only went up on the main player, and down on the tail.
+        val fadeIn = h.mainVolumes.drop(mainAtHandOver - 1)
+        assertEquals(fadeIn.sorted(), fadeIn)
+        val fadeOut = tail.volumes.drop(atHandOver - 1)
+        assertEquals(fadeOut.sortedDescending(), fadeOut)
+    }
+
+    @Test
+    fun aLateTailIsSentAheadAndTheFadeGoesOn() {
+        // A Bluetooth-like start delay of 300 ms: sent 300 ms ahead once, then lined up.
+        val (h, c) = started(latencies = listOf(300L))
+        h.play(swapAt - 10L)
+        val tail = h.tail!!
+        assertEquals(1, tail.seeks.size)
+        assertEquals(prerollAt + 400L + 300L, tail.seeks.single())
+        assertEquals(0L, h.position - tail.positionMs)
+        h.play(handOverAt)
+        assertEquals(1, h.advances)
+        assertEquals(Crossfader.Phase.FADING, c.phase)
+    }
+
+    @Test
+    fun aTailThatCantBeLinedUpMeansNoFade() {
+        // The delay grows with each start: never within 20 ms by the swap.
+        val (h, c) = started(latencies = listOf(100L, 200L, 300L))
+        h.play(dur)
+        assertEquals(0, h.advances)
+        assertTrue(h.mainVolumes.isEmpty()) // the outgoing track never left the main player
+        assertStopped(h, c)
+        assertEquals(TailAlign.MAX_SEEKS, h.tails.single().seeks.size)
+    }
+
+    @Test
+    fun aTailTooSlowToMeasureByTheSwapMeansNoFade() {
+        val (h, c) = started(latencies = listOf(1_100L))
+        h.play(dur)
+        assertEquals(0, h.advances)
+        assertStopped(h, c)
+    }
+
+    @Test
+    fun theFadeFollowsTheMainPlayersOwnVolume() {
+        val (h, c) = fading()
+        h.baseVolume = 0.5f
+        h.play(3_100L)
+        val t = CrossfadePlan.progress(h.clock, h.clock - 3_100L, 6_000L)
+        assertEquals(0.5f * CrossfadePlan.inGain(t), h.mainLevel, 0.02f)
+        assertEquals(0.5f * CrossfadePlan.outGain(t), h.tail!!.level, 0.02f)
+        c.onHalted()
+        assertStopped(h, c)
+        assertEquals(0.5f, h.mainLevel, 0f)
     }
 
     @Test
     fun theNextTrackGetsItsOwnPrimeAtTheHandOver() {
         val (h, _) = fading()
         // Armed for track b (same length in the fake): its prime is the only message left.
-        assertEquals(listOf(handOverAt - 1_800L), h.messages.map { it.first })
+        assertEquals(listOf(primeAt), h.messages.map { it.first })
         h.play(6_000L)
-        h.play(handOverAt - 1_800L)
+        h.play(primeAt)
         assertEquals(2, h.tails.size)
     }
 
@@ -356,7 +518,6 @@ class CrossfadeTest {
     @Test
     fun aLateEchoOfOurSeekIsIgnoredButALaterSeekStops() {
         val (h, c) = started()
-        h.onAdvance = { h.item = "b"; h.position = 0L }
         h.play(handOverAt)
         h.play(500L)
         c.onSeek(nearStart = true)
@@ -377,7 +538,7 @@ class CrossfadeTest {
     fun aSeekSkipOrNewItemDuringTheFadeStopsIt() {
         for (event in listOf<(Crossfader, FakeHost) -> Unit>(
             { c, _ -> c.onSeek(nearStart = false) },
-            { c, h -> h.item = "c"; c.onItemChanged() },
+            { c, h -> h.item = "z"; c.onItemChanged() },
         )) {
             val (h, c) = fading()
             event(c, h)
@@ -398,13 +559,32 @@ class CrossfadeTest {
     }
 
     @Test
-    fun aTailErrorOrItsEndStopsTheFade() {
-        val (h, c) = fading()
+    fun aTailErrorOrEndDuringTheFadeLetsTheFadeInFinish() {
+        for (gone in listOf<(Crossfader.TailEvents) -> Unit>({ it.onTailError() }, { it.onTailEnded() })) {
+            val (h, c) = fading()
+            val before = h.mainLevel
+            gone(h.tail!!.events)
+            assertTrue(h.tail!!.released)
+            assertEquals(Crossfader.Phase.FADING, c.phase)
+            // No jump: the incoming track keeps rising along the curve.
+            assertEquals(before, h.mainLevel, 0f)
+            h.play(3_050L)
+            assertTrue(h.mainLevel in before..0.99f)
+            h.play(6_000L)
+            assertStopped(h, c)
+        }
+    }
+
+    @Test
+    fun aTailErrorDuringTheSwapGivesTheTrackBackToTheMainPlayer() {
+        val (h, c) = started()
+        h.play(swapAt + 60L)
+        assertEquals(Crossfader.Phase.SWAP, c.phase)
+        assertTrue(h.mainLevel < 1f)
         h.tail!!.events.onTailError()
         assertStopped(h, c)
-        val (h2, c2) = fading()
-        h2.tail!!.events.onTailEnded()
-        assertStopped(h2, c2)
+        h.play(dur)
+        assertEquals(0, h.advances)
     }
 
     @Test
@@ -412,7 +592,7 @@ class CrossfadeTest {
         val (h, c) = fading()
         val old = h.tail!!
         h.play(6_000L)
-        h.play(handOverAt - 1_800L)
+        h.play(primeAt)
         assertEquals(Crossfader.Phase.PRIMED, c.phase)
         old.events.onTailError()
         assertEquals(Crossfader.Phase.PRIMED, c.phase)
@@ -423,7 +603,9 @@ class CrossfadeTest {
     fun theQueueChangingDuringTheFadeLetsItRun() {
         val (h, c) = fading()
         // Autoplay adds tracks, repeat or shuffle change: the fade no longer depends on them.
+        h.next = "y"
         c.onQueueChanged()
+        c.onOrderChanged()
         c.onDurationKnown()
         c.onBuffering()
         c.onReady()
@@ -437,14 +619,14 @@ class CrossfadeTest {
     fun beforeTheHandOverAHaltDropsTheTail() {
         val events = listOf<(Crossfader) -> Unit>({ it.onHalted() }, { it.onBuffering() }, { it.release() })
         for ((i, event) in events.withIndex()) {
-            for (at in listOf(handOverAt - 1_800L, handOverAt - 300L)) {
+            for (at in listOf(primeAt, prerollAt, swapAt + 60L)) {
                 val (h, c) = started()
                 h.play(at)
-                assertTrue(c.phase == Crossfader.Phase.PRIMED || c.phase == Crossfader.Phase.PREROLL)
+                assertTrue(c.phase in setOf(Crossfader.Phase.PRIMED, Crossfader.Phase.PREROLL, Crossfader.Phase.SWAP))
                 event(c)
                 assertTrue("event $i at $at", h.tails.single().released)
                 assertStopped(h, c)
-                assertTrue(h.mainVolumes.isEmpty()) // never touched
+                if (at < swapAt) assertTrue(h.mainVolumes.isEmpty()) // never touched
                 // The track ends the usual way: no hand-over by a stale message.
                 h.play(dur)
                 assertEquals("event $i at $at", 0, h.advances)
@@ -456,12 +638,13 @@ class CrossfadeTest {
     fun beforeTheHandOverAChangePlansAgain() {
         val events = listOf<(Crossfader, FakeHost) -> Unit>(
             { c, _ -> c.onSeek(nearStart = false) },
-            { c, _ -> c.onQueueChanged() },
-            { c, h -> h.item = "c"; c.onItemChanged() },
+            { c, h -> h.next = "z"; c.onQueueChanged() },
+            { c, _ -> c.onOrderChanged() },
+            { c, h -> h.item = "z"; c.onItemChanged() },
             { c, _ -> c.setSetting(3_000) },
         )
         for ((i, event) in events.withIndex()) {
-            for (at in listOf(handOverAt - 1_800L, handOverAt - 300L)) {
+            for (at in listOf(primeAt, prerollAt)) {
                 val (h, c) = started()
                 h.play(at)
                 val first = h.tail!!
@@ -476,9 +659,26 @@ class CrossfadeTest {
     }
 
     @Test
-    fun aQueueChangeBeforeTheHandOverPlansAgain() {
+    fun aQueueEditThatKeepsTheNextTrackKeepsTheTail() {
+        for (at in listOf(primeAt, prerollAt + 200L)) {
+            val (h, c) = started()
+            h.play(at)
+            val phase = c.phase
+            // An autoplay top-up, or the shuffle order put back: the same next track.
+            c.onQueueChanged()
+            assertEquals(1, h.tails.size)
+            assertFalse(h.tail!!.released)
+            assertEquals(phase, c.phase)
+            h.play(handOverAt)
+            assertEquals(1, h.advances)
+        }
+    }
+
+    @Test
+    fun aNewNextTrackBeforeTheHandOverPlansAgain() {
         val (h, c) = started()
-        h.play(handOverAt - 1_800L)
+        h.play(primeAt)
+        h.next = "z"
         c.onQueueChanged()
         // Still before the hand-over, with time to load: a new tail at once.
         assertEquals(2, h.tails.size)
@@ -489,7 +689,7 @@ class CrossfadeTest {
     @Test
     fun aTailNotReadyByThePrerollMeansNoFade() {
         val (h, c) = started()
-        h.play(handOverAt - 1_800L)
+        h.play(primeAt)
         h.tail!!.isReady = false
         h.play(dur)
         assertEquals(0, h.advances)
@@ -497,13 +697,14 @@ class CrossfadeTest {
     }
 
     @Test
-    fun theNextTrackNotBufferedAtTheHandOverMeansNoFade() {
+    fun theNextTrackNotBufferedAtTheSwapMeansNoFade() {
         val (h, c) = started()
-        h.play(handOverAt - 1L)
+        h.play(swapAt - 10L)
         h.f = h.f.copy(nextBufferedMs = 0L)
-        h.play(handOverAt)
+        h.play(swapAt)
         assertEquals(0, h.advances)
         assertStopped(h, c)
+        assertTrue(h.mainVolumes.isEmpty())
     }
 
     @Test
@@ -537,31 +738,41 @@ class CrossfadeTest {
     fun aResumeNearTheEndPrimesAtOnceIfThereIsTimeElseNot() {
         val (h, c) = started()
         c.onHalted()
-        h.position = handOverAt - 1_000L
+        h.position = handOverAt - 1_700L
         c.onResumed()
         assertEquals(Crossfader.Phase.PRIMED, c.phase)
 
         val (h2, c2) = started()
         c2.onHalted()
-        h2.position = handOverAt - 500L
+        h2.position = handOverAt - 1_600L
         c2.onResumed()
         assertEquals(Crossfader.Phase.NONE, c2.phase)
         assertTrue(h2.tails.isEmpty())
     }
 
     @Test
-    fun aPrimeDuringAFadeWaits() {
-        // A 4.5 s next track: its prime (at 0) comes while the fade into it runs.
+    fun aPrimeThatFallsDuringAFadeComesOnceTheFadeIsOver() {
+        // A 7.5 s next track: the fade into it is 2.5 s, and its own prime (2.3 s in) comes
+        // while that fade still runs.
         val (h, c) = started(settingMs = 3_000)
-        h.f = h.f.copy(nextDurationMs = 4_500L, nextBufferedMs = 4_500L)
+        h.f = h.f.copy(nextDurationMs = 7_500L, nextBufferedMs = 7_500L)
         h.onAdvance = {
-            h.item = "b"
+            h.item = "t${h.advances}"
+            h.next = "n${h.advances}"
             h.position = 0L
-            h.f = h.f.copy(durationMs = 4_500L)
+            h.f = h.f.copy(durationMs = 7_500L)
         }
-        h.play(dur - 1_500L)
+        h.play(dur - 2_500L)
         assertEquals(Crossfader.Phase.FADING, c.phase)
         assertEquals(1, h.tails.size)
+        h.play(2_400L)
+        assertEquals(1, h.tails.size) // not during the fade
+        // Once that fade is over, the short track gets its own tail, and fades into the next.
+        h.play(2_600L)
+        assertEquals(2, h.tails.size)
+        assertEquals(Crossfader.Phase.PRIMED, c.phase)
+        h.play(5_000L)
+        assertEquals(2, h.advances)
     }
 
     @Test
