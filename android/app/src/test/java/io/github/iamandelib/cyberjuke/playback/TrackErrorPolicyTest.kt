@@ -143,7 +143,7 @@ class TrackErrorPolicyTest {
         // So is the resolver's kind.
         assertEquals(Action.Skip, TrackErrorPolicy.decide(down.copy(kind = FailureKind.CONTENT)))
         assertEquals(Action.Block(BlockReason.BOT_CHECK), TrackErrorPolicy.decide(down.copy(kind = FailureKind.BOT_CHECK)))
-        assertEquals(Action.Pause(resume = false), TrackErrorPolicy.decide(down.copy(kind = FailureKind.BROKEN)))
+        assertEquals(Action.Pause(resume = false, network = false), TrackErrorPolicy.decide(down.copy(kind = FailureKind.BROKEN)))
     }
 
     @Test
