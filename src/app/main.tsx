@@ -112,9 +112,10 @@ async function maybeAutoplay(): Promise<void> {
 }
 
 /**
- * Load the catalog in the background once the first screen has painted, and bring it
- * up to date when the app comes back to the foreground or back online. The store's
- * own rules decide whether that means a request (at most hourly) or nothing.
+ * Load the catalog in the background once the screen is idle (called after Home's first
+ * page, see afterFirstPage), and bring it up to date when the app comes back to the
+ * foreground or back online. The store's own rules decide whether that means a request
+ * (at most hourly) or nothing.
  */
 function startCatalog(): void {
   const kick = () => void catalog.refresh();
@@ -123,6 +124,26 @@ function startCatalog(): void {
     if (document.visibilityState === 'visible') kick();
   });
   onReconnect(kick);
+}
+
+/** Longest that background work waits for Home's first page (a slow or hung request). */
+const FIRST_PAGE_WAIT_MS = 5000;
+
+/**
+ * Run `fn` once Home's first page has settled (answered or failed), or after
+ * FIRST_PAGE_WAIT_MS, whichever comes first: the catalog's download and the parse of
+ * its big file don't compete with the request the first screen waits for.
+ */
+function afterFirstPage(first: Promise<unknown>, fn: () => void): void {
+  let done = false;
+  const go = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    fn();
+  };
+  const timer = setTimeout(go, FIRST_PAGE_WAIT_MS);
+  first.then(go, go);
 }
 
 async function boot(): Promise<void> {
@@ -165,9 +186,11 @@ async function boot(): Promise<void> {
     root,
   );
   mark('render');
-  startCatalog();
+  afterFirstPage(firstPage, () => {
+    startCatalog();
+    void startUpdates(native ? () => JukePlayer.getAppInfo() : undefined);
+  });
   startFreshness();
-  void startUpdates(native ? () => JukePlayer.getAppInfo() : undefined);
   maybeAutoplay().catch((e) => logError('autoplay', e));
 }
 

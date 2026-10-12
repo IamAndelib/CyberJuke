@@ -4,8 +4,8 @@ import { isFeedQuery, start, waitForTracks } from '../helpers';
 
 /**
  * Launch: Home's Latest is always fetched fresh, so the work is in asking for it first.
- * The query goes out before the first render, and a query that never answers ends in
- * the error state, not an endless skeleton.
+ * The query goes out before the first render, the catalog waits until it has answered,
+ * and a query that never answers ends in the error state, not an endless skeleton.
  */
 
 declare global {
@@ -38,16 +38,35 @@ test.describe('a Latest page that takes a while', () => {
   });
 });
 
+test('the catalog download waits until Latest has answered', async ({ page }) => {
+  const events: string[] = [];
+  await page.route(/firestore\.googleapis\.com\/.*:runQuery/, async (route) => {
+    const q = queryOf(route);
+    if (q?.limit === 300) events.push('catalog');
+    if (isFirstPage(q) && !events.includes('latest')) {
+      // Slower than the idle wait the catalog used to start after (1.5 s), well under the cap (5 s).
+      await new Promise((r) => setTimeout(r, 2500));
+      events.push('latest');
+    }
+    return route.fallback();
+  });
+  await start(page);
+  await expect.poll(() => events.includes('catalog')).toBe(true);
+  expect(events.indexOf('latest')).toBeLessThan(events.indexOf('catalog'));
+});
+
 test.describe('a Latest request that never answers', () => {
-  test('ends in the error state with Retry after the timeout', async ({ page }) => {
+  test('ends in the error state with Retry after the timeout, and the catalog loads anyway', async ({ page }) => {
     await page.addInitScript(() => {
       window.__cyberjukeRequestTimeoutMs = 1500;
     });
     let hang = true;
+    let catalogAsked = false;
     let release!: () => void;
     const held = new Promise<void>((r) => (release = r));
     await page.route(/firestore\.googleapis\.com\/.*:runQuery/, async (route) => {
       const q = queryOf(route);
+      if (q?.limit === 300) catalogAsked = true;
       if (hang && isFirstPage(q)) {
         await held;
         return route.abort().catch(() => {});
@@ -60,6 +79,7 @@ test.describe('a Latest request that never answers', () => {
     // Not offline: it couldn't load, with Retry.
     await expect(home.getByTestId('error')).toBeVisible();
     await expect(home.getByTestId('offline')).toHaveCount(0);
+    await expect.poll(() => catalogAsked).toBe(true);
     hang = false;
     release();
     await home.getByTestId('retry').click();
