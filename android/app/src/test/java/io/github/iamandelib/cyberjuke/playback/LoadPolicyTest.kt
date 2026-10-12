@@ -53,16 +53,32 @@ class LoadPolicyTest {
         gate.allow(setOf("a", "b"))
         gate.await("a") // its turn: no wait
         val done = CountDownLatch(1)
-        val t = Thread {
+        val t = waiter {
             gate.await("c")
             done.countDown()
         }
-        t.start()
-        assertFalse(done.await(200, TimeUnit.MILLISECONDS))
-        // Skipped on: "c" is next now.
-        gate.allow(setOf("b", "c"))
-        assertTrue(done.await(5, TimeUnit.SECONDS))
-        t.join(5_000)
+        try {
+            assertFalse(done.await(200, TimeUnit.MILLISECONDS))
+            // Skipped on: "c" is next now.
+            gate.allow(setOf("b", "c"))
+            assertTrue(done.await(5, TimeUnit.SECONDS))
+        } finally {
+            // Whatever failed above, nothing is left waiting.
+            gate.allow(emptySet())
+            t.interrupt()
+            t.join(5_000)
+        }
+    }
+
+    /** A daemon thread running [body] (it can never keep the test JVM alive). */
+    private fun waiter(body: () -> Unit): Thread = Thread {
+        try {
+            body()
+        } catch (_: InterruptedIOException) {
+        }
+    }.apply {
+        isDaemon = true
+        start()
     }
 
     @Test
@@ -78,15 +94,22 @@ class LoadPolicyTest {
             } catch (e: Throwable) {
                 thrown.set(e)
             }
+        }.apply {
+            isDaemon = true
+            start()
         }
-        t.start()
-        assertTrue(started.await(5, TimeUnit.SECONDS))
-        Thread.sleep(100)
-        // ExoPlayer's Loader interrupts a load it cancels or releases.
-        t.interrupt()
-        t.join(5_000)
-        assertFalse(t.isAlive)
-        assertTrue(thrown.get() is InterruptedIOException)
+        try {
+            assertTrue(started.await(5, TimeUnit.SECONDS))
+            Thread.sleep(100)
+            // ExoPlayer's Loader interrupts a load it cancels or releases.
+            t.interrupt()
+            t.join(5_000)
+            assertFalse(t.isAlive)
+            assertTrue(thrown.get() is InterruptedIOException)
+        } finally {
+            gate.allow(emptySet())
+            t.interrupt()
+        }
     }
 
     @Test
