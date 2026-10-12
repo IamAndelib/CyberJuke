@@ -109,7 +109,7 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 | Settings, favourite genres and artists, recent searches | App data (Capacitor Preferences). Android may include these in your own Google backup |
 | The cached Jukebox catalog and lyrics | App data and cache. The catalog is dropped on sign-in and sign-out; signing out drops members-only tracks' lyrics |
 | What was playing last (the queue and where in it), so the app reopens on it | App files, excluded from backups; signing out removes members-only tracks from it |
-| Audio of your liked songs and of recently played and next tracks (the listening cache) | Up to the chosen size, on the phone only, never backed up (the app's cache, and its index excluded from backups). Members-only tracks are removed on sign-out. Clear cache in Settings |
+| Audio of your liked songs and of recently played and next tracks (the listening cache) | Up to the chosen size, on the phone only, never backed up (the app's cache, and its index excluded from backups). It is kept by video ID and format, never by stream URL. Members-only tracks are removed on sign-out, and none is kept while signed out. Clear cache in Settings |
 | Login token, user id and @username (only if you sign in) | Encrypted with an Android Keystore key; excluded from Android cloud and device-transfer backups |
 | Stream URLs, YouTube Music results | Memory only |
 
@@ -119,7 +119,7 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 |---|---|---|
 | Cyberspace's backend (Google Firestore) | Requests for Jukebox posts; your login token if signed in | Browsing the Jukebox |
 | Cyberspace's login (Google Identity Toolkit / Secure Token) | Your email and password; token refreshes | Only if you sign in |
-| YouTube | The video ID of the track being played or prefetched, or of a liked song being saved to play offline | Playback; saving a song you just liked; older liked songs are downloaded on Wi-Fi only, while the app is open or playing |
+| YouTube | The video ID of the track being played or prefetched, or of a liked song being saved to play offline | Playback; saving a song you just liked; older liked songs are downloaded on an unmetered network (Wi-Fi), while the app is open (also in the background) or playing |
 | YouTube Music | Your Global search query, or the artist you open; the video ID of a Global track, for its radio (also in the background while autoplay refills); the video ID of the playing track when LRCLIB has no lyrics for it | Global search, artist pages, Global autoplay, lyrics fallback |
 | YouTube and Google image servers (`i.ytimg.com`, `*.googleusercontent.com`, `*.ggpht.com`) | Artwork requests | Lists, artist pages and Now Playing |
 | LRCLIB | Artist, title and duration of the current track | Lyrics panel open |
