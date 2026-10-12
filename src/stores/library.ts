@@ -30,6 +30,10 @@ export const THEME_LABELS: Record<ThemeId, string> = {
 export type Quality = 'auto' | 'high' | 'low';
 export const QUALITIES: readonly Quality[] = ['auto', 'high', 'low'];
 
+/** The listening cache's size in MB (Settings → Listening cache). */
+export type CacheMb = 128 | 256 | 512;
+export const CACHE_SIZES: readonly CacheMb[] = [128, 256, 512];
+
 /** Minutes between checks for new tracks; 0 = only when I refresh. */
 type CheckEvery = 5 | 15 | 30 | 60 | 0;
 export const CHECK_EVERY_OPTIONS: readonly CheckEvery[] = [5, 15, 30, 60, 0];
@@ -56,6 +60,8 @@ export interface Settings {
   autoplay: boolean;
   /** Look for a newer release by itself (daily at most; never for F-Droid installs). */
   checkUpdates: boolean;
+  /** How much music the phone may keep (the listening cache): liked songs to play offline, recent and next tracks. */
+  cacheMb: CacheMb;
   /** The saved format's version: each migration below runs once. */
   version: number;
 }
@@ -77,6 +83,7 @@ const DEFAULT_SETTINGS: Settings = {
   ipv4: 'auto',
   autoplay: true,
   checkUpdates: true,
+  cacheMb: 256,
   version: SETTINGS_VERSION,
 };
 
@@ -195,6 +202,8 @@ export async function loadLibrary(): Promise<void> {
   merged.autoplay = merged.autoplay !== false;
   merged.checkUpdates = merged.checkUpdates !== false;
   if (!CHECK_EVERY_OPTIONS.includes(merged.checkEvery)) merged.checkEvery = DEFAULT_SETTINGS.checkEvery;
+  // Saved before the listening cache (or unknown): the default size.
+  if (!CACHE_SIZES.includes(merged.cacheMb)) merged.cacheMb = DEFAULT_SETTINGS.cacheMb;
   settings.value = merged;
   if (migrated || preferIpv4 !== undefined || upgraded) write(K_SETTINGS, merged);
 }
@@ -431,6 +440,18 @@ async function saveKept(kept: Map<string, KeptAccount>, now: number): Promise<vo
 let keptJob: Promise<void> = Promise.resolve();
 const queueKept = (job: () => Promise<void>): Promise<void> => (keptJob = keptJob.then(job, job));
 
+const membersDropped = new Set<(tracks: Track[]) => void>();
+
+/**
+ * Called on every dropMembersOnly (a sign-out, or starting signed out) with the members-only
+ * tracks it takes out of Liked and history (maybe none): the listening cache drops their
+ * audio. Returns an unsubscribe.
+ */
+export function onMembersOnlyDropped(cb: (tracks: Track[]) => void): () => void {
+  membersDropped.add(cb);
+  return () => membersDropped.delete(cb);
+}
+
 /**
  * Signed out of Cyberspace: members-only tracks leave Liked and history (they can't be
  * opened signed out). [uid], the account just signed out: its members-only likes and plays
@@ -440,6 +461,8 @@ const queueKept = (job: () => Promise<void>): Promise<void> => (keptJob = keptJo
  */
 export function dropMembersOnly(uid: string | null = null): void {
   const all = liked.value;
+  const gone = [...all.filter((t) => t.membersOnly), ...history.value.filter((e) => e.track.membersOnly).map((e) => e.track)];
+  for (const cb of membersDropped) cb(gone);
   const likes = uid ? all.flatMap((t, i) => (t.membersOnly ? [removedFrom(all, i, trackId)] : [])) : [];
   const plays = uid ? history.value.filter((e) => e.track.membersOnly) : [];
   if (all.some((t) => t.membersOnly)) {

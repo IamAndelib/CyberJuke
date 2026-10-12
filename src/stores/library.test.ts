@@ -32,7 +32,7 @@ describe('theme migration', () => {
   it('migrates a saved GRiD theme to Brutalist and saves it', async () => {
     store.set('settings', JSON.stringify({ theme: 'grid', showNsfw: true, quality: 'low' }));
     await lib.loadLibrary();
-    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: true, version: 2 });
+    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: true, cacheMb: 256, version: 2 });
     await flush();
     expect(JSON.parse(store.get('settings')!).theme).toBe('brutalist');
   });
@@ -167,6 +167,48 @@ describe('check interval setting', () => {
     await lib.loadLibrary();
     expect(lib.settings.value.checkEvery).toBe(15);
     expect(lib.CHECK_EVERY_OPTIONS).toEqual([5, 15, 30, 60, 0]);
+  });
+});
+
+describe('listening cache setting', () => {
+  it('is 256 MB unless one of the sizes was chosen, and keeps a choice', async () => {
+    expect(lib.CACHE_SIZES).toEqual([128, 256, 512]);
+    await lib.loadLibrary();
+    expect(lib.settings.value.cacheMb).toBe(256);
+    // Saved before the setting existed (an older version): the default, nothing else changes.
+    store.set('settings', JSON.stringify({ theme: 'vt320', quality: 'low', version: 2 }));
+    await lib.loadLibrary();
+    expect(lib.settings.value).toMatchObject({ cacheMb: 256, theme: 'vt320', quality: 'low' });
+    lib.updateSettings({ cacheMb: 512 });
+    await flush();
+    expect(JSON.parse(store.get('settings')!)).toMatchObject({ cacheMb: 512 });
+    await lib.loadLibrary();
+    expect(lib.settings.value.cacheMb).toBe(512);
+    for (const junk of [1024, '256', null, -1]) {
+      store.set('settings', JSON.stringify({ cacheMb: junk, version: 2 }));
+      await lib.loadLibrary();
+      expect(lib.settings.value.cacheMb).toBe(256);
+    }
+  });
+});
+
+describe('members-only tracks dropped at a sign-out', () => {
+  const tr = (id: string, membersOnly = false) => ({ id, ytId: id.padEnd(11, 'x'), title: id, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '', ...(membersOnly && { membersOnly: true }) });
+
+  it('tells its listeners which ones left Liked and history, every time', async () => {
+    files.set(LIKED_FILE, JSON.stringify([tr('pub'), tr('mem1', true)]));
+    await lib.loadLibrary();
+    lib.addRecent(tr('mem2', true));
+    const seen: string[][] = [];
+    const off = lib.onMembersOnlyDropped((tracks) => seen.push(tracks.map((t) => t.id)));
+    lib.dropMembersOnly();
+    expect(seen).toEqual([['mem1', 'mem2']]);
+    // Nothing left to drop: still told (the cache may hold queued or catalog ones).
+    lib.dropMembersOnly();
+    expect(seen).toEqual([['mem1', 'mem2'], []]);
+    off();
+    lib.dropMembersOnly();
+    expect(seen).toHaveLength(2);
   });
 });
 

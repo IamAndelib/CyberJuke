@@ -34,7 +34,8 @@ import { ArtistPage } from '../features/artists/Artist';
 import { ArtistGrid } from '../features/artists/Artists';
 import { GenreDetail, GenreGrid } from '../features/genres/Genres';
 import { Home } from '../features/home/Home';
-import { Library } from '../features/library/Library';
+import { Library, openLiked } from '../features/library/Library';
+import { hasSavedLiked } from '../stores/savedOffline';
 import { ReleasesPage } from '../features/artists/Releases';
 import { Search } from '../features/search/Search';
 import { Settings } from '../features/settings/Settings';
@@ -266,6 +267,27 @@ function useInertUnderNowPlaying(app: { current: HTMLElement | null }): void {
   }, []);
 }
 
+/**
+ * The bar at the top while offline. With liked songs saved on the phone it says they still
+ * play, and a tap opens Liked; otherwise it asks to connect. It never says how many.
+ */
+function OfflineBanner() {
+  if (!hasSavedLiked.value) {
+    return (
+      <div class="offline-banner" role="status" data-testid="offline-banner">
+        {OFFLINE.banner}
+      </div>
+    );
+  }
+  return (
+    <div class="offline-banner" role="status" data-testid="offline-banner">
+      <button type="button" class="offline-banner-link" onClick={openLiked} data-testid="offline-banner-liked">
+        {OFFLINE.bannerLiked}
+      </button>
+    </div>
+  );
+}
+
 export function App() {
   const cur = tab.value;
   // Only whether something is loaded: playback itself never re-renders the app.
@@ -289,11 +311,7 @@ export function App() {
 
   return (
     <div ref={app} class={'app' + (hasPlayer ? ' has-player' : '') + (showFab ? ' has-fab' : '')}>
-      {!online.value && (
-        <div class="offline-banner" role="status" data-testid="offline-banner">
-          {OFFLINE.banner}
-        </div>
-      )}
+      {!online.value && <OfflineBanner />}
       <main class="main">
         {TAB_ITEMS.filter((t) => visited.current.has(t.id)).map((t) => (
           <TabPane key={t.id} t={t.id} active={t.id === cur} />

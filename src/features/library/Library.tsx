@@ -2,6 +2,7 @@ import { signal, type ReadonlySignal } from '@preact/signals';
 import { useCallback, useMemo } from 'preact/hooks';
 import type { Track } from '../../data/model';
 import { history, liked, recent } from '../../stores/library';
+import { LIKED_LABEL, savedOffline } from '../../stores/savedOffline';
 import { dayKey, groupByDay } from '../../stores/history';
 import { useChunks } from '../../ui/useChunks';
 import { arrowChoice } from '../../ui/arrowChoice';
@@ -10,15 +11,26 @@ import { Icon } from '../../ui/icons';
 import { EmptyState, PlayShuffle, Tracks, playFrom } from '../../ui/components/TrackList';
 import { TrackRow } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
-import { askConfirm, selectTab, useSearchContext } from '../../ui/nav';
+import { askConfirm, nowPlayingOpen, popToRoot, selectTab, useSearchContext } from '../../ui/nav';
 import { list } from '../../ui/playAll';
 import { plural } from '../../core/text';
 
 const SECTIONS = ['liked', 'recent'] as const;
 const section = signal<(typeof SECTIONS)[number]>('liked');
 
-const LIKED_CTX = list('Liked');
+const LIKED_CTX = list(LIKED_LABEL);
 const RECENT_CTX = list('Recently played');
+
+/** Offline, a liked song saved on the phone plays (its row isn't dimmed). Reads the signal: rows follow it. */
+const savedNow = (t: Track) => savedOffline.value.has(t.ytId);
+
+/** Library → Liked, from anywhere (the offline banner, the offline toast's button). */
+export function openLiked(): void {
+  section.value = 'liked';
+  nowPlayingOpen.value = false;
+  popToRoot('library');
+  selectTab('library');
+}
 
 /** M3: clearing history asks first, and can still be undone from the toast. */
 function confirmClear(): void {
@@ -87,7 +99,7 @@ export function Library() {
 
       <div data-testid={sel === 'liked' ? 'liked-list' : 'recent-list'}>
         {tracks.length ? (
-          sel === 'liked' ? <Tracks tracks={tracks} ctx={LIKED_CTX} /> : <HistoryDays />
+          sel === 'liked' ? <Tracks tracks={tracks} ctx={LIKED_CTX} playsOffline={savedNow} /> : <HistoryDays />
         ) : sel === 'liked' ? (
           <EmptyState title="No liked tracks yet">
             Tap <Icon name="heartOutline" size={16} /> in the player, or Like in a track's ⋯ menu, to keep it here.

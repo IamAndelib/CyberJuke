@@ -20,9 +20,11 @@ import { logError } from '../core/log';
 import { online } from '../core/network';
 import { OFFLINE } from '../core/offlineText';
 import { exposeForTests } from '../core/testHooks';
+import type { Track } from '../data/model';
+import { LIKED_LABEL, hasSavedLiked, isSaved, savedOffline } from '../stores/savedOffline';
 import { createAutoplay, type Autoplay } from './autoplay';
 import { NativePlayer } from './nativePlayer';
-import { offlineGuard } from './offlineGuard';
+import { offlineGuard, type OfflineRefusal } from './offlineGuard';
 import { safePlayer } from './safePlayer';
 import { nsfwAutoplayIds, type PlayContext, type Player, type UpItem, type UpNextItem, type UpNextSections } from './types';
 import { WebPlayer } from './webPlayer';
@@ -34,18 +36,56 @@ function commandFailed(message: string): void {
   toast(block.blocked.peek() ? 'Playback is paused while YouTube is limiting requests' : message);
 }
 
+/** Opens Library → Liked (the app sets it: the player can't reach the screens). */
+let openLiked: (() => void) | null = null;
+
+/** Where the offline toast's Liked button goes. */
+export function setOpenLiked(open: () => void): void {
+  openLiked = open;
+}
+
 /**
- * Whether playback can start now. Offline nothing can play, so it says so (a toast) and
- * returns false. Every play action goes through it: the player's own commands below, and
- * actions made of several commands (Play and Shuffle) before their first one.
+ * Says why playing was refused offline. With liked songs saved: a liked song not saved yet
+ * says so; anything else that the saved ones still play (its button opens Liked). With none
+ * saved yet, that it needs a connection.
+ */
+function refuseOffline(why: OfflineRefusal): void {
+  if (!hasSavedLiked.peek()) toast(OFFLINE.tap);
+  else if (why === 'unsaved') toast(OFFLINE.notSaved);
+  else toast(OFFLINE.tapLiked, undefined, openLiked ? { label: OFFLINE.likedAction, run: openLiked } : undefined);
+}
+
+/**
+ * Whether playback can start now, for something that isn't a saved liked song (the Jukebox
+ * shuffle). Offline it says why (a toast) and returns false.
  */
 export function canStartPlayback(): boolean {
   if (online.peek()) return true;
-  toast(OFFLINE.tap);
+  refuseOffline('offline');
   return false;
 }
 
-export const player: Player = offlineGuard(safePlayer(Capacitor.isNativePlatform() ? new NativePlayer() : new WebPlayer(), commandFailed), canStartPlayback);
+/**
+ * What of `tracks`, started from `ctx`, can play now: all of it online; offline only the saved
+ * ones of a list from Liked. Null (and a toast says why) when none can. For actions made of
+ * several commands (Play and Shuffle), before their first one.
+ */
+export function playableNow(tracks: Track[], ctx: PlayContext): Track[] | null {
+  if (online.peek()) return tracks;
+  if (ctx.label === LIKED_LABEL) {
+    const saved = savedOffline.peek();
+    const some = tracks.filter((t) => isSaved(t, saved));
+    if (some.length) return some;
+  }
+  refuseOffline('offline');
+  return null;
+}
+
+export const player: Player = offlineGuard(safePlayer(Capacitor.isNativePlatform() ? new NativePlayer() : new WebPlayer(), commandFailed), {
+  online: () => online.peek(),
+  saved: () => savedOffline.peek(),
+  refuse: refuseOffline,
+});
 
 const state = player.state;
 

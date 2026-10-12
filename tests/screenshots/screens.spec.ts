@@ -290,6 +290,22 @@ for (const theme of ['dark', 'c64'] as const) {
     await settle(page);
     await shot(page, `offline-search-global-${theme}`);
   });
+
+  test(`offline: Liked with saved songs (${theme})`, async ({ page, backend }) => {
+    const track = (n: number) => ({ id: `l${n}`, ytId: `abcdefghij${n}`, title: `Liked track ${n}`, artist: 'An Artist', genre: 'Synthwave', by: 'someone', postTitle: '', postUrl: '', createdAt: '2026-01-01T00:00:00Z', nsfw: false, artworkUrl: '' });
+    await page.setViewportSize({ width: 412, height: 915 });
+    await seedStorage(page, { [SETTINGS_KEY]: { theme, showNsfw: false, quality: 'high' }, 'CapacitorStorage.liked': [1, 2, 3, 4].map(track) });
+    await page.goto('/');
+    await expect(page.getByTestId('track-row').first()).toBeVisible();
+    // What native would report as saved for offline.
+    await page.evaluate(() => (window as unknown as { __cyberjukeCache: { saved(ids: string[]): void } }).__cyberjukeCache.saved(['abcdefghij1', 'abcdefghij3']));
+    backend.offline = true;
+    await page.context().setOffline(true);
+    await page.getByTestId('offline-banner-liked').click();
+    await expect(page.getByTestId('liked-list').getByTestId('track-row')).toHaveCount(4);
+    await settle(page);
+    await shot(page, `offline-liked-${theme}`);
+  });
 }
 
 for (const theme of THEMES) {

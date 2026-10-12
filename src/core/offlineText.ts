@@ -1,12 +1,15 @@
 /**
  * Every offline line the app shows, in one voice (the terminal style of `[ NO CARRIER ]`
- * and "Feeling lucky?"), so they stay consistent. Offline nothing plays, so they all say
- * the same thing: connect. Here in core because the player's toasts use them as well as
- * the screens.
+ * and "Feeling lucky?"), so they stay consistent. Offline the only music that plays is liked
+ * songs saved on the phone (the listening cache), so they say that when some are, and
+ * "connect" otherwise. Here in core because the player's toasts use them as well as the
+ * screens.
  */
 export const OFFLINE = {
   /** The bar at the top while the device is offline. */
   banner: '[ offline ] no carrier · connect to play',
+  /** The bar while offline with liked songs saved (it opens Liked). */
+  bannerLiked: '[ offline ] no carrier · your liked songs still play',
   /** The state a list shows instead of its rows (OfflineGate). */
   glyph: '[ NO CARRIER ]',
   title: "Line's dead",
@@ -15,6 +18,11 @@ export const OFFLINE = {
   redial: 'Redial',
   /** A tap that would play something. */
   tap: 'No carrier. Connect to play.',
+  /** The same with liked songs saved: its button opens Liked. */
+  tapLiked: 'No carrier. Your liked songs still play.',
+  likedAction: 'Liked',
+  /** A liked song not saved on the phone yet, tapped offline. */
+  notSaved: 'Not saved yet. Needs a connection.',
   /** The connection dropped mid-track and the player won't pick up by itself. */
   lostWaits: "Signal lost. Press play once you're back online.",
   /** In place of the time (Now Playing) and the artist (mini player) while native waits for the network. */

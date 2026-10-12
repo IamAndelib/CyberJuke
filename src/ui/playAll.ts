@@ -7,7 +7,7 @@
  *    list in order, then similar ones.
  */
 import type { Track } from '../data/model';
-import { canStartPlayback, player, type PlayContext } from '../player';
+import { playableNow, player, type PlayContext } from '../player';
 
 export const radio = (label: string): PlayContext => ({ label, mode: 'radio' });
 export const list = (label: string): PlayContext => ({ label, mode: 'list' });
@@ -19,10 +19,12 @@ export function playFrom(tracks: Track[], i: number, ctx: PlayContext): Promise<
 
 /**
  * P3, the Play and Shuffle buttons: Play always plays in order with shuffle off;
- * Shuffle always turns shuffle on (from a random track). Offline neither changes anything.
+ * Shuffle always turns shuffle on (from a random track). Offline only Liked's saved songs
+ * play; elsewhere neither changes anything.
  */
-export async function playAll(tracks: Track[], { shuffle, ctx }: { shuffle: boolean; ctx: PlayContext }): Promise<void> {
-  if (!tracks.length || !canStartPlayback()) return;
+export async function playAll(all: Track[], { shuffle, ctx }: { shuffle: boolean; ctx: PlayContext }): Promise<void> {
+  const tracks = all.length ? playableNow(all, ctx) : null;
+  if (!tracks?.length) return;
   if (!shuffle) {
     await player.setShuffle(false);
     await playFrom(tracks, 0, ctx);

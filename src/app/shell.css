@@ -25,6 +25,21 @@
   font-size: 13px;
   text-align: center;
 }
+/* With liked songs saved: the whole bar opens Liked. */
+.offline-banner-link {
+  display: block;
+  width: 100%;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
 .offline-banner + .main .topbar {
   padding-top: 10px;
 }
