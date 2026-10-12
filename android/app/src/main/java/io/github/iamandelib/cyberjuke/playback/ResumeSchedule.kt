@@ -6,7 +6,8 @@ import io.github.iamandelib.cyberjuke.net.NetBlock
  * When to try again after an outage pause while the network still looks up. A weak link that
  * stalls a track stays validated, so the network callback's resume never comes; these tries
  * do: [STEPS_MS] after each outage pause, then every [THEN_EVERY_MS], and none after the window
- * ([NetBlock.RESUME_WINDOW_MS] from the streak's first outage pause) is over.
+ * ([NetBlock.RESUME_WINDOW_MS] from the streak's first outage pause) is over. The window's end
+ * is the last event: the wait ends then, not at the last try.
  *
  * PlaybackService runs it on one Handler.postDelayed on the main looper, at most one pending,
  * only while an outage pause is pending. Pure: the clock is passed in (ResumeScheduleTest).
@@ -34,13 +35,19 @@ internal class ResumeSchedule(private val windowMs: Long = NetBlock.RESUME_WINDO
         lastAt = now
     }
 
-    /** Milliseconds from [now] to the next try, or null: no streak, or its window is over. */
+    /**
+     * Milliseconds from [now] to the next event: a try, or after the last one the window's end
+     * (then [isOver]: the wait is given up, while the network callback could still resume until
+     * then). Null: no streak, or it is over.
+     */
     fun delayMs(now: Long): Long? {
-        if (startedAt == IDLE) return null
-        val due = lastAt + step(attempts)
-        if (due > startedAt + windowMs) return null
+        if (startedAt == IDLE || isOver(now)) return null
+        val due = minOf(lastAt + step(attempts), startedAt + windowMs)
         return (due - now).coerceAtLeast(0L)
     }
+
+    /** The streak's window has run out at [now]. */
+    fun isOver(now: Long): Boolean = startedAt != IDLE && now >= startedAt + windowMs
 
     /** A try ran at [now]. */
     fun attempted(now: Long) {

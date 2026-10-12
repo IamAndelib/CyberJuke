@@ -80,8 +80,11 @@ class PlaybackService : MediaSessionService() {
     /** mediaIds already re-resolved once after an HTTP 403/410 (expired stream URL). */
     private val expiredRetried = HashSet<String>()
 
-    /** The last item that reached READY (its stream worked): TrackErrorPolicy.Facts.playedThisItem. */
+    /** The last item that played (its stream worked): TrackErrorPolicy.Facts.playedThisItem. */
     private var lastReadyId: String? = null
+
+    /** Unclear I/O failures at one spot of the current item: TrackErrorPolicy.Facts.failuresHere. */
+    private val failureSpot = FailureSpot()
 
     /** Loads the playing item and the next one only; told which they are ([updateLoadAhead]). */
     private var oneAhead: OneAheadLoadControl? = null
@@ -566,8 +569,14 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
-            // Playing again: an outage's tries are over.
-            if (isPlaying) stopOutageRetry()
+            if (isPlaying) {
+                // Its stream works (also after a gapless move to it, which has no READY).
+                lastReadyId = player?.currentMediaItem?.mediaId
+                // Playing again: an outage's tries are over, and nothing waits for the network
+                // (Play pressed during the wait: the wait goes, and says so).
+                stopOutageRetry()
+                if (NetBlock.waitingForNetwork()) NetBlock.takeResume()
+            }
             schedulePrefetch()
             // Where it stopped, and while it plays every few seconds (a crash loses no more).
             handler.removeCallbacks(savePositionTick)
@@ -612,6 +621,9 @@ class PlaybackService : MediaSessionService() {
             prefetchedKey = null
             Log.i(TAG, "Transition to ${mediaItem?.mediaId} (${JukeUris.ytIdOf(mediaItem)}), reason=$reason")
             if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) rebuffers.onJump(SystemClock.elapsedRealtime())
+            // Moved on gaplessly, already playing: no READY comes for this one.
+            if (player?.playbackState == Player.STATE_READY) lastReadyId = mediaItem?.mediaId
+            failureSpot.clear()
             StreamResolver.releaseFormats()
             governQuality(mediaItem)
             schedulePrefetch()
@@ -977,6 +989,11 @@ class PlaybackService : MediaSessionService() {
         val resolve = error.findCause<ResolveException>()
         val served = ytId?.let { StreamResolver.lastServed(it) }
         val now = System.currentTimeMillis()
+        val ioOther = error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED ||
+            error.findCause<EOFException>() != null || error.findCause<SocketException>() != null
+        val isCurrent = index == p.currentMediaItemIndex
+        // A track broken at one spot fails there again after each resume (READY in between).
+        val failuresHere = if (ioOther) failureSpot.onFailure(trackId, if (isCurrent) p.currentPosition else 0L) else 0
         val facts = TrackErrorPolicy.Facts(
             kind = resolve?.kind,
             httpCode = http?.responseCode,
@@ -989,11 +1006,11 @@ class PlaybackService : MediaSessionService() {
             blocked = error.findCause<BlockedException>() != null,
             ioNetwork = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
                 error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
-            ioOther = error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED ||
-                error.findCause<EOFException>() != null || error.findCause<SocketException>() != null,
+            ioOther = ioOther,
             networkValidated = isNetworkValidated(),
             playedThisItem = trackId == lastReadyId,
-            isCurrent = index == p.currentMediaItemIndex,
+            failuresHere = failuresHere,
+            isCurrent = isCurrent,
             hasNext = p.hasNextMediaItem(),
             consecutiveFailures = consecutiveFailures,
             outagePauses = outagePauses,
@@ -1092,14 +1109,16 @@ class PlaybackService : MediaSessionService() {
         if (until > 0L) scheduleResume(until) else handler.post { resumeAfterBlock() }
     }
 
-    /** The next outage try (one pending at most); past the window, the wait is given up. */
+    /** The next outage try, or the window's end (one pending at most). */
     private fun armOutageRetry() {
         handler.removeCallbacks(outageRetry)
         val delay = resumeSchedule.delayMs(SystemClock.elapsedRealtime())
-        if (delay != null) {
-            handler.postDelayed(outageRetry, delay)
-            return
-        }
+        if (delay != null) handler.postDelayed(outageRetry, delay) else endOutageWait()
+    }
+
+    /** The window is over: the wait is given up (the page hears it, Play still works). */
+    private fun endOutageWait() {
+        handler.removeCallbacks(outageRetry)
         resumeSchedule.stop()
         if (NetBlock.waitingForNetwork()) {
             Log.i(TAG, "Network still not back: no longer resuming by itself")
@@ -1118,6 +1137,10 @@ class PlaybackService : MediaSessionService() {
             return
         }
         val now = SystemClock.elapsedRealtime()
+        if (resumeSchedule.isOver(now)) {
+            endOutageWait()
+            return
+        }
         resumeSchedule.attempted(now)
         if (isNetworkValidated()) {
             Log.i(TAG, "Outage: trying again")

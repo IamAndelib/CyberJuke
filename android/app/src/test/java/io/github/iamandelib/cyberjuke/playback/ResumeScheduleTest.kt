@@ -11,15 +11,19 @@ class ResumeScheduleTest {
     private val sec = 1_000L
     private val min = 60_000L
 
-    /** Runs every try the schedule asks for from an outage pause at [start]; the try times. */
-    private fun tries(s: ResumeSchedule, start: Long): List<Long> {
+    /** Runs every event the schedule asks for from an outage pause at [start]: the tries' times, then "end". */
+    private fun tries(s: ResumeSchedule, start: Long): List<String> {
         s.onOutagePause(start)
-        val at = ArrayList<Long>()
+        val at = ArrayList<String>()
         var now = start
         while (true) {
             val d = s.delayMs(now) ?: break
             now += d
-            at.add(now - start)
+            if (s.isOver(now)) {
+                at.add("end ${(now - start) / sec}")
+                break
+            }
+            at.add("${(now - start) / sec}")
             s.attempted(now)
         }
         return at
@@ -36,9 +40,11 @@ class ResumeScheduleTest {
 
     @Test
     fun triesBackOffThenEveryTwoMinutesUntilTheWindowEnds() {
-        // 15 s, 30 s and 60 s apart, then every 2 min, all within the 9-minute window.
+        // 15 s, 30 s and 60 s apart, then every 2 min, all within the 9-minute window; the
+        // wait ends at the window's end, not at the last try (the network callback may still
+        // resume until then).
         assertEquals(
-            listOf(15 * sec, 45 * sec, 105 * sec, 225 * sec, 345 * sec, 465 * sec),
+            listOf("15", "45", "105", "225", "345", "465", "end 540"),
             tries(ResumeSchedule(), 1_000_000L),
         )
         assertEquals(9 * min, NetBlock.RESUME_WINDOW_MS)
@@ -62,10 +68,14 @@ class ResumeScheduleTest {
         val s = ResumeSchedule()
         s.onOutagePause(0L)
         repeat(4) { s.attempted((it + 1) * min) }
-        // Paused again 8.5 min in: still the same streak, and the next try would be past 9 min.
+        // Paused again 8.5 min in: still the same streak; the next try would be past 9 min, so
+        // what comes next is the window's end.
         s.onOutagePause(8 * min + 30 * sec)
         assertTrue(s.active)
-        assertNull(s.delayMs(8 * min + 30 * sec))
+        assertEquals(30 * sec, s.delayMs(8 * min + 30 * sec))
+        assertFalse(s.isOver(9 * min - 1))
+        assertTrue(s.isOver(9 * min))
+        assertNull(s.delayMs(9 * min))
     }
 
     @Test
@@ -93,6 +103,6 @@ class ResumeScheduleTest {
 
     @Test
     fun aShorterWindowEndsSooner() {
-        assertEquals(listOf(15 * sec, 45 * sec), tries(ResumeSchedule(windowMs = min), 0L))
+        assertEquals(listOf("15", "45", "end 60"), tries(ResumeSchedule(windowMs = min), 0L))
     }
 }

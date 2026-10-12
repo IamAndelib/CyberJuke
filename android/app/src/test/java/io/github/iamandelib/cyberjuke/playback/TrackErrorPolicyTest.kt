@@ -140,6 +140,33 @@ class TrackErrorPolicyTest {
     }
 
     @Test
+    fun aTrackBrokenAtOneSpotIsSkippedTheSecondTimeThere() {
+        // The network is up and the track played up to here: once an outage...
+        val midTrack = Facts(kind = null, ioOther = true, networkValidated = true, playedThisItem = true)
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(midTrack.copy(failuresHere = 0)))
+        // ...but failing at the same spot again, it's the file: skip it instead of looping.
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(midTrack.copy(failuresHere = 1)))
+        assertEquals(Action.PauseAtEnd, TrackErrorPolicy.decide(midTrack.copy(failuresHere = 1, hasNext = false)))
+        // With the network down, it waits however often it failed there.
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(midTrack.copy(failuresHere = 5, networkValidated = false)))
+    }
+
+    @Test
+    fun failuresCountPerSpotOfOneTrack() {
+        val spot = FailureSpot()
+        assertEquals(0, spot.onFailure("a", 60_000L))
+        // Resumed, played the buffer up to about the same place, failed again.
+        assertEquals(1, spot.onFailure("a", 75_000L))
+        assertEquals(2, spot.onFailure("a", 70_000L))
+        // Well past it (more than 30 s on): a new spot.
+        assertEquals(0, spot.onFailure("a", 110_000L))
+        // Another track, or a cleared one: starts over.
+        assertEquals(0, spot.onFailure("b", 110_000L))
+        spot.clear()
+        assertEquals(0, spot.onFailure("b", 110_000L))
+    }
+
+    @Test
     fun theOutageStreakLeavesRoomForTheScheduledTries() {
         // ResumeSchedule tries six times within its window (ResumeScheduleTest); the network
         // callback may add one or two.

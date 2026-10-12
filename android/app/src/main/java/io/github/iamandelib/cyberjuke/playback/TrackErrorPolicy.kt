@@ -26,6 +26,9 @@ internal object TrackErrorPolicy {
      */
     const val MAX_OUTAGE_RESUMES = 8
 
+    /** An unclear I/O failure this many times at the same spot of a track is the track's. */
+    const val MAX_FAILURES_HERE = 2
+
     data class Facts(
         /** From the resolver ([ResolveException.kind]) or null for a stream (HTTP) failure. */
         val kind: FailureKind?,
@@ -54,8 +57,10 @@ internal object TrackErrorPolicy {
         val ioOther: Boolean = false,
         /** The device has a validated network now. */
         val networkValidated: Boolean = true,
-        /** The last item that played (reached READY) is this one: its stream worked until now. */
+        /** The last item that played is this one: its stream worked until now. */
         val playedThisItem: Boolean = false,
+        /** [ioOther] failures of this item at about this position before this one ([FailureSpot]). */
+        val failuresHere: Int = 0,
         val isCurrent: Boolean = true,
         val hasNext: Boolean = true,
         /** Per-video failures in a row before this one. */
@@ -126,7 +131,10 @@ internal object TrackErrorPolicy {
             if (f.ioNetwork) return outage(f)
             // Not clearly the network: an outage only when the next track would fail too. Then a
             // good track is not skipped, and a flapping link doesn't stop playback.
-            if (f.ioOther && (!f.networkValidated || f.playedThisItem)) return outage(f)
+            // But the same failure at the same spot again, with the network up, is the file
+            // (broken at that point): skip it rather than loop on it.
+            if (f.ioOther && !f.networkValidated) return outage(f)
+            if (f.ioOther && f.playedThisItem && f.failuresHere + 1 < MAX_FAILURES_HERE) return outage(f)
         }
         return perVideo(f)
     }
@@ -139,5 +147,38 @@ internal object TrackErrorPolicy {
         f.consecutiveFailures + 1 >= MAX_CONSECUTIVE_FAILURES -> Action.Stop
         !f.isCurrent || f.hasNext -> Action.Skip
         else -> Action.PauseAtEnd
+    }
+}
+
+/**
+ * Counts unclear I/O failures of one item at about one position ([TrackErrorPolicy.Facts.failuresHere]).
+ * Reaching READY again doesn't reset it (a resume plays the buffer up to the same bad spot); a
+ * new item, or a failure more than [NEAR_MS] away from the last one, starts over. Pure
+ * (TrackErrorPolicyTest). Main thread.
+ */
+internal class FailureSpot {
+    private var id: String? = null
+    private var positionMs = 0L
+    private var count = 0
+
+    /** An unclear I/O failure of [id] at [positionMs]. Returns how many came before it at this spot. */
+    fun onFailure(id: String, positionMs: Long): Int {
+        if (id != this.id || kotlin.math.abs(positionMs - this.positionMs) > NEAR_MS) {
+            this.id = id
+            count = 0
+        }
+        this.positionMs = positionMs
+        return count++
+    }
+
+    /** Another item plays. */
+    fun clear() {
+        id = null
+        count = 0
+    }
+
+    companion object {
+        /** Failures this close to each other are at the same spot. */
+        const val NEAR_MS = 30_000L
     }
 }
