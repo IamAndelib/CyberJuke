@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### The app
+- Smoother playback on slow and unstable connections: the player now keeps about two minutes of music ready ahead (it used to be under one), notices a stalled connection sooner and retries it while the music plays on, and gets the next track ready after 10 seconds of the current one.
+- When the connection drops for good mid-song, playback pauses and the mini player and Now Playing say **Waiting for carrier…**. It carries on by itself once you're back, also on a weak Wi-Fi or mobile signal that never quite went away (it keeps trying for a few minutes).
+- Settings → Audio quality has a new default, **Auto**: the best quality the connection can keep up with. It steps down or up one notch at a time, only between tracks, and never jumps from lowest to highest at once. **High** (always the best audio) and **Low** (uses the least data) stay as before. If you had High, which was the default, you're now on Auto; Low stays Low.
+
+### Fixed
+- A dropped or reset connection no longer skips good tracks, and a flapping connection no longer stops playback after five "failed" tracks: it waits and carries on instead.
+- After a change of network (or of address on the same one), the next track's stream link is fetched again right away, and links the change didn't break are kept, so the next track starts sooner.
+
 ## [1.1.2] - 2026-10-10
 
 ### Build

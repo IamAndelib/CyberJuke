@@ -17,7 +17,8 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] Switch between Wi-Fi and mobile data **during** a song: playback continues, or resumes by itself within a few seconds. No "YouTube is limiting requests" banner.
 - [ ] Turn on airplane mode during a song until it stops, then off again: it carries on by itself.
 - [ ] Start a Jukebox track, swipe the app away, and let it play past the list: autoplay keeps going. Reopen the app: Up next shows the autoplay tracks.
-- [ ] Settings → Audio quality **Low**, then **High**: both play.
+- [ ] Settings → Audio quality shows **Auto** (on an updated install that had High, too; Low stays Low). **Auto**, **High** and **Low** each play, and the line under the name says what the choice does.
+- [ ] With **Auto** on a slow connection (mobile data with weak signal, or a throttled Wi-Fi): over a few tracks the sound gets lighter one step at a time, never mid-track. Back on a fast connection, it climbs back over several tracks (5 calm minutes per step).
 - [ ] Settings → **IPv4**: Always, then Off, then back to **Auto**: tracks play each time.
 - [ ] On a phone or network that showed "YouTube is limiting requests" before: play for a while with IPv4 on **Auto**. The banner should rarely show; if it does, playback **resumes by itself** when a short countdown (1 or 3 min) ends, also with the screen off (keep the app in the background to check). Unplug your headphones during the countdown: it then stays paused.
 - [ ] If the banner shows: tap **[Try now]**. It goes away; music resumes, or the banner comes back with a longer wait. Switching Wi-Fi ↔ mobile data also lifts it at once.
@@ -65,6 +66,11 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 
 ## Rough conditions
 - [ ] Airplane mode: an offline notice appears. Airplane mode off: lists load again by themselves.
+- [ ] **Rough network.** Throttle the connection (a phone hotspot on 2G/3G, or a router's bandwidth limit) and play for 15 minutes: no track is skipped and playback doesn't stop; any stall is short and picks up by itself.
+- [ ] Walk out of Wi-Fi range (or block the router's internet while Wi-Fi stays connected) mid-song: the song keeps playing for a minute or two from what's buffered. If it does stop, Now Playing and the mini player show **Waiting for carrier…** in place of the time and the artist, and it plays on by itself once you're back in range (it keeps trying for 9 minutes, also when Wi-Fi still says connected).
+- [ ] Wi-Fi ↔ mobile data handover mid-song, a few times in a row: playback continues or resumes by itself; the next track starts without a long wait.
+- [ ] While **Waiting for carrier…** shows, press pause (or unplug headphones): the text goes, and it stays paused when the connection comes back.
+- [ ] After an hour of playback on the Preview, Android's battery and memory use for CyberJuke (Settings → Apps → CyberJuke Preview) is about what the current release shows.
 - [ ] While music plays, swipe the app away from recent apps, then reopen it: Now Playing and Up next show the right tracks (no "Unknown track").
 - [ ] Skip quickly through 10 tracks: no "YouTube is limiting requests" banner.
 - [ ] If that banner ever appears, write down the time and your network. It's YouTube limiting your connection, and the app waits instead of hammering it.
