@@ -50,9 +50,11 @@ import io.github.iamandelib.cyberjuke.MainActivity
 import io.github.iamandelib.cyberjuke.findCause
 import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.BlockedException
+import io.github.iamandelib.cyberjuke.net.Family
 import io.github.iamandelib.cyberjuke.net.Http
 import io.github.iamandelib.cyberjuke.net.NetBlock
 import io.github.iamandelib.cyberjuke.net.NetEpoch
+import io.github.iamandelib.cyberjuke.net.NetEpochState
 import io.github.iamandelib.cyberjuke.net.NetPrefs
 import org.json.JSONArray
 import java.io.EOFException
@@ -160,7 +162,7 @@ class PlaybackService : MediaSessionService() {
             runCatching { connectivity().getNetworkCapabilities(network) }.getOrNull()?.let {
                 if (NetPrefs.onNetwork(networkKey(it))) StreamResolver.clear()
             }
-            if (NetEpoch.onNetwork(network.toString())) onNetworkChanged(newNetwork = true)
+            if (NetEpoch.onNetwork(network.toString())) onNetworkChanged(newNetwork = true, NetEpochState.ALL_FAMILIES)
         }
 
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
@@ -178,7 +180,8 @@ class PlaybackService : MediaSessionService() {
 
         override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
             val addresses = linkProperties.linkAddresses.mapNotNull { it.address?.hostAddress }.toSet()
-            if (NetEpoch.onAddresses(network.toString(), addresses)) onNetworkChanged(newNetwork = false)
+            val changed = NetEpoch.addressesChanged(network.toString(), addresses)
+            if (changed.isNotEmpty()) onNetworkChanged(newNetwork = false, changed)
         }
     }
     private var networkCallbackRegistered = false
@@ -196,12 +199,18 @@ class PlaybackService : MediaSessionService() {
     /**
      * Any thread (ConnectivityManager's). A new network is a new IP as far as YouTube is
      * concerned: a running back-off is lifted at once (and playback resumes if it stopped it).
+     * Stream URLs bound to an address family that changed go (a new IPv6 address leaves the
+     * IPv4-bound ones working); the next track's is fetched again if it went.
      */
-    private fun onNetworkChanged(newNetwork: Boolean) {
-        StreamResolver.clear()
+    private fun onNetworkChanged(newNetwork: Boolean, families: Set<Family>) {
+        StreamResolver.dropBoundTo(families)
         Http.evictConnections()
         if (newNetwork) NetBlock.reset(keepLevel = false)
-        Log.i(TAG, "Default network changed (generation ${NetEpoch.generation}): stream URLs dropped")
+        handler.post {
+            prefetchedKey = null
+            schedulePrefetch()
+        }
+        Log.i(TAG, "Default network changed (generation ${NetEpoch.generation}): stream URLs bound to $families dropped")
     }
 
     private fun isNetworkValidated(): Boolean = try {

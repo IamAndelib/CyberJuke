@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.playback
 
+import io.github.iamandelib.cyberjuke.net.Family
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -102,14 +103,36 @@ class StreamCacheTest {
     }
 
     @Test
-    fun prefetchAfterThirtySecondsOrInTheLastMinute() {
+    fun prefetchAfterTenSecondsOrInTheLastMinute() {
         val min3 = 180_000L
-        assertEquals(30_000L, PrefetchPolicy.delayMs(0L, min3))
-        assertEquals(0L, PrefetchPolicy.delayMs(30_000L, min3))
-        assertEquals(10_000L, PrefetchPolicy.delayMs(20_000L, -1L)) // duration unknown
-        // A 70s track: the last-minute window opens at 10s, before the 30s mark.
-        assertEquals(10_000L, PrefetchPolicy.delayMs(0L, 70_000L))
+        assertEquals(10_000L, PrefetchPolicy.delayMs(0L, min3))
+        assertEquals(0L, PrefetchPolicy.delayMs(10_000L, min3))
+        assertEquals(4_000L, PrefetchPolicy.delayMs(6_000L, -1L)) // duration unknown
+        // A 65s track: the last-minute window opens at 5s, before the 10s mark.
+        assertEquals(5_000L, PrefetchPolicy.delayMs(0L, 65_000L))
         assertEquals(0L, PrefetchPolicy.delayMs(5_000L, 40_000L)) // shorter than a minute
+        // A quick skip (under 10 s in) still costs no request.
+        assertEquals(true, PrefetchPolicy.delayMs(3_000L, min3) > 0L)
+    }
+
+    @Test
+    fun cachedUrlsCanBeDroppedByWhatTheyAreBoundTo() {
+        val lru = TtlLru<String, String>(10)
+        val v4 = "https://x.googlevideo.com/videoplayback?ip=203.0.113.9&itag=251"
+        val v6 = "https://x.googlevideo.com/videoplayback?ip=2001%3Adb8%3A%3A1&itag=251"
+        val none = "https://x.googlevideo.com/videoplayback?itag=251"
+        lru.put("a", v4, 100)
+        lru.put("b", v6, 100)
+        lru.put("c", none, 100)
+        assertEquals(Family.IPV4, StreamUrls.familyOf(v4))
+        assertEquals(Family.IPV6, StreamUrls.familyOf(v6))
+        assertNull(StreamUrls.familyOf(none))
+        // A new IPv6 address: only the IPv6-bound URL goes; the others still work.
+        lru.removeValuesIf { StreamUrls.familyOf(it) == Family.IPV6 }
+        assertNull(lru.get("b", 0))
+        assertEquals(v4, lru.get("a", 0))
+        assertEquals(none, lru.get("c", 0))
+        assertEquals(2, lru.size())
     }
 
     @Test

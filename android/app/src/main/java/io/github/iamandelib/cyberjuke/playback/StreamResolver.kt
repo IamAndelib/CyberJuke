@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.media3.common.MimeTypes
 import io.github.iamandelib.cyberjuke.findCause
 import io.github.iamandelib.cyberjuke.net.FailureKind
+import io.github.iamandelib.cyberjuke.net.Family
 import io.github.iamandelib.cyberjuke.net.Hosts
 import io.github.iamandelib.cyberjuke.net.NetBlock
 import io.github.iamandelib.cyberjuke.net.NetEpoch
@@ -65,7 +66,8 @@ internal data class ResolvedStream(
  *   trips it ([YtGuard]); a successful extraction ends the unproven state.
  * - Re-resolving mid-track keeps the same itag ([reResolve], or a load that starts past byte 0),
  *   so the resumed bytes belong to the same file. Streams are also cached by itag for that.
- * - A change of network ([NetEpoch]) clears the cache; a URL extracted before it is not cached.
+ * - A change of network ([NetEpoch]) drops the cached URLs bound to the address family that
+ *   changed ([dropBoundTo]); a URL extracted during the change is not cached.
  * - Only https URLs are served ([Hosts.isAllowedMediaUrl]).
  */
 internal object StreamResolver {
@@ -261,10 +263,20 @@ internal object StreamResolver {
         cache.removeIf { it.startsWith("$ytId|") }
     }
 
-    /** Drops every cached URL (e.g. the network path changed: URLs are bound to the IP). */
+    /** Drops every cached URL (e.g. the IPv4 setting changed: URLs are bound to the IP). */
     fun clear() {
         cache.clear()
         pins.clear()
+    }
+
+    /**
+     * The network's [families] addresses changed: drops the cached URLs bound to one of them
+     * (googlevideo binds a URL to the address that resolved it). A URL bound to the other
+     * family, or to none, still works and is kept.
+     */
+    fun dropBoundTo(families: Set<Family>) {
+        if (families.isEmpty()) return
+        cache.removeValuesIf { s -> StreamUrls.familyOf(s.url)?.let { it in families } == true }
     }
 
     /**

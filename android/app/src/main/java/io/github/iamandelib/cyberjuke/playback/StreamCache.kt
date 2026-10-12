@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.playback
 
+import io.github.iamandelib.cyberjuke.net.Family
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Future
 
@@ -32,6 +33,9 @@ internal object StreamUrls {
         val ip = IP.find(url)?.groupValues?.get(1) ?: return null
         return ip.contains(':') || ip.contains("%3A", ignoreCase = true)
     }
+
+    /** The address family the URL is bound to ([boundToIpv6]), or null if it doesn't say. */
+    fun familyOf(url: String): Family? = boundToIpv6(url)?.let { if (it) Family.IPV6 else Family.IPV4 }
 
     /** Until when a URL resolved at [resolvedAtMs] may be served from the cache. */
     fun cacheUntil(url: String, resolvedAtMs: Long): Long =
@@ -89,6 +93,12 @@ internal class TtlLru<K, V>(private val maxEntries: Int) {
         map.keys.removeAll(pred)
     }
 
+    /** Drops the entries whose value matches [pred] (expired or not). */
+    @Synchronized
+    fun removeValuesIf(pred: (V) -> Boolean) {
+        map.values.removeAll { pred(it.value) }
+    }
+
     @Synchronized
     fun clear() = map.clear()
 
@@ -132,9 +142,11 @@ internal class LatestTaskRunner(private val executor: ExecutorService) {
 /**
  * When to warm the next track's stream URL (Y4): only once the current one has played
  * [MIN_PLAYED_MS], or within its last [END_WINDOW_MS], so fast skipping costs no requests.
+ * Early enough that a weak network has time to get it before the track ends; only the next
+ * track, never further ahead.
  */
 internal object PrefetchPolicy {
-    const val MIN_PLAYED_MS = 30_000L
+    const val MIN_PLAYED_MS = 10_000L
     const val END_WINDOW_MS = 60_000L
 
     /**
