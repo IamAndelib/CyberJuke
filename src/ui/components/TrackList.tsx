@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import type { Track } from '../../data/model';
 import { catalog } from '../../stores/catalog';
+import { mark } from '../../core/marks';
 import type { Paged } from '../usePaged';
 import { useChunks } from '../useChunks';
 import { Icon } from '../icons';
@@ -134,6 +135,12 @@ export function PagedTracks({
   const { tracks, status, error, hasMore, loadingMore, loadMore } = paged;
   const chunks = useChunks(tracks.length, chunkKey);
   const play = useRowPlayer(tracks, ctx, queue);
+  const hasRows = status !== 'loading' && tracks.length > 0;
+
+  // Test builds: when the first list's rows are on screen (startup timing).
+  useEffect(() => {
+    if (hasRows) mark('first-row');
+  }, [hasRows]);
 
   useEffect(() => {
     const el = sentinel.current;

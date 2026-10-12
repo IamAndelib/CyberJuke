@@ -24,7 +24,8 @@ import { installRenderCounter } from '../core/renderCount';
 import { describeError } from '../core/errors';
 import { logError } from '../core/log';
 import { TEST_HOOKS } from '../core/testHooks';
-import { loadLibrary, settings } from '../stores/library';
+import { mark } from '../core/marks';
+import { loadLists, loadSettings, settings } from '../stores/library';
 import { onReconnect, watchNetwork } from '../core/network';
 import { catalog } from '../stores/catalog';
 import { startFreshness } from '../stores/newTracks';
@@ -125,12 +126,27 @@ function startCatalog(): void {
 }
 
 async function boot(): Promise<void> {
+  mark('boot');
   // e2e: the boot-failure screen.
   if (TEST_HOOKS && localStorage.getItem('__cyberjukeFailBoot')) throw new Error('Simulated boot failure');
   installRenderCounter({ App, Overlays, Home, Library, Screen, TrackRow, MiniPlayer, NowPlaying, ArtistGrid, ArtistTiles, ArtistTile, ArtistPage, GenreGrid, GenreTiles, GenreTile, GenreDetail });
-  // A saved Cyberspace login decides which query the first requests use.
-  await Promise.all([loadLibrary().catch((e) => logError('loadLibrary', e)), auth.restore()]);
-  startAccount();
+  // Read before the first render: the settings and favourites (small keys) and a saved
+  // Cyberspace login. Liked and history, files that can be large, are read alongside
+  // and may arrive just after it.
+  const settingsRead = loadSettings().catch((e) => logError('loadSettings', e));
+  const listsRead = loadLists().catch((e) => logError('loadLibrary', e));
+  await auth.restore();
+  // Sign-ins and sign-outs are followed from here on (restore() may already be refreshing the login).
+  startAccount(listsRead);
+  // Home's first page is asked for now, not after the first render: the login decides
+  // the query, and Home's list gets this same request when it mounts (the source shares
+  // a load in progress). Always from the network: nothing of Latest is kept on disk.
+  const firstPage = source.latest(null);
+  firstPage.catch(() => {
+    /* Home's list shows the failure */
+  });
+  await settingsRead;
+  mark('storage');
   startQueuePurge();
   startPlayerPrefs();
   applyTheme();
@@ -148,6 +164,7 @@ async function boot(): Promise<void> {
     </>,
     root,
   );
+  mark('render');
   startCatalog();
   startFreshness();
   void startUpdates(native ? () => JukePlayer.getAppInfo() : undefined);

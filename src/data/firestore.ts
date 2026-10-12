@@ -22,6 +22,7 @@ import { bool, isHiddenDoc, tracksFromRows, type FsRunQueryRow, type Track, ts }
 import { Cache } from '../core/cache';
 import { errorMessage, isOffline } from '../core/errors';
 import { parseRunQueryRows } from '../core/guards';
+import { mark } from '../core/marks';
 import type { Cursor, Page, TrackSource } from './source';
 
 export const PROJECT = 'cyberspace-cyberspace';
@@ -326,6 +327,7 @@ export class FirestoreSource implements TrackSource {
   }
 
   private async post(body: string, token: string | null, signal: AbortSignal): Promise<Response> {
+    mark('request');
     try {
       return await untilAborted(
         this.fetchFn(RUN_QUERY_URL, {
@@ -382,6 +384,7 @@ export class FirestoreSource implements TrackSource {
     } catch {
       throw new FirestoreError(`Bad response (${res.status})`, res.status);
     }
+    mark('response');
     const rows = res.ok ? parseRunQueryRows(json) : null;
     if (!rows) {
       const err = Array.isArray(json) ? json[0]?.error : (json as { error?: { message?: string } })?.error;
