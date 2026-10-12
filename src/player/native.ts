@@ -98,6 +98,20 @@ interface JukePlayerPlugin {
     autoIpv4?: boolean;
     lastLimit?: { at: number; reason: string; surface: string };
   }>;
+  /**
+   * The listening cache: the liked songs, newest like first (at most BRIDGE_MAX_ITEMS). Native
+   * keeps them in the cache last, saves one liked since the last call at once and older ones on
+   * Wi-Fi, so they play offline.
+   */
+  setLikedIds(o: { ytIds: string[] }): Promise<void>;
+  /** The listening cache's size; 128, 256 or 512 (anything else is 256). A smaller one evicts at once. */
+  setCacheLimit(o: { mb: number }): Promise<void>;
+  /** Empties the listening cache. Playback goes on. */
+  clearCache(): Promise<void>;
+  /** Signed out: the cached audio of these (members-only) videos goes (at most BRIDGE_MAX_ITEMS). */
+  dropCached(o: { ytIds: string[] }): Promise<void>;
+  /** The liked songs saved whole on the phone, by ytId: they play offline. */
+  cachedIds(): Promise<{ ytIds: string[] }>;
   /** Keep a screen area (CSS px relative to the WebView) out of the system back gesture; null clears it. */
   setGestureExclusion(rect: { left: number; top: number; width: number; height: number } | null): Promise<void>;
   /** Native re-sends `tracks` when a `tracks` or `state` listener is added (K4): add `tracks` first. */
@@ -120,6 +134,8 @@ interface JukePlayerPlugin {
   addListener(event: 'tracks', cb: (e: { tracks: NativeTrack[] }) => void): Promise<{ remove: () => Promise<void> }>;
   /** Parsing failed in a way that means YouTube changed something (an app update is needed). */
   addListener(event: 'extractorBroken', cb: (e: { message: string }) => void): Promise<{ remove: () => Promise<void> }>;
+  /** The liked songs saved whole changed (sent only when the set does, at most every 2 s): the whole set. */
+  addListener(event: 'cacheChanged', cb: (e: { ytIds: string[] }) => void): Promise<{ remove: () => Promise<void> }>;
   /** The media notification was tapped (kept until a listener comes, for a cold start). */
   addListener(event: 'openNowPlaying', cb: (e: Record<string, never>) => void): Promise<{ remove: () => Promise<void> }>;
 }

@@ -118,6 +118,8 @@ internal data class ResolvedStream(
     val netGen: Int = 0,
     /** The video's quality ladder ([QualityLadder]) as bitrates, best first; empty for a fallback stream. */
     val ladderBps: List<Int> = emptyList(),
+    /** An audio-only format: kept in the listening cache (a muxed fallback, with video, isn't). */
+    val audioOnly: Boolean = false,
 )
 
 /**

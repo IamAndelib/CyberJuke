@@ -16,8 +16,35 @@ import java.io.InterruptedIOException
 import java.util.concurrent.Callable
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutionException
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.FutureTask
+
+/**
+ * The one background thread for work ahead of playback, at the lowest priority, one task at a
+ * time: the next track's stream link ([StreamResolver.prefetch]), and the listening cache's
+ * downloads (LikedSaver) and upkeep ([AudioCache]: a new size, Clear cache, a sign-out). So
+ * never two downloads at once.
+ */
+internal object Background {
+    val executor: ExecutorService = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "CyberJuke-prefetch").apply {
+            isDaemon = true
+            priority = Thread.MIN_PRIORITY
+        }
+    }
+
+    /** Runs [task] on the thread; a failure is logged, never thrown at the thread. */
+    fun run(what: String, task: () -> Unit) {
+        executor.execute {
+            try {
+                task()
+            } catch (e: Exception) {
+                Log.w("CyberJukeBackground", "$what failed: ${e.javaClass.simpleName}")
+            }
+        }
+    }
+}
 
 /** Resolution failed. [kind] says whether it is this video, the network or a block. */
 internal class ResolveException(
@@ -48,6 +75,8 @@ internal class ManifestOnlyException(
  *
  * - Cache (memory only): until the URL's own `expire` minus 30 minutes ([StreamUrls]), real
  *   LRU of [MAX_CACHE] entries.
+ * - A track saved whole in the listening cache is played from it, with no extraction
+ *   ([cachedKey], asked first by [YtDataSpecResolver]).
  * - Concurrent resolutions of the same video share one extraction (in-flight map, pruned as
  *   each one finishes).
  * - While [NetBlock] holds a back-off, nothing is resolved, not even from the cache
@@ -95,14 +124,7 @@ internal object StreamResolver {
 
     private val inFlight = ConcurrentHashMap<String, FutureTask<ResolvedStream>>()
 
-    private val prefetcher = LatestTaskRunner(
-        Executors.newSingleThreadExecutor { r ->
-            Thread(r, "CyberJuke-prefetch").apply {
-                isDaemon = true
-                priority = Thread.MIN_PRIORITY
-            }
-        },
-    )
+    private val prefetcher = LatestTaskRunner(Background.executor)
 
     private fun currentRung(): Int = QualityLadder.rungFor(quality, autoRung)
 
@@ -159,6 +181,35 @@ internal object StreamResolver {
             }
         }
         throw IOException("unreachable")
+    }
+
+    /**
+     * The listening cache's key for [ytId] when a copy of it is saved whole ([AudioCache]), to
+     * play from it with no extraction and no request (also during a back-off: nothing is asked
+     * of YouTube); else null. A resume, or a track kept through an outage ([keepFormat]), only in
+     * its own format; otherwise the one the quality setting asks for when known, else any.
+     * Recorded as served, so a later resume keeps that file.
+     */
+    fun cachedKey(ytId: String, midStream: Boolean): String? {
+        val keep = kept[ytId] ?: if (midStream) served.get(ytId, now())?.itag?.takeIf { it > 0 } else null
+        val rungItag = cache.get(ytId, currentRung(), null, now())?.itag
+        val itag = AudioCache.wholeItag(ytId, keep, rungItag) ?: return null
+        val before = served.get(ytId, now())
+        // No URL: nothing is requested for it.
+        serve(
+            ResolvedStream(
+                ytId = ytId,
+                url = "",
+                headers = emptyMap(),
+                description = "listening cache itag=$itag",
+                resolvedAtMs = now(),
+                itag = itag,
+                netGen = NetEpoch.generation,
+                ladderBps = before?.ladderBps ?: emptyList(),
+                audioOnly = true,
+            ),
+        )
+        return CacheKeys.of(ytId, itag)
     }
 
     private fun serve(s: ResolvedStream): ResolvedStream {
@@ -225,7 +276,7 @@ internal object StreamResolver {
         // 0. Resuming: the same format as before, if it is still offered.
         if (preferItag != null && preferItag > 0) {
             (ex.audio + ex.muxed).firstOrNull { it.itag == preferItag }?.let { pick ->
-                return stream(ytId, pick, "same itag $preferItag ${pick.mimeType}", now, gen, bps)
+                return stream(ytId, pick, "same itag $preferItag ${pick.mimeType}", now, gen, bps, audioOnly = pick in ex.audio)
             }
         }
 
@@ -237,7 +288,7 @@ internal object StreamResolver {
 
         // 2. Lowest progressive muxed (audio+video) stream; ExoPlayer just plays its audio.
         ex.muxed.minByOrNull { if (it.bitrate > 0) it.bitrate else Int.MAX_VALUE }?.let { pick ->
-            return stream(ytId, pick, "muxed ${pick.mimeType} ${pick.bitrate}p", now, gen)
+            return stream(ytId, pick, "muxed ${pick.mimeType} ${pick.bitrate}p", now, gen, audioOnly = false)
         }
 
         // 3. Adaptive manifest (handled by the service, see ManifestOnlyException).
@@ -253,6 +304,7 @@ internal object StreamResolver {
         now: Long,
         gen: Int,
         ladderBps: List<Int> = emptyList(),
+        audioOnly: Boolean = true,
     ) = ResolvedStream(
         ytId = ytId,
         url = c.url,
@@ -262,6 +314,7 @@ internal object StreamResolver {
         itag = if (c.itag > 0) c.itag else StreamUrls.itag(c.url) ?: -1,
         netGen = gen,
         ladderBps = ladderBps,
+        audioOnly = audioOnly,
     )
 
     /** The stream last served for [ytId] (any quality, kept a day, even once expired), or null. */
@@ -306,12 +359,15 @@ internal object StreamResolver {
     /**
      * Best effort: warm the cache for an upcoming item on a background thread. Only the latest
      * request is kept (a newer one cancels it); nothing happens while YouTube backs us off.
+     * Returns true when it queued one (a running liked save gives way to it).
      */
-    fun prefetch(ytId: String) {
-        if (NetBlock.isQuiet()) return
-        if (cache.get(ytId, currentRung(), kept[ytId], now()) != null) return
-        prefetcher.submit(ytId) {
+    fun prefetch(ytId: String): Boolean {
+        if (NetBlock.isQuiet()) return false
+        if (cache.get(ytId, currentRung(), kept[ytId], now()) != null) return false
+        return prefetcher.submit(ytId) {
             try {
+                // Saved whole in the listening cache: it plays from there, no link needed.
+                if (AudioCache.isWhole(ytId)) return@submit
                 resolve(ytId)
             } catch (e: Exception) {
                 Log.i(TAG, "prefetch($ytId) failed: ${e.message}")

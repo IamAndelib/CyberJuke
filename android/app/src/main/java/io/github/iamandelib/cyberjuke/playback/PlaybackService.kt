@@ -161,6 +161,19 @@ class PlaybackService : MediaSessionService() {
         },
     )
 
+    /** The playing track and the next, the pair the player loads ([updateLoadAhead]). */
+    private var loadingIds: Set<String> = emptySet()
+
+    /** Saves liked songs into the listening cache while the service runs anyway. */
+    private val likedSaver = LikedSaver(
+        handler,
+        object : LikedSaver.Host {
+            override fun loadingPair(): Set<String> = loadingIds
+
+            override fun playerLoading(): Boolean = player?.isLoading == true
+        },
+    )
+
     /** "<current mediaId>><next ytId>" already prefetched, so each pair is warmed once. */
     private var prefetchedKey: String? = null
     private val prefetchCheck = Runnable { checkPrefetch() }
@@ -183,6 +196,10 @@ class PlaybackService : MediaSessionService() {
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
             // The IPv4 setting's Auto memory is per kind of network.
             if (NetPrefs.onNetwork(networkKey(caps))) StreamResolver.clear()
+            // Online, and on Wi-Fi: the liked saver's backfill (it acts on a change only).
+            val validated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            val unmetered = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+            handler.post { likedSaver.onNetwork(validated, unmetered) }
             // Online again (validated): playback an outage stopped picks up again.
             // (Validated fires again and again on a network that's up: at most every few seconds.)
             if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) && NetBlock.resumePending() &&
@@ -191,6 +208,10 @@ class PlaybackService : MediaSessionService() {
                 lastNetResumeAt = SystemClock.elapsedRealtime()
                 handler.post { resumeAfterBlock() }
             }
+        }
+
+        override fun onLost(network: Network) {
+            handler.post { likedSaver.onNetwork(validated = false, unmetered = false) }
         }
 
         override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
@@ -238,11 +259,17 @@ class PlaybackService : MediaSessionService() {
     /** Resumes playback a back-off stopped once it ends (lifted early, or ran out). */
     private val blockListener = object : NetBlock.Listener {
         override fun onBlocked(until: Long, reason: BlockReason) {
-            handler.post { scheduleResume(until) }
+            handler.post {
+                scheduleResume(until)
+                likedSaver.check() // a running save stops
+            }
         }
 
         override fun onUnblocked() {
-            handler.post { blockEnded.run() }
+            handler.post {
+                blockEnded.run()
+                likedSaver.check()
+            }
         }
 
         // Stopped by a back-off while playing, or Play pressed during one: where the sound was
@@ -409,8 +436,13 @@ class PlaybackService : MediaSessionService() {
 
         // DefaultDataSource handles asset:// (CI test tone) and delegates http(s) to OkHttp,
         // with the streaming timeouts (a stall is noticed, and retried, while the buffer plays).
+        // YouTube audio goes through the listening cache in between (the resolver gives it its
+        // key): what plays is kept, and what's kept whole plays without the network.
+        AudioCache.init(this, PlayerPrefsStore.cacheMb(this))
+        AudioCache.addListener(likedSaver.cacheListener)
+        AudioCache.addLikedListener(likedSaver.likedListener)
         val upstream = DefaultDataSource.Factory(this, OkHttpDataSource.Factory(Http.streaming))
-        val dataSourceFactory = ResolvingDataSource.Factory(upstream, YtDataSpecResolver)
+        val dataSourceFactory = ResolvingDataSource.Factory(AudioCache.dataSourceFactory(upstream), YtDataSpecResolver)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
             .setLoadErrorHandlingPolicy(JukeLoadErrorPolicy())
 
@@ -472,6 +504,13 @@ class PlaybackService : MediaSessionService() {
 
         setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this).build())
         restoreLastSession()
+        // The network as it is now (the callback then tells of changes).
+        runCatching { connectivity().let { it.getNetworkCapabilities(it.activeNetwork) } }.getOrNull()?.let {
+            likedSaver.onNetwork(
+                it.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
+                it.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
+            )
+        }
         Log.i(TAG, "PlaybackService created")
     }
 
@@ -513,6 +552,9 @@ class PlaybackService : MediaSessionService() {
         }
         radio.shutdown()
         StreamResolver.cancelPrefetch()
+        likedSaver.stop()
+        AudioCache.removeListener(likedSaver.cacheListener)
+        AudioCache.removeLikedListener(likedSaver.likedListener)
         YtDataSpecResolver.gate.allow(emptySet())
         if (networkCallbackRegistered) {
             try {
@@ -527,6 +569,8 @@ class PlaybackService : MediaSessionService() {
         }
         mediaSession = null
         player = null
+        // After the player: nothing reads the cache any more (a save still running fails and stops).
+        AudioCache.release()
         super.onDestroy()
     }
 
@@ -573,6 +617,11 @@ class PlaybackService : MediaSessionService() {
             handler.removeCallbacks(savePositionTick)
             savePosition()
             if (isPlaying) handler.postDelayed(savePositionTick, POSITION_SAVE_MS)
+        }
+
+        /** Playback needs the network: a liked save gives way; done loading, one may start. */
+        override fun onIsLoadingChanged(isLoading: Boolean) {
+            if (isLoading) likedSaver.giveWay() else likedSaver.check()
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
@@ -689,7 +738,8 @@ class PlaybackService : MediaSessionService() {
         val key = "${p.currentMediaItem?.mediaId}>$ytId"
         if (key == prefetchedKey) return
         prefetchedKey = key
-        StreamResolver.prefetch(ytId)
+        // The prefetch thread is the liked saver's too: playback's link comes first.
+        if (StreamResolver.prefetch(ytId)) likedSaver.giveWay()
     }
 
     // ---- Auto quality ---------------------------------------------------------------------------
@@ -822,6 +872,7 @@ class PlaybackService : MediaSessionService() {
         if (p == null || p.mediaItemCount == 0) {
             lc.currentIndex = C.INDEX_UNSET
             lc.nextIndex = C.INDEX_UNSET
+            loadingIds = emptySet()
             YtDataSpecResolver.gate.allow(emptySet())
             return
         }
@@ -832,6 +883,7 @@ class PlaybackService : MediaSessionService() {
         val ids = HashSet<String>(2)
         JukeUris.ytIdOf(p.currentMediaItem)?.let { ids.add(it) }
         if (next != C.INDEX_UNSET) JukeUris.ytIdOf(p.getMediaItemAt(next))?.let { ids.add(it) }
+        loadingIds = ids
         YtDataSpecResolver.gate.allow(ids)
     }
 
