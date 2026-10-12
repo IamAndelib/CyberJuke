@@ -25,6 +25,15 @@ class QualityLadderTest {
     }
 
     @Test
+    fun aLowOpusLosesToABetterAac() {
+        // Only a 70 kbps Opus next to a 128 kbps AAC: High must not pick the 70.
+        assertEquals(listOf(140, 139), rank(opus70, opus50, aac128, aac48))
+        // Opus about as good as AAC (at least 90 %) still wins.
+        assertEquals(listOf(9, 250), rank(F(9, 120_000, "audio/webm"), opus70, aac128, aac48))
+        assertEquals(listOf(140), rank(F(9, 110_000, "audio/webm"), aac128))
+    }
+
+    @Test
     fun familiesComeFromTheMimeType() {
         assertEquals(QualityLadder.Family.OPUS, QualityLadder.familyOf("audio/webm; codecs=\"opus\""))
         assertEquals(QualityLadder.Family.OPUS, QualityLadder.familyOf("AUDIO/WEBM"))

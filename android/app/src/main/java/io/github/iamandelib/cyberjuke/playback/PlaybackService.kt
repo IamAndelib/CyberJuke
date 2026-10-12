@@ -92,9 +92,8 @@ class PlaybackService : MediaSessionService() {
     /** Auto quality's rung, decided as each track starts. */
     private val governor = QualityGovernor()
 
-    /** For telling a rebuffer from a seek or the first load. */
-    private var lastPlaybackState = Player.STATE_IDLE
-    private var lastSeekAt = 0L
+    /** Tells a rebuffer from the buffering of a seek, a skip or a list change. */
+    private val rebuffers = RebufferDetector()
 
     /**
      * Retries after an outage pause while the network stays validated (a weak link stalled
@@ -538,13 +537,14 @@ class PlaybackService : MediaSessionService() {
     private inner class PlayerListener : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
             val now = SystemClock.elapsedRealtime()
-            // Playing, then stalled to fill the buffer again: not a seek's, nor the first load's.
-            if (playbackState == Player.STATE_BUFFERING && lastPlaybackState == Player.STATE_READY &&
-                player?.playWhenReady == true && now - lastSeekAt > SEEK_GRACE_MS
-            ) {
-                governor.onRebuffer(now)
-            }
-            lastPlaybackState = playbackState
+            // Playing, then stalled to fill the buffer again: not a seek's, a skip's or an edit's.
+            val rebuffer = rebuffers.onState(
+                ready = playbackState == Player.STATE_READY,
+                buffering = playbackState == Player.STATE_BUFFERING,
+                playWhenReady = player?.playWhenReady == true,
+                now = now,
+            )
+            if (rebuffer) governor.onRebuffer(now)
             if (playbackState == Player.STATE_ENDED) endedAt = now
             // Loading again (a restored session's first Play, or a retry): autoplay may top up.
             if (playbackState != Player.STATE_IDLE) {
@@ -593,10 +593,9 @@ class PlaybackService : MediaSessionService() {
             reason: Int,
         ) {
             schedulePrefetch()
-            if (reason == Player.DISCONTINUITY_REASON_SEEK) {
-                lastSeekAt = SystemClock.elapsedRealtime()
-                savePosition()
-            }
+            // A seek, a skip or a removal: the buffering it causes is no rebuffer.
+            if (reason != Player.DISCONTINUITY_REASON_AUTO_TRANSITION) rebuffers.onJump(SystemClock.elapsedRealtime())
+            if (reason == Player.DISCONTINUITY_REASON_SEEK) savePosition()
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -608,6 +607,7 @@ class PlaybackService : MediaSessionService() {
             StreamResolver.cancelPrefetch()
             prefetchedKey = null
             Log.i(TAG, "Transition to ${mediaItem?.mediaId} (${JukeUris.ytIdOf(mediaItem)}), reason=$reason")
+            if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) rebuffers.onJump(SystemClock.elapsedRealtime())
             governQuality(mediaItem)
             schedulePrefetch()
         }
@@ -1426,8 +1426,5 @@ class PlaybackService : MediaSessionService() {
 
         /** While playing, the position is saved this often. */
         private const val POSITION_SAVE_MS = 15_000L
-
-        /** Buffering this soon after a seek is the seek's, not a rebuffer. */
-        private const val SEEK_GRACE_MS = 2_000L
     }
 }
