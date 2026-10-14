@@ -7,6 +7,8 @@ import type { Track } from '../data/model';
 import { block } from '../stores/block';
 import { toast } from '../stores/toast';
 import { TEST_HOOKS, exposeForTests } from '../core/testHooks';
+import { UNTITLED } from '../data/model';
+import { trackErrorText, type TrackErrorFacts } from './errorText';
 import { Queue } from './queue';
 import type { RepeatMode } from './native';
 import type { CrossfadeMs, Ipv4Mode, Quality } from '../stores/library';
@@ -100,6 +102,8 @@ export class WebPlayer implements Player {
     // The browser player never waits for the network (waitingForNetwork stays false); e2e
     // drives native's "waiting for carrier" state through this.
     exposeForTests('__cyberjukeWaitingForNetwork', (on: boolean) => this.publish({ waitingForNetwork: on }));
+    // Nor does it send `trackError`; e2e injects what native would say about the current track.
+    exposeForTests('__cyberjukeTrackError', (e: TrackErrorFacts) => toast(trackErrorText(e, this.q.current?.title ?? UNTITLED)));
   }
 
   private publish(patch: Partial<PlayerState> = {}): void {
