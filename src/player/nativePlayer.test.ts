@@ -149,6 +149,12 @@ describe('NativePlayer: a session native restored after a restart', () => {
     expect(toNative(tr('M', { membersOnly: true })).membersOnly).toBe(true);
     expect('membersOnly' in toNative(tr('A'))).toBe(false);
   });
+
+  it("sends an album track's album to native (clipped like the other text), none otherwise", () => {
+    expect(toNative(tr('M', { album: 'Blue Lines' })).album).toBe('Blue Lines');
+    expect(toNative(tr('M', { album: 'x'.repeat(BRIDGE_MAX_STRING + 1) })).album).toHaveLength(BRIDGE_MAX_STRING);
+    expect('album' in toNative(tr('A'))).toBe(false);
+  });
 });
 
 describe('NativePlayer: play/pause', () => {

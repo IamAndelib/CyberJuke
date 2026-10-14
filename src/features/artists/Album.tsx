@@ -18,18 +18,21 @@ interface AlbumMeta {
 
 /** Album or playlist from Global: cover, title, artist, Play/Shuffle and the track list. */
 export function AlbumPage({ album }: { album: AlbumRef }) {
+  // An album's tracks carry its name (not a playlist's: a mix of albums), the same on every
+  // page of it, so the player knows they belong together (Gapless playback and Crossfade).
+  const albumName = album.kind === 'album' ? album.title : undefined;
   const { feed, snap } = useFeed<Track, string, AlbumMeta>(
     `album:${album.url}`,
     async (next) => {
       if (next) {
         const p = await music.more(next);
-        return { items: musicTracks(p.items, album.subtitle), cursor: p.next ?? null };
+        return { items: musicTracks(p.items, album.subtitle, albumName), cursor: p.next ?? null };
       }
       const p = await music.playlist(album.url);
       // The album's own subtitle may be empty: fall back to what the search said.
       const subtitle = p.subtitle || album.subtitle;
       return {
-        items: musicTracks(p.items, subtitle),
+        items: musicTracks(p.items, subtitle, albumName),
         cursor: p.next ?? null,
         meta: { title: p.title || album.title, subtitle, thumbnailUrl: p.thumbnailUrl || album.thumbnailUrl },
       };

@@ -170,6 +170,7 @@ export function asTrack(x: unknown): Track | null {
   if (replies !== undefined) t.replies = replies;
   if (ORIGINS.includes(x.source as TrackOrigin)) t.source = x.source as TrackOrigin;
   if (x.membersOnly === true) t.membersOnly = true;
+  if (isStr(x.album) && x.album) t.album = x.album;
   return t;
 }
 

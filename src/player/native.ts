@@ -5,7 +5,8 @@
 import { registerPlugin } from '@capacitor/core';
 import type { CrossfadeMs, Quality } from '../stores/library';
 
-export interface NativeTrack { id: string; ytId: string; title: string; artist: string; artworkUrl: string; by?: string; postUrl?: string; membersOnly?: boolean }
+/** `album`: the album the track was opened from (Track.album), for the same-album rule of Crossfade. */
+export interface NativeTrack { id: string; ytId: string; title: string; artist: string; artworkUrl: string; by?: string; postUrl?: string; membersOnly?: boolean; album?: string }
 export type RepeatMode = 'off' | 'all' | 'one';
 export interface NativeState {
   isPlaying: boolean; isBuffering: boolean;

@@ -133,4 +133,11 @@ describe('stored tracks', () => {
     expect(asTracks([track, null, { id: '' }, track])).toHaveLength(2);
     expect(asTracks('nope')).toEqual([]);
   });
+
+  it('asTrack keeps the album of a Global album track, and drops anything else there', () => {
+    expect(asTrack({ ...track, album: 'Blue Lines' })?.album).toBe('Blue Lines');
+    expect(asTrack({ ...track, album: '' })).not.toHaveProperty('album');
+    expect(asTrack({ ...track, album: 7 })).not.toHaveProperty('album');
+    expect(asTrack(track)).not.toHaveProperty('album');
+  });
 });

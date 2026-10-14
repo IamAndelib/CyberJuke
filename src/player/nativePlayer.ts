@@ -27,6 +27,7 @@ export function toNative(t: Track): NativeTrack {
     by: clip(t.by),
     postUrl: link(t.postUrl),
     ...(t.membersOnly && { membersOnly: true }),
+    ...(t.album && { album: clip(t.album) }),
   };
 }
 

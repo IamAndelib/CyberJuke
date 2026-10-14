@@ -132,6 +132,8 @@ internal object JukeTracks {
         val metadata = MediaMetadata.Builder()
             .setTitle(o.str("title"))
             .setArtist(o.str("artist"))
+            // The album it was opened from, if any: Crossfade leaves two tracks of one album alone.
+            .setAlbumTitle(o.str("album"))
             .setArtworkUri(o.str("artworkUrl")?.takeIf { SessionPolicy.isAllowedArtwork(it) }?.let { Uri.parse(it) })
             .setExtras(extras)
             .build()
