@@ -255,6 +255,17 @@ class CachePolicyTest {
         assertFalse(LikedSaverPolicy.keepGoing(f.copy(unmetered = false), fresh = false))
     }
 
+    @Test
+    fun noSaveWithoutACacheToSaveInto() {
+        // The cache failed to start: no extraction for nothing, fresh like or backfill, and no timer.
+        val f = Facts(liked, saved = emptySet(), fresh = setOf("new00000000"), cache = false, retryInMs = 5_000L)
+        assertNull(LikedSaverPolicy.next(f))
+        assertNull(LikedSaverPolicy.next(f.copy(fresh = emptySet())))
+        assertNull(LikedSaverPolicy.recheckInMs(f.copy(sinceLastMs = 10_000L)))
+        assertFalse(LikedSaverPolicy.keepGoing(f, fresh = true))
+        assertEquals("new00000000", LikedSaverPolicy.next(f.copy(cache = true)))
+    }
+
     // ---- the review's fixes ----
 
     @Test

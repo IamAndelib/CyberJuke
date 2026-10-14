@@ -156,6 +156,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             sinceLastMs = if (lastExtractionAt == 0L) Long.MAX_VALUE else now - lastExtractionAt,
             retryInMs = strikes.nextDueInMs(now),
             denied = AudioCache::isDenied,
+            cache = !AudioCache.startFailed,
         )
     }
 
@@ -217,6 +218,9 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             // Cancelled, a back-off, or members-only while signed out: no fault of the song.
             if (cancelled || NetBlock.isQuiet() || AudioCache.isDenied(ytId)) return SaveOutcome.CANCELLED
             if (AudioCache.isWhole(ytId)) return SaveOutcome.SAVED
+            // Before the extraction: without a cache (it failed to start just now) there is
+            // nothing to save into, and the saver stops ([LikedSaverPolicy.Facts.cache]).
+            val source = AudioCache.downloadSource() ?: return SaveOutcome.STOPPED
             val stream = try {
                 // An extraction, like playing it would be (it counts toward YouTube's limits,
                 // hence one at a time and spaced out); a back-off stops it (BlockedException).
@@ -236,7 +240,6 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             // Only an audio-only format is kept in the cache.
             if (!stream.audioOnly || stream.itag <= 0) return SaveOutcome.FAILED
             if (cancelled) return SaveOutcome.CANCELLED
-            val source = AudioCache.downloadSource() ?: return SaveOutcome.STOPPED
             return try {
                 val spec = YtDataSpecResolver.streamSpec(DataSpec.Builder().setUri(JukeUris.forYt(ytId)).build(), ytId, stream)
                 val w = CacheWriter(source, spec, null, null)

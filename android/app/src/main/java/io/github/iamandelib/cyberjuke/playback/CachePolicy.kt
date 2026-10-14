@@ -525,6 +525,7 @@ internal class MembersAudio {
  *   [MIN_GAP_MS], and only while the cache has room for liked songs ([Facts.likedFull]).
  * - Never while offline, during a YouTube back-off ([Facts.quiet]) or while playback needs the
  *   network ([PlaybackNeed]): playback always comes first (a running save gives way, [keepGoing]).
+ * - Never without a cache to save into ([Facts.cache]): no extraction for nothing.
  *
  * Event-driven: asked again when something it depends on changes. The one timer is
  * [recheckInMs]: a one-shot re-check for the end of the gap, pending only while the gap alone
@@ -564,6 +565,8 @@ internal object LikedSaverPolicy {
         val retryInMs: Long? = null,
         /** Members-only while signed out: never saved. Asked only of a candidate. */
         val denied: (String) -> Boolean = { false },
+        /** There is a cache to save into (none after it failed to start: [AudioCache.startFailed]). */
+        val cache: Boolean = true,
     )
 
     /**
@@ -577,7 +580,7 @@ internal object LikedSaverPolicy {
     fun next(f: Facts): String? = pick(f, f.sinceLastMs)
 
     private fun pick(f: Facts, sinceLastMs: Long): String? {
-        if (f.busy || !f.online || f.quiet || f.playbackNeedsNetwork) return null
+        if (!f.cache || f.busy || !f.online || f.quiet || f.playbackNeedsNetwork) return null
         // Each candidate's denied answer is asked once (and only for those looked at).
         val denied = HashMap<String, Boolean>()
         val todo = f.liked.asSequence().filter { it !in f.saved && it !in f.skip && !denied.getOrPut(it) { f.denied(it) } }
@@ -595,14 +598,14 @@ internal object LikedSaverPolicy {
      * neither waits (an event will come).
      */
     fun recheckInMs(f: Facts): Long? {
-        if (pick(f, f.sinceLastMs) != null) return null
+        if (!f.cache || pick(f, f.sinceLastMs) != null) return null
         val gap = if (f.sinceLastMs < MIN_GAP_MS && pick(f, Long.MAX_VALUE) != null) MIN_GAP_MS - f.sinceLastMs else null
         return listOfNotNull(gap, f.retryInMs).minOrNull()
     }
 
     /** Whether a save of a [fresh] (or backfill) like may go on, or must stop and give way. */
     fun keepGoing(f: Facts, fresh: Boolean): Boolean =
-        f.online && !f.quiet && !f.playbackNeedsNetwork && (fresh || f.unmetered)
+        f.cache && f.online && !f.quiet && !f.playbackNeedsNetwork && (fresh || f.unmetered)
 }
 
 /**
