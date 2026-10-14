@@ -27,6 +27,9 @@
 - A list that failed during a network switch or behind a Wi-Fi login page reloads by itself when the connection is reported again and when you come back to the app.
 - A request that fails outright is tried once more, a second later, before the list gives up.
 
+### Repository
+- Eight "day in the life" tests run the browser build the way a day with the app goes: a commute through a tunnel, a Wi-Fi to mobile data handover, an album left playing, a sign-out while a liked song is still being saved, a night of Liked songs, an hour with the screen locked, slow browsing, and a café Wi-Fi with a login page. Hours pass on a faked clock, so each takes seconds.
+
 ## [1.1.2] - 2026-10-10
 
 ### Build
