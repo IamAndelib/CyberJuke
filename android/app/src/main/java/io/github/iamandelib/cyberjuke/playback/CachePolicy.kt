@@ -209,6 +209,19 @@ internal class CacheLedger(limitBytes: Long) {
         }
     }
 
+    /**
+     * Forgets every span, keeping the liked list and the limit: a start that failed had counted
+     * the spans on disk before failing, and a cache that isn't there has nothing to evict or play.
+     */
+    fun resetSpans() {
+        entries.clear()
+        keysByYt.clear()
+        listening.clear()
+        likedEntries.clear()
+        total = 0L
+        likedBytes = 0L
+    }
+
     fun onTouched(key: String, touched: Long) {
         val e = entries[key] ?: return
         if (touched <= e.touched) return

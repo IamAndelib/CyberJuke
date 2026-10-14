@@ -30,7 +30,8 @@ import java.util.concurrent.CopyOnWriteArraySet
  * - One [SimpleCache] for the process (it refuses a second one on the same folder), opened on
  *   first use off the main thread and kept open for the process's life: never released, so
  *   nothing blocks the main thread in onDestroy, and nothing is lost when the process dies
- *   (every span is indexed as it is written).
+ *   (every span is indexed as it is written). One that fails to start is released and not tried
+ *   again in the process ([startFailed]): playback streams.
  * - Keys are `yt:<ytId>:<itag>:<clen>` ([CacheKeys]), set by [YtDataSpecResolver]; only those
  *   go through the cache ([CacheRouter]), so the CI tone and HLS are untouched.
  * - A track saved whole plays from it with no extraction and no request
@@ -82,6 +83,15 @@ internal object AudioCache {
 
     @Volatile
     private var cache: SimpleCache? = null
+
+    /**
+     * The cache failed to start: not tried again in this process. Another start would count every
+     * span into the [ledger] a second time (and evict real files for bytes that aren't there), and
+     * would be rebuilt on every call, the playback thread's included. Playback streams meanwhile.
+     */
+    @Volatile
+    var startFailed = false
+        private set
 
     /** The limit in MB (Settings), kept to apply when the cache opens. */
     @Volatile
@@ -136,12 +146,13 @@ internal object AudioCache {
 
     /**
      * The open cache, opening it if needed (that waits while it counts what it holds); null when
-     * it can't be (no context yet, a disk error, a cache that failed to start): playback then
-     * streams. Never on the main thread.
+     * it can't be (no context yet, or it failed to start: [startFailed]): playback then streams.
+     * Never on the main thread.
      */
     @Synchronized
     fun open(): SimpleCache? {
         cache?.let { return it }
+        if (startFailed) return null
         val ctx = appContext ?: return null
         return try {
             val db = StandaloneDatabaseProvider(ctx)
@@ -164,16 +175,39 @@ internal object AudioCache {
             try {
                 c.checkInitialization()
             } catch (e: Cache.CacheException) {
+                startFailed = true
                 Log.w(TAG, "Listening cache failed to start: ${(e.cause ?: e).javaClass.simpleName}")
-                c.release()
+                try {
+                    c.release()
+                } finally {
+                    forgetFailedStart(c)
+                }
                 return null
             }
             cache = c
             c
         } catch (e: Exception) {
+            startFailed = true
             Log.w(TAG, "No listening cache: ${e.javaClass.simpleName}")
             null
         }
+    }
+
+    /**
+     * The failed start had counted the spans on disk into the [ledger], and may have found liked
+     * songs saved (and told the page): none of it plays, so it is all forgotten, and the page told.
+     * After [Cache.release], which may still report spans removed.
+     */
+    private fun forgetFailedStart(c: SimpleCache) {
+        val hadSaved = synchronized(c) {
+            ledger.resetSpans()
+            val had = saved.isNotEmpty() || savedLiked.isNotEmpty()
+            saved.clear()
+            savedLiked = emptySet()
+            publish()
+            had
+        }
+        if (hadSaved) listeners.forEach { it.onSavedChanged() }
     }
 
     /**

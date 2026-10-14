@@ -161,6 +161,36 @@ class CachePolicyTest {
     }
 
     @Test
+    fun aFailedStartIsForgottenSoTheNextCountIsTheOnlyOne() {
+        val l = CacheLedger(20 * mb)
+        l.setLiked(listOf("liked00000a"), known = false)
+        // What a start does: every span on disk counted in.
+        val count = {
+            l.onAdded(CacheKeys.of("liked00000a", 251), 8 * mb, touched = 1)
+            l.onAdded(CacheKeys.of("listen0000a", 251), 8 * mb, touched = 2)
+        }
+        // Counted twice (a start that failed, then another): 32 MB of 16, and a real file would go.
+        count()
+        count()
+        assertEquals(32 * mb, l.total)
+        assertEquals(listOf(CacheKeys.of("listen0000a", 251)), l.victims())
+        // Forgotten after the failed start: none of it is there to evict, nor saved.
+        l.resetSpans()
+        assertEquals(0L, l.total)
+        assertEquals(0L, l.likedBytes)
+        assertEquals(emptyList<String>(), l.keysOf("liked00000a"))
+        assertFalse(l.likedFull(0L))
+        count()
+        assertEquals(16 * mb, l.total)
+        assertEquals(8 * mb, l.likedBytes)
+        assertEquals(emptyList<String>(), l.victims())
+        // The liked list and the limit stay.
+        assertTrue(l.isLiked("liked00000a"))
+        assertEquals(listOf("liked00000a"), l.liked)
+        assertEquals(20 * mb, l.limit)
+    }
+
+    @Test
     fun likedFullLeavesRoomForListening() {
         val l = CacheLedger(128 * mb)
         l.setLiked(listOf("likeda00000"), known = false)
