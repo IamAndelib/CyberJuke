@@ -523,3 +523,24 @@ internal object LikedSaverPolicy {
     fun keepGoing(f: Facts, fresh: Boolean): Boolean =
         f.online && !f.quiet && !f.playbackNeedsNetwork && (fresh || f.unmetered)
 }
+
+/**
+ * How a liked save ended: [SAVED] (whole in the cache), [FAILED] (not this service's life),
+ * [STOPPED] (a strike, [SaveStrikes]), [CANCELLED] (no fault of the song). Pure.
+ */
+internal enum class SaveOutcome {
+    SAVED,
+    FAILED,
+    STOPPED,
+    CANCELLED,
+    ;
+
+    companion object {
+        /**
+         * The writer got to the end: saved only if the song is now whole in the cache. A span
+         * playback was writing at the same time is read past, not written (its lock), and a
+         * length never learned leaves it not whole: a strike then, and it is tried again.
+         */
+        fun afterWrite(whole: Boolean): SaveOutcome = if (whole) SAVED else STOPPED
+    }
+}

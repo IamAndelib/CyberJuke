@@ -448,4 +448,11 @@ class CachePolicyTest {
         assertNull(LikedSaverPolicy.next(f.copy(skip = setOf("mid00000000"))))
         assertEquals("mid00000000", LikedSaverPolicy.next(f))
     }
+
+    @Test
+    fun aSaveCountsOnlyWhenTheSongIsWholeInTheCache() {
+        // The writer finished, but playback held the span (its lock): read past, not written.
+        assertEquals(SaveOutcome.STOPPED, SaveOutcome.afterWrite(whole = false))
+        assertEquals(SaveOutcome.SAVED, SaveOutcome.afterWrite(whole = true))
+    }
 }
