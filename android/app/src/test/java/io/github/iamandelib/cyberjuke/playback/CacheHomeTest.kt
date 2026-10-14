@@ -31,8 +31,9 @@ class CacheHomeTest {
         File(old, "audio-liked").writeText("dQw4w9WgXcQ")
         File(old, "audio-members").writeText("abcdefghijk")
         val deleted = ArrayList<File>()
+        val owned = ArrayList<File>()
 
-        assertTrue(CacheHome.move(old, new, { deleted.add(it) }))
+        assertTrue(CacheHome.move(old, new, { deleted.add(it) }, { owned.add(it) }))
 
         assertTrue(File(new, "audio/1234abcd.uid").isFile)
         assertEquals("song", File(new, "audio/7/0.0.1.v3.exo").readText())
@@ -40,6 +41,8 @@ class CacheHomeTest {
         assertEquals("abcdefghijk", File(new, "audio-members").readText())
         for (name in CacheHome.NAMES) assertFalse(name, File(old, name).exists())
         assertTrue(deleted.isEmpty())
+        // Each moved one is made the app's own data (not the cache folder's group any more).
+        assertEquals(CacheHome.NAMES.map { File(new, it) }, owned)
     }
 
     @Test
@@ -52,7 +55,7 @@ class CacheHomeTest {
         File(old, "audio-liked").writeText("old")
         val deleted = ArrayList<File>()
 
-        assertTrue(CacheHome.move(old, new, { deleted.add(it); it.deleteRecursively() }))
+        assertTrue(CacheHome.move(old, new, { deleted.add(it); it.deleteRecursively() }, { error("nothing moved") }))
 
         assertTrue(File(new, "audio/new.uid").isFile)
         assertEquals("new", File(new, "audio-liked").readText())
@@ -65,7 +68,7 @@ class CacheHomeTest {
     @Test
     fun nothingAnywhereStartsEmpty() {
         val (old, new) = homes()
-        assertTrue(CacheHome.move(old, new, { error("nothing to delete") }))
+        assertTrue(CacheHome.move(old, new, { error("nothing to delete") }, { error("nothing moved") }))
         for (name in CacheHome.NAMES) assertFalse(name, File(new, name).exists())
     }
 
@@ -76,13 +79,29 @@ class CacheHomeTest {
         File(old, "audio-liked").writeText("dQw4w9WgXcQ")
         val deleted = ArrayList<File>()
 
-        assertFalse(CacheHome.move(old, new, { deleted.add(it); it.deleteRecursively() }, rename = { _, _ -> false }))
+        assertFalse(CacheHome.move(old, new, { deleted.add(it); it.deleteRecursively() }, { error("nothing moved") }, rename = { _, _ -> false }))
 
         assertEquals(listOf(File(old, "audio")), deleted)
         for (name in CacheHome.NAMES) {
             assertFalse(name, File(old, name).exists())
             assertFalse(name, File(new, name).exists())
         }
+    }
+
+    @Test
+    fun onlyWhatWasMovedIsMadeTheAppsOwn() {
+        val (old, new) = homes()
+        File(old, "audio").mkdirs()
+        File(old, "audio-liked").writeText("dQw4w9WgXcQ")
+        File(old, "audio-members").writeText("abcdefghijk")
+        val owned = ArrayList<File>()
+        // The liked list doesn't move (it starts empty); the folder and the tags do.
+        val rename = { from: File, to: File -> from.name != "audio-liked" && from.renameTo(to) }
+
+        assertFalse(CacheHome.move(old, new, { it.deleteRecursively() }, { owned.add(it) }, rename))
+
+        assertEquals(listOf(File(new, "audio"), File(new, "audio-members")), owned)
+        assertFalse(File(old, "audio-liked").exists())
     }
 
     /** The old home (cacheDir) and the new one (noBackupFilesDir), both there as on the phone. */

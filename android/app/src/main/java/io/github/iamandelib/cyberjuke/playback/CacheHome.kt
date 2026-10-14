@@ -47,12 +47,15 @@ internal object CacheHome {
      * so it is instant, and the folder keeps its `.uid` file, so the cache's index (in the
      * database) still fits it. A rename that fails, or an old copy left beside a new one, is
      * deleted ([deleteDir] for the folder, which drops its index too) and that part starts empty.
-     * False when something couldn't be moved.
+     * Each one moved is handed to [fixOwner]: a rename keeps the cache folder's group (and its
+     * setgid bit, which gives that group to what is written in it later), so Android would still
+     * count it as cache. False when something couldn't be moved.
      */
     fun move(
         oldRoot: File,
         newRoot: File,
         deleteDir: (File) -> Unit,
+        fixOwner: (File) -> Unit,
         rename: (File, File) -> Boolean = { from, to -> from.renameTo(to) },
     ): Boolean {
         var moved = true
@@ -62,7 +65,7 @@ internal object CacheHome {
             val drop = when (plan(oldExists, File(newRoot, name).exists())) {
                 Step.MIGRATE -> {
                     val ok = rename(old, File(newRoot, name))
-                    if (!ok) moved = false
+                    if (ok) fixOwner(File(newRoot, name)) else moved = false
                     !ok
                 }
                 Step.IN_PLACE -> oldExists

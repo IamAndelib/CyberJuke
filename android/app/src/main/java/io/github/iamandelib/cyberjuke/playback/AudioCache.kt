@@ -2,6 +2,7 @@ package io.github.iamandelib.cyberjuke.playback
 
 import android.content.Context
 import android.net.Uri
+import android.system.Os
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
@@ -52,6 +53,9 @@ import java.util.concurrent.CopyOnWriteArraySet
 @OptIn(UnstableApi::class)
 internal object AudioCache {
     private const val TAG = "CyberJukeCache"
+
+    /** rwxrwx--x, no setgid (0771). */
+    private const val DIR_MODE = 0b111_111_001
 
     const val DEFAULT_MB = 256
     val SIZES_MB = listOf(128, 256, 512)
@@ -220,11 +224,29 @@ internal object AudioCache {
      */
     private fun moveHome(ctx: Context, db: StandaloneDatabaseProvider) {
         try {
-            if (!CacheHome.move(ctx.cacheDir, ctx.noBackupFilesDir, deleteDir = { SimpleCache.delete(it, db) })) {
+            if (!CacheHome.move(ctx.cacheDir, ctx.noBackupFilesDir, deleteDir = { SimpleCache.delete(it, db) }, fixOwner = ::ownAsAppData)) {
                 Log.w(TAG, "Listening cache not moved: starting empty")
             }
         } catch (e: Exception) {
             Log.w(TAG, "Listening cache not moved: ${e.javaClass.simpleName}")
+        }
+    }
+
+    /**
+     * [f] (moved from cacheDir) and all in it get the app's own group, and folders lose the setgid
+     * bit (0771): cacheDir is setgid with the app's cache group, which a rename keeps and passes on
+     * to what is written there later, so Android would go on counting it as cache (Settings,
+     * its cache quota and what it clears first). A failure is said, and the cache kept as it is.
+     */
+    private fun ownAsAppData(f: File) {
+        try {
+            val gid = Os.getgid()
+            f.walkTopDown().forEach {
+                Os.chown(it.path, -1, gid)
+                if (it.isDirectory) Os.chmod(it.path, DIR_MODE)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Listening cache left in the cache group: ${e.javaClass.simpleName}")
         }
     }
 
