@@ -69,6 +69,7 @@ In a cloud session, the SessionStart hook (`.claude/hooks/session-start.sh`) ins
 ## Workflow rules
 
 - Work on a `claude/*` branch and deliver through a PR (template: `.github/pull_request_template.md`). Never push to `main`, merge, run Release/Preview, or touch signing secrets.
+- **Keep it simple; don't reinvent the wheel.** Before building anything, look for how others already solve it (Media3/Android docs and samples, well-known open-source players such as NewPipe, SimpMusic, InnerTune, established web patterns) and follow the proven approach. Build our own only where theirs falls short, and name the source in the PR.
 - A confirmed bug gets a fix **and** a test that fails without it.
 - Every user-visible change gets a line under `## [Unreleased]` in `CHANGELOG.md`, in the existing plain, user-facing tone.
 - Commits:

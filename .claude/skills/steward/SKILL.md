@@ -72,7 +72,7 @@ Don't comment just to acknowledge. Comment only when it moves the issue forward.
    - Vitest next to the code;
    - Playwright in `tests/e2e/` using `tests/fixtures`;
    - Kotlin in `android/app/src/test/` (proved by CI).
-3. **Make the minimal fix.** Respect the layers, the invariants in CLAUDE.md, and the style of the surrounding code (comment density, naming).
+3. **Research, then make the minimal fix.** First look for how others already solve it (Media3/Android docs and samples, NewPipe and other open-source players, established web patterns) and follow the proven approach; keep it simple and don't reinvent the wheel. Name the source in the PR. Respect the layers, the invariants in CLAUDE.md, and the style of the surrounding code (comment density, naming).
 4. **Run the local gates:**
    - always `npm run check`;
    - `npm run e2e` when UI, stores, player or data change;
