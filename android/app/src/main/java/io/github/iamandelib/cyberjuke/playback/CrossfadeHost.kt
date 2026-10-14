@@ -124,6 +124,10 @@ internal class ExoCrossfadeHost(
 
     override fun dropIncoming() = drop()
 
+    override fun resumeMain() {
+        main()?.play()
+    }
+
     override val mainPlaying: Boolean get() = main()?.isPlaying == true
 
     override val incomingPlaying: Boolean get() = incoming()?.isPlaying == true
@@ -201,12 +205,16 @@ internal class CrossfadeEvents(private val fader: Crossfader) : Player.Listener 
         }
     }
 
-    /** A length became known, or the list changed (the next track may be another). */
-    override fun onTimelineChanged(timeline: Timeline, reason: Int) = fader.onListChanged()
+    /**
+     * The list changed, or a length became known. An edit of the list or of its order is told by
+     * the service once its queue has arranged it (PlaybackService.PlayerListener): the order a
+     * shuffled insert lands in first isn't the one it keeps.
+     */
+    override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+        if (reason != Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) fader.onListChanged()
+    }
 
     override fun onRepeatModeChanged(repeatMode: Int) = fader.onListChanged()
-
-    override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = fader.onListChanged()
 }
 
 /** The incoming player's events before the hand-over: it plays (the ramp may go on), or it failed. */
