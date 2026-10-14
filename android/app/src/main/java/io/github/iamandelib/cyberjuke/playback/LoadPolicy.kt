@@ -101,8 +101,9 @@ internal object LoadRetry {
  * continue-loading check), but the load control refuses it any further loading until it is
  * current, so a skip costs little data. A prepared period that isn't loading is a normal state:
  * nothing is loading, so the player is ready to move on, makes the transition by itself at the
- * end of this track, and the next one then buffers at its start (BufferPolicy.START_MS), which
- * is the short pause the listener hears. A crossfade needs the next track buffered, so it is
+ * end of this track, and the next one then buffers at its start (a cold start after playing
+ * counts as a rebuffer: BufferPolicy.AFTER_REBUFFER_MS, about five seconds of audio, plus the
+ * round trip), which is the short pause the listener hears. A crossfade needs the next track buffered, so it is
  * [wanted] then too. Pure (LoadPolicyTest).
  */
 internal object LoadAhead {
