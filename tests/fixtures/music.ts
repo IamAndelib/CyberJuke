@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { imagesOffline } from './youtube';
 
 function hash(s: string): number {
   let h = 2166136261;
@@ -257,6 +258,7 @@ export interface MusicStubOptions {
 
 export async function stubMusic(page: Page, opts: MusicStubOptions = {}): Promise<void> {
   await page.route(/^https:\/\/lh3\.googleusercontent\.com\/fake\//, (route) => {
+    if (imagesOffline(page)) return route.abort('internetdisconnected');
     const id = /fake\/([^=]+)/.exec(route.request().url())?.[1] ?? 'x';
     return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: fakeCover(id) });
   });

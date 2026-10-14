@@ -305,6 +305,12 @@ for (const theme of ['dark', 'c64'] as const) {
     await expect(page.getByTestId('liked-list').getByTestId('track-row')).toHaveCount(4);
     await settle(page);
     await shot(page, `offline-liked-${theme}`);
+    // Now Playing covers the bar, so its header says so.
+    await page.getByTestId('liked-list').getByTestId('track-play').first().click();
+    await openNowPlaying(page);
+    await expect(page.getByTestId('np-offline-liked')).toBeVisible();
+    await settle(page);
+    await shot(page, `offline-now-playing-${theme}`);
   });
 }
 

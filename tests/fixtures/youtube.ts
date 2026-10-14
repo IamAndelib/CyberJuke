@@ -103,9 +103,25 @@ const FAKE_YT = `
 })();
 `;
 
+/**
+ * Pages whose image hosts (these thumbnails, and the Global covers in music.ts) are cut off:
+ * their requests fail like a lost connection. setOffline sets it, since the browser's offline
+ * mode doesn't reach routed requests; set alone, the app counts as online but no image gets
+ * through (a Wi-Fi login page).
+ */
+const imagesCutOff = new WeakSet<Page>();
+
+export function setImagesOffline(page: Page, off: boolean): void {
+  if (off) imagesCutOff.add(page);
+  else imagesCutOff.delete(page);
+}
+
+export const imagesOffline = (page: Page): boolean => imagesCutOff.has(page);
+
 /** Synthetic thumbnails for i.ytimg.com and the fake IFrame player. */
 export async function stubYouTube(page: Page): Promise<void> {
   await page.route(/^https:\/\/i\.ytimg\.com\/vi\/([^/]+)\//, (route) => {
+    if (imagesOffline(page)) return route.abort('internetdisconnected');
     const id = /\/vi\/([^/]+)\//.exec(route.request().url())?.[1] ?? 'x';
     return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: fakeThumb(id, /\/mqdefault\.jpg$/.test(route.request().url())) });
   });

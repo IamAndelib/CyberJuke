@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Feed, FeedCache, JUKEBOX_FEED_PREFIXES, authScope, fillFeed, isFilling, retryWatchedFeeds, type FeedPage } from './feed';
+import { AUTO_RETRY_GAP_MS, Feed, FeedCache, JUKEBOX_FEED_PREFIXES, authScope, fillFeed, isFilling, retryWatchedFeeds, type FeedPage } from './feed';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
@@ -267,6 +267,33 @@ describe('retryWatchedFeeds (W6)', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(shown.snapshot.status).toBe('ready');
     expect(hidden.snapshot.status).toBe('error');
+    un();
+  });
+
+  it('a list that keeps failing is retried by itself at most once a minute; Retry is never held', async () => {
+    const cache = new FeedCache();
+    const loader = vi.fn(() => Promise.reject(Object.assign(new Error('bad response'), { offline: false })));
+    const shown = cache.get('shown', loader);
+    const un = shown.subscribe(() => {});
+    shown.start();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(loader).toHaveBeenCalledTimes(1);
+    // Android reports "connected" on every capability change: the first one retries, the next ones don't.
+    const t0 = performance.now();
+    shown.retryFailed(t0);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(loader).toHaveBeenCalledTimes(2);
+    shown.retryFailed(t0 + 5_000);
+    shown.retryFailed(t0 + AUTO_RETRY_GAP_MS - 1);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(loader).toHaveBeenCalledTimes(2);
+    shown.retryFailed(t0 + AUTO_RETRY_GAP_MS);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(loader).toHaveBeenCalledTimes(3);
+    // The user's Retry goes through at once.
+    shown.retry();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(loader).toHaveBeenCalledTimes(4);
     un();
   });
 });

@@ -23,6 +23,7 @@ import { Cache } from '../core/cache';
 import { errorMessage, isOffline } from '../core/errors';
 import { parseRunQueryRows } from '../core/guards';
 import { mark } from '../core/marks';
+import { online } from '../core/network';
 import type { Cursor, Page, TrackSource } from './source';
 
 export const PROJECT = 'cyberspace-cyberspace';
@@ -385,7 +386,9 @@ export class FirestoreSource implements TrackSource {
       try {
         return await this.answer(body, members, ctl.signal);
       } catch (e) {
-        if (!(e instanceof FirestoreError && e.offline)) throw e;
+        // Only a request that got no answer at all, and only while the app thinks it is online:
+        // offline, the answer is known, and a second request would just cost a second.
+        if (!(e instanceof FirestoreError && e.offline) || !online.peek()) throw e;
         await delay(RETRY_DELAY_MS, ctl.signal);
         return await this.answer(body, members, ctl.signal);
       }
