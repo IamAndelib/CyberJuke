@@ -101,11 +101,22 @@ export class Feed<T, C, M = undefined> {
     void this.loadFirst(false);
   }
 
-  /** Back online: reload a first page that failed, or retry a page that failed to load more. */
-  retryFailed(): void {
+  /** When the last automatic retry ran (performance.now()); null = none yet. */
+  private autoRetriedAt: number | null = null;
+
+  /**
+   * The connection is reported again, or the app is back in front: reload a first page that
+   * failed, or retry a page that failed to load more. At most once per AUTO_RETRY_GAP_MS: Android
+   * reports "connected" on every change of the network's capabilities, and a list that keeps
+   * failing for another reason must not flicker on each of them. A tap on Retry is never held.
+   */
+  retryFailed(now = performance.now()): void {
     const s = this.snapshot;
+    const failed = s.status === 'error' || (s.status === 'ready' && s.error && s.hasMore && !s.loadingMore);
+    if (!failed || (this.autoRetriedAt != null && now - this.autoRetriedAt < AUTO_RETRY_GAP_MS)) return;
+    this.autoRetriedAt = now;
     if (s.status === 'error') this.retry();
-    else if (s.status === 'ready' && s.error && s.hasMore && !s.loadingMore) this.loadMore();
+    else this.loadMore();
   }
 
   loadMore(): void {
@@ -329,7 +340,10 @@ export const feeds = new FeedCache();
 /** Global search results, kept apart so typing many queries doesn't push out pages and albums. */
 export const globalFeeds = new FeedCache(20);
 
-/** Back online: every feed on screen whose load failed tries again. */
+/** The least time between two automatic retries of one failed feed (Feed.retryFailed). */
+export const AUTO_RETRY_GAP_MS = 60_000;
+
+/** The connection is reported again, or the app is back in front: every feed on screen whose load failed tries again. */
 export function retryWatchedFeeds(caches: FeedCache[] = [feeds, globalFeeds]): void {
   for (const c of caches) for (const f of c.all()) if (f.watched) f.retryFailed();
 }
