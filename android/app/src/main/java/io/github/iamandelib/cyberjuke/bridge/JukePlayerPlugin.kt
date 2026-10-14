@@ -819,11 +819,16 @@ class JukePlayerPlugin : Plugin() {
         upkeep(call, "signedOut") { AudioCache.signedOut() }
     }
 
-    /** `signedIn()`: members-only audio may be cached again. */
+    /**
+     * `signedIn()`: members-only audio may be cached again. Queued behind any `signedOut()` like
+     * the rest of the upkeep, so a quick sign-out and sign-in can't end signed out.
+     */
     @PluginMethod
     fun signedIn(call: PluginCall) {
-        AudioCache.signedIn()
-        call.resolve()
+        upkeep(call, "signedIn") {
+            AudioCache.signedIn()
+            true
+        }
     }
 
     /** `cachedIds()`: `{ ytIds }`, the liked songs saved whole (they play offline). */
