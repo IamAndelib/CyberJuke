@@ -90,9 +90,13 @@ internal object CrossfadePlan {
         val nextDurationMs: Long,
         /** How much of the next track is buffered. */
         val nextBufferedMs: Long,
+        /** Settings → Gapless playback. */
+        val gapless: Boolean = true,
+        /** The playing track and the next are from one album (both say so). */
+        val sameAlbum: Boolean = false,
     )
 
-    enum class Skip { OFF, NOT_PLAYING, REPEAT_ONE, LAST, OUTAGE, NOT_OURS, TOO_SHORT, TOO_LATE, NEXT_NOT_READY }
+    enum class Skip { OFF, NOT_PLAYING, REPEAT_ONE, LAST, OUTAGE, NOT_OURS, SAME_ALBUM, TOO_SHORT, TOO_LATE, NEXT_NOT_READY }
 
     sealed interface Decision {
         /** Fade for [fadeMs], handing over at [startAtMs] of the playing track. */
@@ -104,9 +108,10 @@ internal object CrossfadePlan {
 
     /**
      * At the prime: fade or not. Not on repeat-one, the last track, during an outage or a
-     * back-off, on a fallback stream, with too little time left to load the tail (a seek near
-     * the end), or when the next track couldn't start at once (a normal transition then, never
-     * a stall).
+     * back-off, on a fallback stream, between two tracks of one album with Gapless playback on
+     * (they were made to run into each other; Metrolist's "gapless" option is this rule), with
+     * too little time left to load the tail (a seek near the end), or when the next track
+     * couldn't start at once (a normal transition then, never a stall).
      */
     fun decide(f: Facts): Decision {
         if (f.settingMs <= 0L) return Decision.No(Skip.OFF)
@@ -115,6 +120,7 @@ internal object CrossfadePlan {
         if (!f.hasNext) return Decision.No(Skip.LAST)
         if (f.outage) return Decision.No(Skip.OUTAGE)
         if (!f.ours) return Decision.No(Skip.NOT_OURS)
+        if (f.gapless && f.sameAlbum) return Decision.No(Skip.SAME_ALBUM)
         val fade = fadeMs(f.settingMs, f.durationMs, f.nextDurationMs)
         if (fade == 0L) return Decision.No(Skip.TOO_SHORT)
         val startAt = f.durationMs - fade

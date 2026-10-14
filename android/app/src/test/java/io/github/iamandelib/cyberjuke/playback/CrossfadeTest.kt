@@ -20,7 +20,9 @@ class CrossfadeTest {
         positionMs: Long = 3 * min,
         nextDurationMs: Long = 3 * min,
         nextBufferedMs: Long = 3 * min,
-    ) = CrossfadePlan.Facts(settingMs, playing, repeatOne, hasNext, outage, ours, durationMs, positionMs, nextDurationMs, nextBufferedMs)
+        gapless: Boolean = true,
+        sameAlbum: Boolean = false,
+    ) = CrossfadePlan.Facts(settingMs, playing, repeatOne, hasNext, outage, ours, durationMs, positionMs, nextDurationMs, nextBufferedMs, gapless, sameAlbum)
 
     // ---- CrossfadePlan --------------------------------------------------------------------
 
@@ -75,6 +77,10 @@ class CrossfadeTest {
         assertEquals(CrossfadePlan.Skip.LAST, why(facts(hasNext = false)))
         assertEquals(CrossfadePlan.Skip.OUTAGE, why(facts(outage = true)))
         assertEquals(CrossfadePlan.Skip.NOT_OURS, why(facts(ours = false)))
+        // Two tracks of one album with Gapless on go straight into each other (Metrolist's rule).
+        assertEquals(CrossfadePlan.Skip.SAME_ALBUM, why(facts(sameAlbum = true)))
+        assertTrue(CrossfadePlan.decide(facts(sameAlbum = true, gapless = false)) is CrossfadePlan.Decision.Fade)
+        assertTrue(CrossfadePlan.decide(facts(sameAlbum = false, gapless = true)) is CrossfadePlan.Decision.Fade)
         assertEquals(CrossfadePlan.Skip.TOO_SHORT, why(facts(durationMs = 2_000L, positionMs = 0L)))
         assertEquals(CrossfadePlan.Skip.TOO_SHORT, why(facts(durationMs = -1L)))
         // Seeked to within the last moments: no time to load the tail.

@@ -535,7 +535,7 @@ class PlaybackService : MediaSessionService() {
         // Crossfade (Settings): the outgoing track's last seconds on a second, bare player that
         // exists only during a fade (CrossfadeTail); the queue and the session stay on this one.
         val fader = Crossfader(
-            ExoCrossfadeHost(this, exo, handler, cacheSources, audioAttributes),
+            ExoCrossfadeHost(this, exo, handler, cacheSources, audioAttributes) { gapless },
             crossfadeMs,
         )
         exo.addListener(CrossfadeEvents(fader))

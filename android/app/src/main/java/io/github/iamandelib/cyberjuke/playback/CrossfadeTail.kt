@@ -43,6 +43,8 @@ internal class ExoCrossfadeHost(
     /** The service's sources: the listening cache, then the network ([AudioCache.dataSourceFactory]). */
     private val dataSources: DataSource.Factory,
     private val audioAttributes: AudioAttributes,
+    /** Settings → Gapless playback, as the service has it. */
+    private val gapless: () -> Boolean,
 ) : Crossfader.Host {
     private val messages = ArrayList<PlayerMessage>(3)
     private val window = Timeline.Window()
@@ -57,6 +59,9 @@ internal class ExoCrossfadeHost(
         } else {
             p.currentTimeline.getWindow(next, window).durationMs.takeIf { it != C.TIME_UNSET } ?: -1L
         }
+        // The album each was opened from (PlayerShared.toMediaItem); a track without one belongs to none.
+        val album = p.currentMediaItem?.mediaMetadata?.albumTitle?.takeIf { it.isNotEmpty() }
+        val nextAlbum = if (next == C.INDEX_UNSET || next >= p.mediaItemCount) null else p.getMediaItemAt(next).mediaMetadata.albumTitle
         val left = if (duration > 0L) (duration - position).coerceAtLeast(0L) else 0L
         return CrossfadePlan.Facts(
             settingMs = settingMs,
@@ -71,6 +76,8 @@ internal class ExoCrossfadeHost(
             positionMs = position,
             nextDurationMs = nextDuration,
             nextBufferedMs = (p.totalBufferedDuration - left).coerceAtLeast(0L),
+            gapless = gapless(),
+            sameAlbum = album != null && album.toString() == nextAlbum?.toString(),
         )
     }
 
