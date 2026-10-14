@@ -1,12 +1,11 @@
 import { signal } from '@preact/signals';
 import { describe, expect, it, vi } from 'vitest';
 import type { Track } from '../data/model';
-import { LIKED_LABEL } from '../stores/savedOffline';
 import { offlineGuard } from './offlineGuard';
 import { EMPTY_STATE, type Player, type PlayerState } from './types';
 
 /** A player whose every command is a mock, and a guard that is online until told otherwise. */
-function setup(state: Partial<PlayerState> = {}, saved: string[] = []) {
+function setup(state: Partial<PlayerState> = {}, saved: string[] = [], liked: string[] = []) {
   const cmd = () => vi.fn((..._a: unknown[]): Promise<void> => Promise.resolve());
   const inner = {
     kind: 'web',
@@ -36,13 +35,14 @@ function setup(state: Partial<PlayerState> = {}, saved: string[] = []) {
   } satisfies Player;
   let up = true;
   const refused = vi.fn();
-  const p = offlineGuard(inner, { online: () => up, saved: () => new Set(saved), refuse: refused });
+  const p = offlineGuard(inner, { online: () => up, saved: () => new Set(saved), liked: (t) => liked.includes(t.id), refuse: refused });
   return { inner, p, refused, offline: () => (up = false) };
 }
 
 const t = (id: string): Track => ({ id, ytId: `${id}`.padEnd(11, '0') }) as Track;
 const track = t('a');
-const LIKED = { label: LIKED_LABEL, mode: 'list' as const };
+const LIKED = { label: 'Liked', mode: 'list' as const };
+const RECENT = { label: 'Recently played', mode: 'list' as const };
 const HOME = { label: 'Home · Latest', mode: 'radio' as const };
 
 describe('offlineGuard', () => {
@@ -101,25 +101,28 @@ describe('offlineGuard', () => {
     expect(p.state).toBe(inner.state);
   });
 
-  it('offline, a list from Liked plays only its saved songs, from the tapped one', async () => {
+  it('offline, a list from anywhere plays only its saved songs, from the tapped one', async () => {
     const [a, b, c, d] = ['a', 'b', 'c', 'd'].map(t);
-    const { inner, p, refused, offline } = setup({}, [a.ytId, c.ytId, d.ytId]);
-    offline();
-    await p.playList([a, b, c, d], 2, LIKED);
-    expect(inner.playList).toHaveBeenCalledWith([a, c, d], 1, LIKED);
-    expect(refused).not.toHaveBeenCalled();
+    for (const ctx of [LIKED, RECENT, HOME, undefined]) {
+      const { inner, p, refused, offline } = setup({}, [a.ytId, c.ytId, d.ytId]);
+      offline();
+      await p.playList([a, b, c, d], 2, ctx);
+      expect(inner.playList).toHaveBeenCalledWith([a, c, d], 1, ctx);
+      expect(refused).not.toHaveBeenCalled();
+    }
   });
 
-  it('offline, an unsaved liked song says it isn’t saved; the same list elsewhere is refused', async () => {
-    const [a, b] = ['a', 'b'].map(t);
-    const { inner, p, refused, offline } = setup({}, [a.ytId]);
+  it('offline, an unsaved liked song says it isn’t saved yet; any other unsaved song needs a connection', async () => {
+    const [a, b, c] = ['a', 'b', 'c'].map(t);
+    const { inner, p, refused, offline } = setup({}, [a.ytId], [a.id, b.id]);
     offline();
-    await p.playList([a, b], 1, LIKED);
-    expect(refused).toHaveBeenLastCalledWith('unsaved');
-    // Saved, but started from somewhere other than Liked (Recently played, Home): refused.
-    await p.playList([a, b], 0, HOME);
-    expect(refused).toHaveBeenLastCalledWith('offline');
-    await p.playList([a, b], 0);
+    for (const ctx of [LIKED, RECENT, HOME]) {
+      await p.playList([a, b, c], 1, ctx);
+      expect(refused).toHaveBeenLastCalledWith('unsaved');
+      await p.playList([a, b, c], 2, ctx);
+      expect(refused).toHaveBeenLastCalledWith('offline');
+    }
+    await p.playList([a, b], 5);
     expect(refused).toHaveBeenLastCalledWith('offline');
     expect(inner.playList).not.toHaveBeenCalled();
   });

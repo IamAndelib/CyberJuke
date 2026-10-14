@@ -19,11 +19,11 @@ export function playFrom(tracks: Track[], i: number, ctx: PlayContext): Promise<
 
 /**
  * P3, the Play and Shuffle buttons: Play always plays in order with shuffle off;
- * Shuffle always turns shuffle on (from a random track). Offline only Liked's saved songs
- * play; elsewhere neither changes anything.
+ * Shuffle always turns shuffle on (from a random track). Offline only the list's saved songs
+ * play; with none, neither changes anything.
  */
 export async function playAll(all: Track[], { shuffle, ctx }: { shuffle: boolean; ctx: PlayContext }): Promise<void> {
-  const tracks = all.length ? playableNow(all, ctx) : null;
+  const tracks = all.length ? playableNow(all) : null;
   if (!tracks?.length) return;
   if (!shuffle) {
     await player.setShuffle(false);

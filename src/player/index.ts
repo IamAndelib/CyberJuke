@@ -10,7 +10,7 @@
  */
 import { Capacitor } from '@capacitor/core';
 import { computed, effect, untracked } from '@preact/signals';
-import { addRecent, recent, settings, showNsfw } from '../stores/library';
+import { addRecent, likedIds, recent, settings, showNsfw } from '../stores/library';
 import { block } from '../stores/block';
 import { catalog } from '../stores/catalog';
 import { toast } from '../stores/toast';
@@ -21,7 +21,7 @@ import { online } from '../core/network';
 import { OFFLINE } from '../core/offlineText';
 import { exposeForTests } from '../core/testHooks';
 import type { Track } from '../data/model';
-import { LIKED_LABEL, hasSavedLiked, isSaved, savedOffline } from '../stores/savedOffline';
+import { hasSavedLiked, savedOffline, savedTracks } from '../stores/savedOffline';
 import { createAutoplay, type Autoplay } from './autoplay';
 import { NativePlayer } from './nativePlayer';
 import { offlineGuard, type OfflineRefusal } from './offlineGuard';
@@ -66,17 +66,14 @@ export function canStartPlayback(): boolean {
 }
 
 /**
- * What of `tracks`, started from `ctx`, can play now: all of it online; offline only the saved
- * ones of a list from Liked. Null (and a toast says why) when none can. For actions made of
- * several commands (Play and Shuffle), before their first one.
+ * What of `tracks` can play now: all of it online; offline only its saved songs (from any list).
+ * Null (and a toast says why) when none can. For actions made of several commands (Play and
+ * Shuffle), before their first one.
  */
-export function playableNow(tracks: Track[], ctx: PlayContext): Track[] | null {
+export function playableNow(tracks: Track[]): Track[] | null {
   if (online.peek()) return tracks;
-  if (ctx.label === LIKED_LABEL) {
-    const saved = savedOffline.peek();
-    const some = tracks.filter((t) => isSaved(t, saved));
-    if (some.length) return some;
-  }
+  const some = savedTracks(tracks, savedOffline.peek());
+  if (some.length) return some;
   refuseOffline('offline');
   return null;
 }
@@ -84,6 +81,7 @@ export function playableNow(tracks: Track[], ctx: PlayContext): Track[] | null {
 export const player: Player = offlineGuard(safePlayer(Capacitor.isNativePlatform() ? new NativePlayer() : new WebPlayer(), commandFailed), {
   online: () => online.peek(),
   saved: () => savedOffline.peek(),
+  liked: (t) => likedIds.peek().has(t.id),
   refuse: refuseOffline,
 });
 

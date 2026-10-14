@@ -11,7 +11,7 @@
 - When the connection drops mid-track, the message says so ("Signal lost") instead of blaming the track, and whether it picks up by itself once you're back.
 - A **listening cache** keeps the music you play, and the next track, on the phone, so the music keeps playing when the signal drops, and playing a song again costs no data. Settings → **Listening cache** sets how much it may keep: 128, 256 (the default) or 512 MB, and **Clear cache** empties it. Nothing of it leaves the phone or goes into backups, and signing out removes the members-only tracks from it.
 - Liked songs are saved in it too, so they play offline: a song you like is saved right away, and older likes one at a time, on Wi-Fi only, while the app is open or playing.
-- Offline, Library → Liked plays the liked songs already saved, from the one you tap; the others are dimmed and say "Not saved yet. Needs a connection." The top bar reads "no carrier · your liked songs still play" and opens Liked, and anything else you try to play says so, with a button to Liked. With nothing saved yet, it asks you to connect, as before.
+- Offline, the liked songs already saved play from any list (Liked, Recently played, Home, an album…), from the one you tap, and stand out bright; the rest is dimmed, and a liked song not saved yet says "Not saved yet. Needs a connection." The top bar reads "no carrier · your liked songs still play" and opens Liked, and anything else you try to play says so, with a button to Liked. With nothing saved yet, it asks you to connect, as before.
 - Offline, a paused song always resumes, saved or not: it plays what it has already loaded (and says "Signal lost" if that runs out). Only starting another song needs it saved.
 
 ### Fixed
