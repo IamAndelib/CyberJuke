@@ -22,6 +22,7 @@
 - A dropped or reset connection no longer skips good tracks, and a flapping connection no longer stops playback after five "failed" tracks: it waits and carries on instead.
 - After a change of network (or of address on the same one), the next track's stream link is fetched again right away, and links the change didn't break are kept, so the next track starts sooner.
 - A list that gets no answer from Cyberspace stops loading after 15 seconds and offers Retry, instead of showing placeholders forever.
+- A list that failed during a network switch or behind a Wi-Fi login page reloads by itself when the connection is reported again and when you come back to the app.
 
 ## [1.1.2] - 2026-10-10
 

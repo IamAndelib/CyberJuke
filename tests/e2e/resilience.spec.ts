@@ -1,6 +1,6 @@
 import { expect, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { expectStable, opened, openNowPlaying, openSearch, playerCalls, recordOpens, seedStorage, start, waitForTracks } from '../helpers';
+import { expectStable, opened, openNowPlaying, openSearch, playerCalls, recordOpens, seedStorage, setOffline, setVisibility, start, waitForTracks } from '../helpers';
 
 /**
  * When things go wrong: YouTube limiting the network or changing something (Y1),
@@ -82,12 +82,6 @@ test('"YouTube changed something" links to the releases and can be dismissed', a
   await page.getByTestId('broken-dismiss').click();
   await expect(banner).toHaveCount(0);
 });
-
-/** The device loses (or gets back) its connection: the browser's and the stub backend's. */
-async function setOffline(page: Page, backend: { offline: boolean }, off: boolean): Promise<void> {
-  backend.offline = off;
-  await page.context().setOffline(off);
-}
 
 const BANNER = '[ offline ] no carrier · connect to play';
 const NO_CARRIER = /^\[ NO CARRIER \]Line's deadConnect to the internet to load the Jukebox\.\s*Redial$/;
@@ -339,6 +333,36 @@ test('lists that failed while offline load again when the connection comes back'
   await waitForTracks(page);
   await expect(page.getByTestId('offline')).toHaveCount(0);
   await expect(page.getByTestId('offline-banner')).toHaveCount(0);
+});
+
+test('a list that failed during a handover blip loads again when the OS reports connected', async ({ page, backend }) => {
+  await start(page);
+  // A grace the blip never outlasts: the app never counts as offline, so it never comes back online either.
+  await page.evaluate(() => (window.__cyberjukeOfflineGraceMs = 60_000));
+  await setOffline(page, backend, true);
+  await page.getByTestId('genre-chip').nth(2).click();
+  await expect(page.getByTestId('offline')).toBeVisible();
+  await expect(page.getByTestId('offline-banner')).toHaveCount(0);
+  await setOffline(page, backend, false);
+  // The OS says "connected" again (the Network plugin's report at the end of a handover).
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  // No tap on Redial: the list loads by itself.
+  await waitForTracks(page);
+  await expect(page.getByTestId('offline')).toHaveCount(0);
+});
+
+test('a list that failed behind a Wi-Fi login page loads again when the app comes back to the foreground', async ({ page, backend }) => {
+  await start(page);
+  // The OS says connected, but nothing gets through.
+  backend.offline = true;
+  await page.getByTestId('genre-chip').nth(2).click();
+  await expect(page.getByTestId('offline')).toBeVisible();
+  await expect(page.getByTestId('offline-banner')).toHaveCount(0);
+  backend.offline = false;
+  await setVisibility(page, 'hidden');
+  await setVisibility(page, 'visible');
+  await waitForTracks(page);
+  await expect(page.getByTestId('offline')).toHaveCount(0);
 });
 
 test.describe('a start that fails', () => {

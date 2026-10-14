@@ -183,8 +183,12 @@ async function boot(): Promise<void> {
   startPlayerPrefs();
   applyTheme();
   watchNetwork();
-  // Back online: lists on screen that failed to load try again.
+  // Back online (or told again that we are), and back in the foreground: lists on screen
+  // that failed to load try again.
   onReconnect(() => retryWatchedFeeds());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') retryWatchedFeeds();
+  });
   wireBackButton();
   wireNotificationTap();
   startBlockEvents();
