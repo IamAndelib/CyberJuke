@@ -1,6 +1,6 @@
 import { expect, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { expectStable, opened, openNowPlaying, openSearch, playerCalls, recordOpens, seedStorage, start, waitForTracks } from '../helpers';
+import { bufferedAhead, expectStable, opened, openNowPlaying, openSearch, playerCalls, recordOpens, seedStorage, start, waitForTracks } from '../helpers';
 
 /**
  * When things go wrong: YouTube limiting the network or changing something (Y1),
@@ -274,11 +274,13 @@ test('offline, the paused track resumes; Shuffle says to connect and leaves the 
   await expect(toggle).toHaveAttribute('aria-label', 'Pause');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-label', 'Play');
+  // Paused mid-song, with audio loaded ahead (the fake player may not have started loading yet).
+  await bufferedAhead(page, 30_000);
   const title = await page.getByTestId('mini-title').textContent();
   const queued = (await playerCalls(page)).filter((c) => c[0] === 'setQueue').length;
 
   await setOffline(page, backend, true);
-  // Resuming the current track always goes (native plays what it has buffered).
+  // A paused track with audio loaded resumes, saved or not (native plays what it has buffered).
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-label', 'Pause');
   await expect(page.getByTestId('toast')).toHaveCount(0);

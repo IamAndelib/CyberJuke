@@ -77,7 +77,8 @@ import kotlin.math.roundToInt
  *   the started track (a Global one gets its radio natively, refilled in the service).
  * - state also carries `upNextKinds` (one letter per upNextIds entry: q = queued by you,
  *   l = the list, a = autoplay), `upNextIndex` (K1: each entry's index in the list, always
- *   sent), `context` ({ label, mode } or null) and `seedId`.
+ *   sent), `context` ({ label, mode } or null), `seedId` and `bufferedAheadMs` (how much of the
+ *   current track is loaded past the position; 0 for a restored session not loaded yet).
  * - skipToIndex, removeItem and moveItem take an optional `expectId` (K2: the id the caller
  *   sees at `index` / `from`); if the item there has another id the call rejects with code
  *   STALE_INDEX and nothing changes. Checked in the service, on the player itself.

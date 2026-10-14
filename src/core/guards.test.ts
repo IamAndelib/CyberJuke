@@ -33,8 +33,15 @@ describe('parseNativeState', () => {
       context: { label: 'Liked', mode: 'list' },
       seedId: 'b',
       waitingForNetwork: true,
+      bufferedAheadMs: 4000,
     };
     expect(parseNativeState(st)).toEqual(st);
+  });
+
+  it('has no audio loaded ahead unless native says how much (older natives send nothing)', () => {
+    expect(parseNativeState({ index: -1 })?.bufferedAheadMs).toBe(0);
+    for (const junk of [-1, NaN, Infinity, '5000', null]) expect(parseNativeState({ index: -1, bufferedAheadMs: junk })?.bufferedAheadMs).toBe(0);
+    expect(parseNativeState({ index: -1, bufferedAheadMs: 5000 })?.bufferedAheadMs).toBe(5000);
   });
 
   it('is not waiting for the network unless native says so (older natives send nothing)', () => {
@@ -82,6 +89,7 @@ describe('parseNativeState', () => {
       context: null,
       seedId: null,
       waitingForNetwork: false,
+      bufferedAheadMs: 0,
     });
     expect(parseNativeState(null)).toBeNull();
     expect(parseNativeState([1])).toBeNull();

@@ -173,6 +173,17 @@ describe('NativePlayer: play/pause', () => {
     await p.toggle();
     expect(p.state.value.waitingForNetwork).toBe(false);
   });
+
+  it('keeps how much audio native has loaded ahead (none from an older native, none for a list just started)', async () => {
+    const p = new NativePlayer();
+    emit('state', state({ isPlaying: false, queueIds: ['A'], upNextIds: [], upNextKinds: '', bufferedAheadMs: 30_000 }));
+    expect(p.state.value.bufferedAheadMs).toBe(30_000);
+    emit('state', state({ isPlaying: false, queueIds: ['A'], upNextIds: [], upNextKinds: '' }));
+    expect(p.state.value.bufferedAheadMs).toBe(0);
+    emit('state', state({ isPlaying: false, queueIds: ['A'], upNextIds: [], upNextKinds: '', bufferedAheadMs: 30_000 }));
+    await p.playList([tr('B')], 0);
+    expect(p.state.value.bufferedAheadMs).toBe(0);
+  });
 });
 
 describe('NativePlayer: edits (K2)', () => {
