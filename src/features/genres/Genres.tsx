@@ -54,7 +54,7 @@ export function GenreGrid() {
       right={<GridSortRail sort={genresSort} testid="genres-sort" />}
       azScroller={sort === 'az' && list.length > 0}
     >
-      <OfflineGate>
+      <OfflineGate fill>
         <FavGenres />
         {/* The catalog failed: said so even over the genres seen on Home meanwhile (a part). */}
         {status === 'error' && !complete && (
@@ -65,8 +65,8 @@ export function GenreGrid() {
         ) : status !== 'error' ? (
           <TileSkeleton testid="genre-skeleton" />
         ) : null}
+        <p class="fineprint">Genres are free text chosen by each poster. Tap ☆ to pin a genre to the top.</p>
       </OfflineGate>
-      <p class="fineprint">Genres are free text chosen by each poster. Tap ☆ to pin a genre to the top.</p>
     </Screen>
   );
 }

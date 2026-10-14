@@ -29,9 +29,11 @@ import io.github.iamandelib.cyberjuke.net.NetBlock
 
 /**
  * [Crossfader.Host] over the service's ExoPlayer ([main]). Position messages are the player's
- * own ([PlayerMessage]: delivered as playback passes a position, no timer); the fade-in sets the
- * audio renderer's volume directly, as the player does for its own volume, so a fade raises no
- * volume events (each would be a state event to the page and to every controller).
+ * own ([PlayerMessage]: delivered as playback passes a position, no timer). The fade-in sets the
+ * player's volume ([ExoPlayer.setVolume], applied with the audio focus's ducking), as the tail's
+ * is set and as other players' crossfades do. Its volume events reach the session's controllers:
+ * the notification and the platform session ignore them, and the JukePlayer plugin sends the
+ * page no state for them (bridge/StateEvents).
  */
 @OptIn(UnstableApi::class)
 internal class ExoCrossfadeHost(
@@ -109,20 +111,15 @@ internal class ExoCrossfadeHost(
 
     override fun now(): Long = SystemClock.elapsedRealtime()
 
-    override val baseVolume: Float get() = main.volume
+    override val mainVolume: Float get() = main.volume
 
-    /** Renderer.MSG_SET_VOLUME to the audio renderers, on the playback thread, after anything sent before. */
+    /** Volume steps set, for the debug log. */
+    private var volumeSteps = 0
+
     override fun setMainVolume(v: Float) {
-        val volume = v.coerceIn(0f, 1f)
-        for (i in 0 until main.rendererCount) {
-            if (main.getRendererType(i) != C.TRACK_TYPE_AUDIO) continue
-            send(main.getRenderer(i), volume)
-            main.getSecondaryRenderer(i)?.let { send(it, volume) }
-        }
-    }
-
-    private fun send(renderer: Renderer, volume: Float) {
-        main.createMessage(renderer).setType(Renderer.MSG_SET_VOLUME).setPayload(volume).send()
+        main.volume = v.coerceIn(0f, 1f)
+        // Debug builds only (R8 strips info logs from the others): the fade-in, as the player has it.
+        if (++volumeSteps % LOG_EVERY == 0) Log.i(TAG, "Crossfade main volume ${main.volume}")
     }
 
     override fun advance() = main.seekToNextMediaItem()
@@ -149,6 +146,9 @@ internal class ExoCrossfadeHost(
 
     private companion object {
         const val TAG = "CyberJukeCrossfade"
+
+        /** Every 10th volume step is logged: about two a second. */
+        const val LOG_EVERY = 10
     }
 }
 

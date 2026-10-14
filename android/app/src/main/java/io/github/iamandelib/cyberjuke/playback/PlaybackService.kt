@@ -176,6 +176,13 @@ class PlaybackService : MediaSessionService() {
         object : LikedSaver.Host {
             override fun loadingPair(): Set<String> = loadingIds
 
+            override fun stillLoading(): Set<String> {
+                val p = player ?: return emptySet()
+                val next = p.nextMediaItemIndex
+                val nextId = if (next == C.INDEX_UNSET || next >= p.mediaItemCount) null else JukeUris.ytIdOf(p.getMediaItemAt(next))
+                return PlaybackNeed.stillLoading(loadOf(p), JukeUris.ytIdOf(p.currentMediaItem), nextId)
+            }
+
             override fun playbackNeedsNetwork(): Boolean = player?.let { PlaybackNeed.needsNetwork(loadOf(it)) } == true
         },
     )

@@ -24,6 +24,7 @@
   font-family: var(--font-display);
   font-size: 13px;
   text-align: center;
+  text-wrap: balance;
 }
 /* With liked songs saved: the whole bar opens Liked. */
 .offline-banner-link {

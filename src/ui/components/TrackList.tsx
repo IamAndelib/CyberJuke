@@ -37,7 +37,6 @@ export function Tracks({
   queue,
   hideGenre,
   showSaves,
-  playsOffline,
   chunkKey = null,
 }: {
   tracks: Track[];
@@ -45,8 +44,6 @@ export function Tracks({
   queue?: () => Track[];
   hideGenre?: boolean;
   showSaves?: boolean;
-  /** Which rows play offline (not dimmed then); one function for the list's lifetime. */
-  playsOffline?: (t: Track) => boolean;
   chunkKey?: string | null;
 }) {
   const { shown, sentinel, more } = useChunks(tracks.length, chunkKey);
@@ -55,7 +52,7 @@ export function Tracks({
     <>
       <ul class="list" data-testid="track-list">
         {tracks.slice(0, shown).map((t, i) => (
-          <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} showSaves={showSaves} playsOffline={playsOffline} onPlay={play} />
+          <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} showSaves={showSaves} onPlay={play} />
         ))}
       </ul>
       {more && <div ref={sentinel} class="list-foot" aria-hidden="true" />}

@@ -3,8 +3,8 @@ import { expect, test } from '../fixtures';
 import { playerCalls, seedStorage, start } from '../helpers';
 
 /**
- * The listening cache (native): liked songs saved on the phone play offline, nothing else
- * does, and Settings sets its size. The browser has no cache: the test hook says which liked
+ * The listening cache (native): liked songs saved on the phone play offline, from any list,
+ * nothing else does, and Settings sets its size. The browser has no cache: the test hook says which liked
  * songs native would report as saved.
  */
 
@@ -27,7 +27,7 @@ const NOT_SAVED = 'Not saved yet. Needs a connection.';
 
 const queues = async (page: Page) => (await playerCalls(page)).filter((c) => c[0] === 'setQueue').map((c) => c[1] as { n: number; context: { label: string } });
 
-test('offline, Liked plays its saved songs from the tapped one; unsaved rows are dimmed and say so', async ({ page, backend }) => {
+test('offline, any list plays its saved songs from the tapped one; unsaved rows are dimmed and say so', async ({ page, backend }) => {
   await seedStorage(page, { 'CapacitorStorage.liked': LIKED });
   await page.goto('/');
   await page.getByTestId('tab-library').click();
@@ -63,14 +63,22 @@ test('offline, Liked plays its saved songs from the tapped one; unsaved rows are
   await expect(page.getByTestId('mini-title')).toHaveText('Track l1');
   await expect.poll(async () => (await queues(page)).at(-1)).toEqual({ n: 2, context: { label: 'Liked', mode: 'list' } });
 
-  // Recently played isn't Liked: its rows stay dimmed offline, and its Play points to Liked.
+  // Recently played follows the same rule: a saved liked song is bright there and plays, and
+  // Play plays the saved ones.
   await page.getByTestId('lib-recent').click();
-  const recent = page.getByTestId('recent-list').getByTestId('track-play');
+  const recent = page.getByTestId('recent-list').getByTestId('track-row');
   await expect(recent).toHaveCount(2);
-  for (const play of await recent.all()) await expect(play).toHaveAttribute('aria-disabled', 'true');
+  for (const play of await recent.getByTestId('track-play').all()) await expect(play).not.toHaveAttribute('aria-disabled');
+  const l3 = recent.filter({ hasText: 'Track l3' });
+  await expect(l3).not.toHaveClass(/\boff\b/);
+  // Past the double-tap window since Track l3 was tapped in Liked (it would be ignored).
+  await page.waitForTimeout(500);
+  await l3.getByTestId('track-play').click();
+  await expect(page.getByTestId('mini-title')).toHaveText('Track l3');
+  await expect.poll(async () => (await queues(page)).at(-1)).toEqual({ n: 2, context: { label: 'Recently played', mode: 'list' } });
   await page.getByTestId('lib-play-all').click();
-  await expect(page.getByTestId('toast')).toContainText(TAP_LIKED);
-  await expect(page.getByTestId('mini-title')).toHaveText('Track l1');
+  await expect(page.getByTestId('mini-title')).toHaveText('Track l3');
+  await expect.poll(async () => (await queues(page)).length).toBe(4);
 
   // Back online: every row plays again.
   await setOffline(page, backend, false);

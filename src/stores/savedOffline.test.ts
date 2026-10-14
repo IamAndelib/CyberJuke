@@ -2,7 +2,7 @@ import { effect } from '@preact/signals';
 import { describe, expect, it } from 'vitest';
 import type { Track } from '../data/model';
 import { liked } from './library';
-import { hasSavedLiked, isSaved, savedLiked, savedOffline, savedQueue, setSavedOffline } from './savedOffline';
+import { hasSavedLiked, isSaved, savedLiked, savedOffline, savedQueue, savedTracks, setSavedOffline } from './savedOffline';
 
 const t = (id: string): Track => ({ id, ytId: id.padEnd(11, '0') }) as Track;
 const [a, b, c, d] = ['a', 'b', 'c', 'd'].map(t);
@@ -53,5 +53,11 @@ describe('savedOffline', () => {
     expect(savedQueue([a, b, c, d], 1, saved)).toBeNull();
     expect(savedQueue([a], 5, saved)).toBeNull();
     expect(savedQueue([a, b], 0, new Set())).toBeNull();
+  });
+
+  it('offline, any list plays its saved songs, in order (Play and Shuffle)', () => {
+    const saved = new Set([a.ytId, c.ytId]);
+    expect(savedTracks([d, c, b, a], saved)).toEqual([c, a]);
+    expect(savedTracks([b, d], saved)).toEqual([]);
   });
 });

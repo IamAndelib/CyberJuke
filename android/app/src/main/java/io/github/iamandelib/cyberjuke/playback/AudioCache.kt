@@ -63,9 +63,12 @@ internal object AudioCache {
     val SIZES_MB = listOf(128, 256, 512)
     private const val MB = 1024L * 1024L
 
-    /** The liked songs saved whole changed ([savedLiked]); any thread. */
+    /** The liked songs saved whole changed ([savedLiked]), or the cache was cleared; any thread. */
     fun interface Listener {
         fun onSavedChanged()
+
+        /** Clear cache emptied it. */
+        fun onCleared() = Unit
     }
 
     /** The liked list changed; [fresh]: liked just now. Any thread. */
@@ -259,7 +262,10 @@ internal object AudioCache {
     /** Clear cache (Settings): everything goes. Playback goes on (from the network). */
     fun clear(): Boolean {
         val done = locked { c -> c.keys.toList().forEach { c.removeResource(it) } } != null
-        if (done) Log.i(TAG, "Cleared")
+        if (done) {
+            Log.i(TAG, "Cleared")
+            listeners.forEach { it.onCleared() }
+        }
         return done
     }
 
@@ -382,7 +388,8 @@ internal class CacheMissException : IOException("Not in the listening cache any 
 
 /**
  * [AudioCache.dataSourceFactory]'s sources: a load with a YouTube cache key ([CacheKeys]) goes
- * through the cache (reads what's there, writes what it fetches), anything else (the CI tone,
+ * through the cache (reads what's there, writes what it fetches, also when the response doesn't
+ * say its length: [CacheKeys.cacheFlags]), anything else (the CI tone,
  * HLS) straight to the upstream, as does a members-only video while signed out or one whose
  * copy was just found missing or unreadable ([AudioCache.misses]). Without a cache,
  * everything goes straight. A cache read error is not hidden (no FLAG_IGNORE_CACHE_ON_ERROR): the
@@ -405,7 +412,8 @@ internal class CacheRouter(private val cached: DataSource?, private val plain: D
             CacheKeys.ytIdOf(key)?.let { AudioCache.isDenied(it) || AudioCache.misses.recent(it) } != true
         val ds = if (viaCache) cached else plain
         current = ds
-        return ds.open(dataSpec)
+        // Cached even when the response has no length ([CacheKeys.cacheFlags]).
+        return ds.open(if (viaCache) dataSpec.buildUpon().setFlags(CacheKeys.cacheFlags(dataSpec.flags)).build() else dataSpec)
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int =

@@ -109,6 +109,26 @@ function ToastItem({ id, text, action }: { id: number; text: string; action?: st
     return () => node.removeEventListener('touchmove', cancel);
   }, []);
 
+  // Wrapped, a box stays as wide as the room it had, and CSS can't shrink it to its lines
+  // (CSSWG #12505): narrow it to the longest line, measured with a Range as
+  // react-wrap-balancer does. Again when the window resizes (a turn of the phone).
+  useLayoutEffect(() => {
+    const node = el.current;
+    const line = node?.firstElementChild;
+    if (!node || !line) return;
+    const fit = () => {
+      node.style.width = '';
+      const range = document.createRange();
+      range.selectNodeContents(line);
+      const lines = Array.from(range.getClientRects(), (r) => r.width);
+      const spare = lines.length ? line.getBoundingClientRect().width - Math.max(...lines) : 0;
+      if (spare >= 1) node.style.width = `${Math.ceil(node.getBoundingClientRect().width - spare)}px`;
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [text]);
+
   const place = (dx: number, animate: boolean) => {
     const node = el.current;
     if (!node) return;

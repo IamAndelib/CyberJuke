@@ -267,7 +267,8 @@ internal class TailAlign {
  *   to the next track ([Host.advance]) and the fade runs.
  *
  * Steps every [CrossfadePlan.STEP_MS] are the only timer, only from the preroll to the fade's
- * end. Volumes are relative to the main player's own volume, read at each step.
+ * end. Both players' volumes are set the public way ([Host.setMainVolume], [Tail.setVolume]),
+ * relative to the main player's own volume, read at the swap (from then on the fade sets it).
  *
  * A pause, seek, skip, stop, a new current track, a call or other loss of audio focus, a stall
  * of the outgoing track or a tail error before the fade stops it at once: the tail goes, its step
@@ -305,10 +306,13 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
 
         fun now(): Long
 
-        /** The main player's own volume (its setting, 1 unless something changed it). */
-        val baseVolume: Float
+        /**
+         * The main player's volume: its own outside a fade (1 unless something changed it),
+         * what the fade set during one.
+         */
+        val mainVolume: Float
 
-        /** The main player's output volume, as a fade sets it (not its volume setting: no events). */
+        /** Sets the main player's volume, as the tail's is set. */
         fun setMainVolume(v: Float)
 
         /** The main player moves on to its next track. */
@@ -365,6 +369,12 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
     private var startAtMs = 0L
     private var swapAt = 0L
     private var startedAt = 0L
+
+    /**
+     * The main player's own volume, read at the swap (the fade sets it from then on): the fade's
+     * volumes are relative to it, and [stop] puts it back.
+     */
+    private var base = 1f
 
     /** Inside our own [Host.advance]: its events are ours, not the user's. */
     private var advancing = false
@@ -551,6 +561,7 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
             stop()
             return
         }
+        base = host.mainVolume
         phase = Phase.SWAP
         swapAt = host.now()
     }
@@ -565,14 +576,12 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
                 if (s is TailAlign.Step.Seek) t.seekTo(s.toMs)
             }
             Phase.SWAP -> {
-                val base = host.baseVolume
                 val s = CrossfadePlan.progress(host.now(), swapAt, CrossfadePlan.SWAP_MS)
                 t?.setVolume(base * s)
                 host.setMainVolume(base * (1f - s))
                 if (s >= 1f && !handOver()) return
             }
             Phase.FADING -> {
-                val base = host.baseVolume
                 val p = CrossfadePlan.progress(host.now(), startedAt, fadeMs)
                 if (p >= 1f) {
                     finish()
@@ -613,7 +622,7 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         if (!primePending) arm()
     }
 
-    /** Ends any fade at once: the tail goes, its step too, and the main player is at full volume. */
+    /** Ends any fade at once: the tail goes, its step too, and the main player is at its own volume again. */
     private fun stop() {
         host.remove(stepTask)
         val t = tail
@@ -621,7 +630,7 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         val touchedMain = phase == Phase.SWAP || phase == Phase.FADING
         phase = Phase.NONE
         t?.release()
-        if (touchedMain) host.setMainVolume(host.baseVolume)
+        if (touchedMain) host.setMainVolume(base)
     }
 
     private companion object {

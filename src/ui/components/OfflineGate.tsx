@@ -16,6 +16,8 @@ export function OfflineState({
   onRedial,
   alert,
   compact,
+  fill,
+  appear,
   testid = 'offline',
 }: {
   body?: string;
@@ -23,6 +25,10 @@ export function OfflineState({
   /** A request that just failed (not the device going offline, which the banner says). */
   alert?: boolean;
   compact?: boolean;
+  /** Alone on its screen: in the middle of the space under the top bar. */
+  fill?: boolean;
+  /** Fades in. */
+  appear?: boolean;
   testid?: string;
 }) {
   const [busy, setBusy] = useState(false);
@@ -43,7 +49,7 @@ export function OfflineState({
     if (live.current) setBusy(false);
   };
   return (
-    <div class={'state' + (compact ? ' compact' : '')} data-testid={testid} role={alert ? 'alert' : undefined}>
+    <div class={'state' + (compact ? ' compact' : '') + (fill ? ' fill' : '') + (appear ? ' appear' : '')} data-testid={testid} role={alert ? 'alert' : undefined}>
       <div class="state-glyph" aria-hidden="true">
         {OFFLINE.glyph}
       </div>
@@ -58,9 +64,14 @@ export function OfflineState({
 
 /**
  * Offline nothing plays, so a list that only leads to music shows the offline state
- * instead of its rows. Back online it shows them again by itself (from memory when
- * they were loaded; a load that failed meanwhile is retried on reconnect).
+ * instead of its rows, when it opens offline. Once it has shown its rows it keeps them
+ * (they dim, and a tap says to connect), so losing the connection takes nothing off the
+ * screen. Opened offline, it shows its rows as soon as the connection is back (a load
+ * that failed meanwhile is retried on reconnect). `fill`: the state is all the screen
+ * shows, so it sits in the middle.
  */
-export function OfflineGate({ children, body }: { children: ComponentChildren; body?: string }) {
-  return online.value ? <>{children}</> : <OfflineState body={body} />;
+export function OfflineGate({ children, body, fill }: { children: ComponentChildren; body?: string; fill?: boolean }) {
+  const shown = useRef(false);
+  if (online.value) shown.current = true;
+  return shown.current ? <>{children}</> : <OfflineState body={body} fill={fill} appear />;
 }

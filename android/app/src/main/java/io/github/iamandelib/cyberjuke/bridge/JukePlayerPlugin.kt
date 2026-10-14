@@ -165,6 +165,7 @@ class JukePlayerPlugin : Plugin() {
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             val c = controller ?: return
+            if (!StateEvents.changeState(events.size(), events::get)) return
             if (events.contains(Player.EVENT_TIMELINE_CHANGED)) {
                 queueDirty = true
                 announceTracks(c)
@@ -831,11 +832,16 @@ class JukePlayerPlugin : Plugin() {
         upkeep(call, "signedOut") { AudioCache.signedOut() }
     }
 
-    /** `signedIn()`: members-only audio may be cached again. */
+    /**
+     * `signedIn()`: members-only audio may be cached again. Queued behind any `signedOut()` like
+     * the rest of the upkeep, so a quick sign-out and sign-in can't end signed out.
+     */
     @PluginMethod
     fun signedIn(call: PluginCall) {
-        AudioCache.signedIn()
-        call.resolve()
+        upkeep(call, "signedIn") {
+            AudioCache.signedIn()
+            true
+        }
     }
 
     /** `cachedIds()`: `{ ytIds }`, the liked songs saved whole (they play offline). */
