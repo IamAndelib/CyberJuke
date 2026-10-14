@@ -1,19 +1,20 @@
 import { expect, test } from '../../fixtures';
-import { clockStart, openNowPlaying, openSearch, playerCalls, runFor } from '../../helpers';
+import { clockStart, fakeYt, openNowPlaying, openSearch, playerCalls, recordToasts, runFor, toastsSeen } from '../../helpers';
 
 /**
  * An evening with an album from Global: found, played from the top, and left alone. Each track
- * ends by itself (the fake player's clock, run forward), the next one follows, and the night's
- * listening lands in Recently played. The list is sent to the player once, and so are the
- * player settings.
+ * ends by itself (the fake player's clock, run forward), the next one follows; one of them has
+ * gone from YouTube and is skipped with a word. The evening's listening lands in Recently
+ * played. The list is sent to the player once, and so are the player settings.
  */
 
 /** One track of the fake player, from its start (71 s in) to its end (247 s), plus its start-up. */
 const TRACK_MS = 177_000;
 
-test('an album plays through by itself: Up next shrinks, Recently played fills, the list and the settings are sent once', async ({ page }) => {
+test('an album plays through by itself, one track skipped: Up next shrinks, Recently played fills, the list and the settings are sent once', async ({ page }) => {
   await clockStart(page);
   await page.goto('/');
+  await recordToasts(page);
   await openSearch(page);
   await page.getByTestId('search-input').fill('Night Owl');
   await page.getByTestId('mode-global').click();
@@ -31,8 +32,10 @@ test('an album plays through by itself: Up next shrinks, Recently played fills, 
   await expect(page.getByTestId('upnext-list-label')).toContainText('Next from:');
   await page.getByTestId('np-close').click();
   // Left alone (the screen off), each track ends by itself; a look at Now Playing between two.
+  // The second track is gone from YouTube: the player says so once and moves on.
   for (let i = 1; i <= 3; i++) {
-    await runFor(page, TRACK_MS);
+    if (i === 2) await fakeYt(page, 'error', 150);
+    else await runFor(page, TRACK_MS);
     await expect(page.getByTestId('mini-title')).toHaveText(titles[i]);
     await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Pause');
     await openNowPlaying(page);
@@ -40,7 +43,7 @@ test('an album plays through by itself: Up next shrinks, Recently played fills, 
     await expect(listRows).toHaveCount(7 - i);
     await page.getByTestId('np-close').click();
   }
-  await expect(page.getByTestId('toast')).toHaveCount(0);
+  expect(await toastsSeen(page)).toEqual([`Skipped "${titles[1]}": unavailable`]);
 
   // Recently played: the four tracks heard, newest first.
   await page.getByTestId('tab-library').click();

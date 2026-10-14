@@ -1,5 +1,5 @@
 import { expect, test } from '../../fixtures';
-import { clockStart, isFeedQuery, playOn, recordToasts, runFor, setVisibility, start, toastsSeen, waitForTracks } from '../../helpers';
+import { clockStart, homeSettled, isFeedQuery, playOn, recordToasts, runFor, setVisibility, start, toastsSeen, tracksEndedIn, waitForTracks } from '../../helpers';
 
 /**
  * An hour with the phone in the pocket, screen locked, music on. In the background the app
@@ -15,6 +15,8 @@ test('an hour locked: nothing is asked in the background; on return one check, o
   const title = (await page.getByTestId('track-title').first().textContent())!.trim();
   await page.getByTestId('track-play').first().click();
   await expect(page.getByTestId('mini-title')).toHaveText(title);
+  // The start-up's own requests (the catalog) are done: what is dropped below is the genre page's.
+  await homeSettled(page, backend);
   // A genre page that failed just before (both tries lost in a handover): it shows no carrier.
   const home = page.getByTestId('screen-home');
   backend.failNext = 2;
@@ -24,8 +26,9 @@ test('an hour locked: nothing is asked in the background; on return one check, o
   const asked = backend.queries.length;
 
   // Screen locked, an hour passes.
+  const HOUR = 61 * 60_000;
   await setVisibility(page, 'hidden');
-  await playOn(page, 61 * 60_000);
+  await playOn(page, HOUR);
   expect(backend.queries.length, 'requests while in the background').toBe(asked);
   // The music played on, through about twenty tracks.
   await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Pause');
@@ -46,7 +49,8 @@ test('an hour locked: nothing is asked in the background; on return one check, o
   expect(limits()).toEqual([24, 25, 300]);
   await page.getByTestId('tab-library').click();
   await page.getByTestId('lib-recent').click();
+  // Recently played: the track that was playing and every one that followed it.
   const count = Number(/(\d+)/.exec((await page.getByTestId('lib-recent').textContent())!)![1]);
-  expect(count).toBeGreaterThanOrEqual(20);
+  expect(count).toBe(tracksEndedIn(HOUR) + 1);
   expect(await toastsSeen(page)).toEqual([]);
 });

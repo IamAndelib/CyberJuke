@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../../fixtures';
 import { clockStart, isFeedQuery, openNowPlaying, playOn, recordToasts, seedStorage, toastsSeen, tracksEndedIn } from '../../helpers';
+import { UP_NEXT_MAX } from '../../../src/core/guards';
 
 /**
  * A night of music from Liked: sixty liked songs (about three hours), then autoplay carries
@@ -47,8 +48,12 @@ test('four hours of Liked, then autoplay: no message, the history pruned, the li
   await page.getByTestId('lib-liked').click();
   await page.getByTestId('lib-play-all').click();
   await expect(page.getByTestId('mini-title')).toHaveText('Liked 0');
-  // Up next tells of the first 50 to come (the rest of the list, and the autoplay picks behind it, wait their turn).
-  await expect.poll(async () => (await queueState(page)).list.length).toBe(50);
+  // Up next shows the first UP_NEXT_MAX of what is to come, however long the queue (59 of the
+  // list alone, and the autoplay picks behind them).
+  await expect.poll(async () => (await queueState(page)).list.length).toBe(UP_NEXT_MAX);
+  await openNowPlaying(page);
+  await expect(page.getByTestId('upnext-row')).toHaveCount(UP_NEXT_MAX);
+  await page.getByTestId('np-close').click();
   const queriesBefore = backend.queries.length;
 
   // The night, in four hours.
@@ -70,13 +75,6 @@ test('four hours of Liked, then autoplay: no message, the history pruned, the li
   expect(overnight.length).toBeLessThanOrEqual(HOURS * 4 + 1);
   expect(overnight.every((x) => x.limit === 25)).toBe(true);
   expect(overnight.some((x) => isFeedQuery(x) || x.limit === 300)).toBe(false);
-
-  // Up next shows a bounded number of rows however long the queue got.
-  await openNowPlaying(page);
-  const upnext = page.getByTestId('upnext-row');
-  expect(await upnext.count()).toBeGreaterThan(0);
-  expect(await upnext.count()).toBeLessThanOrEqual(50);
-  await page.getByTestId('np-close').click();
 
   // Recently played: the night's plays (each track once) on top of the 100 old ones kept, rendered 60 rows at a time.
   await page.getByTestId('tab-library').click();

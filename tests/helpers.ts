@@ -157,8 +157,30 @@ export const recordToasts = (page: Page) =>
   });
 export const toastsSeen = (page: Page) => page.evaluate(() => (window as unknown as { __toastsSeen?: string[] }).__toastsSeen ?? []);
 
-/** The fake YouTube player (the fixture's hook): the current track stalls, resumes, ends or fails. */
-export const fakeYt = (page: Page, action: 'stall' | 'resume' | 'end') => page.evaluate((a) => window.__cyberjukeYt[a](), action);
+/**
+ * The fake YouTube player (the fixture's hook): the current track stalls, resumes, ends, or fails
+ * with a player error `code` (100, 101, 150: removed, private or not embeddable; the app skips it).
+ */
+export const fakeYt = (page: Page, action: 'stall' | 'resume' | 'end' | 'error', code = 150) =>
+  page.evaluate(([a, c]) => (a === 'error' ? window.__cyberjukeYt.error(c) : window.__cyberjukeYt[a]()), [action, code] as const);
+
+/**
+ * Home has settled after the start: the catalog's idle load (the 300-row pages that follow the
+ * first screen) has been answered and the genre chips are the catalog's 24. Before a test counts
+ * requests or drops them (`failNext`), and before it reads a chip then taps it.
+ */
+export async function homeSettled(page: Page, backend: { queries: { limit?: number }[] }): Promise<void> {
+  await expect.poll(() => backend.queries.some((q) => q.limit === 300)).toBe(true);
+  await expect(page.getByTestId('genre-chip')).toHaveCount(24);
+}
+
+/** Tap Home's i-th genre chip and return the genre it stands for (read off the pressed chip). */
+export async function pickGenre(page: Page, i: number): Promise<string> {
+  await page.getByTestId('genre-chip').nth(i).click();
+  const pressed = page.locator('[data-testid="genre-chip"][aria-pressed="true"]');
+  await expect(pressed).toHaveCount(1);
+  return (await pressed.getAttribute('data-genre'))!;
+}
 
 /** What native would report in a `trackError` about the current track (the web player's hook). */
 export const trackError = (page: Page, e: { skipped?: boolean; kind?: string; resumes?: boolean }) => page.evaluate((v) => window.__cyberjukeTrackError(v), e);

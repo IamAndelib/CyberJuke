@@ -1,5 +1,5 @@
 import { expect, test } from '../../fixtures';
-import { clockStart, isFeedQuery, runFor, start, waitForTracks } from '../../helpers';
+import { clockStart, homeSettled, isFeedQuery, pickGenre, runFor, start, waitForTracks } from '../../helpers';
 
 /**
  * Browsing the Jukebox on a slow connection (a train, a crowded cell). The backend's `delay`
@@ -11,15 +11,15 @@ import { clockStart, isFeedQuery, runFor, start, waitForTracks } from '../../hel
 test('slow answers show a skeleton, then the rows; one that never comes offers Retry; nothing is asked twice', async ({ page, backend }) => {
   await clockStart(page);
   await start(page);
+  // The catalog has loaded (else the delay below would hold it, and the chips would change under the finger).
+  await homeSettled(page, backend);
   const home = page.getByTestId('screen-home');
-  const chips = page.getByTestId('genre-chip');
   /** The feed requests (24 rows) for a genre, by name. */
   const requestsFor = (genre: string) => backend.queries.filter((q) => isFeedQuery(q) && JSON.stringify(q.where).includes(`"${genre}"`)).length;
 
   // Five-second round trips: the skeleton, then the rows. One request.
   backend.delay = 5000;
-  const genre1 = (await chips.nth(1).textContent())!.trim();
-  await chips.nth(1).click();
+  const genre1 = await pickGenre(page, 1);
   await expect(home.locator('[data-testid="skeleton"]:visible').first()).toBeVisible();
   await expect(home.getByTestId('error')).toHaveCount(0);
   await waitForTracks(page);
@@ -28,8 +28,7 @@ test('slow answers show a skeleton, then the rows; one that never comes offers R
   // Longer than the app waits: it stops at 15 s and says so, with Retry (still one request:
   // a slow answer isn't a lost one).
   backend.delay = 16_000;
-  const genre2 = (await chips.nth(2).textContent())!.trim();
-  await chips.nth(2).click();
+  const genre2 = await pickGenre(page, 2);
   await expect(home.locator('[data-testid="skeleton"]:visible').first()).toBeVisible();
   await runFor(page, 15_100);
   const error = home.getByTestId('error');

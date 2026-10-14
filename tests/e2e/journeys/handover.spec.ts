@@ -1,5 +1,5 @@
 import { expect, test } from '../../fixtures';
-import { fakeYt, isFeedQuery, playerCalls, start, waitForTracks, waitingForNetwork } from '../../helpers';
+import { fakeYt, homeSettled, isFeedQuery, pickGenre, playerCalls, start, waitForTracks, waitingForNetwork } from '../../helpers';
 
 /**
  * Leaving Wi-Fi for mobile data, twice, with music playing and the Jukebox being browsed. The
@@ -16,16 +16,16 @@ test('two handovers: a dropped request is retried by itself; a list that failed 
   const title = (await page.getByTestId('track-title').first().textContent())!.trim();
   await page.getByTestId('track-play').first().click();
   await expect(page.getByTestId('mini-title')).toHaveText(title);
+  // The start-up's own requests (the catalog) are done: what is dropped below is the genre page's.
+  await homeSettled(page, backend);
   const home = page.getByTestId('screen-home');
-  const chips = page.getByTestId('genre-chip');
   /** The feed requests (24 rows) for a genre, by name. */
   const requestsFor = (genre: string) => backend.queries.filter((q) => isFeedQuery(q) && JSON.stringify(q.where).includes(`"${genre}"`)).length;
 
   // The first handover: the genre page's request is lost in the gap. It is sent again a
   // second later, and the rows come as if nothing had happened.
-  const genre1 = (await chips.nth(1).textContent())!.trim();
   backend.failNext = 1;
-  await chips.nth(1).click();
+  const genre1 = await pickGenre(page, 1);
   await waitForTracks(page);
   expect(requestsFor(genre1)).toBe(2);
   await expect(home.getByTestId('offline')).toHaveCount(0);
@@ -33,9 +33,8 @@ test('two handovers: a dropped request is retried by itself; a list that failed 
   await expect(page.getByTestId('toast')).toHaveCount(0);
 
   // The second one takes longer: both tries are lost, and the music stalls meanwhile.
-  const genre2 = (await chips.nth(2).textContent())!.trim();
   backend.failNext = 2;
-  await chips.nth(2).click();
+  const genre2 = await pickGenre(page, 2);
   await fakeYt(page, 'stall');
   await waitingForNetwork(page, true);
   await expect(home.getByTestId('offline')).toBeVisible();

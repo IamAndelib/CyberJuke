@@ -1,5 +1,5 @@
 import { expect, test } from '../../fixtures';
-import { clockStart, fakeYt, playerCalls, runFor, setOffline, start, trackError, waitForTracks, waitingForNetwork } from '../../helpers';
+import { clockStart, fakeYt, playerCalls, recordToasts, runFor, setOffline, start, toastsSeen, trackError, waitForTracks, waitingForNetwork } from '../../helpers';
 
 /**
  * A commute: music on, the phone drifting from Wi-Fi to mobile data, then through a tunnel.
@@ -14,6 +14,7 @@ const BANNER = '[ offline ] no carrier · connect to play';
 test('a commute: a handover changes nothing; a tunnel pauses the music, which picks up, with the list, once out', async ({ page, backend }) => {
   await clockStart(page);
   await start(page);
+  await recordToasts(page);
   // The usual grace (the fixture turns it off): a lost connection counts after 3 s.
   await page.evaluate(() => (window.__cyberjukeOfflineGraceMs = 3000));
   const title = (await page.getByTestId('track-title').first().textContent())!.trim();
@@ -27,7 +28,7 @@ test('a commute: a handover changes nothing; a tunnel pauses the music, which pi
   await setOffline(page, backend, false);
   await runFor(page, 5000);
   await expect(page.getByTestId('offline-banner')).toHaveCount(0);
-  await expect(page.getByTestId('toast')).toHaveCount(0);
+  expect(await toastsSeen(page)).toEqual([]);
   await expect(page.getByTestId('mini-title')).toHaveText(title);
 
   // The tunnel: the stream stalls, and the connection is gone for longer than the grace.
@@ -59,4 +60,6 @@ test('a commute: a handover changes nothing; a tunnel pauses the music, which pi
   await expect(home.getByTestId('offline')).toHaveCount(0);
   await expect(page.getByTestId('mini-title')).toHaveText(title);
   expect((await playerCalls(page)).filter((c) => c[0] === 'setQueue')).toHaveLength(1);
+  // The one message of the whole trip.
+  expect(await toastsSeen(page)).toEqual([`Signal lost. "${title}" picks up when you're back.`]);
 });
