@@ -39,6 +39,12 @@ test('while native waits for the network, "Waiting for carrier…" replaces the 
   await playAndOpen(page, 0);
   await expect(page.getByTestId('time-pos')).toBeVisible();
   await expect(page.getByTestId('np-waiting')).toHaveCount(0);
+  // A blip (a saved song buffering from the cache, a handover being checked) is never shown.
+  await waiting(true);
+  await page.waitForTimeout(400);
+  await waiting(false);
+  await page.waitForTimeout(1200);
+  await expect(page.getByTestId('np-waiting')).toHaveCount(0);
   await waiting(true);
   await expect(page.getByTestId('np-waiting')).toHaveText('Waiting for carrier…');
   await expect(page.getByTestId('np-waiting')).toHaveAttribute('role', 'status');
