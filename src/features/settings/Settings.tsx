@@ -589,7 +589,7 @@ export function Settings() {
           <div class="setting-text">
             <div class="setting-name">Gapless playback</div>
             <div class="setting-desc" id="gapless-desc">
-              Tracks follow each other without a pause. Off, the next track loads when this one ends (a short pause between tracks; a skip costs little data). Crossfade always readies the next track early.
+              Tracks follow each other without a pause.
             </div>
           </div>
           <Toggle on={s.gapless} onChange={(v) => updateSettings({ gapless: v })} label="Gapless playback" describedBy="gapless-desc" testid="gapless-toggle" />

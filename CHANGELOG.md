@@ -17,6 +17,7 @@
 - A song saved on the phone plays from there on Auto and Low whatever quality it was saved at, also right after the app restarts; only High downloads it again when the saved copy is well below the best quality.
 - A liked song whose save fails (the connection dropped) is tried again later by itself, waiting longer each time (30 seconds, then 1, 2 and 4 minutes), and is given up on after five failed tries until the app is next opened.
 - Offline, the liked songs already saved play from any list (Liked, Recently played, Home, an album…), from the one you tap, and stand out bright; the rest is dimmed, and a liked song not saved yet says "Not saved yet. Needs a connection." The top bar reads "no carrier · your liked songs still play" and opens Liked, and anything else you try to play says so, with a button to Liked. With nothing saved yet, it asks you to connect, as before.
+- Now Playing says when there's no connection, and offers your saved liked songs.
 - Offline, a paused song resumes, saved or not, as long as some of it is already loaded: it plays that (and says "Signal lost" if it runs out). The song the app reopens on has nothing loaded yet, so offline it is dimmed like any other song that isn't saved, and Play says why instead of trying. Starting another song needs it saved.
 - **Crossfade** (Settings → Crossfade): the end of a track blends into the next, over 3, 6 or 10 seconds. Off by default. It fades only when a track ends by itself: a skip, Repeat one, or a moment without connection changes tracks the usual way, and short tracks get a shorter fade.
 - Settings → **Gapless playback** (on): the next track is readied while this one plays and they follow without a pause. Off, the next track loads only when this one ends, with a short pause between tracks, so a skip costs little data. Crossfade always readies the next track early, and with it on, two tracks of the same album go straight into each other instead of fading.
@@ -29,6 +30,7 @@
 - A list that failed during a network switch or behind a Wi-Fi login page reloads by itself when the connection is reported again and when you come back to the app.
 - A request that fails outright is tried once more, a second later, before the list gives up.
 - A listening cache that can't be read or written (the phone's storage full, a damaged file) no longer stops the track: it plays on from the network.
+- Album art that couldn't load while offline loads once you're back online.
 
 ### Repository
 - Eight "day in the life" tests run the browser build the way a day with the app goes: a commute through a tunnel, a Wi-Fi to mobile data handover, an album left playing, a sign-out while a liked song is still being saved, a night of Liked songs, an hour with the screen locked, slow browsing, and a café Wi-Fi with a login page. Hours pass on a faked clock, so each takes seconds.

@@ -40,9 +40,14 @@ function commandFailed(message: string): void {
 /** Opens Library → Liked (the app sets it: the player can't reach the screens). */
 let openLiked: (() => void) | null = null;
 
-/** Where the offline toast's Liked button goes. */
+/** Where the offline toast's Liked button (and the offline line, ui/components/OfflineLine) goes. */
 export function setOpenLiked(open: () => void): void {
   openLiked = open;
+}
+
+/** Opens Library → Liked (closing Now Playing first): for screens that can't import the Library. */
+export function goToLiked(): void {
+  openLiked?.();
 }
 
 /**

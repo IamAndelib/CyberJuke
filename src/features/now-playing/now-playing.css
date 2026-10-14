@@ -186,6 +186,14 @@
   font-size: 12px;
   color: var(--color-fg-dim);
 }
+/* Offline: the offline line (ui/ui.css) as a small chip under the source, since the sheet
+   covers the bar at the top. */
+.np-offline {
+  align-self: center;
+  max-width: 100%;
+  margin-top: 4px;
+  padding: 2px 8px;
+}
 .np-art {
   margin: 8px calc(var(--gutter) + 18px) 26px calc(var(--gutter) + 8px);
   max-width: 420px;

@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { bufferedAhead, playerCalls, seedStorage, setOffline, start } from '../helpers';
+import { bufferedAhead, openNowPlaying, playAndOpen, playerCalls, seedStorage, setOffline, start } from '../helpers';
 
 /**
  * The listening cache (native): liked songs saved on the phone play offline, from any list,
@@ -166,6 +166,35 @@ test('offline, the track the app reopened on is dimmed and asks to connect unles
   await expect(rows.nth(0)).not.toHaveClass(/\boff\b/);
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-label', 'Pause');
+});
+
+test('offline, Now Playing says so too: with liked songs saved its line opens Liked; with none it asks to connect', async ({ page, backend }) => {
+  await seedStorage(page, { 'CapacitorStorage.liked': LIKED });
+  await start(page);
+  await playAndOpen(page);
+  // Online: no line.
+  await expect(page.getByTestId('np-offline')).toHaveCount(0);
+
+  // Offline with nothing saved: it asks to connect (the bar at the top is covered by the sheet).
+  await setOffline(page, backend, true);
+  const line = page.getByTestId('np-offline');
+  await expect(line).toHaveText(BANNER);
+  await expect(line).toHaveAttribute('role', 'status');
+  await expect(page.getByTestId('np-offline-liked')).toHaveCount(0);
+
+  // With a liked song saved: they still play, and a tap closes the sheet and opens Liked.
+  await saved(page, ['abcdefghij2']);
+  await expect(page.getByTestId('np-offline-liked')).toHaveText(BANNER_LIKED);
+  await page.getByTestId('np-offline-liked').click();
+  await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
+  await expect(page.getByTestId('screen-library')).toBeVisible();
+  await expect(page.getByTestId('lib-liked')).toHaveAttribute('aria-selected', 'true');
+
+  // Back online: gone.
+  await openNowPlaying(page);
+  await expect(page.getByTestId('np-offline-liked')).toBeVisible();
+  await setOffline(page, backend, false);
+  await expect(page.getByTestId('np-offline')).toHaveCount(0);
 });
 
 test('Settings → Listening cache: 256 MB by default, three sizes sent to the player and kept, and Clear cache', async ({ page }) => {
