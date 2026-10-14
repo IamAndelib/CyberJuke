@@ -133,6 +133,7 @@ internal object JukeTracks {
             .setTitle(o.str("title"))
             .setArtist(o.str("artist"))
             // The album it was opened from, if any: Crossfade leaves two tracks of one album alone.
+            // Read back for the last session and the `tracks` event, so the rule survives a restart.
             .setAlbumTitle(o.str("album"))
             .setArtworkUri(o.str("artworkUrl")?.takeIf { SessionPolicy.isAllowedArtwork(it) }?.let { Uri.parse(it) })
             .setExtras(extras)

@@ -1128,6 +1128,7 @@ class PlaybackService : MediaSessionService() {
                     by = extra?.by,
                     postUrl = extra?.postUrl,
                     membersOnly = extra?.membersOnly == true,
+                    album = item.mediaMetadata.albumTitle?.toString(),
                     section = when {
                         serial != 0L && serial in pending -> NativeQueue.Section.QUEUED
                         extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) == true -> NativeQueue.Section.AUTO

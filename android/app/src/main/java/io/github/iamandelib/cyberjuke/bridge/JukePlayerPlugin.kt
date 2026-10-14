@@ -1104,6 +1104,7 @@ class JukePlayerPlugin : Plugin() {
             extra?.by?.let { o.put("by", it) }
             extra?.postUrl?.let { o.put("postUrl", it) }
             if (extra?.membersOnly == true) o.put("membersOnly", true)
+            item.mediaMetadata.albumTitle?.toString()?.let { o.put("album", it) }
             arr.put(o)
         }
         if (announcedTracks.size > MAX_ANNOUNCED) announcedTracks.clear()

@@ -145,6 +145,20 @@ describe('NativePlayer: a session native restored after a restart', () => {
     expect(p.state.value.upNext[0].track.title).toBe('Title B');
   });
 
+  it("keeps a restored track's album (a string only), so the same-album rule survives a restart", () => {
+    const p = new NativePlayer();
+    emit('tracks', {
+      tracks: [
+        { id: 'M', ytId: tr('M').ytId, title: 'One', artist: 'Y', artworkUrl: '', album: 'Blue Lines' },
+        { id: 'B', ytId: tr('B').ytId, title: 'Two', artist: 'Y', artworkUrl: '', album: 7 },
+        { id: 'C', ytId: tr('C').ytId, title: 'Three', artist: 'Y', artworkUrl: '' },
+      ],
+    });
+    emit('state', state({ trackId: 'M', queueIds: ['M', 'B', 'C'], upNextIds: ['B', 'C'], upNextKinds: 'll', upNextIndex: [1, 2] }));
+    expect(p.state.value.current?.album).toBe('Blue Lines');
+    expect(p.state.value.upNext.map((u) => 'album' in u.track)).toEqual([false, false]);
+  });
+
   it('sends members-only to native, so a restored session still knows it', () => {
     expect(toNative(tr('M', { membersOnly: true })).membersOnly).toBe(true);
     expect('membersOnly' in toNative(tr('A'))).toBe(false);

@@ -29,6 +29,7 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] Gapless playback **off**, Crossfade at **6 s**: the tracks fade into each other as with Gapless on (a fade needs the next track ready early, so the description says off doesn't apply then); no pause.
 - [ ] Gapless playback **on**, Crossfade at **6 s**, play a Global **album**: its tracks go straight into each other, no fade. The last track of the album fades into what autoplay plays next; a Global playlist or a Jukebox list fades between every pair.
 - [ ] Gapless playback **off**, Crossfade at **6 s**, the same album: it fades between the album's tracks.
+- [ ] Gapless playback **on**, Crossfade at **6 s**, mid-album: swipe the app away from recent apps and reopen it. The restored album's tracks still go straight into each other, as before the restart.
 
 What "gapless" does not do: the app inserts nothing between two tracks, but Media3 leaves the codec's own padding, some 10 to 50 ms, on YouTube's streams (its fMP4 reader turns no edit list into gapless info; Opus's tail padding is only trimmed in offload). A very tight musical join may still be heard as a tiny bump; no player built on these does better. Media3's own preloading of the next item (`setPreloadConfiguration`) isn't used: the app already buffers the next track ahead.
 - [ ] Settings → **IPv4**: Always, then Off, then back to **Auto**: tracks play each time.
