@@ -1,12 +1,11 @@
 import { signal } from '@preact/signals';
 import { describe, expect, it, vi } from 'vitest';
 import type { Track } from '../data/model';
-import { LIKED_LABEL } from '../stores/savedOffline';
 import { offlineGuard } from './offlineGuard';
 import { EMPTY_STATE, type Player, type PlayerState } from './types';
 
 /** A player whose every command is a mock, and a guard that is online until told otherwise. */
-function setup(state: Partial<PlayerState> = {}, saved: string[] = []) {
+function setup(state: Partial<PlayerState> = {}, saved: string[] = [], liked: string[] = []) {
   const cmd = () => vi.fn((..._a: unknown[]): Promise<void> => Promise.resolve());
   const inner = {
     kind: 'web',
@@ -37,13 +36,14 @@ function setup(state: Partial<PlayerState> = {}, saved: string[] = []) {
   } satisfies Player;
   let up = true;
   const refused = vi.fn();
-  const p = offlineGuard(inner, { online: () => up, saved: () => new Set(saved), refuse: refused });
+  const p = offlineGuard(inner, { online: () => up, saved: () => new Set(saved), liked: (t) => liked.includes(t.id), refuse: refused });
   return { inner, p, refused, offline: () => (up = false) };
 }
 
 const t = (id: string): Track => ({ id, ytId: `${id}`.padEnd(11, '0') }) as Track;
 const track = t('a');
-const LIKED = { label: LIKED_LABEL, mode: 'list' as const };
+const LIKED = { label: 'Liked', mode: 'list' as const };
+const RECENT = { label: 'Recently played', mode: 'list' as const };
 const HOME = { label: 'Home · Latest', mode: 'radio' as const };
 
 describe('offlineGuard', () => {
@@ -61,18 +61,26 @@ describe('offlineGuard', () => {
     expect(refused).not.toHaveBeenCalled();
   });
 
-  it('offline with nothing saved, refuses whatever would start playback, once per tap, and the player never hears of it', async () => {
-    const { inner, p, refused, offline } = setup();
+  it('offline with nothing saved, refuses whatever would start something new, once per tap, and the player never hears of it', async () => {
+    const { inner, p, refused, offline } = setup({ queue: [track], current: track, upNext: [{ track, index: 1 }] });
     offline();
     await p.playList([track], 0);
-    await p.play();
-    await p.toggle(); // paused: a resume
     await p.next();
     await p.prev();
     await p.skipTo(1, 'b');
-    for (const c of [inner.playList, inner.play, inner.toggle, inner.next, inner.prev, inner.skipTo]) expect(c).not.toHaveBeenCalled();
-    expect(refused).toHaveBeenCalledTimes(6);
+    for (const c of [inner.playList, inner.next, inner.prev, inner.skipTo]) expect(c).not.toHaveBeenCalled();
+    expect(refused).toHaveBeenCalledTimes(4);
     expect(refused.mock.calls.every(([why]) => why === 'offline')).toBe(true);
+  });
+
+  it('offline, the current track always resumes, saved or not: native plays what it has buffered', async () => {
+    const { inner, p, refused, offline } = setup({ queue: [track], current: track, isPlaying: false });
+    offline();
+    await p.play();
+    await p.toggle(); // paused: a resume
+    expect(inner.play).toHaveBeenCalledTimes(1);
+    expect(inner.toggle).toHaveBeenCalledTimes(1);
+    expect(refused).not.toHaveBeenCalled();
   });
 
   it('offline, pausing, seeking, queue edits and settings still work', async () => {
@@ -95,40 +103,39 @@ describe('offlineGuard', () => {
     expect(p.state).toBe(inner.state);
   });
 
-  it('offline, a list from Liked plays only its saved songs, from the tapped one', async () => {
+  it('offline, a list from anywhere plays only its saved songs, from the tapped one', async () => {
     const [a, b, c, d] = ['a', 'b', 'c', 'd'].map(t);
-    const { inner, p, refused, offline } = setup({}, [a.ytId, c.ytId, d.ytId]);
-    offline();
-    await p.playList([a, b, c, d], 2, LIKED);
-    expect(inner.playList).toHaveBeenCalledWith([a, c, d], 1, LIKED);
-    expect(refused).not.toHaveBeenCalled();
+    for (const ctx of [LIKED, RECENT, HOME, undefined]) {
+      const { inner, p, refused, offline } = setup({}, [a.ytId, c.ytId, d.ytId]);
+      offline();
+      await p.playList([a, b, c, d], 2, ctx);
+      expect(inner.playList).toHaveBeenCalledWith([a, c, d], 1, ctx);
+      expect(refused).not.toHaveBeenCalled();
+    }
   });
 
-  it('offline, an unsaved liked song says it isn’t saved; the same list elsewhere is refused', async () => {
-    const [a, b] = ['a', 'b'].map(t);
-    const { inner, p, refused, offline } = setup({}, [a.ytId]);
+  it('offline, an unsaved liked song says it isn’t saved yet; any other unsaved song needs a connection', async () => {
+    const [a, b, c] = ['a', 'b', 'c'].map(t);
+    const { inner, p, refused, offline } = setup({}, [a.ytId], [a.id, b.id]);
     offline();
-    await p.playList([a, b], 1, LIKED);
-    expect(refused).toHaveBeenLastCalledWith('unsaved');
-    // Saved, but started from somewhere other than Liked (Recently played, Home): refused.
-    await p.playList([a, b], 0, HOME);
-    expect(refused).toHaveBeenLastCalledWith('offline');
-    await p.playList([a, b], 0);
+    for (const ctx of [LIKED, RECENT, HOME]) {
+      await p.playList([a, b, c], 1, ctx);
+      expect(refused).toHaveBeenLastCalledWith('unsaved');
+      await p.playList([a, b, c], 2, ctx);
+      expect(refused).toHaveBeenLastCalledWith('offline');
+    }
+    await p.playList([a, b], 5);
     expect(refused).toHaveBeenLastCalledWith('offline');
     expect(inner.playList).not.toHaveBeenCalled();
   });
 
-  it('offline, Play, Next, Previous and Up next go only onto a saved song', async () => {
+  it('offline, Next, Previous and Up next go only onto a saved song', async () => {
     const [a, b, c] = ['a', 'b', 'c'].map(t);
     const state: Partial<PlayerState> = { queue: [a, b, c], index: 0, current: a, upNext: [{ track: b, index: 1 }, { track: c, index: 2 }] };
     const { inner, p, refused, offline } = setup(state, [a.ytId, c.ytId]);
     offline();
-    await p.play();
-    await p.toggle();
     await p.prev();
     await p.skipTo(2, c.id);
-    expect(inner.play).toHaveBeenCalledTimes(1);
-    expect(inner.toggle).toHaveBeenCalledTimes(1);
     expect(inner.prev).toHaveBeenCalledTimes(1);
     expect(inner.skipTo).toHaveBeenCalledWith(2, c.id);
     // The next one (b) isn't saved, nor is b in Up next.

@@ -7,9 +7,6 @@ import { computed, signal } from '@preact/signals';
 import type { Track } from '../data/model';
 import { liked } from './library';
 
-/** The play context label of Library → Liked: offline, a list started from there plays its saved songs. */
-export const LIKED_LABEL = 'Liked';
-
 /** ytIds of the liked songs saved whole on the phone. */
 export const savedOffline = signal<ReadonlySet<string>>(new Set());
 
@@ -35,10 +32,15 @@ export function isSaved(t: Track | null | undefined, saved: ReadonlySet<string> 
   return !!t?.ytId && saved.has(t.ytId);
 }
 
+/** Offline, the songs of `tracks` that play: the saved ones, in order. */
+export function savedTracks(tracks: readonly Track[], saved: ReadonlySet<string>): Track[] {
+  return tracks.filter((t) => isSaved(t, saved));
+}
+
 /**
- * Offline, a list started from Liked plays only its saved songs, from the tapped one: those of
- * `tracks` that are saved, and where `tracks[start]` is among them. Null when the tapped one
- * isn't saved (nothing to start from).
+ * Offline, a list (from wherever it was started) plays only its saved songs, from the tapped
+ * one: those of `tracks` that are saved, and where `tracks[start]` is among them. Null when the
+ * tapped one isn't saved (nothing to start from).
  */
 export function savedQueue(tracks: readonly Track[], start: number, saved: ReadonlySet<string>): { tracks: Track[]; start: number } | null {
   if (!isSaved(tracks[start], saved)) return null;

@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.playback
 
+import androidx.media3.datasource.DataSpec
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.playback.LikedSaverPolicy.Facts
 import org.junit.Assert.assertEquals
@@ -395,5 +396,63 @@ class CachePolicyTest {
         assertFalse(m.onCached("mem00000001"))
         m.signIn()
         assertFalse(m.denied("mem00000001"))
+    }
+
+    // ---- liked songs never recognised as saved ----
+
+    @Test
+    fun youtubeAudioIsCachedEvenWithoutAContentLength() {
+        // ExoPlayer's progressive loads ask not to be cached when the response has no length
+        // (a live stream, it assumes); googlevideo's POST answer may have none. A `yt:` load is
+        // a file of known length: cached anyway, its length stored at its end.
+        val progressive = DataSpec.FLAG_DONT_CACHE_IF_LENGTH_UNKNOWN or DataSpec.FLAG_ALLOW_CACHE_FRAGMENTATION
+        assertEquals(DataSpec.FLAG_ALLOW_CACHE_FRAGMENTATION, CacheKeys.cacheFlags(progressive))
+        assertEquals(DataSpec.FLAG_ALLOW_GZIP, CacheKeys.cacheFlags(DataSpec.FLAG_ALLOW_GZIP))
+        assertEquals(0, CacheKeys.cacheFlags(0))
+    }
+
+    @Test
+    fun thePlayingAndNextTracksAreSkippedOnlyWhileThePlayerStillLoadsThem() {
+        val cur = "cur00000000"
+        val next = "nxt00000000"
+        val loaded = PlaybackNeed.Load(
+            idle = false, buffering = false, positionMs = 10_000, durationMs = 200_000,
+            bufferedPositionMs = 200_000, totalBufferedMs = 190_000 + 180_000, hasNext = true, nextDurationMs = 180_000,
+        )
+        // Both all buffered: the player won't write them into the cache any more, the saver may.
+        assertEquals(emptySet<String>(), PlaybackNeed.stillLoading(loaded, cur, next))
+        // Ended or idle (a restored session, an error): nothing is loading.
+        val notLoaded = loaded.copy(bufferedPositionMs = 0, totalBufferedMs = 0)
+        assertEquals(emptySet<String>(), PlaybackNeed.stillLoading(notLoaded.copy(idle = true), cur, next))
+        // The current one partly buffered: it is loading, and the next comes after it.
+        assertEquals(setOf(cur, next), PlaybackNeed.stillLoading(notLoaded.copy(bufferedPositionMs = 120_000, totalBufferedMs = 110_000), cur, next))
+        assertEquals(setOf(cur, next), PlaybackNeed.stillLoading(loaded.copy(durationMs = -1), cur, next))
+        // The current one whole, the next not (yet): only the next.
+        assertEquals(setOf(next), PlaybackNeed.stillLoading(loaded.copy(totalBufferedMs = 190_000 + 60_000), cur, next))
+        assertEquals(setOf(next), PlaybackNeed.stillLoading(loaded.copy(nextDurationMs = -1, totalBufferedMs = 190_000), cur, next))
+        // No next track.
+        assertEquals(emptySet<String>(), PlaybackNeed.stillLoading(loaded.copy(hasNext = false), cur, null))
+        // The saver then repairs a liked song that is playing, all buffered.
+        val f = Facts(liked, saved = emptySet(), skip = PlaybackNeed.stillLoading(loaded, "new00000000", "mid00000000"))
+        assertEquals("new00000000", LikedSaverPolicy.next(f))
+    }
+
+    @Test
+    fun afterClearCacheThePlayingLikedSongIsSavedAgainOnAnyNetwork() {
+        // Cleared while a liked song plays (and the next is liked): their bytes are in the
+        // player's memory, so nothing writes them back. They count as liked just now.
+        val fresh = LikedSaverPolicy.freshAfterClear(liked, pair = setOf("mid00000000", "notliked000"))
+        assertEquals(setOf("mid00000000"), fresh)
+        val f = Facts(liked, saved = emptySet(), fresh = fresh, unmetered = false, sinceLastMs = 1_000L)
+        // While the player still loads it: not yet. Loaded: saved, on mobile data too.
+        assertNull(LikedSaverPolicy.next(f.copy(skip = setOf("mid00000000"))))
+        assertEquals("mid00000000", LikedSaverPolicy.next(f))
+    }
+
+    @Test
+    fun aSaveCountsOnlyWhenTheSongIsWholeInTheCache() {
+        // The writer finished, but playback held the span (its lock): read past, not written.
+        assertEquals(SaveOutcome.STOPPED, SaveOutcome.afterWrite(whole = false))
+        assertEquals(SaveOutcome.SAVED, SaveOutcome.afterWrite(whole = true))
     }
 }

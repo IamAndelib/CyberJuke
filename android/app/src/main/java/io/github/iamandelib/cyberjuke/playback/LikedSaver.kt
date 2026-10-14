@@ -19,10 +19,10 @@ import java.io.IOException
  *
  * Lives in PlaybackService, so it only runs while the service already does (the app is open or
  * playing): no job, no alarm, nothing that wakes the phone. Event-driven: asked again when
- * playback's loading changes, the network or the liked list changes, a back-off ends or a save
- * finishes. Its one timer ([recheck]) is a one-shot postDelayed for the end of the gap between
- * two extractions, pending only while the gap alone holds back a save that could start;
- * cancelled by the next check and by [stop]. Downloads run on the one
+ * playback's loading changes, the network or the liked list changes, the cache is cleared, a
+ * back-off ends or a save finishes. Its one timer ([recheck]) is a one-shot postDelayed for the
+ * end of the gap between two extractions, pending only while the gap alone holds back a save
+ * that could start; cancelled by the next check and by [stop]. Downloads run on the one
  * background thread ([Background]), one at a time, through a [CacheWriter] (only the bytes not
  * yet cached are fetched), and give way at once when playback needs the network ([giveWay],
  * [PlaybackNeed]).
@@ -34,6 +34,9 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
     interface Host {
         /** The videos the player loads anyway (the playing track and the next). */
         fun loadingPair(): Set<String>
+
+        /** Of those, the ones it is still loading ([PlaybackNeed.stillLoading]): left to it meanwhile. */
+        fun stillLoading(): Set<String>
 
         /** Playback needs the network now ([PlaybackNeed]). */
         fun playbackNeedsNetwork(): Boolean
@@ -60,8 +63,16 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
 
     private val recheck = Runnable { check() }
 
-    /** The cache's liked list or saved set changed (any thread). */
-    val cacheListener = AudioCache.Listener { handler.post { check() } }
+    /** The cache's saved set changed, or it was cleared (any thread). */
+    val cacheListener = object : AudioCache.Listener {
+        override fun onSavedChanged() {
+            handler.post { check() }
+        }
+
+        override fun onCleared() {
+            handler.post { cleared() }
+        }
+    }
 
     val likedListener = AudioCache.LikedListener { freshIds ->
         handler.post {
@@ -105,6 +116,18 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         job?.cancel()
     }
 
+    /**
+     * Clear cache: the liked songs playing and next count as liked just now
+     * ([LikedSaverPolicy.freshAfterClear]), so they are saved again, on any network, once the
+     * player has loaded them.
+     */
+    private fun cleared() {
+        val again = LikedSaverPolicy.freshAfterClear(AudioCache.liked, host.loadingPair())
+        fresh.addAll(again)
+        tried.removeAll(again)
+        check()
+    }
+
     /** The service is going: nothing more starts, the running save stops, no re-check is left. */
     fun stop() {
         stopped = true
@@ -119,7 +142,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             saved = AudioCache.savedLiked,
             fresh = fresh,
             tried = tried,
-            skip = host.loadingPair() + failed,
+            skip = host.stillLoading() + failed,
             online = online,
             unmetered = unmetered,
             quiet = NetBlock.isQuiet(),
@@ -139,7 +162,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         // Set before it is queued: upkeep arriving before it runs still stops it.
         AudioCache.cancelSave = { j.cancel() }
         Background.run("Liked save") {
-            var outcome = Outcome.STOPPED
+            var outcome = SaveOutcome.STOPPED
             try {
                 outcome = j.run()
             } catch (e: Exception) {
@@ -151,26 +174,24 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         }
     }
 
-    private fun finished(j: SaveJob, outcome: Outcome) {
+    private fun finished(j: SaveJob, outcome: SaveOutcome) {
         if (job === j) {
             job = null
             AudioCache.cancelSave = null
         }
         when (outcome) {
-            Outcome.SAVED -> {
+            SaveOutcome.SAVED -> {
                 fresh.remove(j.ytId)
                 tried.remove(j.ytId)
             }
-            Outcome.FAILED -> failed.add(j.ytId)
+            SaveOutcome.FAILED -> failed.add(j.ytId)
             // Not cancelled, yet not saved (a dropped connection, an exception): three times and
             // it is given up on, so a song that can't be saved isn't tried forever.
-            Outcome.STOPPED -> if (strikes.stopped(j.ytId)) failed.add(j.ytId)
-            Outcome.CANCELLED -> Unit
+            SaveOutcome.STOPPED -> if (strikes.stopped(j.ytId)) failed.add(j.ytId)
+            SaveOutcome.CANCELLED -> Unit
         }
         check()
     }
-
-    private enum class Outcome { SAVED, FAILED, STOPPED, CANCELLED }
 
     /** One song into the cache. Cancelled from any thread; runs on [Background]'s thread. */
     private class SaveJob(val ytId: String, val fresh: Boolean) {
@@ -185,48 +206,50 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             writer?.cancel()
         }
 
-        fun run(): Outcome {
+        fun run(): SaveOutcome {
             // Cancelled, a back-off, or members-only while signed out: no fault of the song.
-            if (cancelled || NetBlock.isQuiet() || AudioCache.isDenied(ytId)) return Outcome.CANCELLED
-            if (AudioCache.isWhole(ytId)) return Outcome.SAVED
+            if (cancelled || NetBlock.isQuiet() || AudioCache.isDenied(ytId)) return SaveOutcome.CANCELLED
+            if (AudioCache.isWhole(ytId)) return SaveOutcome.SAVED
             val stream = try {
                 // An extraction, like playing it would be (it counts toward YouTube's limits,
                 // hence one at a time and spaced out); a back-off stops it (BlockedException).
                 StreamResolver.resolve(ytId)
             } catch (e: ResolveException) {
                 return when (SaveFailure.of(e.kind)) {
-                    SaveFailure.GIVE_UP -> Outcome.FAILED
-                    SaveFailure.STRIKE -> if (cancelled) Outcome.CANCELLED else Outcome.STOPPED
-                    SaveFailure.WAIT -> Outcome.CANCELLED
+                    SaveFailure.GIVE_UP -> SaveOutcome.FAILED
+                    SaveFailure.STRIKE -> if (cancelled) SaveOutcome.CANCELLED else SaveOutcome.STOPPED
+                    SaveFailure.WAIT -> SaveOutcome.CANCELLED
                 }
             } catch (e: ManifestOnlyException) {
-                return Outcome.FAILED
+                return SaveOutcome.FAILED
             } catch (e: IOException) {
                 // A back-off (BlockedException) is no strike either.
-                return if (cancelled || NetBlock.isQuiet()) Outcome.CANCELLED else Outcome.STOPPED
+                return if (cancelled || NetBlock.isQuiet()) SaveOutcome.CANCELLED else SaveOutcome.STOPPED
             }
             // Only an audio-only format is kept in the cache.
-            if (!stream.audioOnly || stream.itag <= 0) return Outcome.FAILED
-            if (cancelled) return Outcome.CANCELLED
-            val source = AudioCache.downloadSource() ?: return Outcome.STOPPED
+            if (!stream.audioOnly || stream.itag <= 0) return SaveOutcome.FAILED
+            if (cancelled) return SaveOutcome.CANCELLED
+            val source = AudioCache.downloadSource() ?: return SaveOutcome.STOPPED
             return try {
                 val spec = YtDataSpecResolver.streamSpec(DataSpec.Builder().setUri(JukeUris.forYt(ytId)).build(), ytId, stream)
                 val w = CacheWriter(source, spec, null, null)
                 writer = w
-                if (cancelled) return Outcome.CANCELLED
+                if (cancelled) return SaveOutcome.CANCELLED
                 w.cache()
-                // No id: R8 keeps info logs out of release builds, and this needs none.
-                Log.i(TAG, "Liked song saved")
-                Outcome.SAVED
+                // Saved only if it is whole now ([SaveOutcome.afterWrite]). No id: R8 keeps info
+                // logs out of release builds, and this needs none.
+                SaveOutcome.afterWrite(AudioCache.isWhole(ytId)).also {
+                    Log.i(TAG, if (it == SaveOutcome.SAVED) "Liked song saved" else "Liked song not whole after its save")
+                }
             } catch (e: IOException) {
                 when {
-                    cancelled || NetBlock.isQuiet() -> Outcome.CANCELLED
+                    cancelled || NetBlock.isQuiet() -> SaveOutcome.CANCELLED
                     // Refused (an expired link, a block): not again this service's life.
                     e.findCause<HttpDataSource.InvalidResponseCodeException>() != null -> {
                         Log.w(TAG, "Liked save refused")
-                        Outcome.FAILED
+                        SaveOutcome.FAILED
                     }
-                    else -> Outcome.STOPPED
+                    else -> SaveOutcome.STOPPED
                 }
             } finally {
                 writer = null
