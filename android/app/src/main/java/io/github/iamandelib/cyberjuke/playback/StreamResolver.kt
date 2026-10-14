@@ -187,19 +187,17 @@ internal object StreamResolver {
      * The listening cache's key for [ytId] when a copy of it is saved whole ([AudioCache]), to
      * play from it with no extraction and no request (also during a back-off: nothing is asked
      * of YouTube); else null. A resume, or a track kept through an outage ([keepFormat]), only in
-     * its own format (as is an [itag] asked for); otherwise the one the quality setting asks for
-     * when known, else, online, one at least as good as the setting asks ([CacheKeys.wantedBps]);
-     * offline any. Not a copy
-     * just found missing ([AudioCache.misses]): its retry goes to the network. Recorded as
-     * served, so a later resume keeps that file.
+     * its own format; otherwise the one the quality setting asks for when known, else, online, one
+     * at least as good as the setting asks ([CacheKeys.wantedBps]); offline any. Not a copy just
+     * found missing ([AudioCache.misses]): its retry goes to the network. Recorded as served, so a
+     * later resume keeps that file.
      */
-    fun cachedKey(ytId: String, midStream: Boolean, itag: Int? = null): String? {
+    fun cachedKey(ytId: String, midStream: Boolean): String? {
         if (AudioCache.misses.recent(ytId)) return null
         val before = served.get(ytId, now())
-        // A resume, a track kept through an outage, or the crossfade tail's pinned [itag]: only
-        // in the very file it was playing.
-        val keepKey = if (FormatKeep.mustKeep(itag, kept[ytId] != null, midStream)) {
-            FormatKeep.keepKey(itag, before?.let { keyOf(it) }) ?: return null
+        // A resume, or a track kept through an outage: only in the very file it was playing.
+        val keepKey = if (FormatKeep.mustKeep(kept[ytId] != null, midStream)) {
+            before?.let { keyOf(it) } ?: return null
         } else {
             null
         }
@@ -224,15 +222,6 @@ internal object StreamResolver {
             ),
         )
         return key
-    }
-
-    /**
-     * The crossfade's tail: [ytId]'s stream link in [itag] if one is still cached, else null.
-     * Never an extraction, and nothing during a back-off (a request then would be one).
-     */
-    fun cachedStream(ytId: String, itag: Int): ResolvedStream? {
-        if (NetBlock.isBlocked()) return null
-        return cache.get(ytId, currentRung(), itag, now())?.takeIf { it.itag == itag }?.let { serve(it) }
     }
 
     /** The cache key of the file [s] is (its own when it came from the cache), or null. */

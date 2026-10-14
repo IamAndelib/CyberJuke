@@ -1048,7 +1048,7 @@ class PlaybackService : MediaSessionService() {
         PlayerPrefsStore.setCrossfadeMs(this, ms)
         crossfadeMs = ms
         crossfade?.setSetting(ms)
-        // A fade needs the next track buffered: with Gapless off, the setting decides the load-ahead.
+        // Crossfade readies the next track early too (LoadAhead.wanted): with Gapless off, the setting decides the load-ahead.
         updateLoadAhead()
     }
 

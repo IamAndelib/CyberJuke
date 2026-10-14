@@ -5,24 +5,16 @@ import io.github.iamandelib.cyberjuke.net.FailureKind
 import java.util.TreeSet
 
 /**
- * Which file a load must keep (StreamResolver). A resume keeps the file it was playing, so does a
- * track kept through an outage ([StreamResolver.keepFormat]), and the crossfade's tail asks for
- * its outgoing track's own format, which beats both. Pure (FormatKeepTest).
+ * Which file a load must keep (StreamResolver): a resume keeps the file it was playing, and so
+ * does a track kept through an outage ([StreamResolver.keepFormat]). Pure (FormatKeepTest).
  */
 internal object FormatKeep {
-    /**
-     * The itag a stream link must be of: a [kept] format's, else for a resume the one served;
-     * null: any rung. (The tail's own links: [StreamResolver.cachedStream], its itag only.)
-     */
+    /** The itag a stream link must be of: a [kept] format's, else for a resume the one served; null: any rung. */
     fun itag(kept: Int?, midStream: Boolean, servedItag: Int?): Int? =
         kept ?: if (midStream) servedItag?.takeIf { it > 0 } else null
 
-    /** Only one saved copy will do: the file that was playing ([keepKey]). */
-    fun mustKeep(asked: Int?, kept: Boolean, midStream: Boolean): Boolean = asked != null || kept || midStream
-
-    /** The served file's key [servedKey], when it is of the [asked] itag (if any); null: no saved copy will do. */
-    fun keepKey(asked: Int?, servedKey: String?): String? =
-        servedKey?.takeIf { asked == null || CacheKeys.itagOf(it) == asked }
+    /** Only one saved copy will do: the file that was playing ([kept] format, or a resume). */
+    fun mustKeep(kept: Boolean, midStream: Boolean): Boolean = kept || midStream
 }
 
 /**
