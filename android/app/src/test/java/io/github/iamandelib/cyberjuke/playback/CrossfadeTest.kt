@@ -162,6 +162,7 @@ class CrossfadeTest {
         var position = 0L
         var speed = 1.0
         override var mainPlaying = true
+        override var mainHeldBack = false
         var mainLevel = 1f
         val mainVolumes = ArrayList<Float>()
 
@@ -664,6 +665,21 @@ class CrossfadeTest {
         // Outside a fade: nothing.
         c.settle()
         assertEquals(1, h.handOvers)
+    }
+
+    @Test
+    fun anEditDuringACallThatHoldsAFadeDoesNotHandOver() {
+        // Only the main player plays on after the call (it has the audio focus): it keeps the session.
+        val (h, c) = fading()
+        c.onPlayWanted(false)
+        h.mainHeldBack = true
+        c.settle()
+        assertEquals(0, h.handOvers)
+        assertEquals(Crossfader.Phase.CROSSING, c.phase)
+        // The edit then changes the next track: the fade stops, as any edit's would.
+        h.incomingNext = false
+        c.onListChanged()
+        assertDropped(h, c)
     }
 
     @Test

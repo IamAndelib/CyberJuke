@@ -132,6 +132,9 @@ internal class ExoCrossfadeHost(
 
     override val incomingPlaying: Boolean get() = incoming()?.isPlaying == true
 
+    override val mainHeldBack: Boolean
+        get() = (main()?.playbackSuppressionReason ?: Player.PLAYBACK_SUPPRESSION_REASON_NONE) != Player.PLAYBACK_SUPPRESSION_REASON_NONE
+
     override val mainVolume: Float get() = main()?.volume ?: 1f
 
     override fun setMainVolume(v: Float) {

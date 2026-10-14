@@ -206,6 +206,9 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         /** The main player plays (its sound comes out). */
         val mainPlaying: Boolean
 
+        /** A call or another app's audio holds the main player back (it plays on by itself once that ends). */
+        val mainHeldBack: Boolean
+
         /** The incoming player plays. */
         val incomingPlaying: Boolean
 
@@ -346,10 +349,12 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
     /**
      * A queue edit of the user's comes, and goes after the track the main player plays: while
      * crossing, the incoming one takes over first, so it is the one played next to (and an
-     * "Add to queue" doesn't take the place of the track already fading in).
+     * "Add to queue" doesn't take the place of the track already fading in). Not while a call
+     * holds the main player back: only it would play on after the call (the incoming one never
+     * asked for the audio focus), so the edit stops the fade as any other would ([onListChanged]).
      */
     fun settle() {
-        if (busy || phase != Phase.CROSSING) return
+        if (busy || phase != Phase.CROSSING || host.mainHeldBack) return
         handOver()
     }
 
