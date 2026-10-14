@@ -465,11 +465,13 @@
 .state-title {
   font-family: var(--font-display);
   font-size: 17px;
+  text-wrap: balance;
 }
 .state-body {
   color: var(--color-fg-dim);
   font-size: 13px;
   max-width: 300px;
+  text-wrap: balance;
 }
 .state-body .icon {
   display: inline-block;
@@ -1370,7 +1372,12 @@ section[data-kind] > .shelf {
   padding-right: 0;
   min-height: 48px;
 }
+/* A block, so its width is the toast's room (Toasts.tsx narrows the toast to its longest line). */
 .toast-text {
+  display: block;
+  text-wrap: balance;
+}
+.toast.has-action .toast-text {
   flex: 1;
   min-width: 0;
   padding: 10px 0;

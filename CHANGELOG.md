@@ -6,6 +6,7 @@
 - Offline, the app says plainly that music needs a connection: the top bar reads "no carrier · connect to play". Lists already on screen stay, their tracks fading to dim. Lists that can only lead to music (Home, genres, artists, albums, Search) and are opened while offline ask you to connect instead, in the middle of the screen; their **Redial** button checks again, and they fill in by themselves once you're online. A pull to refresh while offline says "No carrier. Connect, then refresh."
 - Library stays as it is offline, its tracks dimmed. Tapping a dimmed track, Play, Shuffle or the Jukebox shuffle while offline says "No carrier. Connect to play." and leaves the player as it was.
 - Switching between Wi-Fi and mobile data no longer flashes the app offline: a lost connection only counts once it has lasted a few seconds. Coming back counts at once.
+- A message that takes more than one line fits its text, its lines evened out, instead of keeping an empty strip on the right. The offline bar and the "no carrier" screens even out their lines too.
 - When the connection drops mid-track, the message says so ("Signal lost") instead of blaming the track, and whether it picks up by itself once you're back.
 
 ## [1.1.2] - 2026-10-10

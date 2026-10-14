@@ -24,6 +24,7 @@
   font-family: var(--font-display);
   font-size: 13px;
   text-align: center;
+  text-wrap: balance;
 }
 .offline-banner + .main .topbar {
   padding-top: 10px;

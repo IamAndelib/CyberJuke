@@ -621,3 +621,46 @@ test('a message showing when the block banner appears moves above it', async ({ 
   await expect(banner).toBeVisible();
   await expect.poll(async () => (await box(toast)).y + (await box(toast)).height <= (await box(banner)).y).toBe(true);
 });
+
+type ShowToast = (text: string, ms?: number, action?: { label: string; run: () => void }) => number;
+
+test('a message that wraps hugs its longest line, with Undo too and after the phone turns', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await start(page);
+  const toast = page.getByTestId('toast');
+  /** The toast's box against its text's longest line: what's left over besides padding (and Undo). */
+  const fit = () =>
+    toast.evaluate((t) => {
+      const text = t.querySelector('.toast-text')!;
+      const range = document.createRange();
+      range.selectNodeContents(text);
+      const rects = [...range.getClientRects()];
+      const cs = getComputedStyle(t);
+      const action = t.querySelector('.toast-action');
+      const extra = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + (action ? action.getBoundingClientRect().width + parseFloat(cs.columnGap) : 0);
+      return {
+        lines: new Set(rects.map((r) => Math.round(r.top))).size,
+        spare: t.getBoundingClientRect().width - extra - Math.max(...rects.map((r) => r.width)),
+      };
+    });
+  const long = 'Signal lost. "A Rather Long Track Title (Extended Club Mix)" picks up when you\'re back.';
+
+  await page.evaluate((text) => (window as unknown as { __cyberjukeToast: ShowToast }).__cyberjukeToast(text, 10_000), long);
+  await expect(toast).toHaveText(long);
+  let f = await fit();
+  expect(f.lines).toBeGreaterThan(1);
+  expect(f.spare).toBeGreaterThanOrEqual(0);
+  expect(f.spare).toBeLessThanOrEqual(1);
+
+  await page.evaluate((text) => (window as unknown as { __cyberjukeToast: ShowToast }).__cyberjukeToast(text, 10_000, { label: 'Undo', run: () => {} }), long);
+  await expect(page.getByTestId('toast-action')).toBeVisible();
+  f = await fit();
+  expect(f.lines).toBeGreaterThan(1);
+  expect(f.spare).toBeGreaterThanOrEqual(0);
+  expect(f.spare).toBeLessThanOrEqual(1);
+
+  // Wider: measured again (fewer lines, still no spare room).
+  await page.setViewportSize({ width: 412, height: 780 });
+  await expect.poll(async () => (await fit()).spare).toBeLessThanOrEqual(1);
+  expect((await fit()).spare).toBeGreaterThanOrEqual(0);
+});
