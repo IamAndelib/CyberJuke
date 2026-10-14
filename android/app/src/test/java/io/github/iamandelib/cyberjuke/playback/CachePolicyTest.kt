@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.playback
 
+import androidx.media3.datasource.DataSpec
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.playback.LikedSaverPolicy.Facts
 import org.junit.Assert.assertEquals
@@ -395,5 +396,18 @@ class CachePolicyTest {
         assertFalse(m.onCached("mem00000001"))
         m.signIn()
         assertFalse(m.denied("mem00000001"))
+    }
+
+    // ---- liked songs never recognised as saved ----
+
+    @Test
+    fun youtubeAudioIsCachedEvenWithoutAContentLength() {
+        // ExoPlayer's progressive loads ask not to be cached when the response has no length
+        // (a live stream, it assumes); googlevideo's POST answer may have none. A `yt:` load is
+        // a file of known length: cached anyway, its length stored at its end.
+        val progressive = DataSpec.FLAG_DONT_CACHE_IF_LENGTH_UNKNOWN or DataSpec.FLAG_ALLOW_CACHE_FRAGMENTATION
+        assertEquals(DataSpec.FLAG_ALLOW_CACHE_FRAGMENTATION, CacheKeys.cacheFlags(progressive))
+        assertEquals(DataSpec.FLAG_ALLOW_GZIP, CacheKeys.cacheFlags(DataSpec.FLAG_ALLOW_GZIP))
+        assertEquals(0, CacheKeys.cacheFlags(0))
     }
 }

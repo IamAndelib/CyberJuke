@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.playback
 
+import androidx.media3.datasource.DataSpec
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import java.util.TreeSet
 
@@ -64,6 +65,15 @@ internal object CacheKeys {
         if (ladderBps.isNotEmpty()) return ladderBps[QualityLadder.index(ladderBps.size, rung)]
         return if (rung == 0) TOP_CLASS_BPS else 0
     }
+
+    /**
+     * A `yt:` load's flags on its way into the cache: without FLAG_DONT_CACHE_IF_LENGTH_UNKNOWN.
+     * ExoPlayer sets it on every progressive load, to keep a live stream out of a cache, and
+     * CacheDataSink then writes nothing when the response has no Content-Length (googlevideo's
+     * answer to a POST may have none). A YouTube audio file is never live: it is cached anyway,
+     * and the cache stores its length when the read reaches its end.
+     */
+    fun cacheFlags(flags: Int): Int = flags and DataSpec.FLAG_DONT_CACHE_IF_LENGTH_UNKNOWN.inv()
 
     /**
      * Whether a resource is in the cache whole: its length is known ([contentLength], -1 when
