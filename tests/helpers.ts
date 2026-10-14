@@ -10,6 +10,12 @@ export async function waitForTracks(page: Page): Promise<void> {
   await expect(page.locator('[data-testid="skeleton"]:visible')).toHaveCount(0);
 }
 
+/**
+ * A Latest or genre page (PAGE_SIZE rows), not a catalog page (300) or the freshness
+ * check (25). All three send a field mask, so the size tells them apart.
+ */
+export const isFeedQuery = (q: { limit?: number } | null | undefined): boolean => q?.limit === 24;
+
 /** Load the app and wait for Home's first page. */
 export async function start(page: Page, path = '/'): Promise<void> {
   await page.goto(path);
@@ -65,6 +71,9 @@ export async function openNowPlaying(page: Page): Promise<void> {
 export const musicCalls = (page: Page) => page.evaluate(() => (window as unknown as { __cyberjukeMusicCalls: unknown[][] }).__cyberjukeMusicCalls);
 /** Calls the web player made that the native plugin would receive. */
 export const playerCalls = (page: Page) => page.evaluate(() => window.__cyberjukePlayerCalls ?? []);
+
+/** How much of the current track native reports loaded ahead, in ms (0: the track the app reopens on). */
+export const bufferedAhead = (page: Page, ms: number) => page.evaluate((v) => (window as unknown as { __cyberjukeBufferedAhead(ms: number): void }).__cyberjukeBufferedAhead(v), ms);
 
 declare global {
   interface Window {

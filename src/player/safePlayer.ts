@@ -28,6 +28,7 @@ export const COMMAND_ERRORS: Record<Command, string> = {
   addAutoplay: "Couldn't add autoplay tracks",
   setAutoplay: "Couldn't change autoplay",
   setQuality: "Couldn't change the audio quality",
+  setCrossfade: "Couldn't change the crossfade",
   setNetworkPrefs: "Couldn't change the network setting",
   retryNow: "Couldn't try again",
 };
@@ -67,6 +68,7 @@ export function safePlayer(p: Player, notify: Notify): Player {
     addAutoplay: wrap('addAutoplay'),
     setAutoplay: wrap('setAutoplay'),
     setQuality: wrap('setQuality'),
+    setCrossfade: wrap('setCrossfade'),
     setNetworkPrefs: wrap('setNetworkPrefs'),
     retryNow: wrap('retryNow'),
   };

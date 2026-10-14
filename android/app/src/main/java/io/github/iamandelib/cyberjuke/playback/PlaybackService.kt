@@ -33,8 +33,12 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
@@ -49,11 +53,15 @@ import io.github.iamandelib.cyberjuke.MainActivity
 import io.github.iamandelib.cyberjuke.findCause
 import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.BlockedException
+import io.github.iamandelib.cyberjuke.net.Family
 import io.github.iamandelib.cyberjuke.net.Http
 import io.github.iamandelib.cyberjuke.net.NetBlock
 import io.github.iamandelib.cyberjuke.net.NetEpoch
+import io.github.iamandelib.cyberjuke.net.NetEpochState
 import io.github.iamandelib.cyberjuke.net.NetPrefs
 import org.json.JSONArray
+import java.io.EOFException
+import java.net.SocketException
 
 /**
  * Foreground media service: ExoPlayer + MediaSession. The default Media3 notification
@@ -73,6 +81,35 @@ class PlaybackService : MediaSessionService() {
 
     /** mediaIds already re-resolved once after an HTTP 403/410 (expired stream URL). */
     private val expiredRetried = HashSet<String>()
+
+    /** The last item that played (its stream worked): TrackErrorPolicy.Facts.playedThisItem. */
+    private var lastReadyId: String? = null
+
+    /** Unclear I/O failures at one spot of the current item: TrackErrorPolicy.Facts.failuresHere. */
+    private val failureSpot = FailureSpot()
+
+    /** Loads the playing item and the next one only; told which they are ([updateLoadAhead]). */
+    private var oneAhead: OneAheadLoadControl? = null
+
+    /** The crossfade between tracks (Settings → Crossfade; Off by default). */
+    private var crossfade: Crossfader? = null
+
+    /** Auto quality's rung, decided as each track starts. */
+    private val governor = QualityGovernor()
+
+    /** The setting the governor last saw (a change starts its probing over). */
+    private var governedQuality: AudioQuality? = null
+
+    /** Tells a rebuffer from the buffering of a seek, a skip or a list change. */
+    private val rebuffers = RebufferDetector()
+
+    /**
+     * Retries after an outage pause while the network stays validated (a weak link stalled
+     * the track: no callback will come). One postDelayed at most, only while that pause is
+     * pending; cancelled on a pause by the user, becoming noisy, stop and onDestroy.
+     */
+    private val resumeSchedule = ResumeSchedule()
+    private val outageRetry = Runnable { retryAfterOutage() }
 
     /** "Add to queue" bookkeeping (pure, shared rule with the web: QueueRulesTest). */
     private lateinit var queue: NativeQueue<MediaItem>
@@ -130,6 +167,49 @@ class PlaybackService : MediaSessionService() {
         },
     )
 
+    /** The playing track and the next, the pair the player loads ([updateLoadAhead]). */
+    private var loadingIds: Set<String> = emptySet()
+
+    /** Saves liked songs into the listening cache while the service runs anyway. */
+    private val likedSaver = LikedSaver(
+        handler,
+        object : LikedSaver.Host {
+            override fun loadingPair(): Set<String> = loadingIds
+
+            override fun stillLoading(): Set<String> {
+                val p = player ?: return emptySet()
+                val next = p.nextMediaItemIndex
+                val nextId = if (next == C.INDEX_UNSET || next >= p.mediaItemCount) null else JukeUris.ytIdOf(p.getMediaItemAt(next))
+                return PlaybackNeed.stillLoading(loadOf(p), JukeUris.ytIdOf(p.currentMediaItem), nextId)
+            }
+
+            override fun playbackNeedsNetwork(): Boolean = player?.let { PlaybackNeed.needsNetwork(loadOf(it)) } == true
+        },
+    )
+
+    private val window = Timeline.Window()
+
+    /** What the player has buffered, for [PlaybackNeed] (its isLoading says little: see there). */
+    private fun loadOf(p: ExoPlayer): PlaybackNeed.Load {
+        val next = p.nextMediaItemIndex
+        val nextDuration = if (next == C.INDEX_UNSET || next >= p.currentTimeline.windowCount) {
+            -1L
+        } else {
+            p.currentTimeline.getWindow(next, window).durationMs.takeIf { it != C.TIME_UNSET } ?: -1L
+        }
+        return PlaybackNeed.Load(
+            idle = p.playbackState == Player.STATE_IDLE || p.playbackState == Player.STATE_ENDED,
+            buffering = p.playbackState == Player.STATE_BUFFERING,
+            positionMs = p.currentPosition.coerceAtLeast(0L),
+            durationMs = p.duration.takeIf { it != C.TIME_UNSET } ?: -1L,
+            bufferedPositionMs = p.bufferedPosition,
+            totalBufferedMs = p.totalBufferedDuration,
+            hasNext = next != C.INDEX_UNSET,
+            nextDurationMs = nextDuration,
+            isLoading = p.isLoading,
+        )
+    }
+
     /** "<current mediaId>><next ytId>" already prefetched, so each pair is warmed once. */
     private var prefetchedKey: String? = null
     private val prefetchCheck = Runnable { checkPrefetch() }
@@ -146,12 +226,17 @@ class PlaybackService : MediaSessionService() {
             runCatching { connectivity().getNetworkCapabilities(network) }.getOrNull()?.let {
                 if (NetPrefs.onNetwork(networkKey(it))) StreamResolver.clear()
             }
-            if (NetEpoch.onNetwork(network.toString())) onNetworkChanged(newNetwork = true)
+            if (NetEpoch.onNetwork(network.toString())) onNetworkChanged(newNetwork = true, NetEpochState.ALL_FAMILIES)
         }
 
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
             // The IPv4 setting's Auto memory is per kind of network.
             if (NetPrefs.onNetwork(networkKey(caps))) StreamResolver.clear()
+            // Online, and on Wi-Fi: the liked saver's backfill (it acts on a change only).
+            val validated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            val unmetered = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+            AudioCache.online = validated
+            handler.post { likedSaver.onNetwork(validated, unmetered) }
             // Online again (validated): playback an outage stopped picks up again.
             // (Validated fires again and again on a network that's up: at most every few seconds.)
             if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) && NetBlock.resumePending() &&
@@ -162,9 +247,15 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
+        override fun onLost(network: Network) {
+            AudioCache.online = false
+            handler.post { likedSaver.onNetwork(validated = false, unmetered = false) }
+        }
+
         override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
             val addresses = linkProperties.linkAddresses.mapNotNull { it.address?.hostAddress }.toSet()
-            if (NetEpoch.onAddresses(network.toString(), addresses)) onNetworkChanged(newNetwork = false)
+            val changed = NetEpoch.addressesChanged(network.toString(), addresses)
+            if (changed.isNotEmpty()) onNetworkChanged(newNetwork = false, changed)
         }
     }
     private var networkCallbackRegistered = false
@@ -182,22 +273,41 @@ class PlaybackService : MediaSessionService() {
     /**
      * Any thread (ConnectivityManager's). A new network is a new IP as far as YouTube is
      * concerned: a running back-off is lifted at once (and playback resumes if it stopped it).
+     * Stream URLs bound to an address family that changed go (a new IPv6 address leaves the
+     * IPv4-bound ones working); the next track's is fetched again if it went.
      */
-    private fun onNetworkChanged(newNetwork: Boolean) {
-        StreamResolver.clear()
+    private fun onNetworkChanged(newNetwork: Boolean, families: Set<Family>) {
+        StreamResolver.dropBoundTo(families)
         Http.evictConnections()
         if (newNetwork) NetBlock.reset(keepLevel = false)
-        Log.i(TAG, "Default network changed (generation ${NetEpoch.generation}): stream URLs dropped")
+        handler.post {
+            prefetchedKey = null
+            schedulePrefetch()
+        }
+        Log.i(TAG, "Default network changed (generation ${NetEpoch.generation}): stream URLs bound to $families dropped")
+    }
+
+    private fun isNetworkValidated(): Boolean = try {
+        val cm = connectivity()
+        cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+    } catch (e: Exception) { // SecurityException without ACCESS_NETWORK_STATE
+        true
     }
 
     /** Resumes playback a back-off stopped once it ends (lifted early, or ran out). */
     private val blockListener = object : NetBlock.Listener {
         override fun onBlocked(until: Long, reason: BlockReason) {
-            handler.post { scheduleResume(until) }
+            handler.post {
+                scheduleResume(until)
+                likedSaver.check() // a running save stops
+            }
         }
 
         override fun onUnblocked() {
-            handler.post { blockEnded.run() }
+            handler.post {
+                blockEnded.run()
+                likedSaver.check()
+            }
         }
 
         // Stopped by a back-off while playing, or Play pressed during one: where the sound was
@@ -286,6 +396,7 @@ class PlaybackService : MediaSessionService() {
             Log.i(TAG, "Audio output changed while a resume was pending: cancelled")
             NetBlock.cancelResume()
             releaseResumeWakeLock()
+            stopOutageRetry()
         }
     }
     private var noisyRegistered = false
@@ -361,9 +472,16 @@ class PlaybackService : MediaSessionService() {
             Log.w(TAG, "No network callback: ${e.javaClass.simpleName}")
         }
 
-        // DefaultDataSource handles asset:// (CI test tone) and delegates http(s) to OkHttp.
-        val upstream = DefaultDataSource.Factory(this, OkHttpDataSource.Factory(Http.client))
-        val dataSourceFactory = ResolvingDataSource.Factory(upstream, YtDataSpecResolver)
+        // DefaultDataSource handles asset:// (CI test tone) and delegates http(s) to OkHttp,
+        // with the streaming timeouts (a stall is noticed, and retried, while the buffer plays).
+        // YouTube audio goes through the listening cache in between (the resolver gives it its
+        // key): what plays is kept, and what's kept whole plays without the network.
+        AudioCache.init(this, PlayerPrefsStore.cacheMb(this))
+        AudioCache.addListener(likedSaver.cacheListener)
+        AudioCache.addLikedListener(likedSaver.likedListener)
+        val upstream = DefaultDataSource.Factory(this, OkHttpDataSource.Factory(Http.streaming))
+        val cacheSources = AudioCache.dataSourceFactory(upstream)
+        val dataSourceFactory = ResolvingDataSource.Factory(cacheSources, YtDataSpecResolver)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
             .setLoadErrorHandlingPolicy(JukeLoadErrorPolicy())
 
@@ -372,8 +490,26 @@ class PlaybackService : MediaSessionService() {
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
 
+        // A deeper buffer than Media3's default (BufferPolicy): short drops are never heard. Only
+        // the playing item and the next one load (OneAheadLoadControl).
+        val loadControl = OneAheadLoadControl(
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    BufferPolicy.MIN_MS,
+                    BufferPolicy.MAX_MS,
+                    BufferPolicy.START_MS,
+                    BufferPolicy.AFTER_REBUFFER_MS,
+                )
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .setBackBuffer(BufferPolicy.BACK_MS, /* retainBackBufferFromKeyframe = */ false)
+                .setTargetBufferBytes(BufferPolicy.TARGET_BYTES)
+                .build(),
+        )
+        oneAhead = loadControl
+
         val exo = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
@@ -387,6 +523,21 @@ class PlaybackService : MediaSessionService() {
         queueHost = ExoQueueHost(exo)
         queue = NativeQueue(queueHost)
         exo.addListener(PlayerListener())
+        // Crossfade (Settings): the outgoing track's last seconds on a second, bare player that
+        // exists only during a fade (CrossfadeTail); the queue and the session stay on this one.
+        val fader = Crossfader(
+            ExoCrossfadeHost(this, exo, handler, cacheSources, audioAttributes),
+            PlayerPrefsStore.crossfadeMs(this),
+        )
+        exo.addListener(CrossfadeEvents(fader))
+        crossfade = fader
+        // A load finished (a track all buffered; isLoading may stay true for a gated one): the
+        // liked saver looks again, as playback may not need the network any more.
+        exo.addAnalyticsListener(object : AnalyticsListener {
+            override fun onLoadCompleted(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData) {
+                likedSaver.check()
+            }
+        })
         player = exo
 
         // A tap on the media notification (or the lock screen's player) opens Now Playing.
@@ -407,6 +558,15 @@ class PlaybackService : MediaSessionService() {
 
         setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this).build())
         restoreLastSession()
+        // The network as it is now (the callback then tells of changes).
+        val caps = runCatching { connectivity().let { it.getNetworkCapabilities(it.activeNetwork) } }.getOrNull()
+        AudioCache.online = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) ?: isNetworkValidated()
+        caps?.let {
+            likedSaver.onNetwork(
+                it.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
+                it.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
+            )
+        }
         Log.i(TAG, "PlaybackService created")
     }
 
@@ -422,6 +582,7 @@ class PlaybackService : MediaSessionService() {
             Log.i(TAG, "Task removed while not playing: stopping service")
             // Swiped away: nothing may start playing by itself later.
             NetBlock.cancelResume()
+            stopOutageRetry()
             pauseAllPlayersAndStopSelf()
         }
     }
@@ -437,6 +598,7 @@ class PlaybackService : MediaSessionService() {
         handler.removeCallbacks(prefetchCheck)
         handler.removeCallbacks(lowCheck)
         handler.removeCallbacks(blockEnded)
+        stopOutageRetry()
         NetBlock.remove(blockListener)
         NetBlock.cancelResume()
         releaseResumeWakeLock()
@@ -446,6 +608,10 @@ class PlaybackService : MediaSessionService() {
         }
         radio.shutdown()
         StreamResolver.cancelPrefetch()
+        likedSaver.stop()
+        AudioCache.removeListener(likedSaver.cacheListener)
+        AudioCache.removeLikedListener(likedSaver.likedListener)
+        YtDataSpecResolver.gate.allow(emptySet())
         if (networkCallbackRegistered) {
             try {
                 connectivity().unregisterNetworkCallback(networkCallback)
@@ -453,12 +619,16 @@ class PlaybackService : MediaSessionService() {
             }
             networkCallbackRegistered = false
         }
+        // Its tail shares the player's playback thread: released first.
+        crossfade?.release()
+        crossfade = null
         mediaSession?.let { session ->
             session.player.release()
             session.release()
         }
         mediaSession = null
         player = null
+        // The listening cache stays open for the process's life (AudioCache): nothing to release here.
         super.onDestroy()
     }
 
@@ -466,7 +636,18 @@ class PlaybackService : MediaSessionService() {
 
     private inner class PlayerListener : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_ENDED) endedAt = SystemClock.elapsedRealtime()
+            val now = SystemClock.elapsedRealtime()
+            // Playing, then stalled to fill the buffer again: not a seek's, a skip's or an edit's.
+            val rebuffer = rebuffers.onState(
+                ready = playbackState == Player.STATE_READY,
+                buffering = playbackState == Player.STATE_BUFFERING,
+                playWhenReady = player?.playWhenReady == true,
+                now = now,
+            )
+            if (rebuffer) governor.onRebuffer(now)
+            // A stall stops a liked save; ready (or idle), one may start.
+            likedSaver.check()
+            if (playbackState == Player.STATE_ENDED) endedAt = now
             // Loading again (a restored session's first Play, or a retry): autoplay may top up.
             if (playbackState != Player.STATE_IDLE) {
                 handler.removeCallbacks(lowCheck)
@@ -475,6 +656,7 @@ class PlaybackService : MediaSessionService() {
             if (playbackState == Player.STATE_READY) {
                 consecutiveFailures = 0
                 outagePauses = 0
+                lastReadyId = player?.currentMediaItem?.mediaId
                 player?.currentMediaItem?.mediaId?.let { expiredRetried.remove(it) }
                 // No NetBlock.success() here: READY from a cached URL or buffered bytes proves
                 // nothing about YouTube; a successful extraction or InnerTube request does (M1).
@@ -482,11 +664,24 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) {
+                // Its stream works (also after a gapless move to it, which has no READY).
+                lastReadyId = player?.currentMediaItem?.mediaId
+                // Playing again: an outage's tries are over, and nothing waits for the network
+                // (Play pressed during the wait: the wait goes, and says so).
+                stopOutageRetry()
+                if (NetBlock.waitingForNetwork()) NetBlock.takeResume()
+            }
             schedulePrefetch()
             // Where it stopped, and while it plays every few seconds (a crash loses no more).
             handler.removeCallbacks(savePositionTick)
             savePosition()
             if (isPlaying) handler.postDelayed(savePositionTick, POSITION_SAVE_MS)
+        }
+
+        /** Loading started or stopped: the liked saver looks again (it goes by [PlaybackNeed]). */
+        override fun onIsLoadingChanged(isLoading: Boolean) {
+            likedSaver.check()
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
@@ -501,6 +696,7 @@ class PlaybackService : MediaSessionService() {
             if (!playWhenReady && !NetBlock.isBlocked()) {
                 NetBlock.cancelResume()
                 releaseResumeWakeLock()
+                stopOutageRetry()
             }
         }
 
@@ -510,6 +706,8 @@ class PlaybackService : MediaSessionService() {
             reason: Int,
         ) {
             schedulePrefetch()
+            // A seek, a skip or a removal: the buffering it causes is no rebuffer.
+            if (reason != Player.DISCONTINUITY_REASON_AUTO_TRANSITION) rebuffers.onJump(SystemClock.elapsedRealtime())
             if (reason == Player.DISCONTINUITY_REASON_SEEK) savePosition()
         }
 
@@ -522,6 +720,12 @@ class PlaybackService : MediaSessionService() {
             StreamResolver.cancelPrefetch()
             prefetchedKey = null
             Log.i(TAG, "Transition to ${mediaItem?.mediaId} (${JukeUris.ytIdOf(mediaItem)}), reason=$reason")
+            if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) rebuffers.onJump(SystemClock.elapsedRealtime())
+            // Moved on gaplessly, already playing: no READY comes for this one.
+            if (player?.playbackState == Player.STATE_READY) lastReadyId = mediaItem?.mediaId
+            failureSpot.clear()
+            StreamResolver.releaseFormats()
+            governQuality(mediaItem)
             schedulePrefetch()
         }
 
@@ -594,7 +798,29 @@ class PlaybackService : MediaSessionService() {
         val key = "${p.currentMediaItem?.mediaId}>$ytId"
         if (key == prefetchedKey) return
         prefetchedKey = key
-        StreamResolver.prefetch(ytId)
+        // The prefetch thread is the liked saver's too: playback's link comes first.
+        if (StreamResolver.prefetch(ytId)) likedSaver.giveWay()
+    }
+
+    // ---- Auto quality ---------------------------------------------------------------------------
+
+    /**
+     * A track started: Auto's rung for the tracks resolved from now on (one step at most, from
+     * this track's ladder and the rebuffers so far). This track keeps the format it has.
+     */
+    private fun governQuality(item: MediaItem?) {
+        val quality = StreamResolver.quality
+        // The user changed the setting since the last track: probing starts over.
+        if (quality != governedQuality) {
+            governedQuality = quality
+            governor.onSettingChanged()
+        }
+        if (quality != AudioQuality.AUTO) return
+        val ladder = JukeUris.ytIdOf(item)?.let { StreamResolver.lastServed(it) }?.ladderBps ?: emptyList()
+        val before = StreamResolver.autoRung
+        val rung = governor.onTrackStarted(SystemClock.elapsedRealtime(), ladder)
+        StreamResolver.autoRung = rung
+        if (rung != before) Log.i(TAG, "Auto quality: rung ${before + 1} -> ${rung + 1}")
     }
 
     // ---- "Add to queue" (play next, FIFO) ----------------------------------------------------
@@ -649,6 +875,12 @@ class PlaybackService : MediaSessionService() {
         queueChanged()
     }
 
+    /** The Crossfade setting (validated): saved, and in use at once (a change stops a fade under way). */
+    private fun setCrossfade(ms: Int) {
+        PlayerPrefsStore.setCrossfadeMs(this, ms)
+        crossfade?.setSetting(ms)
+    }
+
     /** A tap in Up next: on an autoplay item the radio continues from it. */
     private fun skipTo(p: ExoPlayer, index: Int) {
         resetFailures()
@@ -687,6 +919,7 @@ class PlaybackService : MediaSessionService() {
 
     /** Publishes the queue facts for the plugin's state and checks autoplay (posted, once). */
     private fun queueChanged() {
+        updateLoadAhead()
         QueueInfo.pendingSerials = queue.pendingSerials.toSet()
         QueueInfo.context = context
         QueueInfo.seedId = seedId
@@ -696,6 +929,30 @@ class PlaybackService : MediaSessionService() {
         sessionDirty = true
         handler.removeCallbacks(saveSession)
         handler.postDelayed(saveSession, SESSION_SAVE_DELAY_MS)
+    }
+
+    /** Tells the load control which items play now and next (in play order: shuffle, repeat). */
+    private fun updateLoadAhead() {
+        val lc = oneAhead ?: return
+        val p = player
+        if (p == null || p.mediaItemCount == 0) {
+            lc.currentIndex = C.INDEX_UNSET
+            lc.nextIndex = C.INDEX_UNSET
+            loadingIds = emptySet()
+            YtDataSpecResolver.gate.allow(emptySet())
+            return
+        }
+        val next = p.nextMediaItemIndex
+        lc.nextIndex = next
+        lc.currentIndex = p.currentMediaItemIndex
+        // The same pair may open its stream; the item after next, prepared early, waits.
+        val ids = HashSet<String>(2)
+        JukeUris.ytIdOf(p.currentMediaItem)?.let { ids.add(it) }
+        if (next != C.INDEX_UNSET) JukeUris.ytIdOf(p.getMediaItemAt(next))?.let { ids.add(it) }
+        loadingIds = ids
+        YtDataSpecResolver.gate.allow(ids)
+        // Another pair to load (a skip, a new list): the liked saver looks again.
+        likedSaver.check()
     }
 
     /**
@@ -855,7 +1112,11 @@ class PlaybackService : MediaSessionService() {
         val resolve = error.findCause<ResolveException>()
         val served = ytId?.let { StreamResolver.lastServed(it) }
         val now = System.currentTimeMillis()
-        val facts = TrackErrorPolicy.Facts(
+        val ioOther = error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED ||
+            error.findCause<EOFException>() != null || error.findCause<SocketException>() != null
+        val isCurrent = index == p.currentMediaItemIndex
+        val positionMs = if (isCurrent) p.currentPosition.coerceAtLeast(0L) else 0L
+        val known = TrackErrorPolicy.Facts(
             kind = resolve?.kind,
             httpCode = http?.responseCode,
             urlAgeMs = served?.let { now - it.resolvedAtMs },
@@ -867,16 +1128,31 @@ class PlaybackService : MediaSessionService() {
             blocked = error.findCause<BlockedException>() != null,
             ioNetwork = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
                 error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
-            isCurrent = index == p.currentMediaItemIndex,
+            ioOther = ioOther,
+            networkValidated = isNetworkValidated(),
+            playedThisItem = trackId == lastReadyId,
+            isCurrent = isCurrent,
             hasNext = p.hasNextMediaItem(),
             consecutiveFailures = consecutiveFailures,
             outagePauses = outagePauses,
         )
+        // A track broken at one spot fails there again after each resume (READY in between).
+        // Counted only where the unclear failure decides (not a connection failure, say).
+        val facts = if (TrackErrorPolicy.countsAtSpot(known)) {
+            known.copy(failuresHere = failureSpot.onFailure(trackId, positionMs))
+        } else {
+            known
+        }
         val message = resolve?.message
             ?: http?.let { "HTTP ${it.responseCode}: ${error.errorCodeName}" }
             ?: "${error.errorCodeName}: ${error.message ?: error.cause?.message ?: "unknown error"}"
         val action = TrackErrorPolicy.decide(facts)
         Log.w(TAG, "Player error ${error.errorCodeName} -> ${action.javaClass.simpleName}")
+        // Paused on a track that was playing: when it loads again (from byte 0, so not a
+        // mid-stream load), it keeps its format, whatever Auto's rung says by then.
+        if (TrackErrorPolicy.keepsFormat(action, isCurrent, facts.playedThisItem, positionMs)) {
+            ytId?.let { StreamResolver.keepFormat(it) }
+        }
 
         when (action) {
             TrackErrorPolicy.Action.WaitBlocked -> {
@@ -923,7 +1199,7 @@ class PlaybackService : MediaSessionService() {
                 } else {
                     p.pause()
                 }
-                PlayerBus.emitTrackError(trackId, message, false)
+                PlayerBus.emitTrackError(trackId, message, false, network = action.network, resumes = action.resume)
             }
             TrackErrorPolicy.Action.Skip, TrackErrorPolicy.Action.PauseAtEnd, TrackErrorPolicy.Action.Stop ->
                 perVideoFailure(p, index, trackId, ytId, message, error, action)
@@ -951,12 +1227,67 @@ class PlaybackService : MediaSessionService() {
         if (wasPlaying) ownPause = true
         p.pause()
         if (!wasPlaying) return
-        NetBlock.wantResume()
-        if (!afterBlock) return // an outage: back when the network is validated again
+        NetBlock.wantResume(outage = !afterBlock)
+        if (!afterBlock) {
+            // An outage: back when the network is validated again, or on the next try while
+            // it stays validated (a weak link).
+            resumeSchedule.onOutagePause(SystemClock.elapsedRealtime())
+            armOutageRetry()
+            return
+        }
+        stopOutageRetry()
         // The resume's timer and wake lock, now that it is wanted. A back-off that already
         // ran out by the time its error surfaced (at a track change): try again at once.
         val until = NetBlock.active().first
         if (until > 0L) scheduleResume(until) else handler.post { resumeAfterBlock() }
+    }
+
+    /** The next outage try, or the window's end (one pending at most). */
+    private fun armOutageRetry() {
+        handler.removeCallbacks(outageRetry)
+        val delay = resumeSchedule.delayMs(SystemClock.elapsedRealtime())
+        if (delay != null) handler.postDelayed(outageRetry, delay) else endOutageWait()
+    }
+
+    /** The window is over: the wait is given up (the page hears it, Play still works). */
+    private fun endOutageWait() {
+        handler.removeCallbacks(outageRetry)
+        resumeSchedule.stop()
+        if (NetBlock.waitingForNetwork()) {
+            Log.i(TAG, "Network still not back: no longer resuming by itself")
+            NetBlock.cancelResume()
+        }
+    }
+
+    /**
+     * An outage try: with a validated network, resume (resumeAfterBlock's checks apply: other
+     * audio, headphones gone, Android 12+ background start). A new outage pause arms the next
+     * try; without a validated network the callback resumes, and the try after it is armed.
+     */
+    private fun retryAfterOutage() {
+        if (!NetBlock.waitingForNetwork()) {
+            resumeSchedule.stop()
+            return
+        }
+        val now = SystemClock.elapsedRealtime()
+        if (resumeSchedule.isOver(now)) {
+            endOutageWait()
+            return
+        }
+        resumeSchedule.attempted(now)
+        if (isNetworkValidated()) {
+            Log.i(TAG, "Outage: trying again")
+            lastNetResumeAt = now
+            resumeAfterBlock()
+            // Refused (another app playing, headphones gone, background): the tries are over.
+            if (!NetBlock.waitingForNetwork() && player?.playWhenReady != true) resumeSchedule.stop()
+        }
+        if (NetBlock.waitingForNetwork()) armOutageRetry()
+    }
+
+    private fun stopOutageRetry() {
+        handler.removeCallbacks(outageRetry)
+        resumeSchedule.stop()
     }
 
     /** A real per-video failure: [action] is TrackErrorPolicy's Skip, PauseAtEnd or Stop. */
@@ -1047,6 +1378,7 @@ class PlaybackService : MediaSessionService() {
                 Log.i(TAG, "Pause key while a resume was pending: cancelled")
                 NetBlock.cancelResume()
                 releaseResumeWakeLock()
+                stopOutageRetry()
             }
             return false
         }
@@ -1132,6 +1464,9 @@ class PlaybackService : MediaSessionService() {
                         BridgeLimits.checkString(args.getString(QueueCommands.ARG_SEED), "seedId"),
                     )
                     QueueCommands.ACTION_SET_AUTOPLAY -> setAutoplay(args.getBoolean(QueueCommands.ARG_ENABLED, true))
+                    QueueCommands.ACTION_SET_CROSSFADE -> setCrossfade(
+                        CrossfadePlan.valid(args.getInt(QueueCommands.ARG_MS, -1)) ?: return bad,
+                    )
                     QueueCommands.ACTION_SKIP_TO -> {
                         val index = args.getInt(QueueCommands.ARG_INDEX, -1)
                         if (index !in 0 until p.mediaItemCount) return bad

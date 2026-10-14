@@ -3,7 +3,6 @@ package io.github.iamandelib.cyberjuke.yt
 import io.github.iamandelib.cyberjuke.findCause
 import io.github.iamandelib.cyberjuke.net.BlockedException
 import io.github.iamandelib.cyberjuke.net.FailureKind
-import org.schabi.newpipe.extractor.MediaFormat
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.exceptions.AgeRestrictedContentException
@@ -156,10 +155,6 @@ internal object YtCompat {
                 originalTrack = true,
             )
         }
-
-    /** m4a (AAC) is the most widely decodable; opus/webm is a close second. */
-    fun isPreferredContainer(mimeType: String?): Boolean =
-        mimeType == MediaFormat.M4A.mimeType || mimeType == MediaFormat.WEBMA.mimeType
 
     /**
      * HTTP headers googlevideo expects for a stream URL. Mirrors what NewPipe's

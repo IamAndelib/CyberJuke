@@ -63,6 +63,8 @@ export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [
     upNextIndex,
     context: ctx ? { label: isStr(ctx.label) ? ctx.label : '', mode: ctx.mode === 'radio' ? 'radio' : 'list' } : null,
     seedId: isStr(x.seedId) && x.seedId ? x.seedId : null,
+    waitingForNetwork: x.waitingForNetwork === true,
+    bufferedAheadMs: Math.max(0, finite(x.bufferedAheadMs) ?? 0),
   };
 }
 

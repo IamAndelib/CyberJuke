@@ -162,6 +162,28 @@ describe('NativePlayer: play/pause', () => {
     expect(fake.plugin.play).toHaveBeenCalledTimes(1);
     expect(p.state.value.isPlaying).toBe(true);
   });
+
+  it('shows the wait for the network while native says so, until the user takes over', async () => {
+    const p = new NativePlayer();
+    emit('state', state({ isPlaying: false, queueIds: ['A'], upNextIds: [], upNextKinds: '', waitingForNetwork: true }));
+    expect(p.state.value.waitingForNetwork).toBe(true);
+    emit('state', state({ isPlaying: false, queueIds: ['A'], upNextIds: [], upNextKinds: '' }));
+    expect(p.state.value.waitingForNetwork).toBe(false);
+    emit('state', state({ isPlaying: false, queueIds: ['A'], upNextIds: [], upNextKinds: '', waitingForNetwork: true }));
+    await p.toggle();
+    expect(p.state.value.waitingForNetwork).toBe(false);
+  });
+
+  it('keeps how much audio native has loaded ahead (none from an older native, none for a list just started)', async () => {
+    const p = new NativePlayer();
+    emit('state', state({ isPlaying: false, queueIds: ['A'], upNextIds: [], upNextKinds: '', bufferedAheadMs: 30_000 }));
+    expect(p.state.value.bufferedAheadMs).toBe(30_000);
+    emit('state', state({ isPlaying: false, queueIds: ['A'], upNextIds: [], upNextKinds: '' }));
+    expect(p.state.value.bufferedAheadMs).toBe(0);
+    emit('state', state({ isPlaying: false, queueIds: ['A'], upNextIds: [], upNextKinds: '', bufferedAheadMs: 30_000 }));
+    await p.playList([tr('B')], 0);
+    expect(p.state.value.bufferedAheadMs).toBe(0);
+  });
 });
 
 describe('NativePlayer: edits (K2)', () => {
@@ -258,6 +280,22 @@ describe('NativePlayer: starting a list', () => {
     emit('trackError', { trackId: 'A', message: 'gone', skipped: true });
     emit('state', state({ index: 1, trackId: 'B', queueIds: ['A', 'B'], upNextIds: [], upNextKinds: '', positionMs: 10 }));
     expect(p.state.value.current?.id).toBe('B');
+  });
+
+  it('says why a track stopped: a lost signal that picks up by itself, one that waits for Play, or the track itself', async () => {
+    const p = new NativePlayer();
+    await p.playList([tr('A'), tr('B')], 0, { label: '', mode: 'list' });
+    const said = (e: Record<string, unknown>) => {
+      emit('trackError', { trackId: 'A', message: 'IO_NETWORK_CONNECTION_FAILED', ...e });
+      return toasts.value.at(-1)?.text;
+    };
+    expect(said({ skipped: false, kind: 'network', resumes: true })).toBe('Signal lost. "Title A" picks up when you\'re back.');
+    expect(said({ skipped: false, kind: 'network', resumes: false })).toBe("Signal lost. Press play once you're back online.");
+    expect(said({ skipped: false, kind: 'track', resumes: false })).toBe('Can\'t play "Title A"');
+    expect(said({ skipped: true, kind: 'track', resumes: false })).toBe('Skipped "Title A": unavailable');
+    // An older native without the fields: about the track, as before.
+    expect(said({ skipped: false })).toBe('Can\'t play "Title A"');
+    expect(said({ skipped: true })).toBe('Skipped "Title A": unavailable');
   });
 
   it(`sends at most ${BRIDGE_MAX_ITEMS} tracks, around the start one, and no string longer than native takes (K6)`, async () => {

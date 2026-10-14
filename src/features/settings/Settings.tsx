@@ -1,16 +1,22 @@
 import {
+  CACHE_SIZES,
   CHECK_EVERY_LABELS,
   CHECK_EVERY_OPTIONS,
+  CROSSFADES,
   THEME_LABELS,
   IPV4_MODES,
+  QUALITIES,
   THEMES,
   settings,
   updateSettings,
+  type CrossfadeMs,
   type Ipv4Mode,
+  type Quality,
   type ThemeId,
 } from '../../stores/library';
 import { useEffect, useState } from 'preact/hooks';
 import { player } from '../../player';
+import { clearListeningCache } from '../../player/listeningCache';
 import { block, netStatusText } from '../../stores/block';
 import { AuthError, SIGN_UP_URL, auth, authErrorText } from '../../data/auth';
 import { RELEASES_URL, REPO_URL } from '../../data/model';
@@ -52,9 +58,19 @@ function Toggle({ on, onChange, label, testid }: { on: boolean; onChange: (v: bo
   );
 }
 
-/** Where the code and the releases are (opened in the browser; github.com is allowlisted). */
-const QUALITIES = ['high', 'low'] as const;
+const QUALITY_LABELS: Record<Quality, string> = { auto: 'Auto', high: 'High', low: 'Low' };
+const QUALITY_DESCS: Record<Quality, string> = {
+  auto: 'Best quality the connection can keep up with',
+  high: 'Always the best audio',
+  low: 'Uses the least data',
+};
 
+const CROSSFADE_LABELS: Record<CrossfadeMs, string> = { 0: 'Off', 3000: '3 s', 6000: '6 s', 10000: '10 s' };
+
+/** After Clear cache: liked songs come back by themselves. */
+const CACHE_CLEARED = 'Cache cleared. Liked songs are saved again on Wi-Fi.';
+
+/** Where the code and the releases are (opened in the browser; github.com is allowlisted). */
 function A({ href, children }: { href: string; children: string }) {
   return (
     <a
@@ -94,6 +110,86 @@ function CheckEverySetting() {
             data-testid={`check-every-${v}`}
           >
             {CHECK_EVERY_LABELS[v]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "Listening cache": how much music the phone keeps (recent and next tracks, and liked songs
+ * to play offline), and Clear cache. The app handles the limit by itself; how much is in use
+ * isn't shown.
+ */
+function ListeningCacheSetting() {
+  const cur = settings.value.cacheMb;
+  const onKey = arrowChoice(CACHE_SIZES, cur, (mb) => updateSettings({ cacheMb: mb }));
+  const clear = () => {
+    clearListeningCache()
+      .then(() => toast(CACHE_CLEARED))
+      .catch(() => toast("Couldn't clear the cache"));
+  };
+  return (
+    <div class="setting stack" data-testid="listening-cache">
+      <div class="setting-text">
+        <div class="setting-name" id="cache-label">
+          Listening cache
+        </div>
+        <div class="setting-desc" id="cache-desc">
+          Keeps music playing when the signal drops.
+        </div>
+      </div>
+      <div class="seg-grid three" role="radiogroup" aria-labelledby="cache-label" aria-describedby="cache-desc" onKeyDown={onKey}>
+        {CACHE_SIZES.map((mb) => (
+          <button
+            key={mb}
+            role="radio"
+            aria-checked={cur === mb}
+            tabIndex={cur === mb ? 0 : -1}
+            data-value={mb}
+            class={cur === mb ? 'on' : ''}
+            onClick={() => updateSettings({ cacheMb: mb })}
+            data-testid={`cache-${mb}`}
+          >
+            {mb} MB
+          </button>
+        ))}
+      </div>
+      <button class="btn cache-clear" onClick={clear} data-testid="cache-clear">
+        Clear cache
+      </button>
+    </div>
+  );
+}
+
+/** "Crossfade": Off, or how long the end of a track blends into the next (on the phone). */
+function CrossfadeSetting() {
+  const cur = settings.value.crossfadeMs;
+  const onKey = arrowChoice(CROSSFADES, cur, (ms) => updateSettings({ crossfadeMs: ms }));
+  return (
+    <div class="setting stack">
+      <div class="setting-text">
+        <div class="setting-name" id="crossfade-label">
+          Crossfade
+        </div>
+        <div class="setting-desc" id="crossfade-desc">
+          Blends the end of a track into the next.
+        </div>
+      </div>
+      <div class="seg-grid" role="radiogroup" aria-labelledby="crossfade-label" aria-describedby="crossfade-desc" onKeyDown={onKey}>
+        {CROSSFADES.map((ms) => (
+          <button
+            key={ms}
+            role="radio"
+            aria-checked={cur === ms}
+            tabIndex={cur === ms ? 0 : -1}
+            data-value={ms}
+            class={cur === ms ? 'on' : ''}
+            onClick={() => updateSettings({ crossfadeMs: ms })}
+            data-testid={`crossfade-${ms}`}
+          >
+            {CROSSFADE_LABELS[ms]}
           </button>
         ))}
       </div>
@@ -415,12 +511,20 @@ export function Settings() {
           </div>
           <Toggle on={s.showNsfw} onChange={(v) => updateSettings({ showNsfw: v })} label="Show NSFW tracks" testid="nsfw-toggle" />
         </div>
-        <div class="setting">
+        <div class="setting stack">
           <div class="setting-text">
             <div class="setting-name">Audio quality</div>
-            <div class="setting-desc">Low saves data.</div>
+            <div class="setting-desc" id="quality-desc" data-testid="quality-desc">
+              {QUALITY_DESCS[s.quality]}
+            </div>
           </div>
-          <div class="segmented small" role="radiogroup" aria-label="Audio quality" onKeyDown={arrowChoice(QUALITIES, s.quality, (q) => updateSettings({ quality: q }))}>
+          <div
+            class="seg-grid three"
+            role="radiogroup"
+            aria-label="Audio quality"
+            aria-describedby="quality-desc"
+            onKeyDown={arrowChoice(QUALITIES, s.quality, (q) => updateSettings({ quality: q }))}
+          >
             {QUALITIES.map((q) => (
               <button
                 key={q}
@@ -432,11 +536,12 @@ export function Settings() {
                 onClick={() => updateSettings({ quality: q })}
                 data-testid={`quality-${q}`}
               >
-                {q === 'high' ? 'High' : 'Low'}
+                {QUALITY_LABELS[q]}
               </button>
             ))}
           </div>
         </div>
+        <ListeningCacheSetting />
         <div class="setting stack">
           <div class="setting-text">
             <div class="setting-name">IPv4</div>
@@ -467,6 +572,7 @@ export function Settings() {
           </div>
           <Toggle on={s.autoplay} onChange={(v) => updateSettings({ autoplay: v })} label="Autoplay" testid="autoplay-toggle" />
         </div>
+        <CrossfadeSetting />
         <CheckEverySetting />
       </section>
 

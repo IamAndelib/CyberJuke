@@ -133,6 +133,9 @@ internal object NetBlock {
 
         /** It no longer should ([cancelResume]; any thread). */
         fun onResumeCancelled() {}
+
+        /** [waitingForNetwork] changed (any thread). */
+        fun onWaitingChanged(waiting: Boolean) {}
     }
 
     /** The last limit YouTube put on us, for the Settings diagnostics line. */
@@ -153,6 +156,10 @@ internal object NetBlock {
     /** Until when playback should start again by itself once the back-off ends (0 = don't). */
     @Volatile
     private var resumeUntil = 0L
+
+    /** The pending resume is an outage's (the network), not a back-off's. */
+    @Volatile
+    private var resumeForOutage = false
 
     /**
      * Auto-resume only within this long of playback being interrupted: no surprise music much
@@ -223,27 +230,47 @@ internal object NetBlock {
         if (playback.reset(now, keepLevel)) listeners.forEach { it.onUnblocked() }
     }
 
-    /** Playback was playing (or asked to) when a back-off stopped it: resume once it ends. */
-    fun wantResume() {
+    /**
+     * Playback was playing (or asked to) when a back-off stopped it: resume once it ends.
+     * [outage]: an outage stopped it instead, so it resumes once the network is back.
+     */
+    fun wantResume(outage: Boolean = false) {
+        val before = waitingForNetwork()
         resumeUntil = clock() + RESUME_WINDOW_MS
+        resumeForOutage = outage
         listeners.forEach { it.onResumeWanted() }
+        waitingChanged(before)
     }
 
     /** The user paused or stopped: no resume. */
     fun cancelResume() {
+        val before = waitingForNetwork()
         val was = resumeUntil
         resumeUntil = 0L
+        resumeForOutage = false
         if (was > 0L) listeners.forEach { it.onResumeCancelled() }
+        waitingChanged(before)
     }
 
     /** True once if playback should resume now (and clears it); false if too late or not wanted. */
     fun takeResume(): Boolean {
+        val before = waitingForNetwork()
         val wanted = resumeUntil
         resumeUntil = 0L
+        resumeForOutage = false
+        waitingChanged(before)
         return wanted > 0L && clock() <= wanted
     }
 
     fun resumePending(): Boolean = resumeUntil > 0L && clock() <= resumeUntil
+
+    /** An outage paused playback and it resumes once the network is back (the `state` event's `waitingForNetwork`). */
+    fun waitingForNetwork(): Boolean = resumeForOutage && resumePending()
+
+    private fun waitingChanged(before: Boolean) {
+        val now = waitingForNetwork()
+        if (now != before) listeners.forEach { it.onWaitingChanged(now) }
+    }
 
     /** Tests only. */
     internal fun resetForTest() {
@@ -252,6 +279,7 @@ internal object NetBlock {
         listeners.clear()
         lastLimit = null
         resumeUntil = 0L
+        resumeForOutage = false
         clock = { System.currentTimeMillis() }
     }
 }

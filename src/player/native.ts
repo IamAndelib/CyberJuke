@@ -3,7 +3,7 @@
  * The native engineer implements exactly this; do not change it unilaterally.
  */
 import { registerPlugin } from '@capacitor/core';
-import type { Quality } from '../stores/library';
+import type { CrossfadeMs, Quality } from '../stores/library';
 
 export interface NativeTrack { id: string; ytId: string; title: string; artist: string; artworkUrl: string; by?: string; postUrl?: string; membersOnly?: boolean }
 export type RepeatMode = 'off' | 'all' | 'one';
@@ -28,6 +28,16 @@ export interface NativeState {
   context: { label: string; mode: 'radio' | 'list' } | null;
   /** The track autoplay follows (the started track, or the autoplay track tapped). */
   seedId: string | null;
+  /**
+   * The connection dropped and playback paused; it resumes by itself once the network is back
+   * (within a few minutes). Sent again whenever it changes. Absent from older natives: false.
+   */
+  waitingForNetwork?: boolean;
+  /**
+   * How much of the current track is loaded past the position, in ms: bufferedPosition minus
+   * position, at least 0 (a restored session not loaded yet has none). Absent from older natives: 0.
+   */
+  bufferedAheadMs?: number;
 }
 /** Why YouTube is refusing requests from this network (Y1). */
 export type BlockReason = 'BOT_CHECK' | 'RATE_LIMIT' | 'STREAM_FORBIDDEN';
@@ -70,7 +80,13 @@ interface JukePlayerPlugin {
   skipToIndex(o: { index: number; expectId?: string }): Promise<void>;
   setShuffle(o: { enabled: boolean }): Promise<void>;
   setRepeat(o: { mode: RepeatMode }): Promise<void>;
+  /** 'auto' steps between bitrates as the connection allows, between tracks; an unknown value is 'auto'. */
   setQuality(o: { quality: Quality }): Promise<void>;
+  /**
+   * Crossfade: 0 (Off) or the fade, in ms, between tracks that end by themselves (not on a
+   * skip, repeat-one or an outage; shrunk on short tracks). Saved natively; anything else rejects.
+   */
+  setCrossfade(o: { ms: CrossfadeMs }): Promise<void>;
   getState(): Promise<NativeState>;
   /** From an Android intent extra (debuggable builds), used by the CI smoke test. */
   getLaunchOptions(): Promise<{ autoplay?: 'latest' }>;
@@ -92,11 +108,40 @@ interface JukePlayerPlugin {
     autoIpv4?: boolean;
     lastLimit?: { at: number; reason: string; surface: string };
   }>;
+  /**
+   * The listening cache: the liked songs, newest like first (at most BRIDGE_MAX_ITEMS), and which
+   * of them are members-only (their audio is tagged, so a sign-out removes it). Native keeps them
+   * in the cache last, saves a few liked since the last call at once and older ones on Wi-Fi, so
+   * they play offline. The upkeep calls (this, setCacheLimit, clearCache, signedOut) resolve once
+   * done, and reject when there is no cache.
+   */
+  setLikedIds(o: { ytIds: string[]; membersOnly: string[] }): Promise<void>;
+  /** The listening cache's size; 128, 256 or 512 (anything else is 256). A smaller one evicts at once. */
+  setCacheLimit(o: { mb: number }): Promise<void>;
+  /** Empties the listening cache. Playback goes on. */
+  clearCache(): Promise<void>;
+  /**
+   * Signed out (or starting signed out): the cached audio of every members-only track goes, and
+   * none is cached again until signedIn(). Cheap when there is none.
+   */
+  signedOut(): Promise<void>;
+  /** Signed in: members-only audio may be cached again. */
+  signedIn(): Promise<void>;
+  /** The liked songs saved whole on the phone, by ytId: they play offline. */
+  cachedIds(): Promise<{ ytIds: string[] }>;
   /** Keep a screen area (CSS px relative to the WebView) out of the system back gesture; null clears it. */
   setGestureExclusion(rect: { left: number; top: number; width: number; height: number } | null): Promise<void>;
   /** Native re-sends `tracks` when a `tracks` or `state` listener is added (K4): add `tracks` first. */
   addListener(event: 'state', cb: (s: NativeState) => void): Promise<{ remove: () => Promise<void> }>;
-  addListener(event: 'trackError', cb: (e: { trackId: string; message: string; skipped: boolean }) => void): Promise<{ remove: () => Promise<void> }>;
+  /**
+   * A track failed. `kind`: 'network' when the connection did (native paused on it, and picks
+   * up by itself when `resumes`), 'track' when the track itself did. An older native sends
+   * neither: treat it as 'track'.
+   */
+  addListener(
+    event: 'trackError',
+    cb: (e: { trackId: string; message: string; skipped: boolean; kind?: 'network' | 'track'; resumes?: boolean }) => void,
+  ): Promise<{ remove: () => Promise<void> }>;
   /** YouTube is refusing this network: playback paused, nothing is requested until `until`. */
   addListener(event: 'blocked', cb: (e: BlockedEvent) => void): Promise<{ remove: () => Promise<void> }>;
   addListener(event: 'unblocked', cb: (e: Record<string, never>) => void): Promise<{ remove: () => Promise<void> }>;
@@ -106,6 +151,8 @@ interface JukePlayerPlugin {
   addListener(event: 'tracks', cb: (e: { tracks: NativeTrack[] }) => void): Promise<{ remove: () => Promise<void> }>;
   /** Parsing failed in a way that means YouTube changed something (an app update is needed). */
   addListener(event: 'extractorBroken', cb: (e: { message: string }) => void): Promise<{ remove: () => Promise<void> }>;
+  /** The liked songs saved whole changed (sent only when the set does, at most every 2 s): the whole set. */
+  addListener(event: 'cacheChanged', cb: (e: { ytIds: string[] }) => void): Promise<{ remove: () => Promise<void> }>;
   /** The media notification was tapped (kept until a listener comes, for a cold start). */
   addListener(event: 'openNowPlaying', cb: (e: Record<string, never>) => void): Promise<{ remove: () => Promise<void> }>;
 }

@@ -52,14 +52,16 @@ const FAKE_YT = `
 (() => {
   class Player {
     constructor(el, opts) {
-      this.opts = opts; this.t = 0; this.state = -1; this.timer = null; this.starting = null;
+      this.opts = opts; this.t = 0; this.state = -1; this.timer = null; this.starting = null; this.loaded = false;
       setTimeout(() => opts.events.onReady && opts.events.onReady(), 30);
     }
     emit(s) { this.state = s; this.opts.events.onStateChange && this.opts.events.onStateChange({ data: s }); }
     // Like the real player: buffering, then playing, unless paused (or cued) meanwhile.
-    loadVideoById() { this.t = 0; this.emit(3); clearTimeout(this.starting); this.starting = setTimeout(() => this.playVideo(), 150); }
-    cueVideoById() { clearTimeout(this.starting); this.t = 0; this.emit(5); }
+    loadVideoById() { this.t = 0; this.loaded = false; this.emit(3); clearTimeout(this.starting); this.starting = setTimeout(() => this.playVideo(), 150); }
+    cueVideoById() { clearTimeout(this.starting); this.t = 0; this.loaded = false; this.emit(5); }
     playVideo() {
+      // Once it plays, all of it is loaded (the real one loads ahead as it goes).
+      this.loaded = true;
       clearInterval(this.timer);
       this.timer = setInterval(() => { this.t += 0.25; }, 250);
       this.emit(1);
@@ -68,6 +70,7 @@ const FAKE_YT = `
     seekTo(s) { this.t = s - 71; window.__ytSeeks = (window.__ytSeeks || 0) + 1; }
     getCurrentTime() { return this.t + 71; }
     getDuration() { return 247; }
+    getVideoLoadedFraction() { return this.loaded ? 1 : 0; }
     setPlaybackQuality() {}
   }
   window.YT = { Player };
