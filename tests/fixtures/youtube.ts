@@ -45,39 +45,61 @@ function fakeThumb(id: string, wide = false): string {
 
 /**
  * A stand-in for the YouTube IFrame API, defined before the app loads (the app's CSP
- * blocks the real script): `window.YT.Player` "plays" by advancing a clock, starting
- * at 71 s into a 247 s track. `window.__cyberjukeYt.stall()` makes the last player
- * buffer (its clock stops) and `resume()` plays on.
+ * blocks the real script): `window.YT.Player` "plays" by the page's clock (Date.now()),
+ * starting at 71 s into a 247 s track, and ends the track by itself when it reaches the
+ * end: one timer for that, nothing ticking, so `page.clock` runs a long session in an
+ * instant (runFor) or a track at a time (fastForward). `window.__cyberjukeYt` drives the
+ * last player: `stall()` makes it buffer (its clock stops) and `resume()` plays on;
+ * `end()` ends the track now; `error(code)` reports a player error (2, 5, 100, 101, 150:
+ * the track can't play here).
  */
 const FAKE_YT = `
 (() => {
+  const START = 71, DURATION = 247;
   let last = null;
   class Player {
     constructor(el, opts) {
       last = this;
-      this.opts = opts; this.t = 0; this.state = -1; this.timer = null; this.starting = null;
+      this.opts = opts; this.base = 0; this.playingSince = null; this.state = -1; this.ending = null; this.starting = null;
       setTimeout(() => opts.events.onReady && opts.events.onReady(), 30);
     }
     emit(s) { this.state = s; this.opts.events.onStateChange && this.opts.events.onStateChange({ data: s }); }
+    // Seconds played of this track: what was played before the last pause, plus the stretch since.
+    played() { return this.base + (this.playingSince == null ? 0 : (Date.now() - this.playingSince) / 1000); }
+    hold() { this.base = this.played(); this.playingSince = null; clearTimeout(this.ending); this.ending = null; }
     // Like the real player: buffering, then playing, unless paused (or cued) meanwhile.
-    loadVideoById() { this.t = 0; this.emit(3); clearTimeout(this.starting); this.starting = setTimeout(() => this.playVideo(), 150); }
-    cueVideoById() { clearTimeout(this.starting); this.t = 0; this.emit(5); }
+    loadVideoById() { this.hold(); this.base = 0; this.emit(3); clearTimeout(this.starting); this.starting = setTimeout(() => this.playVideo(), 150); }
+    cueVideoById() { clearTimeout(this.starting); this.hold(); this.base = 0; this.emit(5); }
     playVideo() {
-      clearInterval(this.timer);
-      this.timer = setInterval(() => { this.t += 0.25; }, 250);
+      this.hold();
+      this.playingSince = Date.now();
+      this.scheduleEnd();
       this.emit(1);
     }
-    pauseVideo() { clearTimeout(this.starting); clearInterval(this.timer); this.emit(2); }
+    // The end comes when the clock gets there (checked, so a jump of the clock can't end a track early).
+    scheduleEnd() {
+      const left = DURATION - this.getCurrentTime();
+      this.ending = setTimeout(() => (this.getCurrentTime() >= DURATION ? this.end() : this.scheduleEnd()), Math.max(0, left * 1000));
+    }
+    pauseVideo() { clearTimeout(this.starting); this.hold(); this.emit(2); }
     // The stream stalls: buffering, the clock stopped, until resume().
-    stall() { clearTimeout(this.starting); clearInterval(this.timer); this.emit(3); }
+    stall() { clearTimeout(this.starting); this.hold(); this.emit(3); }
     resume() { this.playVideo(); }
-    seekTo(s) { this.t = s - 71; window.__ytSeeks = (window.__ytSeeks || 0) + 1; }
-    getCurrentTime() { return this.t + 71; }
-    getDuration() { return 247; }
+    // The track reached its end (the app moves on to the next one).
+    end() { clearTimeout(this.starting); this.hold(); this.base = DURATION - START; this.emit(0); }
+    error(code) { clearTimeout(this.starting); this.hold(); this.opts.events.onError && this.opts.events.onError({ data: code }); }
+    seekTo(s) { const playing = this.playingSince != null; this.hold(); this.base = s - START; if (playing) { this.playingSince = Date.now(); this.scheduleEnd(); } window.__ytSeeks = (window.__ytSeeks || 0) + 1; }
+    getCurrentTime() { return this.played() + START; }
+    getDuration() { return DURATION; }
     setPlaybackQuality() {}
   }
   window.YT = { Player };
-  window.__cyberjukeYt = { stall: () => last && last.stall(), resume: () => last && last.resume() };
+  window.__cyberjukeYt = {
+    stall: () => last && last.stall(),
+    resume: () => last && last.resume(),
+    end: () => last && last.end(),
+    error: (code) => last && last.error(code),
+  };
 })();
 `;
 
