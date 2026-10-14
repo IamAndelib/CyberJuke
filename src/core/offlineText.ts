@@ -6,10 +6,10 @@
  * screens.
  */
 export const OFFLINE = {
-  /** The bar at the top while the device is offline. */
-  banner: '[ offline ] no carrier · connect to play',
+  /** The bar at the top while the device is offline (wrapped, the · stays on the first line). */
+  banner: '[ offline ] no carrier\u00a0· connect to play',
   /** The bar while offline with liked songs saved (it opens Liked). */
-  bannerLiked: '[ offline ] no carrier · your liked songs still play',
+  bannerLiked: '[ offline ] no carrier\u00a0· your liked songs still play',
   /** The state a list shows instead of its rows (OfflineGate). */
   glyph: '[ NO CARRIER ]',
   title: "Line's dead",
@@ -27,7 +27,8 @@ export const OFFLINE = {
   lostWaits: "Signal lost. Press play once you're back online.",
   /** In place of the time (Now Playing) and the artist (mini player) while native waits for the network. */
   waiting: 'Waiting for carrier…',
-  pullAgain: 'No carrier. Connect and pull again.',
+  /** A pull to refresh while offline. */
+  pullAgain: 'No carrier. Connect, then refresh.',
   lyrics: "No carrier. Lyrics load when you're back online.",
 } as const;
 

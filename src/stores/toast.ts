@@ -1,4 +1,5 @@
 import { effect, signal } from '@preact/signals';
+import { exposeForTests } from '../core/testHooks';
 
 /** A button on a toast (Undo): tapping it runs `run` and dismisses the toast. */
 interface ToastAction {
@@ -117,3 +118,6 @@ export function runToastAction(id: number): void {
   dismissToast(id);
   t?.action?.run();
 }
+
+// Tests: show any message (the layout checks and screenshots of long ones).
+exposeForTests('__cyberjukeToast', toast);

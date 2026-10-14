@@ -1,6 +1,6 @@
 import { expect, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { opened, openNowPlaying, openSearch, playerCalls, recordOpens, seedStorage, start, waitForTracks } from '../helpers';
+import { expectStable, opened, openNowPlaying, openSearch, playerCalls, recordOpens, seedStorage, start, waitForTracks } from '../helpers';
 
 /**
  * When things go wrong: YouTube limiting the network or changing something (Y1),
@@ -94,35 +94,84 @@ const NO_CARRIER = /^\[ NO CARRIER \]Line's deadConnect to the internet to load 
 const NO_CARRIER_GLOBAL = /^\[ NO CARRIER \]Line's deadConnect to the internet to search Global\.\s*Redial$/;
 const TAP_TOAST = 'No carrier. Connect to play.';
 
-test('offline, lists that only lead to music ask to connect, and come back by themselves', async ({ page, backend }) => {
+test('a handover blip shorter than the grace changes nothing; a loss that lasts goes offline', async ({ page, backend }) => {
+  await start(page);
+  await page.evaluate(() => (window.__cyberjukeOfflineGraceMs = 1500));
+  const home = page.getByTestId('screen-home');
+  const onScreen = async () => ({
+    banner: await page.getByTestId('offline-banner').count(),
+    dimmed: await home.locator('.row.off').count(),
+    noCarrier: await page.getByTestId('offline').count(),
+    rows: await home.getByTestId('track-row').count(),
+  });
+  const before = await onScreen();
+  expect(before).toMatchObject({ banner: 0, dimmed: 0, noCarrier: 0 });
+
+  // Wi-Fi to data: "not connected" for under a second, then back.
+  await setOffline(page, backend, true);
+  expect(await expectStable(onScreen, 700)).toEqual(before);
+  await setOffline(page, backend, false);
+  // Past the grace too: nothing happened, nothing reloaded.
+  expect(await expectStable(onScreen, 1500)).toEqual(before);
+
+  // Gone for longer than the grace: offline.
+  await setOffline(page, backend, true);
+  await expect(page.getByTestId('offline-banner')).toHaveText(BANNER);
+  // And back: online at once.
+  await setOffline(page, backend, false);
+  await expect(page.getByTestId('offline-banner')).toHaveCount(0, { timeout: 1000 });
+});
+
+/** The `[ NO CARRIER ]` state sits in the middle of its screen's content box. */
+async function expectCentred(page: Page, screen: string): Promise<void> {
+  const gaps = await page.getByTestId(screen).evaluate((el) => {
+    const body = el.querySelector('.screen-body') as HTMLElement;
+    const b = body.getBoundingClientRect();
+    const cs = getComputedStyle(body);
+    const s = el.querySelector('[data-testid="offline"]')!.getBoundingClientRect();
+    return { above: s.top - (b.top + parseFloat(cs.paddingTop)), below: b.bottom - parseFloat(cs.paddingBottom) - s.bottom };
+  });
+  expect(gaps.above).toBeGreaterThan(100);
+  expect(Math.abs(gaps.above - gaps.below)).toBeLessThanOrEqual(2);
+}
+
+test('offline, lists already shown stay with their rows dimmed; lists opened offline ask to connect; all come back by themselves', async ({ page, backend }) => {
   await start(page);
   await setOffline(page, backend, true);
   await expect(page.getByTestId('offline-banner')).toHaveText(BANNER);
 
-  // Home: Latest and Most saved; the Shuffle hero and the genre chips stay.
+  // Home was showing Latest: its rows stay, dimmed (with a short fade), and a tap says to connect.
   const home = page.getByTestId('screen-home');
-  await expect(home.getByTestId('offline')).toHaveText(NO_CARRIER);
-  await expect(home.getByTestId('track-row')).toHaveCount(0);
+  const rows = home.getByTestId('track-row');
+  await expect(rows.first()).toHaveClass(/\boff\b/);
+  await expect(rows.first().getByTestId('track-play')).toHaveAttribute('aria-disabled', 'true');
+  await expect(home.locator('.row:not(.off)')).toHaveCount(0);
+  await expect(home.getByTestId('offline')).toHaveCount(0);
+  expect(await rows.first().locator('.row-main').evaluate((e) => getComputedStyle(e).transitionDuration)).toBe('0.25s');
+  await rows.first().getByTestId('track-play').click({ force: true });
+  await expect(page.getByTestId('toast')).toHaveText(TAP_TOAST);
+  await expect(page.getByTestId('mini-player')).toHaveCount(0);
   await expect(home.getByTestId('shuffle-all')).toBeVisible();
   await expect(home.getByTestId('genre-chips')).toBeVisible();
-  await page.getByTestId('sort-saved').click();
-  await expect(home.getByTestId('offline')).toHaveText(NO_CARRIER);
-  await expect(home.getByTestId('track-row')).toHaveCount(0);
-  await page.getByTestId('sort-latest').click();
-  // Redial while still offline: still no carrier.
-  await home.getByTestId('retry').click();
-  await expect(home.getByTestId('retry')).toHaveAttribute('aria-busy', 'false');
-  await expect(home.getByTestId('offline')).toBeVisible();
 
-  // The Genres and Artists grids.
+  // The Genres and Artists grids, opened offline: no carrier, alone and in the middle.
   await page.getByTestId('tab-genres').click();
   const genres = page.getByTestId('screen-genres');
   await expect(genres.getByTestId('offline')).toHaveText(NO_CARRIER);
+  await expect(genres.getByTestId('offline')).toHaveClass(/\bappear\b/);
   await expect(genres.getByTestId('genre-tile')).toHaveCount(0);
+  await expect(genres.locator('.fineprint')).toHaveCount(0);
+  await expectCentred(page, 'screen-genres');
+  // Redial while still offline: still no carrier.
+  await genres.getByTestId('retry').click();
+  await expect(genres.getByTestId('retry')).toHaveAttribute('aria-busy', 'false');
+  await expect(genres.getByTestId('offline')).toBeVisible();
   await page.getByTestId('tab-artists').click();
   const artists = page.getByTestId('screen-artists');
   await expect(artists.getByTestId('offline')).toHaveText(NO_CARRIER);
   await expect(artists.getByTestId('artist-tile')).toHaveCount(0);
+  await expect(artists.locator('.fineprint')).toHaveCount(0);
+  await expectCentred(page, 'screen-artists');
 
   // Search: the Jukebox and Global.
   await openSearch(page);
@@ -142,35 +191,80 @@ test('offline, lists that only lead to music ask to connect, and come back by th
   await expect(search.getByTestId('offline')).toHaveCount(0);
   await page.getByTestId('search-close').click();
   await expect(artists.getByTestId('artist-tile').first()).toBeVisible();
+  await expect(artists.locator('.fineprint')).toBeVisible();
   await page.getByTestId('tab-genres').click();
   await expect(genres.getByTestId('genre-tile').first()).toBeVisible();
+  await expect(genres.locator('.fineprint')).toBeVisible();
   await page.getByTestId('tab-home').click();
   await waitForTracks(page);
-  await expect(home.getByTestId('offline')).toHaveCount(0);
+  await expect(home.locator('.row.off')).toHaveCount(0);
+  await expect(rows.first().getByTestId('track-play')).not.toHaveAttribute('aria-disabled');
 });
 
-test('offline, an open genre page and artist page ask to connect, then show their rows again', async ({ page, backend }) => {
+test('offline, an open genre page and artist page keep their rows, dimmed; a tap says to connect', async ({ page, backend }) => {
   await start(page);
   await page.getByTestId('tab-genres').click();
   await page.getByTestId('genre-tile').first().click();
   const genre = page.getByTestId('screen-genre');
-  await expect(genre.getByTestId('track-row').first()).toBeVisible();
+  const rows = genre.getByTestId('track-row');
+  await expect(rows.first()).toBeVisible();
+  const count = await rows.count();
   await setOffline(page, backend, true);
-  await expect(genre.getByTestId('offline')).toHaveText(NO_CARRIER);
-  await expect(genre.getByTestId('track-row')).toHaveCount(0);
-  await expect(genre.getByTestId('genre-play-all')).toHaveCount(0);
+  await expect(rows.first()).toHaveClass(/\boff\b/);
+  await expect(rows).toHaveCount(count);
+  await expect(genre.getByTestId('offline')).toHaveCount(0);
+  await genre.getByTestId('genre-play-all').click();
+  await expect(page.getByTestId('toast')).toHaveText(TAP_TOAST);
+  await rows.nth(1).getByTestId('track-play').click({ force: true });
+  await expect(page.getByTestId('toast')).toHaveText(TAP_TOAST);
+  await expect(page.getByTestId('mini-player')).toHaveCount(0);
   await setOffline(page, backend, false);
-  await expect(genre.getByTestId('track-row').first()).toBeVisible();
+  await expect(genre.locator('.row.off')).toHaveCount(0);
 
   await page.getByTestId('tab-artists').click();
   await page.getByTestId('artist-grid').getByTestId('artist-tile').first().click();
   const artist = page.getByTestId('screen-artist');
   await expect(artist.getByTestId('artist-jukebox')).toBeVisible();
   await setOffline(page, backend, true);
-  await expect(artist.getByTestId('offline')).toHaveText(NO_CARRIER);
-  await expect(artist.getByTestId('artist-jukebox')).toHaveCount(0);
-  await setOffline(page, backend, false);
+  await expect(page.getByTestId('offline-banner')).toBeVisible();
   await expect(artist.getByTestId('artist-jukebox')).toBeVisible();
+  await expect(artist.getByTestId('offline')).toHaveCount(0);
+  await expect(artist.locator('.row.off').first()).toBeVisible();
+  await setOffline(page, backend, false);
+  await expect(artist.locator('.row.off')).toHaveCount(0);
+});
+
+test('launched offline: no carrier on Home, Genres and Artists (no intro, in the middle), then the lists once back', async ({ page, backend }) => {
+  // The device is offline from the start (navigator.onLine, which the Network plugin reads on the web).
+  await page.addInitScript(() => {
+    const w = window as unknown as { __netUp: boolean };
+    w.__netUp = false;
+    Object.defineProperty(Navigator.prototype, 'onLine', { configurable: true, get: () => w.__netUp });
+  });
+  backend.offline = true;
+  await page.goto('/');
+  await expect(page.getByTestId('offline-banner')).toHaveText(BANNER);
+  const home = page.getByTestId('screen-home');
+  await expect(home.getByTestId('offline')).toHaveText(NO_CARRIER);
+  await expect(home.getByTestId('track-row')).toHaveCount(0);
+  for (const tab of ['genres', 'artists'] as const) {
+    await page.getByTestId(`tab-${tab}`).click();
+    const screen = page.getByTestId(`screen-${tab}`);
+    await expect(screen.getByTestId('offline')).toHaveText(NO_CARRIER);
+    await expect(screen.locator('.fineprint')).toHaveCount(0);
+    await expectCentred(page, `screen-${tab}`);
+  }
+
+  backend.offline = false;
+  await page.evaluate(() => {
+    (window as unknown as { __netUp: boolean }).__netUp = true;
+    window.dispatchEvent(new Event('online'));
+  });
+  await expect(page.getByTestId('offline-banner')).toHaveCount(0);
+  await expect(page.getByTestId('screen-artists').getByTestId('artist-tile').first()).toBeVisible();
+  await page.getByTestId('tab-home').click();
+  await waitForTracks(page);
+  await expect(home.getByTestId('offline')).toHaveCount(0);
 });
 
 test('offline, the paused track resumes; Shuffle says to connect and leaves the player as it was', async ({ page, backend }) => {
@@ -299,8 +393,15 @@ test('Here on the Genres tab says the Jukebox could not load (with Retry), not "
   await page.getByTestId('search-fab').click();
   await expect(page.getByTestId('here-loading')).toHaveCount(0);
   await expect(page.getByTestId('search').getByTestId('offline')).toBeVisible();
+  await expect(page.getByTestId('search').getByTestId('retry')).toBeVisible();
   backend.offline = false;
   await page.context().setOffline(false);
-  await page.getByTestId('search').getByTestId('retry').click();
-  await expect(page.getByTestId('here-places').getByTestId('here-place').first()).toBeVisible();
+  // Back online, Home's list (kept on screen while offline) loads again and may bring the
+  // genres with it before Retry is needed; otherwise Retry loads them.
+  const places = page.getByTestId('here-places').getByTestId('here-place').first();
+  const retry = page.getByTestId('search').getByTestId('retry');
+  await expect(places.or(retry)).toBeVisible();
+  if (await retry.isVisible()) await retry.click();
+  await expect(places).toBeVisible();
+  await expect(page.getByTestId('search').getByTestId('offline')).toHaveCount(0);
 });
