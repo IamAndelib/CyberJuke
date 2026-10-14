@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { playerCalls, seedStorage, start } from '../helpers';
+import { playerCalls, seedStorage, setOffline, start } from '../helpers';
 
 /**
  * The listening cache (native): liked songs saved on the phone play offline, from any list,
@@ -13,11 +13,6 @@ const LIKED = [track('l1'), track('l2'), track('l3')];
 
 /** What native reports as saved whole (by ytId). */
 const saved = (page: Page, ytIds: string[]) => page.evaluate((ids) => (window as unknown as { __cyberjukeCache: { saved(ids: string[]): void } }).__cyberjukeCache.saved(ids), ytIds);
-
-async function setOffline(page: Page, backend: { offline: boolean }, off: boolean): Promise<void> {
-  backend.offline = off;
-  await page.context().setOffline(off);
-}
 
 const BANNER = '[ offline ] no carrier · connect to play';
 const BANNER_LIKED = '[ offline ] no carrier · your liked songs still play';

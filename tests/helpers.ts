@@ -76,6 +76,8 @@ declare global {
   interface Window {
     /** recordOpens: the URLs window.open was asked for. */
     __opened?: string[];
+    /** The fixture's hook: fake the page's visibility (setVisibility). */
+    __cyberjukeVisibility: (state: 'hidden' | 'visible') => void;
   }
 }
 
@@ -90,6 +92,15 @@ export async function recordOpens(page: Page): Promise<void> {
   });
 }
 export const opened = (page: Page) => page.evaluate(() => window.__opened ?? []);
+
+/** The device loses (or gets back) its connection: the browser's and the stub backend's. */
+export async function setOffline(page: Page, backend: { offline: boolean }, off: boolean): Promise<void> {
+  backend.offline = off;
+  await page.context().setOffline(off);
+}
+
+/** The app goes to the background or comes back: `document.visibilityState` and its event (the fixture's hook). */
+export const setVisibility = (page: Page, state: 'hidden' | 'visible') => page.evaluate((s) => window.__cyberjukeVisibility(s), state);
 
 export const setLyricsMode = (page: Page, mode: string) => page.evaluate((m) => ((window as unknown as { __cyberjukeLyricsMode: string }).__cyberjukeLyricsMode = m), mode);
 

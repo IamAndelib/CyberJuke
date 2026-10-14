@@ -46,12 +46,15 @@ function fakeThumb(id: string, wide = false): string {
 /**
  * A stand-in for the YouTube IFrame API, defined before the app loads (the app's CSP
  * blocks the real script): `window.YT.Player` "plays" by advancing a clock, starting
- * at 71 s into a 247 s track.
+ * at 71 s into a 247 s track. `window.__cyberjukeYt.stall()` makes the last player
+ * buffer (its clock stops) and `resume()` plays on.
  */
 const FAKE_YT = `
 (() => {
+  let last = null;
   class Player {
     constructor(el, opts) {
+      last = this;
       this.opts = opts; this.t = 0; this.state = -1; this.timer = null; this.starting = null;
       setTimeout(() => opts.events.onReady && opts.events.onReady(), 30);
     }
@@ -65,12 +68,16 @@ const FAKE_YT = `
       this.emit(1);
     }
     pauseVideo() { clearTimeout(this.starting); clearInterval(this.timer); this.emit(2); }
+    // The stream stalls: buffering, the clock stopped, until resume().
+    stall() { clearTimeout(this.starting); clearInterval(this.timer); this.emit(3); }
+    resume() { this.playVideo(); }
     seekTo(s) { this.t = s - 71; window.__ytSeeks = (window.__ytSeeks || 0) + 1; }
     getCurrentTime() { return this.t + 71; }
     getDuration() { return 247; }
     setPlaybackQuality() {}
   }
   window.YT = { Player };
+  window.__cyberjukeYt = { stall: () => last && last.stall(), resume: () => last && last.resume() };
 })();
 `;
 
