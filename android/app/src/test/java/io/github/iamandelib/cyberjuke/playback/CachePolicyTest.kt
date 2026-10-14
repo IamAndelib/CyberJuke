@@ -284,7 +284,7 @@ class CachePolicyTest {
 
     @Test
     fun aBackOffOrABrokenExtractorIsNoFaultOfTheSong() {
-        // The song itself: given up on. The connection: a strike (three and it's given up on).
+        // The song itself: given up on. The connection: a strike (SaveStrikes: waits, then gives up).
         assertEquals(SaveFailure.GIVE_UP, SaveFailure.of(FailureKind.CONTENT))
         assertEquals(SaveFailure.GIVE_UP, SaveFailure.of(FailureKind.OTHER))
         assertEquals(SaveFailure.STRIKE, SaveFailure.of(FailureKind.NETWORK))
@@ -317,12 +317,58 @@ class CachePolicyTest {
     }
 
     @Test
-    fun aSongThatKeepsFailingIsGivenUpOn() {
+    fun aStoppedSaveWaitsLongerEachTimeAndTheFifthStopGivesUp() {
         val s = SaveStrikes()
-        assertFalse(s.stopped("a0000000000"))
-        assertFalse(s.stopped("a0000000000"))
-        assertTrue(s.stopped("a0000000000"))
-        assertFalse(s.stopped("b0000000000"))
+        var now = 1_000_000L
+        // 30 s, 1, 2, 4 min after the first four stops (Media3's DownloadManager retries a download
+        // five times; the doubling is LoadRetry.delayMs's shape).
+        for (wait in listOf(30_000L, 60_000L, 120_000L, 240_000L)) {
+            assertFalse(s.stopped("a0000000000", now))
+            assertEquals(setOf("a0000000000"), s.waiting(now))
+            assertEquals(wait, s.nextDueInMs(now))
+            assertEquals(setOf("a0000000000"), s.waiting(now + wait - 1))
+            // Due: no longer waiting, and no timer left for it.
+            assertEquals(emptySet<String>(), s.waiting(now + wait))
+            assertNull(s.nextDueInMs(now + wait))
+            now += wait
+        }
+        // The fifth stop: given up on for the service's life.
+        assertTrue(s.stopped("a0000000000", now))
+        assertEquals(emptySet<String>(), s.waiting(now))
+        assertNull(s.nextDueInMs(now))
+        // Each song counts on its own; the earliest retry due is the timer's.
+        assertFalse(s.stopped("b0000000000", now - 10_000L))
+        assertFalse(s.stopped("c0000000000", now))
+        assertEquals(setOf("b0000000000", "c0000000000"), s.waiting(now))
+        assertEquals(20_000L, s.nextDueInMs(now))
+    }
+
+    @Test
+    fun aSongSavedAfterAllStartsAfreshNextTime() {
+        val s = SaveStrikes()
+        val now = 1_000_000L
+        for (i in 0 until SaveStrikes.MAX - 1) assertFalse(s.stopped("a0000000000", now))
+        // Saved after all (its fourth try worked): forgotten, no timer left for it.
+        s.forget("a0000000000")
+        assertEquals(emptySet<String>(), s.waiting(now))
+        assertNull(s.nextDueInMs(now))
+        // Cleared from the cache and in trouble again months later: it counts from the start.
+        assertFalse(s.stopped("a0000000000", now))
+        assertEquals(30_000L, s.nextDueInMs(now))
+    }
+
+    @Test
+    fun aRetryFiresWithoutAnotherEvent() {
+        // Every candidate waits for its retry (they're skipped): the timer is the earliest retry.
+        val waiting = Facts(liked, saved = emptySet(), skip = liked.toSet(), retryInMs = 45_000L)
+        assertEquals(45_000L, LikedSaverPolicy.recheckInMs(waiting))
+        assertNull(LikedSaverPolicy.recheckInMs(waiting.copy(retryInMs = null)))
+        // The gap holds back a save too: whichever ends first.
+        val gap = Facts(liked, saved = emptySet(), sinceLastMs = 10_000L, retryInMs = 45_000L)
+        assertEquals(LikedSaverPolicy.MIN_GAP_MS - 10_000L, LikedSaverPolicy.recheckInMs(gap))
+        assertEquals(5_000L, LikedSaverPolicy.recheckInMs(gap.copy(retryInMs = 5_000L)))
+        // A save starts now: it asks again when it finishes, no timer.
+        assertNull(LikedSaverPolicy.recheckInMs(Facts(liked, saved = emptySet(), retryInMs = 45_000L)))
     }
 
     @Test
@@ -342,26 +388,41 @@ class CachePolicyTest {
     }
 
     @Test
-    fun onlineALowerCopyDoesNotStandInForTheQualityAsked() {
-        // High (or Auto at the top rung): a 128 kbps copy won't do for a 160 kbps rung.
-        val wantHigh = CacheKeys.wantedBps(AudioQuality.HIGH, 0, rungItag = 251, ladderBps = emptyList(), online = true)
+    fun onHighALowerCopyDoesNotStandInForTheQualityAsked() {
+        // High: a 128 kbps copy won't do for a 160 kbps rung.
+        val wantHigh = CacheKeys.wantedBps(AudioQuality.HIGH, rungItag = 251, ladderBps = emptyList(), online = true)
         assertEquals(160_000, wantHigh)
         assertNull(CacheKeys.pick(listOf(140), keep = null, rungItag = 251, wantedBps = wantHigh))
         assertEquals(251, CacheKeys.pick(listOf(140, 251), keep = null, rungItag = 251, wantedBps = wantHigh))
         // An AAC 256 kbps copy is at least as good.
         assertEquals(141, CacheKeys.pick(listOf(141), keep = null, rungItag = 251, wantedBps = wantHigh))
-        // Without a link yet: the ladder's rung, else High wants a top-class copy.
-        assertEquals(64_000, CacheKeys.wantedBps(AudioQuality.AUTO, 2, rungItag = null, ladderBps = listOf(160_000, 128_000, 64_000, 48_000), online = true))
-        assertEquals(CacheKeys.TOP_CLASS_BPS, CacheKeys.wantedBps(AudioQuality.HIGH, 0, rungItag = null, ladderBps = emptyList(), online = true))
+        // Without a link yet: the ladder's top, else a top-class copy.
+        assertEquals(160_000, CacheKeys.wantedBps(AudioQuality.HIGH, rungItag = null, ladderBps = listOf(160_000, 128_000, 64_000, 48_000), online = true))
+        assertEquals(CacheKeys.TOP_CLASS_BPS, CacheKeys.wantedBps(AudioQuality.HIGH, rungItag = null, ladderBps = emptyList(), online = true))
         assertNull(CacheKeys.pick(listOf(250), keep = null, rungItag = null, wantedBps = CacheKeys.TOP_CLASS_BPS))
-        // Low, Auto lower down, or offline: any whole copy.
-        assertEquals(0, CacheKeys.wantedBps(AudioQuality.LOW, 0, rungItag = 251, ladderBps = emptyList(), online = true))
-        assertEquals(0, CacheKeys.wantedBps(AudioQuality.HIGH, 0, rungItag = 251, ladderBps = emptyList(), online = false))
+        // Low, or offline: any whole copy.
+        assertEquals(0, CacheKeys.wantedBps(AudioQuality.LOW, rungItag = 251, ladderBps = emptyList(), online = true))
+        assertEquals(0, CacheKeys.wantedBps(AudioQuality.HIGH, rungItag = 251, ladderBps = emptyList(), online = false))
         assertEquals(140, CacheKeys.pick(listOf(140), keep = null, rungItag = 251, wantedBps = 0))
         // A resume stays in its file whatever the setting.
         assertEquals(140, CacheKeys.pick(listOf(140), keep = 140, rungItag = 251, wantedBps = wantHigh))
         // A format of unknown bitrate only when any will do.
         assertNull(CacheKeys.pick(listOf(9999), keep = null, rungItag = null, wantedBps = 64_000))
+    }
+
+    @Test
+    fun onAutoAWholeCopyAlwaysWins() {
+        // Auto asks for no bitrate, whatever the rung it is on or the ladder it knows.
+        assertEquals(0, CacheKeys.wantedBps(AudioQuality.AUTO, rungItag = null, ladderBps = emptyList(), online = true))
+        assertEquals(0, CacheKeys.wantedBps(AudioQuality.AUTO, rungItag = 251, ladderBps = listOf(160_000, 128_000, 64_000, 48_000), online = true))
+        // A fresh process (no link, no ladder in memory) plays the copy saved at Low rather than
+        // downloading the song again.
+        val saved = CacheKeys.of("dQw4w9WgXcQ", 250, 2_000_000L)
+        val wanted = CacheKeys.wantedBps(AudioQuality.AUTO, rungItag = null, ladderBps = emptyList(), online = true)
+        assertEquals(saved, CacheKeys.pickKey(listOf(saved), keepKey = null, rungItag = 251, wantedBps = wanted))
+        // The rung's own format still wins when it is whole too.
+        val top = CacheKeys.of("dQw4w9WgXcQ", 251, 3_000_000L)
+        assertEquals(top, CacheKeys.pickKey(listOf(saved, top), keepKey = null, rungItag = 251, wantedBps = wanted))
     }
 
     @Test

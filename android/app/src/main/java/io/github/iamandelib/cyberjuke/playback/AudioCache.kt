@@ -305,7 +305,9 @@ internal object AudioCache {
     /**
      * A source that writes what it reads into the cache, for the liked saver; null without a
      * cache. Without FLAG_BLOCK_ON_CACHE it never waits for a span playback is writing: it reads
-     * past it from the network instead (not cached then).
+     * past it from the network instead (not cached then). Without FLAG_IGNORE_CACHE_ON_ERROR
+     * (unlike playback's, [CacheRouter]) a cache that can't be written fails the save at once,
+     * into the saver's back-off, instead of downloading the song past the cache for nothing.
      */
     fun downloadSource(): CacheDataSource? {
         val c = open() ?: return null
@@ -408,11 +410,20 @@ internal class CacheMissException : IOException("Not in the listening cache any 
 /**
  * [AudioCache.dataSourceFactory]'s sources: a load with a YouTube cache key ([CacheKeys]) goes
  * through the cache (reads what's there, writes what it fetches, also when the response doesn't
- * say its length: [CacheKeys.cacheFlags]), anything else (the CI tone,
- * HLS) straight to the upstream, as does a members-only video while signed out or one whose
- * copy was just found missing or unreadable ([AudioCache.misses]). Without a cache,
- * everything goes straight. A cache read error is not hidden (no FLAG_IGNORE_CACHE_ON_ERROR): the
- * load fails, the cache drops the broken span, and the retry fetches it.
+ * say its length: [CacheKeys.cacheFlags]), anything else (the CI tone, HLS) straight to the
+ * upstream, as does a members-only video while signed out or one whose copy was just found
+ * missing or unreadable ([AudioCache.misses]). Without a cache, everything goes straight.
+ *
+ * The cache can never stop the track: playback's [CacheDataSource] has FLAG_IGNORE_CACHE_ON_ERROR,
+ * as InnerTune's and Metrolist's do. A cache error (a span file gone or unreadable, a write
+ * failing for low storage or a broken index) still fails that load once, and the cache drops the
+ * broken span; the retry ([JukeLoadErrorPolicy], [LoadRetry.cacheFileRetryMs]) then reopens
+ * the same source, which bypasses the cache for the rest of that track (the error is remembered
+ * per source, and a track keeps its source) and reads the network. A copy found
+ * missing is also remembered ([AudioCache.misses]), so [StreamResolver.cachedKey] stops handing
+ * out its key and the retry resolves a stream URL instead of the `cyberjuke://` one. The liked
+ * saver's [AudioCache.downloadSource] has no such flag: a CacheWriter that can't write must
+ * fail, into the saver's back-off ([SaveStrikes]), not read the whole song for nothing.
  */
 @OptIn(UnstableApi::class)
 internal class CacheRouter(private val cached: DataSource?, private val plain: DataSource) : DataSource {
@@ -451,7 +462,7 @@ internal class CacheRouter(private val cached: DataSource?, private val plain: D
     class Factory(private val upstream: DataSource.Factory) : DataSource.Factory {
         override fun createDataSource(): DataSource {
             val c = AudioCache.open()
-            val cached = c?.let { CacheDataSource(it, CacheMissGuard(upstream.createDataSource()), 0) }
+            val cached = c?.let { CacheDataSource(it, CacheMissGuard(upstream.createDataSource()), CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR) }
             return CacheRouter(cached, upstream.createDataSource())
         }
     }
