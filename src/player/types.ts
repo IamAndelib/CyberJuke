@@ -77,6 +77,8 @@ export interface PlayerState {
   context: PlayContext | null;
   /** The track autoplay follows: the started track, or the autoplay track tapped. */
   seed: Track | null;
+  /** The connection dropped and playback paused; it resumes by itself once it's back (native only). */
+  waitingForNetwork: boolean;
 }
 
 export const EMPTY_STATE: PlayerState = {
@@ -93,6 +95,7 @@ export const EMPTY_STATE: PlayerState = {
   upNext: [],
   context: null,
   seed: null,
+  waitingForNetwork: false,
 };
 
 /** Same interface for the native (Android) and web (YouTube IFrame) implementations. */

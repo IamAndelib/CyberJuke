@@ -3,15 +3,16 @@ package io.github.iamandelib.cyberjuke.playback
 import android.content.Context
 
 /**
- * The page's player settings (Autoplay, audio quality), kept here too (SharedPreferences
- * [PREFS], beside [NetPrefsStore]) and read when the service starts: it can start, and play,
- * before the page has loaded to send them.
+ * The page's player settings (Autoplay, audio quality, the listening cache's size), kept here
+ * too (SharedPreferences [PREFS], beside [NetPrefsStore]) and read when the service starts: it
+ * can start, and play, before the page has loaded to send them.
  */
 internal object PlayerPrefsStore {
     /** The native side's SharedPreferences file (also [NetPrefsStore]'s). */
     const val PREFS = "cyberjuke_player"
     private const val KEY_AUTOPLAY = "autoplay"
     private const val KEY_QUALITY = "quality"
+    private const val KEY_CACHE_MB = "cacheMb"
 
     private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -21,10 +22,17 @@ internal object PlayerPrefsStore {
         prefs(context).edit().putBoolean(KEY_AUTOPLAY, enabled).apply()
     }
 
-    fun quality(context: Context): StreamResolver.Quality =
-        if (prefs(context).getString(KEY_QUALITY, null) == "low") StreamResolver.Quality.LOW else StreamResolver.Quality.HIGH
+    /** Nothing saved yet, or something unknown: Auto. */
+    fun quality(context: Context): AudioQuality = AudioQuality.of(prefs(context).getString(KEY_QUALITY, null))
 
-    fun setQuality(context: Context, quality: StreamResolver.Quality) {
-        prefs(context).edit().putString(KEY_QUALITY, if (quality == StreamResolver.Quality.LOW) "low" else "high").apply()
+    fun setQuality(context: Context, quality: AudioQuality) {
+        prefs(context).edit().putString(KEY_QUALITY, quality.key).apply()
+    }
+
+    /** The listening cache's size in MB; nothing saved yet, or something unknown: the default. */
+    fun cacheMb(context: Context): Int = AudioCache.sizeOf(prefs(context).getInt(KEY_CACHE_MB, AudioCache.DEFAULT_MB))
+
+    fun setCacheMb(context: Context, mb: Int) {
+        prefs(context).edit().putInt(KEY_CACHE_MB, AudioCache.sizeOf(mb)).apply()
     }
 }

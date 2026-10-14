@@ -495,6 +495,22 @@ test('pull to refresh that fails says so and keeps what was shown', async ({ pag
   const f = await finger(page, 200, 320);
   await f.move(0, 400);
   await f.end();
-  await expect(page.getByTestId('toast')).toHaveText(/^(Couldn't refresh\. Try again in a moment\.|You're offline\. Showing what's already loaded\.)$/);
+  await expect(page.getByTestId('toast')).toHaveText(/^(Couldn't refresh\. Try again in a moment\.|No carrier\. Connect, then refresh\.)$/);
+  await expect(screen.getByTestId('genre-tile')).toHaveCount(tiles);
+});
+
+test('pull to refresh offline says to connect, then refresh, and keeps the grid', async ({ page, backend }) => {
+  await page.goto('/');
+  await page.getByTestId('tab-genres').click();
+  const screen = page.getByTestId('screen-genres');
+  await expect(screen.locator('.topbar-sub')).toContainText('genres on the Jukebox');
+  const tiles = await screen.getByTestId('genre-tile').count();
+  backend.offline = true;
+  await page.context().setOffline(true);
+  await expect(page.getByTestId('offline-banner')).toBeVisible();
+  const f = await finger(page, 200, 320);
+  await f.move(0, 400);
+  await f.end();
+  await expect(page.getByTestId('toast')).toHaveText('No carrier. Connect, then refresh.');
   await expect(screen.getByTestId('genre-tile')).toHaveCount(tiles);
 });

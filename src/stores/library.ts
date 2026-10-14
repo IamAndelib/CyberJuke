@@ -26,7 +26,13 @@ export const THEME_LABELS: Record<ThemeId, string> = {
   brutalist: 'Brutalist',
 };
 
-export type Quality = 'high' | 'low';
+/** Audio quality: 'auto' steps between rungs as the connection allows; 'high' and 'low' are fixed. */
+export type Quality = 'auto' | 'high' | 'low';
+export const QUALITIES: readonly Quality[] = ['auto', 'high', 'low'];
+
+/** The listening cache's size in MB (Settings → Listening cache). */
+export type CacheMb = 128 | 256 | 512;
+export const CACHE_SIZES: readonly CacheMb[] = [128, 256, 512];
 
 /** Minutes between checks for new tracks; 0 = only when I refresh. */
 type CheckEvery = 5 | 15 | 30 | 60 | 0;
@@ -54,12 +60,32 @@ export interface Settings {
   autoplay: boolean;
   /** Look for a newer release by itself (daily at most; never for F-Droid installs). */
   checkUpdates: boolean;
+  /** How much music the phone may keep (the listening cache): liked songs to play offline, recent and next tracks. */
+  cacheMb: CacheMb;
+  /** The saved format's version: each migration below runs once. */
+  version: number;
 }
 
 export type Ipv4Mode = 'auto' | 'always' | 'off';
 export const IPV4_MODES: readonly Ipv4Mode[] = ['auto', 'always', 'off'];
 
-const DEFAULT_SETTINGS: Settings = { theme: 'dark', showNsfw: false, quality: 'high', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: true };
+/**
+ * Settings versions: 1 (none saved) had Audio quality 'high' as the default; 2 added 'auto' as
+ * the new default.
+ */
+export const SETTINGS_VERSION = 2;
+
+const DEFAULT_SETTINGS: Settings = {
+  theme: 'dark',
+  showNsfw: false,
+  quality: 'auto',
+  checkEvery: 15,
+  ipv4: 'auto',
+  autoplay: true,
+  checkUpdates: true,
+  cacheMb: 256,
+  version: SETTINGS_VERSION,
+};
 
 /** The old Preferences key of Liked, migrated into its file. */
 const LIKED_LEGACY_KEYS = ['liked'] as const;
@@ -163,15 +189,23 @@ export async function loadLibrary(): Promise<void> {
   const migrated = THEME_MIGRATIONS[merged.theme as string];
   if (migrated) merged.theme = migrated;
   if (!THEMES.includes(merged.theme)) merged.theme = DEFAULT_SETTINGS.theme;
-  if (merged.quality !== 'low') merged.quality = 'high';
+  const savedVersion = typeof rest.version === 'number' && Number.isInteger(rest.version) && rest.version > 0 ? rest.version : 1;
+  // Version 2: 'high' was the default, so a saved 'high' can't be told from a choice: it
+  // becomes the new default, Auto, once. A saved 'low' was always a choice and stays.
+  const upgraded = savedVersion < SETTINGS_VERSION && Object.keys(rest).length > 0;
+  if (savedVersion < 2 && merged.quality === 'high') merged.quality = 'auto';
+  if (!QUALITIES.includes(merged.quality)) merged.quality = DEFAULT_SETTINGS.quality;
+  merged.version = Math.max(savedVersion, SETTINGS_VERSION);
   merged.showNsfw = merged.showNsfw === true;
   // The old on/off "Prefer IPv4": on is 'always'; off becomes the new default, 'auto'.
   if (!IPV4_MODES.includes(rest.ipv4 as Ipv4Mode)) merged.ipv4 = preferIpv4 === true ? 'always' : DEFAULT_SETTINGS.ipv4;
   merged.autoplay = merged.autoplay !== false;
   merged.checkUpdates = merged.checkUpdates !== false;
   if (!CHECK_EVERY_OPTIONS.includes(merged.checkEvery)) merged.checkEvery = DEFAULT_SETTINGS.checkEvery;
+  // Saved before the listening cache (or unknown): the default size.
+  if (!CACHE_SIZES.includes(merged.cacheMb)) merged.cacheMb = DEFAULT_SETTINGS.cacheMb;
   settings.value = merged;
-  if (migrated || preferIpv4 !== undefined) write(K_SETTINGS, merged);
+  if (migrated || preferIpv4 !== undefined || upgraded) write(K_SETTINGS, merged);
 }
 
 /** Waits before each new attempt at reading a history file that couldn't be read. */
@@ -406,6 +440,18 @@ async function saveKept(kept: Map<string, KeptAccount>, now: number): Promise<vo
 let keptJob: Promise<void> = Promise.resolve();
 const queueKept = (job: () => Promise<void>): Promise<void> => (keptJob = keptJob.then(job, job));
 
+const membersDropped = new Set<() => void>();
+
+/**
+ * Called after every dropMembersOnly (a sign-out, or starting signed out), once Liked and
+ * history hold no members-only track: the listening cache drops their audio. Returns an
+ * unsubscribe.
+ */
+export function onMembersOnlyDropped(cb: () => void): () => void {
+  membersDropped.add(cb);
+  return () => membersDropped.delete(cb);
+}
+
 /**
  * Signed out of Cyberspace: members-only tracks leave Liked and history (they can't be
  * opened signed out). [uid], the account just signed out: its members-only likes and plays
@@ -425,6 +471,7 @@ export function dropMembersOnly(uid: string | null = null): void {
     history.value = history.value.filter((e) => !e.track.membersOnly);
     saveHistory(history.value);
   }
+  for (const cb of membersDropped) cb();
   if (!uid || (!likes.length && !plays.length)) return;
   void queueKept(async () => {
     const now = Date.now();

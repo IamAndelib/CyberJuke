@@ -9,6 +9,7 @@ import { catalog } from '../stores/catalog';
 import { toast } from '../stores/toast';
 import { YT_ID_RE, parseNativeState } from '../core/guards';
 import { logError } from '../core/log';
+import { OFFLINE, signalLost } from '../core/offlineText';
 import { BRIDGE_MAX_ITEMS, BRIDGE_MAX_STRING, JukePlayer, STALE_INDEX, type NativeState, type NativeTrack, type RepeatMode } from './native';
 import { EMPTY_STATE, LIST_CONTEXT, livePosition, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextItem, type UpNextKind } from './types';
 
@@ -115,8 +116,7 @@ export class NativePlayer implements Player {
     JukePlayer.addListener('trackError', (e) => {
       const id = String(e?.trackId ?? '');
       const t = this.resolve(id);
-      if (e?.skipped) toast(`Skipped "${t.title}": unavailable`);
-      else toast(`Can't play "${t.title}"`);
+      toast(trackErrorText(e, t.title));
       // The track playList started was skipped: native won't report it, so stop waiting.
       if (this.expect?.id === id) {
         this.expect = null;
@@ -242,6 +242,7 @@ export class NativePlayer implements Player {
       upNext,
       context,
       seed,
+      waitingForNetwork: st.waitingForNetwork === true,
     };
   }
 
@@ -280,6 +281,7 @@ export class NativePlayer implements Player {
       upNext: queue.slice(i + 1, i + 51).map((track, k) => ({ track, index: i + 1 + k, ...(k < queued.length && { queued: true }) })),
       context,
       seed: tracks[i],
+      waitingForNetwork: false,
     };
     this.expect = { id: tracks[i].id, until: performance.now() + EXPECT_MS };
     try {
@@ -304,7 +306,8 @@ export class NativePlayer implements Player {
   toggle = () => {
     const s = this.s.value;
     const now = performance.now();
-    this.s.value = { ...s, isPlaying: !s.isPlaying, isBuffering: false, positionMs: livePosition(s, now), sampledAt: now };
+    // Either way the user took over: no "waiting" until native says so again.
+    this.s.value = { ...s, isPlaying: !s.isPlaying, isBuffering: false, waitingForNetwork: false, positionMs: livePosition(s, now), sampledAt: now };
     return (s.isPlaying ? JukePlayer.pause() : JukePlayer.play()).finally(() => this.resync());
   };
   next = () => JukePlayer.skipToNext();
@@ -423,6 +426,16 @@ export class NativePlayer implements Player {
           : undefined,
     };
   }
+}
+
+/**
+ * What a `trackError` says: a lost connection is no fault of the track (native picks up by
+ * itself when `resumes`). An older native sends no `kind`: about the track, as before.
+ */
+function trackErrorText(e: { skipped?: boolean; kind?: string; resumes?: boolean } | null | undefined, title: string): string {
+  if (e?.skipped) return `Skipped "${title}": unavailable`;
+  if (e?.kind === 'network') return e.resumes ? signalLost(title) : OFFLINE.lostWaits;
+  return `Can't play "${title}"`;
 }
 
 /** A track native accepts (a valid 11-character video id, an id it takes). */

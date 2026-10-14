@@ -6,6 +6,8 @@ import { popPage, type ReleasesRef } from '../../ui/nav';
 import { Screen } from '../../ui/components/Screen';
 import { ReleaseGrid, releasesLoader } from '../../ui/components/Music';
 import { EmptyState } from '../../ui/components/TrackList';
+import { OfflineGate } from '../../ui/components/OfflineGate';
+import { OFFLINE } from '../../core/offlineText';
 import { useFeed } from '../../ui/usePaged';
 
 function GridSkeleton() {
@@ -43,30 +45,32 @@ export function ReleasesPage({ release }: { release: ReleasesRef }) {
         </button>
       }
     >
-      {snap.status === 'loading' ? (
-        <GridSkeleton />
-      ) : snap.status === 'error' && snap.error ? (
-        <div class="state compact" role="alert" data-testid="releases-error" data-code={snap.error.code}>
-          <div class="state-glyph" aria-hidden="true">
-            [ NO SIGNAL ]
+      <OfflineGate body={OFFLINE.global}>
+        {snap.status === 'loading' ? (
+          <GridSkeleton />
+        ) : snap.status === 'error' && snap.error ? (
+          <div class="state compact" role="alert" data-testid="releases-error" data-code={snap.error.code}>
+            <div class="state-glyph" aria-hidden="true">
+              [ NO SIGNAL ]
+            </div>
+            <div class="state-body">
+              {snap.error.code === 'NETWORK' || snap.error.code === 'BOT_CHECK'
+                ? musicErrorText({ code: snap.error.code as MusicErrorCode })
+                : "Couldn't load this list."}
+            </div>
+            <button class="btn" onClick={() => feed.retry()} data-testid="releases-retry">
+              <Icon name="refresh" size={18} /> Retry
+            </button>
           </div>
-          <div class="state-body">
-            {snap.error.code === 'NETWORK' || snap.error.code === 'BOT_CHECK'
-              ? musicErrorText({ code: snap.error.code as MusicErrorCode })
-              : "Couldn't load this list."}
-          </div>
-          <button class="btn" onClick={() => feed.retry()} data-testid="releases-retry">
-            <Icon name="refresh" size={18} /> Retry
-          </button>
-        </div>
-      ) : n ? (
-        <>
-          <ReleaseGrid releases={snap.items} artist={artist} kind={kind} />
-          <div class="list-foot end">— end of tape —</div>
-        </>
-      ) : (
-        <EmptyState title={`No ${title.toLowerCase()} found`}>Try again later.</EmptyState>
-      )}
+        ) : n ? (
+          <>
+            <ReleaseGrid releases={snap.items} artist={artist} kind={kind} />
+            <div class="list-foot end">— end of tape —</div>
+          </>
+        ) : (
+          <EmptyState title={`No ${title.toLowerCase()} found`}>Try again later.</EmptyState>
+        )}
+      </OfflineGate>
     </Screen>
   );
 }
