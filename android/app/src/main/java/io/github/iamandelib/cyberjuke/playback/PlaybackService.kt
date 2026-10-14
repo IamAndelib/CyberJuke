@@ -100,6 +100,10 @@ class PlaybackService : MediaSessionService() {
     /** Gapless playback (Settings; on by default): the next track is readied while this one plays ([LoadAhead]). */
     private var gapless = true
 
+    /** The gap at a track's own end, for the debug log ([TransitionWatch]; no ids). */
+    private val transitions = TransitionWatch()
+    private val transitionDeadline = Runnable { judged(transitions.onDeadline(SystemClock.elapsedRealtime())) }
+
     /** Auto quality's rung, decided as each track starts. */
     private val governor = QualityGovernor()
 
@@ -607,6 +611,7 @@ class PlaybackService : MediaSessionService() {
         handler.removeCallbacks(prefetchCheck)
         handler.removeCallbacks(lowCheck)
         handler.removeCallbacks(blockEnded)
+        handler.removeCallbacks(transitionDeadline)
         stopOutageRetry()
         NetBlock.remove(blockListener)
         NetBlock.cancelResume()
@@ -657,6 +662,14 @@ class PlaybackService : MediaSessionService() {
             )
             // Nor the wait for a held-back next track: the connection is fine.
             if (rebuffer && !endOfTrack) governor.onRebuffer(now)
+            when (playbackState) {
+                Player.STATE_BUFFERING -> transitions.onBuffering(now)
+                Player.STATE_READY -> judged(transitions.onReady(now))
+                else -> {
+                    transitions.cancel()
+                    handler.removeCallbacks(transitionDeadline)
+                }
+            }
             // A stall stops a liked save; ready (or idle), one may start.
             likedSaver.check()
             if (playbackState == Player.STATE_ENDED) endedAt = now
@@ -732,7 +745,16 @@ class PlaybackService : MediaSessionService() {
             StreamResolver.cancelPrefetch()
             prefetchedKey = null
             Log.i(TAG, "Transition to ${mediaItem?.mediaId} (${JukeUris.ytIdOf(mediaItem)}), reason=$reason")
-            if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) rebuffers.onJump(SystemClock.elapsedRealtime())
+            val now = SystemClock.elapsedRealtime()
+            if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) rebuffers.onJump(now)
+            // A track ended by itself: was the move seamless? (The crossfade's hand-over is a seek: not judged.)
+            handler.removeCallbacks(transitionDeadline)
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                transitions.onAutoTransition(now, player?.playbackState == Player.STATE_BUFFERING)
+                handler.postDelayed(transitionDeadline, TransitionWatch.WINDOW_MS)
+            } else {
+                transitions.cancel()
+            }
             // Moved on gaplessly, already playing: no READY comes for this one.
             if (player?.playbackState == Player.STATE_READY) lastReadyId = mediaItem?.mediaId
             failureSpot.clear()
@@ -969,6 +991,16 @@ class PlaybackService : MediaSessionService() {
         Log.i(TAG, "Gapless off: the next track opens at this one's end")
         YtDataSpecResolver.gate.allow(loadingIds + ytId)
         return true
+    }
+
+    /** Debug builds only (R8 strips info logs from the others; no ids): how a track's own end went. */
+    private fun judged(v: TransitionWatch.Verdict?) {
+        when (v) {
+            null -> return
+            TransitionWatch.Verdict.Seamless -> Log.i(TAG, "Transition seamless")
+            is TransitionWatch.Verdict.Stalled -> Log.i(TAG, "Transition stalled: ${v.gapMs} ms")
+        }
+        handler.removeCallbacks(transitionDeadline)
     }
 
     /** Tells the load control which items play now and next (in play order: shuffle, repeat). */
