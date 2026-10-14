@@ -5,7 +5,10 @@
 import { registerPlugin } from '@capacitor/core';
 import type { CrossfadeMs, Quality } from '../stores/library';
 
-/** `album`: the album the track was opened from (Track.album), for the same-album rule of Crossfade. */
+/**
+ * `album`: the album the track was opened from (Track.album), for the same-album rule of
+ * Crossfade. Native keeps it with the last session and echoes it in `tracks`.
+ */
 export interface NativeTrack { id: string; ytId: string; title: string; artist: string; artworkUrl: string; by?: string; postUrl?: string; membersOnly?: boolean; album?: string }
 export type RepeatMode = 'off' | 'all' | 'one';
 export interface NativeState {
@@ -87,8 +90,8 @@ interface JukePlayerPlugin {
    * Gapless playback (Settings, on by default). On, the next track is resolved and buffered
    * while this one plays and ExoPlayer's own transition is seamless; with Crossfade on, two
    * tracks of the same album (NativeTrack.album) go straight into each other instead of fading.
-   * Off, the next track is neither resolved nor loaded until it becomes current (a skip costs
-   * no data for it; a short natural gap), unless Crossfade is on. Saved natively.
+   * Off, the next track is prepared but not buffered until it becomes current (a skip costs
+   * little data for it; a short pause as it starts), unless Crossfade is on. Saved natively.
    */
   setGapless(o: { enabled: boolean }): Promise<void>;
   getState(): Promise<NativeState>;

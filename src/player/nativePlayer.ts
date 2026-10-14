@@ -62,6 +62,7 @@ function fromNative(t: NativeTrack): Track | null {
     postUrl: typeof t.postUrl === 'string' ? t.postUrl : '',
     artworkUrl: artworkUrl(t.ytId),
     ...(t.membersOnly === true && { membersOnly: true }),
+    ...(typeof t.album === 'string' && t.album && { album: t.album }),
     ...(t.id.startsWith('ytm:') && { source: 'ytmusic' as const }),
   });
 }

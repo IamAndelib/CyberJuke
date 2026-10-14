@@ -49,9 +49,18 @@ function Swatch({ id }: { id: ThemeId }) {
   );
 }
 
-function Toggle({ on, onChange, label, testid }: { on: boolean; onChange: (v: boolean) => void; label: string; testid: string }) {
+/** An ON/OFF switch; [describedBy] names the row's description, so a screen reader reads it with the switch. */
+function Toggle({ on, onChange, label, describedBy, testid }: { on: boolean; onChange: (v: boolean) => void; label: string; describedBy?: string; testid: string }) {
   return (
-    <button class={'toggle' + (on ? ' on' : '')} role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)} data-testid={testid}>
+    <button
+      class={'toggle' + (on ? ' on' : '')}
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      aria-describedby={describedBy}
+      onClick={() => onChange(!on)}
+      data-testid={testid}
+    >
       <span class="toggle-opt off">OFF</span>
       <span class="toggle-opt on">ON</span>
     </button>
@@ -507,9 +516,11 @@ export function Settings() {
         <div class="setting">
           <div class="setting-text">
             <div class="setting-name">Show NSFW tracks</div>
-            <div class="setting-desc">Hidden by default.</div>
+            <div class="setting-desc" id="nsfw-desc">
+              Hidden by default.
+            </div>
           </div>
-          <Toggle on={s.showNsfw} onChange={(v) => updateSettings({ showNsfw: v })} label="Show NSFW tracks" testid="nsfw-toggle" />
+          <Toggle on={s.showNsfw} onChange={(v) => updateSettings({ showNsfw: v })} label="Show NSFW tracks" describedBy="nsfw-desc" testid="nsfw-toggle" />
         </div>
         <div class="setting stack">
           <div class="setting-text">
@@ -568,16 +579,20 @@ export function Settings() {
         <div class="setting">
           <div class="setting-text">
             <div class="setting-name">Autoplay</div>
-            <div class="setting-desc">Plays similar songs when your list ends.</div>
+            <div class="setting-desc" id="autoplay-desc">
+              Plays similar songs when your list ends.
+            </div>
           </div>
-          <Toggle on={s.autoplay} onChange={(v) => updateSettings({ autoplay: v })} label="Autoplay" testid="autoplay-toggle" />
+          <Toggle on={s.autoplay} onChange={(v) => updateSettings({ autoplay: v })} label="Autoplay" describedBy="autoplay-desc" testid="autoplay-toggle" />
         </div>
         <div class="setting">
           <div class="setting-text">
             <div class="setting-name">Gapless playback</div>
-            <div class="setting-desc">Tracks follow each other without a pause. Off, the next track loads when this one ends (saves data when you skip; not with Crossfade on).</div>
+            <div class="setting-desc" id="gapless-desc">
+              Tracks follow each other without a pause. Off, the next track loads when this one ends (a short pause between tracks; a skip costs little data). Crossfade always readies the next track early.
+            </div>
           </div>
-          <Toggle on={s.gapless} onChange={(v) => updateSettings({ gapless: v })} label="Gapless playback" testid="gapless-toggle" />
+          <Toggle on={s.gapless} onChange={(v) => updateSettings({ gapless: v })} label="Gapless playback" describedBy="gapless-desc" testid="gapless-toggle" />
         </div>
         <CrossfadeSetting />
         <CheckEverySetting />

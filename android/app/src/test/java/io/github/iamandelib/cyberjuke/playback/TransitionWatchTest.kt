@@ -43,7 +43,7 @@ class TransitionWatchTest {
 
     @Test
     fun aStallUnderWayAtTheTransitionCountsFromWhenItBegan() {
-        // The next track wasn't prepared: the player stalls at the end of this one, then moves on.
+        // The connection ran dry at the end of this track; the player moves on while still buffering.
         val w = TransitionWatch()
         w.onBuffering(0L)
         w.onAutoTransition(now = 400L, buffering = true)

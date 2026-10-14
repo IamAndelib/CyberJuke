@@ -95,30 +95,25 @@ internal object LoadRetry {
  * How far ahead the player may load: the playing item and the next one in play order, never
  * further. A deep buffer would otherwise load two or three items ahead, each one an extraction
  * and several MB (the resource budget: at most one track fetched ahead). The next one only
- * when [wanted]: Gapless playback (Settings) readies it while this one plays, so ExoPlayer's
- * own transition is seamless; off, it is neither resolved nor loaded until this one has ended
- * (a skip costs no data for it; a short natural gap), unless a crossfade needs it buffered.
- * ExoPlayer can't move on to a track that isn't prepared: it stalls at the end of this one
- * (buffering), and that is when the next one is let through ([atEnd]). Pure (LoadPolicyTest).
+ * when [wanted]: Gapless playback (Settings) buffers it while this one plays, so ExoPlayer's
+ * own transition is seamless. Off, the next item is still prepared as ExoPlayer wants it (its
+ * link resolved, the stream opened and its first chunk read, up to the extractor's
+ * continue-loading check), but the load control refuses it any further loading until it is
+ * current, so a skip costs little data. A prepared period that isn't loading is a normal state:
+ * nothing is loading, so the player is ready to move on, makes the transition by itself at the
+ * end of this track, and the next one then buffers at its start (BufferPolicy.START_MS), which
+ * is the short pause the listener hears. A crossfade needs the next track buffered, so it is
+ * [wanted] then too. Pure (LoadPolicyTest).
  */
 internal object LoadAhead {
     /** C.INDEX_UNSET. */
     const val UNSET = -1
-
-    /** A stall this close to a track's end is its end, not a rebuffer mid-track. */
-    const val END_SLACK_MS = 3_000L
 
     /** Whether the next track is readied early: Gapless on, or a crossfade set (it needs the next track buffered). */
     fun wanted(gapless: Boolean, crossfadeMs: Int): Boolean = gapless || crossfadeMs > 0
 
     /** The index to load ahead of the current one: [next] when [wanted], else none ([mayLoad] then allows the current item only). */
     fun nextToLoad(wanted: Boolean, next: Int): Int = if (wanted) next else UNSET
-
-    /**
-     * Whether a stall at [positionMs] of a track [durationMs] long (<= 0: unknown) is the wait at
-     * its end for a next track that wasn't readied (Gapless off): the next one may open now.
-     */
-    fun atEnd(positionMs: Long, durationMs: Long): Boolean = durationMs <= 0L || positionMs >= durationMs - END_SLACK_MS
 
     /**
      * Whether the item at [loadingIndex] may keep loading while [currentIndex] plays and
@@ -129,12 +124,13 @@ internal object LoadAhead {
 }
 
 /**
- * Which tracks may open their stream: the playing one and the next (by ytId, the pair
- * [LoadAhead] lets load). OneAheadLoadControl stops loading beyond them, but ExoPlayer still
- * prepares the item after next, and preparing opens its source: an extraction, and a connection
- * left idle. Its resolution waits here instead (YtDataSpecResolver, on the loader thread) until
- * the pair includes it, woken when the pair changes, never polled; the interrupt of a cancelled
- * or released load ends the wait. Nothing set (empty): no gate. Thread-safe. Pure (LoadPolicyTest).
+ * Which tracks may open their stream: the playing one and the next (by ytId, whether or not
+ * [LoadAhead] lets the next load ahead yet). OneAheadLoadControl stops loading beyond them, but
+ * ExoPlayer still prepares the item after next, and preparing opens its source: an extraction,
+ * and a connection left idle. Its resolution waits here instead (YtDataSpecResolver, on the
+ * loader thread) until the pair includes it, woken when the pair changes, never polled; the
+ * interrupt of a cancelled or released load ends the wait. Nothing set (empty): no gate.
+ * Thread-safe. Pure (LoadPolicyTest).
  */
 internal class OpenGate {
     private val lock = ReentrantLock()

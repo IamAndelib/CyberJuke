@@ -123,6 +123,15 @@ internal class RebufferDetector {
         jumpAt = now
     }
 
+    /**
+     * The player moved to another track at [now]: a skip ([auto] false) is a jump. A track ending
+     * by itself is one too when the next wasn't buffered ahead ([nextReadied] false: Gapless off,
+     * no crossfade): it starts cold, and that buffering is its start, not the connection failing.
+     */
+    fun onTransition(auto: Boolean, nextReadied: Boolean, now: Long) {
+        if (!auto || !nextReadied) onJump(now)
+    }
+
     /** The playback state changed at [now]. Returns true if this is a rebuffer. */
     fun onState(ready: Boolean, buffering: Boolean, playWhenReady: Boolean, now: Long): Boolean {
         val rebuffer = wasReady && buffering && playWhenReady && now - jumpAt > GRACE_MS

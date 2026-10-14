@@ -267,4 +267,21 @@ class QualityGovernorTest {
         assertTrue(d.onState(ready = false, buffering = true, playWhenReady = true, now = 13 * sec))
         assertEquals(2_000L, RebufferDetector.GRACE_MS)
     }
+
+    @Test
+    fun aTrackStartingColdAfterItsPredecessorEndedIsNoRebuffer() {
+        val d = RebufferDetector()
+        d.onState(ready = true, buffering = false, playWhenReady = true, now = 0L)
+        // Gapless off: the next track wasn't buffered ahead, so it buffers at its start.
+        d.onTransition(auto = true, nextReadied = false, now = 180 * sec)
+        assertFalse(d.onState(ready = false, buffering = true, playWhenReady = true, now = 180 * sec))
+        d.onState(ready = true, buffering = false, playWhenReady = true, now = 181 * sec)
+        // Gapless on: the next track was buffered ahead, so buffering after the move is a real stall.
+        d.onTransition(auto = true, nextReadied = true, now = 360 * sec)
+        assertTrue(d.onState(ready = false, buffering = true, playWhenReady = true, now = 363 * sec))
+        d.onState(ready = true, buffering = false, playWhenReady = true, now = 364 * sec)
+        // A skip is a jump whatever the setting.
+        d.onTransition(auto = false, nextReadied = true, now = 400 * sec)
+        assertFalse(d.onState(ready = false, buffering = true, playWhenReady = true, now = 401 * sec))
+    }
 }

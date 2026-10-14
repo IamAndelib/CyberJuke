@@ -11,11 +11,11 @@ package io.github.iamandelib.cyberjuke.playback
  *
  * Fed the main player's events with the clock passed in (pure, TransitionWatchTest). A track
  * ending by itself ([onAutoTransition]) opens a window of [WINDOW_MS]: buffering within it, or a
- * stall already under way at the transition (the next track wasn't prepared, so the player
- * stalled at the end of this one first), makes it [Verdict.Stalled] by the time until READY (or
- * so far, at the deadline); no buffering by the deadline makes it [Verdict.Seamless]. A skip, a
- * seek, a new list or the player stopping ([cancel]) is no transition of a track's own: it ends a
- * watch without a verdict and opens none. The crossfade's hand-over is a seek: never judged.
+ * stall already under way at the transition (the connection ran dry at the end of this one
+ * first), makes it [Verdict.Stalled] by the time until READY (or so far, at the deadline); no
+ * buffering by the deadline makes it [Verdict.Seamless]. A skip, a seek, a new list or the player
+ * stopping ([cancel]) is no transition of a track's own: it ends a watch without a verdict and
+ * opens none. The crossfade's hand-over is a seek: never judged.
  */
 internal class TransitionWatch {
     sealed interface Verdict {
