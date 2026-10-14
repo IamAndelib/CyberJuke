@@ -22,42 +22,73 @@ import java.io.FileNotFoundException
 internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
     override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
         val e = loadErrorInfo.exception
-        if (e.findCause<ManifestOnlyException>() != null) return C.TIME_UNSET
-        if (e.findCause<BlockedException>() != null) return C.TIME_UNSET
-        val resolve = e.findCause<ResolveException>()
-        if (resolve != null && resolve.permanent) return C.TIME_UNSET
-        val http = e.findCause<HttpDataSource.InvalidResponseCodeException>()
-        if (http != null && http.responseCode in NO_RETRY_HTTP) return C.TIME_UNSET
-        // A listening-cache file gone (low storage) or unreadable: the retry fetches the bytes from
-        // the network, not from the cache (the video is skipped there for a moment); the default
-        // never retries a missing file: a dead track.
         val ytId = JukeUris.ytIdOf(loadErrorInfo.loadEventInfo.dataSpec.uri)
-        LoadRetry.cacheFileRetryMs(
-            ytLoad = ytId != null,
-            fileError = e.findCause<FileNotFoundException>() != null || e.findCause<FileDataSource.FileDataSourceException>() != null,
-        )?.let { delay ->
-            ytId?.let { AudioCache.misses.missed(it) }
-            return delay
-        }
-        // What the default never retries (a malformed file, a missing one) stays that way.
-        if (super.getRetryDelayMsFor(loadErrorInfo) == C.TIME_UNSET) return C.TIME_UNSET
-        // A broken connection, or the resolver not reaching YouTube (a new network), waits
-        // with the capped back-off; anything else with the default delays. Never given up on
-        // here: the minimum retry count decides when it reaches the player.
-        val network = LoadRetry.isNetwork(
-            httpStatus = http != null,
-            resolverNetwork = resolve != null, // a permanent one returned above
+        val facts = Facts(
+            httpCode = e.findCause<HttpDataSource.InvalidResponseCodeException>()?.responseCode,
             httpTransport = e.findCause<HttpDataSource.HttpDataSourceException>() != null,
-            transportCause = LoadRetry.hasTransportCause(e),
+            ytLoad = ytId != null,
+            fileError = e.findCause<FileDataSource.FileDataSourceException>() != null,
+            errorCount = loadErrorInfo.errorCount,
+            default = super.getRetryDelayMsFor(loadErrorInfo),
         )
-        return LoadRetry.retryDelayMs(loadErrorInfo.errorCount, network)
+        val delay = delayFor(e, facts)
+        // The cache's file is skipped for a moment, so the retry fetches from the network.
+        if (delay == LoadRetry.CACHE_RETRY_MS && ytId != null) AudioCache.misses.missed(ytId)
+        return delay
     }
 
     /** The error reaches the player only after this many retries (and once it needs the data). */
     override fun getMinimumLoadableRetryCount(dataType: Int): Int =
         maxOf(super.getMinimumLoadableRetryCount(dataType), LoadRetry.NETWORK_RETRIES)
 
-    private companion object {
+    /** What the rule looks at besides the error's own causes. */
+    data class Facts(
+        /** An HTTP status among the causes (InvalidResponseCodeException). */
+        val httpCode: Int? = null,
+        /** An HTTP data source failure without a status: the transport broke. */
+        val httpTransport: Boolean = false,
+        /** A load of a YouTube track (a cyberjuke://yt/ URI), not a manifest or an asset. */
+        val ytLoad: Boolean = false,
+        /** A listening-cache file couldn't be read (FileDataSourceException; a missing file shows in the error itself). */
+        val fileError: Boolean = false,
+        /** The [errorCount]th error in a row, from 1. */
+        val errorCount: Int = 1,
+        /** What Media3's default policy says for this error (TIME_UNSET: never retried). */
+        val default: Long = 0L,
+    )
+
+    companion object {
         val NO_RETRY_HTTP = setOf(403, 410, 429)
+
+        /**
+         * The wait before retrying [e], or C.TIME_UNSET for never. Pure (JukeLoadErrorPolicyTest):
+         * the one place that decides; getRetryDelayMsFor only gathers the [Facts].
+         */
+        fun delayFor(e: Throwable, f: Facts): Long {
+            if (e.findCause<ManifestOnlyException>() != null) return C.TIME_UNSET
+            if (e.findCause<BlockedException>() != null) return C.TIME_UNSET
+            val resolve = e.findCause<ResolveException>()
+            if (resolve != null && resolve.permanent) return C.TIME_UNSET
+            if (f.httpCode != null && f.httpCode in NO_RETRY_HTTP) return C.TIME_UNSET
+            // A listening-cache file gone (low storage) or unreadable: the retry fetches the bytes
+            // from the network, not from the cache (the video is skipped there for a moment); the
+            // default never retries a missing file: a dead track.
+            LoadRetry.cacheFileRetryMs(
+                ytLoad = f.ytLoad,
+                fileError = f.fileError || e.findCause<FileNotFoundException>() != null,
+            )?.let { return it }
+            // What the default never retries (a malformed file, a missing one) stays that way.
+            if (f.default == C.TIME_UNSET) return C.TIME_UNSET
+            // A broken connection, or the resolver not reaching YouTube (a new network), waits
+            // with the capped back-off; anything else with the default delays. Never given up on
+            // here: the minimum retry count decides when it reaches the player.
+            val network = LoadRetry.isNetwork(
+                httpStatus = f.httpCode != null,
+                resolverNetwork = resolve != null, // a permanent one returned above
+                httpTransport = f.httpTransport,
+                transportCause = LoadRetry.hasTransportCause(e),
+            )
+            return LoadRetry.retryDelayMs(f.errorCount, network)
+        }
     }
 }
