@@ -72,6 +72,8 @@ internal class ExoCrossfadeHost(
             outage = NetBlock.waitingForNetwork() || NetBlock.isBlocked(),
             gapless = gapless(),
             sameAlbum = album != null && album.toString() == targetAlbum?.toString(),
+            // Prepared by the main player (Crossfade loads the next track ahead): its length is known.
+            nextReady = nextDurationMs() > 0L,
         )
     }
 

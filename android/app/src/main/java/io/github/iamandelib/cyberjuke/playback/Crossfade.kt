@@ -69,6 +69,12 @@ internal object CrossfadePlan {
         val sameAlbum: Boolean = false,
         /** A fade (or the hand-over of the audio focus before one) is under way. */
         val fading: Boolean = false,
+        /**
+         * The main player has prepared the track the fade goes into (its length is known). One that
+         * can't play (removed, private, blocked) never is; fading into it would cut this track's
+         * end short when it fails, so this track ends the usual way and the error rules skip it.
+         */
+        val nextReady: Boolean = true,
     )
 
     enum class Skip {
@@ -77,6 +83,9 @@ internal object CrossfadePlan {
 
         /** No second player could be made. */
         NO_PLAYER,
+
+        /** The track the fade goes into isn't prepared: it can't play, or the link is too slow. */
+        NEXT_NOT_READY,
     }
 
     /** A fade that came due: null to fade, else why not. */
@@ -89,6 +98,7 @@ internal object CrossfadePlan {
         // Made to run into each other (Metrolist's "gapless" option is this rule).
         f.gapless && f.sameAlbum -> Skip.SAME_ALBUM
         f.fading -> Skip.FADING
+        !f.nextReady -> Skip.NEXT_NOT_READY
         else -> null
     }
 

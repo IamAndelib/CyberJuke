@@ -20,7 +20,8 @@ class CrossfadeTest {
         gapless: Boolean = true,
         sameAlbum: Boolean = false,
         fading: Boolean = false,
-    ) = CrossfadePlan.Facts(settingMs, playing, repeatOne, hasNext, outage, gapless, sameAlbum, fading)
+        nextReady: Boolean = true,
+    ) = CrossfadePlan.Facts(settingMs, playing, repeatOne, hasNext, outage, gapless, sameAlbum, fading, nextReady)
 
     // ---- CrossfadePlan --------------------------------------------------------------------
 
@@ -64,11 +65,16 @@ class CrossfadeTest {
     }
 
     @Test
-    fun theNextTrackNeedNotBeBufferedOrEvenKnown() {
-        // The fade waits for the incoming track when it needs a moment: nothing about it is asked
-        // beforehand but its length, when known, to shrink the fade.
+    fun theNextTrackNeedNotBeBufferedOnlyPrepared() {
+        // The fade is set before the next track's length is known (it shrinks the fade once it is),
+        // and waits for the incoming track when it needs a moment to buffer.
         assertEquals(Trigger.At(4 * min - 6_000L, 6_000L), CrossfadePlan.trigger(6_000L, 4 * min, -1L, 0L))
         assertNull(CrossfadePlan.decide(facts()))
+        // When it comes due, the next track must be prepared: one that can't play never is, and
+        // fading into it would cut this one's end short when it fails.
+        assertEquals(Skip.NEXT_NOT_READY, CrossfadePlan.decide(facts(nextReady = false)))
+        // Repeat one goes into its own start, which is.
+        assertNull(CrossfadePlan.decide(facts(repeatOne = true, hasNext = false)))
     }
 
     @Test
@@ -631,6 +637,8 @@ class CrossfadeTest {
             CrossfadeTest().facts(hasNext = false) to Skip.LAST,
             CrossfadeTest().facts(outage = true) to Skip.OUTAGE,
             CrossfadeTest().facts(sameAlbum = true) to Skip.SAME_ALBUM,
+            // A next track that can't play: this one plays to its end, the error rules skip that one.
+            CrossfadeTest().facts(nextReady = false) to Skip.NEXT_NOT_READY,
         )) {
             val h = FakeHost()
             h.f = facts
