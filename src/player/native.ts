@@ -90,8 +90,8 @@ interface JukePlayerPlugin {
    * Gapless playback (Settings, on by default). On, the next track is resolved and buffered
    * while this one plays and ExoPlayer's own transition is seamless; with Crossfade on, two
    * tracks of the same album (NativeTrack.album) go straight into each other instead of fading.
-   * Off, the next track is neither resolved nor loaded until it becomes current (a skip costs
-   * no data for it; a short natural gap), unless Crossfade is on. Saved natively.
+   * Off, the next track is prepared but not buffered until it becomes current (a skip costs
+   * little data for it; a short pause as it starts), unless Crossfade is on. Saved natively.
    */
   setGapless(o: { enabled: boolean }): Promise<void>;
   getState(): Promise<NativeState>;

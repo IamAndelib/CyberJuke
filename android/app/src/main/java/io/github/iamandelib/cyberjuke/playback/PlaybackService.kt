@@ -177,7 +177,7 @@ class PlaybackService : MediaSessionService() {
         },
     )
 
-    /** The playing track and the next, the pair the player loads ([updateLoadAhead]). */
+    /** The playing track and the next, the pair that may open its stream ([updateLoadAhead]). */
     private var loadingIds: Set<String> = emptySet()
 
     /** Saves liked songs into the listening cache while the service runs anyway. */
@@ -651,8 +651,6 @@ class PlaybackService : MediaSessionService() {
     private inner class PlayerListener : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
             val now = SystemClock.elapsedRealtime()
-            // Gapless off: this track has ended and the next one, held back so far, opens now.
-            val endOfTrack = playbackState == Player.STATE_BUFFERING && player?.let { admitNextAtEnd(it) } == true
             // Playing, then stalled to fill the buffer again: not a seek's, a skip's or an edit's.
             val rebuffer = rebuffers.onState(
                 ready = playbackState == Player.STATE_READY,
@@ -660,8 +658,7 @@ class PlaybackService : MediaSessionService() {
                 playWhenReady = player?.playWhenReady == true,
                 now = now,
             )
-            // Nor the wait for a held-back next track: the connection is fine.
-            if (rebuffer && !endOfTrack) governor.onRebuffer(now)
+            if (rebuffer) governor.onRebuffer(now)
             when (playbackState) {
                 Player.STATE_BUFFERING -> transitions.onBuffering(now)
                 Player.STATE_READY -> judged(transitions.onReady(now))
@@ -746,7 +743,12 @@ class PlaybackService : MediaSessionService() {
             prefetchedKey = null
             Log.i(TAG, "Transition to ${mediaItem?.mediaId} (${JukeUris.ytIdOf(mediaItem)}), reason=$reason")
             val now = SystemClock.elapsedRealtime()
-            if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) rebuffers.onJump(now)
+            // A skip is a jump; so is a track ending with the next not buffered ahead (Gapless off): it starts cold.
+            rebuffers.onTransition(
+                auto = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO,
+                nextReadied = LoadAhead.wanted(gapless, crossfadeMs),
+                now = now,
+            )
             // A track ended by itself: was the move seamless? (The crossfade's hand-over is a seek: not judged.)
             handler.removeCallbacks(transitionDeadline)
             if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
@@ -975,24 +977,6 @@ class PlaybackService : MediaSessionService() {
         handler.postDelayed(saveSession, SESSION_SAVE_DELAY_MS)
     }
 
-    /**
-     * Gapless off (and no crossfade): the next track waits at the gate until this one has ended.
-     * ExoPlayer can't move on to a track that isn't prepared, so it stalls there, buffering: that
-     * is when the next one is let through (the link was prefetched, so the gap is a round trip).
-     * The transition then sets the pair as usual ([updateLoadAhead]). True when it let one through.
-     */
-    private fun admitNextAtEnd(p: ExoPlayer): Boolean {
-        if (LoadAhead.wanted(gapless, crossfadeMs)) return false
-        if (!LoadAhead.atEnd(p.currentPosition.coerceAtLeast(0L), p.duration.takeIf { it != C.TIME_UNSET } ?: -1L)) return false
-        val next = p.nextMediaItemIndex
-        if (next == C.INDEX_UNSET || next == p.currentMediaItemIndex) return false
-        val ytId = JukeUris.ytIdOf(p.getMediaItemAt(next)) ?: return false
-        if (ytId in loadingIds) return false
-        Log.i(TAG, "Gapless off: the next track opens at this one's end")
-        YtDataSpecResolver.gate.allow(loadingIds + ytId)
-        return true
-    }
-
     /** Debug builds only (R8 strips info logs from the others; no ids): how a track's own end went. */
     private fun judged(v: TransitionWatch.Verdict?) {
         when (v) {
@@ -1014,11 +998,13 @@ class PlaybackService : MediaSessionService() {
             YtDataSpecResolver.gate.allow(emptySet())
             return
         }
-        // With Gapless off and no crossfade, the next track waits until it is current.
-        val next = LoadAhead.nextToLoad(LoadAhead.wanted(gapless, crossfadeMs), p.nextMediaItemIndex)
-        lc.nextIndex = next
+        // With Gapless off and no crossfade, the next track loads no further than its preparation
+        // until it is current (LoadAhead): ExoPlayer still moves on to it by itself.
+        val next = p.nextMediaItemIndex
+        lc.nextIndex = LoadAhead.nextToLoad(LoadAhead.wanted(gapless, crossfadeMs), next)
         lc.currentIndex = p.currentMediaItemIndex
-        // The same pair may open its stream; the item after next, prepared early, waits.
+        // The pair may open its stream (the next one must prepare, whether it loads ahead or not);
+        // the item after next, prepared early, waits.
         val ids = HashSet<String>(2)
         JukeUris.ytIdOf(p.currentMediaItem)?.let { ids.add(it) }
         if (next != C.INDEX_UNSET) JukeUris.ytIdOf(p.getMediaItemAt(next))?.let { ids.add(it) }

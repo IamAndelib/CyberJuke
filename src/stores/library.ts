@@ -69,9 +69,10 @@ export interface Settings {
   /** Blends the end of a track into the next (native only; the browser player ignores it). */
   crossfadeMs: CrossfadeMs;
   /**
-   * Gapless playback: the next track is readied while this one plays, so they follow without
-   * a pause. Off, the next loads only when this one ends (saves data on a skip; not while
-   * Crossfade is on, which needs it ready). Native only; the browser player ignores it.
+   * Gapless playback: the next track is buffered while this one plays, so they follow without
+   * a pause. Off, the next loads only when this one ends: a short pause, and a skip costs
+   * little data. Crossfade always readies the next track early. Native only; the browser
+   * player ignores it.
    */
   gapless: boolean;
   /** The saved format's version: each migration below runs once. */
