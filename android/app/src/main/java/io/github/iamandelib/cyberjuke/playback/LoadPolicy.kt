@@ -94,11 +94,31 @@ internal object LoadRetry {
 /**
  * How far ahead the player may load: the playing item and the next one in play order, never
  * further. A deep buffer would otherwise load two or three items ahead, each one an extraction
- * and several MB (the resource budget: at most one track fetched ahead). Pure (LoadPolicyTest).
+ * and several MB (the resource budget: at most one track fetched ahead). The next one only
+ * when [wanted]: Gapless playback (Settings) readies it while this one plays, so ExoPlayer's
+ * own transition is seamless; off, it is neither resolved nor loaded until this one has ended
+ * (a skip costs no data for it; a short natural gap), unless a crossfade needs it buffered.
+ * ExoPlayer can't move on to a track that isn't prepared: it stalls at the end of this one
+ * (buffering), and that is when the next one is let through ([atEnd]). Pure (LoadPolicyTest).
  */
 internal object LoadAhead {
     /** C.INDEX_UNSET. */
     const val UNSET = -1
+
+    /** A stall this close to a track's end is its end, not a rebuffer mid-track. */
+    const val END_SLACK_MS = 3_000L
+
+    /** Whether the next track is readied early: Gapless on, or a crossfade set (it needs the next track buffered). */
+    fun wanted(gapless: Boolean, crossfadeMs: Int): Boolean = gapless || crossfadeMs > 0
+
+    /** The index to load ahead of the current one: [next] when [wanted], else none ([mayLoad] then allows the current item only). */
+    fun nextToLoad(wanted: Boolean, next: Int): Int = if (wanted) next else UNSET
+
+    /**
+     * Whether a stall at [positionMs] of a track [durationMs] long (<= 0: unknown) is the wait at
+     * its end for a next track that wasn't readied (Gapless off): the next one may open now.
+     */
+    fun atEnd(positionMs: Long, durationMs: Long): Boolean = durationMs <= 0L || positionMs >= durationMs - END_SLACK_MS
 
     /**
      * Whether the item at [loadingIndex] may keep loading while [currentIndex] plays and

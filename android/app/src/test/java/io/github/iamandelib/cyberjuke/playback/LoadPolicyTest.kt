@@ -131,6 +131,38 @@ class LoadPolicyTest {
     }
 
     @Test
+    fun theNextTrackIsReadiedEarlyWithGaplessOnOrACrossfadeSet() {
+        assertTrue(LoadAhead.wanted(gapless = true, crossfadeMs = 0))
+        assertTrue(LoadAhead.wanted(gapless = true, crossfadeMs = 6_000))
+        // A crossfade needs the next track buffered, Gapless off or not.
+        assertTrue(LoadAhead.wanted(gapless = false, crossfadeMs = 3_000))
+        assertFalse(LoadAhead.wanted(gapless = false, crossfadeMs = 0))
+    }
+
+    @Test
+    fun withGaplessOffOnlyTheCurrentTrackLoads() {
+        assertEquals(4, LoadAhead.nextToLoad(wanted = true, next = 4))
+        assertEquals(LoadAhead.UNSET, LoadAhead.nextToLoad(wanted = false, next = 4))
+        assertEquals(LoadAhead.UNSET, LoadAhead.nextToLoad(wanted = true, next = LoadAhead.UNSET))
+        // Playing item 3 with no next to load: item 4 waits until it becomes current.
+        assertFalse(LoadAhead.mayLoad(4, 3, LoadAhead.UNSET))
+        assertTrue(LoadAhead.mayLoad(3, 3, LoadAhead.UNSET))
+    }
+
+    @Test
+    fun theHeldBackNextTrackOpensWhenThisOneStallsAtItsEnd() {
+        // ExoPlayer stalls at the end of a track whose successor isn't prepared: that is the cue.
+        assertTrue(LoadAhead.atEnd(positionMs = 180_000L, durationMs = 180_000L))
+        assertTrue(LoadAhead.atEnd(positionMs = 177_000L, durationMs = 180_000L))
+        assertTrue(LoadAhead.atEnd(positionMs = 180_400L, durationMs = 180_000L))
+        // A rebuffer mid-track is not.
+        assertFalse(LoadAhead.atEnd(positionMs = 176_999L, durationMs = 180_000L))
+        assertFalse(LoadAhead.atEnd(positionMs = 0L, durationMs = 180_000L))
+        // Length unknown: any stall may be the end.
+        assertTrue(LoadAhead.atEnd(positionMs = 5_000L, durationMs = -1L))
+    }
+
+    @Test
     fun aBrokenConnectionOrAResolverNetworkFailureBacksOffLonger() {
         // A reset socket, an HTTP transport error, or the resolver not reaching YouTube (after a
         // change of network): the capped back-off.

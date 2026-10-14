@@ -83,6 +83,14 @@ interface JukePlayerPlugin {
    * skip, repeat-one or an outage; shrunk on short tracks). Saved natively; anything else rejects.
    */
   setCrossfade(o: { ms: CrossfadeMs }): Promise<void>;
+  /**
+   * Gapless playback (Settings, on by default). On, the next track is resolved and buffered
+   * while this one plays and ExoPlayer's own transition is seamless; with Crossfade on, two
+   * tracks of the same album (NativeTrack.album) go straight into each other instead of fading.
+   * Off, the next track is neither resolved nor loaded until it becomes current (a skip costs
+   * no data for it; a short natural gap), unless Crossfade is on. Saved natively.
+   */
+  setGapless(o: { enabled: boolean }): Promise<void>;
   getState(): Promise<NativeState>;
   /** From an Android intent extra (debuggable builds), used by the CI smoke test. */
   getLaunchOptions(): Promise<{ autoplay?: 'latest' }>;

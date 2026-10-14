@@ -58,7 +58,7 @@ import kotlin.math.roundToInt
 /**
  * Capacitor bridge to PlaybackService. Contract (TS side):
  *   setQueue, queueNext, removeItem, moveItem, play, pause, seekTo, skipToNext,
- *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, setCrossfade, getState,
+ *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, setCrossfade, setGapless, getState,
  *   getAppInfo, getLaunchOptions, getBlockState, setNetworkPrefs, retryNow, getNetStatus,
  *   setGestureExclusion, addAutoplay, setAutoplay, restore, removeIds, setLikedIds,
  *   setCacheLimit, clearCache, signedOut, signedIn, cachedIds; events 'state', 'trackError',
@@ -777,6 +777,17 @@ class JukePlayerPlugin : Plugin() {
         val ms = CrossfadePlan.valid(call.intArg("ms")) ?: return call.reject("ms must be 0, 3000, 6000 or 10000")
         val args = Bundle().apply { putInt(QueueCommands.ARG_MS, ms) }
         withController(call) { c -> sendCommand(call, c, QueueCommands.SET_CROSSFADE, args) }
+    }
+
+    /**
+     * `setGapless({ enabled })`: Gapless playback (the service saves it). On, the next track is
+     * readied while this one plays; off, it loads only once it is current (unless Crossfade is on).
+     */
+    @PluginMethod
+    fun setGapless(call: PluginCall) {
+        val enabled = call.getBoolean("enabled") ?: return call.reject("enabled is required")
+        val args = Bundle().apply { putBoolean(QueueCommands.ARG_ENABLED, enabled) }
+        withController(call) { c -> sendCommand(call, c, QueueCommands.SET_GAPLESS, args) }
     }
 
     // ---- the listening cache ----------------------------------------------------------------

@@ -94,6 +94,12 @@ class PlaybackService : MediaSessionService() {
     /** The crossfade between tracks (Settings → Crossfade; Off by default). */
     private var crossfade: Crossfader? = null
 
+    /** The Crossfade setting, in ms (0 = Off), as the load-ahead needs it ([LoadAhead.wanted]). */
+    private var crossfadeMs = 0
+
+    /** Gapless playback (Settings; on by default): the next track is readied while this one plays ([LoadAhead]). */
+    private var gapless = true
+
     /** Auto quality's rung, decided as each track starts. */
     private val governor = QualityGovernor()
 
@@ -204,7 +210,8 @@ class PlaybackService : MediaSessionService() {
             durationMs = p.duration.takeIf { it != C.TIME_UNSET } ?: -1L,
             bufferedPositionMs = p.bufferedPosition,
             totalBufferedMs = p.totalBufferedDuration,
-            hasNext = next != C.INDEX_UNSET,
+            // A next track that isn't loading ahead (Gapless off) is nothing to wait for.
+            hasNext = next != C.INDEX_UNSET && LoadAhead.wanted(gapless, crossfadeMs),
             nextDurationMs = nextDuration,
             isLoading = p.isLoading,
         )
@@ -449,6 +456,8 @@ class PlaybackService : MediaSessionService() {
         // The page's settings as it last sent them (it may not be there to send them again).
         autoplayEnabled = PlayerPrefsStore.autoplay(this)
         StreamResolver.quality = PlayerPrefsStore.quality(this)
+        crossfadeMs = PlayerPrefsStore.crossfadeMs(this)
+        gapless = PlayerPrefsStore.gapless(this)
         NetBlock.add(blockListener)
         // A back-off already running (the service was restarted): resume when it ends.
         NetBlock.active().first.takeIf { it > 0L }?.let { scheduleResume(it) }
@@ -527,7 +536,7 @@ class PlaybackService : MediaSessionService() {
         // exists only during a fade (CrossfadeTail); the queue and the session stay on this one.
         val fader = Crossfader(
             ExoCrossfadeHost(this, exo, handler, cacheSources, audioAttributes),
-            PlayerPrefsStore.crossfadeMs(this),
+            crossfadeMs,
         )
         exo.addListener(CrossfadeEvents(fader))
         crossfade = fader
@@ -637,6 +646,8 @@ class PlaybackService : MediaSessionService() {
     private inner class PlayerListener : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
             val now = SystemClock.elapsedRealtime()
+            // Gapless off: this track has ended and the next one, held back so far, opens now.
+            val endOfTrack = playbackState == Player.STATE_BUFFERING && player?.let { admitNextAtEnd(it) } == true
             // Playing, then stalled to fill the buffer again: not a seek's, a skip's or an edit's.
             val rebuffer = rebuffers.onState(
                 ready = playbackState == Player.STATE_READY,
@@ -644,7 +655,8 @@ class PlaybackService : MediaSessionService() {
                 playWhenReady = player?.playWhenReady == true,
                 now = now,
             )
-            if (rebuffer) governor.onRebuffer(now)
+            // Nor the wait for a held-back next track: the connection is fine.
+            if (rebuffer && !endOfTrack) governor.onRebuffer(now)
             // A stall stops a liked save; ready (or idle), one may start.
             likedSaver.check()
             if (playbackState == Player.STATE_ENDED) endedAt = now
@@ -878,7 +890,17 @@ class PlaybackService : MediaSessionService() {
     /** The Crossfade setting (validated): saved, and in use at once (a change stops a fade under way). */
     private fun setCrossfade(ms: Int) {
         PlayerPrefsStore.setCrossfadeMs(this, ms)
+        crossfadeMs = ms
         crossfade?.setSetting(ms)
+        // A fade needs the next track buffered: with Gapless off, the setting decides the load-ahead.
+        updateLoadAhead()
+    }
+
+    /** The Gapless playback setting: saved, and the load-ahead follows it at once. */
+    private fun setGapless(enabled: Boolean) {
+        PlayerPrefsStore.setGapless(this, enabled)
+        gapless = enabled
+        updateLoadAhead()
     }
 
     /** A tap in Up next: on an autoplay item the radio continues from it. */
@@ -931,6 +953,24 @@ class PlaybackService : MediaSessionService() {
         handler.postDelayed(saveSession, SESSION_SAVE_DELAY_MS)
     }
 
+    /**
+     * Gapless off (and no crossfade): the next track waits at the gate until this one has ended.
+     * ExoPlayer can't move on to a track that isn't prepared, so it stalls there, buffering: that
+     * is when the next one is let through (the link was prefetched, so the gap is a round trip).
+     * The transition then sets the pair as usual ([updateLoadAhead]). True when it let one through.
+     */
+    private fun admitNextAtEnd(p: ExoPlayer): Boolean {
+        if (LoadAhead.wanted(gapless, crossfadeMs)) return false
+        if (!LoadAhead.atEnd(p.currentPosition.coerceAtLeast(0L), p.duration.takeIf { it != C.TIME_UNSET } ?: -1L)) return false
+        val next = p.nextMediaItemIndex
+        if (next == C.INDEX_UNSET || next == p.currentMediaItemIndex) return false
+        val ytId = JukeUris.ytIdOf(p.getMediaItemAt(next)) ?: return false
+        if (ytId in loadingIds) return false
+        Log.i(TAG, "Gapless off: the next track opens at this one's end")
+        YtDataSpecResolver.gate.allow(loadingIds + ytId)
+        return true
+    }
+
     /** Tells the load control which items play now and next (in play order: shuffle, repeat). */
     private fun updateLoadAhead() {
         val lc = oneAhead ?: return
@@ -942,7 +982,8 @@ class PlaybackService : MediaSessionService() {
             YtDataSpecResolver.gate.allow(emptySet())
             return
         }
-        val next = p.nextMediaItemIndex
+        // With Gapless off and no crossfade, the next track waits until it is current.
+        val next = LoadAhead.nextToLoad(LoadAhead.wanted(gapless, crossfadeMs), p.nextMediaItemIndex)
         lc.nextIndex = next
         lc.currentIndex = p.currentMediaItemIndex
         // The same pair may open its stream; the item after next, prepared early, waits.
@@ -1467,6 +1508,7 @@ class PlaybackService : MediaSessionService() {
                     QueueCommands.ACTION_SET_CROSSFADE -> setCrossfade(
                         CrossfadePlan.valid(args.getInt(QueueCommands.ARG_MS, -1)) ?: return bad,
                     )
+                    QueueCommands.ACTION_SET_GAPLESS -> setGapless(args.getBoolean(QueueCommands.ARG_ENABLED, true))
                     QueueCommands.ACTION_SKIP_TO -> {
                         val index = args.getInt(QueueCommands.ARG_INDEX, -1)
                         if (index !in 0 until p.mediaItemCount) return bad
