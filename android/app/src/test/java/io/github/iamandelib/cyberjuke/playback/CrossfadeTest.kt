@@ -350,7 +350,9 @@ class CrossfadeTest {
         var onAdvance: () -> Unit = { item = next; next = "n$advances"; position = 0L }
         var makeTail = true
         var latencies = listOf(0L)
-        override var baseVolume = 1f
+
+        /** The main player's volume reads back what was set last, as ExoPlayer's does. */
+        override val mainVolume get() = mainLevel
 
         override fun facts(settingMs: Long) = f.copy(settingMs = settingMs, positionMs = position)
 
@@ -434,9 +436,10 @@ class CrossfadeTest {
         return h to c
     }
 
-    /** Played to the middle of a 6 s fade (the main player now on track b). */
-    private fun fading(): Pair<FakeHost, Crossfader> {
+    /** Played to the middle of a 6 s fade (the main player now on track b), the main player's own volume [own]. */
+    private fun fading(own: Float = 1f): Pair<FakeHost, Crossfader> {
         val (h, c) = started()
+        h.mainLevel = own
         h.onAdvance = {
             h.item = "b"
             h.next = "c"
@@ -451,12 +454,12 @@ class CrossfadeTest {
         return h to c
     }
 
-    /** Nothing of the fade is left: no tail, no step, the main player at its own volume. */
-    private fun assertStopped(h: FakeHost, c: Crossfader) {
+    /** Nothing of the fade is left: no tail, no step, the main player at its own volume ([own]). */
+    private fun assertStopped(h: FakeHost, c: Crossfader, own: Float = 1f) {
         assertEquals(Crossfader.Phase.NONE, c.phase)
         assertTrue(h.tails.all { it.released })
         assertTrue("no step left", h.posted.isEmpty())
-        assertEquals(h.baseVolume, h.mainLevel, 0f)
+        assertEquals(own, h.mainLevel, 0f)
     }
 
     @Test
@@ -572,15 +575,30 @@ class CrossfadeTest {
 
     @Test
     fun theFadeFollowsTheMainPlayersOwnVolume() {
-        val (h, c) = fading()
-        h.baseVolume = 0.5f
+        // Read at the swap, not from the volume the fade itself set (that would sink to silence).
+        val (h, c) = fading(own = 0.5f)
         h.play(3_100L)
         val t = CrossfadePlan.progress(h.clock, h.clock - 3_100L, 6_000L)
         assertEquals(0.5f * CrossfadePlan.inGain(t), h.mainLevel, 0.02f)
         assertEquals(0.5f * CrossfadePlan.outGain(t), h.tail!!.level, 0.02f)
         c.onHalted()
+        assertStopped(h, c, own = 0.5f)
+    }
+
+    @Test
+    fun theIncomingTrackFadesInFromSilenceToItsOwnVolume() {
+        val (h, c) = started()
+        h.play(handOverAt)
+        val fromHandOver = h.mainVolumes.size - 1
+        h.play(6_000L)
         assertStopped(h, c)
-        assertEquals(0.5f, h.mainLevel, 0f)
+        // On the main player's volume, every step: silent at the hand-over, then up, never down, to whole.
+        val fadeIn = h.mainVolumes.drop(fromHandOver)
+        assertEquals(0f, fadeIn.first(), 0f)
+        assertEquals(1f, fadeIn.last(), 0f)
+        assertEquals(fadeIn.sorted(), fadeIn)
+        assertTrue(fadeIn.size in 118..122)
+        assertEquals(CrossfadePlan.inGain(0.5f), fadeIn[fadeIn.size / 2], 0.03f)
     }
 
     @Test
