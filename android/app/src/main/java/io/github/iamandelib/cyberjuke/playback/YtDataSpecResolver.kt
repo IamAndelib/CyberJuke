@@ -53,25 +53,6 @@ internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
     }
 
     /**
-     * The crossfade's tail (CrossfadeTail): the outgoing track's own file, [itag], and only from
-     * what is already at hand: its copy saved whole in the listening cache, or its stream link
-     * still cached (the bytes then mostly come from the listening cache too). Never an
-     * extraction, never during a back-off: otherwise the load fails, and there is no fade. It
-     * doesn't wait at the [gate]: that track is the one that was just playing.
-     */
-    class Pinned(private val itag: Int) : ResolvingDataSource.Resolver {
-        override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
-            val ytId = JukeUris.ytIdOf(dataSpec.uri) ?: throw IOException("Crossfade: not a YouTube track")
-            StreamResolver.cachedKey(ytId, midStream = true, itag = itag)?.let { key ->
-                return dataSpec.buildUpon().setKey(key).build()
-            }
-            val stream = StreamResolver.cachedStream(ytId, itag)
-                ?: throw IOException("Crossfade: the track's stream isn't at hand")
-            return YtDataSpecResolver.streamSpec(dataSpec, ytId, stream)
-        }
-    }
-
-    /**
      * The request for [stream] (of [ytId]) from [dataSpec]: its URL and headers, and for an
      * audio-only stream the cache key `yt:<ytId>:<itag>:<clen>` ([CacheKeys]), so it is read from
      * and written to the listening cache (a muxed fallback, with video, is not kept). The liked

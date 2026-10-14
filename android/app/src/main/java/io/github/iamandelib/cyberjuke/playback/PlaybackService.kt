@@ -29,6 +29,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
@@ -88,11 +89,39 @@ class PlaybackService : MediaSessionService() {
     /** Unclear I/O failures at one spot of the current item: TrackErrorPolicy.Facts.failuresHere. */
     private val failureSpot = FailureSpot()
 
-    /** Loads the playing item and the next one only; told which they are ([updateLoadAhead]). */
+    /** The [player]'s load control: the playing item and the next one only, told which they are ([updateLoadAhead]). */
     private var oneAhead: OneAheadLoadControl? = null
+
+    /**
+     * Where every player of the service loads from ([buildPlayer]): YouTube audio through the
+     * listening cache, the network behind it, with the resolver giving each load its URL and key.
+     */
+    private lateinit var dataSources: DataSource.Factory
+
+    private val audioAttributes = AudioAttributes.Builder()
+        .setUsage(C.USAGE_MEDIA)
+        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+        .build()
+
+    /** The service's listeners, on whichever player it has now ([adopt]). */
+    private val listener = PlayerListener()
+
+    // A load finished (a track all buffered; isLoading may stay true for a gated one): the
+    // liked saver looks again, as playback may not need the network any more.
+    private val loadListener = object : AnalyticsListener {
+        override fun onLoadCompleted(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData) {
+            likedSaver.check()
+        }
+    }
 
     /** The crossfade between tracks (Settings → Crossfade; Off by default). */
     private var crossfade: Crossfader? = null
+
+    /** Its listener, on whichever player is the service's ([adopt]). */
+    private var crossfadeEvents: CrossfadeEvents? = null
+
+    /** During a crossfade, the old player: it plays out its own track's end, fading, then goes ([swapToNext]). */
+    private var fading: ExoPlayer? = null
 
     /** The Crossfade setting, in ms (0 = Off), as the load-ahead needs it ([LoadAhead.wanted]). */
     private var crossfadeMs = 0
@@ -494,64 +523,29 @@ class PlaybackService : MediaSessionService() {
         AudioCache.addLikedListener(likedSaver.likedListener)
         val upstream = DefaultDataSource.Factory(this, OkHttpDataSource.Factory(Http.streaming))
         val cacheSources = AudioCache.dataSourceFactory(upstream)
-        val dataSourceFactory = ResolvingDataSource.Factory(cacheSources, YtDataSpecResolver)
-        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
-            .setLoadErrorHandlingPolicy(JukeLoadErrorPolicy())
+        dataSources = ResolvingDataSource.Factory(cacheSources, YtDataSpecResolver)
 
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-            .build()
-
-        // A deeper buffer than Media3's default (BufferPolicy): short drops are never heard. Only
-        // the playing item and the next one load (OneAheadLoadControl).
-        val loadControl = OneAheadLoadControl(
-            DefaultLoadControl.Builder()
-                .setBufferDurationsMs(
-                    BufferPolicy.MIN_MS,
-                    BufferPolicy.MAX_MS,
-                    BufferPolicy.START_MS,
-                    BufferPolicy.AFTER_REBUFFER_MS,
-                )
-                .setPrioritizeTimeOverSizeThresholds(true)
-                .setBackBuffer(BufferPolicy.BACK_MS, /* retainBackBufferFromKeyframe = */ false)
-                .setTargetBufferBytes(BufferPolicy.TARGET_BYTES)
-                .build(),
-        )
-        oneAhead = loadControl
-
-        val exo = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .setLoadControl(loadControl)
-            .setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
-            .setHandleAudioBecomingNoisy(true)
-            .setWakeMode(C.WAKE_MODE_NETWORK)
-            .build()
-        // Audio only: a muxed or HLS fallback stream must not start a video (or text) decoder.
-        exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-            .setTrackTypeDisabled(C.TRACK_TYPE_IMAGE, true)
-            .build()
-        queueHost = ExoQueueHost(exo)
-        queue = NativeQueue(queueHost)
-        exo.addListener(PlayerListener())
-        // Crossfade (Settings): the outgoing track's last seconds on a second, bare player that
-        // exists only during a fade (CrossfadeTail); the queue and the session stay on this one.
+        // Crossfade (Settings), Metrolist's way: at a fade a second player starts the next track
+        // and becomes the service's, while this one plays out its end (CrossfadeHost).
         val fader = Crossfader(
-            ExoCrossfadeHost(this, exo, handler, cacheSources, audioAttributes) { gapless },
+            ExoCrossfadeHost(
+                handler,
+                audioAttributes,
+                main = { player },
+                fading = { fading },
+                gapless = { gapless },
+                swap = ::swapToNext,
+                release = ::releaseFading,
+            ),
             crossfadeMs,
         )
-        exo.addListener(CrossfadeEvents(fader))
         crossfade = fader
-        // A load finished (a track all buffered; isLoading may stay true for a gated one): the
-        // liked saver looks again, as playback may not need the network any more.
-        exo.addAnalyticsListener(object : AnalyticsListener {
-            override fun onLoadCompleted(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData) {
-                likedSaver.check()
-            }
-        })
-        player = exo
+        crossfadeEvents = CrossfadeEvents(fader)
+
+        adopt(buildPlayer())
+        val exo = checkNotNull(player)
+        queueHost = ExoQueueHost { checkNotNull(player) }
+        queue = NativeQueue(queueHost)
 
         // A tap on the media notification (or the lock screen's player) opens Now Playing.
         val openApp = Intent(this, MainActivity::class.java)
@@ -581,6 +575,144 @@ class PlaybackService : MediaSessionService() {
             )
         }
         Log.i(TAG, "PlaybackService created")
+    }
+
+    /** A player the service's way, not yet its own ([adopt]), with the load control only it may use. */
+    private class Built(val player: ExoPlayer, val loadControl: OneAheadLoadControl)
+
+    /**
+     * A new player for the service: the shared sources ([dataSources]), a load control of its own
+     * (two players can't share one), audio focus and becoming-noisy handled, a wake lock while it
+     * plays, audio only.
+     */
+    private fun buildPlayer(): Built {
+        // A deeper buffer than Media3's default (BufferPolicy): short drops are never heard. Only
+        // the playing item and the next one load (OneAheadLoadControl).
+        val loadControl = OneAheadLoadControl(
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    BufferPolicy.MIN_MS,
+                    BufferPolicy.MAX_MS,
+                    BufferPolicy.START_MS,
+                    BufferPolicy.AFTER_REBUFFER_MS,
+                )
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .setBackBuffer(BufferPolicy.BACK_MS, /* retainBackBufferFromKeyframe = */ false)
+                .setTargetBufferBytes(BufferPolicy.TARGET_BYTES)
+                .build(),
+        )
+        val exo = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSources).setLoadErrorHandlingPolicy(JukeLoadErrorPolicy()))
+            .setLoadControl(loadControl)
+            .setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
+            .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
+            .build()
+        // Audio only: a muxed or HLS fallback stream must not start a video (or text) decoder.
+        exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .setTrackTypeDisabled(C.TRACK_TYPE_IMAGE, true)
+            .build()
+        return Built(exo, loadControl)
+    }
+
+    /**
+     * Makes [built] the service's player: the service's listeners move to it from the one it had,
+     * and the media session follows it (Media3 sends every controller, the notification's and the
+     * page's, the new player's whole state, its list included).
+     */
+    private fun adopt(built: Built) {
+        val next = built.player
+        player?.let { old ->
+            old.removeListener(listener)
+            old.removeAnalyticsListener(loadListener)
+            crossfadeEvents?.let { old.removeListener(it) }
+        }
+        next.addListener(listener)
+        next.addAnalyticsListener(loadListener)
+        crossfadeEvents?.let { next.addListener(it) }
+        player = next
+        oneAhead = built.loadControl
+        mediaSession?.player = next
+    }
+
+    /**
+     * The crossfade's swap (Metrolist's startCrossfade and performCrossfadeSwap): a new player
+     * plays the track the fade goes into from its start, at volume 0 (Crossfader fades it in), and
+     * becomes the service's: the session (title, notification, lock screen), the queue and the
+     * listeners move to it. The old one keeps only its own track and plays out its end ([fading]).
+     * Called once the old player gave up its audio focus (ExoCrossfadeHost.yieldFocus). False when
+     * no new player could be made: nothing changed then.
+     */
+    private fun swapToNext(): Boolean {
+        val old = player ?: return false
+        val target = crossfadeTarget(old)
+        if (target == C.INDEX_UNSET || target >= old.mediaItemCount || fading != null) return false
+        val built = try {
+            buildPlayer()
+        } catch (e: RuntimeException) {
+            Log.w(ExoCrossfadeHost.TAG, "Crossfade: no second player: ${e.javaClass.simpleName}")
+            return false
+        }
+        val next = built.player
+        try {
+            // The same items (the same MediaItem objects), order, modes and speed.
+            next.setMediaItems(List(old.mediaItemCount) { old.getMediaItemAt(it) }, target, 0L)
+            next.setShuffleOrder(old.shuffleOrder)
+            next.repeatMode = old.repeatMode
+            next.shuffleModeEnabled = old.shuffleModeEnabled
+            next.playbackParameters = old.playbackParameters
+            next.volume = 0f
+            // Its load control knows its pair before it loads (updateLoadAhead tells it again).
+            built.loadControl.currentIndex = target
+            built.loadControl.nextIndex = LoadAhead.nextToLoad(LoadAhead.wanted(gapless, crossfadeMs), next.nextMediaItemIndex)
+            // Prepared and playing before the session has it: a session whose player is neither
+            // would let the service leave the foreground.
+            next.prepare()
+            next.play()
+        } catch (e: RuntimeException) {
+            Log.w(ExoCrossfadeHost.TAG, "Crossfade: no second player: ${e.javaClass.simpleName}")
+            next.release()
+            return false
+        }
+        val oldLoadControl = oneAhead
+        fading = old
+        adopt(built)
+        // After the session let go of it, or it would send its controllers the one-item list.
+        keepOnlyCurrent(old)
+        // Its own track is never held back (its indices are stale now).
+        oldLoadControl?.currentIndex = C.INDEX_UNSET
+        oldLoadControl?.nextIndex = C.INDEX_UNSET
+        old.addListener(
+            FadingGone { error ->
+                error?.let { Log.w(ExoCrossfadeHost.TAG, "Crossfade: the old track failed: ${it.errorCodeName}") }
+                // Released from the handler, not inside the player's own callback.
+                handler.post { if (fading === old) crossfade?.onFadingGone() }
+            },
+        )
+        // The new player moved to its track with nobody listening: a track change's bookkeeping
+        // (the queue, autoplay, the saved session, prefetch, Auto quality) runs now, as for a
+        // jump: its start isn't a rebuffer, nor a track's own end to judge.
+        listener.onMediaItemTransition(next.currentMediaItem, Player.MEDIA_ITEM_TRANSITION_REASON_SEEK)
+        return true
+    }
+
+    /** The fading player keeps only its own track: no repeat, nothing before or after it. */
+    private fun keepOnlyCurrent(p: ExoPlayer) {
+        p.repeatMode = Player.REPEAT_MODE_OFF
+        p.shuffleModeEnabled = false
+        val i = p.currentMediaItemIndex
+        if (i + 1 < p.mediaItemCount) p.removeMediaItems(i + 1, p.mediaItemCount)
+        if (i > 0) p.removeMediaItems(0, i)
+    }
+
+    /** The fade is over, or stopped: the old player goes. */
+    private fun releaseFading() {
+        val f = fading ?: return
+        fading = null
+        f.release()
+        updateLoadAhead()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
@@ -625,6 +757,9 @@ class PlaybackService : MediaSessionService() {
         likedSaver.stop()
         AudioCache.removeListener(likedSaver.cacheListener)
         AudioCache.removeLikedListener(likedSaver.likedListener)
+        // The old player of a fade under way goes first (before the gate opens).
+        crossfade?.release()
+        crossfade = null
         YtDataSpecResolver.gate.allow(emptySet())
         if (networkCallbackRegistered) {
             try {
@@ -633,9 +768,6 @@ class PlaybackService : MediaSessionService() {
             }
             networkCallbackRegistered = false
         }
-        // Its tail shares the player's playback thread: released first.
-        crossfade?.release()
-        crossfade = null
         mediaSession?.let { session ->
             session.player.release()
             session.release()
@@ -916,7 +1048,7 @@ class PlaybackService : MediaSessionService() {
         PlayerPrefsStore.setCrossfadeMs(this, ms)
         crossfadeMs = ms
         crossfade?.setSetting(ms)
-        // A fade needs the next track buffered: with Gapless off, the setting decides the load-ahead.
+        // Crossfade readies the next track early too (LoadAhead.wanted): with Gapless off, the setting decides the load-ahead.
         updateLoadAhead()
     }
 
@@ -1009,7 +1141,9 @@ class PlaybackService : MediaSessionService() {
         JukeUris.ytIdOf(p.currentMediaItem)?.let { ids.add(it) }
         if (next != C.INDEX_UNSET) JukeUris.ytIdOf(p.getMediaItemAt(next))?.let { ids.add(it) }
         loadingIds = ids
-        YtDataSpecResolver.gate.allow(ids)
+        // During a crossfade the old player's track may still load its end.
+        val fadingId = JukeUris.ytIdOf(fading?.currentMediaItem)
+        YtDataSpecResolver.gate.allow(if (fadingId == null) ids else ids + fadingId)
         // Another pair to load (a skip, a new list): the liked saver looks again.
         likedSaver.check()
     }

@@ -9,7 +9,7 @@ import androidx.media3.common.Player
 internal object StateEvents {
     /**
      * Whether a batch of [count] events ([at] each one) changes the state: not when it is only
-     * the volume, which the page doesn't show and a crossfade steps every 50 ms.
+     * the volume, which the page doesn't show and a crossfade steps twenty times over a fade.
      */
     fun changeState(count: Int, at: (Int) -> Int): Boolean =
         (0 until count).any { at(it) != Player.EVENT_VOLUME_CHANGED }

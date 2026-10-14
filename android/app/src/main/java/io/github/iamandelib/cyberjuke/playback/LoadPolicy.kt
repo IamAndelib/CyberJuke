@@ -103,14 +103,15 @@ internal object LoadRetry {
  * nothing is loading, so the player is ready to move on, makes the transition by itself at the
  * end of this track, and the next one then buffers at its start (a cold start after playing
  * counts as a rebuffer: BufferPolicy.AFTER_REBUFFER_MS, about five seconds of audio, plus the
- * round trip), which is the short pause the listener hears. A crossfade needs the next track buffered, so it is
- * [wanted] then too. Pure (LoadPolicyTest).
+ * round trip), which is the short pause the listener hears. With Crossfade on it is [wanted] too:
+ * the next track then goes into the listening cache while this one plays, and the fade's new
+ * player starts it from there. Pure (LoadPolicyTest).
  */
 internal object LoadAhead {
     /** C.INDEX_UNSET. */
     const val UNSET = -1
 
-    /** Whether the next track is readied early: Gapless on, or a crossfade set (it needs the next track buffered). */
+    /** Whether the next track is readied early: Gapless on, or a crossfade set (its new player then finds the next track cached). */
     fun wanted(gapless: Boolean, crossfadeMs: Int): Boolean = gapless || crossfadeMs > 0
 
     /** The index to load ahead of the current one: [next] when [wanted], else none ([mayLoad] then allows the current item only). */

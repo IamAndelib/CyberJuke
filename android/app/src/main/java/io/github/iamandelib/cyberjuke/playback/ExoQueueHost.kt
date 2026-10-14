@@ -9,10 +9,15 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import java.util.Random
 
-/** [QueueHost] over the service's ExoPlayer: the queue rules ([NativeQueue]) act through it. */
+/**
+ * [QueueHost] over the service's ExoPlayer: the queue rules ([NativeQueue]) act through it.
+ * [player] gives the one the service has now (a crossfade swaps it: PlaybackService.adopt).
+ */
 @OptIn(UnstableApi::class)
-internal class ExoQueueHost(private val p: ExoPlayer) : QueueHost<MediaItem> {
+internal class ExoQueueHost(private val player: () -> ExoPlayer) : QueueHost<MediaItem> {
     private val shuffleSeeds = Random()
+
+    private val p: ExoPlayer get() = player()
 
     override val count: Int get() = p.mediaItemCount
     override val currentIndex: Int get() = if (p.mediaItemCount == 0) -1 else p.currentMediaItemIndex

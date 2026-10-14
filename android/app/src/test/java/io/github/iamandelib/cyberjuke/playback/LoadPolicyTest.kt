@@ -134,7 +134,7 @@ class LoadPolicyTest {
     fun theNextTrackIsReadiedEarlyWithGaplessOnOrACrossfadeSet() {
         assertTrue(LoadAhead.wanted(gapless = true, crossfadeMs = 0))
         assertTrue(LoadAhead.wanted(gapless = true, crossfadeMs = 6_000))
-        // A crossfade needs the next track buffered, Gapless off or not.
+        // A crossfade readies the next track too (its new player finds it cached), Gapless off or not.
         assertTrue(LoadAhead.wanted(gapless = false, crossfadeMs = 3_000))
         assertFalse(LoadAhead.wanted(gapless = false, crossfadeMs = 0))
     }
