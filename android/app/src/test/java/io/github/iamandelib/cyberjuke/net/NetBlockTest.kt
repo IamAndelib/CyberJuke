@@ -194,6 +194,39 @@ class NetBlockTest {
     }
 
     @Test
+    fun theResumeIsOneStateWithOneDeadline() {
+        var now = 0L
+        NetBlock.clock = { now }
+        val heard = mutableListOf<String>()
+        NetBlock.add(object : NetBlock.Listener {
+            override fun onBlocked(until: Long, reason: BlockReason) {}
+            override fun onUnblocked() {}
+            override fun onResumeCancelled() { heard += "cancelled" }
+            override fun onWaitingChanged(waiting: Boolean) { heard += "waiting $waiting" }
+        })
+        // An outage's resume, then a back-off's: the later one is the state, deadline and kind together.
+        NetBlock.wantResume(outage = true)
+        now = 1_000L
+        NetBlock.wantResume()
+        assertTrue(NetBlock.resumePending())
+        assertFalse(NetBlock.waitingForNetwork())
+        now = 1_000L + NetBlock.RESUME_WINDOW_MS
+        assertTrue(NetBlock.resumePending()) // the window restarted with the second want
+        now += 1
+        assertFalse(NetBlock.resumePending())
+        // Run out: taking it says no and clears it; a cancel after that has nothing to announce.
+        assertFalse(NetBlock.takeResume())
+        NetBlock.cancelResume()
+        // An outage's resume that ran out is still cancelled aloud (the state was set), but was no wait any more.
+        NetBlock.wantResume(outage = true)
+        now += NetBlock.RESUME_WINDOW_MS + 1
+        assertFalse(NetBlock.waitingForNetwork())
+        NetBlock.cancelResume()
+        assertFalse(NetBlock.resumePending())
+        assertEquals(listOf("waiting true", "waiting false", "waiting true", "cancelled"), heard)
+    }
+
+    @Test
     fun listenersHearAResumeWantedAndCancelled() {
         val events = mutableListOf<String>()
         NetBlock.add(object : NetBlock.Listener {

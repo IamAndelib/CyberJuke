@@ -2,6 +2,7 @@ package io.github.iamandelib.cyberjuke.net
 
 import java.io.IOException
 import java.util.concurrent.CopyOnWriteArraySet
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Why YouTube is refusing us. The names are the `reason` of the JukePlayer `blocked` event.
@@ -153,13 +154,14 @@ internal object NetBlock {
     @Volatile
     var clock: () -> Long = { System.currentTimeMillis() }
 
-    /** Until when playback should start again by itself once the back-off ends (0 = don't). */
-    @Volatile
-    private var resumeUntil = 0L
+    /**
+     * Playback should start again by itself once the back-off ends or the network is back,
+     * until [until]; [outage]: an outage's resume (the network), not a back-off's.
+     */
+    private data class Resume(val until: Long, val outage: Boolean)
 
-    /** The pending resume is an outage's (the network), not a back-off's. */
-    @Volatile
-    private var resumeForOutage = false
+    /** The pending resume, or null: one reference, so the deadline and its kind change together (three threads write it). */
+    private val resume = AtomicReference<Resume?>(null)
 
     /**
      * Auto-resume only within this long of playback being interrupted: no surprise music much
@@ -236,8 +238,7 @@ internal object NetBlock {
      */
     fun wantResume(outage: Boolean = false) {
         val before = waitingForNetwork()
-        resumeUntil = clock() + RESUME_WINDOW_MS
-        resumeForOutage = outage
+        resume.set(Resume(clock() + RESUME_WINDOW_MS, outage))
         listeners.forEach { it.onResumeWanted() }
         waitingChanged(before)
     }
@@ -245,27 +246,22 @@ internal object NetBlock {
     /** The user paused or stopped: no resume. */
     fun cancelResume() {
         val before = waitingForNetwork()
-        val was = resumeUntil
-        resumeUntil = 0L
-        resumeForOutage = false
-        if (was > 0L) listeners.forEach { it.onResumeCancelled() }
+        if (resume.getAndSet(null) != null) listeners.forEach { it.onResumeCancelled() }
         waitingChanged(before)
     }
 
     /** True once if playback should resume now (and clears it); false if too late or not wanted. */
     fun takeResume(): Boolean {
         val before = waitingForNetwork()
-        val wanted = resumeUntil
-        resumeUntil = 0L
-        resumeForOutage = false
+        val wanted = resume.getAndSet(null)
         waitingChanged(before)
-        return wanted > 0L && clock() <= wanted
+        return wanted != null && clock() <= wanted.until
     }
 
-    fun resumePending(): Boolean = resumeUntil > 0L && clock() <= resumeUntil
+    fun resumePending(): Boolean = resume.get().let { it != null && clock() <= it.until }
 
     /** An outage paused playback and it resumes once the network is back (the `state` event's `waitingForNetwork`). */
-    fun waitingForNetwork(): Boolean = resumeForOutage && resumePending()
+    fun waitingForNetwork(): Boolean = resume.get().let { it != null && it.outage && clock() <= it.until }
 
     private fun waitingChanged(before: Boolean) {
         val now = waitingForNetwork()
@@ -278,8 +274,7 @@ internal object NetBlock {
         music.clear()
         listeners.clear()
         lastLimit = null
-        resumeUntil = 0L
-        resumeForOutage = false
+        resume.set(null)
         clock = { System.currentTimeMillis() }
     }
 }
