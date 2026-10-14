@@ -29,6 +29,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
@@ -88,8 +89,30 @@ class PlaybackService : MediaSessionService() {
     /** Unclear I/O failures at one spot of the current item: TrackErrorPolicy.Facts.failuresHere. */
     private val failureSpot = FailureSpot()
 
-    /** Loads the playing item and the next one only; told which they are ([updateLoadAhead]). */
+    /** The [player]'s load control: the playing item and the next one only, told which they are ([updateLoadAhead]). */
     private var oneAhead: OneAheadLoadControl? = null
+
+    /**
+     * Where every player of the service loads from ([buildPlayer]): YouTube audio through the
+     * listening cache, the network behind it, with the resolver giving each load its URL and key.
+     */
+    private lateinit var dataSources: DataSource.Factory
+
+    private val audioAttributes = AudioAttributes.Builder()
+        .setUsage(C.USAGE_MEDIA)
+        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+        .build()
+
+    /** The service's listeners, on whichever player it has now ([adopt]). */
+    private val listener = PlayerListener()
+
+    // A load finished (a track all buffered; isLoading may stay true for a gated one): the
+    // liked saver looks again, as playback may not need the network any more.
+    private val loadListener = object : AnalyticsListener {
+        override fun onLoadCompleted(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData) {
+            likedSaver.check()
+        }
+    }
 
     /** The crossfade between tracks (Settings → Crossfade; Off by default). */
     private var crossfade: Crossfader? = null
@@ -494,48 +517,12 @@ class PlaybackService : MediaSessionService() {
         AudioCache.addLikedListener(likedSaver.likedListener)
         val upstream = DefaultDataSource.Factory(this, OkHttpDataSource.Factory(Http.streaming))
         val cacheSources = AudioCache.dataSourceFactory(upstream)
-        val dataSourceFactory = ResolvingDataSource.Factory(cacheSources, YtDataSpecResolver)
-        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
-            .setLoadErrorHandlingPolicy(JukeLoadErrorPolicy())
+        dataSources = ResolvingDataSource.Factory(cacheSources, YtDataSpecResolver)
 
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-            .build()
-
-        // A deeper buffer than Media3's default (BufferPolicy): short drops are never heard. Only
-        // the playing item and the next one load (OneAheadLoadControl).
-        val loadControl = OneAheadLoadControl(
-            DefaultLoadControl.Builder()
-                .setBufferDurationsMs(
-                    BufferPolicy.MIN_MS,
-                    BufferPolicy.MAX_MS,
-                    BufferPolicy.START_MS,
-                    BufferPolicy.AFTER_REBUFFER_MS,
-                )
-                .setPrioritizeTimeOverSizeThresholds(true)
-                .setBackBuffer(BufferPolicy.BACK_MS, /* retainBackBufferFromKeyframe = */ false)
-                .setTargetBufferBytes(BufferPolicy.TARGET_BYTES)
-                .build(),
-        )
-        oneAhead = loadControl
-
-        val exo = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .setLoadControl(loadControl)
-            .setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
-            .setHandleAudioBecomingNoisy(true)
-            .setWakeMode(C.WAKE_MODE_NETWORK)
-            .build()
-        // Audio only: a muxed or HLS fallback stream must not start a video (or text) decoder.
-        exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-            .setTrackTypeDisabled(C.TRACK_TYPE_IMAGE, true)
-            .build()
-        queueHost = ExoQueueHost(exo)
+        adopt(buildPlayer())
+        val exo = checkNotNull(player)
+        queueHost = ExoQueueHost { checkNotNull(player) }
         queue = NativeQueue(queueHost)
-        exo.addListener(PlayerListener())
         // Crossfade (Settings): the outgoing track's last seconds on a second, bare player that
         // exists only during a fade (CrossfadeTail); the queue and the session stay on this one.
         val fader = Crossfader(
@@ -544,14 +531,6 @@ class PlaybackService : MediaSessionService() {
         )
         exo.addListener(CrossfadeEvents(fader))
         crossfade = fader
-        // A load finished (a track all buffered; isLoading may stay true for a gated one): the
-        // liked saver looks again, as playback may not need the network any more.
-        exo.addAnalyticsListener(object : AnalyticsListener {
-            override fun onLoadCompleted(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData) {
-                likedSaver.check()
-            }
-        })
-        player = exo
 
         // A tap on the media notification (or the lock screen's player) opens Now Playing.
         val openApp = Intent(this, MainActivity::class.java)
@@ -581,6 +560,64 @@ class PlaybackService : MediaSessionService() {
             )
         }
         Log.i(TAG, "PlaybackService created")
+    }
+
+    /** A player the service's way, not yet its own ([adopt]), with the load control only it may use. */
+    private class Built(val player: ExoPlayer, val loadControl: OneAheadLoadControl)
+
+    /**
+     * A new player for the service: the shared sources ([dataSources]), a load control of its own
+     * (two players can't share one), audio focus and becoming-noisy handled, a wake lock while it
+     * plays, audio only.
+     */
+    private fun buildPlayer(): Built {
+        // A deeper buffer than Media3's default (BufferPolicy): short drops are never heard. Only
+        // the playing item and the next one load (OneAheadLoadControl).
+        val loadControl = OneAheadLoadControl(
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    BufferPolicy.MIN_MS,
+                    BufferPolicy.MAX_MS,
+                    BufferPolicy.START_MS,
+                    BufferPolicy.AFTER_REBUFFER_MS,
+                )
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .setBackBuffer(BufferPolicy.BACK_MS, /* retainBackBufferFromKeyframe = */ false)
+                .setTargetBufferBytes(BufferPolicy.TARGET_BYTES)
+                .build(),
+        )
+        val exo = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSources).setLoadErrorHandlingPolicy(JukeLoadErrorPolicy()))
+            .setLoadControl(loadControl)
+            .setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
+            .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
+            .build()
+        // Audio only: a muxed or HLS fallback stream must not start a video (or text) decoder.
+        exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .setTrackTypeDisabled(C.TRACK_TYPE_IMAGE, true)
+            .build()
+        return Built(exo, loadControl)
+    }
+
+    /**
+     * Makes [built] the service's player: the service's listeners move to it from the one it had,
+     * and the media session follows it (Media3 sends every controller, the notification's and the
+     * page's, the new player's whole state, its list included).
+     */
+    private fun adopt(built: Built) {
+        val next = built.player
+        player?.let { old ->
+            old.removeListener(listener)
+            old.removeAnalyticsListener(loadListener)
+        }
+        next.addListener(listener)
+        next.addAnalyticsListener(loadListener)
+        player = next
+        oneAhead = built.loadControl
+        mediaSession?.player = next
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
