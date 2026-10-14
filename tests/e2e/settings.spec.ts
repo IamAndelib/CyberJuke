@@ -134,7 +134,7 @@ test('Gapless playback: on by default, sent to the player, kept when turned off'
   await page.getByTestId('tab-settings').click();
   const toggle = page.getByTestId('gapless-toggle');
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
-  await expect(page.getByTestId('screen-settings')).toContainText(
+  await expect(toggle).toHaveAccessibleDescription(
     'Tracks follow each other without a pause. Off, the next track loads when this one ends (saves data when you skip; not with Crossfade on).',
   );
   await toggle.click();
