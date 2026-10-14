@@ -67,6 +67,8 @@ export const MEMBERS_FRESHNESS_FIELDS = [...FRESHNESS_FIELDS, 'isBanned', 'isSha
 
 /** A query not answered in this time fails (an error with Retry), so a hung request can't leave a skeleton forever. */
 export const REQUEST_TIMEOUT_MS = 15_000;
+/** A request that got no answer at all (fetch threw) is sent once more, this long later. */
+export const RETRY_DELAY_MS = 1000;
 /** The same for one catalog page (300 posts): it's bigger, and nothing waits on it. */
 const CATALOG_TIMEOUT_MS = 60_000;
 
@@ -171,6 +173,22 @@ interface FirestoreSourceOptions {
   auth?: SourceAuth;
   /** How long a query may take, the ID token it waits for included. Default REQUEST_TIMEOUT_MS. */
   timeoutMs?: number;
+}
+
+/** Resolves `ms` later, or rejects as soon as `signal` aborts (its timer cleared). */
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const stop = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', stop);
+      resolve();
+    }, ms);
+    if (signal.aborted) return stop();
+    signal.addEventListener('abort', stop, { once: true });
+  });
 }
 
 /** `p`, or a rejection as soon as `signal` aborts (for a wait that can't be cancelled itself). */
@@ -354,12 +372,23 @@ export class FirestoreSource implements TrackSource {
     return t;
   }
 
-  /** Run a query: the ID token it needs, the request and its answer, all within `timeoutMs`. */
+  /**
+   * Run a query: the ID token it needs, the request and its answer, all within `timeoutMs`.
+   * A request that got no answer at all (fetch threw: the connection broke, a handover's
+   * gap) is sent once more RETRY_DELAY_MS later, inside the same budget. A timeout, an HTTP
+   * error or a second failure surfaces as it is.
+   */
   private async rows(body: string, members = false, timeoutMs = this.timeoutMs): Promise<FsRunQueryRow[]> {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), timeoutMs);
     try {
-      return await this.answer(body, members, ctl.signal);
+      try {
+        return await this.answer(body, members, ctl.signal);
+      } catch (e) {
+        if (!(e instanceof FirestoreError && e.offline)) throw e;
+        await delay(RETRY_DELAY_MS, ctl.signal);
+        return await this.answer(body, members, ctl.signal);
+      }
     } catch (e) {
       // Too slow is not offline: the list says it couldn't load, with Retry.
       if (ctl.signal.aborted) throw new FirestoreError("Cyberspace didn't answer in time", 0);
