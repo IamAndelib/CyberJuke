@@ -5,8 +5,8 @@
  * the screens.
  */
 export const OFFLINE = {
-  /** The bar at the top while the device is offline. */
-  banner: '[ offline ] no carrier · connect to play',
+  /** The bar at the top while the device is offline (wrapped, the · stays on the first line). */
+  banner: '[ offline ] no carrier\u00a0· connect to play',
   /** The state a list shows instead of its rows (OfflineGate). */
   glyph: '[ NO CARRIER ]',
   title: "Line's dead",
