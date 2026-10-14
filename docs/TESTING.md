@@ -64,7 +64,8 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] With a second account: sign out, sign in as the other one (none of the first account's [members] likes or plays show), like and play something, sign out, and sign in as the first again: its own are back, the other's aren't.
 
 ## Rough conditions
-- [ ] Airplane mode: the top bar reads "[ offline ] no carrier · connect to play", and Home, a genre, an artist page, the Genres and Artists grids and Search show **[ NO CARRIER ]** instead of their rows. Airplane mode off: lists load again by themselves.
+- [ ] Airplane mode on Home: the top bar reads "[ offline ] no carrier · connect to play", and the rows stay, fading to dim; nothing disappears. Airplane mode off: they're bright again.
+- [ ] Close the app, turn on airplane mode, open it: Home, the Genres and Artists tabs and Search show **[ NO CARRIER ]** (on Genres and Artists in the middle of the screen, with no intro line). Airplane mode off: the lists load by themselves.
 - [ ] With the app open, switch between Wi-Fi and mobile data (turn Wi-Fi off, then on): no offline bar, and no list disappears or dims.
 - [ ] Airplane mode, then tap a track in Library (its rows are dimmed), Play, or the Jukebox shuffle: "No carrier. Connect to play.", and nothing starts. The mini player's Play does the same; Pause still works.
 - [ ] Play a track, then turn on airplane mode until it stops: the message starts with "Signal lost" (not "Can't play"). Airplane mode off: it carries on by itself.

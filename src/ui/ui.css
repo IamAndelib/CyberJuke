@@ -192,7 +192,10 @@
 .row.is-current .row-title {
   color: var(--color-accent);
 }
-/* Offline: nothing plays (the ⋯ menu still works). */
+/* Offline: nothing plays (the ⋯ menu still works). The rows dim, they don't go. */
+.row-main {
+  transition: opacity 0.25s steps(3);
+}
 .row.off .row-main {
   opacity: 0.45;
 }
@@ -474,6 +477,26 @@
 }
 .state .btn {
   margin-top: 8px;
+}
+/* A list opened offline: [ NO CARRIER ] fades in. */
+.state.appear {
+  animation: state-in 0.25s steps(3);
+}
+@keyframes state-in {
+  from {
+    opacity: 0;
+  }
+}
+/* The offline state alone on a screen (Genres, Artists): in the middle of the space left. */
+.screen:has(> .screen-body > .state.fill) {
+  display: flex;
+  flex-direction: column;
+}
+.screen:has(> .screen-body > .state.fill) > .screen-body {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .fineprint {
