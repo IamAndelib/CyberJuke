@@ -16,30 +16,9 @@
   position: relative;
 }
 
+/* The offline line (ui/components/OfflineLine) as a bar across the top. */
 .offline-banner {
   padding: calc(6px + var(--safe-top)) var(--gutter) 6px;
-  background: var(--color-fg);
-  color: var(--color-bg);
-  text-shadow: none;
-  font-family: var(--font-display);
-  font-size: 13px;
-  text-align: center;
-  text-wrap: balance;
-}
-/* With liked songs saved: the whole bar opens Liked. */
-.offline-banner-link {
-  display: block;
-  width: 100%;
-  min-height: 24px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
 }
 .offline-banner + .main .topbar {
   padding-top: 10px;
