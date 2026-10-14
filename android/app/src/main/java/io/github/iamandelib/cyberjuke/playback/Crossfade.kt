@@ -22,6 +22,12 @@ internal object CrossfadePlan {
     /** The volume steps a fade takes (Metrolist's 20). */
     const val STEPS = 20
 
+    /**
+     * A fade that starts late (a seek or a resume past its start) starts this far ahead of the
+     * position: a position message needs a position still to come.
+     */
+    const val LATE_START_MS = 100L
+
     /** [ms] if it's one of [CHOICES_MS], else null. */
     fun valid(ms: Int?): Int? = ms?.takeIf { it in CHOICES_MS }
 
@@ -45,16 +51,22 @@ internal object CrossfadePlan {
         data class No(val why: Skip) : Trigger
     }
 
-    /** Where the playing track (at [positionMs]) fades into the next one, and for how long. */
+    /**
+     * Where the playing track (at [positionMs]) fades into the next one, and for how long. Already
+     * past the fade's start (a seek or a resume near the end), a shorter fade over what is left,
+     * from just ahead of the position ([LATE_START_MS]), so it still ends with the track; none
+     * when less than [MIN_FADE_MS] is left. (Metrolist skips the fade then.)
+     */
     fun trigger(settingMs: Long, durationMs: Long, nextDurationMs: Long, positionMs: Long): Trigger {
         if (settingMs <= 0L) return Trigger.No(Skip.OFF)
         if (durationMs <= 0L) return Trigger.No(Skip.UNKNOWN_LENGTH)
         val fade = fadeMs(settingMs, durationMs, nextDurationMs)
         if (fade == 0L) return Trigger.No(Skip.TOO_SHORT)
         val at = durationMs - fade
-        // Already past it (a seek or a resume near the end): the track ends the usual way.
-        if (positionMs >= at) return Trigger.No(Skip.TOO_LATE)
-        return Trigger.At(at, fade)
+        if (positionMs < at) return Trigger.At(at, fade)
+        val lateAt = positionMs + LATE_START_MS
+        val left = durationMs - lateAt
+        return if (left < MIN_FADE_MS) Trigger.No(Skip.TOO_LATE) else Trigger.At(lateAt, left)
     }
 
     /** The main player, as the crossfade sees it when a fade comes due. */
