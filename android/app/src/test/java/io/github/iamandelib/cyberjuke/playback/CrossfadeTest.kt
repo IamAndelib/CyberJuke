@@ -54,14 +54,30 @@ class CrossfadeTest {
         assertEquals(Trigger.At(4 * min - 6_000L, 6_000L), CrossfadePlan.trigger(6_000L, 4 * min, 3 * min, 0L))
         // Shrunk to fit a 15 s next track: later, and shorter.
         assertEquals(Trigger.At(4 * min - 5_000L, 5_000L), CrossfadePlan.trigger(10_000L, 4 * min, 15_000L, 0L))
-        // A moment before the fade is still in time; at or past it, too late (a seek, a resume near the end).
+        // A moment before the fade is still in time.
         assertEquals(Trigger.At(4 * min - 6_000L, 6_000L), CrossfadePlan.trigger(6_000L, 4 * min, 3 * min, 4 * min - 6_001L))
-        assertEquals(Trigger.No(Skip.TOO_LATE), CrossfadePlan.trigger(6_000L, 4 * min, 3 * min, 4 * min - 6_000L))
         assertEquals(Trigger.No(Skip.TOO_LATE), CrossfadePlan.trigger(6_000L, 4 * min, 3 * min, 4 * min))
         assertEquals(Trigger.No(Skip.OFF), CrossfadePlan.trigger(0L, 4 * min, 3 * min, 0L))
         assertEquals(Trigger.No(Skip.UNKNOWN_LENGTH), CrossfadePlan.trigger(6_000L, -1L, 3 * min, 0L))
         assertEquals(Trigger.No(Skip.TOO_SHORT), CrossfadePlan.trigger(6_000L, 2_000L, 3 * min, 0L))
         assertEquals(Trigger.No(Skip.TOO_SHORT), CrossfadePlan.trigger(6_000L, 4 * min, 2_000L, 0L))
+    }
+
+    @Test
+    fun aSeekPastTheFadesStartFadesWhatIsLeft() {
+        // 3:40 with 10 s: the fade starts at 3:30. A seek to 3:34 fades the last 5.9 s, from just
+        // ahead of there, to end with the track.
+        val track = 3 * min + 40_000L
+        assertEquals(Trigger.At(track - 10_000L, 10_000L), CrossfadePlan.trigger(10_000L, track, 3 * min, 0L))
+        assertEquals(Trigger.At(track - 5_900L, 5_900L), CrossfadePlan.trigger(10_000L, track, 3 * min, track - 6_000L))
+        // At the fade's very start (a resume there) the same: what is left.
+        assertEquals(Trigger.At(track - 9_900L, 9_900L), CrossfadePlan.trigger(10_000L, track, 3 * min, track - 10_000L))
+        // Still two seconds to fade: yes; less: too late (the old player may have read its end into
+        // the audio pipeline already), the track ends the usual way.
+        assertEquals(Trigger.At(track - 2_000L, 2_000L), CrossfadePlan.trigger(10_000L, track, 3 * min, track - 2_100L))
+        assertEquals(Trigger.No(Skip.TOO_LATE), CrossfadePlan.trigger(10_000L, track, 3 * min, track - 2_099L))
+        // Never longer than the fade a short next track allows.
+        assertEquals(Trigger.At(track - 4_900L, 4_900L), CrossfadePlan.trigger(10_000L, track, 15_000L, track - 5_000L))
     }
 
     @Test
@@ -227,6 +243,13 @@ class CrossfadeTest {
             mainPlaying = incomingPlaying
             incomingPlaying = false
             onHandOver()
+        }
+
+        var resumed = 0
+
+        override fun resumeMain() {
+            resumed++
+            mainPlaying = true
         }
 
         override fun dropIncoming() {
@@ -545,15 +568,18 @@ class CrossfadeTest {
 
     @Test
     fun aSeekSkipNewListErrorOrSettingMidFadeStopsItAtOnce() {
-        val events = listOf<(Crossfader) -> Unit>(
-            { it.onJump() },
-            { it.onHalted() },
-            { it.setSetting(10_000) },
-            { it.setSetting(0) },
+        val events = listOf<(Crossfader, FakeHost) -> Unit>(
+            // A seek back to 1:00 (a seek within the fade's last seconds fades what is left: see aSeekIntoTheLastSeconds…).
+            { c, h ->
+                h.position = 60_000L
+                c.onJump()
+            },
+            { c, _ -> c.onHalted() },
+            { c, _ -> c.setSetting(0) },
         )
         for ((i, event) in events.withIndex()) {
             val (h, c) = fading()
-            event(c)
+            event(c, h)
             assertDropped(h, c)
             // Nothing of it comes back: the old track ends the usual way.
             val volumes = h.mainVolumes.size
@@ -566,6 +592,13 @@ class CrossfadeTest {
         c.setSetting(6_000)
         assertEquals(Crossfader.Phase.CROSSING, c.phase)
         assertTrue(h.hasIncoming)
+        // Another length: stopped, then a fade of what is left (3.01 s before the end, less the late start).
+        val (h2, c2) = fading()
+        c2.setSetting(10_000)
+        assertDropped(h2, c2)
+        h2.run(200L)
+        assertEquals(Crossfader.Phase.CROSSING, c2.phase)
+        assertEquals(listOf(6_000L, 2_910L), h2.started)
     }
 
     @Test
@@ -604,11 +637,64 @@ class CrossfadeTest {
     }
 
     @Test
-    fun theOldTrackStoppingAtItsEndOutsideAFadeIsIgnored() {
-        val (h, c) = armed()
+    fun theOldTracksStopAtItsEndArrivingAfterItsFadeWasDroppedPlaysOn() {
+        // The stop is taken on the playback thread; the fade was dropped (the incoming track
+        // failed, an edit, a seek) before word of it came: the music must not stay paused there.
+        val (h, c) = fading()
+        c.onIncomingFailed()
+        assertDropped(h, c)
+        h.mainPlaying = false
         c.onMainEnded()
+        assertEquals(1, h.resumed)
+        assertTrue(h.mainPlaying)
         assertEquals(0, h.handOvers)
         assertEquals(Crossfader.Phase.NONE, c.phase)
+    }
+
+    @Test
+    fun anEditOfTheUsersMidFadeLetsTheIncomingTrackTakeOverFirst() {
+        val (h, c) = fading()
+        c.settle()
+        assertEquals(1, h.handOvers)
+        assertEquals("n1", h.item)
+        assertEquals(Crossfader.Phase.RISING, c.phase)
+        // The rest of the ramp on it alone; the old track's own end changes nothing now.
+        h.run(4_000L)
+        assertOver(h, c)
+        // Outside a fade: nothing.
+        c.settle()
+        assertEquals(1, h.handOvers)
+    }
+
+    @Test
+    fun aFadeRefusedOrFailedIsNotTriedAgainForTheTrackUntilTheUserSeeks() {
+        // The incoming track failed: the re-arms of the last seconds (READY, play, a list change) don't build another player.
+        val (h, c) = fading()
+        c.onIncomingFailed()
+        c.arm()
+        c.onPlayWanted(true)
+        c.onListChanged()
+        h.run(1_000L)
+        assertEquals(1, h.starts)
+        assertTrue(h.messages.isEmpty())
+        // A seek within those seconds is the user's: tried again, for what is left.
+        h.position = dur - 2_500L
+        c.onJump()
+        h.run(200L)
+        assertEquals(2, h.starts)
+        assertEquals(Crossfader.Phase.CROSSING, c.phase)
+
+        // A refusal (two tracks of one album) is told once, whatever re-arms follow.
+        val h2 = FakeHost()
+        h2.f = facts(sameAlbum = true)
+        val (_, c2) = armed(host = h2)
+        h2.playTo(fadeAt + 1_000L)
+        repeat(3) {
+            c2.arm()
+            h2.run(200L)
+        }
+        assertEquals(listOf(Skip.SAME_ALBUM), h2.skips)
+        assertEquals(0, h2.starts)
     }
 
     @Test
@@ -650,8 +736,11 @@ class CrossfadeTest {
         h.nextDuration = 3 * min
         c.setSetting(10_000)
         assertEquals(listOf(dur - 10_000L), h.messages.map { it.first })
-        // A seek past the fade: nothing set (too late); back before it: set again.
-        h.position = dur - 2_000L
+        // A seek past the fade's start: what is left, from just ahead; into the last two seconds, nothing.
+        h.position = dur - 3_000L
+        c.onJump()
+        assertEquals(listOf(dur - 2_900L), h.messages.map { it.first })
+        h.position = dur - 500L
         c.onJump()
         assertTrue(h.messages.isEmpty())
         h.position = 60_000L
@@ -662,6 +751,26 @@ class CrossfadeTest {
         h.duration = 2 * min
         c.onJump()
         assertEquals(listOf(2 * min - 10_000L), h.messages.map { it.first })
+    }
+
+    @Test
+    fun aSeekIntoTheLastSecondsFadesWhatIsLeftAndHandsOverAtTheEnd() {
+        val (h, c) = armed(settingMs = 10_000)
+        // Seek to 6 s before the end, past the 10 s fade's start.
+        h.position = dur - 6_000L
+        c.onJump()
+        h.run(100L)
+        assertEquals(Crossfader.Phase.CROSSING, c.phase)
+        assertEquals(listOf(5_900L), h.started)
+        assertEquals("a", h.item)
+        h.incomingPlaying = true
+        c.onPlaying()
+        h.run(5_850L)
+        assertEquals(Crossfader.Phase.CROSSING, c.phase)
+        // The old track's end hands over; the ramp (its steps a little late on this clock) ends just after.
+        h.run(400L)
+        assertOver(h, c)
+        assertEquals(21, h.ins.size)
     }
 
     @Test

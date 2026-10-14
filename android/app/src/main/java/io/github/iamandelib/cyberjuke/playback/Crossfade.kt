@@ -22,6 +22,18 @@ internal object CrossfadePlan {
     /** The volume steps a fade takes (Metrolist's 20). */
     const val STEPS = 20
 
+    /**
+     * A fade that starts late (a seek or a resume past its start) starts this far ahead of the
+     * position: a position message needs a position still to come.
+     */
+    const val LATE_START_MS = 100L
+
+    /**
+     * A late fade needs this much of the track left: with less, the old player may already have
+     * read its end into the audio pipeline, and asking it to stop there would flush it (a gap).
+     */
+    const val LATE_MIN_MS = 2_000L
+
     /** [ms] if it's one of [CHOICES_MS], else null. */
     fun valid(ms: Int?): Int? = ms?.takeIf { it in CHOICES_MS }
 
@@ -45,16 +57,22 @@ internal object CrossfadePlan {
         data class No(val why: Skip) : Trigger
     }
 
-    /** Where the playing track (at [positionMs]) fades into the next one, and for how long. */
+    /**
+     * Where the playing track (at [positionMs]) fades into the next one, and for how long. Already
+     * past the fade's start (a seek or a resume near the end), a shorter fade over what is left,
+     * from just ahead of the position ([LATE_START_MS]), so it still ends with the track; none
+     * when less than [LATE_MIN_MS] is left. (Metrolist skips the fade then.)
+     */
     fun trigger(settingMs: Long, durationMs: Long, nextDurationMs: Long, positionMs: Long): Trigger {
         if (settingMs <= 0L) return Trigger.No(Skip.OFF)
         if (durationMs <= 0L) return Trigger.No(Skip.UNKNOWN_LENGTH)
         val fade = fadeMs(settingMs, durationMs, nextDurationMs)
         if (fade == 0L) return Trigger.No(Skip.TOO_SHORT)
         val at = durationMs - fade
-        // Already past it (a seek or a resume near the end): the track ends the usual way.
-        if (positionMs >= at) return Trigger.No(Skip.TOO_LATE)
-        return Trigger.At(at, fade)
+        if (positionMs < at) return Trigger.At(at, fade)
+        val lateAt = positionMs + LATE_START_MS
+        val left = durationMs - lateAt
+        return if (left < LATE_MIN_MS) Trigger.No(Skip.TOO_LATE) else Trigger.At(lateAt, left)
     }
 
     /** The main player, as the crossfade sees it when a fade comes due. */
@@ -182,6 +200,9 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         /** The incoming player goes before the hand-over; the main one plays on past its track's end. */
         fun dropIncoming()
 
+        /** The main player plays on (it stopped at its track's end for a fade that was dropped meanwhile). */
+        fun resumeMain()
+
         /** The main player plays (its sound comes out). */
         val mainPlaying: Boolean
 
@@ -234,6 +255,13 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
 
     private val stepTask = Runnable { step() }
 
+    /**
+     * The item a fade was refused or failed for: not tried again for it until the user seeks or
+     * skips ([onJump]) or changes the setting. A track's last seconds re-arm on every READY, play
+     * and list change, and each try of a failing track would build a player again.
+     */
+    private var refusedFor: Any? = null
+
     /** The last item and reason a TOO_SHORT or TOO_LATE was told for (each is told once). */
     private var noted: Pair<Any?, CrossfadePlan.Skip>? = null
 
@@ -242,6 +270,7 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         val v = (CrossfadePlan.valid(ms) ?: 0).toLong()
         if (v == settingMs) return
         settingMs = v
+        refusedFor = null
         stop()
         arm()
     }
@@ -258,7 +287,7 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         val g = ++generation
         val current = host.currentItem()
         item = null
-        if (current == null) return
+        if (current == null || current == refusedFor) return
         val t = CrossfadePlan.trigger(settingMs, host.durationMs(), host.nextDurationMs(), host.positionMs())
         if (t is CrossfadePlan.Trigger.No) {
             note(t.why, current)
@@ -273,6 +302,7 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
     /** A new current item, a seek, a skip or a removal on the main player: a fade stops at once. */
     fun onJump() {
         if (busy) return
+        refusedFor = null
         stop()
         arm()
     }
@@ -302,8 +332,23 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         if (wanted) arm()
     }
 
-    /** The main player stopped at its track's end, as asked: the incoming one takes over. */
+    /**
+     * The main player stopped at its track's end, as asked: the incoming one takes over. Only a
+     * fade asks for that stop, but it is taken on the playback thread: one that arrives after its
+     * fade was dropped (an edit, a seek, the incoming track failing) must not leave the music
+     * paused there.
+     */
     fun onMainEnded() {
+        if (busy) return
+        if (phase == Phase.CROSSING) handOver() else host.resumeMain()
+    }
+
+    /**
+     * A queue edit of the user's comes, and goes after the track the main player plays: while
+     * crossing, the incoming one takes over first, so it is the one played next to (and an
+     * "Add to queue" doesn't take the place of the track already fading in).
+     */
+    fun settle() {
         if (busy || phase != Phase.CROSSING) return
         handOver()
     }
@@ -318,6 +363,7 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
     /** The incoming track failed before the hand-over: the old one plays on, as with Crossfade Off. */
     fun onIncomingFailed() {
         if (busy || phase != Phase.CROSSING) return
+        refusedFor = host.currentItem()
         stop()
     }
 
@@ -335,12 +381,12 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         if (g != generation || host.currentItem() != item) return
         val why = CrossfadePlan.decide(host.facts(settingMs).copy(fading = phase != Phase.NONE))
         if (why != null) {
-            note(why, item)
+            refuse(why)
             return
         }
         base = host.mainVolume
         if (!ours { host.startIncoming() }) {
-            note(CrossfadePlan.Skip.NO_PLAYER, item)
+            refuse(CrossfadePlan.Skip.NO_PLAYER)
             return
         }
         phase = Phase.CROSSING
@@ -411,6 +457,13 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         } finally {
             busy = false
         }
+    }
+
+    /** No fade for this track, and why; not tried again for it on its own ([refusedFor]). */
+    private fun refuse(why: CrossfadePlan.Skip) {
+        // A fade under way (the last one still rising) is no refusal of this track's.
+        if (why != CrossfadePlan.Skip.FADING) refusedFor = item
+        note(why, item)
     }
 
     /** Tells a skipped fade: not Off or a length still unknown (the usual), and TOO_SHORT and TOO_LATE once per track. */

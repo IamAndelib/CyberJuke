@@ -126,6 +126,9 @@ class PlaybackService : MediaSessionService() {
     /** Its listener until then. */
     private var incomingEvents: IncomingEvents? = null
 
+    /** onDestroy has begun: nothing waits for the handler any more. */
+    private var destroying = false
+
     /** The Crossfade setting, in ms (0 = Off), as the load-ahead needs it ([LoadAhead.wanted]). */
     private var crossfadeMs = 0
 
@@ -700,17 +703,39 @@ class PlaybackService : MediaSessionService() {
         incoming = null
         incomingEvents?.let { next.removeListener(it) }
         bringInStep(old, next)
-        old.volume = 0f
         adopt(built)
-        // The old one's focus goes with it (handled from here on, also when it ends).
-        next.setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
-        // Not inside its own callback (the hand-over may come from its stop at the end).
-        handler.post { old.release() }
+        letGo(old, next)
         updateLoadAhead()
         // The new player moved to its track with nobody listening: a track change's bookkeeping
         // (the queue, autoplay, the saved session, prefetch, Auto quality) runs now, as for a
         // jump: its start isn't a rebuffer, nor a track's own end to judge.
         listener.onMediaItemTransition(next.currentMediaItem, Player.MEDIA_ITEM_TRANSITION_REASON_SEEK)
+    }
+
+    /**
+     * The old player after a hand-over: still heard (a hand-over before its end, for an edit:
+     * Crossfader.settle), it fades out over [LET_GO_MS] first; then it goes, and its audio focus
+     * with it, to [next]: asked for after the old one let go of it, as Android would otherwise take
+     * it from the old one with a loss that pauses it. Never inside the old one's own callback (the
+     * hand-over may come from its stop at the end).
+     */
+    private fun letGo(old: ExoPlayer, next: ExoPlayer) {
+        val from = old.volume
+        val steps = if (old.isPlaying && from > 0.01f) LET_GO_STEPS else 0
+        var done = 0
+        val step = object : Runnable {
+            override fun run() {
+                if (done < steps && !destroying) {
+                    done++
+                    old.volume = from * (1f - done.toFloat() / steps)
+                    handler.postDelayed(this, LET_GO_MS / LET_GO_STEPS)
+                    return
+                }
+                old.release()
+                if (player === next) next.setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
+            }
+        }
+        handler.post(step)
     }
 
     /**
@@ -745,8 +770,9 @@ class PlaybackService : MediaSessionService() {
         val next = built.player
         incomingEvents?.let { next.removeListener(it) }
         next.volume = 0f
-        // Not inside its own callback (a drop may come from its error).
-        handler.post { next.release() }
+        // Not inside its own callback (a drop may come from its error); at once when the service
+        // ends, before the gate opens (its loader may wait there for the track after next).
+        if (destroying) next.release() else handler.post { next.release() }
         player?.pauseAtEndOfMediaItems = false
         updateLoadAhead()
     }
@@ -770,6 +796,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         Log.i(TAG, "PlaybackService destroyed")
+        destroying = true
         // The latest list and position, before the player goes.
         if (sessionDirty) saveSessionNow()
         savePosition()
@@ -943,6 +970,9 @@ class PlaybackService : MediaSessionService() {
             queue.onPlaylistChanged()
             queueChanged()
             schedulePrefetch()
+            // Once the queue has arranged the edit (a shuffled insert first lands anywhere): the
+            // crossfade looks at the next track (CrossfadeEvents leaves edits to us).
+            crossfade?.onListChanged()
             // Something was added after the list had played to its end (late autoplay, Add to
             // queue, Undo): ExoPlayer stays ENDED, so go on to it.
             // Only soon after the end: a batch arriving much later (after a long back-off, or on
@@ -960,6 +990,7 @@ class PlaybackService : MediaSessionService() {
             queue.onShuffleModeChanged(shuffleModeEnabled)
             queueChanged()
             schedulePrefetch()
+            crossfade?.onListChanged()
         }
 
         /** Repeat all or one turns autoplay off; back to off, autoplay fills up again. */
@@ -1029,9 +1060,11 @@ class PlaybackService : MediaSessionService() {
 
     // ---- "Add to queue" (play next, FIFO) ----------------------------------------------------
 
-    private fun queueNext(p: ExoPlayer, items: List<MediaItem>) {
+    private fun queueNext(items: List<MediaItem>) {
+        // During a fade, after the track fading in: it takes over first.
+        crossfade?.settle()
         val at = queue.queueNext(items)
-        if (p.mediaItemCount > 0) Log.i(TAG, "queueNext: ${items.size} item(s) at $at, ${queue.pendingSerials.size} pending")
+        if ((player?.mediaItemCount ?: 0) > 0) Log.i(TAG, "queueNext: ${items.size} item(s) at $at, ${queue.pendingSerials.size} pending")
         queueChanged()
     }
 
@@ -1127,6 +1160,8 @@ class PlaybackService : MediaSessionService() {
             Log.i(TAG, "restore: autoplay item dropped (autoplay off or repeat on)")
             return
         }
+        // During a fade, among the tracks after the one fading in: it takes over first.
+        crossfade?.settle()
         queue.restore(item, section, beforeId)
         queueChanged()
     }
@@ -1681,7 +1716,7 @@ class PlaybackService : MediaSessionService() {
             }
             try {
                 when (action) {
-                    QueueCommands.ACTION_QUEUE_NEXT -> queueNext(p, tracks() ?: return bad)
+                    QueueCommands.ACTION_QUEUE_NEXT -> queueNext(tracks() ?: return bad)
                     QueueCommands.ACTION_SET_LIST -> setList(
                         tracks() ?: return bad,
                         args.getInt(QueueCommands.ARG_START, 0),
@@ -1821,5 +1856,11 @@ class PlaybackService : MediaSessionService() {
 
         /** While playing, the position is saved this often. */
         private const val POSITION_SAVE_MS = 15_000L
+
+        /** A crossfade's old player, still heard at a hand-over (an edit's), fades out over this long, */
+        private const val LET_GO_MS = 250L
+
+        /** in this many steps. */
+        private const val LET_GO_STEPS = 5
     }
 }
