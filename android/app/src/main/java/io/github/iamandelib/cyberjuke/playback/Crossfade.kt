@@ -1,12 +1,15 @@
 package io.github.iamandelib.cyberjuke.playback
 
 /**
- * Crossfade (Settings → Crossfade), the way Metrolist does it (MusicService's scheduleCrossfade,
+ * Crossfade (Settings → Crossfade), after Metrolist (MusicService's scheduleCrossfade,
  * startCrossfade and performCrossfadeSwap): a fade's length before a track's end, a second player
- * starts the next track from its start, silent, and takes over the media session (the title, the
- * notification and the lock screen move on at once), and fades in while the old player plays out
- * its own end and fades out. Media3 has no crossfade of its own (as of 1.11). Nothing is lined up
- * and the next track needn't be buffered: if it needs a moment to start, the fade waits for it.
+ * starts the next track from its start, silent, and fades in while the old one plays out its own
+ * end and fades out. Media3 has no crossfade of its own (as of 1.11). Nothing is lined up and the
+ * next track needn't be buffered: if it needs a moment to start, the fade waits for it.
+ *
+ * Unlike Metrolist, the media session (the title in the app, the notification and the lock screen,
+ * and the controls) stays with the old track until it ends, and only then moves to the new player
+ * (Crossfader.Host.handOver): what shows is the track that's ending, until it has.
  * Pure (CrossfadeTest): when to fade, how long, and the curve.
  */
 internal object CrossfadePlan {
@@ -124,19 +127,22 @@ internal object CrossfadePlan {
  *
  * Armed for each track ([arm]): one position message ([Host.at], no timer) at
  * [CrossfadePlan.trigger]. When it comes due and [CrossfadePlan.decide] says fade (phases NONE →
- * YIELDING → FADING):
- * - the main player gives up its audio focus ([Host.yieldFocus]), so the new player's request
- *   takes nothing from it (a second request would make Android pause it);
- * - then [Host.swapToNext]: a new main player starts the next track, silent, and the old one keeps
- *   only its own track and fades;
- * - then [CrossfadePlan.STEPS] volume steps, relative to the old player's own volume ([base]): the
- *   new one fades in, the old one out, and is released at the end.
+ * CROSSING → RISING):
+ * - CROSSING: [Host.startIncoming], a second player plays the next track from its start, silent,
+ *   outside the session; the session's player (the main one) stops at its own track's end. Then
+ *   [CrossfadePlan.STEPS] volume steps, relative to the main player's own volume ([base]): the
+ *   incoming one fades in, the main one out. The main one keeps the session, its audio focus and
+ *   the controls: the incoming one follows its pauses and calls ([onPlayWanted]).
+ * - At the main track's end ([onMainEnded]), or the ramp's if that comes first, [Host.handOver]:
+ *   the incoming player becomes the session's and the old one goes.
+ * - RISING: what is left of the ramp, on the new main player alone.
  *
- * The steps are the only timer and run only while the new player plays: while it buffers, is
- * paused or held back, the ramp waits ([onPlaying]). The old player plays when play is wanted
- * ([onPlayWanted]). A seek, a skip, a new list, the main player stopping or failing, or another
- * setting stops a fade at once ([stop]): the old track goes and the new one is at full volume.
- * The old track ending or failing by itself ([onFadingGone]) lets the ramp finish on the new one.
+ * The steps are the only timer and run only while the incoming player plays: while it buffers, is
+ * paused or held back, the ramp waits ([onPlaying]). A seek, a skip, a new list, the main player
+ * stopping or failing, another setting, or an edit that changes the next track stops a fade at
+ * once ([stop]): the incoming player goes ([Host.dropIncoming]) and the main one is at full volume
+ * (after the hand-over: the new track is). The incoming track failing stops it the same way: the
+ * old one plays to its end and on, as with Crossfade Off.
  */
 internal class Crossfader(private val host: Host, settingMs: Int) {
     interface Host {
@@ -160,32 +166,35 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         /** Cancels everything [at] set. */
         fun cancelAll()
 
-        /** The main player gives up its audio focus; [then] runs once it has. */
-        fun yieldFocus(then: () -> Unit)
-
-        /** The main player handles its audio focus again (a fade that didn't happen). */
-        fun reclaimFocus()
-
         /**
-         * A new main player plays the track the fade goes into from its start, at volume 0, and has
-         * the session; the old one keeps only its own track, fading. False: none could be made,
-         * nothing changed.
+         * A second player plays the track the fade goes into from its start, at volume 0, outside
+         * the session; the main player will stop at its track's end ([onMainEnded]). False: none
+         * could be made, nothing changed.
          */
-        fun swapToNext(): Boolean
+        fun startIncoming(): Boolean
+
+        /** The incoming player still plays the track after the main one's (an edit may have changed it). */
+        fun incomingIsNext(): Boolean
+
+        /** The incoming player becomes the main one, with the session (its list brought in step); the old one goes. */
+        fun handOver()
+
+        /** The incoming player goes before the hand-over; the main one plays on past its track's end. */
+        fun dropIncoming()
 
         /** The main player plays (its sound comes out). */
         val mainPlaying: Boolean
+
+        /** The incoming player plays. */
+        val incomingPlaying: Boolean
 
         val mainVolume: Float
 
         fun setMainVolume(v: Float)
 
-        fun setFadingVolume(v: Float)
+        fun setIncomingVolume(v: Float)
 
-        fun setFadingPlaying(playing: Boolean)
-
-        /** The old player goes. */
-        fun releaseFading()
+        fun setIncomingPlayWhenReady(playing: Boolean)
 
         fun post(delayMs: Long, r: Runnable)
 
@@ -198,7 +207,7 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         fun started(fadeMs: Long)
     }
 
-    enum class Phase { NONE, YIELDING, FADING }
+    enum class Phase { NONE, CROSSING, RISING }
 
     var phase = Phase.NONE
         private set
@@ -212,21 +221,15 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
     private var item: Any? = null
     private var armedFadeMs = 0L
 
-    /** Counts focus hand-overs, so a late barrier of an abandoned one does nothing. */
-    private var yields = 0
+    /** Inside our own host calls: the players' events they cause are ours, not the user's. */
+    private var busy = false
 
-    /** Inside our own [Host.swapToNext]: the new player's events are ours, not the user's. */
-    private var swapping = false
-
-    /** The old player's own volume, read before the swap: the fade's volumes are relative to it. */
+    /** The main player's own volume when the fade started: the fade's volumes are relative to it. */
     private var base = 1f
     private var step = 0
     private var stepMs = 0L
 
-    /** The old player is still there (it may end or fail before the ramp does). */
-    private var fadingAlive = false
-
-    /** The ramp waits for the new player to play ([onPlaying]). */
+    /** The ramp waits for the incoming player to play ([onPlaying]). */
     private var waiting = false
 
     private val stepTask = Runnable { step() }
@@ -247,10 +250,10 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
 
     /**
      * Sets the current track's message (again): its length, the next track, the setting or the
-     * position may have changed. A fade under way goes on (the message is for the track after it).
+     * position may have changed. Not while crossing: that track's fade is under way.
      */
     fun arm() {
-        if (swapping || phase == Phase.YIELDING) return
+        if (busy || phase == Phase.CROSSING) return
         host.cancelAll()
         val g = ++generation
         val current = host.currentItem()
@@ -267,42 +270,55 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         host.at(at.atMs) { fire(g) }
     }
 
-    /** A new current item, a seek, a skip or a removal that isn't our swap's: a fade stops at once. */
+    /** A new current item, a seek, a skip or a removal on the main player: a fade stops at once. */
     fun onJump() {
-        if (swapping) return
+        if (busy) return
         stop()
+        arm()
+    }
+
+    /** The list, its order or the repeat mode changed, or a length became known. */
+    fun onListChanged() {
+        if (busy) return
+        // Edits during a fade go to the main player; the hand-over brings the incoming one in step,
+        // unless the track it plays is no longer the next.
+        if (phase == Phase.CROSSING) {
+            if (!host.incomingIsNext()) stop()
+            return
+        }
         arm()
     }
 
     /** The main player stopped, ended or failed. */
     fun onHalted() {
-        if (swapping) return
+        if (busy) return
         stop()
     }
 
     /** Play wanted and nothing holding it back (a pause, a call, another app's audio): [wanted]. */
     fun onPlayWanted(wanted: Boolean) {
-        if (swapping) return
-        when (phase) {
-            Phase.FADING -> if (fadingAlive) host.setFadingPlaying(wanted)
-            Phase.YIELDING -> if (!wanted) stop()
-            Phase.NONE -> Unit
-        }
+        if (busy) return
+        if (phase == Phase.CROSSING) host.setIncomingPlayWhenReady(wanted)
         if (wanted) arm()
     }
 
-    /** The main player plays: a ramp that waited for it goes on. */
+    /** The main player stopped at its track's end, as asked: the incoming one takes over. */
+    fun onMainEnded() {
+        if (busy || phase != Phase.CROSSING) return
+        handOver()
+    }
+
+    /** The playing player (the incoming one while crossing) plays: a ramp that waited goes on. */
     fun onPlaying() {
-        if (swapping || phase != Phase.FADING || !waiting) return
+        if (busy || phase == Phase.NONE || !waiting) return
         waiting = false
         step()
     }
 
-    /** The old player played out its track, or failed: it goes, the ramp finishes on the new one. */
-    fun onFadingGone() {
-        if (phase != Phase.FADING || !fadingAlive) return
-        fadingAlive = false
-        host.releaseFading()
+    /** The incoming track failed before the hand-over: the old one plays on, as with Crossfade Off. */
+    fun onIncomingFailed() {
+        if (busy || phase != Phase.CROSSING) return
+        stop()
     }
 
     /** The service ends: nothing may outlive it. */
@@ -311,7 +327,6 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         host.remove(stepTask)
         host.cancelAll()
         generation++
-        yields++
     }
 
     // ---- the fade -------------------------------------------------------------------------
@@ -323,43 +338,23 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
             note(why, item)
             return
         }
-        val fade = armedFadeMs
-        phase = Phase.YIELDING
-        val y = ++yields
-        host.yieldFocus { start(y, fade) }
-    }
-
-    /** The old player gave up its audio focus: swap, and the ramp starts once the new one plays. */
-    private fun start(y: Int, fadeMs: Long) {
-        if (phase != Phase.YIELDING || y != yields) return
         base = host.mainVolume
-        swapping = true
-        val swapped = try {
-            host.swapToNext()
-        } finally {
-            swapping = false
-        }
-        if (!swapped) {
-            phase = Phase.NONE
-            host.reclaimFocus()
+        if (!ours { host.startIncoming() }) {
             note(CrossfadePlan.Skip.NO_PLAYER, item)
             return
         }
-        phase = Phase.FADING
-        fadingAlive = true
+        phase = Phase.CROSSING
         step = 0
-        stepMs = CrossfadePlan.stepMs(fadeMs)
+        stepMs = CrossfadePlan.stepMs(armedFadeMs)
         waiting = false
-        host.started(fadeMs)
-        // The new track's own fade.
-        arm()
+        host.started(armedFadeMs)
         step()
     }
 
     private fun step() {
-        if (phase != Phase.FADING) return
+        if (phase == Phase.NONE) return
         // Not playing (buffering its start, paused, a call): no step until it does.
-        if (!host.mainPlaying) {
+        if (!(if (phase == Phase.CROSSING) host.incomingPlaying else host.mainPlaying)) {
             waiting = true
             return
         }
@@ -368,33 +363,53 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
             return
         }
         val p = step.toFloat() / CrossfadePlan.STEPS
-        host.setMainVolume(base * CrossfadePlan.fadeIn(p))
-        if (fadingAlive) host.setFadingVolume(base * CrossfadePlan.fadeOut(p))
+        if (phase == Phase.CROSSING) {
+            host.setIncomingVolume(base * CrossfadePlan.fadeIn(p))
+            host.setMainVolume(base * CrossfadePlan.fadeOut(p))
+        } else {
+            host.setMainVolume(base * CrossfadePlan.fadeIn(p))
+        }
         step++
         host.post(stepMs, stepTask)
     }
 
-    /** The fade is over (or stopped): the old player goes, the new one is at its own volume. */
+    /** The incoming player takes over; the ramp goes on with it alone. */
+    private fun handOver() {
+        ours { host.handOver() }
+        phase = Phase.RISING
+        // The new track's own fade.
+        arm()
+    }
+
+    /** The ramp is over: before the main track's end (the old one is silent now), the hand-over too. */
     private fun finish() {
+        if (phase == Phase.CROSSING) handOver()
+        end()
+    }
+
+    /** Ends a fade at once: before the hand-over the incoming player goes, and whichever plays is at full volume. */
+    private fun stop() {
+        when (phase) {
+            Phase.NONE -> return
+            Phase.CROSSING -> ours { host.dropIncoming() }
+            Phase.RISING -> Unit
+        }
+        end()
+    }
+
+    private fun end() {
         host.remove(stepTask)
         waiting = false
         phase = Phase.NONE
-        if (fadingAlive) {
-            fadingAlive = false
-            host.releaseFading()
-        }
         host.setMainVolume(base)
     }
 
-    /** Ends a fade at once, or the focus hand-over before one (the old player takes its focus back). */
-    private fun stop() {
-        when (phase) {
-            Phase.NONE -> Unit
-            Phase.YIELDING -> {
-                phase = Phase.NONE
-                host.reclaimFocus()
-            }
-            Phase.FADING -> finish()
+    private inline fun <T> ours(block: () -> T): T {
+        busy = true
+        try {
+            return block()
+        } finally {
+            busy = false
         }
     }
 

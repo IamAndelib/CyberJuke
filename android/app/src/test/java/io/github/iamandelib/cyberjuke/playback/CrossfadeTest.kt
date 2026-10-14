@@ -130,39 +130,53 @@ class CrossfadeTest {
     // ---- Crossfader ----------------------------------------------------------------------
 
     /**
-     * The service's players and handler, by hand. [run] lets time pass: the main player's position
-     * moves while it plays, its messages run as it passes them, posted steps as they come due, and
-     * the focus barrier once its turn comes ([autoBarrier]; else [barrier]).
+     * The service's players and handler, by hand. [run] lets time pass: each player's position
+     * moves while it plays (the main one at [speed]), the main player's messages run as it passes
+     * them, it stops at its track's end when a fade asked it to (and the crossfader hears of it),
+     * and posted steps run as they come due.
      */
     private class FakeHost : Crossfader.Host {
         var f = CrossfadeTest().facts()
+        var fader: Crossfader? = null
+
+        // The main player: the session's.
+        var item: Any? = "a"
         var duration = 4 * 60_000L
         var nextDuration = 3 * 60_000L
         var position = 0L
-        var clock = 0L
-        var item: Any? = "a"
+        var speed = 1.0
         override var mainPlaying = true
         var mainLevel = 1f
         val mainVolumes = ArrayList<Float>()
 
-        /** The fading player: its volume, whether it plays, and whether it was released. */
-        var fadingLevel = 0f
-        var fadingOn = false
-        val fadingVolumes = ArrayList<Float>()
-        var fadingReleased = 0
-        var hasFading = false
+        /** Asked by a fade's start: it stops at its track's end. */
+        var pauseAtEnd = false
 
+        // The incoming player, from a fade's start to the hand-over.
+        var hasIncoming = false
+        var incomingLevel = 0f
+        var incomingOn = false
+        override var incomingPlaying = false
+        var incomingPosition = 0L
+        val incomingVolumes = ArrayList<Float>()
+
+        /** It still plays the main one's next track. */
+        var incomingNext = true
+
+        var clock = 0L
         val messages = ArrayList<Pair<Long, () -> Unit>>()
         val posted = ArrayList<Pair<Long, Runnable>>()
-        var autoBarrier = true
-        var barrierDue: (() -> Unit)? = null
-        var yields = 0
-        var reclaims = 0
-        var swaps = 0
-        var swapWorks = true
-        var onSwap: () -> Unit = {}
+        var starts = 0
+        var startWorks = true
+        var onStart: () -> Unit = {}
+        var handOvers = 0
+        var onHandOver: () -> Unit = {}
+
+        /** How many main volumes were set before the hand-over (the old player's fade-out). */
+        var outCount = -1
+        var drops = 0
         val skips = ArrayList<Skip>()
-        val starts = ArrayList<Long>()
+        val started = ArrayList<Long>()
 
         override val mainVolume get() = mainLevel
 
@@ -182,36 +196,46 @@ class CrossfadeTest {
 
         override fun cancelAll() = messages.clear()
 
-        override fun yieldFocus(then: () -> Unit) {
-            yields++
-            barrierDue = then
-        }
-
-        fun barrier() {
-            val then = barrierDue ?: return
-            barrierDue = null
-            then()
-        }
-
-        override fun reclaimFocus() {
-            reclaims++
-        }
-
-        /** As the service: the new player at the next track's start, silent and not playing yet; the old one fading. */
-        override fun swapToNext(): Boolean {
-            if (!swapWorks) return false
-            swaps++
-            check(!hasFading) { "a second fading player" }
-            hasFading = true
-            fadingLevel = mainLevel
-            fadingOn = true
-            item = "n$swaps"
-            position = 0L
-            duration = nextDuration
-            mainLevel = 0f
-            mainPlaying = false
-            onSwap()
+        /** As the service: the next track on a second player, silent and not playing yet; the main one stops at its end. */
+        override fun startIncoming(): Boolean {
+            if (!startWorks) return false
+            check(!hasIncoming) { "a second incoming player" }
+            starts++
+            hasIncoming = true
+            incomingLevel = 0f
+            incomingOn = true
+            incomingPlaying = false
+            incomingPosition = 0L
+            pauseAtEnd = true
+            onStart()
             return true
+        }
+
+        override fun incomingIsNext() = incomingNext
+
+        /** As the service: the incoming player becomes the main one (the session's), where it is. */
+        override fun handOver() {
+            check(hasIncoming) { "no incoming player" }
+            handOvers++
+            outCount = mainVolumes.size
+            hasIncoming = false
+            pauseAtEnd = false
+            item = "n$starts"
+            duration = nextDuration
+            position = incomingPosition
+            mainLevel = incomingLevel
+            mainPlaying = incomingPlaying
+            incomingPlaying = false
+            onHandOver()
+        }
+
+        override fun dropIncoming() {
+            check(hasIncoming) { "dropped twice" }
+            drops++
+            hasIncoming = false
+            incomingOn = false
+            incomingPlaying = false
+            pauseAtEnd = false
         }
 
         override fun setMainVolume(v: Float) {
@@ -219,22 +243,15 @@ class CrossfadeTest {
             mainVolumes.add(v)
         }
 
-        override fun setFadingVolume(v: Float) {
-            check(hasFading) { "no fading player" }
-            fadingLevel = v
-            fadingVolumes.add(v)
+        override fun setIncomingVolume(v: Float) {
+            check(hasIncoming) { "no incoming player" }
+            incomingLevel = v
+            incomingVolumes.add(v)
         }
 
-        override fun setFadingPlaying(playing: Boolean) {
-            check(hasFading) { "no fading player" }
-            fadingOn = playing
-        }
-
-        override fun releaseFading() {
-            check(hasFading) { "released twice" }
-            hasFading = false
-            fadingOn = false
-            fadingReleased++
+        override fun setIncomingPlayWhenReady(playing: Boolean) {
+            check(hasIncoming) { "no incoming player" }
+            incomingOn = playing
         }
 
         override fun post(delayMs: Long, r: Runnable) {
@@ -250,19 +267,27 @@ class CrossfadeTest {
         }
 
         override fun started(fadeMs: Long) {
-            starts.add(fadeMs)
+            started.add(fadeMs)
         }
+
+        /** The fade-in's volumes: the incoming player's, then the main one's after the hand-over. */
+        val ins: List<Float> get() = incomingVolumes + mainVolumes.drop(maxOf(outCount, 0))
 
         fun run(ms: Long, tick: Long = 10L) {
             var left = ms
             while (left > 0L) {
                 val d = minOf(tick, left)
                 left -= d
-                if (autoBarrier) barrier()
                 val from = position
                 clock += d
-                if (mainPlaying) position = minOf(position + d, duration)
+                if (mainPlaying) position = minOf(position + (d * speed).toLong(), duration)
+                if (hasIncoming && incomingPlaying) incomingPosition += d
                 for (m in messages.filter { it.first in (from + 1)..position }) if (messages.remove(m)) m.second()
+                if (pauseAtEnd && mainPlaying && position >= duration) {
+                    mainPlaying = false
+                    pauseAtEnd = false
+                    fader?.onMainEnded()
+                }
                 for (p in posted.filter { it.first <= clock }.sortedBy { it.first }) if (posted.remove(p)) p.second.run()
             }
         }
@@ -270,47 +295,77 @@ class CrossfadeTest {
         /** Plays the main player to [to] (its position), whatever time that takes. */
         fun playTo(to: Long) {
             mainPlaying = true
-            run(to - position)
+            run(((to - position) / speed).toLong())
         }
     }
 
     private val dur = 4 * min
     private val fadeAt = dur - 6_000L
 
-    private fun armed(settingMs: Int = 6_000): Pair<FakeHost, Crossfader> {
-        val h = FakeHost()
-        val c = Crossfader(h, settingMs)
+    private fun armed(settingMs: Int = 6_000, host: FakeHost = FakeHost()): Pair<FakeHost, Crossfader> {
+        val c = Crossfader(host, settingMs)
+        host.fader = c
         c.arm()
-        return h to c
+        return host to c
     }
 
-    /** Swapped at the fade's start: the new player buffering its first moments, nothing ramped yet. */
-    private fun swapped(own: Float = 1f): Pair<FakeHost, Crossfader> {
+    /** At the fade's start: the incoming player buffering its first moments, nothing ramped yet. */
+    private fun crossing(own: Float = 1f): Pair<FakeHost, Crossfader> {
         val (h, c) = armed()
         h.mainLevel = own
         h.playTo(fadeAt)
-        h.run(10L)
-        assertEquals(Crossfader.Phase.FADING, c.phase)
+        assertEquals(Crossfader.Phase.CROSSING, c.phase)
         return h to c
     }
 
-    /** In the middle of a 6 s fade: the new player playing, ten of the twenty steps done. */
+    /** In the middle of a 6 s fade: the incoming player playing, ten of the twenty steps done, the old track 3 s from its end. */
     private fun fading(own: Float = 1f): Pair<FakeHost, Crossfader> {
-        val (h, c) = swapped(own)
-        h.mainPlaying = true
+        val (h, c) = crossing(own)
+        h.incomingPlaying = true
         c.onPlaying()
         h.run(10 * 300L - 10L)
-        assertEquals(Crossfader.Phase.FADING, c.phase)
+        assertEquals(Crossfader.Phase.CROSSING, c.phase)
+        assertEquals(10, h.incomingVolumes.size)
         return h to c
     }
 
-    /** The fade is over or stopped: the old player released once, no step left, the new one at [own]. */
-    private fun assertOver(h: FakeHost, c: Crossfader, own: Float = 1f) {
+    /** The incoming track started a second late: its ramp ends a second after the old track, which hands over at its end. */
+    private fun handedOverLate(): Pair<FakeHost, Crossfader> {
+        val (h, c) = crossing()
+        h.run(1_000L)
+        h.incomingPlaying = true
+        c.onPlaying()
+        // Nothing set while crossing (that track's fade is under way), whatever changes.
+        c.arm()
+        c.onPlayWanted(true)
+        assertTrue(h.messages.isEmpty())
+        h.run(5_050L)
+        assertEquals(Crossfader.Phase.RISING, c.phase)
+        assertEquals("n1", h.item)
+        return h to c
+    }
+
+    /** Stopped before the hand-over: the incoming player dropped once, the old one at [own], no step left. */
+    private fun assertDropped(h: FakeHost, c: Crossfader, own: Float = 1f) {
         assertEquals(Crossfader.Phase.NONE, c.phase)
-        assertFalse(h.hasFading)
-        assertEquals(1, h.fadingReleased)
+        assertFalse(h.hasIncoming)
+        assertEquals(1, h.drops)
+        assertEquals(0, h.handOvers)
+        assertFalse("the old one plays on past its end", h.pauseAtEnd)
         assertTrue("no step left", h.posted.isEmpty())
         assertEquals(own, h.mainLevel, 0f)
+        assertEquals("a", h.item)
+    }
+
+    /** Over: handed over once, nothing dropped, no step left, the new track at [own]. */
+    private fun assertOver(h: FakeHost, c: Crossfader, own: Float = 1f) {
+        assertEquals(Crossfader.Phase.NONE, c.phase)
+        assertFalse(h.hasIncoming)
+        assertEquals(1, h.handOvers)
+        assertEquals(0, h.drops)
+        assertTrue("no step left", h.posted.isEmpty())
+        assertEquals(own, h.mainLevel, 0f)
+        assertEquals("n1", h.item)
     }
 
     @Test
@@ -318,7 +373,7 @@ class CrossfadeTest {
         val (h, c) = armed(settingMs = 0)
         h.playTo(dur)
         assertTrue(h.messages.isEmpty())
-        assertEquals(0, h.yields)
+        assertEquals(0, h.starts)
         assertEquals(Crossfader.Phase.NONE, c.phase)
         // Off is the default: never logged.
         assertTrue(h.skips.isEmpty())
@@ -337,77 +392,87 @@ class CrossfadeTest {
         assertEquals(listOf(fadeAt), h.messages.map { it.first })
         assertTrue(h.posted.isEmpty())
 
-        h.autoBarrier = false
         h.playTo(fadeAt)
-        // The old player gives up its audio focus first; the swap waits for that.
-        assertEquals(Crossfader.Phase.YIELDING, c.phase)
-        assertEquals(1, h.yields)
-        assertEquals(0, h.swaps)
-
-        h.barrier()
-        // Swapped: the next track on the new player, silent; the old one at its own volume.
-        assertEquals(Crossfader.Phase.FADING, c.phase)
-        assertEquals(1, h.swaps)
-        assertEquals(listOf(6_000L), h.starts)
-        assertEquals(0f, h.mainLevel, 0f)
-        assertEquals(1f, h.fadingLevel, 0f)
+        // The next track on a second player, silent; the old one at its own volume, stopping at its end.
+        assertEquals(Crossfader.Phase.CROSSING, c.phase)
+        assertEquals(1, h.starts)
+        assertEquals(listOf(6_000L), h.started)
+        assertEquals(0f, h.incomingLevel, 0f)
+        assertEquals(1f, h.mainLevel, 0f)
+        assertTrue(h.pauseAtEnd)
         // The new track buffers its first moments: the ramp waits for it.
         h.run(500L)
+        assertTrue(h.incomingVolumes.isEmpty())
         assertTrue(h.mainVolumes.isEmpty())
-        assertTrue(h.fadingVolumes.isEmpty())
 
-        h.mainPlaying = true
+        h.incomingPlaying = true
         c.onPlaying()
-        h.run(6_000L)
+        // The session stays with the old track through the fade...
+        h.run(5_400L)
+        assertEquals(Crossfader.Phase.CROSSING, c.phase)
+        assertEquals("a", h.item)
+        assertEquals(0, h.handOvers)
+        // ...and moves to the new one when the old one ends, a few seconds into it.
+        h.run(200L)
+        assertEquals(Crossfader.Phase.RISING, c.phase)
+        assertEquals(1, h.handOvers)
+        assertEquals("n1", h.item)
+        assertTrue(h.position in 5_400L..5_700L)
+        // The rest of the ramp on the new one alone.
+        h.run(1_000L)
         assertOver(h, c)
-        // Twenty steps of 300 ms along the curve, then the end at full volume: 21 in all.
-        assertEquals(21, h.mainVolumes.size)
-        for (i in 0 until 20) {
-            assertEquals(CrossfadePlan.fadeIn(i / 20f), h.mainVolumes[i], 1e-6f)
-            assertEquals(CrossfadePlan.fadeOut(i / 20f), h.fadingVolumes[i], 1e-6f)
-        }
-        assertEquals(20, h.fadingVolumes.size)
-        assertEquals(1f, h.mainVolumes.last(), 0f)
-        assertEquals(h.mainVolumes.sorted(), h.mainVolumes)
-        assertEquals(h.fadingVolumes.sortedDescending(), h.fadingVolumes)
+        // Twenty steps of 300 ms along the curve, then full volume.
+        val ins = h.ins
+        assertEquals(21, ins.size)
+        for (i in 0 until 20) assertEquals(CrossfadePlan.fadeIn(i / 20f), ins[i], 1e-6f)
+        assertEquals(1f, ins.last(), 0f)
+        // The old one fell along its curve until it ended.
+        assertEquals(19, h.outCount)
+        for (i in 0 until 19) assertEquals(CrossfadePlan.fadeOut(i / 20f), h.mainVolumes[i], 1e-6f)
         assertTrue(h.skips.isEmpty())
-        assertEquals(0, h.reclaims)
     }
 
     @Test
     fun theRampTakesTheFadesLength() {
-        val (h, c) = swapped()
-        h.mainPlaying = true
+        val (h, c) = crossing()
+        h.incomingPlaying = true
         c.onPlaying()
         val from = h.clock
-        while (c.phase == Crossfader.Phase.FADING) h.run(10L)
+        while (c.phase != Crossfader.Phase.NONE) h.run(10L)
         assertTrue(h.clock - from in 6_000L..6_010L)
+        assertOver(h, c)
     }
 
     @Test
     fun theFadeFollowsTheOldPlayersOwnVolume() {
         val (h, c) = fading(own = 0.5f)
-        assertEquals(0.5f * CrossfadePlan.fadeIn(9 / 20f), h.mainLevel, 1e-6f)
-        assertEquals(0.5f * CrossfadePlan.fadeOut(9 / 20f), h.fadingLevel, 1e-6f)
+        assertEquals(0.5f * CrossfadePlan.fadeIn(9 / 20f), h.incomingLevel, 1e-6f)
+        assertEquals(0.5f * CrossfadePlan.fadeOut(9 / 20f), h.mainLevel, 1e-6f)
         h.run(4_000L)
         assertOver(h, c, own = 0.5f)
     }
 
     @Test
-    fun theNewTrackIsArmedAtTheSwapOrOnceItsLengthIsKnown() {
-        // The fake knows the new track's length (3 min) at once.
-        val (h, _) = swapped()
+    fun theRampEndingBeforeTheOldTrackHandsOverAtOnce() {
+        // A slower speed: the old track's end comes after the ramp's.
+        val h = FakeHost()
+        h.speed = 0.5
+        val (_, c) = armed(host = h)
+        h.playTo(fadeAt)
+        h.incomingPlaying = true
+        c.onPlaying()
+        h.run(6_000L)
+        assertOver(h, c)
+        assertTrue(h.clock < fadeAt / 0.5 + 12_000L)
+    }
+
+    @Test
+    fun theNewTrackIsArmedAtTheHandOverNotBefore() {
+        val (h, c) = handedOverLate()
+        // The fake knows the new track's length (3 min).
         assertEquals(listOf(3 * min - 6_000L), h.messages.map { it.first })
-        // Not known yet at the swap: nothing set until it is.
-        val (h2, c2) = armed()
-        h2.onSwap = { h2.duration = -1L }
-        h2.playTo(fadeAt)
-        h2.run(10L)
-        assertEquals(Crossfader.Phase.FADING, c2.phase)
-        assertTrue(h2.messages.isEmpty())
-        h2.duration = 3 * min
-        c2.arm()
-        assertEquals(listOf(3 * min - 6_000L), h2.messages.map { it.first })
+        h.run(1_000L)
+        assertOver(h, c)
     }
 
     @Test
@@ -415,92 +480,67 @@ class CrossfadeTest {
         val (h, c) = fading()
         h.run(4_000L)
         assertEquals(Crossfader.Phase.NONE, c.phase)
-        // The fake gave the new track the next track's length (3 min).
-        assertEquals(listOf(3 * min - 6_000L), h.messages.map { it.first })
         h.playTo(3 * min - 6_000L)
-        h.run(10L)
-        assertEquals(2, h.swaps)
-        assertEquals(Crossfader.Phase.FADING, c.phase)
+        assertEquals(2, h.starts)
+        assertEquals(Crossfader.Phase.CROSSING, c.phase)
     }
 
     @Test
-    fun abortedWhileYieldingTheFocusComesBackAndNothingIsSwapped() {
-        val events = listOf<(Crossfader, FakeHost) -> Unit>(
-            { c, _ -> c.onJump() },
-            { c, _ -> c.onHalted() },
-            { c, _ -> c.onPlayWanted(false) },
-            { c, _ -> c.setSetting(3_000) },
-            { c, _ -> c.release() },
-        )
-        for ((i, event) in events.withIndex()) {
-            val (h, c) = armed()
-            h.autoBarrier = false
-            h.playTo(fadeAt)
-            assertEquals(Crossfader.Phase.YIELDING, c.phase)
-            event(c, h)
-            assertEquals("event $i", Crossfader.Phase.NONE, c.phase)
-            assertEquals("event $i", 1, h.reclaims)
-            // The barrier's late callback changes nothing.
-            h.barrier()
-            assertEquals("event $i", 0, h.swaps)
-            assertEquals("event $i", Crossfader.Phase.NONE, c.phase)
-            assertTrue(h.mainVolumes.isEmpty())
-        }
-    }
-
-    @Test
-    fun aFailedSwapGivesTheFocusBackAndSaysSo() {
-        val (h, c) = armed()
-        h.swapWorks = false
+    fun aFailedStartSaysSoAndTheTrackEndsTheUsualWay() {
+        val h = FakeHost()
+        h.startWorks = false
+        val (_, c) = armed(host = h)
         h.playTo(fadeAt)
-        h.run(10L)
         assertEquals(Crossfader.Phase.NONE, c.phase)
-        assertEquals(1, h.reclaims)
         assertEquals(listOf(Skip.NO_PLAYER), h.skips)
-        assertTrue(h.starts.isEmpty())
-        assertEquals(0, h.fadingReleased)
-        assertTrue(h.mainVolumes.isEmpty())
-        // The track plays to its end the usual way.
+        assertTrue(h.started.isEmpty())
+        assertFalse(h.pauseAtEnd)
         h.playTo(dur)
-        assertEquals(1, h.yields)
+        assertEquals(0, h.handOvers)
+        assertTrue(h.mainVolumes.isEmpty())
     }
 
     @Test
     fun aPauseOrACallMidFadeHoldsBothPlayersAndTheRamp() {
         val (h, c) = fading()
-        val steps = h.mainVolumes.size
-        // Paused (or held back by a call): the old player stops too, and no step is taken.
+        val steps = h.incomingVolumes.size
+        // Paused (or held back by a call) on the main player: the incoming one stops too, no step is taken.
         c.onPlayWanted(false)
+        assertFalse(h.incomingOn)
         h.mainPlaying = false
-        assertFalse(h.fadingOn)
+        h.incomingPlaying = false
         h.run(5_000L)
-        assertEquals(steps, h.mainVolumes.size)
-        assertEquals(Crossfader.Phase.FADING, c.phase)
-        assertEquals(0, h.fadingReleased)
+        assertEquals(steps, h.incomingVolumes.size)
+        assertEquals(Crossfader.Phase.CROSSING, c.phase)
+        assertEquals("a", h.item)
         // Playing again: both go on, the ramp where it was.
         c.onPlayWanted(true)
-        assertTrue(h.fadingOn)
+        assertTrue(h.incomingOn)
         h.mainPlaying = true
+        h.incomingPlaying = true
         c.onPlaying()
-        assertEquals(steps + 1, h.mainVolumes.size)
+        assertEquals(steps + 1, h.incomingVolumes.size)
         h.run(4_000L)
         assertOver(h, c)
     }
 
     @Test
-    fun theIncomingTrackBufferingMidFadeOnlyHoldsTheRamp() {
+    fun theIncomingTrackBufferingHoldsTheRampAndTheOldOneStillHandsOverAtItsEnd() {
         val (h, c) = fading()
-        val steps = h.mainVolumes.size
-        // Buffering: play is still wanted, the old track plays on.
-        h.mainPlaying = false
-        h.run(2_000L)
-        assertEquals(steps, h.mainVolumes.size)
-        assertTrue(h.fadingOn)
+        val steps = h.incomingVolumes.size
+        // Buffering: play is still wanted, the old track plays on to its end.
+        h.incomingPlaying = false
+        h.run(3_500L)
+        assertEquals(steps, h.incomingVolumes.size)
+        // Handed over to the buffering track; the ramp still waits.
+        assertEquals(Crossfader.Phase.RISING, c.phase)
+        assertEquals("n1", h.item)
         assertTrue(h.posted.isEmpty())
         h.mainPlaying = true
         c.onPlaying()
         h.run(4_000L)
         assertOver(h, c)
+        assertEquals(21, h.ins.size)
     }
 
     @Test
@@ -514,72 +554,88 @@ class CrossfadeTest {
         for ((i, event) in events.withIndex()) {
             val (h, c) = fading()
             event(c)
-            assertOver(h, c)
-            // Nothing of it comes back.
+            assertDropped(h, c)
+            // Nothing of it comes back: the old track ends the usual way.
             val volumes = h.mainVolumes.size
-            h.run(1_000L)
+            h.run(4_000L)
             assertEquals("event $i", volumes, h.mainVolumes.size)
+            assertEquals("event $i", 0, h.handOvers)
         }
         // The same setting again changes nothing.
         val (h, c) = fading()
         c.setSetting(6_000)
-        assertEquals(Crossfader.Phase.FADING, c.phase)
-        assertTrue(h.hasFading)
+        assertEquals(Crossfader.Phase.CROSSING, c.phase)
+        assertTrue(h.hasIncoming)
     }
 
     @Test
-    fun theOldTrackEndingOrFailingMidFadeLetsTheRampFinish() {
+    fun theIncomingTrackFailingLetsTheOldOnePlayOnAsWithCrossfadeOff() {
         val (h, c) = fading()
-        val before = h.mainLevel
-        val outs = h.fadingVolumes.size
-        c.onFadingGone()
-        assertFalse(h.hasFading)
-        assertEquals(1, h.fadingReleased)
-        assertEquals(Crossfader.Phase.FADING, c.phase)
-        // No jump: the incoming track keeps rising along the curve, alone.
-        assertEquals(before, h.mainLevel, 0f)
-        h.run(300L)
-        assertTrue(h.mainLevel > before && h.mainLevel < 1f)
+        c.onIncomingFailed()
+        assertDropped(h, c)
+        // It plays to its end and on (no stop there, no hand-over).
         h.run(4_000L)
-        assertOver(h, c)
-        assertEquals(outs, h.fadingVolumes.size)
+        assertEquals(0, h.handOvers)
+        assertEquals(dur, h.position)
         // A late second word of it changes nothing.
-        c.onFadingGone()
-        assertEquals(1, h.fadingReleased)
+        c.onIncomingFailed()
+        assertEquals(1, h.drops)
     }
 
     @Test
-    fun theNewPlayerNotPlayingAtFirstHoldsTheRampAtSilence() {
-        val (h, c) = swapped()
-        h.run(3_000L)
-        assertTrue(h.mainVolumes.isEmpty())
-        assertEquals(0f, h.mainLevel, 0f)
-        assertEquals(1f, h.fadingLevel, 0f)
-        assertTrue(h.posted.isEmpty())
-        // A play-wanted change meanwhile (the user pressed Play again) only re-arms.
-        c.onPlayWanted(true)
-        assertTrue(h.fadingOn)
-        assertEquals(Crossfader.Phase.FADING, c.phase)
+    fun anEditMidFadeStopsItOnlyIfTheNextTrackChanged() {
+        val (h, c) = fading()
+        // Something added further down: the hand-over brings the incoming player's list in step.
+        c.onListChanged()
+        assertEquals(Crossfader.Phase.CROSSING, c.phase)
+        assertTrue(h.hasIncoming)
+        // The next track removed, or another one moved before it: the fade stops.
+        h.incomingNext = false
+        c.onListChanged()
+        assertDropped(h, c)
     }
 
     @Test
-    fun ourOwnSwapsEventsAreNotTheUsers() {
+    fun aJumpWhileRisingEndsTheFadeAtFullVolume() {
+        val (h, c) = handedOverLate()
+        assertTrue(h.mainLevel < 1f)
+        c.onJump()
+        assertOver(h, c)
+    }
+
+    @Test
+    fun theOldTrackStoppingAtItsEndOutsideAFadeIsIgnored() {
         val (h, c) = armed()
-        var during: Crossfader.Phase? = null
-        h.onSwap = {
-            // The new player's events while it is set up: a transition, its list, play wanted.
+        c.onMainEnded()
+        assertEquals(0, h.handOvers)
+        assertEquals(Crossfader.Phase.NONE, c.phase)
+    }
+
+    @Test
+    fun ourOwnHostCallsEventsAreNotTheUsers() {
+        val (h, c) = armed()
+        val seen = ArrayList<Crossfader.Phase>()
+        val all: () -> Unit = {
+            // The players' events while we set them up: a transition, a list, play wanted, an end.
             c.onJump()
             c.onHalted()
             c.arm()
+            c.onListChanged()
             c.onPlayWanted(true)
-            during = c.phase
+            c.onIncomingFailed()
+            c.onMainEnded()
+            seen.add(c.phase)
         }
+        h.onStart = all
+        h.onHandOver = all
         h.playTo(fadeAt)
-        h.run(10L)
-        assertEquals(Crossfader.Phase.YIELDING, during)
-        assertEquals(Crossfader.Phase.FADING, c.phase)
-        assertEquals(0, h.reclaims)
-        assertTrue(h.hasFading)
+        assertEquals(Crossfader.Phase.CROSSING, c.phase)
+        assertTrue(h.hasIncoming)
+        h.incomingPlaying = true
+        c.onPlaying()
+        h.run(6_100L)
+        assertOver(h, c)
+        assertEquals(2, seen.size)
     }
 
     @Test
@@ -588,7 +644,7 @@ class CrossfadeTest {
         assertEquals(listOf(fadeAt), h.messages.map { it.first })
         // A shorter next track (its length now known): later, shorter.
         h.nextDuration = 15_000L
-        c.arm()
+        c.onListChanged()
         assertEquals(listOf(dur - 5_000L), h.messages.map { it.first })
         // Another setting.
         h.nextDuration = 3 * min
@@ -614,20 +670,25 @@ class CrossfadeTest {
         val stale = h.messages.single().second
         h.item = "z"
         stale()
-        assertEquals(0, h.yields)
+        assertEquals(0, h.starts)
         assertEquals(Crossfader.Phase.NONE, c.phase)
     }
 
     @Test
-    fun aFadeDueDuringAFadeIsSkipped() {
+    fun aFadeDueWhileTheLastOneStillRisesIsSkipped() {
         val (h, c) = fading()
-        // The new track's own fade comes due while this one still runs (the ramp held back).
+        // Handed over to a track that buffers: the ramp waits.
+        h.incomingPlaying = false
+        h.run(3_500L)
+        assertEquals(Crossfader.Phase.RISING, c.phase)
+        // Its own fade comes due meanwhile.
         h.position = h.duration - 6_010L
         c.arm()
+        h.mainPlaying = true
         h.run(20L)
         assertEquals(listOf(Skip.FADING), h.skips)
-        assertEquals(1, h.swaps)
-        assertEquals(Crossfader.Phase.FADING, c.phase)
+        assertEquals(1, h.starts)
+        assertEquals(Crossfader.Phase.RISING, c.phase)
     }
 
     @Test
@@ -642,10 +703,9 @@ class CrossfadeTest {
         )) {
             val h = FakeHost()
             h.f = facts
-            val c = Crossfader(h, 6_000)
-            c.arm()
+            val (_, c) = armed(host = h)
             h.playTo(dur)
-            assertEquals(0, h.yields)
+            assertEquals(0, h.starts)
             assertEquals(listOf(why), h.skips)
             assertEquals(Crossfader.Phase.NONE, c.phase)
         }
@@ -656,12 +716,10 @@ class CrossfadeTest {
         val h = FakeHost()
         h.f = facts(repeatOne = true, hasNext = false)
         h.nextDuration = dur
-        val c = Crossfader(h, 6_000)
-        c.arm()
+        val (_, c) = armed(host = h)
         h.playTo(fadeAt)
-        h.run(10L)
-        assertEquals(1, h.swaps)
-        assertEquals(Crossfader.Phase.FADING, c.phase)
+        assertEquals(1, h.starts)
+        assertEquals(Crossfader.Phase.CROSSING, c.phase)
     }
 
     @Test
@@ -694,9 +752,10 @@ class CrossfadeTest {
     fun releaseLeavesNothing() {
         val (h, c) = fading()
         c.release()
-        assertOver(h, c)
+        assertDropped(h, c)
         assertTrue(h.messages.isEmpty())
         h.playTo(dur)
-        assertEquals(1, h.swaps)
+        assertEquals(1, h.starts)
+        assertEquals(0, h.handOvers)
     }
 }
