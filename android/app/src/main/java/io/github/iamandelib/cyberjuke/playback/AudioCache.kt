@@ -63,9 +63,12 @@ internal object AudioCache {
     val SIZES_MB = listOf(128, 256, 512)
     private const val MB = 1024L * 1024L
 
-    /** The liked songs saved whole changed ([savedLiked]); any thread. */
+    /** The liked songs saved whole changed ([savedLiked]), or the cache was cleared; any thread. */
     fun interface Listener {
         fun onSavedChanged()
+
+        /** Clear cache emptied it. */
+        fun onCleared() = Unit
     }
 
     /** The liked list changed; [fresh]: liked just now. Any thread. */
@@ -259,7 +262,10 @@ internal object AudioCache {
     /** Clear cache (Settings): everything goes. Playback goes on (from the network). */
     fun clear(): Boolean {
         val done = locked { c -> c.keys.toList().forEach { c.removeResource(it) } } != null
-        if (done) Log.i(TAG, "Cleared")
+        if (done) {
+            Log.i(TAG, "Cleared")
+            listeners.forEach { it.onCleared() }
+        }
         return done
     }
 

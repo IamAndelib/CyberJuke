@@ -436,4 +436,16 @@ class CachePolicyTest {
         val f = Facts(liked, saved = emptySet(), skip = PlaybackNeed.stillLoading(loaded, "new00000000", "mid00000000"))
         assertEquals("new00000000", LikedSaverPolicy.next(f))
     }
+
+    @Test
+    fun afterClearCacheThePlayingLikedSongIsSavedAgainOnAnyNetwork() {
+        // Cleared while a liked song plays (and the next is liked): their bytes are in the
+        // player's memory, so nothing writes them back. They count as liked just now.
+        val fresh = LikedSaverPolicy.freshAfterClear(liked, pair = setOf("mid00000000", "notliked000"))
+        assertEquals(setOf("mid00000000"), fresh)
+        val f = Facts(liked, saved = emptySet(), fresh = fresh, unmetered = false, sinceLastMs = 1_000L)
+        // While the player still loads it: not yet. Loaded: saved, on mobile data too.
+        assertNull(LikedSaverPolicy.next(f.copy(skip = setOf("mid00000000"))))
+        assertEquals("mid00000000", LikedSaverPolicy.next(f))
+    }
 }

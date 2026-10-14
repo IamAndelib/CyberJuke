@@ -19,10 +19,10 @@ import java.io.IOException
  *
  * Lives in PlaybackService, so it only runs while the service already does (the app is open or
  * playing): no job, no alarm, nothing that wakes the phone. Event-driven: asked again when
- * playback's loading changes, the network or the liked list changes, a back-off ends or a save
- * finishes. Its one timer ([recheck]) is a one-shot postDelayed for the end of the gap between
- * two extractions, pending only while the gap alone holds back a save that could start;
- * cancelled by the next check and by [stop]. Downloads run on the one
+ * playback's loading changes, the network or the liked list changes, the cache is cleared, a
+ * back-off ends or a save finishes. Its one timer ([recheck]) is a one-shot postDelayed for the
+ * end of the gap between two extractions, pending only while the gap alone holds back a save
+ * that could start; cancelled by the next check and by [stop]. Downloads run on the one
  * background thread ([Background]), one at a time, through a [CacheWriter] (only the bytes not
  * yet cached are fetched), and give way at once when playback needs the network ([giveWay],
  * [PlaybackNeed]).
@@ -63,8 +63,16 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
 
     private val recheck = Runnable { check() }
 
-    /** The cache's liked list or saved set changed (any thread). */
-    val cacheListener = AudioCache.Listener { handler.post { check() } }
+    /** The cache's saved set changed, or it was cleared (any thread). */
+    val cacheListener = object : AudioCache.Listener {
+        override fun onSavedChanged() {
+            handler.post { check() }
+        }
+
+        override fun onCleared() {
+            handler.post { cleared() }
+        }
+    }
 
     val likedListener = AudioCache.LikedListener { freshIds ->
         handler.post {
@@ -106,6 +114,18 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
     /** Playback needs the network (or the prefetch thread): the running save stops at once. */
     fun giveWay() {
         job?.cancel()
+    }
+
+    /**
+     * Clear cache: the liked songs playing and next count as liked just now
+     * ([LikedSaverPolicy.freshAfterClear]), so they are saved again, on any network, once the
+     * player has loaded them.
+     */
+    private fun cleared() {
+        val again = LikedSaverPolicy.freshAfterClear(AudioCache.liked, host.loadingPair())
+        fresh.addAll(again)
+        tried.removeAll(again)
+        check()
     }
 
     /** The service is going: nothing more starts, the running save stops, no re-check is left. */

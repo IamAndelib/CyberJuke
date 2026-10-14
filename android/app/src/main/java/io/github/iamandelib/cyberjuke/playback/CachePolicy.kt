@@ -488,6 +488,13 @@ internal object LikedSaverPolicy {
         val denied: (String) -> Boolean = { false },
     )
 
+    /**
+     * After Clear cache: the liked songs of the player's [pair] (playing and next) count as
+     * liked just now. Their bytes are in the player's memory, so nothing writes them back;
+     * saved like a new like, on any network, once the player has loaded them.
+     */
+    fun freshAfterClear(liked: Collection<String>, pair: Set<String>): Set<String> = pair.filterTo(HashSet()) { it in liked }
+
     /** The video to save now, or null. */
     fun next(f: Facts): String? = pick(f, f.sinceLastMs)
 
