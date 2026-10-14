@@ -1,6 +1,6 @@
 import { expect, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { opened, openNowPlaying, openSearch, playerCalls, recordOpens, seedStorage, start, waitForTracks } from '../helpers';
+import { expectStable, opened, openNowPlaying, openSearch, playerCalls, recordOpens, seedStorage, start, waitForTracks } from '../helpers';
 
 /**
  * When things go wrong: YouTube limiting the network or changing something (Y1),
@@ -93,6 +93,34 @@ const BANNER = '[ offline ] no carrier · connect to play';
 const NO_CARRIER = /^\[ NO CARRIER \]Line's deadConnect to the internet to load the Jukebox\.\s*Redial$/;
 const NO_CARRIER_GLOBAL = /^\[ NO CARRIER \]Line's deadConnect to the internet to search Global\.\s*Redial$/;
 const TAP_TOAST = 'No carrier. Connect to play.';
+
+test('a handover blip shorter than the grace changes nothing; a loss that lasts goes offline', async ({ page, backend }) => {
+  await start(page);
+  await page.evaluate(() => (window.__cyberjukeOfflineGraceMs = 1500));
+  const home = page.getByTestId('screen-home');
+  const onScreen = async () => ({
+    banner: await page.getByTestId('offline-banner').count(),
+    dimmed: await home.locator('.row.off').count(),
+    noCarrier: await page.getByTestId('offline').count(),
+    rows: await home.getByTestId('track-row').count(),
+  });
+  const before = await onScreen();
+  expect(before).toMatchObject({ banner: 0, dimmed: 0, noCarrier: 0 });
+
+  // Wi-Fi to data: "not connected" for under a second, then back.
+  await setOffline(page, backend, true);
+  expect(await expectStable(onScreen, 700)).toEqual(before);
+  await setOffline(page, backend, false);
+  // Past the grace too: nothing happened, nothing reloaded.
+  expect(await expectStable(onScreen, 1500)).toEqual(before);
+
+  // Gone for longer than the grace: offline.
+  await setOffline(page, backend, true);
+  await expect(page.getByTestId('offline-banner')).toHaveText(BANNER);
+  // And back: online at once.
+  await setOffline(page, backend, false);
+  await expect(page.getByTestId('offline-banner')).toHaveCount(0, { timeout: 1000 });
+});
 
 test('offline, lists that only lead to music ask to connect, and come back by themselves', async ({ page, backend }) => {
   await start(page);
