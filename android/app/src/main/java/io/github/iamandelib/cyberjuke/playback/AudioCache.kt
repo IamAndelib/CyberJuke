@@ -134,7 +134,11 @@ internal object AudioCache {
     /** One of [SIZES_MB]; anything else is the default. */
     fun sizeOf(mb: Int): Int = if (mb in SIZES_MB) mb else DEFAULT_MB
 
-    /** The open cache, opening it if needed; null when it can't be (no context yet, a disk error). Never on the main thread. */
+    /**
+     * The open cache, opening it if needed (that waits while it counts what it holds); null when
+     * it can't be (no context yet, a disk error, a cache that failed to start): playback then
+     * streams. Never on the main thread.
+     */
     @Synchronized
     fun open(): SimpleCache? {
         cache?.let { return it }
@@ -155,6 +159,15 @@ internal object AudioCache {
             }
             ledger.limit = limitMb * MB
             val c = SimpleCache(File(ctx.noBackupFilesDir, CacheHome.DIR), JukeCacheEvictor(), db)
+            // Failed to start (its folder or index unreadable), it would fail every read and
+            // write: none instead, and playback streams.
+            try {
+                c.checkInitialization()
+            } catch (e: Cache.CacheException) {
+                Log.w(TAG, "Listening cache failed to start: ${(e.cause ?: e).javaClass.simpleName}")
+                c.release()
+                return null
+            }
             cache = c
             c
         } catch (e: Exception) {
