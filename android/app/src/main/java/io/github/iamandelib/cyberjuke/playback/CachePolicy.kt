@@ -74,17 +74,18 @@ internal object CacheKeys {
     fun nominalBps(itag: Int): Int? = NOMINAL_BPS[itag]
 
     /**
-     * The bitrate a cached copy must reach to stand in for a request ([pick]): offline, or for
-     * Low, anything (0); otherwise the rung asked for: its format's when the link is known
-     * ([rungItag]), else the video's ladder's ([ladderBps]), else for the top rung a top-class
-     * copy ([TOP_CLASS_BPS]) and for a lower one anything.
+     * The bitrate a cached copy must reach to stand in for a request ([pick]). Only High asks for
+     * one; Auto, Low and offline take any whole copy (0): a song already on the phone is played
+     * from it whatever the quality setting, as InnerTune and Metrolist do, rather than downloaded
+     * again for a notch more (a fresh process has no ladder in memory, so Auto's rung would ask
+     * for the top one and skip a copy saved at Low). High wants its format's bitrate when the
+     * link is known ([rungItag]), else the video's ladder's top ([ladderBps]), else a top-class
+     * copy ([TOP_CLASS_BPS]).
      */
-    fun wantedBps(quality: AudioQuality, autoRung: Int, rungItag: Int?, ladderBps: List<Int>, online: Boolean): Int {
-        if (!online || quality == AudioQuality.LOW) return 0
+    fun wantedBps(quality: AudioQuality, rungItag: Int?, ladderBps: List<Int>, online: Boolean): Int {
+        if (!online || quality != AudioQuality.HIGH) return 0
         rungItag?.let { nominalBps(it) }?.let { return it }
-        val rung = QualityLadder.rungFor(quality, autoRung)
-        if (ladderBps.isNotEmpty()) return ladderBps[QualityLadder.index(ladderBps.size, rung)]
-        return if (rung == 0) TOP_CLASS_BPS else 0
+        return ladderBps.firstOrNull() ?: TOP_CLASS_BPS
     }
 
     /**
@@ -108,8 +109,9 @@ internal object CacheKeys {
      * - [keep], the format a resume or a track kept through an outage must stay in: that one
      *   or none (another file mid-song would be garbage);
      * - else [rungItag], the format the quality setting asks for, when known and whole;
-     * - else any whole one at least as good as [wantedBps] ([wantedBps]: online, a lower copy
-     *   doesn't stand in for the quality asked; 0 = any).
+     * - else any whole one at least as good as [wantedBps] (the most recently used first;
+     *   [wantedBps]: on High online, a lower copy doesn't stand in for the quality asked; 0 = any,
+     *   which is what Auto, Low and offline ask).
      */
     fun pick(whole: List<Int>, keep: Int?, rungItag: Int?, wantedBps: Int = 0): Int? {
         if (keep != null) return keep.takeIf { it in whole }

@@ -342,26 +342,41 @@ class CachePolicyTest {
     }
 
     @Test
-    fun onlineALowerCopyDoesNotStandInForTheQualityAsked() {
-        // High (or Auto at the top rung): a 128 kbps copy won't do for a 160 kbps rung.
-        val wantHigh = CacheKeys.wantedBps(AudioQuality.HIGH, 0, rungItag = 251, ladderBps = emptyList(), online = true)
+    fun onHighALowerCopyDoesNotStandInForTheQualityAsked() {
+        // High: a 128 kbps copy won't do for a 160 kbps rung.
+        val wantHigh = CacheKeys.wantedBps(AudioQuality.HIGH, rungItag = 251, ladderBps = emptyList(), online = true)
         assertEquals(160_000, wantHigh)
         assertNull(CacheKeys.pick(listOf(140), keep = null, rungItag = 251, wantedBps = wantHigh))
         assertEquals(251, CacheKeys.pick(listOf(140, 251), keep = null, rungItag = 251, wantedBps = wantHigh))
         // An AAC 256 kbps copy is at least as good.
         assertEquals(141, CacheKeys.pick(listOf(141), keep = null, rungItag = 251, wantedBps = wantHigh))
-        // Without a link yet: the ladder's rung, else High wants a top-class copy.
-        assertEquals(64_000, CacheKeys.wantedBps(AudioQuality.AUTO, 2, rungItag = null, ladderBps = listOf(160_000, 128_000, 64_000, 48_000), online = true))
-        assertEquals(CacheKeys.TOP_CLASS_BPS, CacheKeys.wantedBps(AudioQuality.HIGH, 0, rungItag = null, ladderBps = emptyList(), online = true))
+        // Without a link yet: the ladder's top, else a top-class copy.
+        assertEquals(160_000, CacheKeys.wantedBps(AudioQuality.HIGH, rungItag = null, ladderBps = listOf(160_000, 128_000, 64_000, 48_000), online = true))
+        assertEquals(CacheKeys.TOP_CLASS_BPS, CacheKeys.wantedBps(AudioQuality.HIGH, rungItag = null, ladderBps = emptyList(), online = true))
         assertNull(CacheKeys.pick(listOf(250), keep = null, rungItag = null, wantedBps = CacheKeys.TOP_CLASS_BPS))
-        // Low, Auto lower down, or offline: any whole copy.
-        assertEquals(0, CacheKeys.wantedBps(AudioQuality.LOW, 0, rungItag = 251, ladderBps = emptyList(), online = true))
-        assertEquals(0, CacheKeys.wantedBps(AudioQuality.HIGH, 0, rungItag = 251, ladderBps = emptyList(), online = false))
+        // Low, or offline: any whole copy.
+        assertEquals(0, CacheKeys.wantedBps(AudioQuality.LOW, rungItag = 251, ladderBps = emptyList(), online = true))
+        assertEquals(0, CacheKeys.wantedBps(AudioQuality.HIGH, rungItag = 251, ladderBps = emptyList(), online = false))
         assertEquals(140, CacheKeys.pick(listOf(140), keep = null, rungItag = 251, wantedBps = 0))
         // A resume stays in its file whatever the setting.
         assertEquals(140, CacheKeys.pick(listOf(140), keep = 140, rungItag = 251, wantedBps = wantHigh))
         // A format of unknown bitrate only when any will do.
         assertNull(CacheKeys.pick(listOf(9999), keep = null, rungItag = null, wantedBps = 64_000))
+    }
+
+    @Test
+    fun onAutoAWholeCopyAlwaysWins() {
+        // Auto asks for no bitrate, whatever the rung it is on or the ladder it knows.
+        assertEquals(0, CacheKeys.wantedBps(AudioQuality.AUTO, rungItag = null, ladderBps = emptyList(), online = true))
+        assertEquals(0, CacheKeys.wantedBps(AudioQuality.AUTO, rungItag = 251, ladderBps = listOf(160_000, 128_000, 64_000, 48_000), online = true))
+        // A fresh process (no link, no ladder in memory) plays the copy saved at Low rather than
+        // downloading the song again.
+        val saved = CacheKeys.of("dQw4w9WgXcQ", 250, 2_000_000L)
+        val wanted = CacheKeys.wantedBps(AudioQuality.AUTO, rungItag = null, ladderBps = emptyList(), online = true)
+        assertEquals(saved, CacheKeys.pickKey(listOf(saved), keepKey = null, rungItag = 251, wantedBps = wanted))
+        // The rung's own format still wins when it is whole too.
+        val top = CacheKeys.of("dQw4w9WgXcQ", 251, 3_000_000L)
+        assertEquals(top, CacheKeys.pickKey(listOf(saved, top), keepKey = null, rungItag = 251, wantedBps = wanted))
     }
 
     @Test

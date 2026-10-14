@@ -188,10 +188,10 @@ internal object StreamResolver {
      * play from it with no extraction and no request (also during a back-off: nothing is asked
      * of YouTube); else null. A resume, or a track kept through an outage ([keepFormat]), only in
      * its own format (as is an [itag] asked for); otherwise the one the quality setting asks for
-     * when known, else, online, one at least as good as the setting asks ([CacheKeys.wantedBps]);
-     * offline any. Not a copy
-     * just found missing ([AudioCache.misses]): its retry goes to the network. Recorded as
-     * served, so a later resume keeps that file.
+     * when known and whole, else any whole copy, except on High online, where it must be about
+     * as good as the setting asks ([CacheKeys.wantedBps]: a whole copy always wins on Auto and
+     * Low). Not a copy just found missing ([AudioCache.misses]): its retry goes to the network.
+     * Recorded as served, so a later resume keeps that file.
      */
     fun cachedKey(ytId: String, midStream: Boolean, itag: Int? = null): String? {
         if (AudioCache.misses.recent(ytId)) return null
@@ -205,7 +205,7 @@ internal object StreamResolver {
         }
         val rungStream = cache.get(ytId, currentRung(), null, now())
         val ladder = before?.ladderBps?.takeIf { it.isNotEmpty() } ?: rungStream?.ladderBps ?: emptyList()
-        val wanted = CacheKeys.wantedBps(quality, autoRung, rungStream?.itag, ladder, AudioCache.online)
+        val wanted = CacheKeys.wantedBps(quality, rungStream?.itag, ladder, AudioCache.online)
         val key = AudioCache.wholeKey(ytId, keepKey, rungStream?.itag, wanted) ?: return null
         val keyItag = CacheKeys.itagOf(key) ?: return null
         // No URL: nothing is requested for it.
