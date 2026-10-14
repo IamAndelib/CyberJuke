@@ -410,4 +410,30 @@ class CachePolicyTest {
         assertEquals(DataSpec.FLAG_ALLOW_GZIP, CacheKeys.cacheFlags(DataSpec.FLAG_ALLOW_GZIP))
         assertEquals(0, CacheKeys.cacheFlags(0))
     }
+
+    @Test
+    fun thePlayingAndNextTracksAreSkippedOnlyWhileThePlayerStillLoadsThem() {
+        val cur = "cur00000000"
+        val next = "nxt00000000"
+        val loaded = PlaybackNeed.Load(
+            idle = false, buffering = false, positionMs = 10_000, durationMs = 200_000,
+            bufferedPositionMs = 200_000, totalBufferedMs = 190_000 + 180_000, hasNext = true, nextDurationMs = 180_000,
+        )
+        // Both all buffered: the player won't write them into the cache any more, the saver may.
+        assertEquals(emptySet<String>(), PlaybackNeed.stillLoading(loaded, cur, next))
+        // Ended or idle (a restored session, an error): nothing is loading.
+        val notLoaded = loaded.copy(bufferedPositionMs = 0, totalBufferedMs = 0)
+        assertEquals(emptySet<String>(), PlaybackNeed.stillLoading(notLoaded.copy(idle = true), cur, next))
+        // The current one partly buffered: it is loading, and the next comes after it.
+        assertEquals(setOf(cur, next), PlaybackNeed.stillLoading(notLoaded.copy(bufferedPositionMs = 120_000, totalBufferedMs = 110_000), cur, next))
+        assertEquals(setOf(cur, next), PlaybackNeed.stillLoading(loaded.copy(durationMs = -1), cur, next))
+        // The current one whole, the next not (yet): only the next.
+        assertEquals(setOf(next), PlaybackNeed.stillLoading(loaded.copy(totalBufferedMs = 190_000 + 60_000), cur, next))
+        assertEquals(setOf(next), PlaybackNeed.stillLoading(loaded.copy(nextDurationMs = -1, totalBufferedMs = 190_000), cur, next))
+        // No next track.
+        assertEquals(emptySet<String>(), PlaybackNeed.stillLoading(loaded.copy(hasNext = false), cur, null))
+        // The saver then repairs a liked song that is playing, all buffered.
+        val f = Facts(liked, saved = emptySet(), skip = PlaybackNeed.stillLoading(loaded, "new00000000", "mid00000000"))
+        assertEquals("new00000000", LikedSaverPolicy.next(f))
+    }
 }

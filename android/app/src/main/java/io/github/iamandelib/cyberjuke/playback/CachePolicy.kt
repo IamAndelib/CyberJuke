@@ -298,6 +298,24 @@ internal object PlaybackNeed {
         val isLoading: Boolean = true,
     )
 
+    /**
+     * Which of the playing track ([current]) and the next ([next]) the player is still loading,
+     * so the liked saver leaves them to it: one not all buffered yet (or of unknown length),
+     * unless the player is idle or ended. One all buffered is done: the saver may repair it in
+     * the cache (only the bytes missing there are fetched).
+     */
+    fun stillLoading(l: Load, current: String?, next: String?): Set<String> {
+        if (l.idle) return emptySet()
+        val out = HashSet<String>(2)
+        val currentLoading = l.durationMs <= 0 || l.bufferedPositionMs < l.durationMs - SLACK_MS
+        if (current != null && currentLoading) out.add(current)
+        if (next != null && l.hasNext) {
+            val nextBuffered = l.totalBufferedMs - (l.durationMs - l.positionMs).coerceAtLeast(0L)
+            if (currentLoading || l.nextDurationMs <= 0 || nextBuffered < l.nextDurationMs - SLACK_MS) out.add(next)
+        }
+        return out
+    }
+
     fun needsNetwork(l: Load): Boolean {
         if (l.idle) return false
         if (l.buffering) return true
@@ -427,8 +445,8 @@ internal class MembersAudio {
 /**
  * When the LikedSaver saves a liked song into the cache, and which. Pure (CachePolicyTest).
  *
- * - One at a time, newest like first; never one the player is loading anyway (the playing
- *   track and the next) nor one that failed this session.
+ * - One at a time, newest like first; never one the player is still loading anyway (the
+ *   playing track or the next, [PlaybackNeed.stillLoading]) nor one that failed this session.
  * - A song liked just now ([Facts.fresh]) is saved on any network, at once; if that try fails,
  *   again after [MIN_GAP_MS] like any other.
  * - Older likes (the backfill) only on an unmetered network (Wi-Fi), at most one extraction per
@@ -456,7 +474,7 @@ internal object LikedSaverPolicy {
         val fresh: Set<String> = emptySet(),
         /** Of those, the ones already tried once (their retries wait for the gap). */
         val tried: Set<String> = emptySet(),
-        /** Not to be saved now: the playing and next tracks, and failures this session. */
+        /** Not to be saved now: the playing and next tracks while still loading, and failures this session. */
         val skip: Set<String> = emptySet(),
         val online: Boolean = true,
         val unmetered: Boolean = true,

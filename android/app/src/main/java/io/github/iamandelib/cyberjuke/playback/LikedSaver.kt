@@ -35,6 +35,9 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         /** The videos the player loads anyway (the playing track and the next). */
         fun loadingPair(): Set<String>
 
+        /** Of those, the ones it is still loading ([PlaybackNeed.stillLoading]): left to it meanwhile. */
+        fun stillLoading(): Set<String>
+
         /** Playback needs the network now ([PlaybackNeed]). */
         fun playbackNeedsNetwork(): Boolean
     }
@@ -119,7 +122,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             saved = AudioCache.savedLiked,
             fresh = fresh,
             tried = tried,
-            skip = host.loadingPair() + failed,
+            skip = host.stillLoading() + failed,
             online = online,
             unmetered = unmetered,
             quiet = NetBlock.isQuiet(),
