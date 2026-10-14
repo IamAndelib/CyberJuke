@@ -179,27 +179,97 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             job = null
             AudioCache.cancelSave = null
         }
+        // No id: R8 keeps info logs out of release builds, and this needs none.
         when (outcome) {
             SaveOutcome.SAVED -> {
+                Log.i(TAG, "Liked song saved")
                 fresh.remove(j.ytId)
                 tried.remove(j.ytId)
             }
-            SaveOutcome.FAILED -> failed.add(j.ytId)
+            SaveOutcome.FAILED -> {
+                Log.w(TAG, "Liked save refused or impossible")
+                failed.add(j.ytId)
+            }
             // Not cancelled, yet not saved (a dropped connection, an exception): three times and
             // it is given up on, so a song that can't be saved isn't tried forever.
-            SaveOutcome.STOPPED -> if (strikes.stopped(j.ytId)) failed.add(j.ytId)
+            SaveOutcome.STOPPED -> {
+                Log.i(TAG, "Liked save stopped")
+                if (strikes.stopped(j.ytId)) failed.add(j.ytId)
+            }
             SaveOutcome.CANCELLED -> Unit
         }
         check()
     }
 
-    /** One song into the cache. Cancelled from any thread; runs on [Background]'s thread. */
-    private class SaveJob(val ytId: String, val fresh: Boolean) {
+    /**
+     * One song into the cache: the extraction, then its bytes not yet cached through a
+     * [Writer]. Cancelled from any thread; runs on [Background]'s thread. The world it needs
+     * comes through [Deps] ([Live] in the app), so the outcome table is a JVM test
+     * (SaveJobTest).
+     */
+    internal class SaveJob(val ytId: String, val fresh: Boolean, private val deps: Deps = Live) {
+        /** What a save needs from the back-off, the cache and the resolver. */
+        interface Deps {
+            /** A back-off is in force, or nothing has succeeded since one: no extraction now. */
+            fun quiet(): Boolean
+
+            /** Members-only while signed out: not cached. */
+            fun isDenied(ytId: String): Boolean
+
+            /** Saved whole in the cache. */
+            fun isWhole(ytId: String): Boolean
+
+            /** An extraction ([StreamResolver.resolve]): a [ResolveException], a [ManifestOnlyException] or another IOException. */
+            @Throws(IOException::class)
+            fun resolve(ytId: String): ResolvedStream
+
+            /** A writer fetching [stream]'s bytes not yet cached into the cache, or null without a cache. */
+            @Throws(IOException::class)
+            fun writer(ytId: String, stream: ResolvedStream): Writer?
+
+            /** [e], from a writer, is a refusal (an expired link, a block): not again this service's life. */
+            fun refused(e: IOException): Boolean
+        }
+
+        /** The write of one song's bytes (a [CacheWriter]); cancelled from any thread. */
+        interface Writer {
+            @Throws(IOException::class)
+            fun cache()
+
+            fun cancel()
+        }
+
+        /** The app's: [NetBlock], [AudioCache], [StreamResolver] and a [CacheWriter]. */
+        object Live : Deps {
+            override fun quiet() = NetBlock.isQuiet()
+
+            override fun isDenied(ytId: String) = AudioCache.isDenied(ytId)
+
+            override fun isWhole(ytId: String) = AudioCache.isWhole(ytId)
+
+            // An extraction, like playing it would be (it counts toward YouTube's limits, hence
+            // one at a time and spaced out); a back-off stops it (BlockedException).
+            override fun resolve(ytId: String): ResolvedStream = StreamResolver.resolve(ytId)
+
+            override fun writer(ytId: String, stream: ResolvedStream): Writer? {
+                val source = AudioCache.downloadSource() ?: return null
+                val spec = YtDataSpecResolver.streamSpec(DataSpec.Builder().setUri(JukeUris.forYt(ytId)).build(), ytId, stream)
+                val w = CacheWriter(source, spec, null, null)
+                return object : Writer {
+                    override fun cache() = w.cache()
+
+                    override fun cancel() = w.cancel()
+                }
+            }
+
+            override fun refused(e: IOException) = e.findCause<HttpDataSource.InvalidResponseCodeException>() != null
+        }
+
         @Volatile
         private var cancelled = false
 
         @Volatile
-        private var writer: CacheWriter? = null
+        private var writer: Writer? = null
 
         fun cancel() {
             cancelled = true
@@ -208,12 +278,10 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
 
         fun run(): SaveOutcome {
             // Cancelled, a back-off, or members-only while signed out: no fault of the song.
-            if (cancelled || NetBlock.isQuiet() || AudioCache.isDenied(ytId)) return SaveOutcome.CANCELLED
-            if (AudioCache.isWhole(ytId)) return SaveOutcome.SAVED
+            if (cancelled || deps.quiet() || deps.isDenied(ytId)) return SaveOutcome.CANCELLED
+            if (deps.isWhole(ytId)) return SaveOutcome.SAVED
             val stream = try {
-                // An extraction, like playing it would be (it counts toward YouTube's limits,
-                // hence one at a time and spaced out); a back-off stops it (BlockedException).
-                StreamResolver.resolve(ytId)
+                deps.resolve(ytId)
             } catch (e: ResolveException) {
                 return when (SaveFailure.of(e.kind)) {
                     SaveFailure.GIVE_UP -> SaveOutcome.FAILED
@@ -224,31 +292,22 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
                 return SaveOutcome.FAILED
             } catch (e: IOException) {
                 // A back-off (BlockedException) is no strike either.
-                return if (cancelled || NetBlock.isQuiet()) SaveOutcome.CANCELLED else SaveOutcome.STOPPED
+                return if (cancelled || deps.quiet()) SaveOutcome.CANCELLED else SaveOutcome.STOPPED
             }
             // Only an audio-only format is kept in the cache.
             if (!stream.audioOnly || stream.itag <= 0) return SaveOutcome.FAILED
             if (cancelled) return SaveOutcome.CANCELLED
-            val source = AudioCache.downloadSource() ?: return SaveOutcome.STOPPED
             return try {
-                val spec = YtDataSpecResolver.streamSpec(DataSpec.Builder().setUri(JukeUris.forYt(ytId)).build(), ytId, stream)
-                val w = CacheWriter(source, spec, null, null)
+                val w = deps.writer(ytId, stream) ?: return SaveOutcome.STOPPED
                 writer = w
                 if (cancelled) return SaveOutcome.CANCELLED
                 w.cache()
-                // Saved only if it is whole now ([SaveOutcome.afterWrite]). No id: R8 keeps info
-                // logs out of release builds, and this needs none.
-                SaveOutcome.afterWrite(AudioCache.isWhole(ytId)).also {
-                    Log.i(TAG, if (it == SaveOutcome.SAVED) "Liked song saved" else "Liked song not whole after its save")
-                }
+                // Saved only if it is whole now ([SaveOutcome.afterWrite]).
+                SaveOutcome.afterWrite(deps.isWhole(ytId))
             } catch (e: IOException) {
                 when {
-                    cancelled || NetBlock.isQuiet() -> SaveOutcome.CANCELLED
-                    // Refused (an expired link, a block): not again this service's life.
-                    e.findCause<HttpDataSource.InvalidResponseCodeException>() != null -> {
-                        Log.w(TAG, "Liked save refused")
-                        SaveOutcome.FAILED
-                    }
+                    cancelled || deps.quiet() -> SaveOutcome.CANCELLED
+                    deps.refused(e) -> SaveOutcome.FAILED
                     else -> SaveOutcome.STOPPED
                 }
             } finally {
