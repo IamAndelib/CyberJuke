@@ -1,15 +1,13 @@
 package io.github.iamandelib.cyberjuke.playback
 
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
-
 /**
- * Crossfade (Settings → Crossfade): when a track ends by itself, its last seconds fade out
- * while the next one fades in. Media3 has no crossfade of its own (as of 1.11), so the queue,
- * the session and the notification stay on the one ExoPlayer, which moves on to the next track
- * a fade early, and a second, bare player ([Crossfader.Tail]) plays the end of the outgoing
- * track over it. Pure (CrossfadeTest): what to fade, from where and how long, and the curve.
+ * Crossfade (Settings → Crossfade), the way Metrolist does it (MusicService's scheduleCrossfade,
+ * startCrossfade and performCrossfadeSwap): a fade's length before a track's end, a second player
+ * starts the next track from its start, silent, and takes over the media session (the title, the
+ * notification and the lock screen move on at once), and fades in while the old player plays out
+ * its own end and fades out. Media3 has no crossfade of its own (as of 1.11). Nothing is lined up
+ * and the next track needn't be buffered: if it needs a moment to start, the fade waits for it.
+ * Pure (CrossfadeTest): when to fade, how long, and the curve.
  */
 internal object CrossfadePlan {
     /** The setting's choices: Off, 3 s, 6 s and 10 s. */
@@ -18,30 +16,8 @@ internal object CrossfadePlan {
     /** A shorter fade isn't worth one (a fade shrunk to fit a short track). */
     const val MIN_FADE_MS = 1_000L
 
-    /**
-     * The tail plays this long, muted, before the hand-over: its sound is already flowing then,
-     * and it has time to be lined up with the main player ([TailAlign]): to settle and be
-     * measured, and over a Bluetooth output's start delay once more after a seek.
-     */
-    const val PREROLL_MS = 2_500L
-
-    /** The hand-over itself: the outgoing track moves from the main player to the tail over this long. */
-    const val SWAP_MS = 150L
-
-    /** Time the tail gets to load before its preroll (from the listening cache it needs far less). */
-    const val PREP_MS = 1_500L
-
-    /** Less time than this to load and the track ends the usual way. */
-    const val MIN_PREP_MS = 500L
-
-    /** The volume steps, only while a fade runs. */
-    const val STEP_MS = 50L
-
-    /** The next track starts this much into its buffer ([BufferPolicy.START_MS]); a fade needs it ready. */
-    private const val START_MS = BufferPolicy.START_MS.toLong()
-
-    /** Buffered to within this of the end counts as all there. */
-    private const val SLACK_MS = 1_000L
+    /** The volume steps a fade takes (Metrolist's 20). */
+    const val STEPS = 20
 
     /** [ms] if it's one of [CHOICES_MS], else null. */
     fun valid(ms: Int?): Int? = ms?.takeIf { it in CHOICES_MS }
@@ -58,22 +34,27 @@ internal object CrossfadePlan {
         return if (f < MIN_FADE_MS) 0L else f
     }
 
-    /**
-     * Where the playing track's tail is made ready (its "prime"), from the setting and the
-     * track's own length (the next track may shrink the fade later, never lengthen it); null
-     * when there is no fade.
-     */
-    fun primeAtMs(settingMs: Long, durationMs: Long): Long? {
-        val f = fadeMs(settingMs, durationMs, -1L)
-        if (f == 0L) return null
-        return (durationMs - f - PREROLL_MS - PREP_MS).coerceAtLeast(0L)
+    sealed interface Trigger {
+        /** Fade for [fadeMs] once the track plays through [atMs]: its end minus the fade. */
+        data class At(val atMs: Long, val fadeMs: Long) : Trigger
+
+        /** No fade for this track. */
+        data class No(val why: Skip) : Trigger
     }
 
-    /** What the next track must have buffered for a fade of [fadeMs]: its start and the fade, or all of it. */
-    fun nextNeededMs(fadeMs: Long, nextDurationMs: Long): Long =
-        minOf(fadeMs + START_MS, (nextDurationMs - SLACK_MS).coerceAtLeast(0L))
+    /** Where the playing track (at [positionMs]) fades into the next one, and for how long. */
+    fun trigger(settingMs: Long, durationMs: Long, nextDurationMs: Long, positionMs: Long): Trigger {
+        if (settingMs <= 0L) return Trigger.No(Skip.OFF)
+        if (durationMs <= 0L) return Trigger.No(Skip.UNKNOWN_LENGTH)
+        val fade = fadeMs(settingMs, durationMs, nextDurationMs)
+        if (fade == 0L) return Trigger.No(Skip.TOO_SHORT)
+        val at = durationMs - fade
+        // Already past it (a seek or a resume near the end): the track ends the usual way.
+        if (positionMs >= at) return Trigger.No(Skip.TOO_LATE)
+        return Trigger.At(at, fade)
+    }
 
-    /** The main player, as the crossfade sees it. */
+    /** The main player, as the crossfade sees it when a fade comes due. */
     data class Facts(
         val settingMs: Long,
         /** Playing now: play wanted, READY, nothing (a call, say) holding it back. */
@@ -82,333 +63,166 @@ internal object CrossfadePlan {
         val hasNext: Boolean,
         /** Waiting for the network, or a back-off. */
         val outage: Boolean,
-        /** Our own `cyberjuke://` item (not an HLS fallback), so the tail can open the same stream. */
-        val ours: Boolean,
-        val durationMs: Long,
-        val positionMs: Long,
-        /** <= 0 while unknown (the next track isn't prepared). */
-        val nextDurationMs: Long,
-        /** How much of the next track is buffered. */
-        val nextBufferedMs: Long,
         /** Settings → Gapless playback. */
         val gapless: Boolean = true,
-        /** The playing track and the next are from one album (both say so). */
+        /** The playing track and the one the fade goes into are from one album (both say so). */
         val sameAlbum: Boolean = false,
+        /** A fade (or the hand-over of the audio focus before one) is under way. */
+        val fading: Boolean = false,
     )
 
-    enum class Skip { OFF, NOT_PLAYING, REPEAT_ONE, LAST, OUTAGE, NOT_OURS, SAME_ALBUM, TOO_SHORT, TOO_LATE, NEXT_NOT_READY }
+    enum class Skip {
+        OFF, UNKNOWN_LENGTH, TOO_SHORT, TOO_LATE,
+        NOT_PLAYING, LAST, OUTAGE, SAME_ALBUM, FADING,
 
-    sealed interface Decision {
-        /** Fade for [fadeMs], handing over at [startAtMs] of the playing track. */
-        data class Fade(val fadeMs: Long, val startAtMs: Long) : Decision
-
-        /** The track ends the usual way. */
-        data class No(val why: Skip) : Decision
+        /** No second player could be made. */
+        NO_PLAYER,
     }
 
-    /**
-     * At the prime: fade or not. Not on repeat-one, the last track, during an outage or a
-     * back-off, on a fallback stream, between two tracks of one album with Gapless playback on
-     * (they were made to run into each other; Metrolist's "gapless" option is this rule), with
-     * too little time left to load the tail (a seek near the end), or when the next track
-     * couldn't start at once (a normal transition then, never a stall).
-     */
-    fun decide(f: Facts): Decision {
-        if (f.settingMs <= 0L) return Decision.No(Skip.OFF)
-        if (!f.playing) return Decision.No(Skip.NOT_PLAYING)
-        if (f.repeatOne) return Decision.No(Skip.REPEAT_ONE)
-        if (!f.hasNext) return Decision.No(Skip.LAST)
-        if (f.outage) return Decision.No(Skip.OUTAGE)
-        if (!f.ours) return Decision.No(Skip.NOT_OURS)
-        if (f.gapless && f.sameAlbum) return Decision.No(Skip.SAME_ALBUM)
-        val fade = fadeMs(f.settingMs, f.durationMs, f.nextDurationMs)
-        if (fade == 0L) return Decision.No(Skip.TOO_SHORT)
-        val startAt = f.durationMs - fade
-        if (f.positionMs > startAt - PREROLL_MS - MIN_PREP_MS) return Decision.No(Skip.TOO_LATE)
-        if (!nextReady(f, fade)) return Decision.No(Skip.NEXT_NOT_READY)
-        return Decision.Fade(fade, startAt)
+    /** A fade that came due: null to fade, else why not. */
+    fun decide(f: Facts): Skip? = when {
+        f.settingMs <= 0L -> Skip.OFF
+        !f.playing -> Skip.NOT_PLAYING
+        // Repeat one fades into its own start, as Metrolist does.
+        !f.hasNext && !f.repeatOne -> Skip.LAST
+        f.outage -> Skip.OUTAGE
+        // Made to run into each other (Metrolist's "gapless" option is this rule).
+        f.gapless && f.sameAlbum -> Skip.SAME_ALBUM
+        f.fading -> Skip.FADING
+        else -> null
     }
 
-    /** At the hand-over: still playing, still a next track, no outage, and it is buffered. */
-    fun canHandOver(f: Facts, fadeMs: Long): Boolean =
-        f.playing && f.hasNext && !f.repeatOne && !f.outage && nextReady(f, fadeMs)
+    /** The incoming track's gain at [p] (0 → 1): up fast, then gently (Metrolist's 1 − (1 − p)²). */
+    fun fadeIn(p: Float): Float {
+        val q = 1f - p.coerceIn(0f, 1f)
+        return 1f - q * q
+    }
 
-    private fun nextReady(f: Facts, fadeMs: Long): Boolean =
-        f.nextDurationMs > 0L && f.nextBufferedMs >= nextNeededMs(fadeMs, f.nextDurationMs)
+    /** The outgoing track's gain at [p] (1 → 0): down fast, then gently ((1 − p)²). */
+    fun fadeOut(p: Float): Float {
+        val q = 1f - p.coerceIn(0f, 1f)
+        return q * q
+    }
 
-    /** How far into a fade of [fadeMs] started at [startedAt] it is at [now], 0..1. */
-    fun progress(now: Long, startedAt: Long, fadeMs: Long): Float =
-        if (fadeMs <= 0L) 1f else ((now - startedAt).toFloat() / fadeMs).coerceIn(0f, 1f)
-
-    /** Equal power: the outgoing track's gain at [t] (1 → 0); the two add up to constant loudness. */
-    fun outGain(t: Float): Float = cos(t.coerceIn(0f, 1f) * PI / 2).toFloat().coerceIn(0f, 1f)
-
-    /** The incoming track's gain at [t] (0 → 1). */
-    fun inGain(t: Float): Float = sin(t.coerceIn(0f, 1f) * PI / 2).toFloat().coerceIn(0f, 1f)
+    /** The time between two of a fade's [STEPS]. */
+    fun stepMs(fadeMs: Long): Long = fadeMs / STEPS
 }
 
 /**
- * Lines the tail up with the main player during the preroll. A player's position counts what
- * has been heard, so a tail started at the main player's position lags it by its own start
- * delay (the output's latency: tens of ms on the speaker, a few hundred over Bluetooth), and the
- * hand-over would play that sliver twice.
+ * Runs the crossfade over the service's players ([Host]), on the main thread. Pure (CrossfadeTest,
+ * with a fake host); the Android side is ExoCrossfadeHost.
  *
- * Fed both positions every step. A position is only an estimate at first (Media3 trusts the
- * output's timestamps after up to half a second, then corrects slowly), and each read may be a
- * few ms old, so the drift (main − tail) is only measured once the tail has run steadily for
- * [SETTLE_MS], as the median of its last [SAMPLES] samples. Over [ALIGNED_MS], the tail is sent
- * ahead by the delay learned so far (a seek starts it again, with the same delay), at most
- * [MAX_SEEKS] times, and only while there is time to settle and measure again before the swap
- * (never in its last [NO_SEEK_MS]): after that, and once it was lined up, it only judges. The
- * hand-over only happens within [HAND_OVER_MS] (the swap's ramp hides that much). Pure.
- */
-internal class TailAlign {
-    sealed interface Step {
-        /** Not measured yet, or only judging now. */
-        data object Wait : Step
-
-        /** Seek the tail here (a muted tail: nobody hears it). */
-        data class Seek(val toMs: Long) : Step
-
-        data object Aligned : Step
-    }
-
-    /** The drift, main − tail, in ms (the median of the latest samples); null until measured (again, after a seek). */
-    var driftMs: Long? = null
-        private set
-
-    var seeks = 0
-        private set
-
-    /** How far ahead of the main player the tail must start: its start delay, learned. */
-    private var leadMs = 0L
-    private var lastTailMs: Long? = null
-
-    /** When the tail was first seen running steadily; -1 while it isn't. */
-    private var runningSince = -1L
-
-    /** Samples in a row without progress. */
-    private var still = 0
-    private val samples = ArrayDeque<Long>()
-    private var aligned = false
-
-    /** A step's sample, at [now] (the clock), with [toSwapMs] left until the swap. */
-    fun sample(now: Long, mainMs: Long, tailMs: Long, toSwapMs: Long): Step {
-        val advancing = lastTailMs?.let { tailMs - it >= MIN_ADVANCE_MS } == true
-        lastTailMs = tailMs
-        if (!advancing) {
-            // One odd read is skipped; not started yet, or stalled: what was gathered is void.
-            if (++still >= STALL_STEPS) {
-                runningSince = -1L
-                samples.clear()
-            }
-            return Step.Wait
-        }
-        still = 0
-        if (runningSince < 0L) runningSince = now
-        if (now - runningSince < SETTLE_MS) return Step.Wait
-        samples.addLast(mainMs - tailMs)
-        if (samples.size > SAMPLES) samples.removeFirst()
-        if (samples.size < MIN_SAMPLES) return Step.Wait
-        val d = samples.sorted()[samples.size / 2]
-        driftMs = d
-        if (kotlin.math.abs(d) <= ALIGNED_MS) {
-            aligned = true
-            return Step.Aligned
-        }
-        if (aligned || seeks >= MAX_SEEKS) return Step.Wait
-        val lead = leadMs + d
-        // Time to start again, settle and measure before the swap, or only judge from now on.
-        if (toSwapMs < maxOf(NO_SEEK_MS, kotlin.math.abs(lead) + SETTLE_MS + MIN_SAMPLES * STEP_MS)) return Step.Wait
-        seeks++
-        leadMs = lead
-        lastTailMs = null
-        runningSince = -1L
-        still = 0
-        samples.clear()
-        driftMs = null
-        return Step.Seek(mainMs + leadMs)
-    }
-
-    /** Close enough to hand over without a jump anyone would hear. */
-    val handOverOk: Boolean get() = driftMs?.let { kotlin.math.abs(it) <= HAND_OVER_MS } == true
-
-    companion object {
-        const val ALIGNED_MS = 15L
-        const val HAND_OVER_MS = 30L
-        const val MAX_SEEKS = 2
-
-        /** The tail runs steadily this long before its drift counts. */
-        const val SETTLE_MS = 600L
-
-        /** The drift is the median of this many latest samples, from [MIN_SAMPLES] on. */
-        const val SAMPLES = 5
-        const val MIN_SAMPLES = 3
-
-        /** No seek this close to the swap: the tail couldn't settle again in time. */
-        const val NO_SEEK_MS = 400L
-
-        /** A running tail moves about a step between samples; a waiting one doesn't. */
-        const val MIN_ADVANCE_MS = 10L
-
-        /** This many samples in a row without progress: it isn't running (yet, or any more). */
-        const val STALL_STEPS = 2
-
-        private const val STEP_MS = CrossfadePlan.STEP_MS
-    }
-}
-
-/**
- * Runs the crossfade over the main player ([Host]) and a tail player ([Tail]), on the main
- * thread. Pure (CrossfadeTest, with fakes); the Android side is ExoCrossfadeHost.
+ * Armed for each track ([arm]): one position message ([Host.at], no timer) at
+ * [CrossfadePlan.trigger]. When it comes due and [CrossfadePlan.decide] says fade (phases NONE →
+ * YIELDING → FADING):
+ * - the main player gives up its audio focus ([Host.yieldFocus]), so the new player's request
+ *   takes nothing from it (a second request would make Android pause it);
+ * - then [Host.swapToNext]: a new main player starts the next track, silent, and the old one keeps
+ *   only its own track and fades;
+ * - then [CrossfadePlan.STEPS] volume steps, relative to the old player's own volume ([base]): the
+ *   new one fades in, the old one out, and is released at the end.
  *
- * For each track, a position message ([Host.at], no timer) at [CrossfadePlan.primeAtMs]:
- * - prime: [CrossfadePlan.decide]; on a fade, the tail is made (paused, at the hand-over minus
- *   [CrossfadePlan.PREROLL_MS]) and two more position messages are set;
- * - preroll: the tail plays, muted, and is lined up with the main player ([TailAlign]); not
- *   ready by then: no fade, the tail goes;
- * - swap ([CrossfadePlan.SWAP_MS] before the fade): only if the tail is lined up and the next
- *   track still ready, the outgoing track moves from the main player to the tail in three short
- *   steps (a linear ramp: the two play the same sound), then the main player, silent, moves on
- *   to the next track ([Host.advance]) and the fade runs.
- *
- * Steps every [CrossfadePlan.STEP_MS] are the only timer, only from the preroll to the fade's
- * end. Both players' volumes are set the public way ([Host.setMainVolume], [Tail.setVolume]),
- * relative to the main player's own volume, read at the swap (from then on the fade sets it).
- *
- * A pause, seek, skip, stop, a new current track, a call or other loss of audio focus, a stall
- * of the outgoing track or a tail error before the fade stops it at once: the tail goes, its step
- * is removed and the main player's volume is whole again ([stop]). A tail that fails or ends
- * during the fade just goes; the incoming track's fade-in runs on to the end. A change of the
- * next track, or of the repeat or shuffle mode, before the hand-over plans again; an edit of the
- * queue that leaves the next track as it was changes nothing. After the hand-over the fade goes
- * on (it no longer depends on the queue).
+ * The steps are the only timer and run only while the new player plays: while it buffers, is
+ * paused or held back, the ramp waits ([onPlaying]). The old player plays when play is wanted
+ * ([onPlayWanted]). A seek, a skip, a new list, the main player stopping or failing, or another
+ * setting stops a fade at once ([stop]): the old track goes and the new one is at full volume.
+ * The old track ending or failing by itself ([onFadingGone]) lets the ramp finish on the new one.
  */
 internal class Crossfader(private val host: Host, settingMs: Int) {
     interface Host {
-        /** The main player's facts for the plan. */
+        /** The main player's facts for [CrossfadePlan.decide] (`fading`: false, the crossfader knows). */
         fun facts(settingMs: Long): CrossfadePlan.Facts
-
-        /** Identifies the main player's current item (stable across edits of the list); null when empty. */
-        fun currentItem(): Any?
-
-        /** Identifies the item that plays after the current one; null when none. */
-        fun nextItem(): Any?
-
-        fun positionMs(): Long
 
         /** The current track's length; <= 0 while unknown. */
         fun durationMs(): Long
 
-        /** Runs [action] on the main thread when the current item plays through [positionMs]. */
+        /** The length of the track the fade goes into (the next, or this one on Repeat one); <= 0 while unknown. */
+        fun nextDurationMs(): Long
+
+        fun positionMs(): Long
+
+        /** Identifies the main player's current item (stable across edits of the list); null when empty. */
+        fun currentItem(): Any?
+
+        /** Runs [action] on the main thread when the main player's current item plays through [positionMs]. */
         fun at(positionMs: Long, action: () -> Unit)
 
         /** Cancels everything [at] set. */
         fun cancelAll()
 
+        /** The main player gives up its audio focus; [then] runs once it has. */
+        fun yieldFocus(then: () -> Unit)
+
+        /** The main player handles its audio focus again (a fade that didn't happen). */
+        fun reclaimFocus()
+
+        /**
+         * A new main player plays the track the fade goes into from its start, at volume 0, and has
+         * the session; the old one keeps only its own track, fading. False: none could be made,
+         * nothing changed.
+         */
+        fun swapToNext(): Boolean
+
+        /** The main player plays (its sound comes out). */
+        val mainPlaying: Boolean
+
+        val mainVolume: Float
+
+        fun setMainVolume(v: Float)
+
+        fun setFadingVolume(v: Float)
+
+        fun setFadingPlaying(playing: Boolean)
+
+        /** The old player goes. */
+        fun releaseFading()
+
         fun post(delayMs: Long, r: Runnable)
 
         fun remove(r: Runnable)
 
-        fun now(): Long
+        /** A fade that didn't happen, and why (logged: [CrossfadePlan.Skip]). */
+        fun skipped(why: CrossfadePlan.Skip)
 
-        /**
-         * The main player's volume: its own outside a fade (1 unless something changed it),
-         * what the fade set during one.
-         */
-        val mainVolume: Float
-
-        /** Sets the main player's volume, as the tail's is set. */
-        fun setMainVolume(v: Float)
-
-        /** The main player moves on to its next track. */
-        fun advance()
-
-        /** A paused tail of the current track at [positionMs], loading; null when it can't be made. */
-        fun newTail(positionMs: Long, events: TailEvents): Tail?
-
-        /** At the swap: how well the tail was lined up ([driftMs], null: never measured), and whether it was handed over. */
-        fun judged(driftMs: Long?, seeks: Int, handedOver: Boolean)
+        /** A fade of [fadeMs] started (logged). */
+        fun started(fadeMs: Long)
     }
 
-    interface Tail {
-        val isReady: Boolean
-
-        /** What has been heard of it so far, as a player counts its position. */
-        val positionMs: Long
-
-        fun play()
-
-        fun seekTo(positionMs: Long)
-
-        fun setVolume(v: Float)
-
-        fun release()
-    }
-
-    interface TailEvents {
-        fun onTailEnded()
-
-        fun onTailError()
-    }
-
-    enum class Phase { NONE, PRIMED, PREROLL, SWAP, FADING }
+    enum class Phase { NONE, YIELDING, FADING }
 
     var phase = Phase.NONE
         private set
 
     private var settingMs = (CrossfadePlan.valid(settingMs) ?: 0).toLong()
 
-    /** Bumped by every new plan: a message of an older one does nothing. */
+    /** Bumped by every [arm]: a message set before does nothing. */
     private var generation = 0
 
-    /** The item the messages were set for, and the next one the plan was made with. */
+    /** The item the message was set for, and the fade it was set with. */
     private var item: Any? = null
-    private var plannedNext: Any? = null
+    private var armedFadeMs = 0L
 
-    /** The current item's prime is still to come (a message is set for it). */
-    private var primePending = false
+    /** Counts focus hand-overs, so a late barrier of an abandoned one does nothing. */
+    private var yields = 0
 
-    private var tail: Tail? = null
-    private var align = TailAlign()
-    private var fadeMs = 0L
-    private var startAtMs = 0L
-    private var swapAt = 0L
-    private var startedAt = 0L
+    /** Inside our own [Host.swapToNext]: the new player's events are ours, not the user's. */
+    private var swapping = false
 
-    /**
-     * The main player's own volume, read at the swap (the fade sets it from then on): the fade's
-     * volumes are relative to it, and [stop] puts it back.
-     */
+    /** The old player's own volume, read before the swap: the fade's volumes are relative to it. */
     private var base = 1f
+    private var step = 0
+    private var stepMs = 0L
 
-    /** Inside our own [Host.advance]: its events are ours, not the user's. */
-    private var advancing = false
+    /** The old player is still there (it may end or fail before the ramp does). */
+    private var fadingAlive = false
+
+    /** The ramp waits for the new player to play ([onPlaying]). */
+    private var waiting = false
 
     private val stepTask = Runnable { step() }
 
-    /** Counts tails, so a released one's late event changes nothing. */
-    private var tailNumber = 0
-
-    private fun eventsOf(n: Int) = object : TailEvents {
-        override fun onTailEnded() = tailGone(n)
-
-        override fun onTailError() = tailGone(n)
-    }
-
-    /**
-     * The tail ended or failed. During the fade it just goes (the fade-in runs on to its end,
-     * no jump to full volume); before it, there is no fade.
-     */
-    private fun tailGone(n: Int) {
-        if (n != tailNumber || tail == null) return
-        if (phase == Phase.FADING) {
-            tail?.release()
-            tail = null
-        } else {
-            stop()
-        }
-    }
+    /** The last item and reason a TOO_SHORT or TOO_LATE was told for (each is told once). */
+    private var noted: Pair<Any?, CrossfadePlan.Skip>? = null
 
     /** The setting (anything but [CrossfadePlan.CHOICES_MS] is Off). Changed, a fade under way stops. */
     fun setSetting(ms: Int) {
@@ -421,226 +235,170 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
 
     // ---- the main player's events --------------------------------------------------------
 
-    /** A new current item that isn't our hand-over's (a skip, a removal, a new list, an error's skip). */
-    fun onItemChanged() {
-        if (advancing) return
-        stop()
-        arm()
-    }
-
     /**
-     * A seek. [nearStart]: to within a second of the item's start; that soon after our own
-     * hand-over it is its late echo, not the user's.
+     * Sets the current track's message (again): its length, the next track, the setting or the
+     * position may have changed. A fade under way goes on (the message is for the track after it).
      */
-    fun onSeek(nearStart: Boolean) {
-        if (advancing) return
-        if (phase == Phase.FADING && nearStart && host.now() - startedAt < ECHO_MS) return
-        stop()
-        arm()
-    }
-
-    /** Paused, stopped, ended, or held back (a call, another app's audio). */
-    fun onHalted() {
-        if (advancing) return
-        stop()
-    }
-
-    /** Playing again (or allowed to): the current track gets its messages again. */
-    fun onResumed() {
-        if (advancing) return
-        if (phase == Phase.NONE) arm()
-    }
-
-    /** The outgoing track stalls before the hand-over: the tail would drift from it. */
-    fun onBuffering() {
-        if (advancing) return
-        if (beforeHandOver()) stop()
-    }
-
-    /** READY: the length may be known now. */
-    fun onReady() {
-        if (advancing) return
-        if (phase == Phase.NONE) arm()
-    }
-
-    /**
-     * The list changed. Before the hand-over, only a different next track plans again (an
-     * autoplay top-up after it, or the shuffle order put back as it was, keeps the tail).
-     */
-    fun onQueueChanged() {
-        if (advancing) return
-        if (beforeHandOver()) {
-            if (host.nextItem() == plannedNext) return
-            stop()
+    fun arm() {
+        if (swapping || phase == Phase.YIELDING) return
+        host.cancelAll()
+        val g = ++generation
+        val current = host.currentItem()
+        item = null
+        if (current == null) return
+        val t = CrossfadePlan.trigger(settingMs, host.durationMs(), host.nextDurationMs(), host.positionMs())
+        if (t is CrossfadePlan.Trigger.No) {
+            note(t.why, current)
+            return
         }
+        val at = t as CrossfadePlan.Trigger.At
+        item = current
+        armedFadeMs = at.fadeMs
+        host.at(at.atMs) { fire(g) }
+    }
+
+    /** A new current item, a seek, a skip or a removal that isn't our swap's: a fade stops at once. */
+    fun onJump() {
+        if (swapping) return
+        stop()
         arm()
     }
 
-    /** Repeat or shuffle changed: before the hand-over, plan again. */
-    fun onOrderChanged() {
-        if (advancing) return
-        if (beforeHandOver()) stop()
-        arm()
+    /** The main player stopped, ended or failed. */
+    fun onHalted() {
+        if (swapping) return
+        stop()
     }
 
-    /** A track's length became known. */
-    fun onDurationKnown() {
-        if (advancing) return
-        if (phase == Phase.NONE || phase == Phase.FADING) arm()
+    /** Play wanted and nothing holding it back (a pause, a call, another app's audio): [wanted]. */
+    fun onPlayWanted(wanted: Boolean) {
+        if (swapping) return
+        when (phase) {
+            Phase.FADING -> if (fadingAlive) host.setFadingPlaying(wanted)
+            Phase.YIELDING -> if (!wanted) stop()
+            Phase.NONE -> Unit
+        }
+        if (wanted) arm()
+    }
+
+    /** The main player plays: a ramp that waited for it goes on. */
+    fun onPlaying() {
+        if (swapping || phase != Phase.FADING || !waiting) return
+        waiting = false
+        step()
+    }
+
+    /** The old player played out its track, or failed: it goes, the ramp finishes on the new one. */
+    fun onFadingGone() {
+        if (phase != Phase.FADING || !fadingAlive) return
+        fadingAlive = false
+        host.releaseFading()
     }
 
     /** The service ends: nothing may outlive it. */
     fun release() {
         stop()
+        host.remove(stepTask)
         host.cancelAll()
-        primePending = false
         generation++
+        yields++
     }
 
-    // ---- the plan ------------------------------------------------------------------------
+    // ---- the fade -------------------------------------------------------------------------
 
-    private fun beforeHandOver() = phase == Phase.PRIMED || phase == Phase.PREROLL || phase == Phase.SWAP
-
-    /**
-     * Sets the current track's prime (a fade already running goes on: these messages are for
-     * the track after it). Never while a tail is primed (callers stop it first).
-     */
-    private fun arm() {
-        host.cancelAll()
-        primePending = false
-        val g = ++generation
-        item = null
-        if (settingMs <= 0L) return
-        val primeAt = CrossfadePlan.primeAtMs(settingMs, host.durationMs()) ?: return
-        item = host.currentItem() ?: return
-        // Already past it (a resume or a seek near the end): prime now; decide() turns down what's too late.
-        if (host.positionMs() >= primeAt) {
-            prime(g)
-        } else {
-            primePending = true
-            host.at(primeAt) { prime(g) }
-        }
-    }
-
-    private fun current(g: Int) = g == generation && host.currentItem() == item
-
-    private fun prime(g: Int) {
-        if (g == generation) primePending = false
-        // During a fade (a short track after it): the fade's end arms it again.
-        if (!current(g) || phase != Phase.NONE) return
-        val d = CrossfadePlan.decide(host.facts(settingMs))
-        if (d !is CrossfadePlan.Decision.Fade) return
-        val t = host.newTail(d.startAtMs - CrossfadePlan.PREROLL_MS, eventsOf(++tailNumber)) ?: return
-        tail = t
-        align = TailAlign()
-        fadeMs = d.fadeMs
-        startAtMs = d.startAtMs
-        plannedNext = host.nextItem()
-        phase = Phase.PRIMED
-        host.at(d.startAtMs - CrossfadePlan.PREROLL_MS) { preroll(g) }
-        host.at(d.startAtMs - CrossfadePlan.SWAP_MS) { swap(g) }
-    }
-
-    private fun preroll(g: Int) {
-        if (!current(g) || phase != Phase.PRIMED) return
-        val t = tail ?: return
-        if (!t.isReady) {
-            stop()
+    private fun fire(g: Int) {
+        if (g != generation || host.currentItem() != item) return
+        val why = CrossfadePlan.decide(host.facts(settingMs).copy(fading = phase != Phase.NONE))
+        if (why != null) {
+            note(why, item)
             return
         }
-        t.setVolume(0f)
-        t.play()
-        phase = Phase.PREROLL
-        host.post(CrossfadePlan.STEP_MS, stepTask)
+        val fade = armedFadeMs
+        phase = Phase.YIELDING
+        val y = ++yields
+        host.yieldFocus { start(y, fade) }
     }
 
-    private fun swap(g: Int) {
-        if (!current(g) || phase != Phase.PREROLL) {
-            if (beforeHandOver()) stop()
-            return
-        }
-        // Not lined up (a jump would be heard), or the next track no longer ready: the track
-        // ends the usual way.
-        val ok = align.handOverOk && CrossfadePlan.canHandOver(host.facts(settingMs), fadeMs)
-        host.judged(align.driftMs, align.seeks, ok)
-        if (!ok) {
-            stop()
-            return
-        }
+    /** The old player gave up its audio focus: swap, and the ramp starts once the new one plays. */
+    private fun start(y: Int, fadeMs: Long) {
+        if (phase != Phase.YIELDING || y != yields) return
         base = host.mainVolume
-        phase = Phase.SWAP
-        swapAt = host.now()
+        swapping = true
+        val swapped = try {
+            host.swapToNext()
+        } finally {
+            swapping = false
+        }
+        if (!swapped) {
+            phase = Phase.NONE
+            host.reclaimFocus()
+            note(CrossfadePlan.Skip.NO_PLAYER, item)
+            return
+        }
+        phase = Phase.FADING
+        fadingAlive = true
+        step = 0
+        stepMs = CrossfadePlan.stepMs(fadeMs)
+        waiting = false
+        host.started(fadeMs)
+        // The new track's own fade.
+        arm()
+        step()
     }
 
     private fun step() {
-        val t = tail
-        when (phase) {
-            Phase.PREROLL -> {
-                if (t == null) return
-                val main = host.positionMs()
-                val s = align.sample(host.now(), main, t.positionMs, startAtMs - CrossfadePlan.SWAP_MS - main)
-                if (s is TailAlign.Step.Seek) t.seekTo(s.toMs)
-            }
-            Phase.SWAP -> {
-                val s = CrossfadePlan.progress(host.now(), swapAt, CrossfadePlan.SWAP_MS)
-                t?.setVolume(base * s)
-                host.setMainVolume(base * (1f - s))
-                if (s >= 1f && !handOver()) return
-            }
-            Phase.FADING -> {
-                val p = CrossfadePlan.progress(host.now(), startedAt, fadeMs)
-                if (p >= 1f) {
-                    finish()
-                    return
-                }
-                t?.setVolume(base * CrossfadePlan.outGain(p))
-                host.setMainVolume(base * CrossfadePlan.inGain(p))
-            }
-            else -> return
+        if (phase != Phase.FADING) return
+        // Not playing (buffering its start, paused, a call): no step until it does.
+        if (!host.mainPlaying) {
+            waiting = true
+            return
         }
-        host.post(CrossfadePlan.STEP_MS, stepTask)
+        if (step >= CrossfadePlan.STEPS) {
+            finish()
+            return
+        }
+        val p = step.toFloat() / CrossfadePlan.STEPS
+        host.setMainVolume(base * CrossfadePlan.fadeIn(p))
+        if (fadingAlive) host.setFadingVolume(base * CrossfadePlan.fadeOut(p))
+        step++
+        host.post(stepMs, stepTask)
     }
 
-    /** The tail carries the outgoing track alone now: the main player, silent, moves on. */
-    private fun handOver(): Boolean {
-        host.setMainVolume(0f)
-        phase = Phase.FADING
-        startedAt = host.now()
-        advancing = true
-        try {
-            host.advance()
-        } catch (e: RuntimeException) {
-            // Never left silent.
-            advancing = false
-            stop()
-            return false
-        } finally {
-            advancing = false
-        }
-        // The next track's own prime, for the fade after this one.
-        arm()
-        return true
-    }
-
-    /** The fade is over: the tail goes; a prime that fell during it (a short track) is set again. */
+    /** The fade is over (or stopped): the old player goes, the new one is at its own volume. */
     private fun finish() {
-        stop()
-        if (!primePending) arm()
-    }
-
-    /** Ends any fade at once: the tail goes, its step too, and the main player is at its own volume again. */
-    private fun stop() {
         host.remove(stepTask)
-        val t = tail
-        tail = null
-        val touchedMain = phase == Phase.SWAP || phase == Phase.FADING
+        waiting = false
         phase = Phase.NONE
-        t?.release()
-        if (touchedMain) host.setMainVolume(base)
+        if (fadingAlive) {
+            fadingAlive = false
+            host.releaseFading()
+        }
+        host.setMainVolume(base)
     }
 
-    private companion object {
-        /** Our hand-over's seek may be confirmed again this soon after it. */
-        const val ECHO_MS = 1_000L
+    /** Ends a fade at once, or the focus hand-over before one (the old player takes its focus back). */
+    private fun stop() {
+        when (phase) {
+            Phase.NONE -> Unit
+            Phase.YIELDING -> {
+                phase = Phase.NONE
+                host.reclaimFocus()
+            }
+            Phase.FADING -> finish()
+        }
+    }
+
+    /** Tells a skipped fade: not Off or a length still unknown (the usual), and TOO_SHORT and TOO_LATE once per track. */
+    private fun note(why: CrossfadePlan.Skip, about: Any?) {
+        when (why) {
+            CrossfadePlan.Skip.OFF, CrossfadePlan.Skip.UNKNOWN_LENGTH -> return
+            CrossfadePlan.Skip.TOO_SHORT, CrossfadePlan.Skip.TOO_LATE -> {
+                val key = about to why
+                if (key == noted) return
+                noted = key
+            }
+            else -> Unit
+        }
+        host.skipped(why)
     }
 }
