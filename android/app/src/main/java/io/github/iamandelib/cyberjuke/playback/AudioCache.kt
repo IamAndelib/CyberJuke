@@ -399,7 +399,8 @@ internal class CacheMissException : IOException("Not in the listening cache any 
  * as InnerTune's and Metrolist's do. A cache error (a span file gone or unreadable, a write
  * failing for low storage or a broken index) still fails that load once, and the cache drops the
  * broken span; the retry ([JukeLoadErrorPolicy], [LoadRetry.cacheFileRetryMs]) then reopens
- * the same source, which bypasses the cache for that request and reads the network. A copy found
+ * the same source, which bypasses the cache for the rest of that track (the error is remembered
+ * per source, and a track keeps its source) and reads the network. A copy found
  * missing is also remembered ([AudioCache.misses]), so [StreamResolver.cachedKey] stops handing
  * out its key and the retry resolves a stream URL instead of the `cyberjuke://` one. The liked
  * saver's [AudioCache.downloadSource] has no such flag: a CacheWriter that can't write must

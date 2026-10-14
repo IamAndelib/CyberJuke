@@ -188,6 +188,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             SaveOutcome.SAVED -> {
                 fresh.remove(j.ytId)
                 tried.remove(j.ytId)
+                strikes.forget(j.ytId)
             }
             SaveOutcome.FAILED -> failed.add(j.ytId)
             // Not cancelled, yet not saved (a dropped connection, an exception): tried again after

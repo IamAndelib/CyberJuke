@@ -344,6 +344,20 @@ class CachePolicyTest {
     }
 
     @Test
+    fun aSongSavedAfterAllStartsAfreshNextTime() {
+        val s = SaveStrikes()
+        val now = 1_000_000L
+        for (i in 0 until SaveStrikes.MAX - 1) assertFalse(s.stopped("a0000000000", now))
+        // Saved after all (its fourth try worked): forgotten, no timer left for it.
+        s.forget("a0000000000")
+        assertEquals(emptySet<String>(), s.waiting(now))
+        assertNull(s.nextDueInMs(now))
+        // Cleared from the cache and in trouble again months later: it counts from the start.
+        assertFalse(s.stopped("a0000000000", now))
+        assertEquals(30_000L, s.nextDueInMs(now))
+    }
+
+    @Test
     fun aRetryFiresWithoutAnotherEvent() {
         // Every candidate waits for its retry (they're skipped): the timer is the earliest retry.
         val waiting = Facts(liked, saved = emptySet(), skip = liked.toSet(), retryInMs = 45_000L)

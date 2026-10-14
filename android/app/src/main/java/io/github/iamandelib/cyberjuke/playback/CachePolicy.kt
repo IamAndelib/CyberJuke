@@ -403,6 +403,12 @@ internal class SaveStrikes {
         return false
     }
 
+    /** [ytId] was saved after all: its stops are forgotten, so a later trouble starts afresh. */
+    fun forget(ytId: String) {
+        counts.remove(ytId)
+        dueAt.remove(ytId)
+    }
+
     /** The songs waiting for their retry at [now] (not to be saved yet). */
     fun waiting(now: Long): Set<String> {
         dueAt.values.removeAll { it <= now }
