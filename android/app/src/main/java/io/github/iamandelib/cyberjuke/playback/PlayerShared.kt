@@ -124,7 +124,10 @@ internal object JukeTracks {
         val id = o.str("id") ?: throw IllegalArgumentException("track.id missing")
         val ytId = o.str("ytId") ?: throw IllegalArgumentException("track.ytId missing ($id)")
         if (!SessionPolicy.isValidYtId(ytId)) throw IllegalArgumentException("track.ytId invalid ($id)")
-        TrackExtras.put(id, o.str("by"), o.str("postUrl"), o.optBoolean("membersOnly", false), restored)
+        val membersOnly = o.optBoolean("membersOnly", false)
+        TrackExtras.put(id, o.str("by"), o.str("postUrl"), membersOnly, restored)
+        // Its audio is tagged in the listening cache, so a sign-out removes it.
+        if (membersOnly) AudioCache.markMembers(listOf(ytId))
         val extras = Bundle().apply { putString(JukeUris.EXTRA_YT_ID, ytId) }
         val metadata = MediaMetadata.Builder()
             .setTitle(o.str("title"))
@@ -169,8 +172,12 @@ internal object ControllerKey {
  * Listeners are invoked on the main thread.
  */
 internal object PlayerBus {
+    /**
+     * [network]: the connection failed, not the track (the web says so instead of naming the
+     * track); [resumes]: playback picks up by itself once the network is back.
+     */
     fun interface TrackErrorListener {
-        fun onTrackError(trackId: String, message: String, skipped: Boolean)
+        fun onTrackError(trackId: String, message: String, skipped: Boolean, network: Boolean, resumes: Boolean)
     }
 
     /** NewPipe could not parse YouTube's answer (YouTube changed something). Any thread. */
@@ -197,8 +204,8 @@ internal object PlayerBus {
         brokenListeners.remove(l)
     }
 
-    fun emitTrackError(trackId: String, message: String, skipped: Boolean) {
-        listeners.forEach { it.onTrackError(trackId, message, skipped) }
+    fun emitTrackError(trackId: String, message: String, skipped: Boolean, network: Boolean = false, resumes: Boolean = false) {
+        listeners.forEach { it.onTrackError(trackId, message, skipped, network, resumes) }
     }
 
     fun emitExtractorBroken(message: String) {

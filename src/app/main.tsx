@@ -33,7 +33,8 @@ import { auth } from '../data/auth';
 import { goBack, openNowPlayingWhen } from '../ui/nav';
 import { retryWatchedFeeds } from '../stores/feed';
 import { JukePlayer } from '../player/native';
-import { hasCurrent, startPlayerPrefs, startQueuePurge } from '../player';
+import { hasCurrent, setOpenLiked, startPlayerPrefs, startQueuePurge } from '../player';
+import { startListeningCache } from '../player/listeningCache';
 import { startUpdates } from '../stores/updates';
 import { playFrom, radio } from '../ui/playAll';
 import { startBlockEvents } from '../player/blockEvents';
@@ -41,7 +42,7 @@ import { source } from '../data';
 import { App, Overlays } from './App';
 import { BootError } from './BootError';
 import { Home } from '../features/home/Home';
-import { Library } from '../features/library/Library';
+import { Library, openLiked } from '../features/library/Library';
 import { Screen } from '../ui/components/Screen';
 import { whenIdle } from '../core/idle';
 import { TrackRow } from '../ui/components/TrackRow';
@@ -130,6 +131,9 @@ async function boot(): Promise<void> {
   installRenderCounter({ App, Overlays, Home, Library, Screen, TrackRow, MiniPlayer, NowPlaying, ArtistGrid, ArtistTiles, ArtistTile, ArtistPage, GenreGrid, GenreTiles, GenreTile, GenreDetail });
   // A saved Cyberspace login decides which query the first requests use.
   await Promise.all([loadLibrary().catch((e) => logError('loadLibrary', e)), auth.restore()]);
+  // Before startAccount: starting signed out drops members-only audio too.
+  startListeningCache();
+  setOpenLiked(openLiked);
   startAccount();
   startQueuePurge();
   startPlayerPrefs();

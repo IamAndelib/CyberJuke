@@ -32,8 +32,15 @@ describe('parseNativeState', () => {
       upNextIndex: [0, 2],
       context: { label: 'Liked', mode: 'list' },
       seedId: 'b',
+      waitingForNetwork: true,
     };
     expect(parseNativeState(st)).toEqual(st);
+  });
+
+  it('is not waiting for the network unless native says so (older natives send nothing)', () => {
+    expect(parseNativeState({ index: -1 })?.waitingForNetwork).toBe(false);
+    expect(parseNativeState({ index: -1, waitingForNetwork: 'yes' })?.waitingForNetwork).toBe(false);
+    expect(parseNativeState({ index: -1, waitingForNetwork: true })?.waitingForNetwork).toBe(true);
   });
 
   it('pads the up-next kinds to the ids and repairs the context', () => {
@@ -74,6 +81,7 @@ describe('parseNativeState', () => {
       upNextIndex: [],
       context: null,
       seedId: null,
+      waitingForNetwork: false,
     });
     expect(parseNativeState(null)).toBeNull();
     expect(parseNativeState([1])).toBeNull();

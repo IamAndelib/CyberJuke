@@ -17,6 +17,7 @@ import {
   repeatMode,
   shuffleOn,
   upNextSections,
+  waitingForNetwork,
 } from '../../player';
 import { block } from '../../stores/block';
 import { toggleLikeWithUndo } from '../../stores/undo';
@@ -28,6 +29,7 @@ import { positionNow, useTickValue } from '../../ui/useTick';
 import { splitArtists } from '../../data/artists';
 import { isGlobal, type Track } from '../../data/model';
 import { reducedMotion } from '../../core/motion';
+import { OFFLINE } from '../../core/offlineText';
 import { Art } from '../../ui/components/Art';
 import { Marquee } from './Marquee';
 import { MembersTag } from '../../ui/components/TrackRow';
@@ -155,6 +157,17 @@ function useSwipeUpToOpen(ref: { current: HTMLDivElement | null }): void {
   }, []);
 }
 
+/** The artist line, or the wait for the network: only it re-renders when that changes. */
+function MiniSub({ artist }: { artist: string }) {
+  return waitingForNetwork.value ? (
+    <span class="mini-artist" data-testid="mini-waiting">
+      {OFFLINE.waiting}
+    </span>
+  ) : (
+    <span class="mini-artist">{artist}</span>
+  );
+}
+
 export function MiniPlayer() {
   const t = currentTrack.value;
   return t ? <MiniBar track={t} /> : null;
@@ -170,7 +183,7 @@ function MiniBar({ track: t }: { track: Track }) {
         <Art track={t} size="sm" />
         <span class="mini-text">
           <MiniTitle text={t.title} />
-          <span class="mini-artist">{t.artist}</span>
+          <MiniSub artist={t.artist} />
         </span>
       </button>
       <MiniToggle />
@@ -346,8 +359,16 @@ function SeekBar() {
         />
       </div>
       <div class="seek-times">
-        <span data-testid="time-pos">{fmt(pos)}</span>
-        <span data-testid="time-dur">{dur > 0 ? fmt(dur) : '--:--'}</span>
+        {waitingForNetwork.value ? (
+          <span role="status" data-testid="np-waiting">
+            {OFFLINE.waiting}
+          </span>
+        ) : (
+          <>
+            <span data-testid="time-pos">{fmt(pos)}</span>
+            <span data-testid="time-dur">{dur > 0 ? fmt(dur) : '--:--'}</span>
+          </>
+        )}
       </div>
     </div>
   );

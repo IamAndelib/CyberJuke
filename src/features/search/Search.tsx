@@ -27,11 +27,13 @@ import { Rail, RailRow, RailSep, type RailItem } from '../../ui/components/Rail'
 import { CatalogError, ChunkedTracks, EmptyState, Tracks } from '../../ui/components/TrackList';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
+import { OfflineGate } from '../../ui/components/OfflineGate';
 import { CoverRow, GlobalError, LoadMore, MUSIC_ITEM_OPTS, MusicRow, searchLoader } from '../../ui/components/Music';
 import { useFeed } from '../../ui/usePaged';
 import { globalFeeds } from '../../stores/feed';
 import { list, radio } from '../../ui/playAll';
 import { plural } from '../../core/text';
+import { OFFLINE } from '../../core/offlineText';
 
 const DEBOUNCE_MS = 120;
 const GLOBAL_DEBOUNCE_MS = 400;
@@ -556,11 +558,15 @@ export function Search() {
         }}
       >
         {mode === 'global' ? (
-          <GlobalResults q={debounced} />
+          <OfflineGate body={OFFLINE.global}>
+            <GlobalResults q={debounced} />
+          </OfflineGate>
         ) : mode === 'here' && ctx ? (
           <HereResults q={debounced} ctx={ctx} />
         ) : (
-          <JukeboxResults q={debounced} />
+          <OfflineGate>
+            <JukeboxResults q={debounced} />
+          </OfflineGate>
         )}
       </div>
     </Screen>

@@ -14,6 +14,7 @@ import { CatalogError, PlayShuffle, Tracks } from '../../ui/components/TrackList
 import { list as listCtx } from '../../ui/playAll';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
+import { OfflineGate } from '../../ui/components/OfflineGate';
 import { refreshCatalog } from '../../ui/refresh';
 import { PageStar } from '../../ui/components/FavTile';
 import {
@@ -84,72 +85,74 @@ export function ArtistPage({ name: raw }: { name: string }) {
       right={<ArtistFavButton name={name} />}
       onRefresh={refreshCatalog}
     >
-      <section data-testid="artist-jukebox">
-        <div class="section-head">
-          <h2 class="section-title">Shared on the Jukebox</h2>
-          {jukebox.length > 0 && <span class="dim small">{plural(jukebox.length, 'track')}</span>}
-        </div>
-        {catalogFailed ? (
-          // P7: a failed catalog says so and offers Retry, instead of an endless skeleton.
-          <CatalogError />
-        ) : !catalogReady ? (
-          <SkeletonRows n={3} />
-        ) : jukebox.length ? (
-          <>
-            <PlayShuffle tracks={jukebox} ctx={ctx} testid="artist-jukebox" />
-            <Tracks tracks={jukebox} ctx={ctx} />
-          </>
-        ) : (
-          <p class="section-note dim">Nothing by {name} has been shared on the Jukebox yet.</p>
-        )}
-      </section>
-
-      {failed ? (
-        <SearchSections name={name} />
-      ) : page.snap.status === 'loading' ? (
-        <div data-testid="artist-page-loading">
-          <section>
-            <div class="section-head">
-              <h2 class="section-title">Top songs</h2>
-            </div>
-            <SkeletonRows n={4} />
-          </section>
-          <section>
-            <div class="section-head">
-              <h2 class="section-title">Albums</h2>
-            </div>
-            <ShelfSkeleton />
-          </section>
-        </div>
-      ) : meta?.resolved === false ? null : (
-        <>
-          {page.snap.items.length > 0 && (
-            <section data-testid="artist-top">
+      <OfflineGate>
+        <section data-testid="artist-jukebox">
+          <div class="section-head">
+            <h2 class="section-title">Shared on the Jukebox</h2>
+            {jukebox.length > 0 && <span class="dim small">{plural(jukebox.length, 'track')}</span>}
+          </div>
+          {catalogFailed ? (
+            // P7: a failed catalog says so and offers Retry, instead of an endless skeleton.
+            <CatalogError />
+          ) : !catalogReady ? (
+            <SkeletonRows n={3} />
+          ) : jukebox.length ? (
+            <>
+              <PlayShuffle tracks={jukebox} ctx={ctx} testid="artist-jukebox" />
+              <Tracks tracks={jukebox} ctx={ctx} />
+            </>
+          ) : (
+            <p class="section-note dim">Nothing by {name} has been shared on the Jukebox yet.</p>
+          )}
+        </section>
+  
+        {failed ? (
+          <SearchSections name={name} />
+        ) : page.snap.status === 'loading' ? (
+          <div data-testid="artist-page-loading">
+            <section>
               <div class="section-head">
                 <h2 class="section-title">Top songs</h2>
               </div>
-              <PlayShuffle tracks={page.snap.items} ctx={ctx} testid="artist-top" />
-              <Tracks tracks={page.snap.items} ctx={ctx} />
-              {page.snap.hasMore && (
-                <LoadMore busy={page.snap.loadingMore} error={!!page.snap.error} onClick={() => page.feed.loadMore()} testid="top-load-more" />
-              )}
+              <SkeletonRows n={4} />
             </section>
-          )}
-          {meta &&
-            SHELF_ORDER.map((kind) => (
-              <ReleaseShelf
-                key={kind}
-                kind={kind}
-                title={SHELF_LABEL[kind]}
-                releases={meta.releases[kind]}
-                artist={name}
-                token={shelfToken(kind, meta.more)}
-                channelId={meta.channelId}
-                testid={SHELF_TESTID[kind]}
-              />
-            ))}
-        </>
-      )}
+            <section>
+              <div class="section-head">
+                <h2 class="section-title">Albums</h2>
+              </div>
+              <ShelfSkeleton />
+            </section>
+          </div>
+        ) : meta?.resolved === false ? null : (
+          <>
+            {page.snap.items.length > 0 && (
+              <section data-testid="artist-top">
+                <div class="section-head">
+                  <h2 class="section-title">Top songs</h2>
+                </div>
+                <PlayShuffle tracks={page.snap.items} ctx={ctx} testid="artist-top" />
+                <Tracks tracks={page.snap.items} ctx={ctx} />
+                {page.snap.hasMore && (
+                  <LoadMore busy={page.snap.loadingMore} error={!!page.snap.error} onClick={() => page.feed.loadMore()} testid="top-load-more" />
+                )}
+              </section>
+            )}
+            {meta &&
+              SHELF_ORDER.map((kind) => (
+                <ReleaseShelf
+                  key={kind}
+                  kind={kind}
+                  title={SHELF_LABEL[kind]}
+                  releases={meta.releases[kind]}
+                  artist={name}
+                  token={shelfToken(kind, meta.more)}
+                  channelId={meta.channelId}
+                  testid={SHELF_TESTID[kind]}
+                />
+              ))}
+          </>
+        )}
+      </OfflineGate>
     </Screen>
   );
 }

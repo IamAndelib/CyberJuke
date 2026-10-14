@@ -37,6 +37,8 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 - **Sign in with Cyberspace** (optional): the Jukebox also shows the members-only shared tracks, marked `[members]`. See [Signing in](#signing-in).
 - **Library**: liked tracks and recently played, stored on your phone.
 - **Background playback**: the notification, lock screen and headset buttons all work, and the queue keeps going with the screen off. Tapping the notification opens Now Playing.
+- **Listening cache**: the music you play and the next track are kept on the phone (128, 256 or 512 MB, in Settings), so a sudden drop in the signal doesn't stop the music, and liked songs are saved so they play offline. CyberJuke is made for online listening: offline, only the liked songs already saved play.
+- **Crossfade** (optional): the end of a track blends into the next, over 3, 6 or 10 seconds (Settings → Crossfade).
 - **Picks up where you left off**: the app opens on what you last played, paused at the same spot, even after Android stopped it.
 - **Update notices**: Settings → Updates checks for a new release once a day (or on request) and shows it in Settings with a download link. Installs from F-Droid update through F-Droid instead.
 - **Now Playing**: seek, shuffle, repeat, like, synced lyrics, share, "Playing from …", and an Up Next queue you can reorder.
@@ -108,6 +110,7 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 | Settings, favourite genres and artists, recent searches | App data (Capacitor Preferences). Android may include these in your own Google backup |
 | The cached Jukebox catalog and lyrics | App data and cache. The catalog is dropped on sign-in and sign-out; signing out drops members-only tracks' lyrics |
 | What was playing last (the queue and where in it), so the app reopens on it | App files, excluded from backups; signing out removes members-only tracks from it |
+| Audio of your liked songs and of recently played and next tracks (the listening cache) | Up to the chosen size, on the phone only, never backed up (the app's cache, and its index excluded from backups). It is kept by video ID and format, never by stream URL. Members-only tracks are removed on sign-out, and none is kept while signed out. Clear cache in Settings |
 | Login token, user id and @username (only if you sign in) | Encrypted with an Android Keystore key; excluded from Android cloud and device-transfer backups |
 | Stream URLs, YouTube Music results | Memory only |
 
@@ -117,7 +120,7 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 |---|---|---|
 | Cyberspace's backend (Google Firestore) | Requests for Jukebox posts; your login token if signed in | Browsing the Jukebox |
 | Cyberspace's login (Google Identity Toolkit / Secure Token) | Your email and password; token refreshes | Only if you sign in |
-| YouTube | The video ID of the track being played or prefetched | Playback |
+| YouTube | The video ID of the track being played or prefetched, or of a liked song being saved to play offline | Playback; saving a song you just liked (or the liked song playing when you clear the cache); older liked songs are downloaded on an unmetered network (Wi-Fi), while the app is open (also in the background) or playing |
 | YouTube Music | Your Global search query, or the artist you open; the video ID of a Global track, for its radio (also in the background while autoplay refills); the video ID of the playing track when LRCLIB has no lyrics for it | Global search, artist pages, Global autoplay, lyrics fallback |
 | YouTube and Google image servers (`i.ytimg.com`, `*.googleusercontent.com`, `*.ggpht.com`) | Artwork requests | Lists, artist pages and Now Playing |
 | LRCLIB | Artist, title and duration of the current track | Lyrics panel open |
