@@ -96,7 +96,15 @@ interface JukePlayerPlugin {
   setGestureExclusion(rect: { left: number; top: number; width: number; height: number } | null): Promise<void>;
   /** Native re-sends `tracks` when a `tracks` or `state` listener is added (K4): add `tracks` first. */
   addListener(event: 'state', cb: (s: NativeState) => void): Promise<{ remove: () => Promise<void> }>;
-  addListener(event: 'trackError', cb: (e: { trackId: string; message: string; skipped: boolean }) => void): Promise<{ remove: () => Promise<void> }>;
+  /**
+   * A track failed. `kind`: 'network' when the connection did (native paused on it, and picks
+   * up by itself when `resumes`), 'track' when the track itself did. An older native sends
+   * neither: treat it as 'track'.
+   */
+  addListener(
+    event: 'trackError',
+    cb: (e: { trackId: string; message: string; skipped: boolean; kind?: 'network' | 'track'; resumes?: boolean }) => void,
+  ): Promise<{ remove: () => Promise<void> }>;
   /** YouTube is refusing this network: playback paused, nothing is requested until `until`. */
   addListener(event: 'blocked', cb: (e: BlockedEvent) => void): Promise<{ remove: () => Promise<void> }>;
   addListener(event: 'unblocked', cb: (e: Record<string, never>) => void): Promise<{ remove: () => Promise<void> }>;

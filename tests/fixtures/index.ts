@@ -5,6 +5,7 @@
  * - the fake JukeMusic plugin (Global search, artist pages, lyrics):
  *   `test.use({ musicOptions })`, or `musicOptions: false` for none;
  * - stand-ins for YouTube thumbnails and the IFrame player;
+ * - no handover grace: a lost connection counts as offline at once;
  * - checks after the test: no CSP violation and no uncaught page error.
  * `test.use({ live: true })` (only in @live tests) talks to the real Firestore instead.
  */
@@ -78,6 +79,8 @@ export const test = base.extend<Options & Fixtures>({
 
   stubs: [
     async ({ page, musicOptions }, use) => {
+      // Offline at once: the handover grace (core/network.ts) only where a test sets it.
+      await page.addInitScript(() => (window.__cyberjukeOfflineGraceMs = 0));
       await stubYouTube(page);
       if (musicOptions !== false) await stubMusic(page, musicOptions);
       await use();

@@ -923,7 +923,7 @@ class PlaybackService : MediaSessionService() {
                 } else {
                     p.pause()
                 }
-                PlayerBus.emitTrackError(trackId, message, false)
+                PlayerBus.emitTrackError(trackId, message, false, network = action.network, resumes = action.resume)
             }
             TrackErrorPolicy.Action.Skip, TrackErrorPolicy.Action.PauseAtEnd, TrackErrorPolicy.Action.Stop ->
                 perVideoFailure(p, index, trackId, ytId, message, error, action)

@@ -5,6 +5,7 @@ import { openArtistPage, popPage, useSearchContext, type AlbumRef } from '../../
 import { PlayShuffle, Tracks } from '../../ui/components/TrackList';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
+import { OfflineGate } from '../../ui/components/OfflineGate';
 import { Cover, GlobalError, LoadMore, MUSIC_TRACK_OPTS } from '../../ui/components/Music';
 import { useFeed } from '../../ui/usePaged';
 import { list } from '../../ui/playAll';
@@ -79,21 +80,23 @@ export function AlbumPage({ album }: { album: AlbumRef }) {
           </div>
         </div>
       </div>
-      <PlayShuffle tracks={tracks} ctx={ctx} testid="album" />
-      {snap.status === 'loading' ? (
-        <SkeletonRows n={6} />
-      ) : snap.status === 'error' && snap.error ? (
-        <GlobalError error={snap.error} onRetry={() => feed.retry()} />
-      ) : (
-        <>
-          <Tracks tracks={tracks} ctx={ctx} />
-          {snap.hasMore ? (
-            <LoadMore busy={snap.loadingMore} error={!!snap.error} onClick={() => feed.loadMore()} />
-          ) : (
-            tracks.length > 0 && <div class="list-foot end">— end of tape —</div>
-          )}
-        </>
-      )}
+      <OfflineGate>
+        <PlayShuffle tracks={tracks} ctx={ctx} testid="album" />
+        {snap.status === 'loading' ? (
+          <SkeletonRows n={6} />
+        ) : snap.status === 'error' && snap.error ? (
+          <GlobalError error={snap.error} onRetry={() => feed.retry()} />
+        ) : (
+          <>
+            <Tracks tracks={tracks} ctx={ctx} />
+            {snap.hasMore ? (
+              <LoadMore busy={snap.loadingMore} error={!!snap.error} onClick={() => feed.loadMore()} />
+            ) : (
+              tracks.length > 0 && <div class="list-foot end">— end of tape —</div>
+            )}
+          </>
+        )}
+      </OfflineGate>
     </Screen>
   );
 }

@@ -2,12 +2,14 @@ import { signal } from '@preact/signals';
 import { useMemo, useState } from 'preact/hooks';
 import { shuffled, source } from '../../data';
 import { isOffline } from '../../core/errors';
+import { OFFLINE } from '../../core/offlineText';
 import { catalog, mostSaved, type SavedRange } from '../../stores/catalog';
 import { catalogGenre, chipGenres } from '../../stores/genres';
 import { favoriteGenres, showNsfw } from '../../stores/library';
 import { toast } from '../../stores/toast';
 import { Icon } from '../../ui/icons';
 import { CatalogError, EmptyState, PagedTracks, Tracks } from '../../ui/components/TrackList';
+import { OfflineGate } from '../../ui/components/OfflineGate';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
 import { refreshCatalog } from '../../ui/refresh';
@@ -16,6 +18,7 @@ import { Rail, RailRow, type RailItem } from '../../ui/components/Rail';
 import { usePaged } from '../../ui/usePaged';
 import { feedKey } from '../../stores/feed';
 import { auth } from '../../data/auth';
+import { canStartPlayback } from '../../player';
 import { list as listCtx, playAll, radio, withRest } from '../../ui/playAll';
 
 /** Selected genre chip on Home (null = All). Survives tab switches. */
@@ -38,12 +41,12 @@ async function shuffleJukebox(): Promise<void> {
 function ShuffleHero() {
   const [busy, setBusy] = useState(false);
   const go = async () => {
-    if (busy) return;
+    if (busy || !canStartPlayback()) return;
     setBusy(true);
     try {
       await shuffleJukebox();
     } catch (e) {
-      toast(isOffline(e) ? "You're offline" : "Couldn't shuffle right now");
+      toast(isOffline(e) ? OFFLINE.tap : "Couldn't shuffle right now");
     } finally {
       setBusy(false);
     }
@@ -188,7 +191,9 @@ export function Home() {
       <ShuffleHero />
       <GenreChips />
       <SortRail />
-      {sort === 'latest' ? <PagedTracks paged={paged} ctx={radio(g == null ? 'Home · Latest' : `Home · ${g}`)} queue={queue} chunkKey={key} /> : <MostSaved genre={g} />}
+      <OfflineGate>
+        {sort === 'latest' ? <PagedTracks paged={paged} ctx={radio(g == null ? 'Home · Latest' : `Home · ${g}`)} queue={queue} chunkKey={key} /> : <MostSaved genre={g} />}
+      </OfflineGate>
     </Screen>
   );
 }

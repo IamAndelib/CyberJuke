@@ -266,6 +266,32 @@ test('account: sign-in, an error, signed in, members-only rows (dark)', async ({
   await shot(page, 'home-members');
 });
 
+for (const theme of ['dark', 'c64'] as const) {
+  test(`offline: Home, Library, Global search (${theme})`, async ({ page, backend }) => {
+    await open(page, theme);
+    // Played once (so Recently played has it), then paused.
+    await page.getByTestId('track-play').first().click();
+    await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Pause');
+    await page.getByTestId('mini-toggle').click();
+    backend.offline = true;
+    await page.context().setOffline(true);
+    await expect(page.getByTestId('offline-banner')).toBeVisible();
+    await settle(page);
+    await shot(page, `offline-home-${theme}`);
+    await page.getByTestId('tab-library').click();
+    await page.getByTestId('lib-recent').click();
+    await settle(page);
+    await shot(page, `offline-library-${theme}`);
+    await page.getByTestId('search-fab').click();
+    await page.getByTestId('mode-global').click();
+    await page.getByTestId('search-input').fill('Lumen');
+    await expect(page.getByTestId('search').getByTestId('offline')).toBeVisible();
+    await page.getByTestId('search-input').blur();
+    await settle(page);
+    await shot(page, `offline-search-global-${theme}`);
+  });
+}
+
 for (const theme of THEMES) {
   test(`home and Now Playing (${theme})`, async ({ page }) => {
     await open(page, theme);
@@ -303,3 +329,47 @@ test('narrow phone (360px): search, artist page, Now Playing, settings', async (
   await settle(page);
   await shot(page, 'narrow-settings');
 });
+
+type ShowToast = (text: string, ms?: number, action?: { label: string; run: () => void }) => number;
+/** Show a message and wait for it to finish sliding in. */
+async function showToast(page: Page, text: string, undo = false) {
+  await page.evaluate(([t, u]) => (window as unknown as { __cyberjukeToast: ShowToast }).__cyberjukeToast(t, 60_000, u ? { label: 'Undo', run: () => {} } : undefined), [text, undo] as const);
+  await expect(page.getByTestId('toast').locator('.toast-text')).toHaveText(text);
+  await expect.poll(() => page.getByTestId('toast').evaluate((el) => el.getAnimations().length)).toBe(0);
+}
+
+for (const theme of THEMES) {
+  for (const width of [360, 412]) {
+    test(`messages, offline and Settings (${theme}, ${width}px)`, async ({ page, backend }) => {
+      await open(page, theme, width);
+      const tag = `${theme}-${width}`;
+      await showToast(page, 'Signal lost. "A Rather Long Track Title (Extended Club Mix)" picks up when you\'re back.');
+      await settle(page);
+      await shot(page, `msg-long-${tag}`);
+      await showToast(page, 'Removed from Liked songs', true);
+      await settle(page);
+      await shot(page, `msg-undo-${tag}`);
+
+      backend.offline = true;
+      await page.context().setOffline(true);
+      await expect(page.getByTestId('offline-banner')).toBeVisible();
+      await expect(page.locator('.row.off').first()).toBeVisible();
+      // The waiting line: playback stopped with the connection and waits for Play.
+      await showToast(page, "Signal lost. Press play once you're back online.");
+      await settle(page);
+      await shot(page, `offline-home-${tag}`);
+      await page.getByTestId('tab-genres').click();
+      const state = page.getByTestId('screen-genres').getByTestId('offline');
+      await expect.poll(() => state.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+      await settle(page);
+      await shot(page, `offline-genres-${tag}`);
+
+      await page.getByTestId('tab-settings').click();
+      await settle(page);
+      await shot(page, `settings-${tag}`);
+      await page.getByTestId('about').scrollIntoViewIfNeeded();
+      await settle(page);
+      await shot(page, `settings-about-${tag}`);
+    });
+  }
+}
