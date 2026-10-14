@@ -48,6 +48,8 @@ internal data class LastSession(
         val section: NativeQueue.Section,
         /** A members-only post: the page drops it when signed out. */
         val membersOnly: Boolean = false,
+        /** The album it was opened from (MediaMetadata.albumTitle): Crossfade's same-album rule needs it back. */
+        val album: String? = null,
     ) {
         /** The NativeTrack JSON that [JukeTracks.toMediaItem] takes. */
         fun toNativeTrack(): JSONObject = JSONObject().apply {
@@ -59,6 +61,7 @@ internal data class LastSession(
             by?.let { put("by", it) }
             postUrl?.let { put("postUrl", it) }
             if (membersOnly) put("membersOnly", true)
+            album?.let { put("album", it) }
         }
     }
 
@@ -207,6 +210,7 @@ internal data class LastSession(
                         else -> NativeQueue.Section.LIST
                     },
                     membersOnly = t.optBoolean("membersOnly", false),
+                    album = t.str("album"),
                 )
             }
             val index = o.getInt("index")

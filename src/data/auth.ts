@@ -161,7 +161,11 @@ interface AuthDeps {
 export interface Auth {
   state: ReadonlySignal<AuthState>;
   signedIn(): boolean;
-  /** Read a saved session at startup (no network). Never rejects. */
+  /**
+   * Read a saved session at startup. Never rejects. With one, a new ID token is asked
+   * for right away, in the background: the first signed-in request (token()) waits for
+   * that refresh instead of starting its own after it.
+   */
   restore(): Promise<void>;
   /**
    * Sign in; rejects with an AuthError. The password is not kept. `saved` is false
@@ -345,6 +349,11 @@ export function createAuth(deps: AuthDeps): Auth {
         session = null;
       }
       publish();
+      if (session) {
+        void refresh().catch(() => {
+          /* offline: token() retries on next use */
+        });
+      }
     },
 
     async signIn(email, password) {

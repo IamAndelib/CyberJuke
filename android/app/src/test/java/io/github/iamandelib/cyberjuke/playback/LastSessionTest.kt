@@ -34,6 +34,20 @@ class LastSessionTest {
     }
 
     @Test
+    fun anAlbumTrackKeepsItsAlbum() {
+        // Crossfade's same-album rule reads the album back after a restart; a track without one has none.
+        val s = LastSession.of(listOf(entry(0).copy(album = "Blue Lines"), entry(1)), 0, 0L, 0L, false, null, 0, null, null)!!
+        val back = LastSession.decode(s.encode())!!
+        assertEquals(listOf("Blue Lines", null), back.entries.map { it.album })
+        assertEquals("Blue Lines", back.entries[0].toNativeTrack().getString("album"))
+        assertEquals(false, back.entries[1].toNativeTrack().has("album"))
+        // An album that isn't a string is no album.
+        val odd = JSONObject(s.encode())
+        odd.getJSONArray("tracks").getJSONObject(0).put("album", 7)
+        assertNull(LastSession.decode(odd.toString())!!.entries[0].album)
+    }
+
+    @Test
     fun aMembersOnlyTrackStaysMembersOnly() {
         val s = LastSession.of(listOf(entry(0).copy(membersOnly = true), entry(1)), 0, 0L, 0L, false, null, 0, null, null)!!
         val back = LastSession.decode(s.encode())!!

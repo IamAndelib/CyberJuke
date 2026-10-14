@@ -26,6 +26,7 @@ import type { TrackSource } from '../data/source';
 import { source } from '../data';
 import { auth } from '../data/auth';
 import { toLoadError, type LoadError } from '../core/errors';
+import { online } from '../core/network';
 import { isObj, isTrackFull } from '../core/guards';
 import { kv, textFile, type TextFile } from '../core/storage';
 import { showNsfw } from './library';
@@ -83,6 +84,11 @@ export interface Catalog {
    * Never rejects; failures land in `error`/`status`.
    */
   refresh(opts?: { force?: boolean }): Promise<void>;
+  /**
+   * Show the saved catalog, if there is one, without any request (refresh() reads it
+   * too, first). Never rejects.
+   */
+  restoreSaved(): Promise<void>;
   /**
    * Sign-in state changed: forget everything (memory and both saved catalogs), drop
    * the result of any fetch still running, and do a full refresh.
@@ -196,7 +202,7 @@ export function createCatalog(deps: CatalogDeps): Catalog {
       persist(k);
     } catch (e) {
       if (g !== gen) return;
-      error.value = toLoadError(e);
+      error.value = toLoadError(e, !online.peek());
       // With a cache we keep showing it; only an empty catalog is an error state.
       status.value = all.value.length ? 'ready' : 'error';
     }
@@ -215,6 +221,9 @@ export function createCatalog(deps: CatalogDeps): Catalog {
       });
       inflight = mine;
       return mine;
+    },
+    restoreSaved() {
+      return restore(key());
     },
     async reset() {
       gen++;
