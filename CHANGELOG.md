@@ -26,6 +26,7 @@
 - A list that gets no answer from Cyberspace stops loading after 15 seconds and offers Retry, instead of showing placeholders forever.
 - A list that failed during a network switch or behind a Wi-Fi login page reloads by itself when the connection is reported again and when you come back to the app.
 - A request that fails outright is tried once more, a second later, before the list gives up.
+- Album art that couldn't load while offline loads once you're back online.
 
 ## [1.1.2] - 2026-10-10
 
