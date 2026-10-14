@@ -31,6 +31,7 @@ function setup(state: Partial<PlayerState> = {}, saved: string[] = [], liked: st
     setAutoplay: cmd(),
     setQuality: cmd(),
     setCrossfade: cmd(),
+    setGapless: cmd(),
     setNetworkPrefs: cmd(),
     retryNow: cmd(),
   } satisfies Player;
@@ -96,7 +97,8 @@ describe('offlineGuard', () => {
     await p.setRepeat('all');
     await p.setQuality('low');
     await p.setCrossfade(6000);
-    for (const c of [inner.toggle, inner.pause, inner.seek, inner.move, inner.remove, inner.addToQueue, inner.setShuffle, inner.setRepeat, inner.setQuality, inner.setCrossfade]) {
+    await p.setGapless(false);
+    for (const c of [inner.toggle, inner.pause, inner.seek, inner.move, inner.remove, inner.addToQueue, inner.setShuffle, inner.setRepeat, inner.setQuality, inner.setCrossfade, inner.setGapless]) {
       expect(c).toHaveBeenCalledTimes(1);
     }
     expect(refused).not.toHaveBeenCalled();

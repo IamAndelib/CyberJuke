@@ -145,6 +145,8 @@ export interface Player {
   setQuality(q: Quality): Promise<void>;
   /** Crossfade between tracks (native only; the web player ignores it). */
   setCrossfade(ms: CrossfadeMs): Promise<void>;
+  /** Gapless playback: the next track readied while this one plays (native only; the web player ignores it). */
+  setGapless(enabled: boolean): Promise<void>;
   /** Y6: the IPv4 setting for YouTube requests (native only; the web player ignores it). */
   setNetworkPrefs(prefs: { ipv4: Ipv4Mode }): Promise<void>;
   /** The block banner's "Try now": lift YouTube's back-off now (playback it stopped resumes). */

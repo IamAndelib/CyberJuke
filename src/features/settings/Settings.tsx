@@ -572,6 +572,13 @@ export function Settings() {
           </div>
           <Toggle on={s.autoplay} onChange={(v) => updateSettings({ autoplay: v })} label="Autoplay" testid="autoplay-toggle" />
         </div>
+        <div class="setting">
+          <div class="setting-text">
+            <div class="setting-name">Gapless playback</div>
+            <div class="setting-desc">Tracks follow each other without a pause. Off, the next track loads when this one ends (saves data when you skip; not with Crossfade on).</div>
+          </div>
+          <Toggle on={s.gapless} onChange={(v) => updateSettings({ gapless: v })} label="Gapless playback" testid="gapless-toggle" />
+        </div>
         <CrossfadeSetting />
         <CheckEverySetting />
       </section>

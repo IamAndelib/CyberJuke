@@ -417,6 +417,11 @@ export class WebPlayer implements Player {
     if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setCrossfade', { ms }]);
   }
 
+  async setGapless(enabled: boolean): Promise<void> {
+    // The IFrame player loads one video at a time; e2e checks the call the native plugin would get.
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setGapless', { enabled }]);
+  }
+
   async setNetworkPrefs(prefs: { ipv4: Ipv4Mode }): Promise<void> {
     // Nothing to do in a browser; e2e checks the call the native plugin would get.
     if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setNetworkPrefs', { ipv4: prefs.ipv4 }]);

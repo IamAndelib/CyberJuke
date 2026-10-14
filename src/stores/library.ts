@@ -68,6 +68,12 @@ export interface Settings {
   cacheMb: CacheMb;
   /** Blends the end of a track into the next (native only; the browser player ignores it). */
   crossfadeMs: CrossfadeMs;
+  /**
+   * Gapless playback: the next track is readied while this one plays, so they follow without
+   * a pause. Off, the next loads only when this one ends (saves data on a skip; not while
+   * Crossfade is on, which needs it ready). Native only; the browser player ignores it.
+   */
+  gapless: boolean;
   /** The saved format's version: each migration below runs once. */
   version: number;
 }
@@ -91,6 +97,7 @@ const DEFAULT_SETTINGS: Settings = {
   checkUpdates: true,
   cacheMb: 256,
   crossfadeMs: 0,
+  gapless: true,
   version: SETTINGS_VERSION,
 };
 
@@ -229,6 +236,8 @@ export async function loadSettings(): Promise<void> {
   if (!CACHE_SIZES.includes(merged.cacheMb)) merged.cacheMb = DEFAULT_SETTINGS.cacheMb;
   // Saved before Crossfade (or unknown): Off.
   if (!CROSSFADES.includes(merged.crossfadeMs)) merged.crossfadeMs = DEFAULT_SETTINGS.crossfadeMs;
+  // Saved before Gapless playback (or unknown): on.
+  merged.gapless = merged.gapless !== false;
   settings.value = merged;
   if (migrated || preferIpv4 !== undefined || upgraded) write(K_SETTINGS, merged);
 }

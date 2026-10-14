@@ -32,7 +32,7 @@ describe('theme migration', () => {
   it('migrates a saved GRiD theme to Brutalist and saves it', async () => {
     store.set('settings', JSON.stringify({ theme: 'grid', showNsfw: true, quality: 'low' }));
     await lib.loadLibrary();
-    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: true, cacheMb: 256, crossfadeMs: 0, version: 2 });
+    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: true, cacheMb: 256, crossfadeMs: 0, gapless: true, version: 2 });
     await flush();
     expect(JSON.parse(store.get('settings')!).theme).toBe('brutalist');
   });
@@ -210,6 +210,28 @@ describe('crossfade setting', () => {
       store.set('settings', JSON.stringify({ crossfadeMs: junk, version: 2 }));
       await lib.loadLibrary();
       expect(lib.settings.value.crossfadeMs).toBe(0);
+    }
+  });
+});
+
+describe('gapless setting', () => {
+  it('is on unless turned off, also in settings saved before it existed, and keeps off', async () => {
+    await lib.loadLibrary();
+    expect(lib.settings.value.gapless).toBe(true);
+    // Saved before the setting existed: on, nothing else changes.
+    store.set('settings', JSON.stringify({ theme: 'vt320', quality: 'low', crossfadeMs: 3000, version: 2 }));
+    await lib.loadLibrary();
+    expect(lib.settings.value).toMatchObject({ gapless: true, theme: 'vt320', quality: 'low', crossfadeMs: 3000 });
+    lib.updateSettings({ gapless: false });
+    await flush();
+    expect(JSON.parse(store.get('settings')!)).toMatchObject({ gapless: false });
+    await lib.loadLibrary();
+    expect(lib.settings.value.gapless).toBe(false);
+    // Only a saved false turns it off.
+    for (const junk of ['false', 0, null, 'no']) {
+      store.set('settings', JSON.stringify({ gapless: junk, version: 2 }));
+      await lib.loadLibrary();
+      expect(lib.settings.value.gapless).toBe(true);
     }
   });
 });

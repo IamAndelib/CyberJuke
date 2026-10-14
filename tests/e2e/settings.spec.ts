@@ -127,6 +127,32 @@ test('Crossfade: Off by default, four choices, sent to the player and kept', asy
   await expect(page.getByTestId('crossfade-10000')).toHaveAttribute('aria-checked', 'true');
 });
 
+test('Gapless playback: on by default, sent to the player, kept when turned off', async ({ page }) => {
+  await page.goto('/');
+  const sent = async () => (await playerCalls(page)).filter((c) => c[0] === 'setGapless').map((c) => c[1]);
+  await expect.poll(sent).toEqual([{ enabled: true }]);
+  await page.getByTestId('tab-settings').click();
+  const toggle = page.getByTestId('gapless-toggle');
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('screen-settings')).toContainText(
+    'Tracks follow each other without a pause. Off, the next track loads when this one ends (saves data when you skip; not with Crossfade on).',
+  );
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect.poll(sent).toEqual([{ enabled: true }, { enabled: false }]);
+  await page.reload();
+  await expect.poll(sent).toEqual([{ enabled: false }]);
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('gapless-toggle')).toHaveAttribute('aria-checked', 'false');
+});
+
+test('saved settings without the Gapless key keep it on', async ({ page }) => {
+  await seedStorage(page, { [SETTINGS_KEY]: { theme: 'dark', showNsfw: false, quality: 'low', crossfadeMs: 6000, version: 2 } });
+  await page.goto('/');
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('gapless-toggle')).toHaveAttribute('aria-checked', 'true');
+});
+
 test('a saved unknown crossfade is Off', async ({ page }) => {
   await seedStorage(page, { [SETTINGS_KEY]: { theme: 'dark', crossfadeMs: 4000, version: 2 } });
   await page.goto('/');

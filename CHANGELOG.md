@@ -16,6 +16,7 @@
 - Offline, the liked songs already saved play from any list (Liked, Recently played, Home, an album…), from the one you tap, and stand out bright; the rest is dimmed, and a liked song not saved yet says "Not saved yet. Needs a connection." The top bar reads "no carrier · your liked songs still play" and opens Liked, and anything else you try to play says so, with a button to Liked. With nothing saved yet, it asks you to connect, as before.
 - Offline, a paused song always resumes, saved or not: it plays what it has already loaded (and says "Signal lost" if that runs out). Only starting another song needs it saved.
 - **Crossfade** (Settings → Crossfade): the end of a track blends into the next, over 3, 6 or 10 seconds. Off by default. It fades only when a track ends by itself: a skip, Repeat one, or a moment without connection changes tracks the usual way, and short tracks get a shorter fade.
+- Settings → **Gapless playback** (on): the next track is readied while this one plays and they follow without a pause. Off, the next track loads only when this one ends, saving data when you skip or stop. With Crossfade on, two tracks of the same album go straight into each other instead of fading.
 - Home's latest tracks show up sooner when the app opens: it asks Cyberspace for them while it starts, for about half the data, and brings genres and Most saved up to date just after. They're still always the newest posts, never a saved copy.
 
 ### Fixed

@@ -411,6 +411,7 @@ export class NativePlayer implements Player {
 
   setQuality = (quality: Quality) => JukePlayer.setQuality({ quality });
   setCrossfade = (ms: CrossfadeMs) => JukePlayer.setCrossfade({ ms });
+  setGapless = (enabled: boolean) => JukePlayer.setGapless({ enabled });
   setNetworkPrefs = (prefs: { ipv4: Ipv4Mode }) => JukePlayer.setNetworkPrefs({ ipv4: prefs.ipv4 });
   retryNow = () => JukePlayer.retryNow();
 

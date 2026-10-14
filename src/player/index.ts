@@ -199,18 +199,19 @@ function startAutoplay(): Autoplay {
 }
 
 /**
- * Send the player settings (audio quality, crossfade, the Y6 IPv4 setting, Autoplay) to the
- * player now and on every change, and start autoplay. Called once the library has loaded, so
- * native never gets the defaults first.
+ * Send the player settings (audio quality, crossfade, gapless, the Y6 IPv4 setting, Autoplay)
+ * to the player now and on every change, and start autoplay. Called once the library has
+ * loaded, so native never gets the defaults first.
  */
 export function startPlayerPrefs(): void {
   let lastQuality: string | null = null;
   let lastCrossfade: number | null = null;
+  let lastGapless: boolean | null = null;
   let lastIpv4: string | null = null;
   let lastAutoplay: boolean | null = null;
   startAutoplay();
   effect(() => {
-    const { quality, crossfadeMs, ipv4 } = settings.value;
+    const { quality, crossfadeMs, gapless, ipv4 } = settings.value;
     const auto = settings.value.autoplay;
     // Only the settings are followed: what the player calls read (its state) isn't.
     untracked(() => {
@@ -221,6 +222,10 @@ export function startPlayerPrefs(): void {
       if (crossfadeMs !== lastCrossfade) {
         lastCrossfade = crossfadeMs;
         void player.setCrossfade(crossfadeMs);
+      }
+      if (gapless !== lastGapless) {
+        lastGapless = gapless;
+        void player.setGapless(gapless);
       }
       if (ipv4 !== lastIpv4) {
         lastIpv4 = ipv4;
