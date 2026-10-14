@@ -162,9 +162,9 @@ export const TrackRow = memo(function TrackRow({
   // and only the current row follows play/pause.
   const current = useComputed(() => currentId.value === track.id);
   const isCurrent = current.value;
-  // Offline only saved liked songs play: other rows are dimmed, and a tap says why (the player
-  // refuses it).
-  const off = !online.value && !playsOffline?.(track);
+  // Offline only saved liked songs play, and the current track resumes: other rows are dimmed,
+  // and a tap says why (the player refuses it).
+  const off = !online.value && !isCurrent && !playsOffline?.(track);
   const press = longPress(track);
   return (
     <li class={'row' + (isCurrent ? ' is-current' : '') + (off ? ' off' : '')} data-testid="track-row" data-track-id={track.id}>

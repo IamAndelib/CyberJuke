@@ -173,7 +173,7 @@ test('offline, an open genre page and artist page ask to connect, then show thei
   await expect(artist.getByTestId('artist-jukebox')).toBeVisible();
 });
 
-test('offline, Shuffle and Play say to connect and leave the player as it was', async ({ page, backend }) => {
+test('offline, the paused track resumes; Shuffle says to connect and leaves the player as it was', async ({ page, backend }) => {
   await start(page);
   await page.getByTestId('track-play').first().click();
   const toggle = page.getByTestId('mini-toggle');
@@ -184,8 +184,11 @@ test('offline, Shuffle and Play say to connect and leave the player as it was', 
   const queued = (await playerCalls(page)).filter((c) => c[0] === 'setQueue').length;
 
   await setOffline(page, backend, true);
+  // Resuming the current track always goes (native plays what it has buffered).
   await toggle.click();
-  await expect(page.getByTestId('toast')).toHaveText(TAP_TOAST);
+  await expect(toggle).toHaveAttribute('aria-label', 'Pause');
+  await expect(page.getByTestId('toast')).toHaveCount(0);
+  await toggle.click();
   await expect(toggle).toHaveAttribute('aria-label', 'Play');
   await page.getByTestId('shuffle-all').click();
   await expect(page.getByTestId('toast')).toHaveText(TAP_TOAST);

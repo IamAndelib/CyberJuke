@@ -60,18 +60,26 @@ describe('offlineGuard', () => {
     expect(refused).not.toHaveBeenCalled();
   });
 
-  it('offline with nothing saved, refuses whatever would start playback, once per tap, and the player never hears of it', async () => {
-    const { inner, p, refused, offline } = setup();
+  it('offline with nothing saved, refuses whatever would start something new, once per tap, and the player never hears of it', async () => {
+    const { inner, p, refused, offline } = setup({ queue: [track], current: track, upNext: [{ track, index: 1 }] });
     offline();
     await p.playList([track], 0);
-    await p.play();
-    await p.toggle(); // paused: a resume
     await p.next();
     await p.prev();
     await p.skipTo(1, 'b');
-    for (const c of [inner.playList, inner.play, inner.toggle, inner.next, inner.prev, inner.skipTo]) expect(c).not.toHaveBeenCalled();
-    expect(refused).toHaveBeenCalledTimes(6);
+    for (const c of [inner.playList, inner.next, inner.prev, inner.skipTo]) expect(c).not.toHaveBeenCalled();
+    expect(refused).toHaveBeenCalledTimes(4);
     expect(refused.mock.calls.every(([why]) => why === 'offline')).toBe(true);
+  });
+
+  it('offline, the current track always resumes, saved or not: native plays what it has buffered', async () => {
+    const { inner, p, refused, offline } = setup({ queue: [track], current: track, isPlaying: false });
+    offline();
+    await p.play();
+    await p.toggle(); // paused: a resume
+    expect(inner.play).toHaveBeenCalledTimes(1);
+    expect(inner.toggle).toHaveBeenCalledTimes(1);
+    expect(refused).not.toHaveBeenCalled();
   });
 
   it('offline, pausing, seeking, queue edits and settings still work', async () => {
@@ -116,17 +124,13 @@ describe('offlineGuard', () => {
     expect(inner.playList).not.toHaveBeenCalled();
   });
 
-  it('offline, Play, Next, Previous and Up next go only onto a saved song', async () => {
+  it('offline, Next, Previous and Up next go only onto a saved song', async () => {
     const [a, b, c] = ['a', 'b', 'c'].map(t);
     const state: Partial<PlayerState> = { queue: [a, b, c], index: 0, current: a, upNext: [{ track: b, index: 1 }, { track: c, index: 2 }] };
     const { inner, p, refused, offline } = setup(state, [a.ytId, c.ytId]);
     offline();
-    await p.play();
-    await p.toggle();
     await p.prev();
     await p.skipTo(2, c.id);
-    expect(inner.play).toHaveBeenCalledTimes(1);
-    expect(inner.toggle).toHaveBeenCalledTimes(1);
     expect(inner.prev).toHaveBeenCalledTimes(1);
     expect(inner.skipTo).toHaveBeenCalledWith(2, c.id);
     // The next one (b) isn't saved, nor is b in Up next.
