@@ -208,6 +208,8 @@ test('offline, an open genre page and artist page keep their rows, dimmed; a tap
   await expect(rows.first()).toHaveClass(/\boff\b/);
   await expect(rows).toHaveCount(count);
   await expect(genre.getByTestId('offline')).toHaveCount(0);
+  // Play sits where the tile was: a tap this soon would be the tile's double tap (M9).
+  await page.waitForTimeout(350); // past the double-tap guard
   await genre.getByTestId('genre-play-all').click();
   await expect(page.getByTestId('toast')).toHaveText(TAP_TOAST);
   await rows.nth(1).getByTestId('track-play').click({ force: true });
