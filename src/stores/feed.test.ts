@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AUTO_RETRY_GAP_MS, Feed, FeedCache, JUKEBOX_FEED_PREFIXES, authScope, fillFeed, isFilling, retryWatchedFeeds, type FeedPage } from './feed';
+import { AUTO_RETRY_FIRST_WAIT_MS, AUTO_RETRY_MAX_WAIT_MS, Feed, FeedCache, JUKEBOX_FEED_PREFIXES, authScope, fillFeed, isFilling, retryWatchedFeeds, type FeedPage } from './feed';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
@@ -270,30 +270,64 @@ describe('retryWatchedFeeds (W6)', () => {
     un();
   });
 
-  it('a list that keeps failing is retried by itself at most once a minute; Retry is never held', async () => {
+  it('a list that keeps failing backs off: at once, then 2 s, doubling up to a minute; Retry is never held', async () => {
     const cache = new FeedCache();
     const loader = vi.fn(() => Promise.reject(Object.assign(new Error('bad response'), { offline: false })));
     const shown = cache.get('shown', loader);
     const un = shown.subscribe(() => {});
     shown.start();
-    await new Promise((r) => setTimeout(r, 0));
+    await flush();
     expect(loader).toHaveBeenCalledTimes(1);
-    // Android reports "connected" on every capability change: the first one retries, the next ones don't.
-    const t0 = performance.now();
-    shown.retryFailed(t0);
-    await new Promise((r) => setTimeout(r, 0));
-    expect(loader).toHaveBeenCalledTimes(2);
-    shown.retryFailed(t0 + 5_000);
-    shown.retryFailed(t0 + AUTO_RETRY_GAP_MS - 1);
-    await new Promise((r) => setTimeout(r, 0));
-    expect(loader).toHaveBeenCalledTimes(2);
-    shown.retryFailed(t0 + AUTO_RETRY_GAP_MS);
-    await new Promise((r) => setTimeout(r, 0));
-    expect(loader).toHaveBeenCalledTimes(3);
+    // Android reports "connected" on every capability change: each one retries only once its wait is over.
+    const t0 = 1_000; // whole numbers: a sum of floats can land a hair short of a wait
+    const calls = (at: number) => (shown.retryFailed(t0 + at), flush().then(() => loader.mock.calls.length));
+    expect(await calls(0)).toBe(2);
+    expect(await calls(AUTO_RETRY_FIRST_WAIT_MS - 1)).toBe(2);
+    expect(await calls(AUTO_RETRY_FIRST_WAIT_MS)).toBe(3);
+    const second = AUTO_RETRY_FIRST_WAIT_MS * 3; // 2 s after the first, then 4 s
+    expect(await calls(second - 1)).toBe(3);
+    expect(await calls(second)).toBe(4);
+    // Many doublings later the wait stops growing at a minute.
+    let at = second;
+    for (let i = 0; i < 10; i++) await calls((at += AUTO_RETRY_MAX_WAIT_MS));
+    expect(loader).toHaveBeenCalledTimes(14);
+    expect(await calls(at + AUTO_RETRY_MAX_WAIT_MS - 1)).toBe(14);
     // The user's Retry goes through at once.
     shown.retry();
-    await new Promise((r) => setTimeout(r, 0));
-    expect(loader).toHaveBeenCalledTimes(4);
+    await flush();
+    expect(loader).toHaveBeenCalledTimes(15);
+    un();
+  });
+
+  it('behind a Wi-Fi login page: a tap on Retry, or a load that worked, starts the automatic retries over', async () => {
+    const cache = new FeedCache();
+    let fail = true;
+    const loader = vi.fn(() => (fail ? Promise.reject(Object.assign(new Error('no answer'), { offline: true })) : Promise.resolve({ items: [1], cursor: 'next' })));
+    const shown = cache.get('shown', loader);
+    const un = shown.subscribe(() => {});
+    shown.start();
+    await flush();
+    // Redial: the OS is asked again, says connected (the automatic retry runs), then the tap's own retry.
+    const t0 = 1_000; // whole numbers: a sum of floats can land a hair short of a wait
+    shown.retryFailed(t0);
+    shown.retry();
+    await flush();
+    expect(shown.snapshot.status).toBe('error');
+    const before = loader.mock.calls.length;
+    // The login page is passed a moment later, and Android reports the connection again: not held.
+    fail = false;
+    shown.retryFailed(t0 + 100);
+    await flush();
+    expect(loader).toHaveBeenCalledTimes(before + 1);
+    expect(shown.snapshot.status).toBe('ready');
+    // Later the next page fails; the backoff starts over from "at once".
+    fail = true;
+    shown.loadMore();
+    await flush();
+    expect(shown.snapshot.error).not.toBeNull();
+    shown.retryFailed(t0 + 200);
+    await flush();
+    expect(loader).toHaveBeenCalledTimes(before + 3);
     un();
   });
 });

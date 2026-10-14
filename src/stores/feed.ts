@@ -96,27 +96,33 @@ export class Feed<T, C, M = undefined> {
     return this.loadFirst(true);
   }
 
+  /** A tap on Retry: never held, and the automatic retries start over. */
   retry(): void {
+    this.autoRetry = null;
     this.started = true;
     void this.loadFirst(false);
   }
 
-  /** When the last automatic retry ran (performance.now()); null = none yet. */
-  private autoRetriedAt: number | null = null;
+  /** The last automatic retry (performance.now()) and the wait before the next; null = none since a tap or a load that worked. */
+  private autoRetry: { at: number; wait: number } | null = null;
 
   /**
    * The connection is reported again, or the app is back in front: reload a first page that
-   * failed, or retry a page that failed to load more. At most once per AUTO_RETRY_GAP_MS: Android
-   * reports "connected" on every change of the network's capabilities, and a list that keeps
-   * failing for another reason must not flicker on each of them. A tap on Retry is never held.
+   * failed, or retry a page that failed to load more. Android reports "connected" on every change
+   * of the network's capabilities, so a list that keeps failing for another reason (a 403, a Wi-Fi
+   * login page) backs off rather than flicker on each of them: the first retry is at once, then
+   * AUTO_RETRY_FIRST_WAIT_MS, doubling up to AUTO_RETRY_MAX_WAIT_MS (exponential backoff, as in
+   * WorkManager). A short first wait keeps the report that matters, the login page passed a few
+   * seconds later, from being held.
    */
   retryFailed(now = performance.now()): void {
     const s = this.snapshot;
     const failed = s.status === 'error' || (s.status === 'ready' && s.error && s.hasMore && !s.loadingMore);
-    if (!failed || (this.autoRetriedAt != null && now - this.autoRetriedAt < AUTO_RETRY_GAP_MS)) return;
-    this.autoRetriedAt = now;
+    const last = this.autoRetry;
+    if (!failed || (last && now - last.at < last.wait)) return;
     if (s.status === 'error') this.retry();
     else this.loadMore();
+    this.autoRetry = { at: now, wait: last ? Math.min(last.wait * 2, AUTO_RETRY_MAX_WAIT_MS) : AUTO_RETRY_FIRST_WAIT_MS };
   }
 
   loadMore(): void {
@@ -132,6 +138,7 @@ export class Feed<T, C, M = undefined> {
         this.items = this.dedupe([...this.items, ...p.items]);
         this.cursor = p.cursor;
         this.error = null;
+        this.autoRetry = null;
       })
       .catch((e) => {
         if (g !== this.gen) return;
@@ -165,6 +172,7 @@ export class Feed<T, C, M = undefined> {
       this.cursor = p.cursor;
       this.meta = p.meta;
       this.status = 'ready';
+      this.autoRetry = null;
       return null;
     } catch (e) {
       if (g !== this.gen) return null;
@@ -340,8 +348,9 @@ export const feeds = new FeedCache();
 /** Global search results, kept apart so typing many queries doesn't push out pages and albums. */
 export const globalFeeds = new FeedCache(20);
 
-/** The least time between two automatic retries of one failed feed (Feed.retryFailed). */
-export const AUTO_RETRY_GAP_MS = 60_000;
+/** Feed.retryFailed: the wait after the first automatic retry of a failed feed, doubling each time up to the most. */
+export const AUTO_RETRY_FIRST_WAIT_MS = 2_000;
+export const AUTO_RETRY_MAX_WAIT_MS = 60_000;
 
 /** The connection is reported again, or the app is back in front: every feed on screen whose load failed tries again. */
 export function retryWatchedFeeds(caches: FeedCache[] = [feeds, globalFeeds]): void {
