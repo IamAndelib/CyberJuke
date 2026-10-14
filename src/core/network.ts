@@ -1,14 +1,14 @@
 /**
  * The one `online` signal the app reads (Capacitor Network: the OS's view on
- * Android, online/offline events in the browser). `onReconnect` runs callbacks when
- * the connection comes back.
+ * Android, online/offline events in the browser). `onReconnect` runs callbacks on
+ * every report that the connection is there.
  *
  * Handover grace: switching between Wi-Fi and mobile data, the OS briefly reports
  * "not connected". So a loss only counts once it has lasted OFFLINE_GRACE_MS (the usual
  * Android practice: debounce the loss, not the return). Coming back applies at once,
  * and an answer we asked for (the first status, Redial) applies as it is.
  */
-import { effect, signal, untracked } from '@preact/signals';
+import { signal } from '@preact/signals';
 import { Network } from '@capacitor/network';
 import { logError } from './log';
 import { TEST_HOOKS } from './testHooks';
@@ -41,22 +41,41 @@ function setOnline(connected: boolean): void {
 
 /** A change the OS reported by itself: a loss waits out the grace, a return applies at once. */
 export function networkChanged(connected: boolean): void {
-  if (connected || !online.peek()) return setOnline(connected);
+  if (connected) return reportedConnected();
+  if (!online.peek()) return setOnline(false);
   lossTimer ??= setTimeout(() => setOnline(false), graceMs());
 }
 
 const reconnect = new Set<() => void>();
 
-/** Call `fn` every time the app goes from offline to online. */
+/**
+ * Call `fn` on every report that the connection is there: back online, and "connected"
+ * from the OS or Redial while the app already counted as online. A list that failed in a
+ * handover's gap (inside the grace) or behind a Wi-Fi login page never saw `online` flip,
+ * so a flip alone would leave it failed. The callbacks limit their own work.
+ */
 export function onReconnect(fn: () => void): () => void {
   reconnect.add(fn);
   return () => reconnect.delete(fn);
 }
 
+/** Online, and the reconnect callbacks run. */
+function reportedConnected(): void {
+  setOnline(true);
+  for (const fn of [...reconnect]) {
+    try {
+      fn();
+    } catch (e) {
+      logError('onReconnect', e);
+    }
+  }
+}
+
 /** Ask the OS again (Redial: a change its listener missed). True when online. */
 export async function recheckNetwork(): Promise<boolean> {
   try {
-    setOnline((await Network.getStatus()).connected);
+    if ((await Network.getStatus()).connected) reportedConnected();
+    else setOnline(false);
   } catch {
     // Keep what we had.
   }
@@ -72,21 +91,4 @@ export function watchNetwork(): void {
     .then((s) => setOnline(s.connected))
     .catch(() => {});
   Network.addListener('networkStatusChange', (s) => networkChanged(s.connected)).catch(() => {});
-  let was = online.peek();
-  effect(() => {
-    const now = online.value;
-    if (now && !was) {
-      // Only `online` is followed, not whatever the callbacks read.
-      untracked(() => {
-        for (const fn of [...reconnect]) {
-          try {
-            fn();
-          } catch (e) {
-            logError('onReconnect', e);
-          }
-        }
-      });
-    }
-    was = now;
-  });
 }

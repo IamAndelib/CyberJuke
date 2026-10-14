@@ -17,6 +17,7 @@ import { toast } from '../stores/toast';
 import { auth } from '../data/auth';
 import { music, musicTracks } from '../data/ytmusic';
 import { logError } from '../core/log';
+import { heldFor } from '../core/held';
 import { online } from '../core/network';
 import { OFFLINE } from '../core/offlineText';
 import { exposeForTests } from '../core/testHooks';
@@ -95,8 +96,16 @@ export const isPlaying = computed(() => state.value.isPlaying);
 export const isBuffering = computed(() => state.value.isBuffering);
 /** Playing and not buffering: the position moves. */
 export const isAdvancing = computed(() => state.value.isPlaying && !state.value.isBuffering);
-/** The connection dropped and playback paused; native resumes it by itself once it's back. */
-export const waitingForNetwork = computed(() => state.value.waitingForNetwork);
+/**
+ * The connection dropped and the music waits for it; native resumes by itself once it's back.
+ * Shown once it has held for a moment: a saved song starting offline buffers from the cache for
+ * a split second too, and a handover is checked for up to a second.
+ */
+export const WAITING_SHOW_MS = 1000;
+export const waitingForNetwork = heldFor(
+  computed(() => state.value.waitingForNetwork),
+  WAITING_SHOW_MS,
+);
 export const shuffleOn = computed(() => state.value.shuffle);
 export const repeatMode = computed(() => state.value.repeat);
 /** The current track's length (0 until known). */

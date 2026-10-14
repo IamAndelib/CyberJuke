@@ -13,6 +13,7 @@ import {
   nextCursor,
   PAGE_SIZE,
   REQUEST_TIMEOUT_MS,
+  RETRY_DELAY_MS,
   RUN_QUERY_URL,
   shuffled,
 } from './firestore';
@@ -572,6 +573,7 @@ describe('request timeout', () => {
       expect(w.error).toBeInstanceOf(FirestoreError);
       expect(w.error).toMatchObject({ status: 0, offline: false });
       expect((f.mock.calls[0][1].signal as AbortSignal).aborted).toBe(true);
+      expect(f).toHaveBeenCalledTimes(1); // a hung request is not sent again
     } finally {
       vi.useRealTimers();
     }
@@ -631,7 +633,88 @@ describe('request timeout', () => {
   });
 
   it('a lost connection still reads as offline', async () => {
-    const src = new FirestoreSource({ fetch: (async () => Promise.reject(new TypeError('Failed to fetch'))) as any, timeoutMs: 1000 });
-    await expect(src.latest()).rejects.toMatchObject({ offline: true });
+    vi.useFakeTimers();
+    try {
+      const src = new FirestoreSource({ fetch: (async () => Promise.reject(new TypeError('Failed to fetch'))) as any });
+      const w = watch(src.latest());
+      await vi.advanceTimersByTimeAsync(RETRY_DELAY_MS);
+      expect(w.error).toMatchObject({ name: 'FirestoreError', offline: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('one retry when the request got no answer at all', () => {
+  const failing = () => Promise.reject(new TypeError('Failed to fetch'));
+  const answering = () => Promise.resolve(new Response(JSON.stringify(rows), { status: 200 }));
+  /** Whether `p` has settled, and its error, without waiting for it. */
+  const watch = (p: Promise<unknown>) => {
+    const w = { settled: false, error: undefined as unknown };
+    p.catch((e) => (w.error = e)).finally(() => (w.settled = true));
+    return w;
+  };
+
+  it(`sends the request once more ${RETRY_DELAY_MS / 1000} s after fetch threw (a handover's gap), and answers with its rows`, async () => {
+    vi.useFakeTimers();
+    try {
+      const f = vi.fn().mockImplementationOnce(failing).mockImplementationOnce(answering);
+      const src = new FirestoreSource({ fetch: f as any });
+      const w = watch(src.latest());
+      await vi.advanceTimersByTimeAsync(RETRY_DELAY_MS - 1);
+      expect(f).toHaveBeenCalledTimes(1);
+      expect(w.settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(f).toHaveBeenCalledTimes(2);
+      expect(w.settled).toBe(true);
+      expect(w.error).toBeUndefined();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a second failure surfaces as offline, with two requests and no third', async () => {
+    vi.useFakeTimers();
+    try {
+      const f = vi.fn(failing);
+      const w = watch(new FirestoreSource({ fetch: f as any }).latest());
+      await vi.advanceTimersByTimeAsync(RETRY_DELAY_MS);
+      expect(w.error).toMatchObject({ name: 'FirestoreError', status: 0, offline: true });
+      expect(f).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+      expect(f).toHaveBeenCalledTimes(2);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('an HTTP error is not retried', async () => {
+    vi.useFakeTimers();
+    try {
+      const f = vi.fn(async () => new Response(JSON.stringify([{ error: { message: 'Missing or insufficient permissions.' } }]), { status: 403 }));
+      const w = watch(new FirestoreSource({ fetch: f as any }).latest());
+      await vi.advanceTimersByTimeAsync(RETRY_DELAY_MS);
+      expect(w.error).toMatchObject({ name: 'FirestoreError', status: 403 });
+      expect(f).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the retry stays inside the same budget: a request that fails at once has waited for nothing when the time is up', async () => {
+    vi.useFakeTimers();
+    try {
+      const f = vi.fn(failing);
+      const w = watch(new FirestoreSource({ fetch: f as any, timeoutMs: RETRY_DELAY_MS / 2 }).latest());
+      await vi.advanceTimersByTimeAsync(RETRY_DELAY_MS / 2);
+      expect(w.settled).toBe(true);
+      expect(w.error).toMatchObject({ name: 'FirestoreError', status: 0 });
+      expect(f).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
