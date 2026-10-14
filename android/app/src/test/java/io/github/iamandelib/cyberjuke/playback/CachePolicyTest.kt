@@ -500,6 +500,27 @@ class CachePolicyTest {
         assertFalse(m.denied("mem00000001"))
     }
 
+    @Test
+    fun membersOnlyMarkedWhileTheCacheStartsIsTaggedOrRemovedOnceStarted() {
+        val m = MembersAudio()
+        // The start counted its audio before the page said it is members-only: no tag then.
+        assertFalse(m.onCached("mem00000001"))
+        m.mark("mem00000001")
+        m.mark("mem00000002")
+        assertEquals(setOf("mem00000001", "mem00000002"), m.marked())
+        // Started: of those marked so far, the one with audio in the cache is tagged.
+        assertEquals(MembersAudio.Reconciled(remove = emptyList(), tagged = true), m.reconcile(listOf("mem00000001")))
+        assertEquals(setOf("mem00000001"), m.tagged())
+        // Again: nothing new to write down.
+        assertFalse(m.reconcile(listOf("mem00000001")).tagged)
+        // Signed out: its audio is removed instead, and nothing is tagged.
+        val out = MembersAudio()
+        out.signOut()
+        out.mark("mem00000003")
+        assertEquals(MembersAudio.Reconciled(remove = listOf("mem00000003"), tagged = false), out.reconcile(listOf("mem00000003")))
+        assertEquals(emptySet<String>(), out.tagged())
+    }
+
     // ---- liked songs never recognised as saved ----
 
     @Test

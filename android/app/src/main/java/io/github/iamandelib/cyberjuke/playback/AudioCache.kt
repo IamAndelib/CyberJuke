@@ -185,6 +185,9 @@ internal object AudioCache {
                 return null
             }
             cache = c
+            // Marked while it started (markMembers had no cache to go through yet), after their
+            // audio was counted in: tagged or removed now, every video marked so far.
+            Background.run("markMembers") { reconcileMembers(c, members.marked()) }
             c
         } catch (e: Exception) {
             startFailed = true
@@ -259,23 +262,26 @@ internal object AudioCache {
      * These videos are members-only (queue items, liked tracks): their audio is tagged in the
      * cache. Audio already there is tagged now (signed in) or removed now (signed out), off the
      * calling thread (it may be the main one); a cache not open yet does both as it opens, when
-     * it counts its spans.
+     * it counts its spans, and once it has started for marks that came while it counted.
      */
     fun markMembers(ytIds: Collection<String>) {
         if (ytIds.isEmpty()) return
         ytIds.forEach { members.mark(it) }
         val c = cache ?: return
-        Background.run("markMembers") {
-            var tagged = false
-            synchronized(c) {
-                for (id in ytIds) {
-                    val keys = ledger.keysOf(id)
-                    if (keys.isEmpty()) continue
-                    if (members.denied(id)) keys.forEach { c.removeResource(it) } else tagged = members.onCached(id) || tagged
-                }
+        Background.run("markMembers") { reconcileMembers(c, ytIds) }
+    }
+
+    /**
+     * The audio of these members-only videos already in the cache: tagged, or removed while
+     * signed out ([MembersAudio.reconcile]). Off the calling thread, under the cache's lock.
+     */
+    private fun reconcileMembers(c: SimpleCache, ytIds: Collection<String>) {
+        val r = synchronized(c) {
+            members.reconcile(ytIds.filter { ledger.keysOf(it).isNotEmpty() }).also { r ->
+                r.remove.forEach { id -> ledger.keysOf(id).forEach { c.removeResource(it) } }
             }
-            if (tagged) appContext?.let { writeIds(it, CacheHome.MEMBERS_FILE, members.tagged().toList()) }
         }
+        if (r.tagged) appContext?.let { writeIds(it, CacheHome.MEMBERS_FILE, members.tagged().toList()) }
     }
 
     /**

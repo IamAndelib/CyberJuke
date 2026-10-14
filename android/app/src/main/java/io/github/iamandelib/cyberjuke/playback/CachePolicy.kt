@@ -493,6 +493,29 @@ internal class MembersAudio {
     @Synchronized
     fun tagged(): Set<String> = HashSet(tags)
 
+    /** The videos marked members-only in this run. */
+    @Synchronized
+    fun marked(): Set<String> = HashSet(known)
+
+    /** What [reconcile] found: the videos whose audio is to go, and whether a tag is new. */
+    data class Reconciled(val remove: List<String>, val tagged: Boolean)
+
+    /**
+     * Brings the audio of members-only videos already in the cache ([inCache]) in line: signed
+     * out, it is to go ([Reconciled.remove]); signed in, it is tagged ([Reconciled.tagged]: a new
+     * tag, to be written down). For marks that come after the audio was counted in (the cache
+     * was starting then, or the audio was already there).
+     */
+    @Synchronized
+    fun reconcile(inCache: Collection<String>): Reconciled {
+        val remove = ArrayList<String>()
+        var tagged = false
+        for (id in inCache) {
+            if (denied(id)) remove.add(id) else tagged = onCached(id) || tagged
+        }
+        return Reconciled(remove, tagged)
+    }
+
     @Synchronized
     fun denied(ytId: String): Boolean = signedOut && ytId in deny
 
