@@ -190,6 +190,11 @@ class JukePlayerPlugin : Plugin() {
         }
     }
 
+    // The network's validation flipped: `waitingForNetwork` may have, and no player event carries it.
+    private val onlineListener = AudioCache.OnlineListener {
+        main.post { controller?.let { emitState(it) } }
+    }
+
     private val unblockTimer = Runnable {
         if (!NetBlock.isBlocked()) announceUnblocked()
     }
@@ -250,6 +255,7 @@ class JukePlayerPlugin : Plugin() {
         NetPrefsStore.load(context)
         AudioCache.init(context, PlayerPrefsStore.cacheMb(context))
         AudioCache.addListener(cacheListener)
+        AudioCache.addOnlineListener(onlineListener)
         PlayerBus.add(trackErrorListener)
         PlayerBus.addBroken(brokenListener)
         NetBlock.add(blockListener)
@@ -330,6 +336,7 @@ class JukePlayerPlugin : Plugin() {
     override fun handleOnDestroy() {
         destroyed = true
         AudioCache.removeListener(cacheListener)
+        AudioCache.removeOnlineListener(onlineListener)
         PlayerBus.remove(trackErrorListener)
         PlayerBus.removeBroken(brokenListener)
         NetBlock.remove(blockListener)

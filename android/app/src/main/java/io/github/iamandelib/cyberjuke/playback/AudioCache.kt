@@ -20,6 +20,7 @@ import io.github.iamandelib.cyberjuke.net.Http
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.CopyOnWriteArraySet
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The listening cache: the audio of recently played and next tracks and of liked songs, on the
@@ -109,9 +110,27 @@ internal object AudioCache {
     /** Copies just found missing: not served from the cache for a moment ([CacheMissGuard]). */
     val misses = CacheMisses()
 
-    /** The device has a validated network (PlaybackService): online, a lower copy doesn't stand in. */
-    @Volatile
-    var online: Boolean = true
+    /** [online] flipped; any thread. */
+    fun interface OnlineListener {
+        fun onOnlineChanged(online: Boolean)
+    }
+
+    private val onlineListeners = CopyOnWriteArraySet<OnlineListener>()
+    private val onlineRef = AtomicBoolean(true)
+
+    fun addOnlineListener(l: OnlineListener) = onlineListeners.add(l)
+    fun removeOnlineListener(l: OnlineListener) = onlineListeners.remove(l)
+
+    /**
+     * The device has a validated network (PlaybackService's network callback): online, a lower
+     * copy doesn't stand in, and the `state` event's waiting for carrier reads it. A flip reaches
+     * the [OnlineListener]s (the plugin sends a state).
+     */
+    var online: Boolean
+        get() = onlineRef.get()
+        set(value) {
+            if (onlineRef.getAndSet(value) != value) onlineListeners.forEach { it.onOnlineChanged(value) }
+        }
 
     /** Stops the liked save in progress, if any (LikedSaver sets it while one runs). */
     @Volatile
