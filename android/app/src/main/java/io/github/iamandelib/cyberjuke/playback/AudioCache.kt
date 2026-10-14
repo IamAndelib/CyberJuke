@@ -2,6 +2,7 @@ package io.github.iamandelib.cyberjuke.playback
 
 import android.content.Context
 import android.net.Uri
+import android.system.Os
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
@@ -24,14 +25,15 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The listening cache: the audio of recently played and next tracks and of liked songs, on the
- * phone only (cacheDir/audio, which Android never backs up; its index is in the ExoPlayer
- * database, kept out of backups by the backup rules). Up to the size chosen in Settings
- * (128, 256 or 512 MB); over it, [CacheLedger]'s order decides what goes.
+ * phone only (noBackupFilesDir/audio, which Android never clears and never backs up: [CacheHome];
+ * its index is in the ExoPlayer database, kept out of backups by the backup rules). Up to the
+ * size chosen in Settings (128, 256 or 512 MB); over it, [CacheLedger]'s order decides what goes.
  *
  * - One [SimpleCache] for the process (it refuses a second one on the same folder), opened on
  *   first use off the main thread and kept open for the process's life: never released, so
  *   nothing blocks the main thread in onDestroy, and nothing is lost when the process dies
- *   (every span is indexed as it is written).
+ *   (every span is indexed as it is written). One that fails to start is released and not tried
+ *   again in the process ([startFailed]): playback streams.
  * - Keys are `yt:<ytId>:<itag>:<clen>` ([CacheKeys]), set by [YtDataSpecResolver]; only those
  *   go through the cache ([CacheRouter]), so the CI tone and HLS are untouched.
  * - A track saved whole plays from it with no extraction and no request
@@ -52,13 +54,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 @OptIn(UnstableApi::class)
 internal object AudioCache {
     private const val TAG = "CyberJukeCache"
-    private const val DIR = "audio"
 
-    /** The liked list, newest first, beside the cache (also never backed up). */
-    private const val LIKED_FILE = "audio-liked"
-
-    /** The tags of members-only audio in the cache, beside it. */
-    private const val MEMBERS_FILE = "audio-members"
+    /** rwxrwx--x, no setgid (0771). */
+    private const val DIR_MODE = 0b111_111_001
 
     const val DEFAULT_MB = 256
     val SIZES_MB = listOf(128, 256, 512)
@@ -90,6 +88,15 @@ internal object AudioCache {
 
     @Volatile
     private var cache: SimpleCache? = null
+
+    /**
+     * The cache failed to start: not tried again in this process. Another start would count every
+     * span into the [ledger] a second time (and evict real files for bytes that aren't there), and
+     * would be rebuilt on every call, the playback thread's included. Playback streams meanwhile.
+     */
+    @Volatile
+    var startFailed = false
+        private set
 
     /** The limit in MB (Settings), kept to apply when the cache opens. */
     @Volatile
@@ -160,29 +167,105 @@ internal object AudioCache {
     /** One of [SIZES_MB]; anything else is the default. */
     fun sizeOf(mb: Int): Int = if (mb in SIZES_MB) mb else DEFAULT_MB
 
-    /** The open cache, opening it if needed; null when it can't be (no context yet, a disk error). Never on the main thread. */
+    /**
+     * The open cache, opening it if needed (that waits while it counts what it holds); null when
+     * it can't be (no context yet, or it failed to start: [startFailed]): playback then streams.
+     * Never on the main thread.
+     */
     @Synchronized
     fun open(): SimpleCache? {
         cache?.let { return it }
+        if (startFailed) return null
         val ctx = appContext ?: return null
         return try {
+            val db = StandaloneDatabaseProvider(ctx)
+            // Before anything is read: brought over from cacheDir, its home before (once).
+            moveHome(ctx, db)
             // Before the cache's own init thread replays the spans into the evictor: the liked
             // order, the members-only tags and the limit must already be there (a service
             // started without the page, from a media button, must not evict liked songs as if
             // they weren't).
-            readIds(ctx, MEMBERS_FILE)?.let { members.load(it) }
+            readIds(ctx, CacheHome.MEMBERS_FILE)?.let { members.load(it) }
             if (!likedKnown) {
-                readIds(ctx, LIKED_FILE)?.let { ledger.setLiked(it, known = false) }
+                readIds(ctx, CacheHome.LIKED_FILE)?.let { ledger.setLiked(it, known = false) }
                 liked = ledger.liked
                 likedKnown = liked.isNotEmpty()
             }
             ledger.limit = limitMb * MB
-            val c = SimpleCache(File(ctx.cacheDir, DIR), JukeCacheEvictor(), StandaloneDatabaseProvider(ctx))
+            val c = SimpleCache(File(ctx.noBackupFilesDir, CacheHome.DIR), JukeCacheEvictor(), db)
+            // Failed to start (its folder or index unreadable), it would fail every read and
+            // write: none instead, and playback streams.
+            try {
+                c.checkInitialization()
+            } catch (e: Cache.CacheException) {
+                startFailed = true
+                Log.w(TAG, "Listening cache failed to start: ${(e.cause ?: e).javaClass.simpleName}")
+                try {
+                    c.release()
+                } finally {
+                    forgetFailedStart(c)
+                }
+                return null
+            }
             cache = c
+            // Marked while it started (markMembers had no cache to go through yet), after their
+            // audio was counted in: tagged or removed now, every video marked so far.
+            Background.run("markMembers") { reconcileMembers(c, members.marked()) }
             c
         } catch (e: Exception) {
+            startFailed = true
             Log.w(TAG, "No listening cache: ${e.javaClass.simpleName}")
             null
+        }
+    }
+
+    /**
+     * The failed start had counted the spans on disk into the [ledger], and may have found liked
+     * songs saved (and told the page): none of it plays, so it is all forgotten, and the page told.
+     * After [Cache.release], which may still report spans removed.
+     */
+    private fun forgetFailedStart(c: SimpleCache) {
+        val hadSaved = synchronized(c) {
+            ledger.resetSpans()
+            val had = saved.isNotEmpty() || savedLiked.isNotEmpty()
+            saved.clear()
+            savedLiked = emptySet()
+            publish()
+            had
+        }
+        if (hadSaved) listeners.forEach { it.onSavedChanged() }
+    }
+
+    /**
+     * The cache, its liked list and its members-only tags lived in cacheDir, which Android
+     * clears when storage runs low ([CacheHome]): moved to noBackupFilesDir, once. A move that
+     * fails starts the cache empty (the liked saver saves the liked songs again).
+     */
+    private fun moveHome(ctx: Context, db: StandaloneDatabaseProvider) {
+        try {
+            if (!CacheHome.move(ctx.cacheDir, ctx.noBackupFilesDir, deleteDir = { SimpleCache.delete(it, db) }, fixOwner = ::ownAsAppData)) {
+                Log.w(TAG, "Listening cache not moved: starting empty")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Listening cache not moved: ${e.javaClass.simpleName}")
+        }
+    }
+
+    /**
+     * [f] (moved from cacheDir) and all in it get the app's own group, and folders lose the setgid
+     * bit (0771): cacheDir is setgid with the app's cache group, which a rename keeps and passes on
+     * to what is written there later, so Android would go on counting it as cache (Settings,
+     * its cache quota and what it clears first). A failure is said, and the cache kept as it is.
+     */
+    private fun ownAsAppData(f: File) {
+        try {
+            val gid = Os.getgid()
+            f.walkTopDown().forEach {
+                Os.chown(it.path, -1, gid)
+                if (it.isDirectory) Os.chmod(it.path, DIR_MODE)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Listening cache left in the cache group: ${e.javaClass.simpleName}")
         }
     }
 
@@ -220,23 +303,26 @@ internal object AudioCache {
      * These videos are members-only (queue items, liked tracks): their audio is tagged in the
      * cache. Audio already there is tagged now (signed in) or removed now (signed out), off the
      * calling thread (it may be the main one); a cache not open yet does both as it opens, when
-     * it counts its spans.
+     * it counts its spans, and once it has started for marks that came while it counted.
      */
     fun markMembers(ytIds: Collection<String>) {
         if (ytIds.isEmpty()) return
         ytIds.forEach { members.mark(it) }
         val c = cache ?: return
-        Background.run("markMembers") {
-            var tagged = false
-            synchronized(c) {
-                for (id in ytIds) {
-                    val keys = ledger.keysOf(id)
-                    if (keys.isEmpty()) continue
-                    if (members.denied(id)) keys.forEach { c.removeResource(it) } else tagged = members.onCached(id) || tagged
-                }
+        Background.run("markMembers") { reconcileMembers(c, ytIds) }
+    }
+
+    /**
+     * The audio of these members-only videos already in the cache: tagged, or removed while
+     * signed out ([MembersAudio.reconcile]). Off the calling thread, under the cache's lock.
+     */
+    private fun reconcileMembers(c: SimpleCache, ytIds: Collection<String>) {
+        val r = synchronized(c) {
+            members.reconcile(ytIds.filter { ledger.keysOf(it).isNotEmpty() }).also { r ->
+                r.remove.forEach { id -> ledger.keysOf(id).forEach { c.removeResource(it) } }
             }
-            if (tagged) appContext?.let { writeIds(it, MEMBERS_FILE, members.tagged().toList()) }
         }
+        if (r.tagged) appContext?.let { writeIds(it, CacheHome.MEMBERS_FILE, members.tagged().toList()) }
     }
 
     /**
@@ -263,7 +349,7 @@ internal object AudioCache {
             publish()
             justLiked
         } ?: return false
-        appContext?.let { writeIds(it, LIKED_FILE, liked) }
+        appContext?.let { writeIds(it, CacheHome.LIKED_FILE, liked) }
         likedListeners.forEach { it.onLikedChanged(fresh) }
         return true
     }
@@ -295,7 +381,7 @@ internal object AudioCache {
     fun signedOut(): Boolean {
         val gone = members.signOut()
         val done = locked { c -> gone.forEach { id -> ledger.keysOf(id).forEach { c.removeResource(it) } } } != null
-        appContext?.let { writeIds(it, MEMBERS_FILE, emptyList()) }
+        appContext?.let { writeIds(it, CacheHome.MEMBERS_FILE, emptyList()) }
         if (gone.isNotEmpty()) Log.i(TAG, "Members-only audio removed")
         return done
     }
@@ -358,7 +444,7 @@ internal object AudioCache {
                 return
             }
             if (ytId != null && members.onCached(ytId)) {
-                appContext?.let { writeIds(it, MEMBERS_FILE, members.tagged().toList()) }
+                appContext?.let { writeIds(it, CacheHome.MEMBERS_FILE, members.tagged().toList()) }
             }
             evict(cache, 0L, span.key)
             changed(cache, span.key)
@@ -380,22 +466,22 @@ internal object AudioCache {
         }
     }
 
-    // ---- id lists on disk (beside the cache: never backed up) ---------------------------------
+    // ---- id lists on disk (beside the cache: never cleared, never backed up) -------------------
 
     private fun readIds(ctx: Context, name: String): List<String>? = try {
-        File(ctx.cacheDir, name).takeIf { it.isFile }?.readLines()?.filter { SessionPolicy.isValidYtId(it) }
+        File(ctx.noBackupFilesDir, name).takeIf { it.isFile }?.readLines()?.filter { SessionPolicy.isValidYtId(it) }
     } catch (e: IOException) {
         null
     }
 
     private fun writeIds(ctx: Context, name: String, ids: List<String>) {
         try {
-            val f = File(ctx.cacheDir, name)
+            val f = File(ctx.noBackupFilesDir, name)
             if (ids.isEmpty()) {
                 f.delete()
                 return
             }
-            val tmp = File(ctx.cacheDir, "$name.tmp")
+            val tmp = File(ctx.noBackupFilesDir, "$name.tmp")
             tmp.writeText(ids.joinToString("\n"))
             if (!tmp.renameTo(f)) tmp.delete()
         } catch (e: IOException) {

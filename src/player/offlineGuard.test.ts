@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals';
 import { describe, expect, it, vi } from 'vitest';
 import type { Track } from '../data/model';
-import { offlineGuard } from './offlineGuard';
+import { offlineGuard, playsOffline } from './offlineGuard';
 import { EMPTY_STATE, type Player, type PlayerState } from './types';
 
 /** A player whose every command is a mock, and a guard that is online until told otherwise. */
@@ -74,14 +74,57 @@ describe('offlineGuard', () => {
     expect(refused.mock.calls.every(([why]) => why === 'offline')).toBe(true);
   });
 
-  it('offline, the current track always resumes, saved or not: native plays what it has buffered', async () => {
-    const { inner, p, refused, offline } = setup({ queue: [track], current: track, isPlaying: false });
+  it('offline, a paused track with audio loaded ahead resumes, saved or not: native plays what it has', async () => {
+    const { inner, p, refused, offline } = setup({ queue: [track], current: track, isPlaying: false, bufferedAheadMs: 20_000 });
     offline();
     await p.play();
     await p.toggle(); // paused: a resume
     expect(inner.play).toHaveBeenCalledTimes(1);
     expect(inner.toggle).toHaveBeenCalledTimes(1);
     expect(refused).not.toHaveBeenCalled();
+  });
+
+  it('offline, a saved current track resumes with nothing loaded yet: it plays from the phone', async () => {
+    const { inner, p, refused, offline } = setup({ queue: [track], current: track, isPlaying: false, bufferedAheadMs: 0 }, [track.ytId], [track.id]);
+    offline();
+    await p.play();
+    await p.toggle();
+    expect(inner.play).toHaveBeenCalledTimes(1);
+    expect(inner.toggle).toHaveBeenCalledTimes(1);
+    expect(refused).not.toHaveBeenCalled();
+  });
+
+  it('offline, a track the app reopened on, not saved and with nothing loaded, is refused like its row', async () => {
+    // Liked but not saved yet: says so.
+    const liked = setup({ queue: [track], current: track, isPlaying: false, bufferedAheadMs: 0 }, [], [track.id]);
+    liked.offline();
+    await liked.p.play();
+    await liked.p.toggle();
+    expect(liked.inner.play).not.toHaveBeenCalled();
+    expect(liked.inner.toggle).not.toHaveBeenCalled();
+    expect(liked.refused.mock.calls).toEqual([['unsaved'], ['unsaved']]);
+    // Anything else needs a connection.
+    const other = setup({ queue: [track], current: track, isPlaying: false });
+    other.offline();
+    await other.p.play();
+    await other.p.toggle();
+    expect(other.inner.play).not.toHaveBeenCalled();
+    expect(other.inner.toggle).not.toHaveBeenCalled();
+    expect(other.refused.mock.calls).toEqual([['offline'], ['offline']]);
+    // Online it plays (and loads).
+    const online = setup({ queue: [track], current: track, isPlaying: false });
+    await online.p.play();
+    expect(online.inner.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('the current track plays offline when it is saved, has audio loaded ahead, or is playing', () => {
+    const s = (p: Partial<PlayerState>) => ({ ...EMPTY_STATE, current: track, ...p });
+    const saved = new Set([track.ytId]);
+    expect(playsOffline(s({}), new Set())).toBe(false);
+    expect(playsOffline(s({}), saved)).toBe(true);
+    expect(playsOffline(s({ bufferedAheadMs: 1 }), new Set())).toBe(true);
+    expect(playsOffline(s({ isPlaying: true }), new Set())).toBe(true);
+    expect(playsOffline(s({ current: null }), saved)).toBe(false);
   });
 
   it('offline, pausing, seeking, queue edits and settings still work', async () => {

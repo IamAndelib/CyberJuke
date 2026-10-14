@@ -161,6 +161,36 @@ class CachePolicyTest {
     }
 
     @Test
+    fun aFailedStartIsForgottenSoTheNextCountIsTheOnlyOne() {
+        val l = CacheLedger(20 * mb)
+        l.setLiked(listOf("liked00000a"), known = false)
+        // What a start does: every span on disk counted in.
+        val count = {
+            l.onAdded(CacheKeys.of("liked00000a", 251), 8 * mb, touched = 1)
+            l.onAdded(CacheKeys.of("listen0000a", 251), 8 * mb, touched = 2)
+        }
+        // Counted twice (a start that failed, then another): 32 MB of 16, and a real file would go.
+        count()
+        count()
+        assertEquals(32 * mb, l.total)
+        assertEquals(listOf(CacheKeys.of("listen0000a", 251)), l.victims())
+        // Forgotten after the failed start: none of it is there to evict, nor saved.
+        l.resetSpans()
+        assertEquals(0L, l.total)
+        assertEquals(0L, l.likedBytes)
+        assertEquals(emptyList<String>(), l.keysOf("liked00000a"))
+        assertFalse(l.likedFull(0L))
+        count()
+        assertEquals(16 * mb, l.total)
+        assertEquals(8 * mb, l.likedBytes)
+        assertEquals(emptyList<String>(), l.victims())
+        // The liked list and the limit stay.
+        assertTrue(l.isLiked("liked00000a"))
+        assertEquals(listOf("liked00000a"), l.liked)
+        assertEquals(20 * mb, l.limit)
+    }
+
+    @Test
     fun likedFullLeavesRoomForListening() {
         val l = CacheLedger(128 * mb)
         l.setLiked(listOf("likeda00000"), known = false)
@@ -223,6 +253,17 @@ class CachePolicyTest {
         assertFalse(LikedSaverPolicy.keepGoing(f.copy(quiet = true), fresh = true))
         assertFalse(LikedSaverPolicy.keepGoing(f.copy(online = false), fresh = true))
         assertFalse(LikedSaverPolicy.keepGoing(f.copy(unmetered = false), fresh = false))
+    }
+
+    @Test
+    fun noSaveWithoutACacheToSaveInto() {
+        // The cache failed to start: no extraction for nothing, fresh like or backfill, and no timer.
+        val f = Facts(liked, saved = emptySet(), fresh = setOf("new00000000"), cache = false, retryInMs = 5_000L)
+        assertNull(LikedSaverPolicy.next(f))
+        assertNull(LikedSaverPolicy.next(f.copy(fresh = emptySet())))
+        assertNull(LikedSaverPolicy.recheckInMs(f.copy(sinceLastMs = 10_000L)))
+        assertFalse(LikedSaverPolicy.keepGoing(f, fresh = true))
+        assertEquals("new00000000", LikedSaverPolicy.next(f.copy(cache = true)))
     }
 
     // ---- the review's fixes ----
@@ -457,6 +498,27 @@ class CachePolicyTest {
         assertFalse(m.onCached("mem00000001"))
         m.signIn()
         assertFalse(m.denied("mem00000001"))
+    }
+
+    @Test
+    fun membersOnlyMarkedWhileTheCacheStartsIsTaggedOrRemovedOnceStarted() {
+        val m = MembersAudio()
+        // The start counted its audio before the page said it is members-only: no tag then.
+        assertFalse(m.onCached("mem00000001"))
+        m.mark("mem00000001")
+        m.mark("mem00000002")
+        assertEquals(setOf("mem00000001", "mem00000002"), m.marked())
+        // Started: of those marked so far, the one with audio in the cache is tagged.
+        assertEquals(MembersAudio.Reconciled(remove = emptyList(), tagged = true), m.reconcile(listOf("mem00000001")))
+        assertEquals(setOf("mem00000001"), m.tagged())
+        // Again: nothing new to write down.
+        assertFalse(m.reconcile(listOf("mem00000001")).tagged)
+        // Signed out: its audio is removed instead, and nothing is tagged.
+        val out = MembersAudio()
+        out.signOut()
+        out.mark("mem00000003")
+        assertEquals(MembersAudio.Reconciled(remove = listOf("mem00000003"), tagged = false), out.reconcile(listOf("mem00000003")))
+        assertEquals(emptySet<String>(), out.tagged())
     }
 
     // ---- liked songs never recognised as saved ----

@@ -5,14 +5,24 @@
  * it was), and `refuse` says why:
  *  - a list, from wherever it was started, plays its saved songs, from the tapped one; when that
  *    one isn't saved, 'unsaved' for a liked song, 'offline' for anything else;
- *  - Next, Previous and a tap in Up next only onto a saved song ('offline').
- * Resuming the current track (Play, or the play/pause button while paused) always goes
- * through: native plays from its buffer and says "Signal lost…" if that runs out. Pausing,
- * seeking, queue edits and settings always go through too.
+ *  - Next, Previous and a tap in Up next only onto a saved song ('offline');
+ *  - resuming the current track (Play, or the play/pause button while paused) only when it plays
+ *    offline ([playsOffline]): saved, or with audio loaded ahead (native plays from its buffer
+ *    and says "Signal lost…" if that runs out). The track the app reopens on has none loaded:
+ *    unsaved, it is refused like its row ('unsaved' for a liked song, 'offline' for the rest).
+ * Pausing, seeking, queue edits and settings always go through.
  */
 import type { Track } from '../data/model';
 import { isSaved, savedQueue } from '../stores/savedOffline';
-import type { Player } from './types';
+import type { Player, PlayerState } from './types';
+
+/**
+ * Offline, the current track plays: it is saved on the phone, has audio loaded past where it is,
+ * or is playing. Its row is dimmed otherwise, and Play refused.
+ */
+export function playsOffline(s: Pick<PlayerState, 'current' | 'isPlaying' | 'bufferedAheadMs'>, saved: ReadonlySet<string>): boolean {
+  return s.isPlaying || s.bufferedAheadMs > 0 || isSaved(s.current, saved);
+}
 
 export type OfflineRefusal = 'unsaved' | 'offline';
 
@@ -35,8 +45,17 @@ export function offlineGuard(p: Player, o: OfflinePolicy): Player {
   /** Online, or `t` saved: run it; else refused. */
   const onto = (t: Track | null | undefined, run: () => Promise<void>) => (o.online() || isSaved(t, o.saved()) ? run() : refused('offline'));
   const current = () => p.state.peek().current;
+  /** Online, or the current track plays offline: run it; else refused as its row would be. */
+  const resume = (run: () => Promise<void>) => {
+    const s = p.state.peek();
+    if (o.online() || playsOffline(s, o.saved())) return run();
+    return refused(s.current && o.liked(s.current) ? 'unsaved' : 'offline');
+  };
   return {
     ...p,
+    play: () => resume(() => p.play()),
+    // Playing, it pauses: always.
+    toggle: () => (p.state.peek().isPlaying ? p.toggle() : resume(() => p.toggle())),
     playList: (tracks, start, ctx) => {
       if (o.online()) return p.playList(tracks, start, ctx);
       const q = savedQueue(tracks, start, o.saved());

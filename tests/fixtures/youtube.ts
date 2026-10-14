@@ -60,7 +60,7 @@ const FAKE_YT = `
   class Player {
     constructor(el, opts) {
       last = this;
-      this.opts = opts; this.base = 0; this.playingSince = null; this.state = -1; this.ending = null; this.starting = null;
+      this.opts = opts; this.base = 0; this.playingSince = null; this.state = -1; this.ending = null; this.starting = null; this.loaded = false;
       setTimeout(() => opts.events.onReady && opts.events.onReady(), 30);
     }
     emit(s) { this.state = s; this.opts.events.onStateChange && this.opts.events.onStateChange({ data: s }); }
@@ -68,9 +68,11 @@ const FAKE_YT = `
     played() { return this.base + (this.playingSince == null ? 0 : (Date.now() - this.playingSince) / 1000); }
     hold() { this.base = this.played(); this.playingSince = null; clearTimeout(this.ending); this.ending = null; }
     // Like the real player: buffering, then playing, unless paused (or cued) meanwhile.
-    loadVideoById() { this.hold(); this.base = 0; this.emit(3); clearTimeout(this.starting); this.starting = setTimeout(() => this.playVideo(), 150); }
-    cueVideoById() { clearTimeout(this.starting); this.hold(); this.base = 0; this.emit(5); }
+    loadVideoById() { this.hold(); this.base = 0; this.loaded = false; this.emit(3); clearTimeout(this.starting); this.starting = setTimeout(() => this.playVideo(), 150); }
+    cueVideoById() { clearTimeout(this.starting); this.hold(); this.base = 0; this.loaded = false; this.emit(5); }
     playVideo() {
+      // Once it plays, all of it is loaded (the real one loads ahead as it goes).
+      this.loaded = true;
       this.hold();
       this.playingSince = Date.now();
       this.scheduleEnd();
@@ -91,6 +93,7 @@ const FAKE_YT = `
     seekTo(s) { const playing = this.playingSince != null; this.hold(); this.base = s - START; if (playing) { this.playingSince = Date.now(); this.scheduleEnd(); } window.__ytSeeks = (window.__ytSeeks || 0) + 1; }
     getCurrentTime() { return this.played() + START; }
     getDuration() { return DURATION; }
+    getVideoLoadedFraction() { return this.loaded ? 1 : 0; }
     setPlaybackQuality() {}
   }
   window.YT = { Player };

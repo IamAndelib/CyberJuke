@@ -72,6 +72,9 @@ export const musicCalls = (page: Page) => page.evaluate(() => (window as unknown
 /** Calls the web player made that the native plugin would receive. */
 export const playerCalls = (page: Page) => page.evaluate(() => window.__cyberjukePlayerCalls ?? []);
 
+/** How much of the current track native reports loaded ahead, in ms (0: the track the app reopens on). */
+export const bufferedAhead = (page: Page, ms: number) => page.evaluate((v) => (window as unknown as { __cyberjukeBufferedAhead(ms: number): void }).__cyberjukeBufferedAhead(v), ms);
+
 declare global {
   interface Window {
     /** recordOpens: the URLs window.open was asked for. */

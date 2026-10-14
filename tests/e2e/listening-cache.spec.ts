@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { playerCalls, seedStorage, setOffline, start } from '../helpers';
+import { bufferedAhead, playerCalls, seedStorage, setOffline, start } from '../helpers';
 
 /**
  * The listening cache (native): liked songs saved on the phone play offline, from any list,
@@ -112,6 +112,60 @@ test('offline with liked songs saved, the banner and the refusal toast open Like
   await page.getByTestId('shuffle-all').click();
   await expect(page.getByTestId('toast')).toHaveText(TAP);
   await expect(page.getByTestId('toast-action')).toHaveCount(0);
+});
+
+test('offline, the track the app reopened on is dimmed and asks to connect unless saved; with audio loaded it plays', async ({ page, backend }) => {
+  await seedStorage(page, { 'CapacitorStorage.liked': LIKED });
+  await page.goto('/');
+  await page.getByTestId('tab-library').click();
+  const rows = page.getByTestId('liked-list').getByTestId('track-row');
+  await expect(rows).toHaveCount(3);
+  await saved(page, ['abcdefghij1']);
+  const toggle = page.getByTestId('mini-toggle');
+  const toast = page.getByTestId('toast');
+
+  // Track l2 (liked, not saved) is current and paused with nothing loaded, as after a restart.
+  await rows.nth(1).getByTestId('track-play').click();
+  await expect(toggle).toHaveAttribute('aria-label', 'Pause');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-label', 'Play');
+  await bufferedAhead(page, 0);
+  await setOffline(page, backend, true);
+
+  // Its row is dimmed like any unsaved song, and Play (mini player or its row) says why.
+  const current = rows.nth(1);
+  await expect(current).toHaveClass(/\bis-current\b/);
+  await expect(current).toHaveClass(/\boff\b/);
+  await expect(current.getByTestId('track-play')).toHaveAttribute('aria-disabled', 'true');
+  await toggle.click();
+  await expect(toast).toHaveText(NOT_SAVED);
+  await expect(toggle).toHaveAttribute('aria-label', 'Play');
+  // Any other tap clears the message first (past the row's double-tap window, too).
+  await page.getByTestId('lib-liked').click();
+  await expect(toast).toHaveCount(0);
+  await page.waitForTimeout(500);
+  await current.getByTestId('track-play').click({ force: true });
+  await expect(toast).toHaveText(NOT_SAVED);
+  await expect(toggle).toHaveAttribute('aria-label', 'Play');
+  await expect(page.getByTestId('mini-title')).toHaveText('Track l2');
+
+  // With audio loaded ahead (paused mid-song), it is bright and resumes.
+  await bufferedAhead(page, 30_000);
+  await expect(current).not.toHaveClass(/\boff\b/);
+  await expect(current.getByTestId('track-play')).not.toHaveAttribute('aria-disabled');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-label', 'Pause');
+  await expect(page.getByTestId('mini-title')).toHaveText('Track l2');
+
+  // A saved track the app reopened on plays from the phone, nothing loaded or not.
+  await rows.nth(0).getByTestId('track-play').click();
+  await expect(page.getByTestId('mini-title')).toHaveText('Track l1');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-label', 'Play');
+  await bufferedAhead(page, 0);
+  await expect(rows.nth(0)).not.toHaveClass(/\boff\b/);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-label', 'Pause');
 });
 
 test('Settings → Listening cache: 256 MB by default, three sizes sent to the player and kept, and Clear cache', async ({ page }) => {

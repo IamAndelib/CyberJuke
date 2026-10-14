@@ -2,7 +2,7 @@ import { useComputed } from '@preact/signals';
 import { memo } from 'preact/compat';
 import type { Track } from '../../data/model';
 import { online } from '../../core/network';
-import { currentId, isPlaying, player } from '../../player';
+import { currentId, currentPlaysOffline, isPlaying, player } from '../../player';
 import { isSaved, savedOffline } from '../../stores/savedOffline';
 import { Icon } from '../icons';
 import { menuTrack, nowPlayingOpen } from '../nav';
@@ -160,9 +160,10 @@ export const TrackRow = memo(function TrackRow({
   // and only the current row follows play/pause.
   const current = useComputed(() => currentId.value === track.id);
   const isCurrent = current.value;
-  // Offline only saved liked songs play, in any list, and the current track resumes: other rows
-  // are dimmed, and a tap says why (the player refuses it).
-  const off = !online.value && !isCurrent && !isSaved(track, savedOffline.value);
+  // Offline only saved liked songs play, in any list, and the current track while it plays or
+  // has audio loaded (not the one the app reopened on, unless saved): other rows are dimmed, and
+  // a tap says why (the player refuses it). Only the current row follows the player's state.
+  const off = !online.value && !(isCurrent ? currentPlaysOffline.value : isSaved(track, savedOffline.value));
   const press = longPress(track);
   return (
     <li class={'row' + (isCurrent ? ' is-current' : '') + (off ? ' off' : '')} data-testid="track-row" data-track-id={track.id}>

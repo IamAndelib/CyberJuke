@@ -79,6 +79,11 @@ export interface PlayerState {
   seed: Track | null;
   /** The connection dropped and playback paused; it resumes by itself once it's back (native only). */
   waitingForNetwork: boolean;
+  /**
+   * How much of the current track is loaded past where it is, in ms (0: nothing, as for the
+   * track the app reopens on). Offline, a track that isn't saved resumes only with some.
+   */
+  bufferedAheadMs: number;
 }
 
 export const EMPTY_STATE: PlayerState = {
@@ -96,6 +101,7 @@ export const EMPTY_STATE: PlayerState = {
   context: null,
   seed: null,
   waitingForNetwork: false,
+  bufferedAheadMs: 0,
 };
 
 /** Same interface for the native (Android) and web (YouTube IFrame) implementations. */

@@ -66,6 +66,8 @@ internal object StateEncoder {
         state.put("trackId", if (index >= 0) c.currentMediaItem?.mediaId ?: JSONObject.NULL else JSONObject.NULL)
         state.put("positionMs", if (index >= 0) c.currentPosition.coerceAtLeast(0L) else 0L)
         state.put("durationMs", duration.coerceAtLeast(0L))
+        // None for a restored session not loaded yet: offline, an unsaved one then can't resume.
+        state.put("bufferedAheadMs", if (index >= 0) StateEvents.bufferedAheadMs(c.bufferedPosition, c.currentPosition) else 0L)
         state.put("shuffle", c.shuffleModeEnabled)
         state.put(
             "repeat",

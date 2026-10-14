@@ -245,6 +245,7 @@ export class NativePlayer implements Player {
       context,
       seed,
       waitingForNetwork: st.waitingForNetwork === true,
+      bufferedAheadMs: st.bufferedAheadMs ?? 0,
     };
   }
 
@@ -284,6 +285,7 @@ export class NativePlayer implements Player {
       context,
       seed: tracks[i],
       waitingForNetwork: false,
+      bufferedAheadMs: 0,
     };
     this.expect = { id: tracks[i].id, until: performance.now() + EXPECT_MS };
     try {

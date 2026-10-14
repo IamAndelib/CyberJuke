@@ -156,6 +156,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             sinceLastMs = if (lastExtractionAt == 0L) Long.MAX_VALUE else now - lastExtractionAt,
             retryInMs = strikes.nextDueInMs(now),
             denied = AudioCache::isDenied,
+            cache = !AudioCache.startFailed,
         )
     }
 
@@ -230,6 +231,9 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             @Throws(IOException::class)
             fun resolve(ytId: String): ResolvedStream
 
+            /** Whether there is a cache to save into. */
+            fun hasCache(): Boolean = true
+
             /** A writer fetching [stream]'s bytes not yet cached into the cache, or null without a cache. */
             @Throws(IOException::class)
             fun writer(ytId: String, stream: ResolvedStream): Writer?
@@ -253,6 +257,8 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             override fun isDenied(ytId: String) = AudioCache.isDenied(ytId)
 
             override fun isWhole(ytId: String) = AudioCache.isWhole(ytId)
+
+            override fun hasCache() = AudioCache.open() != null
 
             // An extraction, like playing it would be (it counts toward YouTube's limits, hence
             // one at a time and spaced out); a back-off stops it (BlockedException).
@@ -287,6 +293,9 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             // Cancelled, a back-off, or members-only while signed out: no fault of the song.
             if (cancelled || deps.quiet() || deps.isDenied(ytId)) return SaveOutcome.CANCELLED
             if (deps.isWhole(ytId)) return SaveOutcome.SAVED
+            // Before the extraction: without a cache (it failed to start just now) there is
+            // nothing to save into, and the saver stops ([LikedSaverPolicy.Facts.cache]).
+            if (!deps.hasCache()) return SaveOutcome.STOPPED
             val stream = try {
                 deps.resolve(ytId)
             } catch (e: ResolveException) {

@@ -1,6 +1,8 @@
 package io.github.iamandelib.cyberjuke.bridge
 
+import androidx.media3.common.C
 import androidx.media3.common.Player
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -56,5 +58,21 @@ class StateEventsTest {
         // Play pressed during the wait: the music plays, the wait is over.
         assertFalse(waiting(isPlaying = true, outagePause = true))
         assertFalse(waiting(isPlaying = true, buffering = false))
+    }
+
+    @Test
+    fun bufferedAheadIsWhatIsLoadedPastThePosition() {
+        assertEquals(30_000L, StateEvents.bufferedAheadMs(bufferedMs = 100_000L, positionMs = 70_000L))
+        // A restored session not loaded yet: buffered where it is.
+        assertEquals(0L, StateEvents.bufferedAheadMs(bufferedMs = 70_000L, positionMs = 70_000L))
+        assertEquals(0L, StateEvents.bufferedAheadMs(bufferedMs = 60_000L, positionMs = 70_000L))
+    }
+
+    @Test
+    fun anUnknownBufferIsNone() {
+        // C.TIME_UNSET minus a position would wrap around to a huge positive number.
+        assertEquals(0L, StateEvents.bufferedAheadMs(bufferedMs = C.TIME_UNSET, positionMs = 70_000L))
+        assertEquals(0L, StateEvents.bufferedAheadMs(bufferedMs = 0L, positionMs = 0L))
+        assertEquals(5_000L, StateEvents.bufferedAheadMs(bufferedMs = 5_000L, positionMs = C.TIME_UNSET))
     }
 }

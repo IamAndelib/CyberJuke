@@ -37,6 +37,11 @@ export interface NativeState {
    * (within a few minutes). Sent again whenever it changes. Absent from older natives: false.
    */
   waitingForNetwork?: boolean;
+  /**
+   * How much of the current track is loaded past the position, in ms: bufferedPosition minus
+   * position, at least 0 (a restored session not loaded yet has none). Absent from older natives: 0.
+   */
+  bufferedAheadMs?: number;
 }
 /** Why YouTube is refusing requests from this network (Y1). */
 export type BlockReason = 'BOT_CHECK' | 'RATE_LIMIT' | 'STREAM_FORBIDDEN';

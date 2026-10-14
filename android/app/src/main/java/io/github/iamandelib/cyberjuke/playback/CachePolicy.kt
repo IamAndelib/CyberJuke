@@ -209,6 +209,19 @@ internal class CacheLedger(limitBytes: Long) {
         }
     }
 
+    /**
+     * Forgets every span, keeping the liked list and the limit: a start that failed had counted
+     * the spans on disk before failing, and a cache that isn't there has nothing to evict or play.
+     */
+    fun resetSpans() {
+        entries.clear()
+        keysByYt.clear()
+        listening.clear()
+        likedEntries.clear()
+        total = 0L
+        likedBytes = 0L
+    }
+
     fun onTouched(key: String, touched: Long) {
         val e = entries[key] ?: return
         if (touched <= e.touched) return
@@ -480,6 +493,29 @@ internal class MembersAudio {
     @Synchronized
     fun tagged(): Set<String> = HashSet(tags)
 
+    /** The videos marked members-only in this run. */
+    @Synchronized
+    fun marked(): Set<String> = HashSet(known)
+
+    /** What [reconcile] found: the videos whose audio is to go, and whether a tag is new. */
+    data class Reconciled(val remove: List<String>, val tagged: Boolean)
+
+    /**
+     * Brings the audio of members-only videos already in the cache ([inCache]) in line: signed
+     * out, it is to go ([Reconciled.remove]); signed in, it is tagged ([Reconciled.tagged]: a new
+     * tag, to be written down). For marks that come after the audio was counted in (the cache
+     * was starting then, or the audio was already there).
+     */
+    @Synchronized
+    fun reconcile(inCache: Collection<String>): Reconciled {
+        val remove = ArrayList<String>()
+        var tagged = false
+        for (id in inCache) {
+            if (denied(id)) remove.add(id) else tagged = onCached(id) || tagged
+        }
+        return Reconciled(remove, tagged)
+    }
+
     @Synchronized
     fun denied(ytId: String): Boolean = signedOut && ytId in deny
 
@@ -512,6 +548,7 @@ internal class MembersAudio {
  *   [MIN_GAP_MS], and only while the cache has room for liked songs ([Facts.likedFull]).
  * - Never while offline, during a YouTube back-off ([Facts.quiet]) or while playback needs the
  *   network ([PlaybackNeed]): playback always comes first (a running save gives way, [keepGoing]).
+ * - Never without a cache to save into ([Facts.cache]): no extraction for nothing.
  *
  * Event-driven: asked again when something it depends on changes. The one timer is
  * [recheckInMs]: a one-shot re-check for the end of the gap, pending only while the gap alone
@@ -551,6 +588,8 @@ internal object LikedSaverPolicy {
         val retryInMs: Long? = null,
         /** Members-only while signed out: never saved. Asked only of a candidate. */
         val denied: (String) -> Boolean = { false },
+        /** There is a cache to save into (none after it failed to start: [AudioCache.startFailed]). */
+        val cache: Boolean = true,
     )
 
     /**
@@ -564,7 +603,7 @@ internal object LikedSaverPolicy {
     fun next(f: Facts): String? = pick(f, f.sinceLastMs)
 
     private fun pick(f: Facts, sinceLastMs: Long): String? {
-        if (f.busy || !f.online || f.quiet || f.playbackNeedsNetwork) return null
+        if (!f.cache || f.busy || !f.online || f.quiet || f.playbackNeedsNetwork) return null
         // Each candidate's denied answer is asked once (and only for those looked at).
         val denied = HashMap<String, Boolean>()
         val todo = f.liked.asSequence().filter { it !in f.saved && it !in f.skip && !denied.getOrPut(it) { f.denied(it) } }
@@ -582,14 +621,14 @@ internal object LikedSaverPolicy {
      * neither waits (an event will come).
      */
     fun recheckInMs(f: Facts): Long? {
-        if (pick(f, f.sinceLastMs) != null) return null
+        if (!f.cache || pick(f, f.sinceLastMs) != null) return null
         val gap = if (f.sinceLastMs < MIN_GAP_MS && pick(f, Long.MAX_VALUE) != null) MIN_GAP_MS - f.sinceLastMs else null
         return listOfNotNull(gap, f.retryInMs).minOrNull()
     }
 
     /** Whether a save of a [fresh] (or backfill) like may go on, or must stop and give way. */
     fun keepGoing(f: Facts, fresh: Boolean): Boolean =
-        f.online && !f.quiet && !f.playbackNeedsNetwork && (fresh || f.unmetered)
+        f.cache && f.online && !f.quiet && !f.playbackNeedsNetwork && (fresh || f.unmetered)
 }
 
 /**

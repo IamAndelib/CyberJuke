@@ -14,9 +14,10 @@
   - sharedpref/last_session.xml: where in the last queue playback was. The queue itself is in
     no_backup/last-session.json, which Android never backs up.
   - database/exoplayer_internal.db: the listening cache's index (which videos' audio is kept,
-    liked and members-only ones among them). The audio itself is in the cache directory.
-  The cache directory (lyrics, the listening cache's audio and its liked list) is never backed
-  up by Android.
+    liked and members-only ones among them). The audio itself, its liked list and its
+    members-only tags are in no_backup/ (audio/, audio-liked, audio-members), which Android
+    never backs up.
+  The cache directory (lyrics) is never backed up by Android.
 -->
 <data-extraction-rules>
     <cloud-backup>

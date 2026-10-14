@@ -25,7 +25,7 @@ import type { Track } from '../data/model';
 import { hasSavedLiked, savedOffline, savedTracks } from '../stores/savedOffline';
 import { createAutoplay, type Autoplay } from './autoplay';
 import { NativePlayer } from './nativePlayer';
-import { offlineGuard, type OfflineRefusal } from './offlineGuard';
+import { offlineGuard, playsOffline, type OfflineRefusal } from './offlineGuard';
 import { safePlayer } from './safePlayer';
 import { nsfwAutoplayIds, type PlayContext, type Player, type UpItem, type UpNextItem, type UpNextSections } from './types';
 import { WebPlayer } from './webPlayer';
@@ -106,6 +106,11 @@ export const waitingForNetwork = heldFor(
   computed(() => state.value.waitingForNetwork),
   WAITING_SHOW_MS,
 );
+/**
+ * Offline, the current track still plays (saved, audio loaded ahead, or playing): its row isn't
+ * dimmed and Play goes through. The same rule as the player's offline guard.
+ */
+export const currentPlaysOffline = computed(() => playsOffline(state.value, savedOffline.value));
 export const shuffleOn = computed(() => state.value.shuffle);
 export const repeatMode = computed(() => state.value.repeat);
 /** The current track's length (0 until known). */
