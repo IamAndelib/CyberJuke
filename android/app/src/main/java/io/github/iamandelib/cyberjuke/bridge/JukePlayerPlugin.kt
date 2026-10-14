@@ -165,6 +165,7 @@ class JukePlayerPlugin : Plugin() {
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             val c = controller ?: return
+            if (!StateEvents.changeState(events.size(), events::get)) return
             if (events.contains(Player.EVENT_TIMELINE_CHANGED)) {
                 queueDirty = true
                 announceTracks(c)
