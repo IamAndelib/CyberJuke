@@ -1,5 +1,6 @@
 /** Shared steps and waits for the e2e specs. No fixed sleeps: every wait is on a condition. */
 import { expect, type Locator, type Page } from '@playwright/test';
+import { setImagesOffline } from './fixtures/youtube';
 
 /**
  * The screen showing has its rows. Visited tabs and covered pages stay mounted (hidden),
@@ -98,9 +99,10 @@ export async function recordOpens(page: Page): Promise<void> {
 }
 export const opened = (page: Page) => page.evaluate(() => window.__opened ?? []);
 
-/** The device loses (or gets back) its connection: the browser's and the stub backend's. */
+/** The device loses (or gets back) its connection: the browser's, the stub backend's and the image hosts'. */
 export async function setOffline(page: Page, backend: { offline: boolean }, off: boolean): Promise<void> {
   backend.offline = off;
+  setImagesOffline(page, off);
   await page.context().setOffline(off);
 }
 

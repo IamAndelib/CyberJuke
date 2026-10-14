@@ -18,6 +18,7 @@ import {
   shuffled,
 } from './firestore';
 import { tracksFromRows, type FsRunQueryRow } from './model';
+import { online } from '../core/network';
 
 const rows = fixture as unknown as FsRunQueryRow[];
 
@@ -686,6 +687,22 @@ describe('one retry when the request got no answer at all', () => {
       expect(f).toHaveBeenCalledTimes(2);
       expect(vi.getTimerCount()).toBe(0);
     } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('offline, there is no retry: the answer is known and the error surfaces at once', async () => {
+    vi.useFakeTimers();
+    online.value = false;
+    try {
+      const f = vi.fn(failing);
+      const w = watch(new FirestoreSource({ fetch: f as any }).latest());
+      await vi.advanceTimersByTimeAsync(0);
+      expect(w.error).toMatchObject({ name: 'FirestoreError', status: 0, offline: true });
+      expect(f).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      online.value = true;
       vi.useRealTimers();
     }
   });

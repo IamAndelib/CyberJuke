@@ -26,7 +26,7 @@ import { logError } from '../core/log';
 import { TEST_HOOKS } from '../core/testHooks';
 import { mark } from '../core/marks';
 import { loadLists, loadSettings, settings } from '../stores/library';
-import { onReconnect, watchNetwork } from '../core/network';
+import { onReconnect, online, watchNetwork } from '../core/network';
 import { catalog } from '../stores/catalog';
 import { startFreshness } from '../stores/newTracks';
 import { startAccount } from '../stores/account';
@@ -47,6 +47,7 @@ import { Library, openLiked } from '../features/library/Library';
 import { Screen } from '../ui/components/Screen';
 import { whenIdle } from '../core/idle';
 import { TrackRow } from '../ui/components/TrackRow';
+import { artGen } from '../ui/components/Art';
 import { MiniPlayer, NowPlaying } from '../features/now-playing/PlayerUI';
 import { ArtistGrid, ArtistTile, ArtistTiles } from '../features/artists/Artists';
 import { ArtistPage } from '../features/artists/Artist';
@@ -184,10 +185,16 @@ async function boot(): Promise<void> {
   applyTheme();
   watchNetwork();
   // Back online (or told again that we are), and back in the foreground: lists on screen
-  // that failed to load try again.
-  onReconnect(() => retryWatchedFeeds());
+  // that failed to load try again, and so does art that failed.
+  onReconnect(() => {
+    retryWatchedFeeds();
+    artGen.value++;
+  });
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') retryWatchedFeeds();
+    if (document.visibilityState !== 'visible') return;
+    retryWatchedFeeds();
+    // Still offline, the art would only fail again.
+    if (online.peek()) artGen.value++;
   });
   wireBackButton();
   wireNotificationTap();

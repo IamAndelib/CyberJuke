@@ -20,7 +20,7 @@ const section = signal<(typeof SECTIONS)[number]>('liked');
 const LIKED_CTX = list('Liked');
 const RECENT_CTX = list('Recently played');
 
-/** Library → Liked, from anywhere (the offline banner, the offline toast's button). */
+/** Library → Liked, from anywhere (the offline line, at the top and in Now Playing, and the offline toast's button). */
 export function openLiked(): void {
   section.value = 'liked';
   nowPlayingOpen.value = false;

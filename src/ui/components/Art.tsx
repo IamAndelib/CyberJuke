@@ -1,14 +1,23 @@
+import { signal } from '@preact/signals';
 import { useState } from 'preact/hooks';
 import { smallArtworkUrl, type Track } from '../../data/model';
 import { Icon, type IconName } from '../icons';
 
 /**
+ * Bumped when the connection is back and when the app comes back to the foreground: images
+ * that failed before then are asked for again (rows stay mounted across a reconnect, so a
+ * failure would otherwise last as long as the row).
+ */
+export const artGen = signal(0);
+
+/**
  * The image of [Art] and Cover: [url] in the pixel frame (see .art in ui/ui.css), or a
- * [placeholder] icon when there is none or it fails to load.
+ * [placeholder] icon when there is none or it fails to load (until the next artGen).
  */
 export function ArtFrame({ url, class: cls, placeholder = 'note', big }: { url?: string | null; class: string; placeholder?: IconName; big?: boolean }) {
-  const [failedFor, setFailedFor] = useState<string | null>(null);
-  const failed = !url || failedFor === url;
+  const [failedFor, setFailedFor] = useState<{ url: string; gen: number } | null>(null);
+  // artGen is read only once this image has failed, so healthy frames never re-render for it.
+  const failed = !url || (failedFor?.url === url && failedFor.gen === artGen.value);
   return (
     <div class={cls} aria-hidden="true">
       {failed ? (
@@ -16,7 +25,7 @@ export function ArtFrame({ url, class: cls, placeholder = 'note', big }: { url?:
           <Icon name={placeholder} size={big ? 72 : 24} />
         </div>
       ) : (
-        <img src={url} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setFailedFor(url)} />
+        <img src={url} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setFailedFor({ url, gen: artGen.peek() })} />
       )}
     </div>
   );

@@ -15,6 +15,7 @@
 - A **listening cache** keeps the music you play, and the next track, on the phone, so the music keeps playing when the signal drops, and playing a song again costs no data. Settings → **Listening cache** sets how much it may keep: 128, 256 (the default) or 512 MB, and **Clear cache** empties it (a liked song playing then is saved again once it has loaded). Nothing of it leaves the phone or goes into backups, and signing out removes the members-only tracks from it.
 - Liked songs are saved in it too, so they play offline: a song you like is saved right away, and older likes one at a time, on Wi-Fi only, while the app is open or playing.
 - Offline, the liked songs already saved play from any list (Liked, Recently played, Home, an album…), from the one you tap, and stand out bright; the rest is dimmed, and a liked song not saved yet says "Not saved yet. Needs a connection." The top bar reads "no carrier · your liked songs still play" and opens Liked, and anything else you try to play says so, with a button to Liked. With nothing saved yet, it asks you to connect, as before.
+- Now Playing says when there's no connection, and offers your saved liked songs.
 - Offline, a paused song always resumes, saved or not: it plays what it has already loaded (and says "Signal lost" if that runs out). Only starting another song needs it saved.
 - **Crossfade** (Settings → Crossfade): the end of a track blends into the next, over 3, 6 or 10 seconds, also on Repeat one. Off by default. The next song shows as soon as the fade starts. A skip changes tracks at once; a moment without connection, or a next track that isn't ready (one that can't play, or a very slow connection), changes them the usual way; and short tracks get a shorter fade.
 - Settings → **Gapless playback** (on): the next track is readied while this one plays and they follow without a pause. Off, the next track loads only when this one ends, with a short pause between tracks, so a skip costs little data. Crossfade always readies the next track early, and with it on, two tracks of the same album go straight into each other instead of fading.
@@ -26,6 +27,7 @@
 - A list that gets no answer from Cyberspace stops loading after 15 seconds and offers Retry, instead of showing placeholders forever.
 - A list that failed during a network switch or behind a Wi-Fi login page reloads by itself when the connection is reported again and when you come back to the app.
 - A request that fails outright is tried once more, a second later, before the list gives up.
+- Album art that couldn't load while offline loads once you're back online.
 
 ### Repository
 - Eight "day in the life" tests run the browser build the way a day with the app goes: a commute through a tunnel, a Wi-Fi to mobile data handover, an album left playing, a sign-out while a liked song is still being saved, a night of Liked songs, an hour with the screen locked, slow browsing, and a café Wi-Fi with a login page. Hours pass on a faked clock, so each takes seconds.

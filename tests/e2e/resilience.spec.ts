@@ -1,5 +1,6 @@
 import { expect, test } from '../fixtures';
-import type { Page } from '@playwright/test';
+import { setImagesOffline } from '../fixtures/youtube';
+import type { Locator, Page } from '@playwright/test';
 import { expectStable, opened, openNowPlaying, openSearch, playerCalls, recordOpens, seedStorage, setOffline, setVisibility, start, waitForTracks } from '../helpers';
 
 /**
@@ -365,6 +366,50 @@ test('a list that failed behind a Wi-Fi login page loads again when the app come
   await setVisibility(page, 'visible');
   await waitForTracks(page);
   await expect(page.getByTestId('offline')).toHaveCount(0);
+});
+
+test('art that failed to load offline loads once the connection is back, and on coming back to the app', async ({ page, backend }) => {
+  // 130 liked songs with art: Liked shows 60 rows, and 60 more each time you scroll near its end.
+  const track = (n: number) => {
+    const ytId = 'art' + String(n).padStart(8, '0');
+    return { id: `a${n}`, ytId, title: `Art ${n}`, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '2026-01-01T00:00:00Z', nsfw: false, artworkUrl: `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` };
+  };
+  await seedStorage(page, { 'CapacitorStorage.liked': Array.from({ length: 130 }, (_, i) => track(i)) });
+  await page.goto('/');
+  await page.getByTestId('tab-library').click();
+  const rows = page.getByTestId('liked-list').getByTestId('track-row');
+  await expect(rows).toHaveCount(60);
+  await expect(rows.first().locator('img')).toBeVisible();
+  const loaded = (row: Locator) => row.locator('img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0);
+  const toEnd = () => page.getByTestId('screen-library').evaluate((el) => el.scrollTo(0, el.scrollHeight));
+
+  // Offline, rows scrolled into view get the placeholder.
+  await setOffline(page, backend, true);
+  await toEnd();
+  await expect(rows).toHaveCount(120);
+  const offlineRow = rows.nth(60);
+  await offlineRow.scrollIntoViewIfNeeded();
+  await expect(offlineRow.locator('.art-ph')).toBeVisible();
+  await expect(offlineRow.locator('img')).toHaveCount(0);
+
+  // Back online: they load, with no scrolling or tapping.
+  await setOffline(page, backend, false);
+  await expect(offlineRow.locator('img')).toBeVisible();
+  await expect.poll(() => loaded(offlineRow)).toBe(true);
+  await expect(rows.first().locator('img')).toBeVisible();
+
+  // Online but nothing gets through (a Wi-Fi login page): back in the app, they load.
+  setImagesOffline(page, true);
+  await toEnd();
+  await expect(rows).toHaveCount(130);
+  const cutOffRow = rows.last();
+  await cutOffRow.scrollIntoViewIfNeeded();
+  await expect(cutOffRow.locator('.art-ph')).toBeVisible();
+  setImagesOffline(page, false);
+  await setVisibility(page, 'hidden');
+  await setVisibility(page, 'visible');
+  await expect(cutOffRow.locator('img')).toBeVisible();
+  await expect.poll(() => loaded(cutOffRow)).toBe(true);
 });
 
 test.describe('a start that fails', () => {
