@@ -378,19 +378,48 @@ internal enum class SaveFailure {
     }
 }
 
-/** Saves that stopped (not cancelled) per song: the third time it is given up on for the service's life. */
+/**
+ * Saves that stopped (not cancelled) per song, and when each may be tried again: after the n-th
+ * stop the song waits [FIRST_WAIT_MS] doubled each time (30 s, 1, 2, 4 min), the [MAX]th stop
+ * gives up on it for the service's life. Media3's DownloadManager retries a download five times
+ * (DEFAULT_MIN_RETRY_COUNT) before it fails; the doubling is [LoadRetry.delayMs]'s shape, drawn
+ * out, since a save is never urgent. Main thread; pure (CachePolicyTest).
+ */
 internal class SaveStrikes {
     private val counts = HashMap<String, Int>()
 
-    /** Counts a stop; true when [ytId] is to be given up on now. */
-    fun stopped(ytId: String): Boolean {
+    /** When each waiting song's retry is due; only entries not yet due are kept. */
+    private val dueAt = HashMap<String, Long>()
+
+    /** Counts a stop at [now]; true when [ytId] is to be given up on now, else it waits its turn. */
+    fun stopped(ytId: String, now: Long): Boolean {
         val n = (counts[ytId] ?: 0) + 1
         counts[ytId] = n
-        return n >= MAX
+        if (n >= MAX) {
+            dueAt.remove(ytId)
+            return true
+        }
+        dueAt[ytId] = now + waitMs(n)
+        return false
     }
 
+    /** The songs waiting for their retry at [now] (not to be saved yet). */
+    fun waiting(now: Long): Set<String> {
+        dueAt.values.removeAll { it <= now }
+        return HashSet(dueAt.keys)
+    }
+
+    /** Until the earliest retry is due, from [now]; null when none waits. */
+    fun nextDueInMs(now: Long): Long? = dueAt.values.minOrNull()?.let { it - now }?.takeIf { it > 0 }
+
     companion object {
-        const val MAX = 3
+        /** Stops before a song is given up on. */
+        const val MAX = 5
+
+        const val FIRST_WAIT_MS = 30_000L
+
+        /** 30 s, 1, 2, 4 min after the [stops]th stop (from 1). */
+        fun waitMs(stops: Int): Long = FIRST_WAIT_MS shl (stops - 1).coerceIn(0, MAX - 2)
     }
 }
 
@@ -469,7 +498,8 @@ internal class MembersAudio {
  * When the LikedSaver saves a liked song into the cache, and which. Pure (CachePolicyTest).
  *
  * - One at a time, newest like first; never one the player is still loading anyway (the
- *   playing track or the next, [PlaybackNeed.stillLoading]) nor one that failed this session.
+ *   playing track or the next, [PlaybackNeed.stillLoading]), one that failed this session, nor
+ *   one waiting for its retry after a stop ([SaveStrikes]).
  * - A song liked just now ([Facts.fresh]) is saved on any network, at once; if that try fails,
  *   again after [MIN_GAP_MS] like any other.
  * - Older likes (the backfill) only on an unmetered network (Wi-Fi), at most one extraction per
@@ -478,8 +508,9 @@ internal class MembersAudio {
  *   network ([PlaybackNeed]): playback always comes first (a running save gives way, [keepGoing]).
  *
  * Event-driven: asked again when something it depends on changes. The one timer is
- * [recheckInMs]: a one-shot re-check at the end of the gap, pending only while the gap alone
- * holds back a save that could start.
+ * [recheckInMs]: a one-shot re-check for the end of the gap, pending only while the gap alone
+ * holds back a save that could start, or for the earliest retry due after a stop (its wait ending
+ * is the event, and no other may come), whichever is sooner.
  */
 internal object LikedSaverPolicy {
     /** At least this long between two backfill extractions (YouTube request volume). */
@@ -497,7 +528,10 @@ internal object LikedSaverPolicy {
         val fresh: Set<String> = emptySet(),
         /** Of those, the ones already tried once (their retries wait for the gap). */
         val tried: Set<String> = emptySet(),
-        /** Not to be saved now: the playing and next tracks while still loading, and failures this session. */
+        /**
+         * Not to be saved now: the playing and next tracks while still loading, failures this
+         * session, and songs waiting for their retry after a stop ([SaveStrikes.waiting]).
+         */
         val skip: Set<String> = emptySet(),
         val online: Boolean = true,
         val unmetered: Boolean = true,
@@ -507,6 +541,8 @@ internal object LikedSaverPolicy {
         val likedFull: Boolean = false,
         /** Since the last saver extraction; Long.MAX_VALUE when none yet. */
         val sinceLastMs: Long = Long.MAX_VALUE,
+        /** Until the earliest retry after a stop is due ([SaveStrikes.nextDueInMs]); null when none waits. */
+        val retryInMs: Long? = null,
         /** Members-only while signed out: never saved. Asked only of a candidate. */
         val denied: (String) -> Boolean = { false },
     )
@@ -534,12 +570,15 @@ internal object LikedSaverPolicy {
     }
 
     /**
-     * When to ask again, if only the gap holds back a save that could start: then (the one
-     * postDelayed, while that work waits); otherwise null (an event will come).
+     * When to ask again (the one postDelayed): at the end of the gap, if only the gap holds back
+     * a save that could start; or when the earliest retry after a stop is due ([Facts.retryInMs]);
+     * whichever is sooner. Null when a save starts now (it asks again when it finishes) or when
+     * neither waits (an event will come).
      */
     fun recheckInMs(f: Facts): Long? {
-        if (f.sinceLastMs >= MIN_GAP_MS || pick(f, f.sinceLastMs) != null) return null
-        return if (pick(f, Long.MAX_VALUE) != null) MIN_GAP_MS - f.sinceLastMs else null
+        if (pick(f, f.sinceLastMs) != null) return null
+        val gap = if (f.sinceLastMs < MIN_GAP_MS && pick(f, Long.MAX_VALUE) != null) MIN_GAP_MS - f.sinceLastMs else null
+        return listOfNotNull(gap, f.retryInMs).minOrNull()
     }
 
     /** Whether a save of a [fresh] (or backfill) like may go on, or must stop and give way. */
@@ -549,7 +588,7 @@ internal object LikedSaverPolicy {
 
 /**
  * How a liked save ended: [SAVED] (whole in the cache), [FAILED] (not this service's life),
- * [STOPPED] (a strike, [SaveStrikes]), [CANCELLED] (no fault of the song). Pure.
+ * [STOPPED] (a strike: tried again later, [SaveStrikes]), [CANCELLED] (no fault of the song). Pure.
  */
 internal enum class SaveOutcome {
     SAVED,
@@ -562,7 +601,7 @@ internal enum class SaveOutcome {
         /**
          * The writer got to the end: saved only if the song is now whole in the cache. A span
          * playback was writing at the same time is read past, not written (its lock), and a
-         * length never learned leaves it not whole: a strike then, and it is tried again.
+         * length never learned leaves it not whole: a strike then, and it is tried again later.
          */
         fun afterWrite(whole: Boolean): SaveOutcome = if (whole) SAVED else STOPPED
     }

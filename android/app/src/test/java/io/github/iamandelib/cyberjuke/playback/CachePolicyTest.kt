@@ -284,7 +284,7 @@ class CachePolicyTest {
 
     @Test
     fun aBackOffOrABrokenExtractorIsNoFaultOfTheSong() {
-        // The song itself: given up on. The connection: a strike (three and it's given up on).
+        // The song itself: given up on. The connection: a strike (SaveStrikes: waits, then gives up).
         assertEquals(SaveFailure.GIVE_UP, SaveFailure.of(FailureKind.CONTENT))
         assertEquals(SaveFailure.GIVE_UP, SaveFailure.of(FailureKind.OTHER))
         assertEquals(SaveFailure.STRIKE, SaveFailure.of(FailureKind.NETWORK))
@@ -317,12 +317,44 @@ class CachePolicyTest {
     }
 
     @Test
-    fun aSongThatKeepsFailingIsGivenUpOn() {
+    fun aStoppedSaveWaitsLongerEachTimeAndTheFifthStopGivesUp() {
         val s = SaveStrikes()
-        assertFalse(s.stopped("a0000000000"))
-        assertFalse(s.stopped("a0000000000"))
-        assertTrue(s.stopped("a0000000000"))
-        assertFalse(s.stopped("b0000000000"))
+        var now = 1_000_000L
+        // 30 s, 1, 2, 4 min after the first four stops (Media3's DownloadManager retries a download
+        // five times; the doubling is LoadRetry.delayMs's shape).
+        for (wait in listOf(30_000L, 60_000L, 120_000L, 240_000L)) {
+            assertFalse(s.stopped("a0000000000", now))
+            assertEquals(setOf("a0000000000"), s.waiting(now))
+            assertEquals(wait, s.nextDueInMs(now))
+            assertEquals(setOf("a0000000000"), s.waiting(now + wait - 1))
+            // Due: no longer waiting, and no timer left for it.
+            assertEquals(emptySet<String>(), s.waiting(now + wait))
+            assertNull(s.nextDueInMs(now + wait))
+            now += wait
+        }
+        // The fifth stop: given up on for the service's life.
+        assertTrue(s.stopped("a0000000000", now))
+        assertEquals(emptySet<String>(), s.waiting(now))
+        assertNull(s.nextDueInMs(now))
+        // Each song counts on its own; the earliest retry due is the timer's.
+        assertFalse(s.stopped("b0000000000", now - 10_000L))
+        assertFalse(s.stopped("c0000000000", now))
+        assertEquals(setOf("b0000000000", "c0000000000"), s.waiting(now))
+        assertEquals(20_000L, s.nextDueInMs(now))
+    }
+
+    @Test
+    fun aRetryFiresWithoutAnotherEvent() {
+        // Every candidate waits for its retry (they're skipped): the timer is the earliest retry.
+        val waiting = Facts(liked, saved = emptySet(), skip = liked.toSet(), retryInMs = 45_000L)
+        assertEquals(45_000L, LikedSaverPolicy.recheckInMs(waiting))
+        assertNull(LikedSaverPolicy.recheckInMs(waiting.copy(retryInMs = null)))
+        // The gap holds back a save too: whichever ends first.
+        val gap = Facts(liked, saved = emptySet(), sinceLastMs = 10_000L, retryInMs = 45_000L)
+        assertEquals(LikedSaverPolicy.MIN_GAP_MS - 10_000L, LikedSaverPolicy.recheckInMs(gap))
+        assertEquals(5_000L, LikedSaverPolicy.recheckInMs(gap.copy(retryInMs = 5_000L)))
+        // A save starts now: it asks again when it finishes, no timer.
+        assertNull(LikedSaverPolicy.recheckInMs(Facts(liked, saved = emptySet(), retryInMs = 45_000L)))
     }
 
     @Test

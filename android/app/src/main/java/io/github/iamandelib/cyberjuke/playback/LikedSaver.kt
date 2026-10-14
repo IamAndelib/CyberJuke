@@ -21,8 +21,9 @@ import java.io.IOException
  * playing): no job, no alarm, nothing that wakes the phone. Event-driven: asked again when
  * playback's loading changes, the network or the liked list changes, the cache is cleared, a
  * back-off ends or a save finishes. Its one timer ([recheck]) is a one-shot postDelayed for the
- * end of the gap between two extractions, pending only while the gap alone holds back a save
- * that could start; cancelled by the next check and by [stop]. Downloads run on the one
+ * end of the gap between two extractions (pending only while the gap alone holds back a save
+ * that could start) or for the retry of a save that stopped ([SaveStrikes]), whichever is
+ * sooner; cancelled by the next check and by [stop]. Downloads run on the one
  * background thread ([Background]), one at a time, through a [CacheWriter] (only the bytes not
  * yet cached are fetched), and give way at once when playback needs the network ([giveWay],
  * [PlaybackNeed]).
@@ -52,8 +53,10 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
     /** Fresh ones already tried once: their retries wait for the gap. */
     private val tried = HashSet<String>()
 
-    /** Couldn't be saved this service's life (unavailable, refused, stopped three times). */
+    /** Couldn't be saved this service's life (unavailable, refused, stopped [SaveStrikes.MAX] times). */
     private val failed = HashSet<String>()
+
+    /** Saves that stopped: each waits longer before its next try, then is given up on. */
     private val strikes = SaveStrikes()
 
     /** When the last save extracted (elapsedRealtime); 0 = none yet. */
@@ -137,19 +140,21 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
 
     private fun facts(): LikedSaverPolicy.Facts {
         val liked = AudioCache.liked
+        val now = SystemClock.elapsedRealtime()
         return LikedSaverPolicy.Facts(
             liked = liked,
             saved = AudioCache.savedLiked,
             fresh = fresh,
             tried = tried,
-            skip = host.stillLoading() + failed,
+            skip = host.stillLoading() + failed + strikes.waiting(now),
             online = online,
             unmetered = unmetered,
             quiet = NetBlock.isQuiet(),
             playbackNeedsNetwork = host.playbackNeedsNetwork(),
             busy = job != null,
             likedFull = AudioCache.likedFull,
-            sinceLastMs = if (lastExtractionAt == 0L) Long.MAX_VALUE else SystemClock.elapsedRealtime() - lastExtractionAt,
+            sinceLastMs = if (lastExtractionAt == 0L) Long.MAX_VALUE else now - lastExtractionAt,
+            retryInMs = strikes.nextDueInMs(now),
             denied = AudioCache::isDenied,
         )
     }
@@ -185,9 +190,10 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
                 tried.remove(j.ytId)
             }
             SaveOutcome.FAILED -> failed.add(j.ytId)
-            // Not cancelled, yet not saved (a dropped connection, an exception): three times and
-            // it is given up on, so a song that can't be saved isn't tried forever.
-            SaveOutcome.STOPPED -> if (strikes.stopped(j.ytId)) failed.add(j.ytId)
+            // Not cancelled, yet not saved (a dropped connection, an exception): tried again after
+            // a wait that doubles each time, and given up on after the fifth stop, so a song that
+            // can't be saved isn't tried forever, nor hammered while the connection is bad.
+            SaveOutcome.STOPPED -> if (strikes.stopped(j.ytId, SystemClock.elapsedRealtime())) failed.add(j.ytId)
             SaveOutcome.CANCELLED -> Unit
         }
         check()
