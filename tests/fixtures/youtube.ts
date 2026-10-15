@@ -94,12 +94,33 @@ export function setImagesOffline(page: Page, off: boolean): void {
   else imagesCutOff.delete(page);
 }
 
-export const imagesOffline = (page: Page): boolean => imagesCutOff.has(page);
+const imagesOffline = (page: Page): boolean => imagesCutOff.has(page);
+
+/** Pages whose next request for each image fails once, and the images that already did. */
+const switching = new WeakMap<Page, Set<string>>();
+
+/**
+ * The connection is back, but the network is still switching: the next request for each image
+ * fails once, as Chromium fails the requests in flight when the network changes
+ * (ERR_NETWORK_CHANGED); the one after that loads.
+ */
+export function failImagesOnce(page: Page): void {
+  switching.set(page, new Set());
+}
+
+/** The image request this route answers fails: the host is cut off, or it is caught in a switch. */
+export function imageFails(page: Page, url: string): boolean {
+  if (imagesOffline(page)) return true;
+  const failed = switching.get(page);
+  if (!failed || failed.has(url)) return false;
+  failed.add(url);
+  return true;
+}
 
 /** Synthetic thumbnails for i.ytimg.com and the fake IFrame player. */
 export async function stubYouTube(page: Page): Promise<void> {
   await page.route(/^https:\/\/i\.ytimg\.com\/vi\/([^/]+)\//, (route) => {
-    if (imagesOffline(page)) return route.abort('internetdisconnected');
+    if (imageFails(page, route.request().url())) return route.abort('internetdisconnected');
     const id = /\/vi\/([^/]+)\//.exec(route.request().url())?.[1] ?? 'x';
     return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: fakeThumb(id, /\/mqdefault\.jpg$/.test(route.request().url())) });
   });

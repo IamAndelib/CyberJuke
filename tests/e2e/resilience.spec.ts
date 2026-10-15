@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { setImagesOffline } from '../fixtures/youtube';
+import { failImagesOnce, setImagesOffline } from '../fixtures/youtube';
 import type { Locator, Page } from '@playwright/test';
 import { expectStable, opened, openNowPlaying, openSearch, playerCalls, recordOpens, seedStorage, setOffline, setVisibility, start, waitForTracks } from '../helpers';
 
@@ -410,6 +410,27 @@ test('art that failed to load offline loads once the connection is back, and on 
   await setVisibility(page, 'visible');
   await expect(cutOffRow.locator('img')).toBeVisible();
   await expect.poll(() => loaded(cutOffRow)).toBe(true);
+});
+
+test('art caught in the network switch as the connection comes back still loads', async ({ page, backend }) => {
+  const track = (n: number) => {
+    const ytId = 'sw' + String(n).padStart(9, '0');
+    return { id: `s${n}`, ytId, title: `Switch ${n}`, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '2026-01-01T00:00:00Z', nsfw: false, artworkUrl: `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` };
+  };
+  await seedStorage(page, { 'CapacitorStorage.liked': Array.from({ length: 8 }, (_, i) => track(i)) });
+  // The images' host already gone as the app opens, then the connection with it.
+  setImagesOffline(page, true);
+  await page.goto('/');
+  await page.getByTestId('tab-library').click();
+  const row = page.getByTestId('liked-list').getByTestId('track-row').first();
+  await expect(row.locator('.art-ph')).toBeVisible();
+  await setOffline(page, backend, true);
+  // The phone reports the connection, but the request each image sends right then is caught in
+  // the switch and fails; the next one would load.
+  failImagesOnce(page);
+  await setOffline(page, backend, false);
+  await expect(row.locator('img')).toBeVisible();
+  await expect.poll(() => row.locator('img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
 });
 
 test.describe('a start that fails', () => {
