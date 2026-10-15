@@ -1,5 +1,6 @@
 import { signal } from '@preact/signals';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
+import { online } from '../../core/network';
 import { smallArtworkUrl, type Track } from '../../data/model';
 import { Icon, type IconName } from '../icons';
 
@@ -10,14 +11,36 @@ import { Icon, type IconName } from '../icons';
  */
 export const artGen = signal(0);
 
+/** How long an image that failed while the app counts as online waits for its one more try. */
+export const ART_RETRY_MS = 1000;
+
 /**
  * The image of [Art] and Cover: [url] in the pixel frame (see .art in ui/ui.css), or a
  * [placeholder] icon when there is none or it fails to load (until the next artGen).
+ *
+ * An image that fails while the app counts as online is asked for once more ART_RETRY_MS later,
+ * as a Firestore request is (data/firestore.ts): when the connection comes back, Chromium fails the
+ * requests caught in the network's switch (ERR_NETWORK_CHANGED), the artGen retries among them,
+ * though the next request would load.
  */
 export function ArtFrame({ url, class: cls, placeholder = 'note', big }: { url?: string | null; class: string; placeholder?: IconName; big?: boolean }) {
   const [failedFor, setFailedFor] = useState<{ url: string; gen: number } | null>(null);
+  // The url given its one more try (one per artGen), and whether that try is still to come.
+  const [retry, setRetry] = useState<{ url: string; gen: number; due: boolean } | null>(null);
+  const waiting = !!url && retry?.url === url && retry.due;
+  useEffect(() => {
+    if (!waiting || !retry) return;
+    const t = setTimeout(() => setRetry({ ...retry, due: false }), ART_RETRY_MS);
+    return () => clearTimeout(t);
+  }, [waiting, retry]);
   // artGen is read only once this image has failed, so healthy frames never re-render for it.
-  const failed = !url || (failedFor?.url === url && failedFor.gen === artGen.value);
+  const failed = !url || waiting || (failedFor?.url === url && failedFor.gen === artGen.value);
+  const onError = () => {
+    if (!url) return;
+    const gen = artGen.peek();
+    if (online.peek() && !(retry?.url === url && retry.gen === gen)) setRetry({ url, gen, due: true });
+    else setFailedFor({ url, gen });
+  };
   return (
     <div class={cls} aria-hidden="true">
       {failed ? (
@@ -25,7 +48,7 @@ export function ArtFrame({ url, class: cls, placeholder = 'note', big }: { url?:
           <Icon name={placeholder} size={big ? 72 : 24} />
         </div>
       ) : (
-        <img src={url} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setFailedFor({ url, gen: artGen.peek() })} />
+        <img src={url} alt="" loading="lazy" decoding="async" draggable={false} onError={onError} />
       )}
     </div>
   );
