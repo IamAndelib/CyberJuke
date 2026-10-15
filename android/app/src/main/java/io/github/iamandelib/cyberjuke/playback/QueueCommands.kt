@@ -23,6 +23,12 @@ internal object QueueCommands {
     /** The Autoplay setting: [ARG_ENABLED]. Off drops the autoplay items still to come. */
     const val ACTION_SET_AUTOPLAY = "io.github.iamandelib.cyberjuke.SET_AUTOPLAY"
 
+    /** The Crossfade setting: [ARG_MS], 0 (Off) or a fade's length ([CrossfadePlan.CHOICES_MS]). */
+    const val ACTION_SET_CROSSFADE = "io.github.iamandelib.cyberjuke.SET_CROSSFADE"
+
+    /** The Gapless playback setting: [ARG_ENABLED]. Off loads the next track only once it is current ([LoadAhead]). */
+    const val ACTION_SET_GAPLESS = "io.github.iamandelib.cyberjuke.SET_GAPLESS"
+
     /**
      * A tap in Up next: [ARG_INDEX] (and [ARG_EXPECT]). On an autoplay item the radio continues
      * from it.
@@ -56,6 +62,7 @@ internal object QueueCommands {
     const val ARG_IDS = "ids"
     const val ARG_KIND = "kind"
     const val ARG_BEFORE = "beforeId"
+    const val ARG_MS = "ms"
 
     /** SessionResult extra: the reject code for the web (see [STALE_INDEX], [TOO_LARGE]). */
     const val RESULT_CODE = "code"
@@ -75,7 +82,9 @@ internal object QueueCommands {
     val MOVE = SessionCommand(ACTION_MOVE, Bundle.EMPTY)
     val REMOVE_IDS = SessionCommand(ACTION_REMOVE_IDS, Bundle.EMPTY)
     val RESTORE = SessionCommand(ACTION_RESTORE, Bundle.EMPTY)
-    val ALL = listOf(QUEUE_NEXT, SET_LIST, ADD_AUTOPLAY, SET_AUTOPLAY, SKIP_TO, REMOVE, MOVE, REMOVE_IDS, RESTORE)
+    val SET_CROSSFADE = SessionCommand(ACTION_SET_CROSSFADE, Bundle.EMPTY)
+    val SET_GAPLESS = SessionCommand(ACTION_SET_GAPLESS, Bundle.EMPTY)
+    val ALL = listOf(QUEUE_NEXT, SET_LIST, ADD_AUTOPLAY, SET_AUTOPLAY, SKIP_TO, REMOVE, MOVE, REMOVE_IDS, RESTORE, SET_CROSSFADE, SET_GAPLESS)
 
     /** Played autoplay items kept behind the current one (older ones are trimmed). */
     const val KEEP_PLAYED_AUTO = 50

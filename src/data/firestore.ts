@@ -5,6 +5,9 @@
  *  - only query shapes that have composite indexes (latest, latest-by-genre, and the
  *    catalog: latest with a field mask, optionally `createdAt > since`);
  *  - results cached in memory for ~5 minutes; in-flight requests are de-duplicated;
+ *  - only the fields a track is made of are asked for (CATALOG_FIELDS), and a query
+ *    that gets no answer in REQUEST_TIMEOUT_MS is given up (a slow network shows an
+ *    error with Retry, not an endless skeleton);
  *  - no polling of the feed itself: the only periodic request is the freshness check
  *    (`newerThan`: a createdAt-only field mask, at most FRESHNESS_LIMIT rows), run in
  *    the foreground at the user's chosen interval.
@@ -19,6 +22,8 @@ import { bool, isHiddenDoc, tracksFromRows, type FsRunQueryRow, type Track, ts }
 import { Cache } from '../core/cache';
 import { errorMessage, isOffline } from '../core/errors';
 import { parseRunQueryRows } from '../core/guards';
+import { mark } from '../core/marks';
+import { online } from '../core/network';
 import type { Cursor, Page, TrackSource } from './source';
 
 export const PROJECT = 'cyberspace-cyberspace';
@@ -36,7 +41,10 @@ const SHUFFLE_PAGES = 4;
 export const CATALOG_PAGE_SIZE = 300;
 /** Safety stop for catalog paging (300 * 40 = 12,000 posts). */
 const CATALOG_MAX_PAGES = 40;
-/** Field mask for catalog requests: only what tracksFromDocument and the counts need. */
+/**
+ * Field mask for Jukebox requests (Latest, genre pages and the catalog): only what
+ * tracksFromDocument and the counts need. A field it starts to read goes here too.
+ */
 export const CATALOG_FIELDS = [
   'attachments',
   'audioAttachmentGenre',
@@ -57,6 +65,13 @@ const FRESHNESS_FIELDS = ['createdAt'] as const;
 const MEMBERS_EXTRA_FIELDS = ['isPublic', 'isBanned', 'isShadowBanned'] as const;
 export const MEMBERS_CATALOG_FIELDS = [...CATALOG_FIELDS, ...MEMBERS_EXTRA_FIELDS] as const;
 export const MEMBERS_FRESHNESS_FIELDS = [...FRESHNESS_FIELDS, 'isBanned', 'isShadowBanned'] as const;
+
+/** A query not answered in this time fails (an error with Retry), so a hung request can't leave a skeleton forever. */
+export const REQUEST_TIMEOUT_MS = 15_000;
+/** A request that got no answer at all (fetch threw) is sent once more, this long later. */
+export const RETRY_DELAY_MS = 1000;
+/** The same for one catalog page (300 posts): it's bigger, and nothing waits on it. */
+const CATALOG_TIMEOUT_MS = 60_000;
 
 /** The freshness check's field mask: NSFW hidden adds isNSFW, so NSFW posts aren't counted. */
 function freshnessFields(members: boolean, includeNsfw: boolean): readonly string[] {
@@ -157,6 +172,34 @@ interface FirestoreSourceOptions {
   onLatest?: (newest: string) => void;
   /** The Cyberspace login; without one (or signed out) every request is the public one. */
   auth?: SourceAuth;
+  /** How long a query may take, the ID token it waits for included. Default REQUEST_TIMEOUT_MS. */
+  timeoutMs?: number;
+}
+
+/** Resolves `ms` later, or rejects as soon as `signal` aborts (its timer cleared). */
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const stop = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', stop);
+      resolve();
+    }, ms);
+    if (signal.aborted) return stop();
+    signal.addEventListener('abort', stop, { once: true });
+  });
+}
+
+/** `p`, or a rejection as soon as `signal` aborts (for a wait that can't be cancelled itself). */
+function untilAborted<T>(p: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const stop = () => reject(signal.reason);
+    if (signal.aborted) return stop();
+    signal.addEventListener('abort', stop, { once: true });
+    p.then(resolve, reject).finally(() => signal.removeEventListener('abort', stop));
+  });
 }
 
 export class FirestoreSource implements TrackSource {
@@ -165,6 +208,7 @@ export class FirestoreSource implements TrackSource {
   private readonly showNsfw: () => boolean;
   private readonly fetchFn: typeof fetch;
   private readonly auth: SourceAuth | undefined;
+  private readonly timeoutMs: number;
   /** Observer for the newest post shown on the Latest feed (freshness baseline). */
   onLatest: ((newest: string) => void) | undefined;
   /**
@@ -176,6 +220,7 @@ export class FirestoreSource implements TrackSource {
   constructor(opts: FirestoreSourceOptions = {}) {
     this.onLatest = opts.onLatest;
     this.auth = opts.auth;
+    this.timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
     this.showNsfw = opts.showNsfw ?? (() => false);
     this.fetchFn = opts.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
     this.cache = new Cache({ ttlMs: CACHE_TTL_MS, max: CACHE_MAX_PAGES, dropStale: true, now: opts.now ?? (() => Date.now()) });
@@ -235,7 +280,7 @@ export class FirestoreSource implements TrackSource {
           members,
         }),
       );
-      const p = await this.request(body, members, CATALOG_PAGE_SIZE);
+      const p = await this.request(body, members, CATALOG_PAGE_SIZE, Math.max(this.timeoutMs, CATALOG_TIMEOUT_MS));
       out.push(...p.tracks);
       cursor = p.cursor;
       if (!cursor) break;
@@ -285,7 +330,8 @@ export class FirestoreSource implements TrackSource {
 
   private raw(genre: string | null, cursor: Cursor | null): Promise<Page> {
     const members = this.members();
-    const body = JSON.stringify(buildQuery({ genre, cursor, members }));
+    // The catalog's mask: the same query shapes (and indexes), about half the bytes.
+    const body = JSON.stringify(buildQuery({ genre, cursor, members, select: members ? MEMBERS_CATALOG_FIELDS : CATALOG_FIELDS }));
     return this.cache.load(body, () => this.request(body, members), {
       stored: (page) => {
         if (genre == null && cursor == null && page.tracks[0]?.createdAt) this.onLatest?.(page.tracks[0].createdAt);
@@ -293,28 +339,33 @@ export class FirestoreSource implements TrackSource {
     });
   }
 
-  private async request(body: string, members: boolean, limit = PAGE_SIZE): Promise<Page> {
-    const rows = await this.rows(body, members);
+  private async request(body: string, members: boolean, limit = PAGE_SIZE, timeoutMs = this.timeoutMs): Promise<Page> {
+    const rows = await this.rows(body, members, timeoutMs);
     // The cursor comes from every row, so hidden (banned) posts don't end paging early.
     return { tracks: tracksFromRows(rows), cursor: nextCursor(rows, limit) };
   }
 
-  private async post(body: string, token: string | null): Promise<Response> {
+  private async post(body: string, token: string | null, signal: AbortSignal): Promise<Response> {
+    mark('request');
     try {
-      return await this.fetchFn(RUN_QUERY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
-        body,
-      });
+      return await untilAborted(
+        this.fetchFn(RUN_QUERY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
+          body,
+          signal,
+        }),
+        signal,
+      );
     } catch {
       throw new FirestoreError('Network unavailable', 0, true);
     }
   }
 
-  private async token(get: () => Promise<string | null>): Promise<string> {
+  private async token(get: () => Promise<string | null>, signal: AbortSignal): Promise<string> {
     let t: string | null;
     try {
-      t = await get();
+      t = await untilAborted(get(), signal);
     } catch (e) {
       throw new FirestoreError(errorMessage(e, 'Network unavailable'), 0, isOffline(e));
     }
@@ -322,21 +373,50 @@ export class FirestoreSource implements TrackSource {
     return t;
   }
 
-  private async rows(body: string, members = false): Promise<FsRunQueryRow[]> {
+  /**
+   * Run a query: the ID token it needs, the request and its answer, all within `timeoutMs`.
+   * A request that got no answer at all (fetch threw: the connection broke, a handover's
+   * gap) is sent once more RETRY_DELAY_MS later, inside the same budget. A timeout, an HTTP
+   * error or a second failure surfaces as it is.
+   */
+  private async rows(body: string, members = false, timeoutMs = this.timeoutMs): Promise<FsRunQueryRow[]> {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), timeoutMs);
+    try {
+      try {
+        return await this.answer(body, members, ctl.signal);
+      } catch (e) {
+        // Only a request that got no answer at all, and only while the app thinks it is online:
+        // offline, the answer is known, and a second request would just cost a second.
+        if (!(e instanceof FirestoreError && e.offline) || !online.peek()) throw e;
+        await delay(RETRY_DELAY_MS, ctl.signal);
+        return await this.answer(body, members, ctl.signal);
+      }
+    } catch (e) {
+      // Too slow is not offline: the list says it couldn't load, with Retry.
+      if (ctl.signal.aborted) throw new FirestoreError("Cyberspace didn't answer in time", 0);
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async answer(body: string, members: boolean, signal: AbortSignal): Promise<FsRunQueryRow[]> {
     let res: Response;
     if (members && this.auth) {
-      res = await this.post(body, await this.token(() => this.auth!.token()));
+      res = await this.post(body, await this.token(() => this.auth!.token(), signal), signal);
       // An ID token the server no longer accepts: refresh once and retry once.
-      if (res.status === 401) res = await this.post(body, await this.token(() => this.auth!.refreshNow()));
+      if (res.status === 401) res = await this.post(body, await this.token(() => this.auth!.refreshNow(), signal), signal);
     } else {
-      res = await this.post(body, null);
+      res = await this.post(body, null, signal);
     }
     let json: unknown;
     try {
-      json = await res.json();
+      json = await untilAborted(res.json() as Promise<unknown>, signal);
     } catch {
       throw new FirestoreError(`Bad response (${res.status})`, res.status);
     }
+    mark('response');
     const rows = res.ok ? parseRunQueryRows(json) : null;
     if (!rows) {
       const err = Array.isArray(json) ? json[0]?.error : (json as { error?: { message?: string } })?.error;

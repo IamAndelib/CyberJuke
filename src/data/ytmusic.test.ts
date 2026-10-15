@@ -52,6 +52,13 @@ describe('musicItemToTrack', () => {
       'ytm:bcdefghijkl',
     ]);
   });
+
+  it("tags an album's tracks with the album, and nothing else", () => {
+    const [t] = m.musicTracks([song('abcdefghijk')], 'Artist', 'Blue Lines');
+    expect(t.album).toBe('Blue Lines');
+    expect(m.musicTracks([song('abcdefghijk')], 'Artist')[0]).not.toHaveProperty('album');
+    expect(m.musicTracks([song('abcdefghijk')], 'Artist', '')[0]).not.toHaveProperty('album');
+  });
 });
 
 describe('errors', () => {

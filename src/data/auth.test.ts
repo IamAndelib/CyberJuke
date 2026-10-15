@@ -246,14 +246,54 @@ describe('auth: token refresh', () => {
 });
 
 describe('auth: restore and sign out', () => {
-  it('restores a saved session without a request, then refreshes on first use', async () => {
-    const s = setup();
+  it('restores a saved session and starts the token refresh at once; the first use waits for that one', async () => {
+    let release!: (r: Response) => void;
+    const s = setup({ refresh: () => new Promise<Response>((r) => (release = r)) });
     await s.store.set({ key: SESSION_KEY, value: JSON.stringify({ v: 1, uid: 'uid-1', name: '@nightowl', refreshToken: 'rt-1' }) });
     await s.auth.restore();
     expect(s.auth.state.value).toEqual({ status: 'signedIn', user: { uid: 'uid-1', name: '@nightowl' } });
-    expect(s.fetch).not.toHaveBeenCalled();
     expect(s.changes).toEqual([]);
-    expect(await s.auth.token()).toBe('id-r1');
+    // Already on its way before anything asked for a token.
+    expect(s.refreshCount()).toBe(1);
+    const token = s.auth.token();
+    await new Promise((r) => setTimeout(r, 0));
+    // The first request shares it rather than sending a second refresh after it.
+    expect(s.refreshCount()).toBe(1);
+    release(json(200, { id_token: 'id-r1', refresh_token: 'rt-1', expires_in: '3600', user_id: 'uid-1' }));
+    expect(await token).toBe('id-r1');
+    expect(s.refreshCount()).toBe(1);
+    // The ID token stays in memory: only the refresh token is saved.
+    expect((await s.store.get({ key: SESSION_KEY })).value).not.toContain('id-r1');
+  });
+
+  it('restores a session whose login has expired: the background refresh signs out (expired)', async () => {
+    const s = setup({ refresh: () => json(400, { error: { message: 'TOKEN_EXPIRED' } }) });
+    await s.store.set({ key: SESSION_KEY, value: JSON.stringify({ v: 1, uid: 'uid-1', name: '@nightowl', refreshToken: 'rt-1' }) });
+    await s.auth.restore();
+    await vi.waitFor(() => expect(s.changes).toEqual([[false, 'expired']]));
+    expect(s.auth.signedIn()).toBe(false);
+    expect(await s.auth.token()).toBeNull();
+  });
+
+  it('restores a session offline: the failed background refresh keeps it, and the next use tries again', async () => {
+    const s = setup({
+      refresh: (n) => {
+        if (n === 1) throw new TypeError('Failed to fetch');
+        return json(200, { id_token: 'id-r2', refresh_token: 'rt-1', expires_in: '3600', user_id: 'uid-1' });
+      },
+    });
+    await s.store.set({ key: SESSION_KEY, value: JSON.stringify({ v: 1, uid: 'uid-1', name: '@nightowl', refreshToken: 'rt-1' }) });
+    await s.auth.restore();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(s.auth.signedIn()).toBe(true);
+    expect(await s.auth.token()).toBe('id-r2');
+  });
+
+  it('restores nothing when signed out: no request', async () => {
+    const s = setup();
+    await s.auth.restore();
+    expect(s.auth.state.value.status).toBe('signedOut');
+    expect(s.fetch).not.toHaveBeenCalled();
   });
 
   it('ignores a missing or unreadable saved session', async () => {

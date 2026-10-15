@@ -8,6 +8,7 @@ import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
@@ -30,8 +31,12 @@ import io.github.iamandelib.cyberjuke.net.Family
 import io.github.iamandelib.cyberjuke.net.Ipv4Mode
 import io.github.iamandelib.cyberjuke.net.NetBlock
 import io.github.iamandelib.cyberjuke.net.NetPrefs
+import io.github.iamandelib.cyberjuke.playback.AudioCache
+import io.github.iamandelib.cyberjuke.playback.AudioQuality
+import io.github.iamandelib.cyberjuke.playback.Background
 import io.github.iamandelib.cyberjuke.playback.BridgeLimits
 import io.github.iamandelib.cyberjuke.playback.ControllerKey
+import io.github.iamandelib.cyberjuke.playback.CrossfadePlan
 import io.github.iamandelib.cyberjuke.playback.JukeTracks
 import io.github.iamandelib.cyberjuke.playback.JukeUris
 import io.github.iamandelib.cyberjuke.playback.LaunchOptions
@@ -42,6 +47,7 @@ import io.github.iamandelib.cyberjuke.playback.PlayerBus
 import io.github.iamandelib.cyberjuke.playback.PlayerPrefsStore
 import io.github.iamandelib.cyberjuke.playback.QueueCommands
 import io.github.iamandelib.cyberjuke.playback.QueueInfo
+import io.github.iamandelib.cyberjuke.playback.SessionPolicy
 import io.github.iamandelib.cyberjuke.playback.StreamResolver
 import io.github.iamandelib.cyberjuke.playback.TooLargeException
 import io.github.iamandelib.cyberjuke.playback.TrackExtras
@@ -52,12 +58,21 @@ import kotlin.math.roundToInt
 /**
  * Capacitor bridge to PlaybackService. Contract (TS side):
  *   setQueue, queueNext, removeItem, moveItem, play, pause, seekTo, skipToNext,
- *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, getState,
+ *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, setCrossfade, setGapless, getState,
  *   getAppInfo, getLaunchOptions, getBlockState, setNetworkPrefs, retryNow, getNetStatus,
- *   setGestureExclusion, addAutoplay, setAutoplay, restore, removeIds; events 'state',
- *   'trackError', 'blocked', 'unblocked', 'extractorBroken', 'queueLow', 'tracks',
- *   'openNowPlaying'.
+ *   setGestureExclusion, addAutoplay, setAutoplay, restore, removeIds, setLikedIds,
+ *   setCacheLimit, clearCache, signedOut, signedIn, cachedIds; events 'state', 'trackError',
+ *   'blocked', 'unblocked', 'extractorBroken', 'queueLow', 'tracks', 'openNowPlaying',
+ *   'cacheChanged'.
  *
+ * - The listening cache ([AudioCache]): setLikedIds({ ytIds, membersOnly? }) (newest like
+ *   first), setCacheLimit({ mb }), clearCache(), signedOut() (members-only audio goes, and stays
+ *   out until signedIn()), cachedIds() -> { ytIds }: the liked songs saved whole, which play
+ *   offline. cacheChanged { ytIds } sends that set again when it changes, at most every 2 s.
+ *   The upkeep calls resolve once done, and reject when there is no cache.
+ * - trackError is { trackId, message, skipped, kind: 'network' | 'track', resumes }: 'network'
+ *   when the connection failed (paused on the item; `resumes`: it plays on by itself once the
+ *   network is back), 'track' when the track itself did.
  * - setQueue keeps the tracks queued with queueNext next (P1) and starts autoplay over from
  *   the started track (a Global one gets its radio natively, refilled in the service).
  * - state also carries `upNextKinds` (one letter per upNextIds entry: q = queued by you,
@@ -88,6 +103,8 @@ import kotlin.math.roundToInt
  *   when play()/setQueue is refused during one. unblocked {}: the back-off ran out or was lifted
  *   (new network, IPv4 setting changed, retryNow), or playback worked again.
  *   extractorBroken { message }: YouTube changed something (parse failure).
+ * - state's `waitingForNetwork`: an outage paused playback, and it resumes by itself once the
+ *   network is back (NetBlock.waitingForNetwork); sent again whenever it changes.
  * - While blocked, setQueue/play still update the queue but do not prepare (no extraction):
  *   playback stays paused with isBuffering false. Once the back-off ends, the service resumes
  *   playback it stopped (or a play() it refused), within NetBlock.RESUME_WINDOW_MS.
@@ -148,6 +165,7 @@ class JukePlayerPlugin : Plugin() {
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             val c = controller ?: return
+            if (!StateEvents.changeState(events.size(), events::get)) return
             if (events.contains(Player.EVENT_TIMELINE_CHANGED)) {
                 queueDirty = true
                 announceTracks(c)
@@ -165,6 +183,16 @@ class JukePlayerPlugin : Plugin() {
         override fun onUnblocked() {
             main.post { announceUnblocked() }
         }
+
+        // `waitingForNetwork` changed while paused: no player event would carry it.
+        override fun onWaitingChanged(waiting: Boolean) {
+            main.post { controller?.let { emitState(it) } }
+        }
+    }
+
+    // The network's validation flipped: `waitingForNetwork` may have, and no player event carries it.
+    private val onlineListener = AudioCache.OnlineListener {
+        main.post { controller?.let { emitState(it) } }
     }
 
     private val unblockTimer = Runnable {
@@ -180,17 +208,54 @@ class JukePlayerPlugin : Plugin() {
         }
     }
 
+    /** The liked songs saved whole last sent in `cacheChanged`, and when (elapsedRealtime). */
+    private var lastSaved: Set<String>? = null
+    private var lastSavedAt = 0L
+    private var savedEmitPending = false
+
+    private val emitSaved = Runnable {
+        savedEmitPending = false
+        val ids = AudioCache.savedLiked
+        if (ids == lastSaved) return@Runnable
+        lastSaved = ids
+        lastSavedAt = SystemClock.elapsedRealtime()
+        notifyListeners("cacheChanged", savedIds(ids))
+    }
+
+    private fun savedIds(ids: Set<String>): JSObject {
+        val arr = JSArray()
+        ids.forEach { arr.put(it) }
+        val data = JSObject()
+        data.put("ytIds", arr)
+        return data
+    }
+
+    /** Any thread: the saved liked songs changed. Sent only when the set did, at most every [SAVED_EVENT_GAP_MS]. */
+    private val cacheListener = AudioCache.Listener {
+        main.post {
+            if (savedEmitPending) return@post
+            savedEmitPending = true
+            val wait = (lastSavedAt + SAVED_EVENT_GAP_MS - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+            main.postDelayed(emitSaved, wait)
+        }
+    }
+
     /** Already on the main thread (PlayerBus): notified at once, before the state it led to. */
-    private val trackErrorListener = PlayerBus.TrackErrorListener { trackId, message, skipped ->
+    private val trackErrorListener = PlayerBus.TrackErrorListener { trackId, message, skipped, network, resumes ->
         val data = JSObject()
         data.put("trackId", trackId)
         data.put("message", message)
         data.put("skipped", skipped)
+        data.put("kind", if (network) "network" else "track")
+        data.put("resumes", resumes)
         notifyListeners("trackError", data)
     }
 
     override fun load() {
         NetPrefsStore.load(context)
+        AudioCache.init(context, PlayerPrefsStore.cacheMb(context))
+        AudioCache.addListener(cacheListener)
+        AudioCache.addOnlineListener(onlineListener)
         PlayerBus.add(trackErrorListener)
         PlayerBus.addBroken(brokenListener)
         NetBlock.add(blockListener)
@@ -270,6 +335,8 @@ class JukePlayerPlugin : Plugin() {
 
     override fun handleOnDestroy() {
         destroyed = true
+        AudioCache.removeListener(cacheListener)
+        AudioCache.removeOnlineListener(onlineListener)
         PlayerBus.remove(trackErrorListener)
         PlayerBus.removeBroken(brokenListener)
         NetBlock.remove(blockListener)
@@ -277,6 +344,7 @@ class JukePlayerPlugin : Plugin() {
         main.post {
             main.removeCallbacks(ticker)
             main.removeCallbacks(unblockTimer)
+            main.removeCallbacks(emitSaved)
             controller?.removeListener(playerListener)
             controllerFuture?.let { MediaController.releaseFuture(it) }
             controllerFuture = null
@@ -698,16 +766,121 @@ class JukePlayerPlugin : Plugin() {
         }
     }
 
+    /** `setQuality({ quality: 'auto' | 'high' | 'low' })`; an unknown value is 'auto'. */
     @PluginMethod
     fun setQuality(call: PluginCall) {
-        StreamResolver.quality = when (call.getString("quality")) {
-            "high" -> StreamResolver.Quality.HIGH
-            "low" -> StreamResolver.Quality.LOW
-            else -> return call.reject("quality must be 'high' or 'low'")
-        }
+        StreamResolver.quality = AudioQuality.of(call.getString("quality"))
         PlayerPrefsStore.setQuality(context, StreamResolver.quality)
         // Takes effect from the next resolution (next track / next prepare).
         call.resolve()
+    }
+
+    /**
+     * `setCrossfade({ ms: 0 | 3000 | 6000 | 10000 })`: Off, or the fade between tracks that end by
+     * themselves (the service saves it). Anything else rejects.
+     */
+    @PluginMethod
+    fun setCrossfade(call: PluginCall) {
+        val ms = CrossfadePlan.valid(call.intArg("ms")) ?: return call.reject("ms must be 0, 3000, 6000 or 10000")
+        val args = Bundle().apply { putInt(QueueCommands.ARG_MS, ms) }
+        withController(call) { c -> sendCommand(call, c, QueueCommands.SET_CROSSFADE, args) }
+    }
+
+    /**
+     * `setGapless({ enabled })`: Gapless playback (the service saves it). On, the next track is
+     * readied while this one plays; off, it loads only once it is current (unless Crossfade is on).
+     */
+    @PluginMethod
+    fun setGapless(call: PluginCall) {
+        val enabled = call.getBoolean("enabled") ?: return call.reject("enabled is required")
+        val args = Bundle().apply { putBoolean(QueueCommands.ARG_ENABLED, enabled) }
+        withController(call) { c -> sendCommand(call, c, QueueCommands.SET_GAPLESS, args) }
+    }
+
+    // ---- the listening cache ----------------------------------------------------------------
+    // Its upkeep runs on the one background thread (Background). A liked save in progress there
+    // is stopped first, so the call never waits behind it; the call resolves once the work is
+    // done, and rejects when there is no cache (it couldn't be opened).
+
+    /** Runs [work] on the background thread, after stopping a liked save; resolves when it's done. */
+    private fun upkeep(call: PluginCall, what: String, work: () -> Boolean) {
+        AudioCache.cancelSave?.invoke()
+        Background.run(what) {
+            try {
+                if (work()) call.resolve() else call.reject("No listening cache")
+            } catch (e: Exception) {
+                call.reject("$what failed: ${e.javaClass.simpleName}")
+            }
+        }
+    }
+
+    /**
+     * `setLikedIds({ ytIds, membersOnly? })`: the liked songs, newest like first (at most
+     * BRIDGE_MAX_ITEMS), and which of them are members-only. Kept in the cache last, and saved
+     * for offline; a few liked since the last call are saved now.
+     */
+    @PluginMethod
+    fun setLikedIds(call: PluginCall) {
+        val ids = ytIdsArg(call, "ytIds") ?: return
+        val members = if (call.data.has("membersOnly")) ytIdsArg(call, "membersOnly") ?: return else emptyList()
+        AudioCache.markMembers(members)
+        upkeep(call, "setLikedIds") { AudioCache.setLiked(ids) }
+    }
+
+    /** `setCacheLimit({ mb: 128 | 256 | 512 })`; anything else is 256. A smaller one evicts at once. */
+    @PluginMethod
+    fun setCacheLimit(call: PluginCall) {
+        val mb = AudioCache.sizeOf(call.intArg("mb") ?: AudioCache.DEFAULT_MB)
+        PlayerPrefsStore.setCacheMb(context, mb)
+        upkeep(call, "setCacheLimit") { AudioCache.setLimitMb(mb) }
+    }
+
+    /** `clearCache()`: Settings' Clear cache. Playback goes on; liked songs are saved again on Wi-Fi. */
+    @PluginMethod
+    fun clearCache(call: PluginCall) {
+        upkeep(call, "clearCache") { AudioCache.clear() }
+    }
+
+    /**
+     * `signedOut()`: signed out (or starting signed out). The cached audio of every members-only
+     * track goes, and none is cached again until `signedIn()`. Cheap when there is none.
+     */
+    @PluginMethod
+    fun signedOut(call: PluginCall) {
+        upkeep(call, "signedOut") { AudioCache.signedOut() }
+    }
+
+    /**
+     * `signedIn()`: members-only audio may be cached again. Queued behind any `signedOut()` like
+     * the rest of the upkeep, so a quick sign-out and sign-in can't end signed out.
+     */
+    @PluginMethod
+    fun signedIn(call: PluginCall) {
+        upkeep(call, "signedIn") {
+            AudioCache.signedIn()
+            true
+        }
+    }
+
+    /** `cachedIds()`: `{ ytIds }`, the liked songs saved whole (they play offline). */
+    @PluginMethod
+    fun cachedIds(call: PluginCall) {
+        val ids = AudioCache.savedLikedNow()
+        call.resolve(savedIds(ids))
+    }
+
+    /** The call's [key] ids (valid ones only), or null after rejecting it (missing, TOO_LARGE). */
+    private fun ytIdsArg(call: PluginCall, key: String): List<String>? {
+        val arr = call.getArray(key) ?: return null.also { call.reject("$key is required") }
+        return try {
+            BridgeLimits.idsOf(arr).filter { SessionPolicy.isValidYtId(it) }
+        } catch (e: TooLargeException) {
+            call.reject(e.message, QueueCommands.TOO_LARGE)
+            null
+        } catch (e: Exception) {
+            call.reject("Invalid $key: ${e.message}")
+            null
+        }
     }
 
     @PluginMethod
@@ -938,6 +1111,7 @@ class JukePlayerPlugin : Plugin() {
             extra?.by?.let { o.put("by", it) }
             extra?.postUrl?.let { o.put("postUrl", it) }
             if (extra?.membersOnly == true) o.put("membersOnly", true)
+            item.mediaMetadata.albumTitle?.toString()?.let { o.put("album", it) }
             arr.put(o)
         }
         if (announcedTracks.size > MAX_ANNOUNCED) announcedTracks.clear()
@@ -987,6 +1161,9 @@ class JukePlayerPlugin : Plugin() {
         private const val TAG = "CyberJukePlugin"
         private const val TICK_TAG = "CyberJukeTick"
         private const val TICK_MS = 1000L
+
+        /** `cacheChanged` at most this often. */
+        private const val SAVED_EVENT_GAP_MS = 2000L
 
         /** Android ignores gesture exclusion beyond 200dp per edge. */
         private const val MAX_EXCLUSION_DP = 200f

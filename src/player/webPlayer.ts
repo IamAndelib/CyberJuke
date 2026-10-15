@@ -6,10 +6,12 @@ import { signal } from '@preact/signals';
 import type { Track } from '../data/model';
 import { block } from '../stores/block';
 import { toast } from '../stores/toast';
-import { TEST_HOOKS } from '../core/testHooks';
+import { TEST_HOOKS, exposeForTests } from '../core/testHooks';
+import { UNTITLED } from '../data/model';
+import { trackErrorText, type TrackErrorFacts } from './errorText';
 import { Queue } from './queue';
 import type { RepeatMode } from './native';
-import type { Ipv4Mode, Quality } from '../stores/library';
+import type { CrossfadeMs, Ipv4Mode, Quality } from '../stores/library';
 import { AUTOPLAY_LOW, EMPTY_STATE, LIST_CONTEXT, livePosition, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
 
 /* Minimal typings for the parts of the IFrame API we use. */
@@ -95,6 +97,14 @@ export class WebPlayer implements Player {
   private lowListeners = new Set<(e: QueueLow) => void>();
   /** The low state last announced, so each one is announced once. */
   private lowKey: string | null = null;
+
+  constructor() {
+    // The browser player never waits for the network (waitingForNetwork stays false); e2e
+    // drives native's "waiting for carrier" state through this.
+    exposeForTests('__cyberjukeWaitingForNetwork', (on: boolean) => this.publish({ waitingForNetwork: on }));
+    // Nor does it send `trackError`; e2e injects what native would say about the current track.
+    exposeForTests('__cyberjukeTrackError', (e: TrackErrorFacts) => toast(trackErrorText(e, this.q.current?.title ?? UNTITLED)));
+  }
 
   private publish(patch: Partial<PlayerState> = {}): void {
     const prev = this.s.value;
@@ -400,8 +410,20 @@ export class WebPlayer implements Player {
   }
 
   async setQuality(q: Quality): Promise<void> {
+    // e2e checks the call the native plugin would get.
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setQuality', { quality: q }]);
     // The IFrame API ignores quality requests nowadays; kept for interface parity.
     this.yt?.setPlaybackQuality?.(q === 'low' ? 'small' : 'default');
+  }
+
+  async setCrossfade(ms: CrossfadeMs): Promise<void> {
+    // The IFrame player has no crossfade; e2e checks the call the native plugin would get.
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setCrossfade', { ms }]);
+  }
+
+  async setGapless(enabled: boolean): Promise<void> {
+    // The IFrame player loads one video at a time; e2e checks the call the native plugin would get.
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setGapless', { enabled }]);
   }
 
   async setNetworkPrefs(prefs: { ipv4: Ipv4Mode }): Promise<void> {

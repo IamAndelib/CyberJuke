@@ -10,7 +10,7 @@ import { Icon } from '../../ui/icons';
 import { EmptyState, PlayShuffle, Tracks, playFrom } from '../../ui/components/TrackList';
 import { TrackRow } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
-import { askConfirm, selectTab, useSearchContext } from '../../ui/nav';
+import { askConfirm, nowPlayingOpen, popToRoot, selectTab, useSearchContext } from '../../ui/nav';
 import { list } from '../../ui/playAll';
 import { plural } from '../../core/text';
 
@@ -19,6 +19,14 @@ const section = signal<(typeof SECTIONS)[number]>('liked');
 
 const LIKED_CTX = list('Liked');
 const RECENT_CTX = list('Recently played');
+
+/** Library → Liked, from anywhere (the offline line, at the top and in Now Playing, and the offline toast's button). */
+export function openLiked(): void {
+  section.value = 'liked';
+  nowPlayingOpen.value = false;
+  popToRoot('library');
+  selectTab('library');
+}
 
 /** M3: clearing history asks first, and can still be undone from the toast. */
 function confirmClear(): void {

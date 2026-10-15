@@ -297,6 +297,8 @@ test('the Jukebox tracks of an artist play from the artist page', async ({ page 
   await page.getByTestId('artist-grid').getByTestId('artist-tile').first().click();
   const jukebox = page.getByTestId('artist-jukebox');
   const first = (await jukebox.getByTestId('track-title').first().textContent())!.trim();
+  // Play sits where the tile was: a tap this soon would be the tile's double tap (M9).
+  await page.waitForTimeout(350); // past the double-tap guard
   await page.getByTestId('artist-jukebox-play').click();
   await expect(page.getByTestId('mini-title')).toHaveText(first);
 });
