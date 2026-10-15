@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { box, start, toastsGone, waitForTracks } from '../helpers';
+import { box, isFeedQuery, start, toastsGone, waitForTracks } from '../helpers';
 
 /** Home: the Latest feed, genre chips, Most saved, the new-tracks pill and the CI autoplay hook. */
 
@@ -108,7 +108,7 @@ test('the new-tracks pill appears when there are newer posts; tapping it refresh
       }));
       return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(rows) });
     }
-    if (!q.select && !q.startAt && q.where.compositeFilter.filters.length === 5) latestFetches++;
+    if (isFeedQuery(q) && !q.startAt && q.where.compositeFilter.filters.length === 5) latestFetches++;
     return route.fallback();
   });
   await start(page);

@@ -24,8 +24,9 @@ import { installRenderCounter } from '../core/renderCount';
 import { describeError } from '../core/errors';
 import { logError } from '../core/log';
 import { TEST_HOOKS } from '../core/testHooks';
-import { loadLibrary, settings } from '../stores/library';
-import { onReconnect, watchNetwork } from '../core/network';
+import { mark } from '../core/marks';
+import { loadLists, loadSettings, settings } from '../stores/library';
+import { onReconnect, online, watchNetwork } from '../core/network';
 import { catalog } from '../stores/catalog';
 import { startFreshness } from '../stores/newTracks';
 import { startAccount } from '../stores/account';
@@ -33,7 +34,8 @@ import { auth } from '../data/auth';
 import { goBack, openNowPlayingWhen } from '../ui/nav';
 import { retryWatchedFeeds } from '../stores/feed';
 import { JukePlayer } from '../player/native';
-import { hasCurrent, startPlayerPrefs, startQueuePurge } from '../player';
+import { hasCurrent, setOpenLiked, startPlayerPrefs, startQueuePurge } from '../player';
+import { startListeningCache } from '../player/listeningCache';
 import { startUpdates } from '../stores/updates';
 import { playFrom, radio } from '../ui/playAll';
 import { startBlockEvents } from '../player/blockEvents';
@@ -41,10 +43,11 @@ import { source } from '../data';
 import { App, Overlays } from './App';
 import { BootError } from './BootError';
 import { Home } from '../features/home/Home';
-import { Library } from '../features/library/Library';
+import { Library, openLiked } from '../features/library/Library';
 import { Screen } from '../ui/components/Screen';
 import { whenIdle } from '../core/idle';
 import { TrackRow } from '../ui/components/TrackRow';
+import { artGen } from '../ui/components/Art';
 import { MiniPlayer, NowPlaying } from '../features/now-playing/PlayerUI';
 import { ArtistGrid, ArtistTile, ArtistTiles } from '../features/artists/Artists';
 import { ArtistPage } from '../features/artists/Artist';
@@ -110,33 +113,89 @@ async function maybeAutoplay(): Promise<void> {
   if (page.tracks.length) await playFrom(page.tracks, 0, radio('Home · Latest'));
 }
 
+/** Longest that background work waits for Home's first page (a slow or hung request). */
+const FIRST_PAGE_WAIT_MS = 5000;
+
 /**
- * Load the catalog in the background once the first screen has painted, and bring it
- * up to date when the app comes back to the foreground or back online. The store's
- * own rules decide whether that means a request (at most hourly) or nothing.
+ * Run `fn` once Home's first page has settled (answered or failed), or after
+ * FIRST_PAGE_WAIT_MS, whichever comes first: the catalog's download and the update
+ * check don't compete with the request the first screen waits for.
  */
-function startCatalog(): void {
-  const kick = () => void catalog.refresh();
-  whenIdle(kick, 1500, 300);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') kick();
+function afterFirstPage(first: Promise<unknown>, fn: () => void): void {
+  let done = false;
+  const go = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    fn();
+  };
+  const timer = setTimeout(go, FIRST_PAGE_WAIT_MS);
+  first.then(go, go);
+}
+
+/**
+ * Show the saved catalog (genre chips, Most saved, the Shuffle pool) once the first
+ * screen has painted: a file read, no request. Its network refresh waits for Home's
+ * first page (`firstPage`, see afterFirstPage), then follows the app back to the
+ * foreground or back online. The store's own rules decide whether that means a request
+ * (at most hourly) or nothing.
+ */
+function startCatalog(firstPage: Promise<unknown>): void {
+  whenIdle(() => void catalog.restoreSaved(), 1500, 300);
+  afterFirstPage(firstPage, () => {
+    const kick = () => void catalog.refresh();
+    whenIdle(kick, 1500, 300);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') kick();
+    });
+    onReconnect(kick);
   });
-  onReconnect(kick);
 }
 
 async function boot(): Promise<void> {
+  mark('boot');
   // e2e: the boot-failure screen.
   if (TEST_HOOKS && localStorage.getItem('__cyberjukeFailBoot')) throw new Error('Simulated boot failure');
   installRenderCounter({ App, Overlays, Home, Library, Screen, TrackRow, MiniPlayer, NowPlaying, ArtistGrid, ArtistTiles, ArtistTile, ArtistPage, GenreGrid, GenreTiles, GenreTile, GenreDetail });
-  // A saved Cyberspace login decides which query the first requests use.
-  await Promise.all([loadLibrary().catch((e) => logError('loadLibrary', e)), auth.restore()]);
-  startAccount();
+  // Read before the first render: the settings and favourites (small keys) and a saved
+  // Cyberspace login. Liked and history, files that can be large, are read alongside
+  // and may arrive just after it.
+  const settingsRead = loadSettings().catch((e) => logError('loadSettings', e));
+  const listsRead = loadLists().catch((e) => logError('loadLibrary', e));
+  const stored = Promise.all([settingsRead, listsRead]).then(() => undefined);
+  await auth.restore();
+  // The listening cache hears Liked and its size once they're read (not an empty list or the
+  // default size first), and before startAccount acts on them: starting signed out drops
+  // members-only audio too.
+  void stored.then(startListeningCache);
+  setOpenLiked(openLiked);
+  // Sign-ins and sign-outs are followed from here on (restore() may already be refreshing the login).
+  startAccount(stored);
+  // Home's first page is asked for now, not after the first render: the login decides
+  // the query, and Home's list gets this same request when it mounts (the source shares
+  // a load in progress). Always from the network: nothing of Latest is kept on disk.
+  const firstPage = source.latest(null);
+  firstPage.catch(() => {
+    /* Home's list shows the failure */
+  });
+  await settingsRead;
+  mark('storage');
   startQueuePurge();
   startPlayerPrefs();
   applyTheme();
   watchNetwork();
-  // Back online: lists on screen that failed to load try again.
-  onReconnect(() => retryWatchedFeeds());
+  // Back online (or told again that we are), and back in the foreground: lists on screen
+  // that failed to load try again, and so does art that failed.
+  onReconnect(() => {
+    retryWatchedFeeds();
+    artGen.value++;
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    retryWatchedFeeds();
+    // Still offline, the art would only fail again.
+    if (online.peek()) artGen.value++;
+  });
   wireBackButton();
   wireNotificationTap();
   startBlockEvents();
@@ -148,9 +207,10 @@ async function boot(): Promise<void> {
     </>,
     root,
   );
-  startCatalog();
+  mark('render');
+  startCatalog(firstPage);
+  afterFirstPage(firstPage, () => void startUpdates(native ? () => JukePlayer.getAppInfo() : undefined));
   startFreshness();
-  void startUpdates(native ? () => JukePlayer.getAppInfo() : undefined);
   maybeAutoplay().catch((e) => logError('autoplay', e));
 }
 

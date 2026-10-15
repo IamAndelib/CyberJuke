@@ -46,12 +46,15 @@ function fakeThumb(id: string, wide = false): string {
 /**
  * A stand-in for the YouTube IFrame API, defined before the app loads (the app's CSP
  * blocks the real script): `window.YT.Player` "plays" by advancing a clock, starting
- * at 71 s into a 247 s track.
+ * at 71 s into a 247 s track. `window.__cyberjukeYt.stall()` makes the last player
+ * buffer (its clock stops) and `resume()` plays on.
  */
 const FAKE_YT = `
 (() => {
+  let last = null;
   class Player {
     constructor(el, opts) {
+      last = this;
       this.opts = opts; this.t = 0; this.state = -1; this.timer = null; this.starting = null;
       setTimeout(() => opts.events.onReady && opts.events.onReady(), 30);
     }
@@ -65,18 +68,59 @@ const FAKE_YT = `
       this.emit(1);
     }
     pauseVideo() { clearTimeout(this.starting); clearInterval(this.timer); this.emit(2); }
+    // The stream stalls: buffering, the clock stopped, until resume().
+    stall() { clearTimeout(this.starting); clearInterval(this.timer); this.emit(3); }
+    resume() { this.playVideo(); }
     seekTo(s) { this.t = s - 71; window.__ytSeeks = (window.__ytSeeks || 0) + 1; }
     getCurrentTime() { return this.t + 71; }
     getDuration() { return 247; }
     setPlaybackQuality() {}
   }
   window.YT = { Player };
+  window.__cyberjukeYt = { stall: () => last && last.stall(), resume: () => last && last.resume() };
 })();
 `;
+
+/**
+ * Pages whose image hosts (these thumbnails, and the Global covers in music.ts) are cut off:
+ * their requests fail like a lost connection. setOffline sets it, since the browser's offline
+ * mode doesn't reach routed requests; set alone, the app counts as online but no image gets
+ * through (a Wi-Fi login page).
+ */
+const imagesCutOff = new WeakSet<Page>();
+
+export function setImagesOffline(page: Page, off: boolean): void {
+  if (off) imagesCutOff.add(page);
+  else imagesCutOff.delete(page);
+}
+
+const imagesOffline = (page: Page): boolean => imagesCutOff.has(page);
+
+/** Pages whose next request for each image fails once, and the images that already did. */
+const switching = new WeakMap<Page, Set<string>>();
+
+/**
+ * The connection is back, but the network is still switching: the next request for each image
+ * fails once, as Chromium fails the requests in flight when the network changes
+ * (ERR_NETWORK_CHANGED); the one after that loads.
+ */
+export function failImagesOnce(page: Page): void {
+  switching.set(page, new Set());
+}
+
+/** The image request this route answers fails: the host is cut off, or it is caught in a switch. */
+export function imageFails(page: Page, url: string): boolean {
+  if (imagesOffline(page)) return true;
+  const failed = switching.get(page);
+  if (!failed || failed.has(url)) return false;
+  failed.add(url);
+  return true;
+}
 
 /** Synthetic thumbnails for i.ytimg.com and the fake IFrame player. */
 export async function stubYouTube(page: Page): Promise<void> {
   await page.route(/^https:\/\/i\.ytimg\.com\/vi\/([^/]+)\//, (route) => {
+    if (imageFails(page, route.request().url())) return route.abort('internetdisconnected');
     const id = /\/vi\/([^/]+)\//.exec(route.request().url())?.[1] ?? 'x';
     return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: fakeThumb(id, /\/mqdefault\.jpg$/.test(route.request().url())) });
   });

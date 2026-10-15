@@ -1,5 +1,6 @@
 /** Shared steps and waits for the e2e specs. No fixed sleeps: every wait is on a condition. */
 import { expect, type Locator, type Page } from '@playwright/test';
+import { setImagesOffline } from './fixtures/youtube';
 
 /**
  * The screen showing has its rows. Visited tabs and covered pages stay mounted (hidden),
@@ -9,6 +10,12 @@ export async function waitForTracks(page: Page): Promise<void> {
   await expect(page.locator('[data-testid="track-row"]:visible').first()).toBeVisible();
   await expect(page.locator('[data-testid="skeleton"]:visible')).toHaveCount(0);
 }
+
+/**
+ * A Latest or genre page (PAGE_SIZE rows), not a catalog page (300) or the freshness
+ * check (25). All three send a field mask, so the size tells them apart.
+ */
+export const isFeedQuery = (q: { limit?: number } | null | undefined): boolean => q?.limit === 24;
 
 /** Load the app and wait for Home's first page. */
 export async function start(page: Page, path = '/'): Promise<void> {
@@ -70,6 +77,8 @@ declare global {
   interface Window {
     /** recordOpens: the URLs window.open was asked for. */
     __opened?: string[];
+    /** The fixture's hook: fake the page's visibility (setVisibility). */
+    __cyberjukeVisibility: (state: 'hidden' | 'visible') => void;
   }
 }
 
@@ -84,6 +93,16 @@ export async function recordOpens(page: Page): Promise<void> {
   });
 }
 export const opened = (page: Page) => page.evaluate(() => window.__opened ?? []);
+
+/** The device loses (or gets back) its connection: the browser's, the stub backend's and the image hosts'. */
+export async function setOffline(page: Page, backend: { offline: boolean }, off: boolean): Promise<void> {
+  backend.offline = off;
+  setImagesOffline(page, off);
+  await page.context().setOffline(off);
+}
+
+/** The app goes to the background or comes back: `document.visibilityState` and its event (the fixture's hook). */
+export const setVisibility = (page: Page, state: 'hidden' | 'visible') => page.evaluate((s) => window.__cyberjukeVisibility(s), state);
 
 export const setLyricsMode = (page: Page, mode: string) => page.evaluate((m) => ((window as unknown as { __cyberjukeLyricsMode: string }).__cyberjukeLyricsMode = m), mode);
 

@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { box, expectStable, nextFrame, openNowPlaying, playAndOpen, scrollTo, scrollTopOf, start, waitForTracks } from '../helpers';
+import { box, expectStable, isFeedQuery, nextFrame, openNowPlaying, playAndOpen, scrollTo, scrollTopOf, start, waitForTracks } from '../helpers';
 
 /**
  * Motion and touch: text selection, the marquee, press feedback, pull-to-refresh,
@@ -145,7 +145,7 @@ test('pull to refresh: follows the finger on a rubber band with no re-render, th
 
 test('pull to refresh: a short pull springs back, a sideways swipe is ignored', async ({ page, backend }) => {
   await start(page);
-  const latest = () => backend.queries.filter((q) => !q.select && !q.startAt).length;
+  const latest = () => backend.queries.filter((q) => isFeedQuery(q) && !q.startAt).length;
   const before = latest();
   let f = await finger(page, 200, 320);
   await f.move(0, 70);
@@ -495,6 +495,22 @@ test('pull to refresh that fails says so and keeps what was shown', async ({ pag
   const f = await finger(page, 200, 320);
   await f.move(0, 400);
   await f.end();
-  await expect(page.getByTestId('toast')).toHaveText(/^(Couldn't refresh\. Try again in a moment\.|You're offline\. Showing what's already loaded\.)$/);
+  await expect(page.getByTestId('toast')).toHaveText(/^(Couldn't refresh\. Try again in a moment\.|No carrier\. Connect, then refresh\.)$/);
+  await expect(screen.getByTestId('genre-tile')).toHaveCount(tiles);
+});
+
+test('pull to refresh offline says to connect, then refresh, and keeps the grid', async ({ page, backend }) => {
+  await page.goto('/');
+  await page.getByTestId('tab-genres').click();
+  const screen = page.getByTestId('screen-genres');
+  await expect(screen.locator('.topbar-sub')).toContainText('genres on the Jukebox');
+  const tiles = await screen.getByTestId('genre-tile').count();
+  backend.offline = true;
+  await page.context().setOffline(true);
+  await expect(page.getByTestId('offline-banner')).toBeVisible();
+  const f = await finger(page, 200, 320);
+  await f.move(0, 400);
+  await f.end();
+  await expect(page.getByTestId('toast')).toHaveText('No carrier. Connect, then refresh.');
   await expect(screen.getByTestId('genre-tile')).toHaveCount(tiles);
 });
