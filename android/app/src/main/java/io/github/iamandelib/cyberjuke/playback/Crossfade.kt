@@ -1,5 +1,8 @@
 package io.github.iamandelib.cyberjuke.playback
 
+import kotlin.math.PI
+import kotlin.math.sin
+
 /**
  * Crossfade (Settings → Crossfade), after Metrolist (MusicService's scheduleCrossfade,
  * startCrossfade and performCrossfadeSwap): a fade's length before a track's end, a second player
@@ -9,7 +12,8 @@ package io.github.iamandelib.cyberjuke.playback
  *
  * Unlike Metrolist, the media session (the title in the app, the notification and the lock screen,
  * and the controls) stays with the old track until it ends, and only then moves to the new player
- * (Crossfader.Host.handOver): what shows is the track that's ending, until it has.
+ * (Crossfader.Host.handOver): what shows is the track that's ending, until it has. And the
+ * curve is an equal-power one, in small steps ([fadeIn], [STEP_MS]).
  * Pure (CrossfadeTest): when to fade, how long, and the curve.
  */
 internal object CrossfadePlan {
@@ -19,8 +23,11 @@ internal object CrossfadePlan {
     /** A shorter fade isn't worth one (a fade shrunk to fit a short track). */
     const val MIN_FADE_MS = 1_000L
 
-    /** The volume steps a fade takes (Metrolist's 20). */
-    const val STEPS = 20
+    /**
+     * The time between two of a fade's volume steps: too short for a step to be heard (Metrolist
+     * takes 20 steps, 500 ms apart over 10 s).
+     */
+    const val STEP_MS = 50L
 
     /**
      * A fade that starts late (a seek or a resume past its start) starts this far ahead of the
@@ -123,20 +130,21 @@ internal object CrossfadePlan {
         else -> null
     }
 
-    /** The incoming track's gain at [p] (0 → 1): up fast, then gently (Metrolist's 1 − (1 − p)²). */
-    fun fadeIn(p: Float): Float {
-        val q = 1f - p.coerceIn(0f, 1f)
-        return 1f - q * q
-    }
+    /**
+     * The incoming track's gain at [p] (0 → 1) of the fade. With [fadeOut] an equal-power pair
+     * (sin and cos of p·π/2), the usual curve for fading between two different songs (Smus, Web
+     * Audio API, ch. 3; Fink, Holters and Zölzer 2016): the old track falls all the way from its
+     * volume to silence and the new one rises from silence to it, gently at the ends, and together
+     * they stay as loud as one (sin² + cos² = 1; each at −3 dB halfway). Metrolist's curve
+     * (1 − (1 − p)² and (1 − p)²) halved the old track in the fade's first third.
+     */
+    fun fadeIn(p: Float): Float = sin(p.coerceIn(0f, 1f) * PI / 2).toFloat()
 
-    /** The outgoing track's gain at [p] (1 → 0): down fast, then gently ((1 − p)²). */
-    fun fadeOut(p: Float): Float {
-        val q = 1f - p.coerceIn(0f, 1f)
-        return q * q
-    }
+    /** The outgoing track's gain at [p] (1 → 0): cos(p·π/2), as sin((1 − p)·π/2), exact at both ends. See [fadeIn]. */
+    fun fadeOut(p: Float): Float = fadeIn(1f - p.coerceIn(0f, 1f))
 
-    /** The time between two of a fade's [STEPS]. */
-    fun stepMs(fadeMs: Long): Long = fadeMs / STEPS
+    /** The volume steps a fade of [fadeMs] takes, [STEP_MS] apart (at least one). */
+    fun steps(fadeMs: Long): Int = (fadeMs / STEP_MS).toInt().coerceAtLeast(1)
 }
 
 /**
@@ -148,8 +156,8 @@ internal object CrossfadePlan {
  * CROSSING → RISING):
  * - CROSSING: [Host.startIncoming], a second player plays the next track from its start, silent,
  *   outside the session; the session's player (the main one) stops at its own track's end. Then
- *   [CrossfadePlan.STEPS] volume steps, relative to the main player's own volume ([base]): the
- *   incoming one fades in, the main one out. The main one keeps the session, its audio focus and
+ *   a volume step every [CrossfadePlan.STEP_MS], relative to the main player's own volume
+ *   ([base]): the incoming one fades in, the main one out. The main one keeps the session, its audio focus and
  *   the controls: the incoming one follows its pauses and calls ([onPlayWanted]).
  * - At the main track's end ([onMainEnded]), or the ramp's if that comes first, [Host.handOver]:
  *   the incoming player becomes the session's and the old one goes.
@@ -251,7 +259,7 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
     /** The main player's own volume when the fade started: the fade's volumes are relative to it. */
     private var base = 1f
     private var step = 0
-    private var stepMs = 0L
+    private var steps = 1
 
     /** The ramp waits for the incoming player to play ([onPlaying]). */
     private var waiting = false
@@ -396,7 +404,7 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
         }
         phase = Phase.CROSSING
         step = 0
-        stepMs = CrossfadePlan.stepMs(armedFadeMs)
+        steps = CrossfadePlan.steps(armedFadeMs)
         waiting = false
         host.started(armedFadeMs)
         step()
@@ -409,11 +417,11 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
             waiting = true
             return
         }
-        if (step >= CrossfadePlan.STEPS) {
+        if (step >= steps) {
             finish()
             return
         }
-        val p = step.toFloat() / CrossfadePlan.STEPS
+        val p = step.toFloat() / steps
         if (phase == Phase.CROSSING) {
             host.setIncomingVolume(base * CrossfadePlan.fadeIn(p))
             host.setMainVolume(base * CrossfadePlan.fadeOut(p))
@@ -421,7 +429,7 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
             host.setMainVolume(base * CrossfadePlan.fadeIn(p))
         }
         step++
-        host.post(stepMs, stepTask)
+        host.post(CrossfadePlan.STEP_MS, stepTask)
     }
 
     /** The incoming player takes over; the ramp goes on with it alone. */

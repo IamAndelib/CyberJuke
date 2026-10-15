@@ -115,13 +115,24 @@ class CrossfadeTest {
     }
 
     @Test
-    fun theCurveRisesFastAndFallsFast() {
+    fun theCurveIsEqualPowerAllTheWay() {
+        // From silence to full, and from full to silence.
         assertEquals(0f, CrossfadePlan.fadeIn(0f), 0f)
         assertEquals(1f, CrossfadePlan.fadeIn(1f), 0f)
         assertEquals(1f, CrossfadePlan.fadeOut(0f), 0f)
         assertEquals(0f, CrossfadePlan.fadeOut(1f), 0f)
-        assertEquals(0.75f, CrossfadePlan.fadeIn(0.5f), 1e-6f)
-        assertEquals(0.25f, CrossfadePlan.fadeOut(0.5f), 1e-6f)
+        // Halfway both at −3 dB, and all along as loud together as one track.
+        assertEquals(0.70711f, CrossfadePlan.fadeIn(0.5f), 1e-5f)
+        assertEquals(0.70711f, CrossfadePlan.fadeOut(0.5f), 1e-5f)
+        for (i in 0..100) {
+            val p = i / 100f
+            val power = CrossfadePlan.fadeIn(p) * CrossfadePlan.fadeIn(p) + CrossfadePlan.fadeOut(p) * CrossfadePlan.fadeOut(p)
+            assertEquals(1f, power, 1e-5f)
+        }
+        // The old track goes gently at first (above 90 % for the first quarter), and the new one
+        // ends gently (above 90 % for the last quarter): no sudden drop or jump.
+        assertTrue(CrossfadePlan.fadeOut(0.25f) > 0.9f)
+        assertTrue(CrossfadePlan.fadeIn(0.75f) > 0.9f)
         // Each moves one way only; clamped outside 0..1.
         var lastIn = 0f
         var lastOut = 1f
@@ -136,11 +147,14 @@ class CrossfadeTest {
     }
 
     @Test
-    fun twentyStepsOverTheFade() {
-        assertEquals(20, CrossfadePlan.STEPS)
-        assertEquals(150L, CrossfadePlan.stepMs(3_000L))
-        assertEquals(300L, CrossfadePlan.stepMs(6_000L))
-        assertEquals(500L, CrossfadePlan.stepMs(10_000L))
+    fun aStepEvery50msOverTheFade() {
+        assertEquals(50L, CrossfadePlan.STEP_MS)
+        assertEquals(60, CrossfadePlan.steps(3_000L))
+        assertEquals(120, CrossfadePlan.steps(6_000L))
+        assertEquals(200, CrossfadePlan.steps(10_000L))
+        // A late fade's odd length: whole steps, the last one a moment before the track's end.
+        assertEquals(58, CrossfadePlan.steps(2_910L))
+        assertEquals(1, CrossfadePlan.steps(30L))
     }
 
     // ---- Crossfader ----------------------------------------------------------------------
@@ -342,14 +356,14 @@ class CrossfadeTest {
         return h to c
     }
 
-    /** In the middle of a 6 s fade: the incoming player playing, ten of the twenty steps done, the old track 3 s from its end. */
+    /** In the middle of a 6 s fade: the incoming player playing, half of its 120 steps done, the old track 3 s from its end. */
     private fun fading(own: Float = 1f): Pair<FakeHost, Crossfader> {
         val (h, c) = crossing(own)
         h.incomingPlaying = true
         c.onPlaying()
-        h.run(10 * 300L - 10L)
+        h.run(3_000L - 10L)
         assertEquals(Crossfader.Phase.CROSSING, c.phase)
-        assertEquals(10, h.incomingVolumes.size)
+        assertEquals(60, h.incomingVolumes.size)
         return h to c
     }
 
@@ -445,14 +459,14 @@ class CrossfadeTest {
         // The rest of the ramp on the new one alone.
         h.run(1_000L)
         assertOver(h, c)
-        // Twenty steps of 300 ms along the curve, then full volume.
+        // 120 steps of 50 ms along the curve, then full volume.
         val ins = h.ins
-        assertEquals(21, ins.size)
-        for (i in 0 until 20) assertEquals(CrossfadePlan.fadeIn(i / 20f), ins[i], 1e-6f)
+        assertEquals(121, ins.size)
+        for (i in 0 until 120) assertEquals(CrossfadePlan.fadeIn(i / 120f), ins[i], 1e-6f)
         assertEquals(1f, ins.last(), 0f)
-        // The old one fell along its curve until it ended.
-        assertEquals(19, h.outCount)
-        for (i in 0 until 19) assertEquals(CrossfadePlan.fadeOut(i / 20f), h.mainVolumes[i], 1e-6f)
+        // The old one fell along its curve until it ended (5.5 s of it: the new one started 0.5 s late).
+        assertEquals(110, h.outCount)
+        for (i in 0 until 110) assertEquals(CrossfadePlan.fadeOut(i / 120f), h.mainVolumes[i], 1e-6f)
         assertTrue(h.skips.isEmpty())
     }
 
@@ -470,8 +484,8 @@ class CrossfadeTest {
     @Test
     fun theFadeFollowsTheOldPlayersOwnVolume() {
         val (h, c) = fading(own = 0.5f)
-        assertEquals(0.5f * CrossfadePlan.fadeIn(9 / 20f), h.incomingLevel, 1e-6f)
-        assertEquals(0.5f * CrossfadePlan.fadeOut(9 / 20f), h.mainLevel, 1e-6f)
+        assertEquals(0.5f * CrossfadePlan.fadeIn(59 / 120f), h.incomingLevel, 1e-6f)
+        assertEquals(0.5f * CrossfadePlan.fadeOut(59 / 120f), h.mainLevel, 1e-6f)
         h.run(4_000L)
         assertOver(h, c, own = 0.5f)
     }
@@ -564,7 +578,7 @@ class CrossfadeTest {
         c.onPlaying()
         h.run(4_000L)
         assertOver(h, c)
-        assertEquals(21, h.ins.size)
+        assertEquals(121, h.ins.size)
     }
 
     @Test
@@ -786,7 +800,7 @@ class CrossfadeTest {
         // The old track's end hands over; the ramp (its steps a little late on this clock) ends just after.
         h.run(400L)
         assertOver(h, c)
-        assertEquals(21, h.ins.size)
+        assertEquals(119, h.ins.size)
     }
 
     @Test
