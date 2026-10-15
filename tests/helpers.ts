@@ -1,5 +1,6 @@
 /** Shared steps and waits for the e2e specs. No fixed sleeps: every wait is on a condition. */
 import { expect, type Locator, type Page } from '@playwright/test';
+import { setImagesOffline } from './fixtures/youtube';
 
 /**
  * The screen showing has its rows. Visited tabs and covered pages stay mounted (hidden),
@@ -9,6 +10,12 @@ export async function waitForTracks(page: Page): Promise<void> {
   await expect(page.locator('[data-testid="track-row"]:visible').first()).toBeVisible();
   await expect(page.locator('[data-testid="skeleton"]:visible')).toHaveCount(0);
 }
+
+/**
+ * A Latest or genre page (PAGE_SIZE rows), not a catalog page (300) or the freshness
+ * check (25). All three send a field mask, so the size tells them apart.
+ */
+export const isFeedQuery = (q: { limit?: number } | null | undefined): boolean => q?.limit === 24;
 
 /** Load the app and wait for Home's first page. */
 export async function start(page: Page, path = '/'): Promise<void> {
@@ -70,6 +77,13 @@ declare global {
   interface Window {
     /** recordOpens: the URLs window.open was asked for. */
     __opened?: string[];
+    /** The fixture's hook: fake the page's visibility (setVisibility). */
+    __cyberjukeVisibility: (state: 'hidden' | 'visible') => void;
+    /** The fake YouTube player's hook (fakeYt). */
+    __cyberjukeYt: { stall(): void; resume(): void; end(): void; error(code: number): void };
+    /** The web player's test hooks (trackError, waitingForNetwork). */
+    __cyberjukeTrackError: (e: { skipped?: boolean; kind?: string; resumes?: boolean }) => void;
+    __cyberjukeWaitingForNetwork: (on: boolean) => void;
   }
 }
 
@@ -84,6 +98,97 @@ export async function recordOpens(page: Page): Promise<void> {
   });
 }
 export const opened = (page: Page) => page.evaluate(() => window.__opened ?? []);
+
+/** The device loses (or gets back) its connection: the browser's, the stub backend's and the image hosts'. */
+export async function setOffline(page: Page, backend: { offline: boolean }, off: boolean): Promise<void> {
+  backend.offline = off;
+  setImagesOffline(page, off);
+  await page.context().setOffline(off);
+}
+
+/** The app goes to the background or comes back: `document.visibilityState` and its event (the fixture's hook). */
+export const setVisibility = (page: Page, state: 'hidden' | 'visible') => page.evaluate((s) => window.__cyberjukeVisibility(s), state);
+
+/**
+ * Fake the page's clock (before the app loads): its timers, Date and performance. Time
+ * still passes at its usual pace, and `runFor` runs a long stretch of it in an instant: the
+ * fake player ends its tracks, the app's timers fire, in order. A request in flight when
+ * `runFor` starts hits its timeout like any other timer, so let requests settle first.
+ */
+export const clockStart = (page: Page) => page.clock.install();
+
+/** Run `ms` of the faked clock (clockStart), firing everything due in it. */
+export const runFor = (page: Page, ms: number) => page.clock.runFor(ms);
+
+/** One track of the fake player (tests/fixtures/youtube.ts): 71 s in to 247 s, plus its start-up. */
+export const FAKE_TRACK_MS = 176_150;
+
+/**
+ * Hours of listening on the faked clock, a track at a time: each jump lands at the end of the
+ * track playing (`fastForward`: what was due in between fires once, as after the phone's
+ * sleep), then the next one starts; exactly `ceil(ms / (FAKE_TRACK_MS + 200))` tracks end. The
+ * clock is paused meanwhile, so the stretch is as long as asked whatever the test's own pace.
+ * `runFor` would fire the player's position poll once a second of the night (minutes of test
+ * time); the music, the history and the app's hourly habits come out the same.
+ */
+export async function playOn(page: Page, ms: number): Promise<void> {
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
+  // A track still starting up (the fake player's 150 ms) plays first.
+  await runFor(page, 200);
+  for (let left = ms; left > 0; left -= FAKE_TRACK_MS + 200) {
+    await page.clock.fastForward(FAKE_TRACK_MS);
+    await runFor(page, 200);
+  }
+  await page.clock.resume();
+}
+
+/** How many tracks end during `playOn(page, ms)`. */
+export const tracksEndedIn = (ms: number) => Math.ceil(ms / (FAKE_TRACK_MS + 200));
+
+/** Record every message shown from now on (toastsSeen), also those gone again by the time a test looks. */
+export const recordToasts = (page: Page) =>
+  page.evaluate(() => {
+    const w = window as unknown as { __toastsSeen: string[] };
+    w.__toastsSeen = [];
+    new MutationObserver(() => {
+      for (const el of document.querySelectorAll('[data-testid="toast"]')) {
+        const text = el.textContent ?? '';
+        if (w.__toastsSeen.at(-1) !== text) w.__toastsSeen.push(text);
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+export const toastsSeen = (page: Page) => page.evaluate(() => (window as unknown as { __toastsSeen?: string[] }).__toastsSeen ?? []);
+
+/**
+ * The fake YouTube player (the fixture's hook): the current track stalls, resumes, ends, or fails
+ * with a player error `code` (100, 101, 150: removed, private or not embeddable; the app skips it).
+ */
+export const fakeYt = (page: Page, action: 'stall' | 'resume' | 'end' | 'error', code = 150) =>
+  page.evaluate(([a, c]) => (a === 'error' ? window.__cyberjukeYt.error(c) : window.__cyberjukeYt[a]()), [action, code] as const);
+
+/**
+ * Home has settled after the start: the catalog's idle load (the 300-row pages that follow the
+ * first screen) has been answered and the genre chips are the catalog's 24. Before a test counts
+ * requests or drops them (`failNext`), and before it reads a chip then taps it.
+ */
+export async function homeSettled(page: Page, backend: { queries: { limit?: number }[] }): Promise<void> {
+  await expect.poll(() => backend.queries.some((q) => q.limit === 300)).toBe(true);
+  await expect(page.getByTestId('genre-chip')).toHaveCount(24);
+}
+
+/** Tap Home's i-th genre chip and return the genre it stands for (read off the pressed chip). */
+export async function pickGenre(page: Page, i: number): Promise<string> {
+  await page.getByTestId('genre-chip').nth(i).click();
+  const pressed = page.locator('[data-testid="genre-chip"][aria-pressed="true"]');
+  await expect(pressed).toHaveCount(1);
+  return (await pressed.getAttribute('data-genre'))!;
+}
+
+/** What native would report in a `trackError` about the current track (the web player's hook). */
+export const trackError = (page: Page, e: { skipped?: boolean; kind?: string; resumes?: boolean }) => page.evaluate((v) => window.__cyberjukeTrackError(v), e);
+
+/** Native waits for the network (or no longer does): the web player's hook for that state. */
+export const waitingForNetwork = (page: Page, on: boolean) => page.evaluate((v) => window.__cyberjukeWaitingForNetwork(v), on);
 
 export const setLyricsMode = (page: Page, mode: string) => page.evaluate((m) => ((window as unknown as { __cyberjukeLyricsMode: string }).__cyberjukeLyricsMode = m), mode);
 

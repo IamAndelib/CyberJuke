@@ -10,10 +10,13 @@ import { isPublicQuery, runQuery, type StructuredQuery } from './firestore';
  * Sign-in errors by input: password "wrong" → INVALID_LOGIN_CREDENTIALS, email
  * starting "busy" → TOO_MANY_ATTEMPTS_TRY_LATER, email starting "offline" → the
  * request fails. `rejectFirstToken`: the first ID token gets one 401 from Firestore.
+ *
+ * A slow or broken network is the backend's doing (`delay`, `failNext`, `offline`): Chromium's
+ * network throttling (CDP) doesn't apply to responses the test supplies through `page.route`.
  */
 export interface BackendOptions {
   rejectFirstToken?: boolean;
-  /** Extra latency for runQuery, ms. */
+  /** Extra latency for runQuery, ms (the start value of `Backend.delay`). */
   delay?: number;
 }
 
@@ -28,6 +31,10 @@ export interface Backend {
   queries: StructuredQuery[];
   /** Make runQuery fail (as if offline) until set back to false. */
   offline: boolean;
+  /** Extra latency for every runQuery from now on, ms (a slow network). */
+  delay: number;
+  /** Drop the next n runQuery requests without an answer (a connection that breaks mid-handover), then answer again. */
+  failNext: number;
 }
 
 const CORS = {
@@ -51,6 +58,8 @@ export async function stubBackend(page: Page, opts: BackendOptions = {}): Promis
     memberBodies: [],
     queries: [],
     offline: false,
+    delay: opts.delay ?? 0,
+    failNext: 0,
   };
   let issued = 0;
   const valid = new Set<string>();
@@ -99,8 +108,12 @@ export async function stubBackend(page: Page, opts: BackendOptions = {}): Promis
     if (b.offline) return route.abort('internetdisconnected');
     const q = (JSON.parse(req.postData() ?? '{}') as { structuredQuery: StructuredQuery }).structuredQuery;
     b.queries.push(q);
+    if (b.failNext > 0) {
+      b.failNext--;
+      return route.abort('connectionreset');
+    }
     const auth = (await req.allHeaders())['authorization'];
-    if (opts.delay) await new Promise((r) => setTimeout(r, opts.delay));
+    if (b.delay) await new Promise((r) => setTimeout(r, b.delay));
     if (auth) {
       b.calls.members++;
       b.tokens.push(auth);

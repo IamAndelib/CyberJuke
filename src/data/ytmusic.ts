@@ -152,9 +152,10 @@ function idFromUrl(url: string): string | undefined {
 /**
  * A song item as a playable Track (id `ytm:<ytId>`, no genre, poster or post), or null
  * for anything that isn't a playable song. Artwork uses the video's hqdefault frame so
- * it gets the same crop and pixel treatment as Jukebox tracks.
+ * it gets the same crop and pixel treatment as Jukebox tracks. [album]: the album the
+ * item was listed in, when it was one (Track.album).
  */
-export function musicItemToTrack(item: MusicItem, fallbackArtist = ''): Track | null {
+export function musicItemToTrack(item: MusicItem, fallbackArtist = '', album?: string): Track | null {
   if (item.kind !== 'song') return null;
   const ytId = item.ytId && YT_ID_RE.test(item.ytId) ? item.ytId : idFromUrl(item.url);
   if (!ytId) return null;
@@ -165,14 +166,16 @@ export function musicItemToTrack(item: MusicItem, fallbackArtist = ''): Track | 
     artist: cleanCredit(item.subtitle ?? '') || fallbackArtist || UNKNOWN_ARTIST,
     artworkUrl: artworkUrl(ytId),
     source: 'ytmusic',
+    ...(album && { album }),
   });
 }
 
-export function musicTracks(items: MusicItem[], fallbackArtist = ''): Track[] {
+/** The songs among [items] as Tracks, each once; [album] when they are an album's tracks. */
+export function musicTracks(items: MusicItem[], fallbackArtist = '', album?: string): Track[] {
   const out: Track[] = [];
   const seen = new Set<string>();
   for (const it of items) {
-    const t = musicItemToTrack(it, fallbackArtist);
+    const t = musicItemToTrack(it, fallbackArtist, album);
     if (t && !seen.has(t.id)) {
       seen.add(t.id);
       out.push(t);

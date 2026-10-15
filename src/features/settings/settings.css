@@ -236,6 +236,10 @@
   color: var(--color-bg);
   text-shadow: none;
 }
+/* Under the sizes, at its own width (not a fourth size). */
+.cache-clear {
+  align-self: flex-start;
+}
 
 /* ---- Settings → Account ----------------------------------------------------------- */
 

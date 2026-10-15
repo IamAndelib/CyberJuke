@@ -47,6 +47,8 @@ describe('safePlayer', () => {
       setAutoplay: vi.fn(fail),
       onQueueLow: () => () => {},
       setQuality: vi.fn(fail),
+      setCrossfade: vi.fn(fail),
+      setGapless: vi.fn(fail),
       setNetworkPrefs: vi.fn(fail),
       retryNow: vi.fn(fail),
       netStatus: vi.fn(fail),

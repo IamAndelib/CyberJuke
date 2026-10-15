@@ -36,6 +36,11 @@ export interface Track {
    * and its post link needs a login on the site. Missing means public.
    */
   membersOnly?: boolean;
+  /**
+   * The album this track was opened from (a Global album page); the player knows two tracks
+   * of one album by it, so Crossfade leaves their transition alone (Gapless playback).
+   */
+  album?: string;
 }
 
 export type TrackOrigin = 'jukebox' | 'ytmusic';

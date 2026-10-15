@@ -13,17 +13,22 @@
     CapacitorStorage.xml before 1.1.1; the app moves it on first start.)
   - sharedpref/last_session.xml: where in the last queue playback was. The queue itself is in
     no_backup/last-session.json, which Android never backs up.
-  The cache directory (lyrics) is never backed up by Android.
+  - database/exoplayer_internal.db: the listening cache's index (which videos' audio is kept,
+    liked and members-only ones among them). The audio itself is in the cache directory.
+  The cache directory (lyrics, the listening cache's audio and its liked list) is never backed
+  up by Android.
 -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="cyberjuke_secure.xml" />
         <exclude domain="sharedpref" path="last_session.xml" />
         <exclude domain="file" path="cyberjuke/" />
+        <exclude domain="database" path="exoplayer_internal.db" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="cyberjuke_secure.xml" />
         <exclude domain="sharedpref" path="last_session.xml" />
         <exclude domain="file" path="cyberjuke/" />
+        <exclude domain="database" path="exoplayer_internal.db" />
     </device-transfer>
 </data-extraction-rules>

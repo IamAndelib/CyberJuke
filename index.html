@@ -6,7 +6,9 @@
       Content Security Policy: only the app's own scripts and styles run; images come
       from the app and the video host's image servers; requests go only to Cyberspace's
       database and login, and GitHub's releases API (the update check). Styles set from
-      code (style properties) are not affected.
+      code (style properties) are not affected. The two preconnects below only open the
+      connections Home is about to use (its first query, the cover art) a little sooner:
+      hosts already allowed here, nothing sent.
     -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; img-src 'self' data: https://*.ytimg.com https://*.googleusercontent.com https://*.ggpht.com; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.github.com; style-src 'self'; font-src 'self'; media-src 'none'; worker-src 'none'; manifest-src 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
@@ -14,6 +16,9 @@
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="Unofficial player for the Cyberspace Jukebox" />
     <title>CyberJuke</title>
+    <!-- The query is a CORS fetch (crossorigin); the cover art is plain <img> (no crossorigin), each its own connection pool. -->
+    <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://i.ytimg.com" />
     <link rel="preload" href="/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/jetbrains-mono-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/departure-mono-regular.woff2" as="font" type="font/woff2" crossorigin />

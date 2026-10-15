@@ -7,4 +7,5 @@
     <exclude domain="sharedpref" path="cyberjuke_secure.xml" />
     <exclude domain="sharedpref" path="last_session.xml" />
     <exclude domain="file" path="cyberjuke/" />
+    <exclude domain="database" path="exoplayer_internal.db" />
 </full-backup-content>

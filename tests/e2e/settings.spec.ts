@@ -83,6 +83,96 @@ test('IPv4: Auto by default, sent to the player at start and on change, and kept
   await expect(page.getByTestId('net-status')).toHaveCount(0);
 });
 
+test('Audio quality: Auto by default, three choices that say what they do, sent to the player and kept', async ({ page }) => {
+  await page.goto('/');
+  const sent = async () => (await playerCalls(page)).filter((c) => c[0] === 'setQuality').map((c) => c[1]);
+  await expect.poll(sent).toEqual([{ quality: 'auto' }]);
+  await page.getByTestId('tab-settings').click();
+  const group = page.getByRole('radiogroup', { name: 'Audio quality' });
+  await expect(group.getByRole('radio')).toHaveText(['Auto', 'High', 'Low']);
+  await expect(page.getByTestId('quality-auto')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('quality-desc')).toHaveText('Best quality the connection can keep up with');
+  await page.getByTestId('quality-high').click();
+  await expect(page.getByTestId('quality-desc')).toHaveText('Always the best audio');
+  await page.getByTestId('quality-low').click();
+  await expect(page.getByTestId('quality-low')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('quality-desc')).toHaveText('Uses the least data');
+  await expect.poll(sent).toEqual([{ quality: 'auto' }, { quality: 'high' }, { quality: 'low' }]);
+  await page.reload();
+  await expect.poll(sent).toEqual([{ quality: 'low' }]);
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('quality-low')).toHaveAttribute('aria-checked', 'true');
+});
+
+test('Crossfade: Off by default, four choices, sent to the player and kept', async ({ page }) => {
+  await page.goto('/');
+  const sent = async () => (await playerCalls(page)).filter((c) => c[0] === 'setCrossfade').map((c) => c[1]);
+  await expect.poll(sent).toEqual([{ ms: 0 }]);
+  await page.getByTestId('tab-settings').click();
+  const group = page.getByRole('radiogroup', { name: 'Crossfade' });
+  await expect(group.getByRole('radio')).toHaveText(['Off', '3 s', '6 s', '10 s']);
+  await expect(group).toHaveAccessibleDescription('Blends the end of a track into the next.');
+  await expect(page.getByTestId('crossfade-0')).toHaveAttribute('aria-checked', 'true');
+  await page.getByTestId('crossfade-6000').click();
+  await expect(page.getByTestId('crossfade-6000')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('crossfade-0')).toHaveAttribute('aria-checked', 'false');
+  // Arrow keys move the choice, as in the other radio groups.
+  await page.getByTestId('crossfade-6000').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('crossfade-10000')).toHaveAttribute('aria-checked', 'true');
+  await expect.poll(sent).toEqual([{ ms: 0 }, { ms: 6000 }, { ms: 10000 }]);
+  await page.reload();
+  await expect.poll(sent).toEqual([{ ms: 10000 }]);
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('crossfade-10000')).toHaveAttribute('aria-checked', 'true');
+});
+
+test('Gapless playback: on by default, sent to the player, kept when turned off', async ({ page }) => {
+  await page.goto('/');
+  const sent = async () => (await playerCalls(page)).filter((c) => c[0] === 'setGapless').map((c) => c[1]);
+  await expect.poll(sent).toEqual([{ enabled: true }]);
+  await page.getByTestId('tab-settings').click();
+  const toggle = page.getByTestId('gapless-toggle');
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expect(toggle).toHaveAccessibleDescription(
+    'Tracks follow each other without a pause.',
+  );
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect.poll(sent).toEqual([{ enabled: true }, { enabled: false }]);
+  await page.reload();
+  await expect.poll(sent).toEqual([{ enabled: false }]);
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('gapless-toggle')).toHaveAttribute('aria-checked', 'false');
+});
+
+test('saved settings without the Gapless key keep it on', async ({ page }) => {
+  await seedStorage(page, { [SETTINGS_KEY]: { theme: 'dark', showNsfw: false, quality: 'low', crossfadeMs: 6000, version: 2 } });
+  await page.goto('/');
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('gapless-toggle')).toHaveAttribute('aria-checked', 'true');
+});
+
+test('a saved unknown crossfade is Off', async ({ page }) => {
+  await seedStorage(page, { [SETTINGS_KEY]: { theme: 'dark', crossfadeMs: 4000, version: 2 } });
+  await page.goto('/');
+  const sent = async () => (await playerCalls(page)).filter((c) => c[0] === 'setCrossfade').map((c) => c[1]);
+  await expect.poll(sent).toEqual([{ ms: 0 }]);
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('crossfade-0')).toHaveAttribute('aria-checked', 'true');
+});
+
+test('a saved High (the old default) becomes Auto; a saved Low stays', async ({ page }) => {
+  await seedStorage(page, { [SETTINGS_KEY]: { theme: 'dark', showNsfw: false, quality: 'high' } });
+  await page.goto('/');
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('quality-auto')).toHaveAttribute('aria-checked', 'true');
+  await page.evaluate((k) => localStorage.setItem(k, JSON.stringify({ theme: 'dark', showNsfw: false, quality: 'low' })), SETTINGS_KEY);
+  await page.reload();
+  await page.getByTestId('tab-settings').click();
+  await expect(page.getByTestId('quality-low')).toHaveAttribute('aria-checked', 'true');
+});
+
 test('an old "Prefer IPv4: on" becomes Always', async ({ page }) => {
   await seedStorage(page, { [SETTINGS_KEY]: { theme: 'dark', preferIpv4: true } });
   await page.goto('/');
@@ -219,11 +309,11 @@ test('Updates: the automatic check is a setting that persists', async ({ page })
 test('radio groups and the Library tabs are one Tab stop each, worked with the arrow keys', async ({ page }) => {
   await start(page);
   await page.getByTestId('tab-settings').click();
-  await page.getByTestId('quality-high').focus();
+  await page.getByTestId('quality-auto').focus();
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByTestId('quality-low')).toHaveAttribute('aria-checked', 'true');
-  await expect(page.getByTestId('quality-low')).toBeFocused();
-  await expect(page.getByTestId('quality-high')).toHaveAttribute('tabindex', '-1');
+  await expect(page.getByTestId('quality-high')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('quality-high')).toBeFocused();
+  await expect(page.getByTestId('quality-auto')).toHaveAttribute('tabindex', '-1');
   await page.getByTestId('ipv4-auto').focus();
   await page.keyboard.press('End');
   await expect(page.locator('[data-testid^="ipv4-"]').last()).toHaveAttribute('aria-checked', 'true');
