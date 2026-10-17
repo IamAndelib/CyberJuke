@@ -26,6 +26,21 @@ test('switching theme changes the CSS variables and persists', async ({ page }) 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'brutalist');
 });
 
+test('changing a setting other than the theme leaves the theme alone (no restyle)', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('tab-settings').click();
+  await page.evaluate(() => {
+    const w = window as unknown as { __themeWrites: number };
+    w.__themeWrites = 0;
+    new MutationObserver((rs) => (w.__themeWrites += rs.length)).observe(document.documentElement, { attributes: true });
+  });
+  await page.getByTestId('check-every-5').click();
+  await expect(page.getByTestId('check-every-5')).toHaveAttribute('aria-checked', 'true');
+  await page.getByTestId('cache-512').click();
+  await expect(page.getByTestId('cache-512')).toHaveAttribute('aria-checked', 'true');
+  expect(await page.evaluate(() => (window as unknown as { __themeWrites: number }).__themeWrites)).toBe(0);
+});
+
 test('a saved GRiD theme migrates to Brutalist', async ({ page }) => {
   await seedStorage(page, { [SETTINGS_KEY]: { theme: 'grid', showNsfw: false, quality: 'high' } });
   await page.goto('/');

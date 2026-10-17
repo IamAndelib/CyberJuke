@@ -16,7 +16,7 @@ import '../features/now-playing/now-playing.css';
 // Buttons in the app's chrome act on a tap even while a list is still gliding.
 import '../ui/tapThrough';
 import { render } from 'preact';
-import { effect } from '@preact/signals';
+import { computed, effect } from '@preact/signals';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -66,10 +66,12 @@ function catchStrays(): void {
 }
 
 function applyTheme(): void {
+  // Only the theme: another setting changing mustn't restyle the page or call the status bar.
+  const theme = computed(() => settings.value.theme);
   effect(() => {
-    const theme = settings.value.theme;
+    const t = theme.value;
     const root = document.documentElement;
-    root.dataset.theme = theme;
+    root.dataset.theme = t;
     const cs = getComputedStyle(root);
     const bg = cs.getPropertyValue('--color-bg').trim();
     const dark = cs.getPropertyValue('--scheme').trim() !== 'light';
