@@ -374,9 +374,10 @@ class PlaybackService : MediaSessionService() {
     private val blockEnded = Runnable { resumeAfterBlock() }
 
     /**
-     * Keeps the CPU awake until a pending resume is due: the player is paused (no wake lock of
-     * its own), and a Handler's delay doesn't run on while the phone sleeps in a pocket. Only
-     * for a resume that can still happen (within [NetBlock.RESUME_WINDOW_MS]); timed.
+     * Keeps the CPU awake until a pending resume is due, or an outage's next try: the player is
+     * paused (no wake lock of its own), and a Handler's delay doesn't run on while the phone
+     * sleeps in a pocket. Only for a resume that can still happen (within
+     * [NetBlock.RESUME_WINDOW_MS]); timed.
      */
     private var resumeWakeLock: PowerManager.WakeLock? = null
 
@@ -417,12 +418,17 @@ class PlaybackService : MediaSessionService() {
         val wait = (until - System.currentTimeMillis()).coerceAtLeast(0L) + BLOCK_END_SLACK_MS
         handler.postDelayed(blockEnded, wait)
         if (!NetBlock.resumePending() || wait > NetBlock.RESUME_WINDOW_MS) return
+        keepAwakeFor(wait)
+    }
+
+    /** [resumeWakeLock] for [ms] and a little more (a new call sets a new timeout). */
+    private fun keepAwakeFor(ms: Long) {
         try {
             val lock = resumeWakeLock ?: (getSystemService(Context.POWER_SERVICE) as PowerManager)
                 .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "CyberJuke:resume")
                 .apply { setReferenceCounted(false) }
                 .also { resumeWakeLock = it }
-            lock.acquire(wait + WAKE_SLACK_MS)
+            lock.acquire(ms + WAKE_SLACK_MS)
         } catch (e: Exception) {
             Log.w(TAG, "No wake lock for the resume: ${e.javaClass.simpleName}")
         }
@@ -1507,11 +1513,16 @@ class PlaybackService : MediaSessionService() {
         if (until > 0L) scheduleResume(until) else handler.post { resumeAfterBlock() }
     }
 
-    /** The next outage try, or the window's end (one pending at most). */
+    /**
+     * The next outage try, or the window's end (one pending at most), with the phone kept awake
+     * until then: on a weak link that stays validated no network callback wakes it, so a locked
+     * phone would make the try wait for the screen to come on.
+     */
     private fun armOutageRetry() {
         handler.removeCallbacks(outageRetry)
-        val delay = resumeSchedule.delayMs(SystemClock.elapsedRealtime())
-        if (delay != null) handler.postDelayed(outageRetry, delay) else endOutageWait()
+        val delay = resumeSchedule.delayMs(SystemClock.elapsedRealtime()) ?: return endOutageWait()
+        handler.postDelayed(outageRetry, delay)
+        keepAwakeFor(delay)
     }
 
     /** The window is over: the wait is given up (the page hears it, Play still works). */
@@ -1553,6 +1564,8 @@ class PlaybackService : MediaSessionService() {
     private fun stopOutageRetry() {
         handler.removeCallbacks(outageRetry)
         resumeSchedule.stop()
+        // A back-off's resume that is still wanted takes it again (pauseToResume, scheduleResume).
+        releaseResumeWakeLock()
     }
 
     /** A real per-video failure: [action] is TrackErrorPolicy's Skip, PauseAtEnd or Stop. */
