@@ -145,14 +145,16 @@ export function PagedTracks({
     if (hasRows) mark('first-row');
   }, [hasRows]);
 
+  const failed = !!error;
   useEffect(() => {
     const el = sentinel.current;
-    if (!el || !hasMore || status !== 'ready' || chunks.more) return;
+    // A failed page waits for "Retry loading more" (or the connection coming back), not the next render.
+    if (!el || !hasMore || status !== 'ready' || failed || chunks.more) return;
     // Re-observing after each page fires the callback again if the sentinel is still visible.
     const io = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && loadMore(), { rootMargin: '600px 0px' });
     io.observe(el);
     return () => io.disconnect();
-  }, [tracks.length, hasMore, status, loadMore, chunks.more]);
+  }, [tracks.length, hasMore, status, failed, loadMore, chunks.more]);
 
   if (status === 'loading') return <SkeletonRows />;
   if (status === 'error' && error) return <ErrorState {...error} onRetry={paged.retry} />;

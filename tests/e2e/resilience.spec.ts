@@ -1,7 +1,7 @@
 import { expect, test } from '../fixtures';
 import { failImagesOnce, setImagesOffline } from '../fixtures/youtube';
 import type { Locator, Page } from '@playwright/test';
-import { bufferedAhead, expectStable, opened, openNowPlaying, openSearch, playerCalls, recordOpens, seedStorage, setOffline, setVisibility, start, waitForTracks } from '../helpers';
+import { bufferedAhead, expectStable, isFeedQuery, opened, openNowPlaying, openSearch, playerCalls, recordOpens, scrollTo, seedStorage, setOffline, setVisibility, start, waitForTracks } from '../helpers';
 
 /**
  * When things go wrong: YouTube limiting the network or changing something (Y1),
@@ -368,6 +368,31 @@ test('a list that failed behind a Wi-Fi login page loads again when the app come
   await setVisibility(page, 'visible');
   await waitForTracks(page);
   await expect(page.getByTestId('offline')).toHaveCount(0);
+});
+
+test('a page that fails to load more waits for Retry instead of asking again and again', async ({ page, backend }) => {
+  await start(page);
+  const home = page.getByTestId('screen-home');
+  const rows = home.getByTestId('track-row');
+  const retry = home.getByRole('button', { name: 'Retry loading more' });
+  const laterPages = () => backend.queries.filter((q) => isFeedQuery(q) && q.startAt).length;
+  backend.failPages = true;
+  await expect
+    .poll(async () => {
+      await scrollTo(page, 'screen-home', 1e6);
+      return laterPages();
+    })
+    .toBeGreaterThan(0);
+  await expect(retry).toBeVisible();
+  // The end of the list stays in view, and the failed page isn't asked for again by itself.
+  const asked = laterPages();
+  await page.waitForTimeout(3000);
+  expect(laterPages()).toBe(asked);
+  await expect(retry).toBeVisible();
+  backend.failPages = false;
+  const shown = await rows.count();
+  await retry.click();
+  await expect.poll(() => rows.count()).toBeGreaterThan(shown);
 });
 
 test('art that failed to load offline loads once the connection is back, and on coming back to the app', async ({ page, backend }) => {

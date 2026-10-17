@@ -11,7 +11,7 @@ import { isPublicQuery, runQuery, type StructuredQuery } from './firestore';
  * starting "busy" → TOO_MANY_ATTEMPTS_TRY_LATER, email starting "offline" → the
  * request fails. `rejectFirstToken`: the first ID token gets one 401 from Firestore.
  *
- * A slow or broken network is the backend's doing (`delay`, `failNext`, `offline`): Chromium's
+ * A slow or broken network is the backend's doing (`delay`, `failNext`, `failPages`, `offline`): Chromium's
  * network throttling (CDP) doesn't apply to responses the test supplies through `page.route`.
  */
 export interface BackendOptions {
@@ -35,6 +35,8 @@ export interface Backend {
   delay: number;
   /** Drop the next n runQuery requests without an answer (a connection that breaks mid-handover), then answer again. */
   failNext: number;
+  /** Drop every request for a later page (a query with `startAt`) until set back to false; first pages still load. */
+  failPages: boolean;
 }
 
 const CORS = {
@@ -60,6 +62,7 @@ export async function stubBackend(page: Page, opts: BackendOptions = {}): Promis
     offline: false,
     delay: opts.delay ?? 0,
     failNext: 0,
+    failPages: false,
   };
   let issued = 0;
   const valid = new Set<string>();
@@ -112,6 +115,7 @@ export async function stubBackend(page: Page, opts: BackendOptions = {}): Promis
       b.failNext--;
       return route.abort('connectionreset');
     }
+    if (b.failPages && q.startAt) return route.abort('connectionreset');
     const auth = (await req.allHeaders())['authorization'];
     if (b.delay) await new Promise((r) => setTimeout(r, b.delay));
     if (auth) {
