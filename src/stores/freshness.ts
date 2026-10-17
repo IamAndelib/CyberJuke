@@ -71,6 +71,8 @@ export function createFreshness(deps: FreshnessDeps): Freshness {
   let shown: string | null = null;
   let timer: unknown = null;
   let lastCheckAt = 0;
+  /** When the timer last came due, also for a check that couldn't run (offline, no baseline). */
+  let lastDueAt = 0;
   let running: Promise<void> | null = null;
   let started = false;
   /** Bumped by reset(): a check from the other sign-in state counts posts this one can't show. */
@@ -88,9 +90,12 @@ export function createFreshness(deps: FreshnessDeps): Freshness {
     if (!started) return;
     const ms = deps.intervalMs();
     if (ms == null || ms <= 0 || !deps.isVisible()) return;
-    const wait = Math.max(0, lastCheckAt + ms - now());
+    // From the last time it came due, so a skipped check waits a whole interval too instead of
+    // coming due again at once (resume still checks: it goes by the last check that ran).
+    const wait = Math.max(0, Math.max(lastCheckAt, lastDueAt) + ms - now());
     timer = setTimer(() => {
       timer = null;
+      lastDueAt = now();
       void check().finally(schedule);
     }, wait);
   }

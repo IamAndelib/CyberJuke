@@ -32,6 +32,7 @@
 - A listening cache that can't be read or written (the phone's storage full, a damaged file) no longer stops the track: it plays on from the network.
 - Album art that couldn't load while offline loads once you're back online.
 - When the next page of a list fails to load, the list waits for **Retry loading more** (or the connection coming back) instead of asking for it again and again, which wasted data and battery.
+- With the app open and offline for longer than the new-tracks check interval, Home's check for new tracks waits its usual time between tries instead of trying again constantly, which used battery.
 
 ### Repository
 - Eight "day in the life" tests run the browser build the way a day with the app goes: a commute through a tunnel, a Wi-Fi to mobile data handover, an album left playing, a sign-out while a liked song is still being saved, a night of Liked songs, an hour with the screen locked, slow browsing, and a café Wi-Fi with a login page. Hours pass on a faked clock, so each takes seconds.
