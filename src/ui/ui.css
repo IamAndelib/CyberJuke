@@ -1403,6 +1403,8 @@ section[data-kind] > .shelf {
 .toast-text {
   display: block;
   text-wrap: balance;
+  /* A name with no space in it (an artist, a title) breaks rather than leave the screen. */
+  overflow-wrap: anywhere;
 }
 .toast.has-action .toast-text {
   flex: 1;

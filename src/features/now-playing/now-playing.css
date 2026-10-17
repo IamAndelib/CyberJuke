@@ -586,6 +586,8 @@ button.lyr-line {
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--color-fg-dim);
+  /* "Next from: <list>": a name with no space in it breaks rather than leave the screen. */
+  overflow-wrap: anywhere;
 }
 .upnext-label::before {
   content: '// ';

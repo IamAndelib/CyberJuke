@@ -664,3 +664,29 @@ test('a message that wraps hugs its longest line, with Undo too and after the ph
   await expect.poll(async () => (await fit()).spare).toBeLessThanOrEqual(1);
   expect((await fit()).spare).toBeGreaterThanOrEqual(0);
 });
+
+test('a long unbroken word wraps inside a message and inside an Up next heading', async ({ page }) => {
+  const word = 'Supercalifragilisticexpialidociousness';
+  await start(page);
+  const inside = (l: ReturnType<Page['getByTestId']>) =>
+    l.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return el.scrollWidth <= el.clientWidth + 1 && r.left >= 0 && r.right <= document.documentElement.clientWidth + 1;
+    });
+  await page.evaluate((text) => (window as unknown as { __cyberjukeToast: ShowToast }).__cyberjukeToast(text, 10_000), `${word}${word} added to Favourites`);
+  const toast = page.getByTestId('toast');
+  await expect(toast).toBeVisible();
+  expect(await inside(toast)).toBe(true);
+
+  // An artist named so: Up next says "Next from: <name>".
+  await openSearch(page);
+  await page.getByTestId('mode-global').click();
+  await page.getByTestId('search-input').fill(word);
+  await page.getByTestId('filter-artists').click();
+  await page.getByTestId('music-open').first().click();
+  await page.getByTestId('artist-top-play').click();
+  await openNowPlaying(page);
+  const label = page.getByTestId('upnext-list-label');
+  await expect(label).toContainText(word);
+  expect(await inside(label)).toBe(true);
+});
