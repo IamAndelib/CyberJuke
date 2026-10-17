@@ -55,25 +55,16 @@ export function likedPayload(tracks: readonly Track[]): { ytIds: string[]; membe
   return { ytIds, membersOnly };
 }
 
-function sendLiked(o: { ytIds: string[]; membersOnly: string[] }): void {
-  if (native) JukePlayer.setLikedIds(o).catch(fail('cache.setLikedIds'));
-  else record(['setLikedIds', o.ytIds]);
+/** Native's `name` call, or in the browser a record of it (with `shown`, what the e2e suite checks). */
+function send(name: string, call: () => Promise<unknown>, ...shown: unknown[]): void {
+  if (native) call().catch(fail(`cache.${name}`));
+  else record([name, ...shown]);
 }
 
-function sendLimit(mb: CacheMb): void {
-  if (native) JukePlayer.setCacheLimit({ mb }).catch(fail('cache.setCacheLimit'));
-  else record(['setCacheLimit', { mb }]);
-}
-
-function sendSignedOut(): void {
-  if (native) JukePlayer.signedOut().catch(fail('cache.signedOut'));
-  else record(['signedOut']);
-}
-
-function sendSignedIn(): void {
-  if (native) JukePlayer.signedIn().catch(fail('cache.signedIn'));
-  else record(['signedIn']);
-}
+const sendLiked = (o: { ytIds: string[]; membersOnly: string[] }) => send('setLikedIds', () => JukePlayer.setLikedIds(o), o.ytIds);
+const sendLimit = (mb: CacheMb) => send('setCacheLimit', () => JukePlayer.setCacheLimit({ mb }), { mb });
+const sendSignedOut = () => send('signedOut', () => JukePlayer.signedOut());
+const sendSignedIn = () => send('signedIn', () => JukePlayer.signedIn());
 
 /** Settings' Clear cache: everything goes; playback goes on, and liked songs are saved again on Wi-Fi. */
 export function clearListeningCache(): Promise<void> {
