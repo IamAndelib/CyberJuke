@@ -1,4 +1,4 @@
-// ESLint 9 flat config. `npm run lint` fails on errors only; warnings are reported but allowed.
+// ESLint 9 flat config. `npm run lint` fails on any error or warning (--max-warnings=0).
 //
 // TypeScript 7 (the native compiler used by `npm run typecheck`) has no JavaScript API, and
 // typescript-eslint 8 needs one. TypeScript's own side-by-side package, @typescript/typescript6,

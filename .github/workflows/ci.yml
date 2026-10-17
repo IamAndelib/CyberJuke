@@ -38,7 +38,7 @@ jobs:
       # No dependency install scripts run in CI (only fsevents has one, and it is macOS-only).
       - run: npm ci --ignore-scripts
       - run: npm run typecheck
-      # Fails on errors only; warnings show up as annotations.
+      # Fails on any error or warning (--max-warnings=0).
       - run: npm run lint
       - run: npm test
       - run: npm run build

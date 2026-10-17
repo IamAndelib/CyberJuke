@@ -192,7 +192,8 @@
 .row.is-current .row-title {
   color: var(--color-accent);
 }
-/* Offline: nothing plays (the ⋯ menu still works). The rows dim, they don't go. */
+/* Offline: a row that can't play dims (saved liked songs and the current track stay bright), and
+   the ⋯ menu still works. The rows dim, they don't go. */
 .row-main {
   transition: opacity 0.25s steps(3);
 }

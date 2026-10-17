@@ -63,8 +63,8 @@ export function OfflineState({
 }
 
 /**
- * Offline nothing plays, so a list that only leads to music shows the offline state
- * instead of its rows, when it opens offline. Once it has shown its rows it keeps them
+ * Offline only the liked songs saved on the phone play (Liked has them), so a list that only
+ * leads to music shows the offline state instead of its rows, when it opens offline. Once it has shown its rows it keeps them
  * (they dim, and a tap says to connect), so losing the connection takes nothing off the
  * screen. Opened offline, it shows its rows as soon as the connection is back (a load
  * that failed meanwhile is retried on reconnect). `fill`: the state is all the screen

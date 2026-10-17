@@ -88,7 +88,10 @@ interface JukePlayerPlugin {
   skipToIndex(o: { index: number; expectId?: string }): Promise<void>;
   setShuffle(o: { enabled: boolean }): Promise<void>;
   setRepeat(o: { mode: RepeatMode }): Promise<void>;
-  /** 'auto' steps between bitrates as the connection allows, between tracks; an unknown value is 'auto'. */
+  /**
+   * 'auto' steps down a notch after two stalls within 3 minutes and back up after 5 calm minutes,
+   * only between tracks (QualityGovernor); an unknown value is 'auto'.
+   */
   setQuality(o: { quality: Quality }): Promise<void>;
   /**
    * Crossfade: 0 (Off) or the fade, in ms, between tracks that end by themselves (not on a
