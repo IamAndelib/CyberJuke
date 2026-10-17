@@ -863,11 +863,21 @@ class JukePlayerPlugin : Plugin() {
         }
     }
 
-    /** `cachedIds()`: `{ ytIds }`, the liked songs saved whole (they play offline). */
+    /**
+     * `cachedIds()`: `{ ytIds }`, the liked songs saved whole (they play offline). On the
+     * background thread too: the first call opens the cache, which waits for its index to be
+     * read, and every plugin call would wait behind that on the plugins' one thread.
+     */
     @PluginMethod
     fun cachedIds(call: PluginCall) {
-        val ids = AudioCache.savedLikedNow()
-        call.resolve(savedIds(ids))
+        AudioCache.cancelSave?.invoke()
+        Background.run("cachedIds") {
+            try {
+                call.resolve(savedIds(AudioCache.savedLikedNow()))
+            } catch (e: Exception) {
+                call.reject("cachedIds failed: ${e.javaClass.simpleName}")
+            }
+        }
     }
 
     /** The call's [key] ids (valid ones only), or null after rejecting it (missing, TOO_LARGE). */
