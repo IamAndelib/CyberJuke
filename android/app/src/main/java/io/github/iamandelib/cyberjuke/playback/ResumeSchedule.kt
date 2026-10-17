@@ -21,6 +21,7 @@ internal class ResumeSchedule(private val windowMs: Long = NetBlock.RESUME_WINDO
 
     private var attempts = 0
 
+    /** A streak runs. Tests only. */
     val active: Boolean get() = startedAt != IDLE
 
     /**

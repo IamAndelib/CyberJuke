@@ -253,7 +253,7 @@ internal class CacheLedger(limitBytes: Long) {
     fun keysOf(ytId: String): List<String> =
         keysByYt[ytId]?.mapNotNull { entries[it] }?.sortedByDescending { it.touched }?.map { it.key } ?: emptyList()
 
-    /** The cached bytes of [key] (0 when none). */
+    /** The cached bytes of [key] (0 when none). Tests only. */
     fun bytesOf(key: String): Long = entries[key]?.bytes ?: 0L
 
     /**

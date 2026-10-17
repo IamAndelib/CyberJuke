@@ -30,15 +30,10 @@ internal class NetEpochState {
     }
 
     /**
-     * [id]'s addresses are [now]. Returns true if they changed from addresses already known
-     * for it (the first report for a network is its baseline, not a change).
-     */
-    fun onAddresses(id: String, now: Set<String>): Boolean = addressesChanged(id, now).isNotEmpty()
-
-    /**
-     * Like [onAddresses], but says which address families changed: both for another network,
-     * only IPv6 when just its (often rotating) IPv6 addresses did. URLs bound to a family that
-     * didn't change still work. Empty: no change.
+     * [id]'s addresses are [now]: which address families changed from those already known for
+     * it. Both for another network, only IPv6 when just its (often rotating) IPv6 addresses did;
+     * URLs bound to a family that didn't change still work. Empty: no change (the first report
+     * for a network is its baseline, not a change).
      */
     @Synchronized
     fun addressesChanged(id: String, now: Set<String>): Set<Family> {
@@ -74,8 +69,6 @@ internal object NetEpoch {
     val generation: Int get() = state.generation
 
     fun onNetwork(id: String): Boolean = state.onNetwork(id)
-
-    fun onAddresses(id: String, addresses: Set<String>): Boolean = state.onAddresses(id, addresses)
 
     fun addressesChanged(id: String, addresses: Set<String>): Set<Family> = state.addressesChanged(id, addresses)
 }
