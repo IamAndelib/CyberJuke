@@ -237,11 +237,6 @@ class PlaybackService : MediaSessionService() {
     /** What the player has buffered, for [PlaybackNeed] (its isLoading says little: see there). */
     private fun loadOf(p: ExoPlayer): PlaybackNeed.Load {
         val next = p.nextMediaItemIndex
-        val nextDuration = if (next == C.INDEX_UNSET || next >= p.currentTimeline.windowCount) {
-            -1L
-        } else {
-            p.currentTimeline.getWindow(next, window).durationMs.takeIf { it != C.TIME_UNSET } ?: -1L
-        }
         return PlaybackNeed.Load(
             idle = p.playbackState == Player.STATE_IDLE || p.playbackState == Player.STATE_ENDED,
             buffering = p.playbackState == Player.STATE_BUFFERING,
@@ -251,7 +246,7 @@ class PlaybackService : MediaSessionService() {
             totalBufferedMs = p.totalBufferedDuration,
             // A next track that isn't loading ahead (Gapless off) is nothing to wait for.
             hasNext = next != C.INDEX_UNSET && LoadAhead.wanted(gapless, crossfadeMs),
-            nextDurationMs = nextDuration,
+            nextDurationMs = durationOf(p, next, window),
             isLoading = p.isLoading,
         )
     }
@@ -285,7 +280,7 @@ class PlaybackService : MediaSessionService() {
             handler.post { likedSaver.onNetwork(validated, unmetered) }
             // Online again (validated): playback an outage stopped picks up again.
             // (Validated fires again and again on a network that's up: at most every few seconds.)
-            if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) && NetBlock.resumePending() &&
+            if (validated && NetBlock.resumePending() &&
                 SystemClock.elapsedRealtime() - lastNetResumeAt > NET_RESUME_GAP_MS
             ) {
                 lastNetResumeAt = SystemClock.elapsedRealtime()
@@ -581,12 +576,7 @@ class PlaybackService : MediaSessionService() {
         // The network as it is now (the callback then tells of changes).
         val caps = runCatching { connectivity().let { it.getNetworkCapabilities(it.activeNetwork) } }.getOrNull()
         AudioCache.online = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) ?: isNetworkValidated()
-        caps?.let {
-            likedSaver.onNetwork(
-                it.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
-                it.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
-            )
-        }
+        caps?.let { likedSaver.onNetwork(AudioCache.online, it.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) }
         Log.i(TAG, "PlaybackService created")
     }
 

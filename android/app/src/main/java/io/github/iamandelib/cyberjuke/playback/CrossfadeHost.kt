@@ -18,6 +18,13 @@ import io.github.iamandelib.cyberjuke.net.NetBlock
 internal fun crossfadeTarget(p: Player): Int =
     if (p.repeatMode == Player.REPEAT_MODE_ONE) p.currentMediaItemIndex else p.nextMediaItemIndex
 
+/** The length of [p]'s item [index] once it is prepared, else (or with no such item) -1. [window] is reused. */
+internal fun durationOf(p: Player, index: Int, window: Timeline.Window): Long {
+    val t = p.currentTimeline
+    if (index == C.INDEX_UNSET || index >= t.windowCount) return -1L
+    return t.getWindow(index, window).durationMs.takeIf { it != C.TIME_UNSET } ?: -1L
+}
+
 /**
  * [Crossfader.Host] over the service's players: the [main] one (the session's) and, during a fade,
  * the [incoming] one. Position messages are the main player's own ([PlayerMessage]: delivered as
@@ -48,7 +55,8 @@ internal class ExoCrossfadeHost(
     /** PlaybackService.dropIncoming. */
     private val drop: () -> Unit,
 ) : Crossfader.Host {
-    private val messages = ArrayList<PlayerMessage>(1)
+    /** The one position message [at] set (arm cancels before it sets another). */
+    private var message: PlayerMessage? = null
     private val window = Timeline.Window()
 
     override fun facts(settingMs: Long): CrossfadePlan.Facts {
@@ -80,10 +88,7 @@ internal class ExoCrossfadeHost(
 
     override fun nextDurationMs(): Long {
         val p = main() ?: return -1L
-        val target = crossfadeTarget(p)
-        val t = p.currentTimeline
-        if (target == C.INDEX_UNSET || target >= t.windowCount) return -1L
-        return t.getWindow(target, window).durationMs.takeIf { it != C.TIME_UNSET } ?: -1L
+        return durationOf(p, crossfadeTarget(p), window)
     }
 
     override fun positionMs(): Long = main()?.currentPosition?.coerceAtLeast(0L) ?: 0L
@@ -98,18 +103,17 @@ internal class ExoCrossfadeHost(
 
     override fun at(positionMs: Long, action: () -> Unit) {
         val p = main() ?: return
-        messages.add(
-            p.createMessage { _, _ -> action() }
-                .setLooper(Looper.getMainLooper())
-                .setPosition(p.currentMediaItemIndex, positionMs)
-                .setDeleteAfterDelivery(true)
-                .send(),
-        )
+        message?.cancel()
+        message = p.createMessage { _, _ -> action() }
+            .setLooper(Looper.getMainLooper())
+            .setPosition(p.currentMediaItemIndex, positionMs)
+            .setDeleteAfterDelivery(true)
+            .send()
     }
 
     override fun cancelAll() {
-        messages.forEach { it.cancel() }
-        messages.clear()
+        message?.cancel()
+        message = null
     }
 
     override fun startIncoming(): Boolean = start()
