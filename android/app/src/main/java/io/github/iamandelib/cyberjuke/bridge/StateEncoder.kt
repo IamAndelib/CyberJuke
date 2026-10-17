@@ -2,6 +2,7 @@ package io.github.iamandelib.cyberjuke.bridge
 
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import androidx.media3.common.util.Util
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import io.github.iamandelib.cyberjuke.net.NetBlock
@@ -60,7 +61,9 @@ internal object StateEncoder {
         val duration = c.duration.takeIf { it != C.TIME_UNSET && it > 0L }
             ?: c.currentMediaItem?.mediaMetadata?.durationMs ?: 0L
         val state = JSObject()
-        state.put("isPlaying", c.isPlaying)
+        // Playing or about to, by Media3's own play/pause button rule: also while it loads
+        // (isBuffering), not on a call or at the end. The page's button shows Pause then.
+        state.put("isPlaying", !Util.shouldShowPlayButton(c))
         state.put("isBuffering", c.playbackState == Player.STATE_BUFFERING)
         state.put("index", index)
         state.put("trackId", if (index >= 0) c.currentMediaItem?.mediaId ?: JSONObject.NULL else JSONObject.NULL)

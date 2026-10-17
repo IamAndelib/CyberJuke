@@ -12,6 +12,10 @@ import type { CrossfadeMs, Quality } from '../stores/library';
 export interface NativeTrack { id: string; ytId: string; title: string; artist: string; artworkUrl: string; by?: string; postUrl?: string; membersOnly?: boolean; album?: string }
 export type RepeatMode = 'off' | 'all' | 'one';
 export interface NativeState {
+  /**
+   * isPlaying: playing or about to, as Media3's play/pause button shows it (Util.shouldShowPlayButton),
+   * so also while it loads; isBuffering: it is loading.
+   */
   isPlaying: boolean; isBuffering: boolean;
   index: number;            // index into the current list (list order), -1 if empty
   trackId: string | null;

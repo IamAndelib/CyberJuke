@@ -63,6 +63,7 @@ export interface PlayerState {
   /** Index of the current track in `queue`, -1 if none. */
   index: number;
   current: Track | null;
+  /** Playing or about to: true while it loads too (`isBuffering`), as on the play/pause button. */
   isPlaying: boolean;
   isBuffering: boolean;
   positionMs: number;
@@ -170,6 +171,14 @@ export interface NetStatus {
   autoIpv4: boolean;
   /** The last time YouTube limited us. */
   lastLimit?: { at: number; reason: string; surface: 'playback' | 'music' };
+}
+
+/**
+ * The play/pause button shows Pause, and a tap pauses: playing, about to, or waiting for the
+ * network to resume by itself (the tap calls that resume off).
+ */
+export function wantsPlay(s: Pick<PlayerState, 'isPlaying' | 'waitingForNetwork'>): boolean {
+  return s.isPlaying || s.waitingForNetwork;
 }
 
 /** Estimated live position, interpolated between samples while playing. */

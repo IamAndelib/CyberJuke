@@ -194,6 +194,15 @@ describe('NativePlayer: play/pause', () => {
     expect(p.state.value.waitingForNetwork).toBe(false);
   });
 
+  it('during the wait for the network, the button pauses: the resume is called off, nothing starts', async () => {
+    const p = new NativePlayer();
+    emit('state', state({ isPlaying: false, queueIds: ['A'], upNextIds: [], upNextKinds: '', waitingForNetwork: true }));
+    await p.toggle();
+    expect(fake.plugin.pause).toHaveBeenCalledTimes(1);
+    expect(fake.plugin.play).not.toHaveBeenCalled();
+    expect(p.state.value).toMatchObject({ isPlaying: false, waitingForNetwork: false });
+  });
+
   it('keeps how much audio native has loaded ahead (none from an older native, none for a list just started)', async () => {
     const p = new NativePlayer();
     emit('state', state({ isPlaying: false, queueIds: ['A'], upNextIds: [], upNextKinds: '', bufferedAheadMs: 30_000 }));

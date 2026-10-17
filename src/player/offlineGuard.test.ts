@@ -127,6 +127,14 @@ describe('offlineGuard', () => {
     expect(playsOffline(s({ current: null }), saved)).toBe(false);
   });
 
+  it('offline, the button pauses during the wait for the network: never refused', async () => {
+    const { inner, p, refused, offline } = setup({ queue: [track], current: track, isPlaying: false, waitingForNetwork: true });
+    offline();
+    await p.toggle();
+    expect(inner.toggle).toHaveBeenCalledTimes(1);
+    expect(refused).not.toHaveBeenCalled();
+  });
+
   it('offline, pausing, seeking, queue edits and settings still work', async () => {
     const { inner, p, refused, offline } = setup({ isPlaying: true });
     offline();

@@ -12,6 +12,7 @@ import {
   livePosition,
   playContext,
   player,
+  playWanted,
   positionSample,
   queuePlace,
   repeatMode,
@@ -50,10 +51,10 @@ function fmt(ms: number): string {
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
 
-/** Play/pause glyph (a spinner while starting); reads only the play state. */
+/** Play/pause glyph (a spinner while loading, Pause while waiting for the network); reads only the play state. */
 function PlayPauseIcon({ size }: { size: number }) {
   if (isPlaying.value && isBuffering.value) return <span class={'spinner' + (size > 30 ? ' big' : '')} aria-hidden="true" />;
-  return <Icon name={isPlaying.value ? 'pause' : 'play'} size={size} />;
+  return <Icon name={playWanted.value ? 'pause' : 'play'} size={size} />;
 }
 
 // ---- Mini player -------------------------------------------------------------------
@@ -95,7 +96,7 @@ function MiniProgress() {
 
 function MiniToggle() {
   return (
-    <button class="icon-btn" onClick={() => player.toggle()} aria-label={isPlaying.value ? 'Pause' : 'Play'} data-testid="mini-toggle">
+    <button class="icon-btn" onClick={() => player.toggle()} aria-label={playWanted.value ? 'Pause' : 'Play'} data-testid="mini-toggle">
       <PlayPauseIcon size={28} />
     </button>
   );
@@ -673,7 +674,7 @@ function NpControls() {
       <button class="icon-btn big" aria-label="Previous track" onClick={() => player.prev()} data-testid="np-prev">
         <Icon name="prev" size={36} />
       </button>
-      <button class="play-btn" aria-label={isPlaying.value ? 'Pause' : 'Play'} onClick={() => player.toggle()} data-testid="np-toggle">
+      <button class="play-btn" aria-label={playWanted.value ? 'Pause' : 'Play'} onClick={() => player.toggle()} data-testid="np-toggle">
         <PlayPauseIcon size={40} />
       </button>
       <NextButton size={36} class="icon-btn big" testid="np-next" />

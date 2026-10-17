@@ -12,7 +12,7 @@ import { trackErrorText, type TrackErrorFacts } from './errorText';
 import { Queue } from './queue';
 import type { RepeatMode } from './native';
 import type { CrossfadeMs, Ipv4Mode, Quality } from '../stores/library';
-import { AUTOPLAY_LOW, EMPTY_STATE, LIST_CONTEXT, livePosition, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
+import { AUTOPLAY_LOW, EMPTY_STATE, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
 
 /* Minimal typings for the parts of the IFrame API we use. */
 interface YTPlayer {
@@ -316,11 +316,11 @@ export class WebPlayer implements Player {
 
   async pause(): Promise<void> {
     this.yt?.pauseVideo();
-    this.publish({ isPlaying: false, isBuffering: false, positionMs: livePosition(this.s.value), sampledAt: performance.now() });
+    this.publish({ isPlaying: false, isBuffering: false, waitingForNetwork: false, positionMs: livePosition(this.s.value), sampledAt: performance.now() });
   }
 
   toggle(): Promise<void> {
-    return this.s.value.isPlaying ? this.pause() : this.play();
+    return wantsPlay(this.s.value) ? this.pause() : this.play();
   }
 
   async next(): Promise<void> {

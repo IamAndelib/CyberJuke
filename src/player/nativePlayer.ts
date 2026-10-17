@@ -11,7 +11,7 @@ import { YT_ID_RE, parseNativeState } from '../core/guards';
 import { logError } from '../core/log';
 import { trackErrorText } from './errorText';
 import { BRIDGE_MAX_ITEMS, BRIDGE_MAX_STRING, JukePlayer, STALE_INDEX, type NativeState, type NativeTrack, type RepeatMode } from './native';
-import { EMPTY_STATE, LIST_CONTEXT, livePosition, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextItem, type UpNextKind } from './types';
+import { EMPTY_STATE, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextItem, type UpNextKind } from './types';
 
 /** K6: text native would refuse as too long is cut (a link that long is dropped). */
 const clip = (s: string) => (s.length > BRIDGE_MAX_STRING ? s.slice(0, BRIDGE_MAX_STRING) : s);
@@ -310,9 +310,10 @@ export class NativePlayer implements Player {
   toggle = () => {
     const s = this.s.value;
     const now = performance.now();
-    // Either way the user took over: no "waiting" until native says so again.
-    this.s.value = { ...s, isPlaying: !s.isPlaying, isBuffering: false, waitingForNetwork: false, positionMs: livePosition(s, now), sampledAt: now };
-    return (s.isPlaying ? JukePlayer.pause() : JukePlayer.play()).finally(() => this.resync());
+    const on = wantsPlay(s);
+    // Either way the user took over: no "waiting" until native says so again (a pause calls its resume off).
+    this.s.value = { ...s, isPlaying: !on, isBuffering: false, waitingForNetwork: false, positionMs: livePosition(s, now), sampledAt: now };
+    return (on ? JukePlayer.pause() : JukePlayer.play()).finally(() => this.resync());
   };
   next = () => JukePlayer.skipToNext();
   prev = () => JukePlayer.skipToPrevious();

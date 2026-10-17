@@ -27,7 +27,7 @@ import { createAutoplay, type Autoplay } from './autoplay';
 import { NativePlayer } from './nativePlayer';
 import { offlineGuard, playsOffline, type OfflineRefusal } from './offlineGuard';
 import { safePlayer } from './safePlayer';
-import { nsfwAutoplayIds, type PlayContext, type Player, type UpItem, type UpNextItem, type UpNextSections } from './types';
+import { nsfwAutoplayIds, wantsPlay, type PlayContext, type Player, type UpItem, type UpNextItem, type UpNextSections } from './types';
 import { WebPlayer } from './webPlayer';
 
 export * from './types';
@@ -101,6 +101,8 @@ export const isPlaying = computed(() => state.value.isPlaying);
 export const isBuffering = computed(() => state.value.isBuffering);
 /** Playing and not buffering: the position moves. */
 export const isAdvancing = computed(() => state.value.isPlaying && !state.value.isBuffering);
+/** The play/pause button shows Pause ([wantsPlay]). */
+export const playWanted = computed(() => wantsPlay(state.value));
 /**
  * The connection dropped and the music waits for it; native resumes by itself once it's back.
  * Shown once it has held for a moment: a saved song starting offline buffers from the cache for

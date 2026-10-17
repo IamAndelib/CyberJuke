@@ -10,11 +10,11 @@
  *    offline ([playsOffline]): saved, or with audio loaded ahead (native plays from its buffer
  *    and says "Signal lost…" if that runs out). The track the app reopens on has none loaded:
  *    unsaved, it is refused like its row ('unsaved' for a liked song, 'offline' for the rest).
- * Pausing, seeking, queue edits and settings always go through.
+ * Pausing (also during the wait for the network), seeking, queue edits and settings always go through.
  */
 import type { Track } from '../data/model';
 import { isSaved, savedQueue } from '../stores/savedOffline';
-import type { Player, PlayerState } from './types';
+import { wantsPlay, type Player, type PlayerState } from './types';
 
 /**
  * Offline, the current track plays: it is saved on the phone, has audio loaded past where it is,
@@ -54,8 +54,8 @@ export function offlineGuard(p: Player, o: OfflinePolicy): Player {
   return {
     ...p,
     play: () => resume(() => p.play()),
-    // Playing, it pauses: always.
-    toggle: () => (p.state.peek().isPlaying ? p.toggle() : resume(() => p.toggle())),
+    // Playing (or waiting for the network to resume), it pauses: always.
+    toggle: () => (wantsPlay(p.state.peek()) ? p.toggle() : resume(() => p.toggle())),
     playList: (tracks, start, ctx) => {
       if (o.online()) return p.playList(tracks, start, ctx);
       const q = savedQueue(tracks, start, o.saved());
