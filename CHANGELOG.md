@@ -33,6 +33,7 @@
 - Album art that couldn't load while offline loads once you're back online.
 - When the next page of a list fails to load, the list waits for **Retry loading more** (or the connection coming back) instead of asking for it again and again, which wasted data and battery.
 - With the app open and offline for longer than the new-tracks check interval, Home's check for new tracks waits its usual time between tries instead of trying again constantly, which used battery.
+- Android's system log no longer records which track failed to play.
 - While a track loads, the play button shows Pause (and its spinner), as it does while it plays, and a tap pauses it. It used to show Play, and a tap did nothing.
 
 ### Repository

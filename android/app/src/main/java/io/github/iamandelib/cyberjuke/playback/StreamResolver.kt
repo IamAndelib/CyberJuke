@@ -66,7 +66,7 @@ internal class ManifestOnlyException(
     val ytId: String,
     val manifestUrl: String,
     val mimeType: String,
-) : IOException("No progressive stream for $ytId, only a manifest ($mimeType)")
+) : IOException("No progressive stream, only a manifest ($mimeType)")
 
 /**
  * Turns a YouTube id into a playable stream URL using NewPipeExtractor (via [YtCompat]).
@@ -311,7 +311,8 @@ internal object StreamResolver {
         // 3. Adaptive manifest (handled by the service, see ManifestOnlyException).
         ex.hlsUrl?.let { throw ManifestOnlyException(ytId, it, MimeTypes.APPLICATION_M3U8) }
 
-        throw ResolveException(ytId, "NO_STREAM: no playable stream found for $ytId", null, FailureKind.CONTENT)
+        // No id in the message: Media3 logs playback errors in release builds too (the field has it).
+        throw ResolveException(ytId, "NO_STREAM: no playable stream found", null, FailureKind.CONTENT)
     }
 
     private fun stream(
