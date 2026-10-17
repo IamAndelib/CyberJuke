@@ -2,7 +2,6 @@ package io.github.iamandelib.cyberjuke.playback
 
 import android.content.Context
 import android.net.Uri
-import android.system.Os
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
@@ -25,8 +24,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The listening cache: the audio of recently played and next tracks and of liked songs, on the
- * phone only (noBackupFilesDir/audio, which Android never clears and never backs up: [CacheHome];
- * its index is in the ExoPlayer database, kept out of backups by the backup rules). Up to the
+ * phone only (noBackupFilesDir/audio, which Android never clears and never backs up, as Metrolist
+ * keeps its caches out of cacheDir; its index is in the ExoPlayer database, kept out of backups
+ * by the backup rules). Up to the
  * size chosen in Settings (128, 256 or 512 MB); over it, [CacheLedger]'s order decides what goes.
  *
  * - One [SimpleCache] for the process (it refuses a second one on the same folder), opened on
@@ -55,8 +55,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal object AudioCache {
     private const val TAG = "CyberJukeCache"
 
-    /** rwxrwx--x, no setgid (0771). */
-    private const val DIR_MODE = 0b111_111_001
+    /** In noBackupFilesDir: the SimpleCache folder, the liked list (newest first), the members-only tags. */
+    private const val DIR = "audio"
+    private const val LIKED_FILE = "audio-liked"
+    private const val MEMBERS_FILE = "audio-members"
 
     const val DEFAULT_MB = 256
     val SIZES_MB = listOf(128, 256, 512)
@@ -179,20 +181,18 @@ internal object AudioCache {
         val ctx = appContext ?: return null
         return try {
             val db = StandaloneDatabaseProvider(ctx)
-            // Before anything is read: brought over from cacheDir, its home before (once).
-            moveHome(ctx, db)
             // Before the cache's own init thread replays the spans into the evictor: the liked
             // order, the members-only tags and the limit must already be there (a service
             // started without the page, from a media button, must not evict liked songs as if
             // they weren't).
-            readIds(ctx, CacheHome.MEMBERS_FILE)?.let { members.load(it) }
+            readIds(ctx, MEMBERS_FILE)?.let { members.load(it) }
             if (!likedKnown) {
-                readIds(ctx, CacheHome.LIKED_FILE)?.let { ledger.setLiked(it, known = false) }
+                readIds(ctx, LIKED_FILE)?.let { ledger.setLiked(it, known = false) }
                 liked = ledger.liked
                 likedKnown = liked.isNotEmpty()
             }
             ledger.limit = limitMb * MB
-            val c = SimpleCache(File(ctx.noBackupFilesDir, CacheHome.DIR), JukeCacheEvictor(), db)
+            val c = SimpleCache(File(ctx.noBackupFilesDir, DIR), JukeCacheEvictor(), db)
             // Failed to start (its folder or index unreadable), it would fail every read and
             // write: none instead, and playback streams.
             try {
@@ -234,39 +234,6 @@ internal object AudioCache {
             had
         }
         if (hadSaved) listeners.forEach { it.onSavedChanged() }
-    }
-
-    /**
-     * The cache, its liked list and its members-only tags lived in cacheDir, which Android
-     * clears when storage runs low ([CacheHome]): moved to noBackupFilesDir, once. A move that
-     * fails starts the cache empty (the liked saver saves the liked songs again).
-     */
-    private fun moveHome(ctx: Context, db: StandaloneDatabaseProvider) {
-        try {
-            if (!CacheHome.move(ctx.cacheDir, ctx.noBackupFilesDir, deleteDir = { SimpleCache.delete(it, db) }, fixOwner = ::ownAsAppData)) {
-                Log.w(TAG, "Listening cache not moved: starting empty")
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Listening cache not moved: ${e.javaClass.simpleName}")
-        }
-    }
-
-    /**
-     * [f] (moved from cacheDir) and all in it get the app's own group, and folders lose the setgid
-     * bit (0771): cacheDir is setgid with the app's cache group, which a rename keeps and passes on
-     * to what is written there later, so Android would go on counting it as cache (Settings,
-     * its cache quota and what it clears first). A failure is said, and the cache kept as it is.
-     */
-    private fun ownAsAppData(f: File) {
-        try {
-            val gid = Os.getgid()
-            f.walkTopDown().forEach {
-                Os.chown(it.path, -1, gid)
-                if (it.isDirectory) Os.chmod(it.path, DIR_MODE)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Listening cache left in the cache group: ${e.javaClass.simpleName}")
-        }
     }
 
     /** Runs [block] with the open cache, under its lock; null without one. */
@@ -322,7 +289,7 @@ internal object AudioCache {
                 r.remove.forEach { id -> ledger.keysOf(id).forEach { c.removeResource(it) } }
             }
         }
-        if (r.tagged) appContext?.let { writeIds(it, CacheHome.MEMBERS_FILE, members.tagged().toList()) }
+        if (r.tagged) appContext?.let { writeIds(it, MEMBERS_FILE, members.tagged().toList()) }
     }
 
     /**
@@ -349,7 +316,7 @@ internal object AudioCache {
             publish()
             justLiked
         } ?: return false
-        appContext?.let { writeIds(it, CacheHome.LIKED_FILE, liked) }
+        appContext?.let { writeIds(it, LIKED_FILE, liked) }
         likedListeners.forEach { it.onLikedChanged(fresh) }
         return true
     }
@@ -384,7 +351,7 @@ internal object AudioCache {
         // No cache (it didn't start): the audio is still on the phone, so its tags stay written
         // down, and the sign-out at the next start removes it.
         if (done) members.removed(gone)
-        appContext?.let { writeIds(it, CacheHome.MEMBERS_FILE, members.tagged().toList()) }
+        appContext?.let { writeIds(it, MEMBERS_FILE, members.tagged().toList()) }
         if (gone.isNotEmpty()) Log.i(TAG, "Members-only audio removed")
         return done
     }
@@ -447,7 +414,7 @@ internal object AudioCache {
                 return
             }
             if (ytId != null && members.onCached(ytId)) {
-                appContext?.let { writeIds(it, CacheHome.MEMBERS_FILE, members.tagged().toList()) }
+                appContext?.let { writeIds(it, MEMBERS_FILE, members.tagged().toList()) }
             }
             evict(cache, 0L, span.key)
             changed(cache, span.key)
