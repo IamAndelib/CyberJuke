@@ -37,8 +37,10 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 - **Sign in with Cyberspace** (optional): the Jukebox also shows the members-only shared tracks, marked `[members]`. See [Signing in](#signing-in).
 - **Library**: liked tracks and recently played, stored on your phone.
 - **Background playback**: the notification, lock screen and headset buttons all work, and the queue keeps going with the screen off. Tapping the notification opens Now Playing.
-- **Listening cache**: the music you play and the next track are kept on the phone (128, 256 or 512 MB, in Settings), so a sudden drop in the signal doesn't stop the music, and liked songs are saved so they play offline. CyberJuke is made for online listening: offline, only the liked songs already saved play.
+- **Listening cache**: the music you play and the next track are kept on the phone (128, 256 or 512 MB, in Settings), so a sudden drop in the signal doesn't stop the music, and liked songs are saved so they play offline. CyberJuke is made for online listening: offline, only the liked songs already saved play, and a paused song resumes from what it has loaded.
+- **Audio quality**: **Auto** (the default) plays the best quality the connection keeps up with, stepping down after stalls and back up once it's calm, only between tracks; **High** and **Low** stay put.
 - **Crossfade** (optional): the end of a track blends into the next, over 3, 6 or 10 seconds (Settings → Crossfade).
+- **Gapless playback** (on by default): the next track is readied while this one plays, so they follow without a pause. Off, it loads only when this one ends, so a skip costs little data.
 - **Picks up where you left off**: the app opens on what you last played, paused at the same spot, even after Android stopped it.
 - **Update notices**: Settings → Updates checks for a new release once a day (or on request) and shows it in Settings with a download link. Installs from F-Droid update through F-Droid instead.
 - **Now Playing**: seek, shuffle, repeat, like, synced lyrics, share, "Playing from …", and an Up Next queue you can reorder.
@@ -134,7 +136,7 @@ Signing in is optional. Without it, CyberJuke shows the Jukebox's public posts. 
 
 - **Your password** goes only to Cyberspace's own login service (Google's Firebase Auth, the same one the website uses). CyberJuke never stores or logs it.
 - **What is kept:** a login token (the refresh token), your user id and your @username, encrypted on the phone with an Android Keystore key. The short-lived access token stays in memory and is renewed before it expires. If the token can't be saved, you stay signed in until the app closes.
-- **Sign out** (Settings → Account) deletes the token and clears the cached Jukebox data, including the members-only shared tracks wherever they were saved (liked tracks, history, lyrics). Signing in or out reloads the whole catalog.
+- **Sign out** (Settings → Account) deletes the token and clears the cached Jukebox data, including the members-only shared tracks wherever they were saved (liked tracks, history, lyrics, and their audio in the listening cache). Signing in or out reloads the whole catalog.
 - New accounts are made on [cyberspace.online](https://cyberspace.online/?signup=1); CyberJuke has no sign-up of its own.
 - Signed in, requests stay as light as before: the same page sizes, cache times and refresh intervals.
 

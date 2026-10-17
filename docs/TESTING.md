@@ -11,7 +11,7 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 ## Playback
 - [ ] A Home track plays. So do a genre track, an artist page track and a **Global** search result.
 - [ ] With the screen off and the app in the background, music keeps playing and moves on to the next track.
-- [ ] Notification and lock screen: play/pause, next and previous work, and they show the title and artwork. *(These changed: the lock screen no longer lists the queue.)*
+- [ ] Notification and lock screen: play/pause, next and previous work, and they show the title and artwork.
 - [ ] On a fresh install (Android 13 or newer), the first play asks for no permission, and the notification still shows its controls.
 - [ ] Unplugging headphones or disconnecting Bluetooth pauses playback.
 - [ ] Switch between Wi-Fi and mobile data **during** a song: playback continues, or resumes by itself within a few seconds. No "YouTube is limiting requests" banner.
@@ -104,8 +104,8 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 - [ ] Wi-Fi ↔ mobile data handover mid-song, a few times in a row: playback continues or resumes by itself; the next track starts without a long wait. **Waiting for carrier…** doesn't flash during the switch (it shows only once a stall has lasted a second).
 - [ ] **Wi-Fi with a login page** (a café, a hotel): join it with the app open, before logging in. The lists you open say **[ NO CARRIER ]** and the music, once its buffer runs out, says "Signal lost" and shows **Waiting for carrier…**, with no offline bar (the phone says it's connected). Log in on the portal page and come back to the app: the list loads by itself and the music carries on, with no tap on Redial.
 - [ ] Switch Wi-Fi off and on while a genre page is loading (a request caught in the switch): the page still fills in by itself, with no error and no Redial.
-- [ ] With the cache-reliability changes: Settings → Audio quality **Low**, like a song and let it save (play it to the end on Wi-Fi), then switch to **Auto**, close the app completely, reopen it in airplane mode and play the song from Liked: it plays, from the phone, with no download.
-- [ ] With the cache-reliability changes: like a song on Wi-Fi and turn airplane mode on while it is still saving (a few seconds in). Back online, with the app open, it is saved a little later by itself (airplane mode on again: it's bright in Liked), with no message in between.
+- [ ] Settings → Audio quality **Low**, like a song and let it save (play it to the end on Wi-Fi), then switch to **Auto**, close the app completely, reopen it in airplane mode and play the song from Liked: it plays, from the phone, with no download.
+- [ ] Like a song on Wi-Fi and turn airplane mode on while it is still saving (a few seconds in). Back online, with the app open, it is saved a little later by itself (airplane mode on again: it's bright in Liked), with no message in between.
 - [ ] While **Waiting for carrier…** shows, the button shows Pause (also offline): press it and the text goes, and the music stays paused when the connection comes back. With the phone still connected (Wi-Fi without internet), press **Play** after that: it tries at once; once music plays the text is gone (if the connection is still down, the wait comes back). Unplug your headphones while it waits: it stays paused when the connection comes back.
 - [ ] Leave it waiting with no connection: after about 9 minutes the text goes and it no longer starts by itself; **Play** still works once you're back.
 - [ ] With Crossfade on, a track's end while **Waiting for carrier…**: no fade (the log says `Crossfade skipped: OUTAGE`); the next track starts the usual way once it can. On a throttled connection where the next track takes a while to start: the old track plays out its end, and the new one fades in once it plays (if the next track isn't ready at all when the fade is due, no fade: `NEXT_NOT_READY`).
