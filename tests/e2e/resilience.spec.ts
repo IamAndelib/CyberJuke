@@ -548,8 +548,10 @@ test('Here on the Genres tab says the Jukebox could not load (with Retry), not "
   // genres with it before Retry is needed; otherwise Retry loads them.
   const places = page.getByTestId('here-places').getByTestId('here-place').first();
   const retry = page.getByTestId('search').getByTestId('retry');
-  await expect(places.or(retry)).toBeVisible();
-  if (await retry.isVisible()) await retry.click();
-  await expect(places).toBeVisible();
+  // Retry may go (the genres came) between seeing it and tapping it: try again until they show.
+  await expect(async () => {
+    if (await retry.isVisible()) await retry.click({ timeout: 1000 });
+    await expect(places).toBeVisible({ timeout: 1000 });
+  }).toPass();
   await expect(page.getByTestId('search').getByTestId('offline')).toHaveCount(0);
 });
