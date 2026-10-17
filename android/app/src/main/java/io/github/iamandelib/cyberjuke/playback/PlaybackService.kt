@@ -826,10 +826,10 @@ class PlaybackService : MediaSessionService() {
         likedSaver.stop()
         AudioCache.removeListener(likedSaver.cacheListener)
         AudioCache.removeLikedListener(likedSaver.likedListener)
-        // The incoming player of a fade under way goes first (before the gate opens).
+        // The incoming player of a fade under way goes first, the main one below, and only then
+        // the gate opens: a load waiting at it ends with the player instead of starting.
         crossfade?.release()
         crossfade = null
-        YtDataSpecResolver.gate.allow(emptySet())
         if (networkCallbackRegistered) {
             try {
                 connectivity().unregisterNetworkCallback(networkCallback)
@@ -843,6 +843,7 @@ class PlaybackService : MediaSessionService() {
         }
         mediaSession = null
         player = null
+        YtDataSpecResolver.gate.allow(emptySet())
         // The listening cache stays open for the process's life (AudioCache): nothing to release here.
         super.onDestroy()
     }
@@ -967,6 +968,9 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            // A release that timed out in onDestroy reports it here, listeners still attached:
+            // there is no track to skip or pause any more.
+            if (destroying) return
             val p = player ?: return
             handlePlayerError(p, error)
         }
