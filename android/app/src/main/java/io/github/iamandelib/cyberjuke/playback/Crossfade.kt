@@ -95,7 +95,7 @@ internal object CrossfadePlan {
         val gapless: Boolean = true,
         /** The playing track and the one the fade goes into are from one album (both say so). */
         val sameAlbum: Boolean = false,
-        /** A fade (or the hand-over of the audio focus before one) is under way. */
+        /** A fade is under way: both tracks playing, or the new one still rising after the hand-over. */
         val fading: Boolean = false,
         /**
          * The main player has prepared the track the fade goes into (its length is known). One that

@@ -28,7 +28,8 @@ internal fun crossfadeTarget(p: Player): Int =
  * The audio focus is ExoPlayer's: the main player keeps it through the fade (a call or another
  * app's audio pauses it, and the incoming one follows: CrossfadeEvents), and the incoming one,
  * which doesn't handle it until the hand-over, then takes it (the old one goes anyway). Ducking
- * (a navigation prompt) applies to the main one only.
+ * (a navigation prompt): Android 8 and later lower every player of the app, so both dip; on
+ * Android 7 ExoPlayer lowers its own volume, so only the main one does.
  *
  * Skipped and started fades are logged as warnings (R8 keeps those, see proguard-rules.pro), with
  * no ids: `adb logcat -s CyberJukeCrossfade:W`.
