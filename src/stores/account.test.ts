@@ -71,6 +71,25 @@ describe('startAccount', () => {
     await vi.waitFor(() => expect(calls).toEqual(['drop:null']));
   });
 
+  it('signed out at startup: the lyrics cache drops members-only lyrics once the page is idle, not during startup', async () => {
+    vi.useFakeTimers();
+    try {
+      fakeAuth.uid = null;
+      const { startAccount } = await import('./account');
+      const { lyrics } = await import('../data/lyrics');
+      startAccount();
+      expect(lyrics.dropMembersOnly).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(lyrics.dropMembersOnly).toHaveBeenCalledTimes(1);
+      // A sign-out drops them at once.
+      fakeAuth.emit(true, 'signIn');
+      fakeAuth.emit(false, 'signOut');
+      expect(lyrics.dropMembersOnly).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('a list that could not be read still follows sign-outs', async () => {
     const { startAccount } = await import('./account');
     startAccount(Promise.reject(new Error('unreadable')));

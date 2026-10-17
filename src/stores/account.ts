@@ -13,6 +13,7 @@ import { FirestoreError } from '../data/firestore';
 import type { Track } from '../data/model';
 import { feeds, JUKEBOX_FEED_PREFIXES } from './feed';
 import { lyrics } from '../data/lyrics';
+import { whenIdle } from '../core/idle';
 import { catalog } from './catalog';
 import { dropMembersOnly, returnMembersOnly } from './library';
 import { freshness } from './newTracks';
@@ -54,7 +55,8 @@ export function startAccount(libraryRead: Promise<unknown> = Promise.resolve()):
   let uid = auth.state.value.user?.uid ?? null;
   if (!auth.signedIn()) {
     afterRead(() => dropMembersOnly());
-    void lyrics.dropMembersOnly();
+    // It reads the whole lyrics cache: not while the app starts (a sign-out dropped them already).
+    whenIdle(() => void lyrics.dropMembersOnly(), 1500, 300);
   } else if (uid) {
     const was = uid;
     afterRead(() => returnMembersOnly(was));
