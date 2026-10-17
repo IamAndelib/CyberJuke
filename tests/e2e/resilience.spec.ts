@@ -264,6 +264,35 @@ test('launched offline: no carrier on Home, Genres and Artists (no intro, in the
   await expect(home.getByTestId('offline')).toHaveCount(0);
 });
 
+test('launched offline with the Jukebox saved from before: Genres and Artists show no count over "Connect to load"', async ({ page, backend }) => {
+  await start(page);
+  for (const tab of ['genres', 'artists'] as const) {
+    await page.getByTestId(`tab-${tab}`).click();
+    await expect(page.getByTestId(`screen-${tab}`).locator('.topbar-sub')).toContainText(`${tab} on the Jukebox`);
+  }
+  await page.addInitScript(() => {
+    const w = window as unknown as { __netUp: boolean };
+    w.__netUp = false;
+    Object.defineProperty(Navigator.prototype, 'onLine', { configurable: true, get: () => w.__netUp });
+  });
+  backend.offline = true;
+  await page.reload();
+  await expect(page.getByTestId('offline-banner')).toHaveText(BANNER);
+  const sub = { genres: 'Browse by genre', artists: 'Browse by artist' };
+  for (const tab of ['genres', 'artists'] as const) {
+    await page.getByTestId(`tab-${tab}`).click();
+    const screen = page.getByTestId(`screen-${tab}`);
+    await expect(screen.getByTestId('offline')).toHaveText(NO_CARRIER);
+    await expect(screen.locator('.topbar-sub')).toHaveText(sub[tab]);
+  }
+  backend.offline = false;
+  await page.evaluate(() => {
+    (window as unknown as { __netUp: boolean }).__netUp = true;
+    window.dispatchEvent(new Event('online'));
+  });
+  await expect(page.getByTestId('screen-artists').locator('.topbar-sub')).toContainText('artists on the Jukebox');
+});
+
 test('offline, the paused track resumes; Shuffle says to connect and leaves the player as it was', async ({ page, backend }) => {
   await start(page);
   await page.getByTestId('track-play').first().click();

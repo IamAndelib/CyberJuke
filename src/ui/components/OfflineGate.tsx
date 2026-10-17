@@ -70,8 +70,18 @@ export function OfflineState({
  * that failed meanwhile is retried on reconnect). `fill`: the state is all the screen
  * shows, so it sits in the middle.
  */
-export function OfflineGate({ children, body, fill }: { children: ComponentChildren; body?: string; fill?: boolean }) {
-  const shown = useRef(false);
-  if (online.value) shown.current = true;
-  return shown.current ? <>{children}</> : <OfflineState body={body} fill={fill} appear />;
+export function OfflineGate({ children, body, fill, seen }: { children: ComponentChildren; body?: string; fill?: boolean; seen?: boolean }) {
+  const own = useSeenOnline();
+  return (seen ?? own) ? <>{children}</> : <OfflineState body={body} fill={fill} appear />;
+}
+
+/**
+ * Whether the screen has been online since it opened: what OfflineGate goes by. A screen that
+ * says something about its list outside the gate (a count in its title) asks this, and passes
+ * it to the gate as `seen`, so the two always agree.
+ */
+export function useSeenOnline(): boolean {
+  const seen = useRef(false);
+  if (online.value) seen.current = true;
+  return seen.current;
 }

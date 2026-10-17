@@ -10,7 +10,7 @@ import { FavSection, FavTile, PageStar } from '../../ui/components/FavTile';
 import { openGenrePage, popPage, useSearchContext, type Place } from '../../ui/nav';
 import { ErrorState, PagedTracks, PlayShuffle } from '../../ui/components/TrackList';
 import { Screen } from '../../ui/components/Screen';
-import { OfflineGate } from '../../ui/components/OfflineGate';
+import { OfflineGate, useSeenOnline } from '../../ui/components/OfflineGate';
 import { refreshCatalog } from '../../ui/refresh';
 import { GridSortRail, TileGrid, TileSkeleton } from '../../ui/components/GridSort';
 import type { GenreCount } from '../../data/search';
@@ -43,18 +43,20 @@ export function GenreGrid() {
   const status = catalog.status.value;
   const complete = genresComplete.value;
   const sort = genresSort.value;
+  // No count over the offline state's "Connect to load".
+  const seen = useSeenOnline();
 
   return (
     <Screen
       testid="screen-genres"
       title="Genres"
-      subtitle={complete ? `${list.length} genres on the Jukebox` : 'Browse by genre'}
+      subtitle={seen && complete ? `${list.length} genres on the Jukebox` : 'Browse by genre'}
       onRefresh={refreshCatalog}
       scrollKey={`genres:${sort}`}
       right={<GridSortRail sort={genresSort} testid="genres-sort" />}
       azScroller={sort === 'az' && list.length > 0}
     >
-      <OfflineGate fill>
+      <OfflineGate fill seen={seen}>
         <FavGenres />
         {/* The catalog failed: said so even over the genres seen on Home meanwhile (a part). */}
         {status === 'error' && !complete && (
