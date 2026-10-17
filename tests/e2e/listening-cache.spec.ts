@@ -219,9 +219,19 @@ test('Settings → Listening cache: 256 MB by default, three sizes sent to the p
   await expect(page.getByTestId('cache-128')).toHaveAttribute('aria-checked', 'true');
   await expect.poll(sent).toEqual([{ mb: 256 }, { mb: 512 }, { mb: 128 }]);
 
+  // Clear cache asks first: it takes the saved liked songs too. Cancel leaves it be.
+  const clears = async () => (await playerCalls(page)).filter((c) => c[0] === 'clearCache').length;
   await page.getByTestId('cache-clear').click();
+  const sheet = page.getByTestId('confirm-sheet');
+  await expect(sheet).toContainText('Clear the listening cache?');
+  await expect(page.getByTestId('confirm-ok')).toHaveText('Clear cache');
+  await page.getByTestId('confirm-cancel').click();
+  await expect(sheet).toBeHidden();
+  expect(await clears()).toBe(0);
+  await page.getByTestId('cache-clear').click();
+  await page.getByTestId('confirm-ok').click();
   await expect(page.getByTestId('toast')).toHaveText('Cache cleared. Liked songs are saved again on Wi-Fi.');
-  expect((await playerCalls(page)).filter((c) => c[0] === 'clearCache')).toHaveLength(1);
+  expect(await clears()).toBe(1);
 
   await page.reload();
   await expect.poll(sent).toEqual([{ mb: 128 }]);

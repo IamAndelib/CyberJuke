@@ -134,11 +134,18 @@ function CheckEverySetting() {
 function ListeningCacheSetting() {
   const cur = settings.value.cacheMb;
   const onKey = arrowChoice(CACHE_SIZES, cur, (mb) => updateSettings({ cacheMb: mb }));
-  const clear = () => {
-    clearListeningCache()
-      .then(() => toast(CACHE_CLEARED))
-      .catch(() => toast("Couldn't clear the cache"));
-  };
+  // M3: it takes the saved liked songs too, so it asks first.
+  const clear = () =>
+    askConfirm({
+      title: 'Clear the listening cache?',
+      body: 'The music kept on the phone goes, saved liked songs too. They are saved again on Wi-Fi.',
+      confirm: 'Clear cache',
+      run: () =>
+        clearListeningCache().then(
+          () => void toast(CACHE_CLEARED),
+          () => void toast("Couldn't clear the cache"),
+        ),
+    });
   return (
     <div class="setting stack" data-testid="listening-cache">
       <div class="setting-text">
