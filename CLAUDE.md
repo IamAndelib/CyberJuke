@@ -59,7 +59,7 @@ In a cloud session, the SessionStart hook (`.claude/hooks/session-start.sh`) ins
   - `versionCode` and `versionName` stay literal in `android/app/build.gradle`.
   - No timestamps in builds; `dependenciesInfo` stays off.
   - The update check never runs for F-Droid installs.
-  - Node 22.22.0 is pinned to match the recipe.
+  - Node 22.22.0 is pinned in the workflows. The recipe installs Debian's nodejs (forky); the Reproducible build check with `debian_node: forky` proves both give the same APK.
 - **Supply chain:**
   - GitHub Actions are pinned to full SHAs with a `# vX.Y.Z` comment; workflows start with `permissions: {}`.
   - Gradle's `distributionSha256Sum` comes from gradle.org.

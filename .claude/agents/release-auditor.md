@@ -26,7 +26,7 @@ Check:
   - `package.json` and `android/app/build.gradle` versions agree.
 - **F-Droid.**
   - The recipe `docs/fdroid/io.github.iamandelib.cyberjuke.yml` is in rewritemeta format, with no comments and only the newest build.
-  - Its Node/JDK assumptions still match the workflows (`NODE_VERSION` 22.22.0, JDK 21).
+  - Its Node/JDK assumptions still hold: the workflows build with `NODE_VERSION` 22.22.0 and JDK 21, the recipe with Debian forky's nodejs on the buildserver's default JDK, and the Reproducible build check with `debian_node: forky` matched for the last release.
   - `versionCode`/`versionName` are literal; no build timestamps; `dependenciesInfo` off.
 - **Version pins.** Note when `NODE_VERSION` differs between workflows, and when `newPipeExtractorVersion` is behind what the NewPipe app ships (report only).
 
