@@ -34,6 +34,7 @@
 - When the next page of a list fails to load, the list waits for **Retry loading more** (or the connection coming back) instead of asking for it again and again, which wasted data and battery.
 - With the app open and offline for longer than the new-tracks check interval, Home's check for new tracks waits its usual time between tries instead of trying again constantly, which used battery.
 - Android's system log no longer records which track failed to play.
+- Offline with nothing playing, **Add to queue** (or Undo in Up next) follows the offline rule like any list: a saved liked song plays, anything else says to connect. It used to try to start the track.
 - If Liked can't be read when the app opens (a storage hiccup), it is read again a little later and merged with what you liked meanwhile, and your saved liked songs stay saved for offline in the meantime. Recently played already worked this way.
 - While a track loads, the play button shows Pause (and its spinner), as it does while it plays, and a tap pauses it. It used to show Play, and a tap did nothing.
 

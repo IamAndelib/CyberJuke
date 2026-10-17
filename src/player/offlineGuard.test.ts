@@ -136,7 +136,7 @@ describe('offlineGuard', () => {
   });
 
   it('offline, pausing, seeking, queue edits and settings still work', async () => {
-    const { inner, p, refused, offline } = setup({ isPlaying: true });
+    const { inner, p, refused, offline } = setup({ queue: [track], index: 0, current: track, isPlaying: true });
     offline();
     await p.toggle(); // playing: a pause
     await p.pause();
@@ -180,6 +180,21 @@ describe('offlineGuard', () => {
     await p.playList([a, b], 5);
     expect(refused).toHaveBeenLastCalledWith('offline');
     expect(inner.playList).not.toHaveBeenCalled();
+  });
+
+  it('offline with nothing loaded, Add to queue and Undo start a list: its saved songs only', async () => {
+    const [a, b] = ['a', 'b'].map(t);
+    const { inner, p, refused, offline } = setup({}, [b.ytId]);
+    offline();
+    await p.addToQueue([a]);
+    await p.restore(a, 'queued', null);
+    expect(refused).toHaveBeenCalledTimes(2);
+    expect(refused).toHaveBeenLastCalledWith('offline');
+    // Saved, it plays (the saved songs of what was added, from the first).
+    await p.addToQueue([b, a]);
+    expect(inner.playList).toHaveBeenCalledWith([b], 0, undefined);
+    expect(inner.addToQueue).not.toHaveBeenCalled();
+    expect(inner.restore).not.toHaveBeenCalled();
   });
 
   it('offline, Next, Previous and Up next go only onto a saved song', async () => {

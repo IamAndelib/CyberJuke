@@ -6,6 +6,7 @@
  *  - a list, from wherever it was started, plays its saved songs, from the tapped one; when that
  *    one isn't saved, 'unsaved' for a liked song, 'offline' for anything else;
  *  - Next, Previous and a tap in Up next only onto a saved song ('offline');
+ *  - with nothing loaded, Add to queue and Undo start a list (the players do), so the list rule;
  *  - resuming the current track (Play, or the play/pause button while paused) only when it plays
  *    offline ([playsOffline]): saved, or with audio loaded ahead (native plays from its buffer
  *    and says "Signal lost…" if that runs out). The track the app reopens on has none loaded:
@@ -51,18 +52,22 @@ export function offlineGuard(p: Player, o: OfflinePolicy): Player {
     if (o.online() || playsOffline(s, o.saved())) return run();
     return refused(s.current && o.liked(s.current) ? 'unsaved' : 'offline');
   };
+  const playList: Player['playList'] = (tracks, start, ctx) => {
+    if (o.online()) return p.playList(tracks, start, ctx);
+    const q = savedQueue(tracks, start, o.saved());
+    if (q) return p.playList(q.tracks, q.start, ctx);
+    const tapped = tracks[start];
+    return refused(tapped && o.liked(tapped) ? 'unsaved' : 'offline');
+  };
+  const empty = () => p.state.peek().index < 0;
   return {
     ...p,
     play: () => resume(() => p.play()),
     // Playing (or waiting for the network to resume), it pauses: always.
     toggle: () => (wantsPlay(p.state.peek()) ? p.toggle() : resume(() => p.toggle())),
-    playList: (tracks, start, ctx) => {
-      if (o.online()) return p.playList(tracks, start, ctx);
-      const q = savedQueue(tracks, start, o.saved());
-      if (q) return p.playList(q.tracks, q.start, ctx);
-      const tapped = tracks[start];
-      return refused(tapped && o.liked(tapped) ? 'unsaved' : 'offline');
-    },
+    playList,
+    addToQueue: (tracks) => (empty() ? playList(tracks, 0) : p.addToQueue(tracks)),
+    restore: (track, kind, beforeId) => (empty() ? playList([track], 0) : p.restore(track, kind, beforeId)),
     next: () => onto(p.state.peek().upNext[0]?.track, () => p.next()),
     prev: () => onto(current(), () => p.prev()),
     skipTo: (index, expectId) => onto(p.state.peek().queue[index], () => p.skipTo(index, expectId)),
