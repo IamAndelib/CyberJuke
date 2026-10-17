@@ -1,5 +1,5 @@
 import { expect, test } from '../../fixtures';
-import { fakeYt, homeSettled, isFeedQuery, pickGenre, playerCalls, start, waitForTracks, waitingForNetwork } from '../../helpers';
+import { fakeYt, homeSettled, pickGenre, playerCalls, requestsFor, start, waitForTracks, waitingForNetwork } from '../../helpers';
 
 /**
  * Leaving Wi-Fi for mobile data, twice, with music playing and the Jukebox being browsed. The
@@ -19,15 +19,13 @@ test('two handovers: a dropped request is retried by itself; a list that failed 
   // The start-up's own requests (the catalog) are done: what is dropped below is the genre page's.
   await homeSettled(page, backend);
   const home = page.getByTestId('screen-home');
-  /** The feed requests (24 rows) for a genre, by name. */
-  const requestsFor = (genre: string) => backend.queries.filter((q) => isFeedQuery(q) && JSON.stringify(q.where).includes(`"${genre}"`)).length;
 
   // The first handover: the genre page's request is lost in the gap. It is sent again a
   // second later, and the rows come as if nothing had happened.
   backend.failNext = 1;
   const genre1 = await pickGenre(page, 1);
   await waitForTracks(page);
-  expect(requestsFor(genre1)).toBe(2);
+  expect(requestsFor(backend, genre1)).toBe(2);
   await expect(home.getByTestId('offline')).toHaveCount(0);
   await expect(page.getByTestId('offline-banner')).toHaveCount(0);
   await expect(page.getByTestId('toast')).toHaveCount(0);
@@ -41,13 +39,13 @@ test('two handovers: a dropped request is retried by itself; a list that failed 
   // The device isn't offline: no banner; the list alone says it couldn't get through.
   await expect(page.getByTestId('offline-banner')).toHaveCount(0);
   await expect(page.getByTestId('mini-waiting')).toHaveText('Waiting for carrier…');
-  expect(requestsFor(genre2)).toBe(2);
+  expect(requestsFor(backend, genre2)).toBe(2);
 
   // The OS says "connected" at the end of the handover: the list loads by itself, no tap.
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
   await waitForTracks(page);
   await expect(home.getByTestId('offline')).toHaveCount(0);
-  expect(requestsFor(genre2)).toBe(3);
+  expect(requestsFor(backend, genre2)).toBe(3);
   await waitingForNetwork(page, false);
   await fakeYt(page, 'resume');
   await expect(page.getByTestId('mini-waiting')).toHaveCount(0);

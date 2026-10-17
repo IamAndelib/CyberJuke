@@ -1,6 +1,8 @@
 /** Shared steps and waits for the e2e specs. No fixed sleeps: every wait is on a condition. */
 import { expect, type Locator, type Page } from '@playwright/test';
-import { setImagesOffline } from './fixtures/youtube';
+import { FAKE_TRACK_MS, setImagesOffline } from './fixtures/youtube';
+
+export { FAKE_TRACK_MS };
 
 /**
  * The screen showing has its rows. Visited tabs and covered pages stay mounted (hidden),
@@ -16,6 +18,10 @@ export async function waitForTracks(page: Page): Promise<void> {
  * check (25). All three send a field mask, so the size tells them apart.
  */
 export const isFeedQuery = (q: { limit?: number } | null | undefined): boolean => q?.limit === 24;
+
+/** The feed requests (24 rows) the fake backend got for a genre, by name. */
+export const requestsFor = (backend: { queries: { limit?: number; where?: unknown }[] }, genre: string): number =>
+  backend.queries.filter((q) => isFeedQuery(q) && JSON.stringify(q.where).includes(`"${genre}"`)).length;
 
 /** Load the app and wait for Home's first page. */
 export async function start(page: Page, path = '/'): Promise<void> {
@@ -123,8 +129,6 @@ export const clockStart = (page: Page) => page.clock.install();
 /** Run `ms` of the faked clock (clockStart), firing everything due in it. */
 export const runFor = (page: Page, ms: number) => page.clock.runFor(ms);
 
-/** One track of the fake player (tests/fixtures/youtube.ts): 71 s in to 247 s, plus its start-up. */
-export const FAKE_TRACK_MS = 176_150;
 
 /**
  * Hours of listening on the faked clock, a track at a time: each jump lands at the end of the

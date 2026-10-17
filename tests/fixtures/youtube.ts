@@ -53,9 +53,16 @@ function fakeThumb(id: string, wide = false): string {
  * `end()` ends the track now; `error(code)` reports a player error (2, 5, 100, 101, 150:
  * the track can't play here).
  */
+/** The fake player's track: it starts this far in (s) and is this long (s); loading takes FAKE_LOAD_MS. */
+const FAKE_START_S = 71;
+const FAKE_DURATION_S = 247;
+const FAKE_LOAD_MS = 150;
+/** One track of the fake player, from its start to its end, plus its start-up. */
+export const FAKE_TRACK_MS = (FAKE_DURATION_S - FAKE_START_S) * 1000 + FAKE_LOAD_MS;
+
 const FAKE_YT = `
 (() => {
-  const START = 71, DURATION = 247;
+  const START = ${FAKE_START_S}, DURATION = ${FAKE_DURATION_S};
   let last = null;
   class Player {
     constructor(el, opts) {
@@ -68,7 +75,7 @@ const FAKE_YT = `
     played() { return this.base + (this.playingSince == null ? 0 : (Date.now() - this.playingSince) / 1000); }
     hold() { this.base = this.played(); this.playingSince = null; clearTimeout(this.ending); this.ending = null; }
     // Like the real player: buffering, then playing, unless paused (or cued) meanwhile.
-    loadVideoById() { this.hold(); this.base = 0; this.loaded = false; this.emit(3); clearTimeout(this.starting); this.starting = setTimeout(() => this.playVideo(), 150); }
+    loadVideoById() { this.hold(); this.base = 0; this.loaded = false; this.emit(3); clearTimeout(this.starting); this.starting = setTimeout(() => this.playVideo(), ${FAKE_LOAD_MS}); }
     cueVideoById() { clearTimeout(this.starting); this.hold(); this.base = 0; this.loaded = false; this.emit(5); }
     playVideo() {
       // Once it plays, all of it is loaded (the real one loads ahead as it goes).
