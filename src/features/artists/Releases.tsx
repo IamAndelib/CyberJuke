@@ -1,10 +1,10 @@
 import { artistKey } from '../../data/artists';
-import { SHELF_LABEL, musicErrorText, type MusicErrorCode, type Release } from '../../data/ytmusic';
+import { SHELF_LABEL, type Release } from '../../data/ytmusic';
 import { feedKey, feeds } from '../../stores/feed';
 import { Icon } from '../../ui/icons';
 import { popPage, type ReleasesRef } from '../../ui/nav';
 import { Screen } from '../../ui/components/Screen';
-import { ReleaseGrid, releasesLoader } from '../../ui/components/Music';
+import { GlobalError, ReleaseGrid, releasesLoader } from '../../ui/components/Music';
 import { EmptyState } from '../../ui/components/TrackList';
 import { OfflineGate } from '../../ui/components/OfflineGate';
 import { OFFLINE } from '../../core/offlineText';
@@ -49,19 +49,7 @@ export function ReleasesPage({ release }: { release: ReleasesRef }) {
         {snap.status === 'loading' ? (
           <GridSkeleton />
         ) : snap.status === 'error' && snap.error ? (
-          <div class="state compact" role="alert" data-testid="releases-error" data-code={snap.error.code}>
-            <div class="state-glyph" aria-hidden="true">
-              [ NO SIGNAL ]
-            </div>
-            <div class="state-body">
-              {snap.error.code === 'NETWORK' || snap.error.code === 'BOT_CHECK'
-                ? musicErrorText({ code: snap.error.code as MusicErrorCode })
-                : "Couldn't load this list."}
-            </div>
-            <button class="btn" onClick={() => feed.retry()} data-testid="releases-retry">
-              <Icon name="refresh" size={18} /> Retry
-            </button>
-          </div>
+          <GlobalError error={snap.error} onRetry={() => feed.retry()} testid="releases-error" unavailable="Couldn't load this list." />
         ) : n ? (
           <>
             <ReleaseGrid releases={snap.items} artist={artist} kind={kind} />

@@ -1,6 +1,6 @@
 import { expect, test } from '../fixtures';
 import type { Locator, Page } from '@playwright/test';
-import { musicCalls, openSearch, scrollTo, scrollTopOf, start } from '../helpers';
+import { musicCalls, openSearch, scrollTo, scrollTopOf, setOffline, start } from '../helpers';
 
 /** The Artists tab and artist pages: Jukebox tracks, the artist's own page, fallbacks, Here search. */
 
@@ -128,9 +128,21 @@ test.describe('an expired See all token', () => {
     const err = page.getByTestId('releases-error');
     await expect(err).toContainText("Couldn't load this list.");
     await expect(err).not.toContainText(/youtube/i);
-    await page.getByTestId('releases-retry').click();
+    await page.getByTestId('global-retry').click();
     await expect(page.getByTestId('screen-releases').getByTestId('release-card')).toHaveCount(6);
     expect((await musicCalls(page)).filter((c) => c[0] === 'artistPage')).toHaveLength(2);
+  });
+
+  test('offline after it failed, it says No carrier like every Global list, and loads once back', async ({ page, backend }) => {
+    await openFirstArtist(page);
+    await page.getByTestId('artist-albums').getByTestId('see-all').click();
+    const screen = page.getByTestId('screen-releases');
+    await expect(screen.getByTestId('releases-error')).toBeVisible();
+    await setOffline(page, backend, true);
+    await expect(screen.getByTestId('offline')).toBeVisible();
+    await expect(screen.getByTestId('releases-error')).toHaveCount(0);
+    await setOffline(page, backend, false);
+    await expect(screen.getByTestId('release-card')).toHaveCount(6);
   });
 });
 
