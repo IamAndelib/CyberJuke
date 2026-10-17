@@ -104,6 +104,32 @@ describe('the listening cache wiring', () => {
     expect(fake.names()).toEqual(['setLikedIds', 'signedOut']);
   });
 
+  it('while Liked could not be read, sends none of it (native keeps the Liked it has), then all of it once read', async () => {
+    vi.advanceTimersByTime(LIKED_SEND_DELAY_MS);
+    let failing = true;
+    const file = {
+      path: 'l',
+      get unreadable() {
+        return failing;
+      },
+      load: async () => (failing ? null : [{ ...t('old'), title: 'Old' }]),
+      save: async () => {},
+      remove: async () => {},
+    };
+    const noHistory = { path: 'h', unreadable: false, load: async () => null, save: async () => {}, remove: async () => {} };
+    lib.setLibraryStorage({ get: async () => null, set: async () => {}, remove: async () => {} }, noHistory, file);
+    fake.calls.length = 0;
+    await lib.loadLists();
+    lib.liked.value = [t('new')];
+    vi.advanceTimersByTime(LIKED_SEND_DELAY_MS);
+    lib.dropMembersOnly();
+    expect(fake.names()).toEqual(['signedOut']);
+    failing = false;
+    await vi.advanceTimersByTimeAsync(lib.LIST_RETRY_MS[0]);
+    vi.advanceTimersByTime(LIKED_SEND_DELAY_MS);
+    expect(fake.of('setLikedIds')).toEqual([{ ytIds: ['newxxxxxxxx', 'oldxxxxxxxx'], membersOnly: [] }]);
+  });
+
   it('Clear cache asks native', async () => {
     fake.calls.length = 0;
     await clearListeningCache();

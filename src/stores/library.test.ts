@@ -472,6 +472,45 @@ describe('Undo puts an item back next to its neighbour', () => {
   });
 });
 
+describe('a Liked file that cannot be read', () => {
+  const tr = (id: string, extra: Record<string, unknown> = {}) => ({ ...extra, id, ytId: 'abcdefghij' + id.slice(-1), title: id, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '' });
+
+  it('is not overwritten: likes are kept in memory, and the file is read again later and merged', async () => {
+    vi.useFakeTimers();
+    try {
+      let failing = true;
+      const saves: unknown[] = [];
+      const file = {
+        path: 'l',
+        get unreadable() {
+          return failing;
+        },
+        load: vi.fn(async () => (failing ? null : [tr('old'), tr('m', { membersOnly: true })])),
+        save: vi.fn(async (v: unknown) => void (failing || saves.push(v))),
+        remove: async () => {},
+      };
+      const noHistory = { path: 'h', unreadable: false, load: async () => null, save: async () => {}, remove: async () => {} };
+      lib.setLibraryStorage({ get: async () => null, set: async () => {}, remove: async () => {} }, noHistory, file);
+      await lib.loadLists();
+      expect(lib.likedUnreadable.value).toBe(true);
+      lib.toggleLike(tr('new') as never);
+      expect(lib.liked.value.map((t) => t.id)).toEqual(['new']);
+      // Still failing at the first retry: it tries again later.
+      await vi.advanceTimersByTimeAsync(lib.LIST_RETRY_MS[0]);
+      expect(file.load).toHaveBeenCalledTimes(2);
+      expect(lib.likedUnreadable.value).toBe(true);
+      failing = false;
+      await vi.advanceTimersByTimeAsync(lib.LIST_RETRY_MS[1]);
+      // Merged, this session's likes first; signed out, the members-only like stays out.
+      expect(lib.liked.value.map((t) => t.id)).toEqual(['new', 'old']);
+      expect(lib.likedUnreadable.value).toBe(false);
+      expect(saves).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('a history file that cannot be read', () => {
   const tr = (id: string, extra: Record<string, unknown> = {}) => ({ ...extra, id, ytId: 'abcdefghij' + id.slice(-1), title: id, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '' });
 
@@ -497,10 +536,10 @@ describe('a history file that cannot be read', () => {
       expect(lib.recent.value.map((t) => t.id)).toEqual(['new']);
       expect(saves).toEqual([]);
       // Still failing at the first retry: it tries again later.
-      await vi.advanceTimersByTimeAsync(lib.HISTORY_RETRY_MS[0]);
+      await vi.advanceTimersByTimeAsync(lib.LIST_RETRY_MS[0]);
       expect(file.load).toHaveBeenCalledTimes(2);
       failing = false;
-      await vi.advanceTimersByTimeAsync(lib.HISTORY_RETRY_MS[1]);
+      await vi.advanceTimersByTimeAsync(lib.LIST_RETRY_MS[1]);
       // Merged, newest first; signed out, the members-only play stays out.
       expect(lib.recent.value.map((t) => t.id)).toEqual(['new', 'old']);
       expect(saves).toHaveLength(1);

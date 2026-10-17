@@ -5,7 +5,7 @@
  * Preferences: they can hold members-only tracks, and that folder is kept out of backups
  * (android/app/src/main/res/xml/data_extraction_rules.xml), unlike Preferences.
  */
-import { computed, signal } from '@preact/signals';
+import { computed, signal, type ReadonlySignal } from '@preact/signals';
 import type { Track } from '../data/model';
 import { artistKey } from '../data/artists';
 import { auth } from '../data/auth';
@@ -114,6 +114,12 @@ const K_FAV_ARTISTS = 'favArtists';
 const THEME_MIGRATIONS: Record<string, ThemeId> = { grid: 'brutalist' };
 
 export const liked = signal<Track[]>([]);
+const likedUnreadableSignal = signal(false);
+/**
+ * Liked is on the phone but couldn't be read (yet): `liked` holds only this session's likes,
+ * until a later read merges the rest in (loadLists). The listening cache waits for it.
+ */
+export const likedUnreadable: ReadonlySignal<boolean> = likedUnreadableSignal;
 /** Listening history, newest first (see ./history for the retention rules). */
 export const history = signal<HistoryEntry[]>([]);
 /** History as a plain track list, each track once. */
@@ -183,15 +189,38 @@ export async function loadLists(): Promise<void> {
   const earlyLikes = loadedOnce ? [] : liked.value;
   const early = loadedOnce ? [] : history.value;
   loadedOnce = true;
-  const likes = asTracks(l);
-  liked.value = earlyLikes.length ? [...earlyLikes, ...likes.filter((t) => !earlyLikes.some((e) => e.id === t.id))] : likes;
+  liked.value = mergeLiked(earlyLikes, asTracks(l));
   if (earlyLikes.length) saveLiked(liked.value);
   history.value = early.length ? mergeHistory(early, decodeHistory(h, Date.now()), Date.now()) : decodeHistory(h, Date.now());
   // Rewrites a migrated (old-shape) history in the current one, and keeps early plays; skipped when unchanged.
   if (h != null || early.length) saveHistory(history.value);
-  // There but unreadable (not missing): what's played now is kept in memory, and the
-  // file is read again later and merged, never replaced.
-  if (historyFile.unreadable) retryHistory(0);
+  // There but unreadable (not missing): what's liked and played now is kept in memory, and
+  // the file is read again later and merged, never replaced.
+  likedUnreadableSignal.value = likedFile.unreadable === true;
+  if (likedFile.unreadable) retryRead(likedFile, mergeLikedFile);
+  if (historyFile.unreadable) retryRead(historyFile, mergeHistoryFile);
+}
+
+/** This session's likes first (newest first), then those from the file that aren't among them. */
+function mergeLiked(mine: Track[], stored: Track[]): Track[] {
+  return mine.length ? [...mine, ...stored.filter((t) => !mine.some((e) => e.id === t.id))] : stored;
+}
+
+/** Signed out, a members-only track read late stays out, as at start (dropMembersOnly). */
+const openable = <T>(items: T[], track: (x: T) => Track): T[] => (auth.signedIn() ? items : items.filter((x) => !track(x).membersOnly));
+
+function mergeLikedFile(raw: unknown): void {
+  const merged = openable(mergeLiked(liked.value, asTracks(raw)), (t) => t);
+  liked.value = merged;
+  likedUnreadableSignal.value = false;
+  saveLiked(merged);
+}
+
+function mergeHistoryFile(raw: unknown): void {
+  const now = Date.now();
+  const merged = openable(mergeHistory(history.value, decodeHistory(raw, now), now), (e) => e.track);
+  history.value = merged;
+  saveHistory(merged);
 }
 
 /** The settings and favourites: small keys, read before the first render (the theme, the NSFW setting). */
@@ -243,28 +272,25 @@ export async function loadSettings(): Promise<void> {
   if (migrated || preferIpv4 !== undefined || upgraded) write(K_SETTINGS, merged);
 }
 
-/** Waits before each new attempt at reading a history file that couldn't be read. */
-export const HISTORY_RETRY_MS = [5_000, 30_000, 120_000, 600_000];
-let historyRetry: ReturnType<typeof setTimeout> | null = null;
+/** Waits before each new attempt at reading a Liked or history file that couldn't be read. */
+export const LIST_RETRY_MS = [5_000, 30_000, 120_000, 600_000];
+const retries = new Map<JsonFile<unknown>, ReturnType<typeof setTimeout>>();
 
-function retryHistory(attempt: number): void {
-  if (historyRetry) clearTimeout(historyRetry);
-  historyRetry = null;
-  if (attempt >= HISTORY_RETRY_MS.length) return;
-  historyRetry = setTimeout(() => {
-    historyRetry = null;
-    void historyFile
-      .load()
-      .catch(() => null)
-      .then((h) => {
-        if (historyFile.unreadable) return retryHistory(attempt + 1);
-        const now = Date.now();
-        let merged = mergeHistory(history.value, decodeHistory(h, now), now);
-        if (!auth.signedIn()) merged = merged.filter((e) => !e.track.membersOnly);
-        history.value = merged;
-        saveHistory(merged);
-      });
-  }, HISTORY_RETRY_MS[attempt]);
+/** Reads [file] again after each wait while it stays unreadable; [merge] takes what it held. */
+function retryRead(file: JsonFile<unknown>, merge: (raw: unknown) => void, attempt = 0): void {
+  clearTimeout(retries.get(file));
+  retries.delete(file);
+  if (attempt >= LIST_RETRY_MS.length) return;
+  retries.set(
+    file,
+    setTimeout(() => {
+      retries.delete(file);
+      void file
+        .load()
+        .catch(() => null)
+        .then((raw) => (file.unreadable ? retryRead(file, merge, attempt + 1) : merge(raw)));
+    }, LIST_RETRY_MS[attempt]),
+  );
 }
 
 /** Both lists of plays, newest first; a track played twice on one day is listed once, at its newest play. */

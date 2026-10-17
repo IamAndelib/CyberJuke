@@ -3,7 +3,8 @@
  * on the phone only, up to the size chosen in Settings. Liked songs are saved so they play
  * offline (`savedOffline`). This wires the page's side of it:
  *  - the liked songs (newest like first) and which are members-only, sent at start and when
- *    Liked changes (a burst of likes sends once);
+ *    Liked changes (a burst of likes sends once); none while Liked couldn't be read (native
+ *    keeps the Liked it has rather than hear that this session's likes are all of it);
  *  - the size setting, sent at start and on change, and Clear cache;
  *  - signing out (and starting signed out): Liked at once, then `signedOut()`, so native drops
  *    every members-only track's audio and caches none until a sign-in;
@@ -18,7 +19,7 @@ import { logError } from '../core/log';
 import { TEST_HOOKS, exposeForTests } from '../core/testHooks';
 import { auth } from '../data/auth';
 import type { Track } from '../data/model';
-import { liked, onMembersOnlyDropped, settings, type CacheMb } from '../stores/library';
+import { liked, likedUnreadable, onMembersOnlyDropped, settings, type CacheMb } from '../stores/library';
 import { setSavedOffline } from '../stores/savedOffline';
 import { BRIDGE_MAX_ITEMS, JukePlayer } from './native';
 
@@ -101,6 +102,7 @@ export function startListeningCache(): void {
   };
   const keyOf = (o: { ytIds: string[]; membersOnly: string[] }) => o.ytIds.join(',') + '|' + o.membersOnly.join(',');
   effect(() => {
+    if (likedUnreadable.value) return;
     const o = likedPayload(liked.value);
     const key = keyOf(o);
     if (key === sent) {
@@ -124,8 +126,10 @@ export function startListeningCache(): void {
   // Signed out (or starting signed out), the members-only tracks just left Liked: native hears
   // the new Liked first, at once, then drops all members-only audio.
   onMembersOnlyDropped(() => {
-    const o = likedPayload(liked.peek());
-    send(o, keyOf(o));
+    if (!likedUnreadable.peek()) {
+      const o = likedPayload(liked.peek());
+      send(o, keyOf(o));
+    }
     sendSignedOut();
   });
   if (auth.signedIn()) sendSignedIn();
