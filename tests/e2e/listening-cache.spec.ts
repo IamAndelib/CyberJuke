@@ -85,11 +85,19 @@ test('offline with liked songs saved, the banner and the refusal toast open Like
   await seedStorage(page, { 'CapacitorStorage.liked': LIKED });
   await start(page);
   await saved(page, ['abcdefghij2']);
+  // A screen reader hears it go offline: the status region is there, empty, before the text comes.
+  const region = page.getByTestId('offline-banner-status');
+  await expect(region).toHaveAttribute('role', 'status');
+  await expect(region).toHaveText('');
+  await region.evaluate((el) => ((window as unknown as { __region: Element }).__region = el));
   await setOffline(page, backend, true);
+  await expect(region).toHaveText(BANNER_LIKED);
+  expect(await region.evaluate((el) => el === (window as unknown as { __region: Element }).__region)).toBe(true);
 
-  // The banner opens Liked.
+  // The banner opens Liked, a full-size target.
   const banner = page.getByTestId('offline-banner');
   await expect(banner).toHaveText(BANNER_LIKED);
+  expect((await page.getByTestId('offline-banner-liked').boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await page.getByTestId('offline-banner-liked').click();
   await expect(page.getByTestId('screen-library')).toBeVisible();
   await expect(page.getByTestId('lib-liked')).toHaveAttribute('aria-selected', 'true');
@@ -179,7 +187,8 @@ test('offline, Now Playing says so too: with liked songs saved its line opens Li
   await setOffline(page, backend, true);
   const line = page.getByTestId('np-offline');
   await expect(line).toHaveText(BANNER);
-  await expect(line).toHaveAttribute('role', 'status');
+  await expect(page.getByTestId('np-offline-status')).toHaveAttribute('role', 'status');
+  await expect(page.getByTestId('np-offline-status')).toHaveText(BANNER);
   await expect(page.getByTestId('np-offline-liked')).toHaveCount(0);
 
   // With a liked song saved: they still play, and a tap closes the sheet and opens Liked.

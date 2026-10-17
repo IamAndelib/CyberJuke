@@ -20,7 +20,16 @@
 .offline-banner {
   padding: calc(6px + var(--safe-top)) var(--gutter) 6px;
 }
-.offline-banner + .main .topbar {
+/* With liked songs saved the whole bar is a button: its padding goes onto the button, a full-size target. */
+.offline-banner:has(> .offline-link) {
+  padding-top: var(--safe-top);
+  padding-bottom: 0;
+}
+.offline-banner > .offline-link {
+  min-height: 44px;
+  padding: 6px 0;
+}
+.offline-status:has(> .offline-banner) + .main .topbar {
   padding-top: 10px;
 }
 

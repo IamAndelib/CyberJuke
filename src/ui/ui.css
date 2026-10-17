@@ -1306,6 +1306,11 @@ section[data-kind] > .shelf {
 
 /* ---- Offline line: the bar at the top, and the chip in Now Playing ----------------- */
 
+/* The offline line's live region: no box of its own while online (empty). */
+.offline-status {
+  display: flex;
+  flex-direction: column;
+}
 .offline-line {
   background: var(--color-fg);
   color: var(--color-bg);

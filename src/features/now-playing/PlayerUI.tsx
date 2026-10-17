@@ -31,7 +31,6 @@ import { splitArtists } from '../../data/artists';
 import { isGlobal, type Track } from '../../data/model';
 import { reducedMotion } from '../../core/motion';
 import { OFFLINE } from '../../core/offlineText';
-import { online } from '../../core/network';
 import { Art } from '../../ui/components/Art';
 import { OfflineLine } from '../../ui/components/OfflineLine';
 import { Marquee } from './Marquee';
@@ -712,7 +711,7 @@ function NpFrom() {
 
 /** Offline, the app's offline line (the sheet covers the bar at the top), as a chip under the source. */
 function NpOffline() {
-  return online.value ? null : <OfflineLine class="np-offline" testid="np-offline" />;
+  return <OfflineLine class="np-offline" testid="np-offline" />;
 }
 
 /** Artist line in Now Playing: tapping opens the artist page (or a chooser for several). */
