@@ -490,7 +490,10 @@ class CachePolicyTest {
         assertEquals(setOf("mem00000001", "mem00000002"), m.tagged())
         assertFalse(m.denied("mem00000001"))
         // Signed out: every tagged or known one goes, and none comes back in until a sign-in.
-        assertEquals(setOf("mem00000001", "mem00000002"), m.signOut())
+        val gone = m.signOut()
+        assertEquals(setOf("mem00000001", "mem00000002"), gone)
+        // The tags go once the audio has (AudioCache removes it, then says so).
+        m.removed(gone)
         assertEquals(emptySet<String>(), m.tagged())
         assertTrue(m.denied("mem00000001"))
         assertTrue(m.denied("mem00000002"))
@@ -498,6 +501,21 @@ class CachePolicyTest {
         assertFalse(m.onCached("mem00000001"))
         m.signIn()
         assertFalse(m.denied("mem00000001"))
+    }
+
+    @Test
+    fun aSignOutWhoseAudioCouldNotGoKeepsItsTagsForTheNextStart() {
+        // The cache didn't start in this run: nothing was removed, so the tags (and the file)
+        // still say which audio on the phone is members-only.
+        val m = MembersAudio()
+        m.load(listOf("mem00000001"))
+        m.mark("mem00000002")
+        assertEquals(setOf("mem00000001", "mem00000002"), m.signOut())
+        assertEquals(setOf("mem00000001"), m.tagged())
+        // The next start loads them, and its sign-out removes that audio.
+        val next = MembersAudio()
+        next.load(m.tagged())
+        assertEquals(setOf("mem00000001"), next.signOut())
     }
 
     @Test

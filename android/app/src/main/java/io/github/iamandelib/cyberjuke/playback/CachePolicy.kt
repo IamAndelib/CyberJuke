@@ -457,6 +457,8 @@ internal class CacheMisses(private val clock: () -> Long = { System.currentTimeM
  * - [onCached]: it reached the cache, so it is tagged (AudioCache keeps the tags in a file);
  * - [signOut]: every tagged or known one is to go, and while signed out none of them may come
  *   back in ([denied]: the cache is bypassed for them, and a span that slips in is removed);
+ *   their tags stay until [removed] says the audio went (a cache that didn't start removes
+ *   nothing: the tags wait for the next start);
  * - [signIn] lifts that.
  * Thread-safe. Pure (CachePolicyTest).
  */
@@ -511,14 +513,19 @@ internal class MembersAudio {
     @Synchronized
     fun denied(ytId: String): Boolean = signedOut && ytId in deny
 
-    /** Signed out: the videos whose audio is to go now; the tags are cleared. */
+    /** Signed out: the videos whose audio is to go now. */
     @Synchronized
     fun signOut(): Set<String> {
         signedOut = true
         val gone = HashSet(tags).apply { addAll(known) }
         deny.addAll(gone)
-        tags.clear()
         return gone
+    }
+
+    /** The audio of [ytIds] is out of the cache: their tags go. */
+    @Synchronized
+    fun removed(ytIds: Collection<String>) {
+        tags.removeAll(ytIds.toSet())
     }
 
     @Synchronized

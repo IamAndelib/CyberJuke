@@ -381,7 +381,10 @@ internal object AudioCache {
     fun signedOut(): Boolean {
         val gone = members.signOut()
         val done = locked { c -> gone.forEach { id -> ledger.keysOf(id).forEach { c.removeResource(it) } } } != null
-        appContext?.let { writeIds(it, CacheHome.MEMBERS_FILE, emptyList()) }
+        // No cache (it didn't start): the audio is still on the phone, so its tags stay written
+        // down, and the sign-out at the next start removes it.
+        if (done) members.removed(gone)
+        appContext?.let { writeIds(it, CacheHome.MEMBERS_FILE, members.tagged().toList()) }
         if (gone.isNotEmpty()) Log.i(TAG, "Members-only audio removed")
         return done
     }
