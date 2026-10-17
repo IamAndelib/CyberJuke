@@ -346,7 +346,6 @@ function SignedIn({ name }: { name: string }) {
             body: 'Members-only tracks will be hidden.',
             confirm: 'Sign out',
             run: signOut,
-            testid: 'confirm-signout',
           })
         }
         data-testid="signout"

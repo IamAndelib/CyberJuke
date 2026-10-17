@@ -108,7 +108,7 @@ export const playWanted = computed(() => wantsPlay(state.value));
  * Shown once it has held for a moment: a saved song starting offline buffers from the cache for
  * a split second too, and a handover is checked for up to a second.
  */
-export const WAITING_SHOW_MS = 1000;
+const WAITING_SHOW_MS = 1000;
 export const waitingForNetwork = heldFor(
   computed(() => state.value.waitingForNetwork),
   WAITING_SHOW_MS,

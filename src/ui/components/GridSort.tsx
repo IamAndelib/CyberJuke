@@ -21,7 +21,7 @@ export function GridSortRail({ sort, testid }: { sort: Signal<GridSort>; testid:
 }
 
 /** Letter + rule heading one A–Z section (read by the fast scroller's letter popup). */
-export function AZHead({ letter }: { letter: string }) {
+function AZHead({ letter }: { letter: string }) {
   return (
     <div class="az-head" data-testid="az-head" data-letter={letter}>
       <span class="az-letter">{letter}</span>

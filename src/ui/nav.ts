@@ -81,7 +81,6 @@ export interface ConfirmRequest {
   /** The confirming button's label, e.g. "Clear 12 plays". */
   confirm: string;
   run: () => void | Promise<void>;
-  testid?: string;
 }
 export const confirmRequest = signal<ConfirmRequest | null>(null);
 

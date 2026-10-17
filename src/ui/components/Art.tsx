@@ -12,7 +12,7 @@ import { Icon, type IconName } from '../icons';
 export const artGen = signal(0);
 
 /** How long an image that failed while the app counts as online waits for its one more try. */
-export const ART_RETRY_MS = 1000;
+const ART_RETRY_MS = 1000;
 
 /**
  * The image of [Art] and Cover: [url] in the pixel frame (see .art in ui/ui.css), or a

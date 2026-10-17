@@ -36,7 +36,6 @@ function confirmClear(): void {
     body: 'Everything under Recently played goes.',
     confirm: `Clear ${plural(n, 'play')}`,
     run: clearHistoryWithUndo,
-    testid: 'confirm-clear',
   });
 }
 
