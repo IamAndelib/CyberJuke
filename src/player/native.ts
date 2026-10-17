@@ -95,7 +95,8 @@ interface JukePlayerPlugin {
   setQuality(o: { quality: Quality }): Promise<void>;
   /**
    * Crossfade: 0 (Off) or the fade, in ms, between tracks that end by themselves (not on a
-   * skip, repeat-one or an outage; shrunk on short tracks). Saved natively; anything else rejects.
+   * skip or an outage; on Repeat one into the track's own start; shrunk on short tracks). Saved
+   * natively; anything else rejects.
    */
   setCrossfade(o: { ms: CrossfadeMs }): Promise<void>;
   /**
