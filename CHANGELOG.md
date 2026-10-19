@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.2.0] - 2026-10-17
+## [1.2.0] - 2026-10-19
 
 ### The app
 - **Listening cache:** the music you play and the next track are kept on the phone, so a drop in the signal doesn't stop the music and playing a song again costs no data. Settings → **Listening cache** sets how much it may keep (128, 256 or 512 MB; 256 by default), and **Clear cache** empties it, after asking. It is kept with the app's data, so Android doesn't clear it when storage runs low; nothing of it leaves the phone or goes into backups, and signing out removes the members-only tracks from it. When it can't be written (the phone's storage full), the music plays on from the network.

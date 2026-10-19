@@ -180,7 +180,6 @@ If `android/gradle/verification-metadata.xml` is ever committed, dependency PRs 
 
 Backlog, each to be done as its own PR when the maintainer agrees:
 
-- The `eslint.config.js` header and the lint step comment in `ci.yml` say lint "fails on errors only". `npm run lint` uses `--max-warnings=0`, so those comments are stale.
 - `android/gradle/verification-metadata.xml` isn't committed, so Gradle dependency verification is off. Generating it needs the maintainer to run the workflow.
 - Rule tags in code comments (R1, S1, P1, L4/L5/L7, K1, C2, H1, Y3/Y4, AP3) have no index. A short `docs/RULES.md` would help reviewers.
 - The canary, gradle-verification and screenshots workflows use Node `'22'`, while the others pin `22.22.0`.
