@@ -8,6 +8,7 @@ function harness(over: Partial<FreshnessDeps> & { every?: number | null } = {}) 
   let t = 1_000_000;
   const timers: { at: number; fn: () => void; id: number }[] = [];
   let nextId = 1;
+  let armed = 0;
   const state = { visible: true, every: over.every === undefined ? 15 : over.every, online: true };
   const newerThan = vi.fn(async (_since: string) => ({ count: 0, newest: null as string | null }));
   const onFound = vi.fn();
@@ -20,6 +21,7 @@ function harness(over: Partial<FreshnessDeps> & { every?: number | null } = {}) 
     isOnline: () => state.online,
     now: () => t,
     setTimer: (fn, ms) => {
+      armed++;
       const id = nextId++;
       timers.push({ at: t + ms, fn, id });
       return id;
@@ -34,7 +36,8 @@ function harness(over: Partial<FreshnessDeps> & { every?: number | null } = {}) 
   /** Advance the clock, firing due timers in order. */
   async function advance(ms: number) {
     const end = t + ms;
-    for (;;) {
+    for (let fired = 0; ; fired++) {
+      if (fired > 1000) throw new Error('the timer keeps firing without waiting');
       timers.sort((a, b) => a.at - b.at);
       const due = timers[0];
       if (!due || due.at > end) break;
@@ -46,7 +49,7 @@ function harness(over: Partial<FreshnessDeps> & { every?: number | null } = {}) 
     }
     t = end;
   }
-  return { f, newerThan, onFound, state, timers, advance, flush };
+  return { f, newerThan, onFound, state, timers, advance, flush, armed: () => armed };
 }
 
 describe('freshness timer per setting', () => {
@@ -110,6 +113,21 @@ describe('freshness timer per setting', () => {
     h.state.online = false;
     await h.f.check();
     expect(h.newerThan).not.toHaveBeenCalled();
+  });
+
+  it('offline, a skipped check waits a whole interval for the next; back online it checks', async () => {
+    const h = harness({ every: 15 });
+    h.f.start();
+    h.state.online = false;
+    await h.advance(16 * MIN);
+    expect(h.newerThan).not.toHaveBeenCalled();
+    // The first wait, then the next one after the skipped check.
+    expect(h.armed()).toBe(2);
+    expect(h.timers.map((x) => x.at - 1_000_000)).toEqual([30 * MIN]);
+    h.state.online = true;
+    h.f.resume(); // the connection is back
+    await h.flush();
+    expect(h.newerThan).toHaveBeenCalledTimes(1);
   });
 });
 

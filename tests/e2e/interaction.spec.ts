@@ -459,7 +459,7 @@ test('Autoplay is on by default and the setting is kept; Settings lines are shor
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   const settings = page.getByTestId('screen-settings');
   await expect(settings).toContainText('Plays similar songs when your list ends.');
-  for (const line of ['Hidden by default.', 'Low saves data.', 'Shows a button on Home when new tracks are posted.', 'Auto switches when IPv6 gets blocked.']) {
+  for (const line of ['Hidden by default.', 'Best quality the connection can keep up with', 'Shows a button on Home when new tracks are posted.', 'Auto switches when IPv6 gets blocked.']) {
     await expect(settings).toContainText(line);
   }
   await toggle.click();
@@ -620,4 +620,73 @@ test('a message showing when the block banner appears moves above it', async ({ 
   const banner = page.getByTestId('block-banner');
   await expect(banner).toBeVisible();
   await expect.poll(async () => (await box(toast)).y + (await box(toast)).height <= (await box(banner)).y).toBe(true);
+});
+
+type ShowToast = (text: string, ms?: number, action?: { label: string; run: () => void }) => number;
+
+test('a message that wraps hugs its longest line, with Undo too and after the phone turns', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await start(page);
+  const toast = page.getByTestId('toast');
+  /** The toast's box against its text's longest line: what's left over besides padding (and Undo). */
+  const fit = () =>
+    toast.evaluate((t) => {
+      const text = t.querySelector('.toast-text')!;
+      const range = document.createRange();
+      range.selectNodeContents(text);
+      const rects = [...range.getClientRects()];
+      const cs = getComputedStyle(t);
+      const action = t.querySelector('.toast-action');
+      const extra = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + (action ? action.getBoundingClientRect().width + parseFloat(cs.columnGap) : 0);
+      return {
+        lines: new Set(rects.map((r) => Math.round(r.top))).size,
+        spare: t.getBoundingClientRect().width - extra - Math.max(...rects.map((r) => r.width)),
+      };
+    });
+  const long = 'Signal lost. "A Rather Long Track Title (Extended Club Mix)" picks up when you\'re back.';
+
+  await page.evaluate((text) => (window as unknown as { __cyberjukeToast: ShowToast }).__cyberjukeToast(text, 10_000), long);
+  await expect(toast).toHaveText(long);
+  let f = await fit();
+  expect(f.lines).toBeGreaterThan(1);
+  expect(f.spare).toBeGreaterThanOrEqual(0);
+  expect(f.spare).toBeLessThanOrEqual(1);
+
+  await page.evaluate((text) => (window as unknown as { __cyberjukeToast: ShowToast }).__cyberjukeToast(text, 10_000, { label: 'Undo', run: () => {} }), long);
+  await expect(page.getByTestId('toast-action')).toBeVisible();
+  f = await fit();
+  expect(f.lines).toBeGreaterThan(1);
+  expect(f.spare).toBeGreaterThanOrEqual(0);
+  expect(f.spare).toBeLessThanOrEqual(1);
+
+  // Wider: measured again (fewer lines, still no spare room).
+  await page.setViewportSize({ width: 412, height: 780 });
+  await expect.poll(async () => (await fit()).spare).toBeLessThanOrEqual(1);
+  expect((await fit()).spare).toBeGreaterThanOrEqual(0);
+});
+
+test('a long unbroken word wraps inside a message and inside an Up next heading', async ({ page }) => {
+  const word = 'Supercalifragilisticexpialidociousness';
+  await start(page);
+  const inside = (l: ReturnType<Page['getByTestId']>) =>
+    l.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return el.scrollWidth <= el.clientWidth + 1 && r.left >= 0 && r.right <= document.documentElement.clientWidth + 1;
+    });
+  await page.evaluate((text) => (window as unknown as { __cyberjukeToast: ShowToast }).__cyberjukeToast(text, 10_000), `${word}${word} added to Favourites`);
+  const toast = page.getByTestId('toast');
+  await expect(toast).toBeVisible();
+  expect(await inside(toast)).toBe(true);
+
+  // An artist named so: Up next says "Next from: <name>".
+  await openSearch(page);
+  await page.getByTestId('mode-global').click();
+  await page.getByTestId('search-input').fill(word);
+  await page.getByTestId('filter-artists').click();
+  await page.getByTestId('music-open').first().click();
+  await page.getByTestId('artist-top-play').click();
+  await openNowPlaying(page);
+  const label = page.getByTestId('upnext-list-label');
+  await expect(label).toContainText(word);
+  expect(await inside(label)).toBe(true);
 });

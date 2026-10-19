@@ -6,11 +6,13 @@ import { signal } from '@preact/signals';
 import type { Track } from '../data/model';
 import { block } from '../stores/block';
 import { toast } from '../stores/toast';
-import { TEST_HOOKS } from '../core/testHooks';
+import { TEST_HOOKS, exposeForTests } from '../core/testHooks';
+import { UNTITLED } from '../data/model';
+import { trackErrorText, type TrackErrorFacts } from './errorText';
 import { Queue } from './queue';
 import type { RepeatMode } from './native';
-import type { Ipv4Mode, Quality } from '../stores/library';
-import { AUTOPLAY_LOW, EMPTY_STATE, LIST_CONTEXT, livePosition, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
+import type { CrossfadeMs, Ipv4Mode, Quality } from '../stores/library';
+import { AUTOPLAY_LOW, EMPTY_STATE, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
 
 /* Minimal typings for the parts of the IFrame API we use. */
 interface YTPlayer {
@@ -21,6 +23,8 @@ interface YTPlayer {
   seekTo(seconds: number, allowSeekAhead: boolean): void;
   getCurrentTime(): number;
   getDuration(): number;
+  /** How much of the video is loaded, 0 to 1. */
+  getVideoLoadedFraction?(): number;
   setPlaybackQuality?(q: string): void;
 }
 interface YTNamespace {
@@ -95,6 +99,22 @@ export class WebPlayer implements Player {
   private lowListeners = new Set<(e: QueueLow) => void>();
   /** The low state last announced, so each one is announced once. */
   private lowKey: string | null = null;
+
+  constructor() {
+    // The browser player never waits for the network (waitingForNetwork stays false); e2e
+    // drives native's "waiting for carrier" state through this.
+    exposeForTests('__cyberjukeWaitingForNetwork', (on: boolean) => this.publish({ waitingForNetwork: on }));
+    // Nor does it send `trackError`; e2e injects what native would say about the current track.
+    exposeForTests('__cyberjukeTrackError', (e: TrackErrorFacts) => toast(trackErrorText(e, this.q.current?.title ?? UNTITLED)));
+    // e2e: how much audio native would report loaded ahead (0: the track the app reopens on).
+    exposeForTests('__cyberjukeBufferedAhead', (ms: number) => this.publish({ bufferedAheadMs: ms }));
+  }
+
+  /** How much of the loaded video is past the playhead, in ms (native's bufferedAheadMs). */
+  private loadedAhead(yt: YTPlayer): number {
+    const loadedTo = (yt.getVideoLoadedFraction?.() ?? 0) * (yt.getDuration() || 0);
+    return Math.max(0, Math.round((loadedTo - yt.getCurrentTime()) * 1000));
+  }
 
   private publish(patch: Partial<PlayerState> = {}): void {
     const prev = this.s.value;
@@ -193,13 +213,14 @@ export class WebPlayer implements Player {
         durationMs: Math.round((yt.getDuration() || 0) * 1000),
         positionMs: Math.round(yt.getCurrentTime() * 1000),
         sampledAt: now,
+        bufferedAheadMs: this.loadedAhead(yt),
       });
       this.startPoll();
     } else if (code === YT_PAUSED) {
       this.stopPoll();
-      this.publish({ isPlaying: false, isBuffering: false, positionMs: Math.round(yt.getCurrentTime() * 1000), sampledAt: now });
+      this.publish({ isPlaying: false, isBuffering: false, positionMs: Math.round(yt.getCurrentTime() * 1000), sampledAt: now, bufferedAheadMs: this.loadedAhead(yt) });
     } else if (code === YT_BUFFERING) {
-      this.publish({ isBuffering: true, positionMs: Math.round(yt.getCurrentTime() * 1000), sampledAt: now });
+      this.publish({ isBuffering: true, positionMs: Math.round(yt.getCurrentTime() * 1000), sampledAt: now, bufferedAheadMs: this.loadedAhead(yt) });
     } else if (code === YT_ENDED) {
       this.stopPoll();
       this.advance(true);
@@ -220,7 +241,7 @@ export class WebPlayer implements Player {
     this.poll = setInterval(() => {
       // Positions are interpolated between samples; no need to sample a hidden page.
       if (!this.yt || document.hidden) return;
-      this.s.value = { ...this.s.value, positionMs: Math.round(this.yt.getCurrentTime() * 1000), sampledAt: performance.now() };
+      this.s.value = { ...this.s.value, positionMs: Math.round(this.yt.getCurrentTime() * 1000), sampledAt: performance.now(), bufferedAheadMs: this.loadedAhead(this.yt) };
     }, 1000);
   }
 
@@ -236,10 +257,10 @@ export class WebPlayer implements Player {
       this.stopPoll();
       this.yt?.pauseVideo();
       this.loadedId = null;
-      this.publish({ isPlaying: false, isBuffering: false, positionMs: 0, durationMs: 0 });
+      this.publish({ isPlaying: false, isBuffering: false, positionMs: 0, durationMs: 0, bufferedAheadMs: 0 });
       return;
     }
-    this.publish({ isPlaying: autoplay, isBuffering: autoplay, positionMs: 0, durationMs: 0, sampledAt: performance.now() });
+    this.publish({ isPlaying: autoplay, isBuffering: autoplay, positionMs: 0, durationMs: 0, sampledAt: performance.now(), bufferedAheadMs: 0 });
     let yt: YTPlayer;
     try {
       yt = await this.ensurePlayer();
@@ -295,11 +316,11 @@ export class WebPlayer implements Player {
 
   async pause(): Promise<void> {
     this.yt?.pauseVideo();
-    this.publish({ isPlaying: false, isBuffering: false, positionMs: livePosition(this.s.value), sampledAt: performance.now() });
+    this.publish({ isPlaying: false, isBuffering: false, waitingForNetwork: false, positionMs: livePosition(this.s.value), sampledAt: performance.now() });
   }
 
   toggle(): Promise<void> {
-    return this.s.value.isPlaying ? this.pause() : this.play();
+    return wantsPlay(this.s.value) ? this.pause() : this.play();
   }
 
   async next(): Promise<void> {
@@ -400,8 +421,20 @@ export class WebPlayer implements Player {
   }
 
   async setQuality(q: Quality): Promise<void> {
+    // e2e checks the call the native plugin would get.
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setQuality', { quality: q }]);
     // The IFrame API ignores quality requests nowadays; kept for interface parity.
     this.yt?.setPlaybackQuality?.(q === 'low' ? 'small' : 'default');
+  }
+
+  async setCrossfade(ms: CrossfadeMs): Promise<void> {
+    // The IFrame player has no crossfade; e2e checks the call the native plugin would get.
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setCrossfade', { ms }]);
+  }
+
+  async setGapless(enabled: boolean): Promise<void> {
+    // The IFrame player loads one video at a time; e2e checks the call the native plugin would get.
+    if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['setGapless', { enabled }]);
   }
 
   async setNetworkPrefs(prefs: { ipv4: Ipv4Mode }): Promise<void> {

@@ -32,7 +32,7 @@ describe('theme migration', () => {
   it('migrates a saved GRiD theme to Brutalist and saves it', async () => {
     store.set('settings', JSON.stringify({ theme: 'grid', showNsfw: true, quality: 'low' }));
     await lib.loadLibrary();
-    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: true });
+    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: false, cacheMb: 256, crossfadeMs: 0, gapless: true, version: lib.SETTINGS_VERSION });
     await flush();
     expect(JSON.parse(store.get('settings')!).theme).toBe('brutalist');
   });
@@ -65,6 +65,61 @@ describe('theme migration', () => {
     store.set('settings', JSON.stringify({ ipv4: 'sometimes' }));
     await lib.loadLibrary();
     expect(lib.settings.value.ipv4).toBe('auto');
+  });
+
+  it('turns a saved High (the old default) into Auto once, and saves it', async () => {
+    store.set('settings', JSON.stringify({ theme: 'dark', quality: 'high' }));
+    await lib.loadLibrary();
+    expect(lib.settings.value.quality).toBe('auto');
+    expect(lib.settings.value.version).toBe(lib.SETTINGS_VERSION);
+    await flush();
+    expect(JSON.parse(store.get('settings')!)).toMatchObject({ quality: 'auto', version: lib.SETTINGS_VERSION });
+    // Once: High chosen after the upgrade stays High.
+    lib.updateSettings({ quality: 'high' });
+    await flush();
+    await lib.loadLibrary();
+    expect(lib.settings.value.quality).toBe('high');
+  });
+
+  it('checks for updates only when turned on: off by default, and turned off once for an older install', async () => {
+    // A fresh install: off.
+    await lib.loadLibrary();
+    expect(lib.settings.value.checkUpdates).toBe(false);
+    // Saved before it was opt-in, "on" can't be told from the old default: off, once, and saved.
+    store.set('settings', JSON.stringify({ theme: 'dark', checkUpdates: true, version: 2 }));
+    await lib.loadLibrary();
+    expect(lib.settings.value.checkUpdates).toBe(false);
+    await flush();
+    expect(JSON.parse(store.get('settings')!)).toMatchObject({ checkUpdates: false, version: lib.SETTINGS_VERSION });
+    // Turned on since: it stays on.
+    lib.updateSettings({ checkUpdates: true });
+    await flush();
+    await lib.loadLibrary();
+    expect(lib.settings.value.checkUpdates).toBe(true);
+    // Anything but true is off.
+    store.set('settings', JSON.stringify({ checkUpdates: 'yes', version: lib.SETTINGS_VERSION }));
+    await lib.loadLibrary();
+    expect(lib.settings.value.checkUpdates).toBe(false);
+  });
+
+  it('keeps a saved Low through the upgrade', async () => {
+    store.set('settings', JSON.stringify({ theme: 'dark', quality: 'low' }));
+    await lib.loadLibrary();
+    expect(lib.settings.value.quality).toBe('low');
+    await flush();
+    expect(JSON.parse(store.get('settings')!)).toMatchObject({ quality: 'low', version: lib.SETTINGS_VERSION });
+  });
+
+  it('defaults to Auto, and an unknown quality falls back to it', async () => {
+    await lib.loadLibrary();
+    expect(lib.settings.value.quality).toBe('auto');
+    // Nothing saved yet: nothing to migrate, nothing written.
+    await flush();
+    expect(store.has('settings')).toBe(false);
+    store.set('settings', JSON.stringify({ quality: 'ultra', version: 2 }));
+    await lib.loadLibrary();
+    expect(lib.settings.value.quality).toBe('auto');
+    expect(lib.QUALITIES).toEqual(['auto', 'high', 'low']);
   });
 
   it('lists Brutalist and not GRiD', () => {
@@ -133,6 +188,92 @@ describe('check interval setting', () => {
     await lib.loadLibrary();
     expect(lib.settings.value.checkEvery).toBe(15);
     expect(lib.CHECK_EVERY_OPTIONS).toEqual([5, 15, 30, 60, 0]);
+  });
+});
+
+describe('listening cache setting', () => {
+  it('is 256 MB unless one of the sizes was chosen, and keeps a choice', async () => {
+    expect(lib.CACHE_SIZES).toEqual([128, 256, 512]);
+    await lib.loadLibrary();
+    expect(lib.settings.value.cacheMb).toBe(256);
+    // Saved before the setting existed (an older version): the default, nothing else changes.
+    store.set('settings', JSON.stringify({ theme: 'vt320', quality: 'low', version: 2 }));
+    await lib.loadLibrary();
+    expect(lib.settings.value).toMatchObject({ cacheMb: 256, theme: 'vt320', quality: 'low' });
+    lib.updateSettings({ cacheMb: 512 });
+    await flush();
+    expect(JSON.parse(store.get('settings')!)).toMatchObject({ cacheMb: 512 });
+    await lib.loadLibrary();
+    expect(lib.settings.value.cacheMb).toBe(512);
+    for (const junk of [1024, '256', null, -1]) {
+      store.set('settings', JSON.stringify({ cacheMb: junk, version: 2 }));
+      await lib.loadLibrary();
+      expect(lib.settings.value.cacheMb).toBe(256);
+    }
+  });
+});
+
+describe('crossfade setting', () => {
+  it('is Off unless one of the lengths was chosen, and keeps a choice', async () => {
+    expect(lib.CROSSFADES).toEqual([0, 3000, 6000, 10000]);
+    await lib.loadLibrary();
+    expect(lib.settings.value.crossfadeMs).toBe(0);
+    // Saved before the setting existed: Off, nothing else changes.
+    store.set('settings', JSON.stringify({ theme: 'vt320', quality: 'low', cacheMb: 512, version: 2 }));
+    await lib.loadLibrary();
+    expect(lib.settings.value).toMatchObject({ crossfadeMs: 0, theme: 'vt320', quality: 'low', cacheMb: 512 });
+    lib.updateSettings({ crossfadeMs: 6000 });
+    await flush();
+    expect(JSON.parse(store.get('settings')!)).toMatchObject({ crossfadeMs: 6000 });
+    await lib.loadLibrary();
+    expect(lib.settings.value.crossfadeMs).toBe(6000);
+    for (const junk of [5000, '3000', 3, null, -1, 10001]) {
+      store.set('settings', JSON.stringify({ crossfadeMs: junk, version: 2 }));
+      await lib.loadLibrary();
+      expect(lib.settings.value.crossfadeMs).toBe(0);
+    }
+  });
+});
+
+describe('gapless setting', () => {
+  it('is on unless turned off, also in settings saved before it existed, and keeps off', async () => {
+    await lib.loadLibrary();
+    expect(lib.settings.value.gapless).toBe(true);
+    // Saved before the setting existed: on, nothing else changes.
+    store.set('settings', JSON.stringify({ theme: 'vt320', quality: 'low', crossfadeMs: 3000, version: 2 }));
+    await lib.loadLibrary();
+    expect(lib.settings.value).toMatchObject({ gapless: true, theme: 'vt320', quality: 'low', crossfadeMs: 3000 });
+    lib.updateSettings({ gapless: false });
+    await flush();
+    expect(JSON.parse(store.get('settings')!)).toMatchObject({ gapless: false });
+    await lib.loadLibrary();
+    expect(lib.settings.value.gapless).toBe(false);
+    // Only a saved false turns it off.
+    for (const junk of ['false', 0, null, 'no']) {
+      store.set('settings', JSON.stringify({ gapless: junk, version: 2 }));
+      await lib.loadLibrary();
+      expect(lib.settings.value.gapless).toBe(true);
+    }
+  });
+});
+
+describe('members-only tracks dropped at a sign-out', () => {
+  const tr = (id: string, membersOnly = false) => ({ id, ytId: id.padEnd(11, 'x'), title: id, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '', ...(membersOnly && { membersOnly: true }) });
+
+  it('tells its listeners after each drop, once Liked and history hold none', async () => {
+    files.set(LIKED_FILE, JSON.stringify([tr('pub'), tr('mem1', true)]));
+    await lib.loadLibrary();
+    lib.addRecent(tr('mem2', true));
+    const seen: string[][] = [];
+    const off = lib.onMembersOnlyDropped(() => seen.push([...lib.liked.value.map((t) => t.id), ...lib.history.value.map((e) => e.track.id)]));
+    lib.dropMembersOnly();
+    expect(seen).toEqual([['pub']]);
+    // Nothing left to drop: still told (native drops whatever members-only audio it tagged).
+    lib.dropMembersOnly();
+    expect(seen).toHaveLength(2);
+    off();
+    lib.dropMembersOnly();
+    expect(seen).toHaveLength(2);
   });
 });
 
@@ -352,6 +493,45 @@ describe('Undo puts an item back next to its neighbour', () => {
   });
 });
 
+describe('a Liked file that cannot be read', () => {
+  const tr = (id: string, extra: Record<string, unknown> = {}) => ({ ...extra, id, ytId: 'abcdefghij' + id.slice(-1), title: id, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '' });
+
+  it('is not overwritten: likes are kept in memory, and the file is read again later and merged', async () => {
+    vi.useFakeTimers();
+    try {
+      let failing = true;
+      const saves: unknown[] = [];
+      const file = {
+        path: 'l',
+        get unreadable() {
+          return failing;
+        },
+        load: vi.fn(async () => (failing ? null : [tr('old'), tr('m', { membersOnly: true })])),
+        save: vi.fn(async (v: unknown) => void (failing || saves.push(v))),
+        remove: async () => {},
+      };
+      const noHistory = { path: 'h', unreadable: false, load: async () => null, save: async () => {}, remove: async () => {} };
+      lib.setLibraryStorage({ get: async () => null, set: async () => {}, remove: async () => {} }, noHistory, file);
+      await lib.loadLists();
+      expect(lib.likedUnreadable.value).toBe(true);
+      lib.toggleLike(tr('new') as never);
+      expect(lib.liked.value.map((t) => t.id)).toEqual(['new']);
+      // Still failing at the first retry: it tries again later.
+      await vi.advanceTimersByTimeAsync(lib.LIST_RETRY_MS[0]);
+      expect(file.load).toHaveBeenCalledTimes(2);
+      expect(lib.likedUnreadable.value).toBe(true);
+      failing = false;
+      await vi.advanceTimersByTimeAsync(lib.LIST_RETRY_MS[1]);
+      // Merged, this session's likes first; signed out, the members-only like stays out.
+      expect(lib.liked.value.map((t) => t.id)).toEqual(['new', 'old']);
+      expect(lib.likedUnreadable.value).toBe(false);
+      expect(saves).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('a history file that cannot be read', () => {
   const tr = (id: string, extra: Record<string, unknown> = {}) => ({ ...extra, id, ytId: 'abcdefghij' + id.slice(-1), title: id, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '' });
 
@@ -377,10 +557,10 @@ describe('a history file that cannot be read', () => {
       expect(lib.recent.value.map((t) => t.id)).toEqual(['new']);
       expect(saves).toEqual([]);
       // Still failing at the first retry: it tries again later.
-      await vi.advanceTimersByTimeAsync(lib.HISTORY_RETRY_MS[0]);
+      await vi.advanceTimersByTimeAsync(lib.LIST_RETRY_MS[0]);
       expect(file.load).toHaveBeenCalledTimes(2);
       failing = false;
-      await vi.advanceTimersByTimeAsync(lib.HISTORY_RETRY_MS[1]);
+      await vi.advanceTimersByTimeAsync(lib.LIST_RETRY_MS[1]);
       // Merged, newest first; signed out, the members-only play stays out.
       expect(lib.recent.value.map((t) => t.id)).toEqual(['new', 'old']);
       expect(saves).toHaveLength(1);

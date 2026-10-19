@@ -1,6 +1,6 @@
 import type { ReadonlySignal } from '@preact/signals';
 import type { Track } from '../data/model';
-import type { Ipv4Mode, Quality } from '../stores/library';
+import type { CrossfadeMs, Ipv4Mode, Quality } from '../stores/library';
 import type { RepeatMode } from './native';
 
 export type { RepeatMode };
@@ -63,6 +63,7 @@ export interface PlayerState {
   /** Index of the current track in `queue`, -1 if none. */
   index: number;
   current: Track | null;
+  /** Playing or about to: true while it loads too (`isBuffering`), as on the play/pause button. */
   isPlaying: boolean;
   isBuffering: boolean;
   positionMs: number;
@@ -77,6 +78,13 @@ export interface PlayerState {
   context: PlayContext | null;
   /** The track autoplay follows: the started track, or the autoplay track tapped. */
   seed: Track | null;
+  /** The connection dropped and playback paused; it resumes by itself once it's back (native only). */
+  waitingForNetwork: boolean;
+  /**
+   * How much of the current track is loaded past where it is, in ms (0: nothing, as for the
+   * track the app reopens on). Offline, a track that isn't saved resumes only with some.
+   */
+  bufferedAheadMs: number;
 }
 
 export const EMPTY_STATE: PlayerState = {
@@ -93,6 +101,8 @@ export const EMPTY_STATE: PlayerState = {
   upNext: [],
   context: null,
   seed: null,
+  waitingForNetwork: false,
+  bufferedAheadMs: 0,
 };
 
 /** Same interface for the native (Android) and web (YouTube IFrame) implementations. */
@@ -140,6 +150,10 @@ export interface Player {
   /** Called when autoplay needs more tracks (native: the `queueLow` event). Returns an unsubscribe. */
   onQueueLow(cb: (e: QueueLow) => void): () => void;
   setQuality(q: Quality): Promise<void>;
+  /** Crossfade between tracks (native only; the web player ignores it). */
+  setCrossfade(ms: CrossfadeMs): Promise<void>;
+  /** Gapless playback: the next track readied while this one plays (native only; the web player ignores it). */
+  setGapless(enabled: boolean): Promise<void>;
   /** Y6: the IPv4 setting for YouTube requests (native only; the web player ignores it). */
   setNetworkPrefs(prefs: { ipv4: Ipv4Mode }): Promise<void>;
   /** The block banner's "Try now": lift YouTube's back-off now (playback it stopped resumes). */
@@ -157,6 +171,14 @@ export interface NetStatus {
   autoIpv4: boolean;
   /** The last time YouTube limited us. */
   lastLimit?: { at: number; reason: string; surface: 'playback' | 'music' };
+}
+
+/**
+ * The play/pause button shows Pause, and a tap pauses: playing, about to, or waiting for the
+ * network to resume by itself (the tap calls that resume off).
+ */
+export function wantsPlay(s: Pick<PlayerState, 'isPlaying' | 'waitingForNetwork'>): boolean {
+  return s.isPlaying || s.waitingForNetwork;
 }
 
 /** Estimated live position, interpolated between samples while playing. */

@@ -12,11 +12,13 @@ import {
   livePosition,
   playContext,
   player,
+  playWanted,
   positionSample,
   queuePlace,
   repeatMode,
   shuffleOn,
   upNextSections,
+  waitingForNetwork,
 } from '../../player';
 import { block } from '../../stores/block';
 import { toggleLikeWithUndo } from '../../stores/undo';
@@ -28,7 +30,9 @@ import { positionNow, useTickValue } from '../../ui/useTick';
 import { splitArtists } from '../../data/artists';
 import { isGlobal, type Track } from '../../data/model';
 import { reducedMotion } from '../../core/motion';
+import { OFFLINE } from '../../core/offlineText';
 import { Art } from '../../ui/components/Art';
+import { OfflineLine } from '../../ui/components/OfflineLine';
 import { Marquee } from './Marquee';
 import { MembersTag } from '../../ui/components/TrackRow';
 import { LyricsPanel } from './Lyrics';
@@ -46,10 +50,10 @@ function fmt(ms: number): string {
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
 
-/** Play/pause glyph (a spinner while starting); reads only the play state. */
+/** Play/pause glyph (a spinner while loading, Pause while waiting for the network); reads only the play state. */
 function PlayPauseIcon({ size }: { size: number }) {
   if (isPlaying.value && isBuffering.value) return <span class={'spinner' + (size > 30 ? ' big' : '')} aria-hidden="true" />;
-  return <Icon name={isPlaying.value ? 'pause' : 'play'} size={size} />;
+  return <Icon name={playWanted.value ? 'pause' : 'play'} size={size} />;
 }
 
 // ---- Mini player -------------------------------------------------------------------
@@ -91,7 +95,7 @@ function MiniProgress() {
 
 function MiniToggle() {
   return (
-    <button class="icon-btn" onClick={() => player.toggle()} aria-label={isPlaying.value ? 'Pause' : 'Play'} data-testid="mini-toggle">
+    <button class="icon-btn" onClick={() => player.toggle()} aria-label={playWanted.value ? 'Pause' : 'Play'} data-testid="mini-toggle">
       <PlayPauseIcon size={28} />
     </button>
   );
@@ -155,6 +159,17 @@ function useSwipeUpToOpen(ref: { current: HTMLDivElement | null }): void {
   }, []);
 }
 
+/** The artist line, or the wait for the network: only it re-renders when that changes. */
+function MiniSub({ artist }: { artist: string }) {
+  return waitingForNetwork.value ? (
+    <span class="mini-artist" data-testid="mini-waiting">
+      {OFFLINE.waiting}
+    </span>
+  ) : (
+    <span class="mini-artist">{artist}</span>
+  );
+}
+
 export function MiniPlayer() {
   const t = currentTrack.value;
   return t ? <MiniBar track={t} /> : null;
@@ -170,7 +185,7 @@ function MiniBar({ track: t }: { track: Track }) {
         <Art track={t} size="sm" />
         <span class="mini-text">
           <MiniTitle text={t.title} />
-          <span class="mini-artist">{t.artist}</span>
+          <MiniSub artist={t.artist} />
         </span>
       </button>
       <MiniToggle />
@@ -346,8 +361,16 @@ function SeekBar() {
         />
       </div>
       <div class="seek-times">
-        <span data-testid="time-pos">{fmt(pos)}</span>
-        <span data-testid="time-dur">{dur > 0 ? fmt(dur) : '--:--'}</span>
+        {waitingForNetwork.value ? (
+          <span role="status" data-testid="np-waiting">
+            {OFFLINE.waiting}
+          </span>
+        ) : (
+          <>
+            <span data-testid="time-pos">{fmt(pos)}</span>
+            <span data-testid="time-dur">{dur > 0 ? fmt(dur) : '--:--'}</span>
+          </>
+        )}
       </div>
     </div>
   );
@@ -555,6 +578,7 @@ function NowPlayingContent() {
             <div class="np-head-title">
               <span class="np-kicker">Now playing</span>
               <NpFrom />
+              <NpOffline />
             </div>
             <button class="icon-btn" onClick={() => (menuTrack.value = t)} aria-label="More options" data-testid="np-more">
               <Icon name="more" />
@@ -649,7 +673,7 @@ function NpControls() {
       <button class="icon-btn big" aria-label="Previous track" onClick={() => player.prev()} data-testid="np-prev">
         <Icon name="prev" size={36} />
       </button>
-      <button class="play-btn" aria-label={isPlaying.value ? 'Pause' : 'Play'} onClick={() => player.toggle()} data-testid="np-toggle">
+      <button class="play-btn" aria-label={playWanted.value ? 'Pause' : 'Play'} onClick={() => player.toggle()} data-testid="np-toggle">
         <PlayPauseIcon size={40} />
       </button>
       <NextButton size={36} class="icon-btn big" testid="np-next" />
@@ -683,6 +707,11 @@ function NpFrom() {
       <Marquee text={text} />
     </span>
   );
+}
+
+/** Offline, the app's offline line (the sheet covers the bar at the top), as a chip under the source. */
+function NpOffline() {
+  return <OfflineLine class="np-offline" testid="np-offline" />;
 }
 
 /** Artist line in Now Playing: tapping opens the artist page (or a chooser for several). */

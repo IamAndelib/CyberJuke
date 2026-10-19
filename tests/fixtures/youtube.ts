@@ -45,38 +45,114 @@ function fakeThumb(id: string, wide = false): string {
 
 /**
  * A stand-in for the YouTube IFrame API, defined before the app loads (the app's CSP
- * blocks the real script): `window.YT.Player` "plays" by advancing a clock, starting
- * at 71 s into a 247 s track.
+ * blocks the real script): `window.YT.Player` "plays" by the page's clock (Date.now()),
+ * starting at 71 s into a 247 s track, and ends the track by itself when it reaches the
+ * end: one timer for that, nothing ticking, so `page.clock` runs a long session in an
+ * instant (runFor) or a track at a time (fastForward). `window.__cyberjukeYt` drives the
+ * last player: `stall()` makes it buffer (its clock stops) and `resume()` plays on;
+ * `end()` ends the track now; `error(code)` reports a player error (2, 5, 100, 101, 150:
+ * the track can't play here).
  */
+/** The fake player's track: it starts this far in (s) and is this long (s); loading takes FAKE_LOAD_MS. */
+const FAKE_START_S = 71;
+const FAKE_DURATION_S = 247;
+const FAKE_LOAD_MS = 150;
+/** One track of the fake player, from its start to its end, plus its start-up. */
+export const FAKE_TRACK_MS = (FAKE_DURATION_S - FAKE_START_S) * 1000 + FAKE_LOAD_MS;
+
 const FAKE_YT = `
 (() => {
+  const START = ${FAKE_START_S}, DURATION = ${FAKE_DURATION_S};
+  let last = null;
   class Player {
     constructor(el, opts) {
-      this.opts = opts; this.t = 0; this.state = -1; this.timer = null; this.starting = null;
+      last = this;
+      this.opts = opts; this.base = 0; this.playingSince = null; this.state = -1; this.ending = null; this.starting = null; this.loaded = false;
       setTimeout(() => opts.events.onReady && opts.events.onReady(), 30);
     }
     emit(s) { this.state = s; this.opts.events.onStateChange && this.opts.events.onStateChange({ data: s }); }
+    // Seconds played of this track: what was played before the last pause, plus the stretch since.
+    played() { return this.base + (this.playingSince == null ? 0 : (Date.now() - this.playingSince) / 1000); }
+    hold() { this.base = this.played(); this.playingSince = null; clearTimeout(this.ending); this.ending = null; }
     // Like the real player: buffering, then playing, unless paused (or cued) meanwhile.
-    loadVideoById() { this.t = 0; this.emit(3); clearTimeout(this.starting); this.starting = setTimeout(() => this.playVideo(), 150); }
-    cueVideoById() { clearTimeout(this.starting); this.t = 0; this.emit(5); }
+    loadVideoById() { this.hold(); this.base = 0; this.loaded = false; this.emit(3); clearTimeout(this.starting); this.starting = setTimeout(() => this.playVideo(), ${FAKE_LOAD_MS}); }
+    cueVideoById() { clearTimeout(this.starting); this.hold(); this.base = 0; this.loaded = false; this.emit(5); }
     playVideo() {
-      clearInterval(this.timer);
-      this.timer = setInterval(() => { this.t += 0.25; }, 250);
+      // Once it plays, all of it is loaded (the real one loads ahead as it goes).
+      this.loaded = true;
+      this.hold();
+      this.playingSince = Date.now();
+      this.scheduleEnd();
       this.emit(1);
     }
-    pauseVideo() { clearTimeout(this.starting); clearInterval(this.timer); this.emit(2); }
-    seekTo(s) { this.t = s - 71; window.__ytSeeks = (window.__ytSeeks || 0) + 1; }
-    getCurrentTime() { return this.t + 71; }
-    getDuration() { return 247; }
+    // The end comes when the clock gets there (checked, so a jump of the clock can't end a track early).
+    scheduleEnd() {
+      const left = DURATION - this.getCurrentTime();
+      this.ending = setTimeout(() => (this.getCurrentTime() >= DURATION ? this.end() : this.scheduleEnd()), Math.max(0, left * 1000));
+    }
+    pauseVideo() { clearTimeout(this.starting); this.hold(); this.emit(2); }
+    // The stream stalls: buffering, the clock stopped, until resume().
+    stall() { clearTimeout(this.starting); this.hold(); this.emit(3); }
+    resume() { this.playVideo(); }
+    // The track reached its end (the app moves on to the next one).
+    end() { clearTimeout(this.starting); this.hold(); this.base = DURATION - START; this.emit(0); }
+    error(code) { clearTimeout(this.starting); this.hold(); this.opts.events.onError && this.opts.events.onError({ data: code }); }
+    seekTo(s) { const playing = this.playingSince != null; this.hold(); this.base = s - START; if (playing) { this.playingSince = Date.now(); this.scheduleEnd(); } window.__ytSeeks = (window.__ytSeeks || 0) + 1; }
+    getCurrentTime() { return this.played() + START; }
+    getDuration() { return DURATION; }
+    getVideoLoadedFraction() { return this.loaded ? 1 : 0; }
     setPlaybackQuality() {}
   }
   window.YT = { Player };
+  window.__cyberjukeYt = {
+    stall: () => last && last.stall(),
+    resume: () => last && last.resume(),
+    end: () => last && last.end(),
+    error: (code) => last && last.error(code),
+  };
 })();
 `;
+
+/**
+ * Pages whose image hosts (these thumbnails, and the Global covers in music.ts) are cut off:
+ * their requests fail like a lost connection. setOffline sets it, since the browser's offline
+ * mode doesn't reach routed requests; set alone, the app counts as online but no image gets
+ * through (a Wi-Fi login page).
+ */
+const imagesCutOff = new WeakSet<Page>();
+
+export function setImagesOffline(page: Page, off: boolean): void {
+  if (off) imagesCutOff.add(page);
+  else imagesCutOff.delete(page);
+}
+
+const imagesOffline = (page: Page): boolean => imagesCutOff.has(page);
+
+/** Pages whose next request for each image fails once, and the images that already did. */
+const switching = new WeakMap<Page, Set<string>>();
+
+/**
+ * The connection is back, but the network is still switching: the next request for each image
+ * fails once, as Chromium fails the requests in flight when the network changes
+ * (ERR_NETWORK_CHANGED); the one after that loads.
+ */
+export function failImagesOnce(page: Page): void {
+  switching.set(page, new Set());
+}
+
+/** The image request this route answers fails: the host is cut off, or it is caught in a switch. */
+export function imageFails(page: Page, url: string): boolean {
+  if (imagesOffline(page)) return true;
+  const failed = switching.get(page);
+  if (!failed || failed.has(url)) return false;
+  failed.add(url);
+  return true;
+}
 
 /** Synthetic thumbnails for i.ytimg.com and the fake IFrame player. */
 export async function stubYouTube(page: Page): Promise<void> {
   await page.route(/^https:\/\/i\.ytimg\.com\/vi\/([^/]+)\//, (route) => {
+    if (imageFails(page, route.request().url())) return route.abort('internetdisconnected');
     const id = /\/vi\/([^/]+)\//.exec(route.request().url())?.[1] ?? 'x';
     return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: fakeThumb(id, /\/mqdefault\.jpg$/.test(route.request().url())) });
   });

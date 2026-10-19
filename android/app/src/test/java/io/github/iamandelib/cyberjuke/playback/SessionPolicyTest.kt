@@ -18,9 +18,9 @@ class SessionPolicyTest {
     @Test
     fun fullAccessForUsAndTheSystem() {
         assertEquals(Access.FULL, access(Controller(own, 10123, isTrusted = true)))
-        assertEquals(Access.FULL, access(Controller(own, 10123, isTrusted = false, isMediaNotificationController = true)))
-        assertEquals(Access.FULL, access(Controller("com.google.android.projection.gearhead", 10200, isTrusted = false, isAutoCompanionController = true)))
-        assertEquals(Access.FULL, access(Controller("com.android.car.media", 10300, isTrusted = false, isAutomotiveController = true)))
+        assertEquals(Access.FULL, access(Controller(own, 10123, isTrusted = false, isMediaNotificationController = true, packageNameVerified = true)))
+        assertEquals(Access.FULL, access(Controller("com.google.android.projection.gearhead", 10200, isTrusted = false, isAutoCompanionController = true, packageNameVerified = true)))
+        assertEquals(Access.FULL, access(Controller("com.android.car.media", 10300, isTrusted = false, isAutomotiveController = true, packageNameVerified = true)))
         assertEquals(Access.FULL, access(Controller("com.android.bluetooth", 1002, isTrusted = true)))
         assertEquals(Access.FULL, access(Controller("android", 1000, isTrusted = true)))
         assertEquals(Access.FULL, access(Controller("com.android.systemui", 10050, isTrusted = true)))
@@ -37,6 +37,20 @@ class SessionPolicyTest {
         // A system-ish name without trust or a system uid.
         assertEquals(Access.TRANSPORT, access(Controller("com.android.systemui", 10050, isTrusted = false)))
         assertEquals(Access.TRANSPORT, access(Controller("android", 1000, isTrusted = false)))
+    }
+
+    @Test
+    fun theSystemControllersCountOnlyWithAVerifiedPackageName() {
+        // Media3 recognises these three by package name; unverified, they are like any other app.
+        for (c in listOf(
+            Controller("com.google.android.projection.gearhead", 10400, isTrusted = false, isAutoCompanionController = true),
+            Controller("com.android.car.media", 10400, isTrusted = false, isAutomotiveController = true),
+            Controller(own, 10400, isTrusted = false, isMediaNotificationController = true),
+        )) {
+            assertEquals(c.packageName, Access.TRANSPORT, access(c))
+            assertEquals(c.packageName, Grant.TRANSPORT, grant(c))
+            assertEquals(c.packageName, Access.FULL, access(c.copy(packageNameVerified = true)))
+        }
     }
 
     @Test
@@ -92,7 +106,7 @@ class SessionPolicyTest {
         assertEquals(Grant.TRANSPORT, grant(Controller(own, 10999, isTrusted = false, connectionToken = token)))
         // A trusted system controller with a guessed token is still not the plugin.
         assertEquals(Grant.FULL, grant(Controller("android", 1000, isTrusted = true, connectionToken = token)))
-        assertEquals(Grant.FULL, grant(Controller("com.google.android.projection.gearhead", 10200, isTrusted = false, isAutoCompanionController = true)))
+        assertEquals(Grant.FULL, grant(Controller("com.google.android.projection.gearhead", 10200, isTrusted = false, isAutoCompanionController = true, packageNameVerified = true)))
     }
 
     @Test

@@ -187,10 +187,27 @@ describe('lyrics client cache', () => {
     expect(plugin.lyrics).toHaveBeenCalledTimes(3);
   });
 
+  it('writes the cache file once for lookups close together (the track and the next)', async () => {
+    vi.useFakeTimers();
+    try {
+      const store = new Map<string, string>();
+      const set = vi.fn(async (k: string, v: string) => void store.set(k, v));
+      const c = l.createLyricsClient({ plugin: () => ({ lyrics: async () => ({ found: true, plain: 'x' }) }), storage: { get: async () => null, set } });
+      await c.get(track('a'));
+      await c.get(track('b'));
+      expect(set).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(l.LYRICS_PERSIST_MS);
+      expect(set).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(store.get(l.LYRICS_CACHE_KEY)!).map((e: [string]) => e[0])).toEqual(['a', 'b']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('persists and restores the cache', async () => {
     const { c, store } = setup();
     await c.get(track('a'));
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, l.LYRICS_PERSIST_MS + 50));
     const c2 = l.createLyricsClient({
       plugin: () => ({ lyrics: vi.fn() }),
       storage: { get: async (k) => store.get(k) ?? null, set: async () => {} },

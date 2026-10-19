@@ -1,0 +1,6 @@
+- Listening cache (Settings, 128 to 512 MB): what you play and the next track stay on the phone, so a weak signal doesn't stop the music
+- Liked songs are saved to play offline; offline, the app says so and dims what can't play
+- Audio quality Auto, the new default, follows the connection
+- Crossfade (3, 6 or 10 s) and a Gapless playback setting
+- Rides out dropouts: deeper buffer, "Waiting for carrier..." instead of skipping
+- Home opens faster; failed lists reload by themselves

@@ -37,8 +37,12 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 - **Sign in with Cyberspace** (optional): the Jukebox also shows the members-only shared tracks, marked `[members]`. See [Signing in](#signing-in).
 - **Library**: liked tracks and recently played, stored on your phone.
 - **Background playback**: the notification, lock screen and headset buttons all work, and the queue keeps going with the screen off. Tapping the notification opens Now Playing.
+- **Listening cache**: the music you play and the next track are kept on the phone (128, 256 or 512 MB, in Settings), so a sudden drop in the signal doesn't stop the music, and liked songs are saved so they play offline. CyberJuke is made for online listening: offline, only the liked songs already saved play, and a paused song resumes from what it has loaded.
+- **Audio quality**: **Auto** (the default) plays the best quality the connection keeps up with, stepping down after stalls and back up once it's calm, only between tracks; **High** and **Low** stay put.
+- **Crossfade** (optional): the end of a track blends into the next, over 3, 6 or 10 seconds (Settings → Crossfade).
+- **Gapless playback** (on by default): the next track is readied while this one plays, so they follow without a pause. Off, it loads only when this one ends, so a skip costs little data.
 - **Picks up where you left off**: the app opens on what you last played, paused at the same spot, even after Android stopped it.
-- **Update notices**: Settings → Updates checks for a new release once a day (or on request) and shows it in Settings with a download link. Installs from F-Droid update through F-Droid instead.
+- **Update notices** (off until you turn them on): Settings → Updates checks for a new release once a day (or when you tap Check now) and shows it in Settings with a download link. Installs from F-Droid update through F-Droid instead.
 - **Now Playing**: seek, shuffle, repeat, like, synced lyrics, share, "Playing from …", and an Up Next queue you can reorder.
 - **"Posted by @user"** opens the original post on Cyberspace, so you can see what the poster wrote and reply.
 - **Undo** for unlike, unfavourite, removing from Up next and clearing history or recent searches. Any message at the bottom can be swiped away, left or right.
@@ -93,7 +97,7 @@ Releases are built by the `Release` workflow from a tagged commit with no caches
 | **Playback** | Every Jukebox track is a YouTube link. A native Android player (`android/app/src/main/java/.../playback/`; Capacitor plugins in `bridge/`, YouTube code in `yt/`, lyrics in `lyrics/`, HTTP and back-off in `net/`) resolves the audio stream with [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) and plays it with Media3/ExoPlayer in a media session. The queue lives in that native service, which is what keeps music going with the screen off. The web side talks to it through a Capacitor plugin (`src/player/native.ts`). |
 | **Global search, artist pages** | YouTube Music data, read on the phone through the `JukeMusic` plugin (`src/data/ytmusic.ts` on the web side): the artist's own page for top songs and the discography, NewPipeExtractor for search, albums and playlists. Results are cached for 10 minutes. |
 | **Lyrics** | Looked up on [LRCLIB](https://lrclib.net) when the lyrics panel is open, else the lyrics YouTube Music shows (from LyricFind), and cached on the phone. |
-| **Update check** | Asks GitHub's API for the latest release: at most once a day while the app is open (Settings → Updates; can be turned off), or when you tap Check now. Never for installs from F-Droid. |
+| **Update check** | Asks GitHub's API for the latest release: at most once a day while the app is open, only if you turn it on (Settings → Updates; off by default), or when you tap Check now. Never for installs from F-Droid. |
 | **Sign-in** | Optional. `src/data/auth.ts` signs in with Cyberspace's own login (Firebase Auth, email and password, over plain HTTPS; no Firebase SDK). Signed in, requests carry your login token and use the same query the site uses for members. |
 
 ## Privacy and data
@@ -108,6 +112,7 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 | Settings, favourite genres and artists, recent searches | App data (Capacitor Preferences). Android may include these in your own Google backup |
 | The cached Jukebox catalog and lyrics | App data and cache. The catalog is dropped on sign-in and sign-out; signing out drops members-only tracks' lyrics |
 | What was playing last (the queue and where in it), so the app reopens on it | App files, excluded from backups; signing out removes members-only tracks from it |
+| Audio of your liked songs and of recently played and next tracks (the listening cache) | Up to the chosen size, on the phone only, never backed up (app files that Android neither backs up nor clears to free space, and its index excluded from backups). It is kept by video ID and format, never by stream URL. Members-only tracks are removed on sign-out, and none is kept while signed out. Clear cache in Settings |
 | Login token, user id and @username (only if you sign in) | Encrypted with an Android Keystore key; excluded from Android cloud and device-transfer backups |
 | Stream URLs, YouTube Music results | Memory only |
 
@@ -117,11 +122,11 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 |---|---|---|
 | Cyberspace's backend (Google Firestore) | Requests for Jukebox posts; your login token if signed in | Browsing the Jukebox |
 | Cyberspace's login (Google Identity Toolkit / Secure Token) | Your email and password; token refreshes | Only if you sign in |
-| YouTube | The video ID of the track being played or prefetched | Playback |
+| YouTube | The video ID of the track being played or prefetched, or of a liked song being saved to play offline | Playback; saving a song you just liked (or the liked song playing when you clear the cache); older liked songs are downloaded on an unmetered network (Wi-Fi), while the app is open (also in the background) or playing |
 | YouTube Music | Your Global search query, or the artist you open; the video ID of a Global track, for its radio (also in the background while autoplay refills); the video ID of the playing track when LRCLIB has no lyrics for it | Global search, artist pages, Global autoplay, lyrics fallback |
 | YouTube and Google image servers (`i.ytimg.com`, `*.googleusercontent.com`, `*.ggpht.com`) | Artwork requests | Lists, artist pages and Now Playing |
 | LRCLIB | Artist, title and duration of the current track | Lyrics panel open |
-| GitHub (`api.github.com`) | A request for the latest CyberJuke release (nothing about you or your library) | At most once a day when the app opens or comes back (an hour after a failed check), or **Check now**; never for F-Droid installs; off with Settings → Updates |
+| GitHub (`api.github.com`) | A request for the latest CyberJuke release (nothing about you or your library) | At most once a day when the app opens or comes back (an hour after a failed check), or **Check now**; only once you turn it on in Settings → Updates (off by default); never for F-Droid installs |
 
 Nothing is sent to the developer. Your password is never stored or logged.
 
@@ -131,7 +136,7 @@ Signing in is optional. Without it, CyberJuke shows the Jukebox's public posts. 
 
 - **Your password** goes only to Cyberspace's own login service (Google's Firebase Auth, the same one the website uses). CyberJuke never stores or logs it.
 - **What is kept:** a login token (the refresh token), your user id and your @username, encrypted on the phone with an Android Keystore key. The short-lived access token stays in memory and is renewed before it expires. If the token can't be saved, you stay signed in until the app closes.
-- **Sign out** (Settings → Account) deletes the token and clears the cached Jukebox data, including the members-only shared tracks wherever they were saved (liked tracks, history, lyrics). Signing in or out reloads the whole catalog.
+- **Sign out** (Settings → Account) deletes the token and clears the cached Jukebox data, including the members-only shared tracks wherever they were saved (liked tracks, history, lyrics, and their audio in the listening cache). Signing in or out reloads the whole catalog.
 - New accounts are made on [cyberspace.online](https://cyberspace.online/?signup=1); CyberJuke has no sign-up of its own.
 - Signed in, requests stay as light as before: the same page sizes, cache times and refresh intervals.
 

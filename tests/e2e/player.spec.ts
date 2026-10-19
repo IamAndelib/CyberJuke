@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { box, musicCalls, openNowPlaying, playAndOpen, playerCalls, setLyricsMode, start, touchDrag, touchSwipe, touchTap } from '../helpers';
+import { box, musicCalls, openNowPlaying, playAndOpen, playerCalls, setLyricsMode, start, touchDrag, touchSwipe, touchTap, waitingForNetwork } from '../helpers';
 
 /** Mini player, Now Playing (controls, swipe, links), the queue, lyrics and Share. */
 
@@ -31,6 +31,55 @@ test('tapping a track shows the mini player, which opens Now Playing', async ({ 
   await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
   // Closed, the sheet's contents go away (nothing renders or fetches behind it).
   await expect(page.getByTestId('np-title')).toHaveCount(0);
+});
+
+test('while native waits for the network, "Waiting for carrier…" replaces the time and the artist', async ({ page }) => {
+  const waiting = (on: boolean) => page.evaluate((v) => (window as unknown as { __cyberjukeWaitingForNetwork: (on: boolean) => void }).__cyberjukeWaitingForNetwork(v), on);
+  await start(page);
+  await playAndOpen(page, 0);
+  await expect(page.getByTestId('time-pos')).toBeVisible();
+  await expect(page.getByTestId('np-waiting')).toHaveCount(0);
+  // A blip (a saved song buffering from the cache, a handover being checked) is never shown.
+  await waiting(true);
+  await page.waitForTimeout(400);
+  await expect(page.getByTestId('np-waiting')).toHaveCount(0);
+  await waiting(false);
+  await page.waitForTimeout(1200);
+  await expect(page.getByTestId('np-waiting')).toHaveCount(0);
+  await waiting(true);
+  await expect(page.getByTestId('np-waiting')).toHaveText('Waiting for carrier…');
+  await expect(page.getByTestId('np-waiting')).toHaveAttribute('role', 'status');
+  await expect(page.getByTestId('time-pos')).toHaveCount(0);
+  await expect(page.getByTestId('time-dur')).toHaveCount(0);
+  await page.getByTestId('np-close').click();
+  await expect(page.getByTestId('mini-waiting')).toHaveText('Waiting for carrier…');
+  const artist = page.getByTestId('mini-player').locator('.mini-artist');
+  await expect(artist).toHaveCount(1);
+  await waiting(false);
+  await expect(page.getByTestId('mini-waiting')).toHaveCount(0);
+  await expect(artist).not.toHaveText('Waiting for carrier…');
+  await expect(artist).not.toHaveText('');
+  await openNowPlaying(page);
+  await expect(page.getByTestId('time-pos')).toBeVisible();
+  await expect(page.getByTestId('np-waiting')).toHaveCount(0);
+});
+
+test('while native waits for the network, the button says Pause and a tap calls off the resume', async ({ page }) => {
+  await start(page);
+  await playAndOpen(page, 0);
+  const btn = page.getByTestId('np-toggle');
+  // An outage paused it; native resumes by itself once the network is back.
+  await btn.click();
+  await expect(btn).toHaveAttribute('aria-label', 'Play');
+  await waitingForNetwork(page, true);
+  await expect(page.getByTestId('np-waiting')).toBeVisible();
+  await expect(btn).toHaveAttribute('aria-label', 'Pause');
+  await expect(btn.locator('svg[data-icon="pause"]')).toHaveCount(1);
+  await btn.click();
+  await expect(page.getByTestId('np-waiting')).toHaveCount(0);
+  await expect(btn).toHaveAttribute('aria-label', 'Play');
+  await page.getByTestId('np-close').click();
+  await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Play');
 });
 
 test('the play icon is optically centred in its round button', async ({ page }) => {

@@ -184,4 +184,16 @@ test('a track change re-renders the current rows, not the lists; history renders
   await expect(page.getByTestId('recent-list').getByTestId('track-row').first()).toBeVisible();
   // The first chunk, not all 400 plays.
   expect(await page.getByTestId('recent-list').getByTestId('track-row').count()).toBeLessThan(150);
+
+  // Each track that plays goes on top of Recently played: the rows already there stay as they are.
+  await reset();
+  for (let i = 0; i < 3; i++) {
+    const title = await page.getByTestId('mini-title').textContent();
+    await page.getByTestId('mini-next').click();
+    await expect(page.getByTestId('mini-title')).not.toHaveText(title!);
+    await expect(page.getByTestId('recent-list').getByTestId('track-title').first()).toHaveText(await page.getByTestId('mini-title').textContent() ?? '');
+  }
+  const recent = await renders();
+  console.info(`3 track changes on Recently played: ${JSON.stringify(recent)}`);
+  expect(recent.TrackRow ?? 0).toBeLessThanOrEqual(12);
 });

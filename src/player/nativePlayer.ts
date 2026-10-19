@@ -4,13 +4,14 @@
  */
 import { computed, effect, signal, untracked } from '@preact/signals';
 import { UNKNOWN_ARTIST, UNTITLED, artworkUrl, makeTrack, type Track } from '../data/model';
-import { history, knownTrack, liked, IPV4_MODES, type Ipv4Mode, type Quality } from '../stores/library';
+import { history, knownTrack, liked, IPV4_MODES, type CrossfadeMs, type Ipv4Mode, type Quality } from '../stores/library';
 import { catalog } from '../stores/catalog';
 import { toast } from '../stores/toast';
 import { YT_ID_RE, parseNativeState } from '../core/guards';
 import { logError } from '../core/log';
+import { trackErrorText } from './errorText';
 import { BRIDGE_MAX_ITEMS, BRIDGE_MAX_STRING, JukePlayer, STALE_INDEX, type NativeState, type NativeTrack, type RepeatMode } from './native';
-import { EMPTY_STATE, LIST_CONTEXT, livePosition, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextItem, type UpNextKind } from './types';
+import { EMPTY_STATE, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextItem, type UpNextKind } from './types';
 
 /** K6: text native would refuse as too long is cut (a link that long is dropped). */
 const clip = (s: string) => (s.length > BRIDGE_MAX_STRING ? s.slice(0, BRIDGE_MAX_STRING) : s);
@@ -26,6 +27,7 @@ export function toNative(t: Track): NativeTrack {
     by: clip(t.by),
     postUrl: link(t.postUrl),
     ...(t.membersOnly && { membersOnly: true }),
+    ...(t.album && { album: clip(t.album) }),
   };
 }
 
@@ -60,6 +62,7 @@ function fromNative(t: NativeTrack): Track | null {
     postUrl: typeof t.postUrl === 'string' ? t.postUrl : '',
     artworkUrl: artworkUrl(t.ytId),
     ...(t.membersOnly === true && { membersOnly: true }),
+    ...(typeof t.album === 'string' && t.album && { album: t.album }),
     ...(t.id.startsWith('ytm:') && { source: 'ytmusic' as const }),
   });
 }
@@ -115,8 +118,7 @@ export class NativePlayer implements Player {
     JukePlayer.addListener('trackError', (e) => {
       const id = String(e?.trackId ?? '');
       const t = this.resolve(id);
-      if (e?.skipped) toast(`Skipped "${t.title}": unavailable`);
-      else toast(`Can't play "${t.title}"`);
+      toast(trackErrorText(e, t.title));
       // The track playList started was skipped: native won't report it, so stop waiting.
       if (this.expect?.id === id) {
         this.expect = null;
@@ -242,6 +244,8 @@ export class NativePlayer implements Player {
       upNext,
       context,
       seed,
+      waitingForNetwork: st.waitingForNetwork === true,
+      bufferedAheadMs: st.bufferedAheadMs ?? 0,
     };
   }
 
@@ -280,6 +284,8 @@ export class NativePlayer implements Player {
       upNext: queue.slice(i + 1, i + 51).map((track, k) => ({ track, index: i + 1 + k, ...(k < queued.length && { queued: true }) })),
       context,
       seed: tracks[i],
+      waitingForNetwork: false,
+      bufferedAheadMs: 0,
     };
     this.expect = { id: tracks[i].id, until: performance.now() + EXPECT_MS };
     try {
@@ -304,8 +310,10 @@ export class NativePlayer implements Player {
   toggle = () => {
     const s = this.s.value;
     const now = performance.now();
-    this.s.value = { ...s, isPlaying: !s.isPlaying, isBuffering: false, positionMs: livePosition(s, now), sampledAt: now };
-    return (s.isPlaying ? JukePlayer.pause() : JukePlayer.play()).finally(() => this.resync());
+    const on = wantsPlay(s);
+    // Either way the user took over: no "waiting" until native says so again (a pause calls its resume off).
+    this.s.value = { ...s, isPlaying: !on, isBuffering: false, waitingForNetwork: false, positionMs: livePosition(s, now), sampledAt: now };
+    return (on ? JukePlayer.pause() : JukePlayer.play()).finally(() => this.resync());
   };
   next = () => JukePlayer.skipToNext();
   prev = () => JukePlayer.skipToPrevious();
@@ -406,6 +414,8 @@ export class NativePlayer implements Player {
   }
 
   setQuality = (quality: Quality) => JukePlayer.setQuality({ quality });
+  setCrossfade = (ms: CrossfadeMs) => JukePlayer.setCrossfade({ ms });
+  setGapless = (enabled: boolean) => JukePlayer.setGapless({ enabled });
   setNetworkPrefs = (prefs: { ipv4: Ipv4Mode }) => JukePlayer.setNetworkPrefs({ ipv4: prefs.ipv4 });
   retryNow = () => JukePlayer.retryNow();
 

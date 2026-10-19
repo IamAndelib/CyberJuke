@@ -5,7 +5,7 @@
  * Preferences: they can hold members-only tracks, and that folder is kept out of backups
  * (android/app/src/main/res/xml/data_extraction_rules.xml), unlike Preferences.
  */
-import { computed, signal } from '@preact/signals';
+import { computed, signal, type ReadonlySignal } from '@preact/signals';
 import type { Track } from '../data/model';
 import { artistKey } from '../data/artists';
 import { auth } from '../data/auth';
@@ -26,7 +26,17 @@ export const THEME_LABELS: Record<ThemeId, string> = {
   brutalist: 'Brutalist',
 };
 
-export type Quality = 'high' | 'low';
+/** Audio quality: 'auto' steps between rungs as the connection allows; 'high' and 'low' are fixed. */
+export type Quality = 'auto' | 'high' | 'low';
+export const QUALITIES: readonly Quality[] = ['auto', 'high', 'low'];
+
+/** The listening cache's size in MB (Settings → Listening cache). */
+export type CacheMb = 128 | 256 | 512;
+export const CACHE_SIZES: readonly CacheMb[] = [128, 256, 512];
+
+/** Crossfade between tracks that end by themselves, in ms; 0 = Off (Settings → Crossfade). */
+export type CrossfadeMs = 0 | 3000 | 6000 | 10000;
+export const CROSSFADES: readonly CrossfadeMs[] = [0, 3000, 6000, 10000];
 
 /** Minutes between checks for new tracks; 0 = only when I refresh. */
 type CheckEvery = 5 | 15 | 30 | 60 | 0;
@@ -54,12 +64,44 @@ export interface Settings {
   autoplay: boolean;
   /** Look for a newer release by itself (daily at most; never for F-Droid installs). */
   checkUpdates: boolean;
+  /** How much music the phone may keep (the listening cache): liked songs to play offline, recent and next tracks. */
+  cacheMb: CacheMb;
+  /** Blends the end of a track into the next (native only; the browser player ignores it). */
+  crossfadeMs: CrossfadeMs;
+  /**
+   * Gapless playback: the next track is buffered while this one plays, so they follow without
+   * a pause. Off, the next loads only when this one ends: a short pause, and a skip costs
+   * little data. Crossfade always readies the next track early. Native only; the browser
+   * player ignores it.
+   */
+  gapless: boolean;
+  /** The saved format's version: each migration below runs once. */
+  version: number;
 }
 
 export type Ipv4Mode = 'auto' | 'always' | 'off';
 export const IPV4_MODES: readonly Ipv4Mode[] = ['auto', 'always', 'off'];
 
-const DEFAULT_SETTINGS: Settings = { theme: 'dark', showNsfw: false, quality: 'high', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: true };
+/**
+ * Settings versions: 1 (none saved) had Audio quality 'high' as the default; 2 added 'auto' as
+ * the new default; 3 made the update check opt-in (it was on by default).
+ */
+export const SETTINGS_VERSION = 3;
+
+const DEFAULT_SETTINGS: Settings = {
+  theme: 'dark',
+  showNsfw: false,
+  quality: 'auto',
+  checkEvery: 15,
+  ipv4: 'auto',
+  autoplay: true,
+  // Opt-in (F-Droid's rule for requests the user didn't ask for).
+  checkUpdates: false,
+  cacheMb: 256,
+  crossfadeMs: 0,
+  gapless: true,
+  version: SETTINGS_VERSION,
+};
 
 /** The old Preferences key of Liked, migrated into its file. */
 const LIKED_LEGACY_KEYS = ['liked'] as const;
@@ -73,6 +115,12 @@ const K_FAV_ARTISTS = 'favArtists';
 const THEME_MIGRATIONS: Record<string, ThemeId> = { grid: 'brutalist' };
 
 export const liked = signal<Track[]>([]);
+const likedUnreadableSignal = signal(false);
+/**
+ * Liked is on the phone but couldn't be read (yet): `liked` holds only this session's likes,
+ * until a later read merges the rest in (loadLists). The listening cache waits for it.
+ */
+export const likedUnreadable: ReadonlySignal<boolean> = likedUnreadableSignal;
 /** Listening history, newest first (see ./history for the retention rules). */
 export const history = signal<HistoryEntry[]>([]);
 /** History as a plain track list, each track once. */
@@ -111,7 +159,7 @@ function write(key: string, value: unknown): void {
   store.set(key, JSON.stringify(value)).catch(() => {});
 }
 
-/** loadLibrary ran: history may be written, and later loads replace the library outright. */
+/** loadLists ran: Liked and history may be written, and later loads replace them outright. */
 let loadedOnce = false;
 
 /** Like saveHistory: not before the file was first read (that load replaces Liked anyway). */
@@ -120,30 +168,69 @@ function saveLiked(tracks: Track[]): void {
 }
 
 function saveHistory(entries: HistoryEntry[]): void {
-  // Before the file was first read, a write would replace the history in it: loadLibrary
+  // Before the file was first read, a write would replace the history in it: loadLists
   // merges what was played meanwhile and saves then.
   if (!loadedOnce) return;
   void historyFile.save(encodeHistory(entries));
 }
 
+/**
+ * Read the whole library. At startup the app reads the small keys first (loadSettings,
+ * before the first render) and Liked and history (loadLists) alongside, without waiting.
+ */
 export async function loadLibrary(): Promise<void> {
-  const [l, h, s, g, a] = await Promise.all([
-    likedFile.load().catch(() => null),
-    historyFile.load().catch(() => null),
+  await Promise.all([loadSettings(), loadLists()]);
+}
+
+/** Liked and history, from their files. A like or play from before the first read is kept. */
+export async function loadLists(): Promise<void> {
+  const [l, h] = await Promise.all([likedFile.load().catch(() => null), historyFile.load().catch(() => null)]);
+  // The screen shows before the first read is done: what was liked or played meanwhile
+  // (the app reopened mid-song) is kept, not overwritten.
+  const earlyLikes = loadedOnce ? [] : liked.value;
+  const early = loadedOnce ? [] : history.value;
+  loadedOnce = true;
+  liked.value = mergeLiked(earlyLikes, asTracks(l));
+  if (earlyLikes.length) saveLiked(liked.value);
+  history.value = early.length ? mergeHistory(early, decodeHistory(h, Date.now()), Date.now()) : decodeHistory(h, Date.now());
+  // Rewrites a migrated (old-shape) history in the current one, and keeps early plays; skipped when unchanged.
+  if (h != null || early.length) saveHistory(history.value);
+  // There but unreadable (not missing): what's liked and played now is kept in memory, and
+  // the file is read again later and merged, never replaced.
+  likedUnreadableSignal.value = likedFile.unreadable === true;
+  if (likedFile.unreadable) retryRead(likedFile, mergeLikedFile);
+  if (historyFile.unreadable) retryRead(historyFile, mergeHistoryFile);
+}
+
+/** This session's likes first (newest first), then those from the file that aren't among them. */
+function mergeLiked(mine: Track[], stored: Track[]): Track[] {
+  return mine.length ? [...mine, ...stored.filter((t) => !mine.some((e) => e.id === t.id))] : stored;
+}
+
+/** Signed out, a members-only track read late stays out, as at start (dropMembersOnly). */
+const openable = <T>(items: T[], track: (x: T) => Track): T[] => (auth.signedIn() ? items : items.filter((x) => !track(x).membersOnly));
+
+function mergeLikedFile(raw: unknown): void {
+  const merged = openable(mergeLiked(liked.value, asTracks(raw)), (t) => t);
+  liked.value = merged;
+  likedUnreadableSignal.value = false;
+  saveLiked(merged);
+}
+
+function mergeHistoryFile(raw: unknown): void {
+  const now = Date.now();
+  const merged = openable(mergeHistory(history.value, decodeHistory(raw, now), now), (e) => e.track);
+  history.value = merged;
+  saveHistory(merged);
+}
+
+/** The settings and favourites: small keys, read before the first render (the theme, the NSFW setting). */
+export async function loadSettings(): Promise<void> {
+  const [s, g, a] = await Promise.all([
     readJson<Partial<Settings>>(store, K_SETTINGS, {}),
     readJson<unknown>(store, K_FAV_GENRES, []),
     readJson<unknown>(store, K_FAV_ARTISTS, []),
   ]);
-  liked.value = asTracks(l);
-  // A play recorded before the first read (the app reopened mid-song) is kept, not overwritten.
-  const early = loadedOnce ? [] : history.value;
-  loadedOnce = true;
-  history.value = early.length ? mergeHistory(early, decodeHistory(h, Date.now()), Date.now()) : decodeHistory(h, Date.now());
-  // Rewrites a migrated (old-shape) history in the current one, and keeps early plays; skipped when unchanged.
-  if (h != null || early.length) saveHistory(history.value);
-  // There but unreadable (not missing): what's played now is kept in memory, and the
-  // file is read again later and merged, never replaced.
-  if (historyFile.unreadable) retryHistory(0);
   favoriteGenres.value = Array.isArray(g)
     ? [...new Set(g.filter((x): x is string => typeof x === 'string' && x.trim() !== ''))]
     : [];
@@ -163,39 +250,51 @@ export async function loadLibrary(): Promise<void> {
   const migrated = THEME_MIGRATIONS[merged.theme as string];
   if (migrated) merged.theme = migrated;
   if (!THEMES.includes(merged.theme)) merged.theme = DEFAULT_SETTINGS.theme;
-  if (merged.quality !== 'low') merged.quality = 'high';
+  const savedVersion = typeof rest.version === 'number' && Number.isInteger(rest.version) && rest.version > 0 ? rest.version : 1;
+  // Version 2: 'high' was the default, so a saved 'high' can't be told from a choice: it
+  // becomes the new default, Auto, once. A saved 'low' was always a choice and stays.
+  const upgraded = savedVersion < SETTINGS_VERSION && Object.keys(rest).length > 0;
+  if (savedVersion < 2 && merged.quality === 'high') merged.quality = 'auto';
+  // Version 3: the update check was on by default, so a saved "on" can't be told from a choice
+  // either: off, once. Turned on again since, it stays on.
+  if (savedVersion < 3) merged.checkUpdates = false;
+  if (!QUALITIES.includes(merged.quality)) merged.quality = DEFAULT_SETTINGS.quality;
+  merged.version = Math.max(savedVersion, SETTINGS_VERSION);
   merged.showNsfw = merged.showNsfw === true;
   // The old on/off "Prefer IPv4": on is 'always'; off becomes the new default, 'auto'.
   if (!IPV4_MODES.includes(rest.ipv4 as Ipv4Mode)) merged.ipv4 = preferIpv4 === true ? 'always' : DEFAULT_SETTINGS.ipv4;
   merged.autoplay = merged.autoplay !== false;
-  merged.checkUpdates = merged.checkUpdates !== false;
+  merged.checkUpdates = merged.checkUpdates === true;
   if (!CHECK_EVERY_OPTIONS.includes(merged.checkEvery)) merged.checkEvery = DEFAULT_SETTINGS.checkEvery;
+  // Saved before the listening cache (or unknown): the default size.
+  if (!CACHE_SIZES.includes(merged.cacheMb)) merged.cacheMb = DEFAULT_SETTINGS.cacheMb;
+  // Saved before Crossfade (or unknown): Off.
+  if (!CROSSFADES.includes(merged.crossfadeMs)) merged.crossfadeMs = DEFAULT_SETTINGS.crossfadeMs;
+  // Saved before Gapless playback (or unknown): on.
+  merged.gapless = merged.gapless !== false;
   settings.value = merged;
-  if (migrated || preferIpv4 !== undefined) write(K_SETTINGS, merged);
+  if (migrated || preferIpv4 !== undefined || upgraded) write(K_SETTINGS, merged);
 }
 
-/** Waits before each new attempt at reading a history file that couldn't be read. */
-export const HISTORY_RETRY_MS = [5_000, 30_000, 120_000, 600_000];
-let historyRetry: ReturnType<typeof setTimeout> | null = null;
+/** Waits before each new attempt at reading a Liked or history file that couldn't be read. */
+export const LIST_RETRY_MS = [5_000, 30_000, 120_000, 600_000];
+const retries = new Map<JsonFile<unknown>, ReturnType<typeof setTimeout>>();
 
-function retryHistory(attempt: number): void {
-  if (historyRetry) clearTimeout(historyRetry);
-  historyRetry = null;
-  if (attempt >= HISTORY_RETRY_MS.length) return;
-  historyRetry = setTimeout(() => {
-    historyRetry = null;
-    void historyFile
-      .load()
-      .catch(() => null)
-      .then((h) => {
-        if (historyFile.unreadable) return retryHistory(attempt + 1);
-        const now = Date.now();
-        let merged = mergeHistory(history.value, decodeHistory(h, now), now);
-        if (!auth.signedIn()) merged = merged.filter((e) => !e.track.membersOnly);
-        history.value = merged;
-        saveHistory(merged);
-      });
-  }, HISTORY_RETRY_MS[attempt]);
+/** Reads [file] again after each wait while it stays unreadable; [merge] takes what it held. */
+function retryRead(file: JsonFile<unknown>, merge: (raw: unknown) => void, attempt = 0): void {
+  clearTimeout(retries.get(file));
+  retries.delete(file);
+  if (attempt >= LIST_RETRY_MS.length) return;
+  retries.set(
+    file,
+    setTimeout(() => {
+      retries.delete(file);
+      void file
+        .load()
+        .catch(() => null)
+        .then((raw) => (file.unreadable ? retryRead(file, merge, attempt + 1) : merge(raw)));
+    }, LIST_RETRY_MS[attempt]),
+  );
 }
 
 /** Both lists of plays, newest first; a track played twice on one day is listed once, at its newest play. */
@@ -406,6 +505,18 @@ async function saveKept(kept: Map<string, KeptAccount>, now: number): Promise<vo
 let keptJob: Promise<void> = Promise.resolve();
 const queueKept = (job: () => Promise<void>): Promise<void> => (keptJob = keptJob.then(job, job));
 
+const membersDropped = new Set<() => void>();
+
+/**
+ * Called after every dropMembersOnly (a sign-out, or starting signed out), once Liked and
+ * history hold no members-only track: the listening cache drops their audio. Returns an
+ * unsubscribe.
+ */
+export function onMembersOnlyDropped(cb: () => void): () => void {
+  membersDropped.add(cb);
+  return () => membersDropped.delete(cb);
+}
+
 /**
  * Signed out of Cyberspace: members-only tracks leave Liked and history (they can't be
  * opened signed out). [uid], the account just signed out: its members-only likes and plays
@@ -425,6 +536,7 @@ export function dropMembersOnly(uid: string | null = null): void {
     history.value = history.value.filter((e) => !e.track.membersOnly);
     saveHistory(history.value);
   }
+  for (const cb of membersDropped) cb();
   if (!uid || (!likes.length && !plays.length)) return;
   void queueKept(async () => {
     const now = Date.now();

@@ -13,6 +13,7 @@ import { FirestoreError } from '../data/firestore';
 import type { Track } from '../data/model';
 import { feeds, JUKEBOX_FEED_PREFIXES } from './feed';
 import { lyrics } from '../data/lyrics';
+import { whenIdle } from '../core/idle';
 import { catalog } from './catalog';
 import { dropMembersOnly, returnMembersOnly } from './library';
 import { freshness } from './newTracks';
@@ -40,32 +41,39 @@ async function resetForSignIn(): Promise<void> {
 let started = false;
 
 /**
- * Follow sign-ins and sign-outs (call once at startup, after auth.restore() and
- * loadLibrary()). Signed out at startup, members-only tracks are dropped too: a
- * backup restored onto a new phone, where the login didn't come along, carries none.
+ * Follow sign-ins and sign-outs (call once at startup, right after auth.restore(), which
+ * may already be refreshing the login). Signed out at startup, members-only tracks are
+ * dropped too: a backup restored onto a new phone, where the login didn't come along,
+ * carries none. What this changes in Liked and history waits for `libraryRead` (they
+ * are read alongside the first render), in the order it happened.
  */
-export function startAccount(): void {
+export function startAccount(libraryRead: Promise<unknown> = Promise.resolve()): void {
   if (started) return;
   started = true;
+  const afterRead = (fn: () => unknown) => void libraryRead.then(fn, fn);
   /** Who is signed in: at a sign-out, whose members-only likes are kept for later. */
   let uid = auth.state.value.user?.uid ?? null;
   if (!auth.signedIn()) {
-    dropMembersOnly();
-    void lyrics.dropMembersOnly();
+    afterRead(() => dropMembersOnly());
+    // It reads the whole lyrics cache: not while the app starts (a sign-out dropped them already).
+    whenIdle(() => void lyrics.dropMembersOnly(), 1500, 300);
   } else if (uid) {
-    void returnMembersOnly(uid);
+    const was = uid;
+    afterRead(() => returnMembersOnly(was));
   }
   auth.onChange((signedIn, reason) => {
     if (!signedIn) {
       // Members-only posts leave the app after signing out (S8), and no Undo on screen
       // brings them back; only that account's likes and plays wait, out of sight, for its next sign-in.
       dropToastActions((a) => a.membersOnly === true);
-      dropMembersOnly(uid);
+      const was = uid;
+      afterRead(() => dropMembersOnly(was));
       void lyrics.dropMembersOnly();
       uid = null;
     } else {
       uid = auth.state.value.user?.uid ?? null;
-      if (uid) void returnMembersOnly(uid);
+      const signedInAs = uid;
+      if (signedInAs) afterRead(() => returnMembersOnly(signedInAs));
     }
     void resetForSignIn();
     if (reason === 'expired') toast('Your Cyberspace login expired. Sign in again in Settings.', 4000);

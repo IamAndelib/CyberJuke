@@ -25,8 +25,11 @@ import {
 import { artistChannels } from '../../stores/artistChannels';
 import type { Track } from '../../data/model';
 import type { LoadError } from '../../core/errors';
+import { online } from '../../core/network';
+import { OFFLINE } from '../../core/offlineText';
 import type { FeedLoader, FeedOptions } from '../../stores/feed';
 import { Icon } from '../icons';
+import { OfflineState } from './OfflineGate';
 import { openAlbumPage, openArtistPage, openReleasesPage, type AlbumRef } from '../nav';
 
 /** Square cover art (albums, playlists, artists) with the same pixel treatment as track art. */
@@ -217,13 +220,27 @@ export function MusicRow({ item }: { item: MusicItem }) {
   );
 }
 
-export function GlobalError({ error, onRetry, testid = 'global-error' }: { error: LoadError; onRetry?: () => void; testid?: string }) {
+/** A Global list that failed: offline, the offline state; online, [ NO SIGNAL ] and why. */
+export function GlobalError({
+  error,
+  onRetry,
+  testid = 'global-error',
+  unavailable,
+}: {
+  error: LoadError;
+  onRetry?: () => void;
+  testid?: string;
+  /** What to say when it isn't the network or a block (by default, that Global search isn't available). */
+  unavailable?: string;
+}) {
+  if (!online.value) return <OfflineState body={OFFLINE.global} onRedial={onRetry} alert compact />;
+  const code = (error.code as MusicErrorCode) ?? 'UNAVAILABLE';
   return (
     <div class="state compact" role="alert" data-testid={testid} data-code={error.code}>
       <div class="state-glyph" aria-hidden="true">
         [ NO SIGNAL ]
       </div>
-      <div class="state-body">{musicErrorText({ code: (error.code as MusicErrorCode) ?? 'UNAVAILABLE' })}</div>
+      <div class="state-body">{unavailable && code !== 'NETWORK' && code !== 'BOT_CHECK' ? unavailable : musicErrorText({ code })}</div>
       {onRetry && (
         <button class="btn" onClick={onRetry} data-testid="global-retry">
           <Icon name="refresh" size={18} /> Retry

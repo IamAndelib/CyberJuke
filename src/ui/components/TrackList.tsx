@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import type { Track } from '../../data/model';
 import { catalog } from '../../stores/catalog';
+import { mark } from '../../core/marks';
 import type { Paged } from '../usePaged';
 import { useChunks } from '../useChunks';
 import { Icon } from '../icons';
 import { playAll, playFrom } from '../playAll';
 import type { PlayContext } from '../../player';
 import { SkeletonRows, TrackRow } from './TrackRow';
+import { OfflineState } from './OfflineGate';
 
 export { playFrom };
 
@@ -89,14 +91,16 @@ export function EmptyState({ title, children, testid = 'empty' }: { title: strin
   );
 }
 
+/** A load that failed, with Retry; for lost connection, the offline state (Redial retries). */
 export function ErrorState({ offline, message, onRetry }: { offline: boolean; message: string; onRetry: () => void }) {
+  if (offline) return <OfflineState onRedial={onRetry} alert />;
   return (
-    <div class="state" data-testid={offline ? 'offline' : 'error'} role="alert">
+    <div class="state" data-testid="error" role="alert">
       <div class="state-glyph" aria-hidden="true">
-        {offline ? '[ NO CARRIER ]' : '[ ERROR ]'}
+        [ ERROR ]
       </div>
-      <div class="state-title">{offline ? "You're offline" : "Couldn't load the Jukebox"}</div>
-      <div class="state-body">{offline ? 'Check your connection and try again.' : message}</div>
+      <div class="state-title">Couldn't load the Jukebox</div>
+      <div class="state-body">{message}</div>
       <button class="btn" onClick={onRetry} data-testid="retry">
         <Icon name="refresh" size={18} /> Retry
       </button>
@@ -134,15 +138,23 @@ export function PagedTracks({
   const { tracks, status, error, hasMore, loadingMore, loadMore } = paged;
   const chunks = useChunks(tracks.length, chunkKey);
   const play = useRowPlayer(tracks, ctx, queue);
+  const hasRows = status !== 'loading' && tracks.length > 0;
 
+  // Test builds: when the first list's rows are on screen (startup timing).
+  useEffect(() => {
+    if (hasRows) mark('first-row');
+  }, [hasRows]);
+
+  const failed = !!error;
   useEffect(() => {
     const el = sentinel.current;
-    if (!el || !hasMore || status !== 'ready' || chunks.more) return;
+    // A failed page waits for "Retry loading more" (or the connection coming back), not the next render.
+    if (!el || !hasMore || status !== 'ready' || failed || chunks.more) return;
     // Re-observing after each page fires the callback again if the sentinel is still visible.
     const io = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && loadMore(), { rootMargin: '600px 0px' });
     io.observe(el);
     return () => io.disconnect();
-  }, [tracks.length, hasMore, status, loadMore, chunks.more]);
+  }, [tracks.length, hasMore, status, failed, loadMore, chunks.more]);
 
   if (status === 'loading') return <SkeletonRows />;
   if (status === 'error' && error) return <ErrorState {...error} onRetry={paged.retry} />;

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'preact/hooks';
 import type { Track } from '../data/model';
 import type { Cursor, Page } from '../data/source';
 import { source } from '../data';
@@ -57,17 +57,24 @@ export function usePaged(key: string, loader: (cursor: Cursor | null) => Promise
     (c) => loader(c).then((p) => ({ items: p.tracks, cursor: p.cursor })),
     TRACK_OPTS,
   );
+  // One set of actions per feed, so effects that depend on them don't re-run on every render.
+  const actions = useMemo(
+    () => ({
+      loadMore: () => feed.loadMore(),
+      refresh: async () => {
+        source.invalidate?.();
+        sayRefreshFailed(await feed.refresh());
+      },
+      retry: () => feed.retry(),
+    }),
+    [feed],
+  );
   return {
     tracks: snap.items,
     status: snap.status,
     error: snap.error,
     hasMore: snap.hasMore,
     loadingMore: snap.loadingMore,
-    loadMore: () => feed.loadMore(),
-    refresh: async () => {
-      source.invalidate?.();
-      sayRefreshFailed(await feed.refresh());
-    },
-    retry: () => feed.retry(),
+    ...actions,
   };
 }

@@ -1,6 +1,35 @@
 # Changelog
 
-## [Unreleased]
+## [1.2.0] - 2026-10-19
+
+### The app
+- **Listening cache:** the music you play and the next track are kept on the phone, so a drop in the signal doesn't stop the music and playing a song again costs no data. Settings → **Listening cache** sets how much it may keep (128, 256 or 512 MB; 256 by default), and **Clear cache** empties it, after asking. It is kept with the app's data, so Android doesn't clear it when storage runs low; nothing of it leaves the phone or goes into backups, and signing out removes the members-only tracks from it. When it can't be written (the phone's storage full), the music plays on from the network.
+- **Liked songs play offline:** a song you like is saved right away, and older likes one at a time, on Wi-Fi, while the app is open or playing. A save cut short is tried again by itself, waiting longer each time. A saved song plays from the phone on Auto and Low whatever quality it was saved at; only High downloads it again when the saved copy is well below the best quality.
+- **Offline**, the app says plainly that music needs a connection: the top bar reads "no carrier · connect to play", or "no carrier · your liked songs still play" (a tap opens Liked) once some are saved, and Now Playing says it too; a screen reader announces it. Lists already on screen stay: what can't play is dimmed, and saved liked songs stay bright and play from any list. Home, genres, artists, albums and Search opened offline ask you to connect, with **Redial**, and fill in by themselves once you're back. Anything else you try to play says why and leaves the player as it was; a paused song still resumes from what it has loaded.
+- **Smoother playback on weak connections:** about two minutes of music is loaded ahead (it used to be under one), a stalled connection is noticed sooner and retried while the music plays on, and the next track's link is fetched after 10 seconds of the current one. Never more than the next track is loaded ahead, so skipping wastes little data.
+- When the connection drops for good mid-song, playback pauses and, within a second, the mini player and Now Playing say **Waiting for carrier…**; the message says "Signal lost" instead of blaming the track. It carries on by itself once you're back, also on a weak signal that never quite went away and with the screen locked (it keeps trying for up to 9 minutes). Meanwhile the button shows Pause: tap it and the music stays paused.
+- Settings → Audio quality has a new default, **Auto**: the best quality the connection can keep up with. Two stalls within 3 minutes step it down a notch; after five minutes without one it tries a notch up (waiting longer each time that fails, up to 40 minutes). It changes only between tracks. If you had High, the old default, you're now on Auto; Low stays Low.
+- **Crossfade** (Settings → Crossfade, Off by default): the end of a track blends into the next over 3, 6 or 10 seconds, also on Repeat one, at an even overall loudness. The song that is ending stays on screen, in the notification and on the lock screen until it ends. A skip changes tracks at once; without a connection, or when the next track isn't ready, tracks change the usual way. Short tracks, and a song you drag into its last seconds, get a shorter fade.
+- Settings → **Gapless playback** (on): the next track is readied while this one plays, and they follow without a pause; with Crossfade on, the tracks of an album you play from its page go straight into each other. Off, the next track loads when this one ends, with a short pause, so a skip costs little data (Crossfade still readies it early).
+- Checking GitHub for a new release is now off until you turn it on (Settings → Updates), also if you had it on: it used to be on by default. Installs from F-Droid never check.
+- Home's latest tracks show up sooner: the app asks Cyberspace for them while it starts, for about half the data, and brings genres and Most saved up to date just after. They're always the newest posts, never a saved copy.
+
+### Fixed
+- A dropped or reset connection no longer skips good tracks, and a flapping connection no longer stops playback after five "failed" tracks: it waits and carries on.
+- After a change of network (or of address on the same one), the next track's stream link is fetched again right away, and links the change didn't break are kept, so the next track starts sooner.
+- Switching between Wi-Fi and mobile data no longer flashes the app offline.
+- A list that gets no answer from Cyberspace stops loading after 15 seconds and offers Retry. A request that fails outright is tried once more a second later, and a list that failed during a network switch or behind a Wi-Fi login page reloads by itself when the connection is back and when you return to the app.
+- When the next page of a list fails to load, the list waits for **Retry loading more** (or the connection coming back) instead of asking for it again and again, which wasted data and battery.
+- With the app open offline, Home's check for new tracks waits its usual time between tries instead of trying again constantly, which used battery.
+- While a track loads, the play button shows Pause (and its spinner), and a tap pauses it. It used to show Play, and a tap did nothing.
+- If Liked can't be read when the app opens (a storage hiccup), it is read again a little later and merged with what you liked meanwhile, as Recently played already was.
+- Album art that couldn't load offline, or during a network switch, loads once you're back.
+- A message that takes more than one line fits its text, its lines evened out, instead of keeping an empty strip on the right; one with a long name that has no spaces in it wraps instead of running off the screen, and so does an Up next heading.
+- Screen readers read the line under the NSFW, Autoplay and Gapless switches in Settings along with the switch.
+- Android's system log no longer records which track failed to play.
+
+### Repository
+- Eight "day in the life" tests run the browser build the way a day with the app goes: a commute through a tunnel, a Wi-Fi to mobile data handover, an album left playing, a sign-out while a liked song is still being saved, a night of Liked songs, an hour with the screen locked, slow browsing, and a café Wi-Fi with a login page. Hours pass on a faked clock, so each takes seconds.
 
 ## [1.1.2] - 2026-10-10
 

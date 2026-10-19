@@ -1,6 +1,6 @@
 # Submitting CyberJuke to F-Droid
 
-[`io.github.iamandelib.cyberjuke.yml`](io.github.iamandelib.cyberjuke.yml) is the recipe for [fdroiddata](https://gitlab.com/fdroid/fdroiddata), in the field order `fdroid rewritemeta` writes and without comments, so it can be pasted as is. It is modelled on Voyager's Capacitor recipe: F-Droid installs JDK 21 and Node 22.22.0 (the tarball checksum is pinned; GitHub's workflows use the same Node), builds the web app, runs `cap sync`, then builds `android/app` with Gradle. `Binaries` and `AllowedAPKSigningKeys` let F-Droid ship the GitHub-signed APK when its own build matches it.
+[`io.github.iamandelib.cyberjuke.yml`](io.github.iamandelib.cyberjuke.yml) is the recipe for [fdroiddata](https://gitlab.com/fdroid/fdroiddata), in the field order `fdroid rewritemeta` writes and without comments, so it can be pasted as is. It is modelled on Voyager's Capacitor recipe: on the buildserver's default JDK (21), F-Droid installs Debian's `nodejs` and `npm` (from forky, at the F-Droid reviewers' request), builds the web app, runs `cap sync`, then builds `android/app` with Gradle. GitHub's workflows build with Node 22.22.0; the reproducible check below proves Debian's Node gives the same APK. `Binaries` and `AllowedAPKSigningKeys` let F-Droid ship the GitHub-signed APK when its own build matches it.
 
 The store listing (title, descriptions, icon, feature graphic, screenshots, per-version changelogs) comes from [`fastlane/metadata/android/en-US/`](../../fastlane/metadata/android/en-US) in this repository. F-Droid reads it from the tagged commit, so nothing about the listing goes in the recipe.
 
@@ -15,7 +15,7 @@ The recipe holds only the newest release (fdroiddata asks for that until an app 
      ```bash
      apksigner verify --print-certs CyberJuke-1.0.1.apk | sed -n 's/.*certificate SHA-256 digest: //p'
      ```
-3. **Check that the build is reproducible:** run **Actions → Reproducible build check** with the tag `v1.0.1`. It rebuilds the tag unsigned, the way F-Droid does, and compares it with the signed APK on the release. To do the same by hand:
+3. **Check that the build is reproducible:** run **Actions → Reproducible build check** with the tag `v1.0.1`, twice: once as it is, and once with `debian_node: forky`, the Node.js the recipe installs. It rebuilds the tag unsigned, the way F-Droid does, and compares it with the signed APK on the release. Move the recipe to the new version only once both match. To do the same by hand:
    ```bash
    git clone https://github.com/IamAndelib/CyberJuke && cd CyberJuke && git checkout v1.0.1
    npm ci --ignore-scripts && npm run build && npx cap sync android --deployment

@@ -2,8 +2,11 @@ package io.github.iamandelib.cyberjuke.bridge
 
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import androidx.media3.common.util.Util
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
+import io.github.iamandelib.cyberjuke.net.NetBlock
+import io.github.iamandelib.cyberjuke.playback.AudioCache
 import io.github.iamandelib.cyberjuke.playback.QueueCommands
 import io.github.iamandelib.cyberjuke.playback.QueueInfo
 import org.json.JSONObject
@@ -58,12 +61,16 @@ internal object StateEncoder {
         val duration = c.duration.takeIf { it != C.TIME_UNSET && it > 0L }
             ?: c.currentMediaItem?.mediaMetadata?.durationMs ?: 0L
         val state = JSObject()
-        state.put("isPlaying", c.isPlaying)
+        // Playing or about to, by Media3's own play/pause button rule: also while it loads
+        // (isBuffering), not on a call or at the end. The page's button shows Pause then.
+        state.put("isPlaying", !Util.shouldShowPlayButton(c))
         state.put("isBuffering", c.playbackState == Player.STATE_BUFFERING)
         state.put("index", index)
         state.put("trackId", if (index >= 0) c.currentMediaItem?.mediaId ?: JSONObject.NULL else JSONObject.NULL)
         state.put("positionMs", if (index >= 0) c.currentPosition.coerceAtLeast(0L) else 0L)
         state.put("durationMs", duration.coerceAtLeast(0L))
+        // None for a restored session not loaded yet: offline, an unsaved one then can't resume.
+        state.put("bufferedAheadMs", if (index >= 0) StateEvents.bufferedAheadMs(c.bufferedPosition, c.currentPosition) else 0L)
         state.put("shuffle", c.shuffleModeEnabled)
         state.put(
             "repeat",
@@ -91,6 +98,19 @@ internal object StateEncoder {
             state.put("context", JSONObject.NULL)
         }
         state.put("seedId", (if (count > 0) QueueInfo.seedId else null) ?: JSONObject.NULL)
+        // The music waits for the carrier: an outage paused it (it resumes by itself once the
+        // network is back), or it stalled with the network gone (WaitingRule).
+        state.put(
+            "waitingForNetwork",
+            WaitingRule.waiting(
+                count = count,
+                isPlaying = c.isPlaying,
+                playWhenReady = c.playWhenReady,
+                buffering = c.playbackState == Player.STATE_BUFFERING,
+                outagePause = NetBlock.waitingForNetwork(),
+                validated = AudioCache.online,
+            ),
+        )
         return state
     }
 }

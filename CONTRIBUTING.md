@@ -29,7 +29,8 @@ cd android && ./gradlew assembleDebug       # debug APK in android/app/build/out
 ```
 
 - **ESLint** allows no warnings (`--max-warnings=0`). Where a rule has to be switched off for a line, the `eslint-disable` comment says why after `--`.
-- **e2e tests** run against the production build with Firestore, the native player and sign-in stubbed by a shared fixture, so they work offline and give the same results every run. Tests tagged `@live` talk to the real Cyberspace backend; CI leaves them out.
+- **e2e tests** run against the production build plus its test hooks (`vite build --mode test`) with Firestore, the native player and sign-in stubbed by a shared fixture, so they work offline and give the same results every run. Tests tagged `@live` talk to the real Cyberspace backend; CI leaves them out.
+- **Journeys** (`tests/e2e/journeys/`) are e2e tests shaped like a day with the app: a commute through a tunnel, an album left playing, a night of Liked, an hour with the screen locked. They run hours of listening on Playwright's faked clock (`clockStart`, `runFor`, `playOn` in `tests/helpers.ts`) and play the network through the stub backend (`delay`, `failNext`, `offline`), so they take seconds and always tell the same story.
 - **Kotlin tests** are plain JVM tests under `android/app/src/test/`. The YouTube canary (`-Pcanary=true`) needs the network and is run daily by CI, not by default.
 
 ### Emulator smoke test
@@ -68,7 +69,7 @@ A stable release gets a review of the **whole** app, not only of what changed si
 
 Every finding is checked before it is acted on; a confirmed bug gets a fix and a test that fails without it. Then all gates pass (`npm run check`, the full Playwright suite twice, the JVM tests), CI is green including the emulator smoke test, and a Preview has been tried on a phone.
 
-After publishing: verify the APK's checksum, signing certificate and version, run **Actions → Reproducible build check** on the tag, and move the F-Droid recipe to the new version.
+After publishing: verify the APK's checksum, signing certificate and version, run **Actions → Reproducible build check** on the tag (as it is, and again with `debian_node: forky`, the Node.js the F-Droid recipe uses), and move the F-Droid recipe to the new version once both match.
 
 ### Publishing
 

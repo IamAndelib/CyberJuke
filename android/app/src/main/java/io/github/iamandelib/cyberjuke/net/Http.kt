@@ -15,7 +15,8 @@ import java.util.concurrent.TimeUnit
 /**
  * The HTTP client for extraction, audio streaming and lyrics. Extraction and streaming must
  * share it: googlevideo URLs are bound to the IP that resolved them, so both have to leave
- * through the same address family (see [NetPrefs]).
+ * through the same address family (see [NetPrefs]). Streaming uses [streaming], the same
+ * clients with shorter timeouts.
  *
  * Two OkHttp clients behind it, each with its own connection pool: the system's choice of
  * address, and IPv4 only. [client] picks one per request, so the moment [NetPrefs] switches to
@@ -38,12 +39,36 @@ internal object Http {
     private val system = lazy { build(Dns.SYSTEM) }
     private val ipv4 = lazy { build(NetPrefs.ipv4Dns) }
 
+    /**
+     * Audio streaming notices a stalled connection sooner ([STREAM_CONNECT_S], [STREAM_READ_S]),
+     * so ExoPlayer retries it while the buffer still plays. Derived with newBuilder(): the
+     * same connection pool, DNS and interceptor as its family's client, so a stream still
+     * leaves through the address family its URL was extracted on.
+     */
+    private fun forStreaming(c: OkHttpClient): OkHttpClient = c.newBuilder()
+        .connectTimeout(STREAM_CONNECT_S, TimeUnit.SECONDS)
+        .readTimeout(STREAM_READ_S, TimeUnit.SECONDS)
+        .build()
+
+    private val systemStreaming = lazy { forStreaming(system.value) }
+    private val ipv4Streaming = lazy { forStreaming(ipv4.value) }
+
+    /** Seconds to connect, and to wait for the next bytes, when streaming audio. */
+    const val STREAM_CONNECT_S = 10L
+    const val STREAM_READ_S = 12L
+
     /** The client for a request made now. */
     fun current(): OkHttpClient = if (NetPrefs.preferIpv4) ipv4.value else system.value
 
     // OkHttp 4's Call.Factory is a plain Kotlin interface, not a fun interface: no SAM lambda.
     val client: Call.Factory = object : Call.Factory {
         override fun newCall(request: Request): Call = current().newCall(request)
+    }
+
+    /** [client] with the streaming timeouts: what ExoPlayer loads audio through. */
+    val streaming: Call.Factory = object : Call.Factory {
+        override fun newCall(request: Request): Call =
+            (if (NetPrefs.preferIpv4) ipv4Streaming.value else systemStreaming.value).newCall(request)
     }
 
     /** Drops idle pooled connections, so the next request resolves again (a new network). */

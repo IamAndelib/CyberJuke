@@ -63,6 +63,8 @@ export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [
     upNextIndex,
     context: ctx ? { label: isStr(ctx.label) ? ctx.label : '', mode: ctx.mode === 'radio' ? 'radio' : 'list' } : null,
     seedId: isStr(x.seedId) && x.seedId ? x.seedId : null,
+    waitingForNetwork: x.waitingForNetwork === true,
+    bufferedAheadMs: Math.max(0, finite(x.bufferedAheadMs) ?? 0),
   };
 }
 
@@ -169,6 +171,7 @@ export function asTrack(x: unknown): Track | null {
   if (replies !== undefined) t.replies = replies;
   if (ORIGINS.includes(x.source as TrackOrigin)) t.source = x.source as TrackOrigin;
   if (x.membersOnly === true) t.membersOnly = true;
+  if (isStr(x.album) && x.album) t.album = x.album;
   return t;
 }
 

@@ -1,5 +1,5 @@
 import { signal, type ReadonlySignal } from '@preact/signals';
-import { useCallback, useMemo } from 'preact/hooks';
+import { useCallback, useMemo, useRef } from 'preact/hooks';
 import type { Track } from '../../data/model';
 import { history, liked, recent } from '../../stores/library';
 import { dayKey, groupByDay } from '../../stores/history';
@@ -10,7 +10,7 @@ import { Icon } from '../../ui/icons';
 import { EmptyState, PlayShuffle, Tracks, playFrom } from '../../ui/components/TrackList';
 import { TrackRow } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
-import { askConfirm, selectTab, useSearchContext } from '../../ui/nav';
+import { askConfirm, nowPlayingOpen, popToRoot, selectTab, useSearchContext } from '../../ui/nav';
 import { list } from '../../ui/playAll';
 import { plural } from '../../core/text';
 
@@ -20,6 +20,14 @@ const section = signal<(typeof SECTIONS)[number]>('liked');
 const LIKED_CTX = list('Liked');
 const RECENT_CTX = list('Recently played');
 
+/** Library → Liked, from anywhere (the offline line, at the top and in Now Playing, and the offline toast's button). */
+export function openLiked(): void {
+  section.value = 'liked';
+  nowPlayingOpen.value = false;
+  popToRoot('library');
+  selectTab('library');
+}
+
 /** M3: clearing history asks first, and can still be undone from the toast. */
 function confirmClear(): void {
   const n = history.value.length;
@@ -28,7 +36,6 @@ function confirmClear(): void {
     body: 'Everything under Recently played goes.',
     confirm: `Clear ${plural(n, 'play')}`,
     run: clearHistoryWithUndo,
-    testid: 'confirm-clear',
   });
 }
 
@@ -116,15 +123,18 @@ function HistoryDays() {
   const days = useMemo(() => groupByDay(entries, Date.now()), [entries, today]);
   const all = useMemo(() => days.flatMap((d) => d.tracks), [days]);
   const { shown, sentinel, more } = useChunks(all.length, 'history');
+  // Each play goes on top, so rows are numbered from the bottom: a new play leaves the
+  // numbers (and so the memoised rows) of those already there alone, and onPlay is one
+  // function for good (it reads the rows through a ref).
+  const rows = useRef(all);
+  rows.current = all;
   // The rows list a track once per day; what plays is the history with each track once (as
   // Play does), from the tapped one.
-  const onPlay = useCallback(
-    (i: number) => {
-      const list = recent.peek();
-      void playFrom(list, Math.max(0, list.findIndex((t) => t.id === all[i]?.id)), RECENT_CTX);
-    },
-    [all],
-  );
+  const onPlay = useCallback((fromEnd: number) => {
+    const list = recent.peek();
+    const id = rows.current[rows.current.length - 1 - fromEnd]?.id;
+    void playFrom(list, Math.max(0, list.findIndex((t) => t.id === id)), RECENT_CTX);
+  }, []);
   let offset = 0;
   return (
     <>
@@ -140,7 +150,7 @@ function HistoryDays() {
             </h3>
             <ul class="list" data-testid="track-list">
               {d.tracks.slice(0, shown - start).map((t, i) => (
-                <TrackRow key={t.id} track={t} index={start + i} onPlay={onPlay} />
+                <TrackRow key={t.id} track={t} index={all.length - 1 - (start + i)} onPlay={onPlay} />
               ))}
             </ul>
           </section>

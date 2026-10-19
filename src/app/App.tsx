@@ -2,8 +2,8 @@ import { effect, useComputed } from '@preact/signals';
 import { memo } from 'preact/compat';
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import { hasCurrent } from '../player';
-import { online } from '../core/network';
 import { BlockBanner } from '../ui/components/BlockBanner';
+import { OfflineLine } from '../ui/components/OfflineLine';
 import { Icon, type IconName } from '../ui/icons';
 import {
   PageKey,
@@ -288,11 +288,7 @@ export function App() {
 
   return (
     <div ref={app} class={'app' + (hasPlayer ? ' has-player' : '') + (showFab ? ' has-fab' : '')}>
-      {!online.value && (
-        <div class="offline-banner" role="status" data-testid="offline-banner">
-          [ offline ] showing what's already loaded
-        </div>
-      )}
+      <OfflineLine class="offline-banner" testid="offline-banner" />
       <main class="main">
         {TAB_ITEMS.filter((t) => visited.current.has(t.id)).map((t) => (
           <TabPane key={t.id} t={t.id} active={t.id === cur} />

@@ -164,6 +164,11 @@ interface CacheEntry {
 }
 
 export const LYRICS_CACHE_KEY = 'lyrics.v1';
+/**
+ * The cache file is written this long after the last lookup that changed it: the whole file
+ * each time, so the track's and the next one's lookups make one write. Signing out writes at once.
+ */
+export const LYRICS_PERSIST_MS = 2000;
 
 export type LyricsOutcome = { status: 'ok'; lyrics: Lyrics } | { status: 'error'; offline: boolean };
 
@@ -212,8 +217,14 @@ export function createLyricsClient(deps: LyricsDeps): LyricsClient {
             return (cache = c);
           }));
 
-  const persist = () => {
+  let persistTimer: ReturnType<typeof setTimeout> | null = null;
+  const persistNow = () => {
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = null;
     if (cache) deps.storage.set(LYRICS_CACHE_KEY, JSON.stringify(cache.pairs())).catch(() => {});
+  };
+  const persist = () => {
+    persistTimer ??= setTimeout(persistNow, LYRICS_PERSIST_MS);
   };
 
   return {
@@ -230,7 +241,8 @@ export function createLyricsClient(deps: LyricsDeps): LyricsClient {
           changed = true;
         }
       }
-      if (changed) persist();
+      // Members-only lyrics leave the phone now, not a moment later (S8).
+      if (changed) persistNow();
     },
     async get(track, durationMs) {
       const c = await ready();
