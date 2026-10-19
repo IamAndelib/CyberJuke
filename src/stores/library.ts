@@ -84,9 +84,9 @@ export const IPV4_MODES: readonly Ipv4Mode[] = ['auto', 'always', 'off'];
 
 /**
  * Settings versions: 1 (none saved) had Audio quality 'high' as the default; 2 added 'auto' as
- * the new default.
+ * the new default; 3 made the update check opt-in (it was on by default).
  */
-export const SETTINGS_VERSION = 2;
+export const SETTINGS_VERSION = 3;
 
 const DEFAULT_SETTINGS: Settings = {
   theme: 'dark',
@@ -95,7 +95,8 @@ const DEFAULT_SETTINGS: Settings = {
   checkEvery: 15,
   ipv4: 'auto',
   autoplay: true,
-  checkUpdates: true,
+  // Opt-in (F-Droid's rule for requests the user didn't ask for).
+  checkUpdates: false,
   cacheMb: 256,
   crossfadeMs: 0,
   gapless: true,
@@ -254,13 +255,16 @@ export async function loadSettings(): Promise<void> {
   // becomes the new default, Auto, once. A saved 'low' was always a choice and stays.
   const upgraded = savedVersion < SETTINGS_VERSION && Object.keys(rest).length > 0;
   if (savedVersion < 2 && merged.quality === 'high') merged.quality = 'auto';
+  // Version 3: the update check was on by default, so a saved "on" can't be told from a choice
+  // either: off, once. Turned on again since, it stays on.
+  if (savedVersion < 3) merged.checkUpdates = false;
   if (!QUALITIES.includes(merged.quality)) merged.quality = DEFAULT_SETTINGS.quality;
   merged.version = Math.max(savedVersion, SETTINGS_VERSION);
   merged.showNsfw = merged.showNsfw === true;
   // The old on/off "Prefer IPv4": on is 'always'; off becomes the new default, 'auto'.
   if (!IPV4_MODES.includes(rest.ipv4 as Ipv4Mode)) merged.ipv4 = preferIpv4 === true ? 'always' : DEFAULT_SETTINGS.ipv4;
   merged.autoplay = merged.autoplay !== false;
-  merged.checkUpdates = merged.checkUpdates !== false;
+  merged.checkUpdates = merged.checkUpdates === true;
   if (!CHECK_EVERY_OPTIONS.includes(merged.checkEvery)) merged.checkEvery = DEFAULT_SETTINGS.checkEvery;
   // Saved before the listening cache (or unknown): the default size.
   if (!CACHE_SIZES.includes(merged.cacheMb)) merged.cacheMb = DEFAULT_SETTINGS.cacheMb;

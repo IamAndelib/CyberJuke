@@ -478,6 +478,7 @@ function Updates() {
       <div class="setting">
         <div class="setting-text">
           <div class="setting-name">Check for updates automatically</div>
+          <div class="setting-desc">Off unless you turn it on. Asks GitHub at most once a day.</div>
         </div>
         <Toggle on={s.checkUpdates} onChange={(v) => updateSettings({ checkUpdates: v })} label="Check for updates automatically" testid="updates-auto" />
       </div>

@@ -276,7 +276,9 @@ test('Updates: Check now finds a newer release (banner, dot on the tab), or says
   await start(page);
   await page.getByTestId('tab-settings').click();
   const card = page.getByTestId('updates');
-  await expect(card.getByTestId('updates-auto')).toHaveAttribute('aria-checked', 'true');
+  // Opt-in: off until turned on, so nothing has asked GitHub.
+  await expect(card.getByTestId('updates-auto')).toHaveAttribute('aria-checked', 'false');
+  await expect(card).toContainText('Off unless you turn it on');
   await expect(card.getByTestId('updates-status')).toHaveText('Not checked yet.');
   await expect(page.getByTestId('settings-update-dot')).toHaveCount(0);
 
@@ -309,16 +311,17 @@ test('Updates: Check now finds a newer release (banner, dot on the tab), or says
   await expect(page.getByTestId('updates-status')).toHaveText("Couldn't check. Try again later.");
 });
 
-test('Updates: the automatic check is a setting that persists', async ({ page }) => {
+test('Updates: the automatic check is off until turned on, and stays as set', async ({ page }) => {
   await start(page);
   await page.getByTestId('tab-settings').click();
   const auto = page.getByTestId('updates-auto');
-  await auto.click();
   await expect(auto).toHaveAttribute('aria-checked', 'false');
+  await auto.click();
+  await expect(auto).toHaveAttribute('aria-checked', 'true');
   await page.reload();
   await waitForTracks(page);
   await page.getByTestId('tab-settings').click();
-  await expect(page.getByTestId('updates-auto')).toHaveAttribute('aria-checked', 'false');
+  await expect(page.getByTestId('updates-auto')).toHaveAttribute('aria-checked', 'true');
 });
 
 test('radio groups and the Library tabs are one Tab stop each, worked with the arrow keys', async ({ page }) => {

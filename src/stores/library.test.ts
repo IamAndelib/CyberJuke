@@ -32,7 +32,7 @@ describe('theme migration', () => {
   it('migrates a saved GRiD theme to Brutalist and saves it', async () => {
     store.set('settings', JSON.stringify({ theme: 'grid', showNsfw: true, quality: 'low' }));
     await lib.loadLibrary();
-    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: true, cacheMb: 256, crossfadeMs: 0, gapless: true, version: 2 });
+    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: false, cacheMb: 256, crossfadeMs: 0, gapless: true, version: lib.SETTINGS_VERSION });
     await flush();
     expect(JSON.parse(store.get('settings')!).theme).toBe('brutalist');
   });
@@ -73,7 +73,7 @@ describe('theme migration', () => {
     expect(lib.settings.value.quality).toBe('auto');
     expect(lib.settings.value.version).toBe(lib.SETTINGS_VERSION);
     await flush();
-    expect(JSON.parse(store.get('settings')!)).toMatchObject({ quality: 'auto', version: 2 });
+    expect(JSON.parse(store.get('settings')!)).toMatchObject({ quality: 'auto', version: lib.SETTINGS_VERSION });
     // Once: High chosen after the upgrade stays High.
     lib.updateSettings({ quality: 'high' });
     await flush();
@@ -81,12 +81,33 @@ describe('theme migration', () => {
     expect(lib.settings.value.quality).toBe('high');
   });
 
+  it('checks for updates only when turned on: off by default, and turned off once for an older install', async () => {
+    // A fresh install: off.
+    await lib.loadLibrary();
+    expect(lib.settings.value.checkUpdates).toBe(false);
+    // Saved before it was opt-in, "on" can't be told from the old default: off, once, and saved.
+    store.set('settings', JSON.stringify({ theme: 'dark', checkUpdates: true, version: 2 }));
+    await lib.loadLibrary();
+    expect(lib.settings.value.checkUpdates).toBe(false);
+    await flush();
+    expect(JSON.parse(store.get('settings')!)).toMatchObject({ checkUpdates: false, version: lib.SETTINGS_VERSION });
+    // Turned on since: it stays on.
+    lib.updateSettings({ checkUpdates: true });
+    await flush();
+    await lib.loadLibrary();
+    expect(lib.settings.value.checkUpdates).toBe(true);
+    // Anything but true is off.
+    store.set('settings', JSON.stringify({ checkUpdates: 'yes', version: lib.SETTINGS_VERSION }));
+    await lib.loadLibrary();
+    expect(lib.settings.value.checkUpdates).toBe(false);
+  });
+
   it('keeps a saved Low through the upgrade', async () => {
     store.set('settings', JSON.stringify({ theme: 'dark', quality: 'low' }));
     await lib.loadLibrary();
     expect(lib.settings.value.quality).toBe('low');
     await flush();
-    expect(JSON.parse(store.get('settings')!)).toMatchObject({ quality: 'low', version: 2 });
+    expect(JSON.parse(store.get('settings')!)).toMatchObject({ quality: 'low', version: lib.SETTINGS_VERSION });
   });
 
   it('defaults to Auto, and an unknown quality falls back to it', async () => {

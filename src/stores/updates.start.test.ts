@@ -27,9 +27,26 @@ afterEach(() => vi.unstubAllGlobals());
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 const visible = () => document.dispatchEvent(new Event('visibilitychange'));
+/** Settings → Updates → Check for updates automatically, on (it is opt-in). */
+const turnOn = async () => {
+  const lib = await import('./library');
+  lib.settings.value = { ...lib.settings.value, checkUpdates: true };
+};
 
 describe('the update check in the app', () => {
+  it('is off until turned on: nothing is asked at startup or on return; Check now still asks', async () => {
+    const u = await import('./updates');
+    await u.startUpdates(async () => ({ version: '1.1.0', installer: 'com.android.vending' }));
+    await flush();
+    visible();
+    await flush();
+    expect(fetches).toBe(0);
+    await u.checkForUpdates();
+    expect(fetches).toBe(1);
+  });
+
   it('never asks GitHub when F-Droid installed it: not at startup, on return, or on Check now', async () => {
+    await turnOn();
     const u = await import('./updates');
     await u.startUpdates(async () => ({ version: '1.1.0', installer: 'org.fdroid.fdroid' }));
     await flush();
@@ -40,6 +57,7 @@ describe('the update check in the app', () => {
   });
 
   it('never asks GitHub before it knows how it was installed, nor when it cannot tell', async () => {
+    await turnOn();
     const u = await import('./updates');
     let answer: (v: { version: string; installer?: string }) => void = () => {};
     const started = u.startUpdates(() => new Promise((r) => (answer = r)));
@@ -52,6 +70,7 @@ describe('the update check in the app', () => {
     expect(fetches).toBe(1);
 
     vi.resetModules();
+    await turnOn();
     const v = await import('./updates');
     await v.startUpdates(() => Promise.reject(new Error('no plugin')));
     await flush();
@@ -64,6 +83,7 @@ describe('the update check in the app', () => {
   });
 
   it('after a failed check, returning to the app does not ask again within the hour', async () => {
+    await turnOn();
     const u = await import('./updates');
     fail = true;
     await u.startUpdates(async () => ({ version: '1.1.0', installer: 'com.android.vending' }));
