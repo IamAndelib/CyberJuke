@@ -1841,6 +1841,7 @@ class PlaybackService : MediaSessionService() {
             isAutoCompanionController = session.isAutoCompanionController(controller),
             isAutomotiveController = session.isAutomotiveController(controller),
             connectionToken = ControllerKey.of(controller.connectionHints),
+            packageNameVerified = controller.isPackageNameVerified,
         )
 
     companion object {

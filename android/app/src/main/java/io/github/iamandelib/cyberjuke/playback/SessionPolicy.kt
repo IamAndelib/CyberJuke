@@ -10,7 +10,8 @@ import java.security.MessageDigest
  * PlaybackService is exported so system UI, Bluetooth, Android Auto and watch apps can control
  * playback. Any installed app can bind to it too, so only these get full access:
  * - our own package (the JukePlayer plugin's MediaController), when Media3 trusts it;
- * - the media notification controller, Android Auto (companion) and Automotive;
+ * - the media notification controller, Android Auto (companion) and Automotive, when Media3 has
+ *   verified the package name they go by (ControllerInfo.isPackageNameVerified);
  * - trusted system controllers: Media3 trusts them (MEDIA_CONTENT_CONTROL, STATUS_BAR_SERVICE,
  *   the system uid) AND they run as a core system uid or are System UI.
  * Everyone else (including apps trusted only because they are notification listeners) gets
@@ -41,6 +42,11 @@ internal object SessionPolicy {
         val isAutomotiveController: Boolean = false,
         /** The [ControllerKey] token from the controller's connection hints, if any. */
         val connectionToken: String? = null,
+        /**
+         * Media3 checked [packageName] against [uid] (ControllerInfo.isPackageNameVerified). It
+         * tells the three controllers above apart by package name alone, so they count only then.
+         */
+        val packageNameVerified: Boolean = false,
     )
 
     /** What a controller is given (see the class comment). */
@@ -68,7 +74,8 @@ internal object SessionPolicy {
     private val SYSTEM_UI_PACKAGES = setOf("com.android.systemui")
 
     fun access(c: Controller, ownPackage: String): Access {
-        if (c.isMediaNotificationController || c.isAutoCompanionController || c.isAutomotiveController) {
+        // Media3 recognises these three by package name, so only a verified one counts.
+        if (c.packageNameVerified && (c.isMediaNotificationController || c.isAutoCompanionController || c.isAutomotiveController)) {
             return Access.FULL
         }
         if (!c.isTrusted) return Access.TRANSPORT
