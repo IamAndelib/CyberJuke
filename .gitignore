@@ -23,3 +23,5 @@ google-services.json
 CyberJuke-secrets.txt
 *-secrets.txt
 cyberjuke-keys/
+# Claude Code agent worktrees
+.claude/worktrees/
