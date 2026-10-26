@@ -11,13 +11,17 @@ class QueueInfoTest {
 
     @Test
     fun aSignalRadioStationPlaysOnWhateverTheAutoplaySetting() {
-        assertEquals(true, Stations.keepsGoing(autoplayEnabled = false, seedId = "sig:cipher:wmin5WkOuPw"))
-        assertEquals(true, Stations.keepsGoing(autoplayEnabled = true, seedId = "sig:cipher:wmin5WkOuPw"))
+        val track = "sig:cipher:wmin5WkOuPw"
+        val station = "Signal Radio · CIPHER"
+        assertEquals(true, Stations.keepsGoing(autoplayEnabled = false, seedId = track, contextLabel = station))
+        assertEquals(true, Stations.keepsGoing(autoplayEnabled = true, seedId = track, contextLabel = station))
+        // A station's track in another list (Recently played, Liked) is just a track there.
+        assertEquals(false, Stations.keepsGoing(autoplayEnabled = false, seedId = track, contextLabel = "Recently played"))
+        assertEquals(false, Stations.keepsGoing(autoplayEnabled = false, seedId = track, contextLabel = null))
         // Anything else stops at the end of its list with Autoplay off.
-        assertEquals(false, Stations.keepsGoing(autoplayEnabled = false, seedId = "post0001"))
-        assertEquals(false, Stations.keepsGoing(autoplayEnabled = false, seedId = "ytm:wmin5WkOuPw"))
-        assertEquals(false, Stations.keepsGoing(autoplayEnabled = false, seedId = null))
-        assertEquals(true, Stations.keepsGoing(autoplayEnabled = true, seedId = "post0001"))
+        assertEquals(false, Stations.keepsGoing(autoplayEnabled = false, seedId = "post0001", contextLabel = station))
+        assertEquals(false, Stations.keepsGoing(autoplayEnabled = false, seedId = "ytm:wmin5WkOuPw", contextLabel = "Global"))
+        assertEquals(true, Stations.keepsGoing(autoplayEnabled = true, seedId = "post0001", contextLabel = "Liked"))
     }
 
     @Test

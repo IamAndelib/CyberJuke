@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from 'preact/hooks';
 import { currentId, player, playContext, repeatMode, shuffleOn, upNextSections, type UpItem, type UpNextKind } from '../../player';
-import { stationOfTrackId } from '../../player/radio';
+import { stationPlaying } from '../../player/radio';
 import { toast } from '../../stores/toast';
 import { Icon } from '../../ui/icons';
 import { Art } from '../../ui/components/Art';
@@ -169,7 +169,7 @@ export function UpNext() {
   const from = ctx?.label ? `Next from: ${ctx.label}` : 'Next from the list';
   const seedTitle = sec.seed?.title;
   // A station's next rounds aren't autoplay (they come with it off too): the station going on.
-  const station = stationOfTrackId(sec.seed?.id);
+  const station = stationPlaying(ctx, sec.seed?.id);
   return (
     <section ref={root} class="upnext" data-testid="up-next">
       <div class="section-head">

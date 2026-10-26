@@ -155,13 +155,13 @@ describe('autoplay', () => {
     expect(b.radio).not.toHaveBeenCalled();
   });
 
-  it('a Signal Radio seed goes on with the next round of its station, natively too, never with Global radio or the catalog', async () => {
-    const { stationById, stationTracks } = await import('./radio');
+  it('a Signal Radio station goes on with the next round of its station, natively too, never with Global radio or the catalog', async () => {
+    const { stationById, stationLabel, stationTracks } = await import('./radio');
     const st = stationById('cold-wave')!;
     const round = stationTracks(st);
     const seed = round[0];
     const last = round.at(-1)!;
-    const a = setup({ current: seed, seed, index: 0, queue: [...round], upNext: round.slice(1).map((t, i) => ({ track: t, index: i + 1 })) });
+    const a = setup({ current: seed, seed, index: 0, queue: [...round], upNext: round.slice(1).map((t, i) => ({ track: t, index: i + 1 })), context: { label: stationLabel(st), mode: 'list' } });
     (a.player as { kind: string }).kind = 'native';
     await a.ap.fill({ left: 0, seedId: seed.id });
     expect(a.added).toHaveLength(1);
@@ -180,6 +180,14 @@ describe('autoplay', () => {
     expect(a.added).toHaveLength(2);
     expect(a.added[1][0]).toHaveLength(round.length);
     expect(a.added[1][0][0]).not.toBe(next.at(-1)!.id);
+  });
+
+  it("a station's track in another list (Recently played) gets similar picks, not the station's rounds", async () => {
+    const { stationById, stationTracks } = await import('./radio');
+    const seed = stationTracks(stationById('cold-wave')!)[0];
+    const a = setup({ current: seed, seed, index: 0, queue: [seed], context: { label: 'Recently played', mode: 'list' } });
+    await a.ap.fill({ left: 0, seedId: seed.id });
+    for (const [ids] of a.added) expect(ids.some((id) => id.startsWith('sig:'))).toBe(false);
   });
 
   it('nothing with repeat on or for an old seed', async () => {

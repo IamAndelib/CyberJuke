@@ -1,8 +1,9 @@
 /**
- * Signal Radio: hyphen8d's curated stations for Cyberspace's Jukebox (bundled from
- * hyphen8d/signal by scripts/update-stations.mjs), and how a station plays. As on
- * cyberspace.online, a station is a shuffle of all its tracks, then another shuffle, and so on;
- * a new round never starts with the track the last one ended on.
+ * Signal Radio: hyphen8d's curated SIGNAL stations, which Cyberspace's Jukebox plays since 4.0
+ * (bundled from hyphen8d/signal by scripts/update-stations.mjs), and how a station plays. As on
+ * cyberspace.online (its player, not SIGNAL's own app), a station is a shuffle of all its
+ * tracks, then another shuffle, and so on; a new round never starts with the track the last
+ * one ended on.
  *
  * Station tracks are ordinary Tracks with no post: id `sig:<station id>:<video id>`, the
  * callsign as genre, source 'signal'. Pure apart from the bundled data.
@@ -32,7 +33,10 @@ export const BAND_NAMES: Record<Band, string> = { ym: 'YM band', zm: 'ZM band' }
 const PREFIX = 'sig:';
 
 /** What Now Playing shows as the source of a station: "Signal Radio · CIPHER". */
-export const stationLabel = (s: Pick<Station, 'callsign'>): string => `Signal Radio · ${s.callsign}`;
+export const stationLabel = (s: Pick<Station, 'callsign'>): string => `${STATION_LABEL}${s.callsign}`;
+
+/** How a station's list is labelled: what the Radio tab starts it with, nothing else can (natively Stations.LABEL). */
+export const STATION_LABEL = 'Signal Radio · ';
 
 /** The dial reading, as the site shows it: one decimal ("273.0"). */
 export const stationFreq = (s: Pick<Station, 'freq'>): string => s.freq.toFixed(1);
@@ -42,10 +46,15 @@ export function stationById(id: string): Station | null {
 }
 
 /**
- * A station's track id. A station plays on round after round whatever the Autoplay setting:
- * it isn't autoplay, it is the station (natively Stations.keepsGoing, the same rule).
+ * The station playing: a list the Radio tab started (its label) whose seed is one of that
+ * station's tracks. It plays on round after round whatever the Autoplay setting: it isn't
+ * autoplay, it is the station (natively Stations.keepsGoing, the same rule). A station's track
+ * in any other list (Liked, Recently played) is just a track there.
  */
-export const isStationId = (id: string | null | undefined): boolean => !!id?.startsWith(PREFIX);
+export function stationPlaying(context: { label: string } | null | undefined, seedId: string | null | undefined): Station | null {
+  const s = stationOfTrackId(seedId);
+  return s && context?.label === stationLabel(s) ? s : null;
+}
 
 /** The station a track id belongs to (`sig:<station>:<video id>`), or null. */
 export function stationOfTrackId(id: string | null | undefined): Station | null {
@@ -75,7 +84,7 @@ export function stationTrack(id: string): Track | null {
   return s ? (stationTracks(s).find((t) => t.id === id) ?? null) : null;
 }
 
-/** Fisher-Yates, as the site does it. */
+/** Fisher-Yates, as cyberspace.online does it. */
 function shuffle<T>(xs: readonly T[], rng: () => number): T[] {
   const out = [...xs];
   for (let i = out.length - 1; i > 0; i--) {

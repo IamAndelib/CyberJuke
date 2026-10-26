@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { clockStart, FAKE_TRACK_MS, openNowPlaying, playOn, start } from '../helpers';
+import { clockStart, expectStable, FAKE_TRACK_MS, openNowPlaying, playOn, start } from '../helpers';
 
 /** Signal Radio: the Radio tab, tuning in, a station that plays on, and its tracks kept. */
 
@@ -147,6 +147,33 @@ test('a station plays on with Autoplay off too: it is the station, not autoplay'
   await openNowPlaying(page);
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from SLOW ORBIT');
   expect(await place(page)).toEqual({ at: 1, of: 64 });
+});
+
+test("a station's track played from another list is just a track there: with Autoplay off it stops at the end", async ({ page }) => {
+  await start(page);
+  await page.getByTestId('tab-settings').click();
+  const toggle = page.getByTestId('autoplay-toggle');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await openRadio(page);
+  await tune(page, 'slow-orbit');
+  const first = (await page.getByTestId('mini-title').textContent())!.trim();
+  await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Pause');
+  await page.getByTestId('mini-next').click();
+  await expect(page.getByTestId('mini-title')).not.toHaveText(first);
+  // From Recently played, which now holds two of the station's tracks: the older one.
+  await page.getByTestId('tab-library').click();
+  await page.getByTestId('lib-recent').click();
+  const rows = page.getByTestId('recent-list').getByTestId('track-row');
+  await expect(rows).toHaveCount(2);
+  await rows.filter({ hasText: first }).getByTestId('track-play').click();
+  await expect(page.getByTestId('mini-title')).toHaveText(first);
+  await openNowPlaying(page);
+  await expect(page.getByTestId('np-from')).toContainText('Recently played');
+  // The two plays and nothing after them: no round of the station.
+  await expectStable(() => place(page), 1000);
+  expect(await place(page)).toEqual({ at: 2, of: 2 });
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveCount(0);
 });
 
 for (const width of [320, 360]) {

@@ -6,12 +6,12 @@
  *  - a Jukebox seed: similar Jukebox tracks from the cached catalog (data/similar);
  *  - a Global seed: YouTube Music's radio for it (web player only; natively the playback
  *    service runs Global radios itself, so they refill with the screen off);
- *  - a Signal Radio seed: the next round of its station (player/radio), all its tracks again.
- * Nothing while autoplay is off (the setting, C3) or repeat is on.
+ *  - a Signal Radio station playing: its next round (player/radio), all its tracks again.
+ * Nothing while autoplay is off (the setting, C3), but for a station, or while repeat is on.
  */
 import { isGlobal, type Track } from '../data/model';
 import { similarTracks } from '../data/similar';
-import { stationOfTrackId, stationQueue } from './radio';
+import { stationPlaying, stationQueue } from './radio';
 import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, type Player, type QueueLow } from './types';
 
 /** How long a batch just added counts as ahead even before the player's state shows it (native's lags the call). */
@@ -82,8 +82,9 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       b.queue = player.state.peek().queue;
     };
 
-    // A station plays on: its next round, which doesn't start with the last track queued.
-    const station = stationOfTrackId(seed.id);
+    // A station plays on: its next round, which doesn't start with the last track queued. (A
+    // station's track in another list, Liked say, gets similar picks like any other.)
+    const station = stationPlaying(s.context, seed.id);
     if (station) {
       await add(stationQueue(station, s.queue.at(-1)?.ytId, deps.rng), true);
       return;

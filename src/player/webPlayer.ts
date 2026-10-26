@@ -10,7 +10,7 @@ import { TEST_HOOKS, exposeForTests } from '../core/testHooks';
 import { UNTITLED } from '../data/model';
 import { trackErrorText, type TrackErrorFacts } from './errorText';
 import { Queue } from './queue';
-import { isStationId } from './radio';
+import { stationPlaying } from './radio';
 import type { RepeatMode } from './native';
 import type { CrossfadeMs, Ipv4Mode, Quality } from '../stores/library';
 import { AUTOPLAY_LOW, EMPTY_STATE, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
@@ -140,9 +140,9 @@ export class WebPlayer implements Player {
     this.checkLow();
   }
 
-  /** More follows the list for [seedId]: Autoplay on, or a Signal Radio station (always). */
+  /** More follows the list for [seedId]: Autoplay on, or a Signal Radio station playing (always). */
   private keepsGoing(seedId: string | undefined): boolean {
-    return this.autoplayOn || isStationId(seedId);
+    return this.autoplayOn || !!stationPlaying(this.context, seedId);
   }
 
   /** AP4, inline: with 5 autoplay tracks or fewer to go, ask for more (once per state). */
@@ -418,7 +418,7 @@ export class WebPlayer implements Player {
   async setAutoplay(enabled: boolean): Promise<void> {
     this.autoplayOn = enabled;
     // A station's next rounds stay: it plays on whatever the setting.
-    if (!enabled && !isStationId(this.seed?.id)) this.q.dropAuto();
+    if (!enabled && !stationPlaying(this.context, this.seed?.id)) this.q.dropAuto();
     this.publish();
   }
 
