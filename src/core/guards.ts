@@ -152,6 +152,8 @@ export function isTrackFull(x: unknown): x is Track {
   for (const k of TRACK_STRINGS) if (!isStr(x[k])) return false;
   if (x.mp3 !== undefined && !isMp3Url(x.mp3)) return false;
   if (x.ytId !== '' && !YT_ID_RE.test(x.ytId as string)) return false;
+  // An MP3 has no video id (Track.mp3): never both.
+  if (x.mp3 !== undefined && x.ytId !== '') return false;
   if (!x.id || !hasAudio(x as Pick<Track, 'ytId' | 'mp3'>) || typeof x.nsfw !== 'boolean') return false;
   if (x.saves !== undefined && finite(x.saves) === undefined) return false;
   if (x.replies !== undefined && finite(x.replies) === undefined) return false;
@@ -168,7 +170,8 @@ export function isTrackFull(x: unknown): x is Track {
 export function asTrack(x: unknown): Track | null {
   if (!isObj(x) || !isStr(x.id) || !x.id || !isStr(x.title)) return null;
   const ytId = isStr(x.ytId) && YT_ID_RE.test(x.ytId) ? x.ytId : '';
-  const mp3 = isMp3Url(x.mp3) ? x.mp3 : undefined;
+  // An MP3 has no video id (Track.mp3): a video id wins.
+  const mp3 = !ytId && isMp3Url(x.mp3) ? x.mp3 : undefined;
   if (!ytId && !mp3) return null;
   const t: Track = {
     id: x.id,

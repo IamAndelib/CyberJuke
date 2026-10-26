@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test, FAKE_MP3_SECONDS, MP3_POSTS, coverUrl } from '../fixtures';
-import { musicCalls, openSearch, start } from '../helpers';
+import { expectStable, musicCalls, openNowPlaying, openSearch, start } from '../helpers';
 
 /** Jukebox MP3s (Cyberspace 4.0): posts whose audio is a latex.gg MP3 with a cover. */
 
@@ -31,9 +31,13 @@ test('an MP3 post shows its cover, plays to its end, and the next MP3 follows', 
   await row.getByTestId('track-play').click();
   await expect(page.getByTestId('mini-title')).toHaveText(first.title);
   await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Pause');
-  // The second MP3 next: when the first ends by itself (the audio really played), it starts.
+  // Paused while the second MP3 is queued next (the first is only seconds long).
+  await page.getByTestId('mini-toggle').click();
+  await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Play');
   await page.getByTestId('search-input').fill(second.title);
   await menu(page, page.getByTestId('search-results').getByTestId('track-row').filter({ hasText: second.title }).first(), 'menu-add-queue');
+  // Played on: when the first ends by itself (the audio really played), the second starts.
+  await page.getByTestId('mini-toggle').click();
   await expect(page.getByTestId('mini-title')).toHaveText(second.title, { timeout: (FAKE_MP3_SECONDS + 8) * 1000 });
   await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Pause');
 });
@@ -60,7 +64,27 @@ test('an MP3 can be liked and shared, and stays in Liked and Recently played aft
   await page.reload();
   await page.getByTestId('tab-library').click();
   await page.getByTestId('lib-recent').click();
-  await expect(page.getByTestId('history-day').first().getByTestId('track-title').first()).toHaveText(first.title);
+  await expect(page.getByTestId('history-day').first().getByTestId('track-title').filter({ hasText: first.title })).not.toHaveCount(0);
+});
+
+test('skipping between MP3s that are still loading keeps showing Pause', async ({ page }) => {
+  // latex.gg slow to answer: a skip lands while the first MP3 is still loading.
+  await page.route(/^https:\/\/latex\.gg\/share\//, async (route) => {
+    await new Promise((r) => setTimeout(r, 5000));
+    await route.fallback();
+  });
+  await start(page);
+  const row = await findInSearch(page, first.title);
+  await row.getByTestId('track-play').click();
+  await page.getByTestId('search-input').fill(second.title);
+  await menu(page, page.getByTestId('search-results').getByTestId('track-row').filter({ hasText: second.title }).first(), 'menu-add-queue');
+  await page.keyboard.press('Escape');
+  await openNowPlaying(page);
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).toHaveText(second.title);
+  // The first one's cancelled play() must not make the second look paused while it loads
+  // (latex.gg still hasn't answered): Pause the whole time, not Play until it starts.
+  expect(await expectStable(() => page.getByTestId('np-toggle').getAttribute('aria-label'), 1500)).toBe('Pause');
 });
 
 test('an MP3 that is gone from latex.gg is skipped with a note', async ({ page }) => {

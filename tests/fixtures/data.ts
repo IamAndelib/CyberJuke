@@ -24,7 +24,6 @@ export const MEMBERS_POSTS = [
   { id: 'membersPost002', title: 'Secret Garden Tape', artist: 'Closed Circle', genre: 'ambient', yt: 'Mbr00000002', by: 'moth' },
   { id: 'membersPost003', title: 'Backroom Radio', artist: 'Midnight Members', genre: 'lo-fi', yt: 'Mbr00000003', by: 'nightowl' },
 ];
-/** A public post by a banned author: only the members query returns it; the phone must hide it. */
 /**
  * Jukebox MP3s (Cyberspace 4.0): latex.gg share links with a cover, as the site stores
  * them. Old enough not to move any of the newest rows other tests count on.
@@ -36,6 +35,7 @@ export const MP3_POSTS = [
 export const mp3Url = (file: string) => `https://latex.gg/share/${file}.mp3`;
 export const coverUrl = (file: string) => `https://bunker.cyberspace.online/uploads/jukebox/fakeUid/${file}.webp`;
 
+/** A public post by a banned author: only the members query returns it; the phone must hide it. */
 export const BANNED_POST = { id: 'bannedPost001', title: 'Banned Broadcast', artist: 'Nobody', genre: 'noise', yt: 'Ban00000001', by: 'spammer' };
 
 export type FsValue = Record<string, unknown>;

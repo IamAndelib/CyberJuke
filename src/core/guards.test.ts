@@ -152,6 +152,9 @@ describe('stored tracks', () => {
       expect(asTrack({ ...mp3, mp3: bad }), String(bad)).toBeNull();
     }
     expect(isTrackFull({ ...mp3, ytId: 'bad' })).toBe(false);
+    // Never both: a video id wins.
+    expect(isTrackFull({ ...mp3, ytId: 'abcdefghijk' })).toBe(false);
+    expect(asTrack({ ...mp3, ytId: 'abcdefghijk' })).not.toHaveProperty('mp3');
     expect(asTrack({ ...mp3, ytId: '<script>' })).toEqual(mp3);
     expect(hasAudio({ ytId: '' })).toBe(false);
     expect(hasAudio(null)).toBe(false);

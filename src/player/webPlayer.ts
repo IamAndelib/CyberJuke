@@ -164,7 +164,13 @@ export class WebPlayer implements Player {
   }
 
   private playAudio(a: HTMLAudioElement): void {
-    a.play().catch(() => this.onMp3() && this.publish({ isPlaying: false, isBuffering: false }));
+    // A new src rejects the previous play() (AbortError) after the next one was asked for: that
+    // one is not about the track now loading. Only a refusal of this track's play shows paused.
+    const src = this.loadedId;
+    a.play().catch((e: unknown) => {
+      if ((e as { name?: unknown } | null)?.name === 'AbortError' || !this.onMp3() || this.loadedId !== src) return;
+      this.publish({ isPlaying: false, isBuffering: false });
+    });
   }
 
   private publish(patch: Partial<PlayerState> = {}): void {
@@ -255,8 +261,13 @@ export class WebPlayer implements Player {
 
   private onYtState(code: number): void {
     const yt = this.yt;
-    // An MP3 is playing: the paused video's events aren't about it.
-    if (!yt || this.q.current?.mp3) return;
+    if (!yt) return;
+    // An MP3 is playing: the paused video's events aren't about it, but a video still loading
+    // when it took over must not start under it.
+    if (this.q.current?.mp3) {
+      if (code === YT_PLAYING) yt.pauseVideo();
+      return;
+    }
     const now = performance.now();
     if (code === YT_PLAYING) {
       this.publish({

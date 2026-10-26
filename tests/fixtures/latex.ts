@@ -31,10 +31,9 @@ function fakeCover(name: string): string {
   </svg>`;
 }
 
-/** Routes latex.gg MP3s and their covers. `failMp3`: the files 404 (gone from latex.gg). */
-export async function stubLatex(page: Page, opts: { failMp3?: boolean } = {}): Promise<void> {
+/** Routes latex.gg MP3s and their covers (a test can route the MP3s again: its route wins). */
+export async function stubLatex(page: Page): Promise<void> {
   await page.route(/^https:\/\/latex\.gg\/share\/[A-Za-z0-9_-]+\.mp3$/i, (route) => {
-    if (opts.failMp3) return route.fulfill({ status: 404, contentType: 'text/plain', body: 'not found' });
     return route.fulfill({ status: 200, contentType: 'audio/mpeg', headers: { 'accept-ranges': 'bytes' }, body: MP3 });
   });
   await page.route(/^https:\/\/bunker\.cyberspace\.online\/uploads\//, (route) => {
