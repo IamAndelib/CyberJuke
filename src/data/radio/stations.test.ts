@@ -29,6 +29,10 @@ describe('stations.json (scripts/update-stations.mjs)', () => {
     }
   });
 
+  it('has each video once per station (a track id is sig:<station>:<video id>)', () => {
+    for (const s of stations) expect(new Set(s.tracks.map((t) => t.ytId)).size, s.id).toBe(s.tracks.length);
+  });
+
   it('has a valid video id, a title and an artist on every track (688 in all)', () => {
     const all = stations.flatMap((s) => s.tracks);
     expect(all).toHaveLength(688);

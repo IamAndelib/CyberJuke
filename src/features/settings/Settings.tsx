@@ -630,8 +630,8 @@ export function Settings() {
           Global search.
         </p>
         <p data-testid="about-signal">
-          <b>Signal Radio:</b> <A href="https://github.com/hyphen8d/signal">Signal Radio stations by hyphen8d (MIT)</A>, the
-          stations of Cyberspace's Jukebox, bundled with the app.
+          <b>Signal Radio:</b> <A href="https://github.com/hyphen8d/signal">SIGNAL by hyphen8d (MIT)</A>, the stations
+          Cyberspace's Jukebox plays as Signal Radio, bundled with the app.
         </p>
       </section>
 

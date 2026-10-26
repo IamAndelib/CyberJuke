@@ -73,7 +73,10 @@
     gap: 2px;
   }
   .tab {
-    font-size: 11px;
+    /* "Settings" in 11 px all but touches "Library"; themes that space their letters (C64)
+       would run the labels together. */
+    font-size: 10px;
+    letter-spacing: 0;
   }
 }
 /* A newer release is out (stores/updates.ts): a dot on the Settings tab. */

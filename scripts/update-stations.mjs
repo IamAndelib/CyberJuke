@@ -142,8 +142,12 @@ function build(md, js) {
     if (!r.tracks.length) fail(`${r.callsign}: no tracks`);
     if (ids.has(s.id)) fail(`station id twice: ${s.id}`);
     ids.add(s.id);
+    const seen = new Set();
     for (const t of r.tracks) {
       if (!YT_ID.test(t.ytId)) fail(`${r.callsign}: bad video id ${t.ytId}`);
+      // A track's id is sig:<station>:<video id>: one video twice on a station would be two tracks with one id.
+      if (seen.has(t.ytId)) fail(`${r.callsign}: video ${t.ytId} twice`);
+      seen.add(t.ytId);
       if (!t.title || !t.artist) fail(`${r.callsign}: track ${t.ytId} has no title or artist`);
     }
     return { id: s.id, band: r.band, freq: r.freq, callsign: r.callsign, tagline: r.tagline, desc: s.desc, tracks: r.tracks };

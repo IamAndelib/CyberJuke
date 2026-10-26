@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { clockStart, expectStable, FAKE_TRACK_MS, openNowPlaying, playOn, start } from '../helpers';
+import { clockStart, expectStable, FAKE_TRACK_MS, openNowPlaying, playOn, seedStorage, SETTINGS_KEY, start } from '../helpers';
 
 /** Signal Radio: the Radio tab, tuning in, a station that plays on, and its tracks kept. */
 
@@ -176,21 +176,28 @@ test("a station's track played from another list is just a track there: with Aut
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveCount(0);
 });
 
-for (const width of [320, 360]) {
-  test(`six tabs fit at ${width} px, every label whole`, async ({ page }) => {
+for (const [width, theme] of [[320, 'dark'], [360, 'dark'], [320, 'c64'], [320, 'brutalist'], [320, 'vt320']] as const) {
+  test(`six tabs fit at ${width} px in ${theme}, every label whole and apart`, async ({ page }) => {
     await page.setViewportSize({ width, height: 740 });
+    await seedStorage(page, { [SETTINGS_KEY]: { theme } });
     await start(page);
     const tabs = page.locator('.tabbar .tab');
     await expect(tabs).toHaveCount(6);
     await expect(tabs.locator('.tab-label')).toHaveText(['Home', 'Radio', 'Genres', 'Artists', 'Library', 'Settings']);
-    const fits = await page.locator('.tabbar').evaluate((bar) => ({
-      bar: bar.scrollWidth <= bar.clientWidth,
-      labels: [...bar.querySelectorAll<HTMLElement>('.tab-label')].map((l) => {
-        const tab = l.closest('.tab')!.getBoundingClientRect();
-        const r = l.getBoundingClientRect();
-        return r.left >= tab.left - 0.5 && r.right <= tab.right + 0.5 && l.scrollWidth <= Math.ceil(r.width) && r.height < 20;
-      }),
-    }));
-    expect(fits).toEqual({ bar: true, labels: [true, true, true, true, true, true] });
+    const fits = await page.locator('.tabbar').evaluate((bar) => {
+      const labels = [...bar.querySelectorAll<HTMLElement>('.tab-label')];
+      const rects = labels.map((l) => l.getBoundingClientRect());
+      return {
+        bar: bar.scrollWidth <= bar.clientWidth,
+        labels: labels.map((l, i) => {
+          const tab = l.closest('.tab')!.getBoundingClientRect();
+          const r = rects[i];
+          return r.left >= tab.left - 0.5 && r.right <= tab.right + 0.5 && l.scrollWidth <= Math.ceil(r.width) && r.height < 20;
+        }),
+        // Neighbouring labels never read as one word: a visible gap between them.
+        apart: rects.slice(1).every((r, i) => r.left - rects[i].right >= 3),
+      };
+    });
+    expect(fits).toEqual({ bar: true, labels: [true, true, true, true, true, true], apart: true });
   });
 }

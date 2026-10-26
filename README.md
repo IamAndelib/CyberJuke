@@ -30,7 +30,7 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 - **Latest tracks** posted to the Jukebox, as an endless list, with a "new tracks" button when something new is posted.
 - **Most saved**: the tracks people saved most on Cyberspace, this month or all time.
 - **Shuffle the Jukebox**: one tap for a random mix from the whole Jukebox.
-- **Signal Radio**: the Radio tab holds the 16 curated stations of Cyberspace's Jukebox, by hyphen8d, in two bands. A station plays all its tracks in a shuffle, then another, for as long as you listen (with Autoplay on).
+- **Signal Radio**: the Radio tab holds the 16 curated stations Cyberspace's Jukebox plays as Signal Radio since its 4.0 update: hyphen8d's SIGNAL, in two bands. A station plays all its tracks in a shuffle, then another, for as long as you listen.
 - **Autoplay**: when a list ends, similar songs keep playing. A Jukebox song leads to Jukebox songs picked by artist, genre and what the same people share; a Global song leads to that song's radio. Tracks you add with "Add to queue" always stay next.
 - **Search** every track on the Jukebox by title, artist or genre, with typo tolerance and recent searches. **Here** searches only the page you're on: a genre, an artist, an album, your library, or the Genres and Artists lists themselves.
 - **Genres** and **Artists**: browse everything shared on the Jukebox, A–Z or by popularity, and ★ your favourites to pin them to the top. An artist page puts what Cyberspace people shared first, then the artist's top songs, albums, live albums, EPs and singles from the artist's own page.
@@ -199,7 +199,7 @@ Maintainers: the publishing steps (signing keys, test builds, releases, F-Droid 
 - **[Cyberspace](https://beta.cyberspace.online)** and its creator **[@genghis_khan](https://beta.cyberspace.online/genghis_khan)**, for the site, its look and the Jukebox.
 - **Everyone who posts music** to the Jukebox. Every track in the app is credited to its poster and links to their post.
 - **[NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor)** by Team NewPipe (GPL-3.0), for playback and the YouTube Music data behind Global search and "More by".
-- **Signal Radio** stations: [hyphen8d/signal](https://github.com/hyphen8d/signal) by hyphen8d, made for Cyberspace's Jukebox. The station list, taglines, descriptions and track lists are bundled from it (`scripts/update-stations.mjs`, at a pinned commit) under the MIT License:
+- **Signal Radio** stations: [hyphen8d/signal](https://github.com/hyphen8d/signal) by hyphen8d (SIGNAL, a standalone project, not Cyberspace's; Cyberspace's Jukebox plays the same stations). The station list, taglines, descriptions and track lists are bundled from it (`scripts/update-stations.mjs`, at a pinned commit) under the MIT License:
 
   > Copyright (c) 2026 Matthew Arevalo
   >
