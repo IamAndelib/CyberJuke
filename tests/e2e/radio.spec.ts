@@ -109,7 +109,7 @@ test('a station plays on past its rounds, and its tracks are kept like any other
   // Past both of them but the last few: another round comes.
   await playOn(page, 60 * (FAKE_TRACK_MS + 200));
   await expect.poll(() => place(page)).toEqual({ at: 61, of: 96 });
-  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('Autoplay · more from THE CRYPT');
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from THE CRYPT');
   const q = await queueState(page);
   expect(q.context?.label).toBe('Signal Radio · THE CRYPT');
   expect([...q.list, ...q.autoplay].every((t) => t.id.startsWith('sig:the-crypt:'))).toBe(true);
@@ -125,7 +125,7 @@ test('a station plays on past its rounds, and its tracks are kept like any other
   await expect(recent.first()).toHaveText(now);
 });
 
-test('with Autoplay off a station plays its whole round, then stops like any list', async ({ page }) => {
+test('a station plays on with Autoplay off too: it is the station, not autoplay', async ({ page }) => {
   await start(page);
   await page.getByTestId('tab-settings').click();
   const toggle = page.getByTestId('autoplay-toggle');
@@ -133,10 +133,20 @@ test('with Autoplay off a station plays its whole round, then stops like any lis
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await openRadio(page);
   await tune(page, 'slow-orbit');
+  // Its next round (32 more) follows the first, as with Autoplay on.
   await openNowPlaying(page);
-  await expect.poll(() => place(page)).toEqual({ at: 1, of: 32 });
-  await expect(page.getByTestId('upnext-row')).toHaveCount(31);
-  await expect(page.getByTestId('upnext-autoplay-label')).toHaveCount(0);
+  await expect.poll(() => place(page)).toEqual({ at: 1, of: 64 });
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from SLOW ORBIT');
+  // Turning Autoplay off while a station plays leaves its rounds alone.
+  await page.getByTestId('np-close').click();
+  await page.getByTestId('tab-settings').click();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await openNowPlaying(page);
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from SLOW ORBIT');
+  expect(await place(page)).toEqual({ at: 1, of: 64 });
 });
 
 for (const width of [320, 360]) {

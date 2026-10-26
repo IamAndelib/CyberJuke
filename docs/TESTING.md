@@ -57,12 +57,12 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 
 ## Signal Radio
 - [ ] The **Radio** tab sits between Home and Genres; all six tab labels show whole (also on a small phone). It lists the YM and ZM bands, each station with its frequency, name and tagline.
-- [ ] Tap a station: it plays one of its tracks, the station is marked with a radio icon, and Now Playing says "Playing from Signal Radio · " and its name. Up next shows the rest of the station, then "Autoplay · more from …".
+- [ ] Tap a station: it plays one of its tracks, the station is marked with a radio icon, and Now Playing says "Playing from Signal Radio · " and its name. Up next shows the rest of the station, then "More from …".
 - [ ] Tap the station that's on: Now Playing opens, and the music doesn't restart. Tap another station: its tracks play, and the mark moves.
 - [ ] The ⓘ button shows what the station plays and how many tracks it has; **Tune in** starts it.
 - [ ] Let a station play with the screen off for longer than its round (about 2 hours for a 32-track station): it keeps going, a new shuffle of the same station.
 - [ ] Swipe the app away while a station plays and reopen it: Now Playing and Up next show the station's titles, not "Unknown track".
-- [ ] Settings → **Autoplay** off, then tune in: the station plays its tracks once, then stops.
+- [ ] Settings → **Autoplay** off, then tune in and let it play past its first round: it keeps going. A Jukebox list still stops at its end.
 
 ## Browsing and gestures
 - [ ] Open a genre page and tap ★ in the top bar: the genre shows under ★ Favourites on the Genres tab. Same on an artist page.

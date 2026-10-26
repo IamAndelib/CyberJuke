@@ -458,7 +458,7 @@ test('Autoplay is on by default and the setting is kept; Settings lines are shor
   const toggle = page.getByTestId('autoplay-toggle');
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   const settings = page.getByTestId('screen-settings');
-  await expect(settings).toContainText('Plays similar songs when your list ends, and keeps a Signal Radio station going.');
+  await expect(settings).toContainText('Plays similar songs when your list ends.');
   for (const line of ['Hidden by default.', 'Best quality the connection can keep up with', 'Shows a button on Home when new tracks are posted.', 'Auto switches when IPv6 gets blocked.']) {
     await expect(settings).toContainText(line);
   }

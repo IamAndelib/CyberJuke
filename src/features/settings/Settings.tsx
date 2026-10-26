@@ -587,7 +587,7 @@ export function Settings() {
           <div class="setting-text">
             <div class="setting-name">Autoplay</div>
             <div class="setting-desc" id="autoplay-desc">
-              Plays similar songs when your list ends, and keeps a Signal Radio station going.
+              Plays similar songs when your list ends.
             </div>
           </div>
           <Toggle on={s.autoplay} onChange={(v) => updateSettings({ autoplay: v })} label="Autoplay" describedBy="autoplay-desc" testid="autoplay-toggle" />

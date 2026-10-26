@@ -41,6 +41,12 @@ export function stationById(id: string): Station | null {
   return STATIONS.find((s) => s.id === id) ?? null;
 }
 
+/**
+ * A station's track id. A station plays on round after round whatever the Autoplay setting:
+ * it isn't autoplay, it is the station (natively QueueCommands.STATION_PREFIX, the same rule).
+ */
+export const isStationId = (id: string | null | undefined): boolean => !!id?.startsWith(PREFIX);
+
 /** The station a track id belongs to (`sig:<station>:<video id>`), or null. */
 export function stationOfTrackId(id: string | null | undefined): Station | null {
   if (!id?.startsWith(PREFIX)) return null;

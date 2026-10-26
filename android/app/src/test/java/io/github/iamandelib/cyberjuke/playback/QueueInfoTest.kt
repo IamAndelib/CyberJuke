@@ -10,6 +10,17 @@ class QueueInfoTest {
     fun tearDown() = QueueInfo.clearLow()
 
     @Test
+    fun aSignalRadioStationPlaysOnWhateverTheAutoplaySetting() {
+        assertEquals(true, QueueCommands.keepsGoing(autoplayEnabled = false, seedId = "sig:cipher:wmin5WkOuPw"))
+        assertEquals(true, QueueCommands.keepsGoing(autoplayEnabled = true, seedId = "sig:cipher:wmin5WkOuPw"))
+        // Anything else stops at the end of its list with Autoplay off.
+        assertEquals(false, QueueCommands.keepsGoing(autoplayEnabled = false, seedId = "post0001"))
+        assertEquals(false, QueueCommands.keepsGoing(autoplayEnabled = false, seedId = "ytm:wmin5WkOuPw"))
+        assertEquals(false, QueueCommands.keepsGoing(autoplayEnabled = false, seedId = null))
+        assertEquals(true, QueueCommands.keepsGoing(autoplayEnabled = true, seedId = "post0001"))
+    }
+
+    @Test
     fun aRunningLowIsKeptUntilAnswered() {
         // Said while the app was swiped away: the service won't say it again for this state,
         // so the plugin repeats lastLow to the page's next queueLow listener.
