@@ -409,6 +409,11 @@ class CachePolicyTest {
         assertTrue(SaveRefusal.refused(404, mp3 = true))
         assertTrue(SaveRefusal.refused(403, mp3 = true))
         assertFalse(SaveRefusal.refused(503, mp3 = true))
+        // A timeout, a rate limit or a refused range passes: a strike, not the end.
+        for (code in listOf(408, 416, 429)) {
+            assertFalse("$code", SaveRefusal.refused(code, mp3 = true))
+            assertTrue("$code", SaveRefusal.refused(code, mp3 = false))
+        }
         // No status (the connection broke): never a refusal.
         assertFalse(SaveRefusal.refused(null, mp3 = false))
         assertFalse(SaveRefusal.refused(null, mp3 = true))

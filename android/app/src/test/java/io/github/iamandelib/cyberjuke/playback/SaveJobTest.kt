@@ -17,7 +17,8 @@ class SaveJobTest {
     private val muxed = audio.copy(itag = 18, audioOnly = false)
 
     /** A refusal the writer reports (the production one: an HTTP status). */
-    private class Refused : IOException("403")
+    /** The writer's request answered [code] (what Media3's InvalidResponseCodeException carries). */
+    private class Http(val code: Int) : IOException("$code")
 
     /** The world as a test sets it up; every call is recorded. */
     private inner class World(
@@ -76,7 +77,7 @@ class SaveJobTest {
             }
         }
 
-        override fun refused(e: IOException, mp3: Boolean) = e is Refused
+        override fun refused(e: IOException, mp3: Boolean) = SaveRefusal.refused((e as? Http)?.code, mp3)
 
         fun run(fresh: Boolean = true, audioId: String = id): SaveOutcome {
             val j = SaveJob(audioId, fresh, this)
@@ -152,7 +153,7 @@ class SaveJobTest {
         // Written, but a span playback had locked was read past: not whole yet, a strike.
         assertEquals(SaveOutcome.STOPPED, World(wholeAfterWrite = false).run())
         // Refused (an expired link, a block): given up.
-        assertEquals(SaveOutcome.FAILED, World(write = { throw Refused() }).run())
+        assertEquals(SaveOutcome.FAILED, World(write = { throw Http(403) }).run())
         // The connection broke: a strike.
         assertEquals(SaveOutcome.STOPPED, World(write = { throw IOException("reset") }).run())
         // The request couldn't even be built (no link): a strike.
@@ -224,7 +225,12 @@ class SaveJobTest {
         assertEquals(SaveOutcome.STOPPED, World(wholeAfterWrite = false).run(audioId = mp3Id))
         assertEquals(SaveOutcome.STOPPED, World(write = { throw IOException("reset") }).run(audioId = mp3Id))
         // Refused: given up.
-        assertEquals(SaveOutcome.FAILED, World(write = { throw Refused() }).run(audioId = mp3Id))
+        assertEquals(SaveOutcome.FAILED, World(write = { throw Http(403) }).run(audioId = mp3Id))
+        // latex.gg failing or rate limiting: tried again later, where a video's link would be done.
+        for (code in listOf(503, 429)) {
+            assertEquals("$code", SaveOutcome.STOPPED, World(write = { throw Http(code) }).run(audioId = mp3Id))
+            assertEquals("$code", SaveOutcome.FAILED, World(write = { throw Http(code) }).run())
+        }
         // Cancelled mid-way: the writer is told.
         val w = World(write = { j ->
             j.cancel()

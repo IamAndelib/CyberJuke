@@ -412,12 +412,16 @@ internal enum class SaveFailure {
 /**
  * Whether a liked save's writer was refused for good (not again this service's life), from the
  * HTTP status it got ([httpCode], null for none). A video's link refused at all: expired or a
- * block. A Jukebox MP3 ([mp3]) only on a 4xx (the file gone or private), as playback never
- * retries one ([JukeLoadErrorPolicy]); latex.gg failing (a 5xx) is a strike, tried again later.
- * Pure (CachePolicyTest).
+ * block. A Jukebox MP3 ([mp3]) only on a 4xx that says the file is gone or private, as playback
+ * never retries one ([JukeLoadErrorPolicy]). latex.gg failing (a 5xx), timing out (408), rate
+ * limiting (429) or refusing a range (416, from a length it never sent) is a strike instead,
+ * tried again later and given up on after [SaveStrikes.MAX]. Pure (CachePolicyTest).
  */
 internal object SaveRefusal {
-    fun refused(httpCode: Int?, mp3: Boolean): Boolean = httpCode != null && (!mp3 || httpCode in 400..499)
+    private val TRANSIENT_4XX = setOf(408, 416, 429)
+
+    fun refused(httpCode: Int?, mp3: Boolean): Boolean =
+        httpCode != null && (!mp3 || (httpCode in 400..499 && httpCode !in TRANSIENT_4XX))
 }
 
 /**
