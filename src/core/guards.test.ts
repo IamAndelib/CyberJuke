@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { asTrack, hasAudio, asTracks, isTrackFull, parseMusicItem, parseMusicPage, parseNativeState, parseRunQueryRows } from './guards';
+import { asTrack, audioIdOf, hasAudio, asTracks, isAudioId, isTrackFull, parseMusicItem, parseMusicPage, parseNativeState, parseRunQueryRows } from './guards';
 
 const track = {
   id: 'p1',
@@ -159,6 +159,19 @@ describe('stored tracks', () => {
     expect(hasAudio({ ytId: '' })).toBe(false);
     expect(hasAudio(null)).toBe(false);
     expect(hasAudio(track)).toBe(true);
+  });
+
+  it('names the audio of a track as the native listening cache does: the video id, or mp3: and the file name of its MP3', () => {
+    expect(audioIdOf(track)).toBe(track.ytId);
+    expect(audioIdOf({ ytId: '', mp3: 'https://latex.gg/share/IZq8cMcx.mp3' })).toBe('mp3:IZq8cMcx.mp3');
+    // A placeholder, or a link that isn't a Jukebox MP3: nothing to cache.
+    expect(audioIdOf({ ytId: '' })).toBe('');
+    expect(audioIdOf({ ytId: '', mp3: 'https://evil.example/share/x.mp3' })).toBe('');
+    expect(audioIdOf(null)).toBe('');
+    for (const ok of ['abcdefghijk', 'mp3:IZq8cMcx.mp3', 'mp3:a-b_C.MP3']) expect(isAudioId(ok), ok).toBe(true);
+    for (const bad of ['', 'mp3:', 'mp3:x.ogg', 'mp3:../x.mp3', 'mp3:a/b.mp3', 'MP3:IZq8cMcx.mp3', 'IZq8cMcx.mp3', 'https://latex.gg/share/IZq8cMcx.mp3', 'short', 42, null]) {
+      expect(isAudioId(bad), String(bad)).toBe(false);
+    }
   });
 
   it('asTrack keeps the album of a Global album track, and drops anything else there', () => {

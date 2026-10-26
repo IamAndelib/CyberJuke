@@ -14,7 +14,7 @@
  */
 import { Capacitor } from '@capacitor/core';
 import { effect } from '@preact/signals';
-import { YT_ID_RE } from '../core/guards';
+import { audioIdOf } from '../core/guards';
 import { logError } from '../core/log';
 import { TEST_HOOKS, exposeForTests } from '../core/testHooks';
 import { auth } from '../data/auth';
@@ -34,24 +34,28 @@ function record(call: unknown[]): void {
   if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(call);
 }
 
-/** The ytIds of `tracks` native takes: valid, each once, in order, at most BRIDGE_MAX_ITEMS. */
-export function ytIdsOf(tracks: readonly Track[]): string[] {
+/**
+ * The audio ids of `tracks` native takes (audioIdOf: a video id, or `mp3:<file>` for a Jukebox
+ * MP3): valid, each once, in order, at most BRIDGE_MAX_ITEMS.
+ */
+export function audioIdsOf(tracks: readonly Track[]): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   for (const t of tracks) {
     if (out.length >= BRIDGE_MAX_ITEMS) break;
-    if (!YT_ID_RE.test(t.ytId) || seen.has(t.ytId)) continue;
-    seen.add(t.ytId);
-    out.push(t.ytId);
+    const id = audioIdOf(t);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
   }
   return out;
 }
 
-/** What setLikedIds sends for `tracks`: their ids, and the members-only ones among them. */
+/** What setLikedIds sends for `tracks`: their audio ids (in `ytIds`, the bridge's name), and the members-only ones among them. */
 export function likedPayload(tracks: readonly Track[]): { ytIds: string[]; membersOnly: string[] } {
-  const ytIds = ytIdsOf(tracks);
+  const ytIds = audioIdsOf(tracks);
   const sent = new Set(ytIds);
-  const membersOnly = ytIdsOf(tracks.filter((t) => t.membersOnly && sent.has(t.ytId)));
+  const membersOnly = audioIdsOf(tracks.filter((t) => t.membersOnly && sent.has(audioIdOf(t))));
   return { ytIds, membersOnly };
 }
 
@@ -129,7 +133,7 @@ export function startListeningCache(): void {
   });
 
   if (!native) {
-    exposeForTests('__cyberjukeCache', { saved: (ytIds: string[]) => setSavedOffline(ytIds) });
+    exposeForTests('__cyberjukeCache', { saved: (audioIds: string[]) => setSavedOffline(audioIds) });
     return;
   }
   JukePlayer.addListener('cacheChanged', (e) => setSavedOffline(Array.isArray(e?.ytIds) ? e.ytIds : [])).catch(fail('cache.listen'));

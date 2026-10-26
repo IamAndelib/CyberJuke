@@ -29,7 +29,7 @@ export type OfflineRefusal = 'unsaved' | 'offline';
 
 export interface OfflinePolicy {
   online(): boolean;
-  /** ytIds of the liked songs saved whole on the phone. */
+  /** Audio ids (audioIdOf) of the liked songs saved whole on the phone. */
   saved(): ReadonlySet<string>;
   /** Whether `t` is liked (a liked song not saved yet says so). */
   liked(t: Track): boolean;
