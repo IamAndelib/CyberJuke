@@ -587,7 +587,7 @@ export function Settings() {
           <div class="setting-text">
             <div class="setting-name">Autoplay</div>
             <div class="setting-desc" id="autoplay-desc">
-              Plays similar songs when your list ends.
+              Plays similar songs when your list ends, and keeps a Signal Radio station going.
             </div>
           </div>
           <Toggle on={s.autoplay} onChange={(v) => updateSettings({ autoplay: v })} label="Autoplay" describedBy="autoplay-desc" testid="autoplay-toggle" />
@@ -629,6 +629,10 @@ export function Settings() {
           <A href="https://github.com/TeamNewPipe/NewPipeExtractor">NewPipeExtractor</A> (GPL-3.0) for playback and
           Global search.
         </p>
+        <p data-testid="about-signal">
+          <b>Signal Radio:</b> <A href="https://github.com/hyphen8d/signal">Signal Radio stations by hyphen8d (MIT)</A>, the
+          stations of Cyberspace's Jukebox, bundled with the app.
+        </p>
       </section>
 
       <section class="card prose" data-testid="licenses">
@@ -657,7 +661,7 @@ export function Settings() {
           <p data-testid="libraries">
             NewPipeExtractor (GPL-3.0); AndroidX Media3 and other AndroidX libraries, OkHttp, Okio, Kotlin,
             kotlinx.coroutines, Guava, nanojson and Apache Cordova (Apache-2.0); Preact, @preact/signals, Capacitor, the
-            Ionic filesystem library and jsoup (MIT); Rhino (MPL-2.0); Protocol Buffers and JSR 305 (BSD-3-Clause);
+            Ionic filesystem library, jsoup and the Signal Radio stations by hyphen8d (MIT); Rhino (MPL-2.0); Protocol Buffers and JSR 305 (BSD-3-Clause);
             desugar_jdk_libs (GPL-2.0 with the Classpath Exception).
           </p>
         </details>

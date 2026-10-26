@@ -66,6 +66,16 @@
   color: var(--color-bg);
   text-shadow: none;
 }
+/* Six tabs on the narrowest phones (320 px): a little more room between the labels. */
+@media (max-width: 340px) {
+  .tabbar {
+    padding-inline: 2px;
+    gap: 2px;
+  }
+  .tab {
+    font-size: 11px;
+  }
+}
 /* A newer release is out (stores/updates.ts): a dot on the Settings tab. */
 .tab-dot {
   position: absolute;

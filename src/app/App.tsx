@@ -33,6 +33,7 @@ import { ArtistPage } from '../features/artists/Artist';
 import { ArtistGrid } from '../features/artists/Artists';
 import { GenreDetail, GenreGrid } from '../features/genres/Genres';
 import { Home } from '../features/home/Home';
+import { Radio } from '../features/radio/Radio';
 import { Library } from '../features/library/Library';
 import { ReleasesPage } from '../features/artists/Releases';
 import { Search } from '../features/search/Search';
@@ -41,6 +42,7 @@ import { updateAvailable } from '../stores/updates';
 
 const TAB_ITEMS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
+  { id: 'radio', label: 'Radio', icon: 'radio' },
   { id: 'genres', label: 'Genres', icon: 'genres' },
   { id: 'artists', label: 'Artists', icon: 'artists' },
   { id: 'library', label: 'Library', icon: 'library' },
@@ -109,6 +111,8 @@ function TabRoot({ t }: { t: Tab }) {
   switch (t) {
     case 'home':
       return <Home />;
+    case 'radio':
+      return <Radio />;
     case 'genres':
       return <GenreGrid />;
     case 'artists':
