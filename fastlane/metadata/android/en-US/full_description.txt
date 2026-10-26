@@ -7,7 +7,7 @@
 <li><b>Latest tracks</b> posted to the Jukebox as an endless list, and <b>Most saved</b> this month or all time.</li>
 <li><b>Search</b> every Jukebox track by title, artist or genre, with typo tolerance.</li>
 <li><b>Shuffle the Jukebox:</b> one tap for a random mix.</li>
-<li><b>Signal Radio:</b> the 16 stations the Jukebox plays (SIGNAL, by hyphen8d), each an endless shuffle.</li>
+<li><b>Signal Radio:</b> the stations the Jukebox plays (SIGNAL, by hyphen8d), each an endless shuffle.</li>
 <li><b>Genres</b> and <b>artists</b> in A–Z or popular order, with favourites. An artist page shows what Cyberspace people shared, then the artist's top songs, albums, live albums, EPs and singles.</li>
 <li><b>Background playback:</b> notification, lock screen and headset controls; the queue keeps going with the screen off.</li>
 <li><b>Listening cache:</b> what you play and the next track stay on the phone (128 to 512 MB), so a weak signal doesn't stop the music. Liked songs are saved to play offline.</li>

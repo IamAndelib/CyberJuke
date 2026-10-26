@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### The app
-- **Signal Radio**, a new Radio tab: the 16 curated stations Cyberspace's Jukebox plays as Signal Radio (hyphen8d's SIGNAL), in their YM and ZM bands. Tap a station to tune in: it plays all its tracks in a shuffle, then another, and on and on, and Now Playing shows "Signal Radio · " and the station's name. The ⓘ button tells you what a station plays. The stations come with the app, so tuning in asks nothing of anyone but YouTube, for the music. A station isn't autoplay: it plays on with Autoplay off too.
+- **Signal Radio**, a new Radio tab: the curated stations Cyberspace's Jukebox plays as Signal Radio (hyphen8d's SIGNAL), in their YM and ZM bands. Tap a station to tune in: it plays all its tracks in a shuffle, then another, and on and on, and Now Playing shows "Signal Radio · " and the station's name. The ⓘ button tells you what a station plays. The stations come with the app, so tuning in asks nothing of anyone but YouTube, for the music. A station isn't autoplay: it plays on with Autoplay off too.
 
 ## [1.2.0] - 2026-10-19
 

@@ -78,7 +78,7 @@ export function Radio() {
   useSearchContext({ label: 'Signal Radio', tracks: allTracks });
   const on = onAir.value;
   return (
-    <Screen testid="screen-radio" title="Signal Radio" subtitle="16 stations by hyphen8d" scrollKey="radio">
+    <Screen testid="screen-radio" title="Signal Radio" subtitle="by hyphen8d" scrollKey="radio">
       {BANDS.map((b) => {
         const stations = STATIONS.filter((s) => s.band === b);
         return (
@@ -97,7 +97,6 @@ export function Radio() {
           </section>
         );
       })}
-      <p class="fineprint">Each station plays all its tracks in a shuffle, then another. The stations are hyphen8d's SIGNAL, as Cyberspace's Jukebox plays them.</p>
     </Screen>
   );
 }
