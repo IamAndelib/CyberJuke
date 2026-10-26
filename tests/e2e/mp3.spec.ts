@@ -95,7 +95,7 @@ test('an MP3 that is gone from latex.gg is skipped with a note', async ({ page }
   await expect(page.getByTestId('toast').last()).toHaveText(`Skipped "${first.title}": unavailable`);
 });
 
-test('a liked MP3 is saved for offline by its file name: offline it stays bright and plays, an unsaved one is dimmed', async ({ page, backend }) => {
+test('a liked MP3 is saved for offline by its file name: offline it stays bright and starts, an unsaved one is dimmed', async ({ page, backend }) => {
   await start(page);
   for (const p of [first, second]) {
     await page.getByTestId('tab-home').click();

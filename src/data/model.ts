@@ -3,7 +3,7 @@
  * Pure functions only: no network, no globals. Unit-tested against
  * real fixtures in __fixtures__/runquery-sample.json.
  */
-import { MP3_URL_RE, YT_ID_RE } from '../core/guards';
+import { audioIdOf, MP3_URL_RE, YT_ID_RE } from '../core/guards';
 
 export interface Track {
   /** Firestore doc id, plus `-<attachmentIndex>` when the post has several audio attachments. */
@@ -56,9 +56,12 @@ export function makeTrack(t: Pick<Track, 'id' | 'ytId' | 'title' | 'artist'> & P
   return { genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '', ...t };
 }
 
-/** What makes two tracks the same audio: the video id, else the MP3 link, else the id (a placeholder). */
+/**
+ * What makes two tracks the same audio: their audio id (audioIdOf: the video id, or the MP3's
+ * file, so two links to one file match whatever the host's case), else the id (a placeholder).
+ */
 export function audioKey(t: Pick<Track, 'id' | 'ytId' | 'mp3'>): string {
-  return t.ytId || t.mp3 || t.id;
+  return audioIdOf(t) || t.id;
 }
 
 /** True for tracks from Global search (not shared on the Jukebox). */

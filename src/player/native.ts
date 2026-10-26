@@ -139,8 +139,7 @@ interface JukePlayerPlugin {
    * they play offline. The upkeep calls (this, setCacheLimit, clearCache, signedOut) resolve once
    * done, and reject when there is no cache.
    * Every `ytIds` here, in cachedIds and in cacheChanged holds audio ids (isAudioId): a video id,
-   * or `mp3:<file>` for a Jukebox MP3 (audioIdOf). Native drops any other entry; an older native,
-   * which knows only video ids, drops the MP3s'.
+   * or `mp3:<file>` for a Jukebox MP3 (audioIdOf). Native drops any other entry.
    */
   setLikedIds(o: { ytIds: string[]; membersOnly: string[] }): Promise<void>;
   /** The listening cache's size; 128, 256 or 512 (anything else is 256). A smaller one evicts at once. */
