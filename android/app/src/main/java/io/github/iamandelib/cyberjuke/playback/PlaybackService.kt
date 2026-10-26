@@ -1091,7 +1091,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun addAutoplay(items: List<MediaItem>, forSeed: String?) {
-        if (!QueueCommands.keepsGoing(autoplayEnabled, seedId) || forSeed != seedId || player?.repeatMode != Player.REPEAT_MODE_OFF) {
+        if (!Stations.keepsGoing(autoplayEnabled, seedId) || forSeed != seedId || player?.repeatMode != Player.REPEAT_MODE_OFF) {
             Log.i(TAG, "addAutoplay: ${items.size} item(s) dropped (stale or autoplay off)")
             return
         }
@@ -1107,8 +1107,8 @@ class PlaybackService : MediaSessionService() {
         lowKey = null
         if (!enabled) {
             radio.stop()
-            // A station's next rounds stay (QueueCommands.keepsGoing).
-            if (!QueueCommands.keepsGoing(false, seedId)) queue.dropUpcomingAuto()
+            // A station's next rounds stay (Stations.keepsGoing).
+            if (!Stations.keepsGoing(false, seedId)) queue.dropUpcomingAuto()
         }
         queueChanged()
     }
@@ -1156,7 +1156,7 @@ class PlaybackService : MediaSessionService() {
 
     private fun restore(item: MediaItem, section: NativeQueue.Section, beforeId: String?) {
         if (section == NativeQueue.Section.AUTO &&
-            (!QueueCommands.keepsGoing(autoplayEnabled, seedId) || player?.repeatMode != Player.REPEAT_MODE_OFF)
+            (!Stations.keepsGoing(autoplayEnabled, seedId) || player?.repeatMode != Player.REPEAT_MODE_OFF)
         ) {
             Log.i(TAG, "restore: autoplay item dropped (autoplay off or repeat on)")
             return
@@ -1228,7 +1228,7 @@ class PlaybackService : MediaSessionService() {
         val p = player ?: return
         // Nothing loading (a restored session before its first Play): no requests for more yet.
         val idle = p.playbackState == Player.STATE_IDLE && !p.playWhenReady
-        if (!QueueCommands.keepsGoing(autoplayEnabled, seedId) || p.repeatMode != Player.REPEAT_MODE_OFF || p.mediaItemCount == 0 || seedId == null || idle) {
+        if (!Stations.keepsGoing(autoplayEnabled, seedId) || p.repeatMode != Player.REPEAT_MODE_OFF || p.mediaItemCount == 0 || seedId == null || idle) {
             lowKey = null
             QueueInfo.clearLow()
             return

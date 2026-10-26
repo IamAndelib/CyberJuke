@@ -11,13 +11,13 @@ class QueueInfoTest {
 
     @Test
     fun aSignalRadioStationPlaysOnWhateverTheAutoplaySetting() {
-        assertEquals(true, QueueCommands.keepsGoing(autoplayEnabled = false, seedId = "sig:cipher:wmin5WkOuPw"))
-        assertEquals(true, QueueCommands.keepsGoing(autoplayEnabled = true, seedId = "sig:cipher:wmin5WkOuPw"))
+        assertEquals(true, Stations.keepsGoing(autoplayEnabled = false, seedId = "sig:cipher:wmin5WkOuPw"))
+        assertEquals(true, Stations.keepsGoing(autoplayEnabled = true, seedId = "sig:cipher:wmin5WkOuPw"))
         // Anything else stops at the end of its list with Autoplay off.
-        assertEquals(false, QueueCommands.keepsGoing(autoplayEnabled = false, seedId = "post0001"))
-        assertEquals(false, QueueCommands.keepsGoing(autoplayEnabled = false, seedId = "ytm:wmin5WkOuPw"))
-        assertEquals(false, QueueCommands.keepsGoing(autoplayEnabled = false, seedId = null))
-        assertEquals(true, QueueCommands.keepsGoing(autoplayEnabled = true, seedId = "post0001"))
+        assertEquals(false, Stations.keepsGoing(autoplayEnabled = false, seedId = "post0001"))
+        assertEquals(false, Stations.keepsGoing(autoplayEnabled = false, seedId = "ytm:wmin5WkOuPw"))
+        assertEquals(false, Stations.keepsGoing(autoplayEnabled = false, seedId = null))
+        assertEquals(true, Stations.keepsGoing(autoplayEnabled = true, seedId = "post0001"))
     }
 
     @Test

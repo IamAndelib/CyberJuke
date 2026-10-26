@@ -43,7 +43,7 @@ export function stationById(id: string): Station | null {
 
 /**
  * A station's track id. A station plays on round after round whatever the Autoplay setting:
- * it isn't autoplay, it is the station (natively QueueCommands.STATION_PREFIX, the same rule).
+ * it isn't autoplay, it is the station (natively Stations.keepsGoing, the same rule).
  */
 export const isStationId = (id: string | null | undefined): boolean => !!id?.startsWith(PREFIX);
 

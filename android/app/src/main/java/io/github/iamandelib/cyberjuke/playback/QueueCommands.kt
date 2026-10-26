@@ -98,17 +98,6 @@ internal object QueueCommands {
     /** Track ids of Global (YouTube Music) tracks: `ytm:<ytId>`, as on the web side. */
     const val GLOBAL_PREFIX = "ytm:"
 
-    /** Track ids of Signal Radio stations' tracks: `sig:<station>:<ytId>`, as on the web side. */
-    const val STATION_PREFIX = "sig:"
-
-    /**
-     * More follows the list for [seedId] (queueLow, addAutoplay, autoplay rows): Autoplay on, or
-     * a Signal Radio station, which plays on round after round whatever the setting (it isn't
-     * autoplay: it is the station). Pure (QueueInfoTest).
-     */
-    fun keepsGoing(autoplayEnabled: Boolean, seedId: String?): Boolean =
-        autoplayEnabled || seedId?.startsWith(STATION_PREFIX) == true
-
     /** Autoplay items left when the queue is "low" and gets more (AP4). */
     const val LOW = 5
 }
