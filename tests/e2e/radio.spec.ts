@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { clockStart, expectStable, FAKE_TRACK_MS, openNowPlaying, playOn, seedStorage, SETTINGS_KEY, start } from '../helpers';
+import { clockStart, expectStable, FAKE_TRACK_MS, openNowPlaying, openSettings, playOn, seedStorage, SETTINGS_KEY, start } from '../helpers';
 
 /** Signal Radio: the Radio tab, tuning in, a station that plays on, and its tracks kept. */
 
@@ -127,7 +127,7 @@ test('a station plays on past its rounds, and its tracks are kept like any other
 
 test('a station plays on with Autoplay off too: it is the station, not autoplay', async ({ page }) => {
   await start(page);
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   const toggle = page.getByTestId('autoplay-toggle');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
@@ -139,7 +139,7 @@ test('a station plays on with Autoplay off too: it is the station, not autoplay'
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from SLOW ORBIT');
   // Turning Autoplay off while a station plays leaves its rounds alone.
   await page.getByTestId('np-close').click();
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await toggle.click();
@@ -151,7 +151,7 @@ test('a station plays on with Autoplay off too: it is the station, not autoplay'
 
 test("a station's track played from another list is just a track there: with Autoplay off it stops at the end", async ({ page }) => {
   await start(page);
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   const toggle = page.getByTestId('autoplay-toggle');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
@@ -177,13 +177,13 @@ test("a station's track played from another list is just a track there: with Aut
 });
 
 for (const [width, theme] of [[320, 'dark'], [360, 'dark'], [320, 'c64'], [320, 'brutalist'], [320, 'vt320']] as const) {
-  test(`six tabs fit at ${width} px in ${theme}, every label whole and apart`, async ({ page }) => {
+  test(`five tabs fit at ${width} px in ${theme}, every label whole and apart`, async ({ page }) => {
     await page.setViewportSize({ width, height: 740 });
     await seedStorage(page, { [SETTINGS_KEY]: { theme } });
     await start(page);
     const tabs = page.locator('.tabbar .tab');
-    await expect(tabs).toHaveCount(6);
-    await expect(tabs.locator('.tab-label')).toHaveText(['Home', 'Genres', 'Artists', 'Library', 'Radio', 'Settings']);
+    await expect(tabs).toHaveCount(5);
+    await expect(tabs.locator('.tab-label')).toHaveText(['Home', 'Genres', 'Artists', 'Library', 'Radio']);
     const fits = await page.locator('.tabbar').evaluate((bar) => {
       const labels = [...bar.querySelectorAll<HTMLElement>('.tab-label')];
       const rects = labels.map((l) => l.getBoundingClientRect());
@@ -198,6 +198,6 @@ for (const [width, theme] of [[320, 'dark'], [360, 'dark'], [320, 'c64'], [320, 
         apart: rects.slice(1).every((r, i) => r.left - rects[i].right >= 3),
       };
     });
-    expect(fits).toEqual({ bar: true, labels: [true, true, true, true, true, true], apart: true });
+    expect(fits).toEqual({ bar: true, labels: [true, true, true, true, true], apart: true });
   });
 }

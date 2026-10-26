@@ -1,11 +1,11 @@
 import { AUTH_USER, AUTH_USER_B, BANNED_POST, expect, MEMBERS_POSTS, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { playerCalls, seedStorage, start, toastsGone, waitForTracks } from '../helpers';
+import { openSettings, playerCalls, seedStorage, start, toastsGone, waitForTracks } from '../helpers';
 
 /** Optional "Sign in with Cyberspace": members-only posts, errors, token refresh, sign-out. */
 
 async function signIn(page: Page, email = AUTH_USER.email, password = AUTH_USER.password) {
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   await page.getByTestId('signin-email').fill(email);
   await page.getByTestId('signin-password').fill(password);
   await page.getByTestId('signin-submit').click();
@@ -20,7 +20,7 @@ const homeRow = (page: Page, title: string) =>
 test('signed out: the Account card offers sign-in; nothing is members-only', async ({ page, backend }) => {
   await start(page);
   await expect(page.getByTestId('members-tag')).toHaveCount(0);
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   const card = page.getByTestId('account');
   await expect(card).toContainText('Sign in with Cyberspace');
   await expect(page.getByTestId('signin-note')).toHaveText('Your password goes only to Cyberspace.');
@@ -99,7 +99,7 @@ test('signing in shows [members] posts in Latest, search and Now Playing; signin
 
   // Sign out: members posts are gone from Home, search, Liked, history, the lyrics cache and
   // storage, apart from the like kept, out of sight, for this account's next sign-in.
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   // Sign out asks first (M3).
   await page.getByTestId('signout').click();
   const confirm = page.getByTestId('confirm-sheet');
@@ -141,6 +141,8 @@ test('members-only likes and plays come back for the account that had them, and 
   /** Like these rows on Home (in this order), then play the last one. */
   const likeAndPlay = async (titles: string[]) => {
     await page.getByTestId('tab-home').click();
+    // Settings may still be open over Home.
+    if (await page.getByTestId('screen-settings').isVisible()) await page.getByTestId('settings-back').click();
     await waitForTracks(page);
     for (const t of titles) {
       await homeRow(page, t).getByTestId('track-more').click();
@@ -158,7 +160,7 @@ test('members-only likes and plays come back for the account that had them, and 
     return { liked: l.map((x) => x.trim()), recent: r.map((x) => x.trim()) };
   };
   const signOut = async () => {
-    await page.getByTestId('tab-settings').click();
+    await openSettings(page);
     await page.getByTestId('signout').click();
     await page.getByTestId('confirm-ok').click();
     await expect(page.getByTestId('signin-form')).toBeVisible();
@@ -237,7 +239,7 @@ test('signed out at startup: members-only tracks restored from a backup are drop
 
 test('sign-in errors: wrong password, too many attempts, no network', async ({ page }) => {
   await page.goto('/');
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   const err = page.getByTestId('signin-error');
   await page.getByTestId('signin-submit').click();
   await expect(err).toHaveText('! Enter your email and password.');

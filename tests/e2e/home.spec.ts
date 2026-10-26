@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { box, isFeedQuery, start, toastsGone, waitForTracks } from '../helpers';
+import { box, isFeedQuery, openSettings, start, toastsGone, waitForTracks } from '../helpers';
 
 /** Home: the Latest feed, genre chips, Most saved, the new-tracks pill and the CI autoplay hook. */
 
@@ -84,7 +84,7 @@ test('the search button sits above the tab bar, then above the mini player; hidd
   await expect(page.getByTestId('mini-player')).toBeVisible();
   await expect.poll(async () => (await box(fab)).y + (await box(fab)).height).toBeLessThanOrEqual((await box(page.getByTestId('mini-player'))).y);
   expect((await box(fab)).width).toBeGreaterThanOrEqual(44);
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   await expect(fab).toHaveCount(0);
 });
 

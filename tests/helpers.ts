@@ -35,6 +35,23 @@ export async function openSearch(page: Page): Promise<void> {
   await expect(page.getByTestId('search-input')).toBeFocused();
 }
 
+/**
+ * Settings: the button at the top right of Home (Settings is a page over Home, not a tab).
+ * From another tab, Home first (where Settings may still be open); showing already, nothing.
+ */
+export async function openSettings(page: Page): Promise<void> {
+  const settings = page.getByTestId('screen-settings');
+  if (await settings.isVisible()) return;
+  const home = page.getByTestId('tab-home');
+  if ((await home.getAttribute('aria-current')) !== 'page') {
+    await home.click();
+    // Left open over Home: it shows again.
+    if (await settings.isVisible()) return;
+  }
+  await page.getByTestId('open-settings').click();
+  await expect(settings).toBeVisible();
+}
+
 /** Two animation frames: layout, observers and rAF work from the last change have run. */
 export async function nextFrame(page: Page): Promise<void> {
   await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));

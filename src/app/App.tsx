@@ -38,7 +38,6 @@ import { Library } from '../features/library/Library';
 import { ReleasesPage } from '../features/artists/Releases';
 import { Search } from '../features/search/Search';
 import { Settings } from '../features/settings/Settings';
-import { updateAvailable } from '../stores/updates';
 
 const TAB_ITEMS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
@@ -46,7 +45,6 @@ const TAB_ITEMS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'artists', label: 'Artists', icon: 'artists' },
   { id: 'library', label: 'Library', icon: 'library' },
   { id: 'radio', label: 'Radio', icon: 'radio' },
-  { id: 'settings', label: 'Settings', icon: 'settings' },
 ];
 
 /** SM7: a pushed page slides in over this long; the page under it hides once it has. */
@@ -96,11 +94,9 @@ function TabBar() {
           aria-current={cur === t.id ? 'page' : undefined}
           onClick={() => (cur === t.id ? retapTab(t.id) : selectTab(t.id))}
           data-testid={`tab-${t.id}`}
-          aria-label={t.id === 'settings' && updateAvailable.value ? 'Settings (update available)' : undefined}
         >
           <Icon name={t.icon} size={24} />
           <span class="tab-label">{t.label}</span>
-          {t.id === 'settings' && updateAvailable.value && <span class="tab-dot" aria-hidden="true" data-testid="settings-update-dot" />}
         </button>
       ))}
     </nav>
@@ -119,8 +115,6 @@ function TabRoot({ t }: { t: Tab }) {
       return <ArtistGrid />;
     case 'library':
       return <Library />;
-    case 'settings':
-      return <Settings />;
   }
 }
 
@@ -136,6 +130,8 @@ function PageView({ page }: { page: Page }) {
       return <ReleasesPage key={page.release.token + '|' + page.release.kind} release={page.release} />;
     case 'search':
       return <Search />;
+    case 'settings':
+      return <Settings />;
   }
 }
 
@@ -274,8 +270,8 @@ export function App() {
   // Only whether something is loaded: playback itself never re-renders the app.
   const hasPlayer = hasCurrent.value;
   const topKind = useComputed(() => topEntry.value?.page.kind ?? null).value;
-  // The search button shows over every page but Search itself and the Settings root.
-  const showFab = topKind !== 'search' && (topKind != null || cur !== 'settings');
+  // The search button shows over every page but Search and Settings.
+  const showFab = topKind !== 'search' && topKind !== 'settings';
   const visited = useRef(new Set<Tab>());
   visited.current.add(cur);
   const app = useRef<HTMLDivElement>(null);

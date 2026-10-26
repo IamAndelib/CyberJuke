@@ -23,9 +23,10 @@ import { RELEASES_URL, REPO_URL } from '../../data/model';
 import { toast } from '../../stores/toast';
 import { app, checkFailed, checkForUpdates, checking, installUnknown, lastCheck, updateAvailable } from '../../stores/updates';
 import { Screen } from '../../ui/components/Screen';
+import { Icon } from '../../ui/icons';
 import { openExternal } from '../../ui/links';
 import { arrowChoice } from '../../ui/arrowChoice';
-import { askConfirm, usePageActive } from '../../ui/nav';
+import { askConfirm, popPage, usePageActive } from '../../ui/nav';
 
 function Swatch({ id }: { id: ThemeId }) {
   const on = settings.value.theme === id;
@@ -505,7 +506,18 @@ function Updates() {
 export function Settings() {
   const s = settings.value;
   return (
-    <Screen testid="screen-settings" title="Settings" subtitle={`CyberJuke v${__APP_VERSION__}`} scrollKey="settings" backToTop={false}>
+    <Screen
+      testid="screen-settings"
+      title="Settings"
+      subtitle={`CyberJuke v${__APP_VERSION__}`}
+      scrollKey="settings"
+      backToTop={false}
+      left={
+        <button class="icon-btn" aria-label="Back" onClick={popPage} data-testid="settings-back">
+          <Icon name="back" />
+        </button>
+      }
+    >
       <UpdateBanner />
       <Account />
 

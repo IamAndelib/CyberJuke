@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { bufferedAhead, openNowPlaying, playAndOpen, playerCalls, seedStorage, setOffline, start } from '../helpers';
+import { bufferedAhead, openNowPlaying, openSettings, playAndOpen, playerCalls, seedStorage, setOffline, start } from '../helpers';
 
 /**
  * The listening cache (native): liked songs saved on the phone play offline, from any list,
@@ -210,7 +210,7 @@ test('Settings → Listening cache: 256 MB by default, three sizes sent to the p
   await page.goto('/');
   const sent = async () => (await playerCalls(page)).filter((c) => c[0] === 'setCacheLimit').map((c) => c[1]);
   await expect.poll(sent).toEqual([{ mb: 256 }]);
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   const setting = page.getByTestId('listening-cache');
   await expect(setting).toContainText('Listening cache');
   await expect(setting).toContainText('Keeps music playing when the signal drops.');
@@ -244,6 +244,6 @@ test('Settings → Listening cache: 256 MB by default, three sizes sent to the p
 
   await page.reload();
   await expect.poll(sent).toEqual([{ mb: 128 }]);
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   await expect(page.getByTestId('cache-128')).toHaveAttribute('aria-checked', 'true');
 });

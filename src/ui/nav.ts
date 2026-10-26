@@ -2,8 +2,9 @@
  * App navigation: which tab is showing, each tab's own stack of pages, and the overlays
  * (Now Playing, the ⋯ menu, the artist chooser, confirm sheets).
  *
- * Every tab has a root screen (Home, the Genres and Artists grids, Library, Signal Radio, Settings)
- * and a stack of pages pushed on top of it: artist, genre, album, "See all" and Search.
+ * Every tab has a root screen (Home, the Genres and Artists grids, Library, Signal Radio)
+ * and a stack of pages pushed on top of it: artist, genre, album, "See all", Search and
+ * Settings (opened from Home's top bar).
  * A page opens in place on the current tab, from anywhere (Home, Search, Now Playing,
  * another artist), and Back pops it, returning exactly where you were. Visited tabs
  * stay mounted (App), so their scroll and artwork survive a tab switch.
@@ -14,8 +15,8 @@ import { useContext, useEffect, useRef } from 'preact/hooks';
 import type { Track } from '../data/model';
 import type { ReleaseKind } from '../data/ytmusic';
 
-export type Tab = 'home' | 'radio' | 'genres' | 'artists' | 'library' | 'settings';
-const TABS: readonly Tab[] = ['home', 'genres', 'artists', 'library', 'radio', 'settings'];
+export type Tab = 'home' | 'radio' | 'genres' | 'artists' | 'library';
+const TABS: readonly Tab[] = ['home', 'genres', 'artists', 'library', 'radio'];
 
 /** An album or playlist from Global search. What we know before it loads is shown at once. */
 export interface AlbumRef {
@@ -44,7 +45,8 @@ export type Page =
   | { kind: 'artist'; name: string }
   | { kind: 'album'; album: AlbumRef }
   | { kind: 'releases'; release: ReleasesRef }
-  | { kind: 'search' };
+  | { kind: 'search' }
+  | { kind: 'settings' };
 
 export interface StackEntry {
   /** Unique for the app session (the page's key). */
@@ -56,7 +58,7 @@ export interface StackEntry {
   tap: { x: number; y: number } | null;
 }
 
-const EMPTY_STACKS: Record<Tab, StackEntry[]> = { home: [], radio: [], genres: [], artists: [], library: [], settings: [] };
+const EMPTY_STACKS: Record<Tab, StackEntry[]> = { home: [], radio: [], genres: [], artists: [], library: [] };
 
 export const tab = signal<Tab>('home');
 /** Each tab's pages above its root, bottom first. */
@@ -163,6 +165,7 @@ function samePage(a: Page, b: Page): boolean {
       return a.release.token === r.token && a.release.kind === r.kind;
     }
     case 'search':
+    case 'settings':
       return true;
   }
 }
@@ -226,6 +229,11 @@ export function openGenrePage(name: string): void {
 /** Album or playlist page on the current tab. */
 export function openAlbumPage(album: AlbumRef): void {
   pushPage({ kind: 'album', album });
+}
+
+/** Settings, over Home (its top bar's gear). */
+export function openSettings(): void {
+  pushPage({ kind: 'settings' });
 }
 
 /** "See all" grid of one shelf, over the artist page. */
