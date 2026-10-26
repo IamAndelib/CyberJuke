@@ -30,6 +30,7 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 - **Latest tracks** posted to the Jukebox, as an endless list, with a "new tracks" button when something new is posted.
 - **Most saved**: the tracks people saved most on Cyberspace, this month or all time.
 - **Shuffle the Jukebox**: one tap for a random mix from the whole Jukebox.
+- **Signal Radio**: the Radio tab holds the 16 curated stations of Cyberspace's Jukebox, by hyphen8d, in two bands. A station plays all its tracks in a shuffle, then another, for as long as you listen (with Autoplay on).
 - **Autoplay**: when a list ends, similar songs keep playing. A Jukebox song leads to Jukebox songs picked by artist, genre and what the same people share; a Global song leads to that song's radio. Tracks you add with "Add to queue" always stay next.
 - **Search** every track on the Jukebox by title, artist or genre, with typo tolerance and recent searches. **Here** searches only the page you're on: a genre, an artist, an album, your library, or the Genres and Artists lists themselves.
 - **Genres** and **Artists**: browse everything shared on the Jukebox, A–Z or by popularity, and ★ your favourites to pin them to the top. An artist page puts what Cyberspace people shared first, then the artist's top songs, albums, live albums, EPs and singles from the artist's own page.
@@ -128,6 +129,8 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 | LRCLIB | Artist, title and duration of the current track | Lyrics panel open |
 | GitHub (`api.github.com`) | A request for the latest CyberJuke release (nothing about you or your library) | At most once a day when the app opens or comes back (an hour after a failed check), or **Check now**; only once you turn it on in Settings → Updates (off by default); never for F-Droid installs |
 
+The Signal Radio stations come with the app (`src/data/radio/stations.json`), so tuning in fetches no station list: a station track goes only to YouTube, by its video ID, like any other track.
+
 Nothing is sent to the developer. Your password is never stored or logged.
 
 ## Signing in
@@ -196,6 +199,15 @@ Maintainers: the publishing steps (signing keys, test builds, releases, F-Droid 
 - **[Cyberspace](https://beta.cyberspace.online)** and its creator **[@genghis_khan](https://beta.cyberspace.online/genghis_khan)**, for the site, its look and the Jukebox.
 - **Everyone who posts music** to the Jukebox. Every track in the app is credited to its poster and links to their post.
 - **[NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor)** by Team NewPipe (GPL-3.0), for playback and the YouTube Music data behind Global search and "More by".
+- **Signal Radio** stations: [hyphen8d/signal](https://github.com/hyphen8d/signal) by hyphen8d, made for Cyberspace's Jukebox. The station list, taglines, descriptions and track lists are bundled from it (`scripts/update-stations.mjs`, at a pinned commit) under the MIT License:
+
+  > Copyright (c) 2026 Matthew Arevalo
+  >
+  > Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+  >
+  > The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+  >
+  > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 - Fonts: [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) and [Departure Mono](https://departuremono.com), both under the SIL Open Font License.
 
 See [NOTICE.md](NOTICE.md) for all third-party components and their licenses. Security issues: see [SECURITY.md](SECURITY.md).
