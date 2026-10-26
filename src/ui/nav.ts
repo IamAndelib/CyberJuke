@@ -2,7 +2,7 @@
  * App navigation: which tab is showing, each tab's own stack of pages, and the overlays
  * (Now Playing, the ⋯ menu, the artist chooser, confirm sheets).
  *
- * Every tab has a root screen (Home, Signal Radio, the Genres and Artists grids, Library, Settings)
+ * Every tab has a root screen (Home, the Genres and Artists grids, Library, Signal Radio, Settings)
  * and a stack of pages pushed on top of it: artist, genre, album, "See all" and Search.
  * A page opens in place on the current tab, from anywhere (Home, Search, Now Playing,
  * another artist), and Back pops it, returning exactly where you were. Visited tabs
@@ -15,7 +15,7 @@ import type { Track } from '../data/model';
 import type { ReleaseKind } from '../data/ytmusic';
 
 export type Tab = 'home' | 'radio' | 'genres' | 'artists' | 'library' | 'settings';
-const TABS: readonly Tab[] = ['home', 'radio', 'genres', 'artists', 'library', 'settings'];
+const TABS: readonly Tab[] = ['home', 'genres', 'artists', 'library', 'radio', 'settings'];
 
 /** An album or playlist from Global search. What we know before it loads is shown at once. */
 export interface AlbumRef {

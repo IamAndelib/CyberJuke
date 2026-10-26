@@ -183,7 +183,7 @@ for (const [width, theme] of [[320, 'dark'], [360, 'dark'], [320, 'c64'], [320, 
     await start(page);
     const tabs = page.locator('.tabbar .tab');
     await expect(tabs).toHaveCount(6);
-    await expect(tabs.locator('.tab-label')).toHaveText(['Home', 'Radio', 'Genres', 'Artists', 'Library', 'Settings']);
+    await expect(tabs.locator('.tab-label')).toHaveText(['Home', 'Genres', 'Artists', 'Library', 'Radio', 'Settings']);
     const fits = await page.locator('.tabbar').evaluate((bar) => {
       const labels = [...bar.querySelectorAll<HTMLElement>('.tab-label')];
       const rects = labels.map((l) => l.getBoundingClientRect());

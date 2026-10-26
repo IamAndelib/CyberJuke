@@ -42,10 +42,10 @@ import { updateAvailable } from '../stores/updates';
 
 const TAB_ITEMS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
-  { id: 'radio', label: 'Radio', icon: 'radio' },
   { id: 'genres', label: 'Genres', icon: 'genres' },
   { id: 'artists', label: 'Artists', icon: 'artists' },
   { id: 'library', label: 'Library', icon: 'library' },
+  { id: 'radio', label: 'Radio', icon: 'radio' },
   { id: 'settings', label: 'Settings', icon: 'settings' },
 ];
 
