@@ -226,7 +226,7 @@ export interface Dataset {
 }
 
 /** Build the dataset for a given "now" (hour-aligned, so parallel workers agree). */
-export function buildDataset(now = Math.floor(Date.now() / 3_600_000) * 3_600_000): Dataset {
+export function buildDataset(now = Math.floor(Date.now() / 3_600_000) * 3_600_000, opts: { mp3?: boolean } = {}): Dataset {
   const r = mulberry32(20261008);
   const genres = buildGenres(r);
   const artists = buildArtists(r);
@@ -284,8 +284,8 @@ export function buildDataset(now = Math.floor(Date.now() / 3_600_000) * 3_600_00
   MEMBERS_POSTS.forEach((p, i) =>
     docs.push(doc({ id: p.id, by: p.by, title: p.title, genre: p.genre, createdAt: new Date(now - 20 * 60_000 - i * 1000).toISOString(), attachments: [audio(p.title, p.artist, p.genre, p.yt)], isPublic: false })),
   );
-  // Jukebox MP3s, by artists and in genres the Jukebox already has.
-  MP3_POSTS.forEach((p, i) =>
+  // Jukebox MP3s (only where asked for: BackendOptions.mp3), by artists and in genres the Jukebox already has.
+  if (opts.mp3) MP3_POSTS.forEach((p, i) =>
     docs.push(doc({ id: p.id, by: p.by, title: p.title, genre: genres[1], createdAt: new Date(now - p.daysAgo * DAY).toISOString(), attachments: [mp3Audio(p.title, artists[5 + i], genres[1], p.file)] })),
   );
   docs.push(

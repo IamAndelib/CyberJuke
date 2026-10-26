@@ -4,6 +4,8 @@ import { musicCalls, openSearch, start } from '../helpers';
 
 /** Jukebox MP3s (Cyberspace 4.0): posts whose audio is a latex.gg MP3 with a cover. */
 
+test.use({ backendOptions: { mp3: true } });
+
 const [first, second] = MP3_POSTS;
 const postUrl = (p: (typeof MP3_POSTS)[number]) => `https://beta.cyberspace.online/${p.by}/${p.id.toLowerCase()}`;
 
