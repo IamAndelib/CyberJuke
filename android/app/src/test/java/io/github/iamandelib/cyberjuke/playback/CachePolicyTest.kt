@@ -29,6 +29,65 @@ class CachePolicyTest {
     }
 
     @Test
+    fun aJukeboxMp3IsKeptByItsFileNameAndGoesThroughTheCache() {
+        val key = CacheKeys.ofMp3("IZq8cMcx.mp3")!!
+        assertEquals("mp3:IZq8cMcx.mp3", key)
+        // Its key is its audio id (as Liked, the saved set and the gate know it): no format, no length.
+        assertEquals(SessionPolicy.mp3AudioId("IZq8cMcx.mp3"), key)
+        assertEquals(key, CacheKeys.audioIdOf(key))
+        assertTrue(CacheKeys.isMp3(key))
+        assertTrue(CacheKeys.isCacheable(key))
+        assertFalse(CacheKeys.isYt(key))
+        assertNull(CacheKeys.ytIdOf(key))
+        assertNull(CacheKeys.itagOf(key))
+        // A video's key still names its video, and goes through the cache as before.
+        assertEquals("dQw4w9WgXcQ", CacheKeys.audioIdOf(CacheKeys.of("dQw4w9WgXcQ", 251, 3_000_000L)))
+        assertTrue(CacheKeys.isCacheable(CacheKeys.of("dQw4w9WgXcQ", 251)))
+        // Nothing else does: not the link itself, nor a file name that isn't one.
+        for (k in listOf(null, "mp3:", "mp3:x.ogg", "mp3:../x.mp3", "mp3:a/b.mp3", "https://latex.gg/share/IZq8cMcx.mp3", "IZq8cMcx.mp3", "asset:///ci-tone.ogg", "yt:abc")) {
+            assertFalse(k.toString(), CacheKeys.isCacheable(k))
+        }
+        assertNull(CacheKeys.ofMp3("../x.mp3"))
+        assertNull(CacheKeys.audioIdOf("mp3:x.ogg"))
+    }
+
+    @Test
+    fun aWholeJukeboxMp3PlaysWhateverTheQualityOrAResumeAsks() {
+        val key = CacheKeys.ofMp3("IZq8cMcx.mp3")!!
+        // pickKey goes by format, and an MP3 has none: it would never play from the cache.
+        assertNull(CacheKeys.pickKey(listOf(key), keepKey = null, rungItag = 251, wantedBps = 160_000))
+        // Its one file plays, on High, on a resume, whatever was asked.
+        assertEquals(key, CacheKeys.pickFor(key, listOf(key), keepKey = null, rungItag = 251, wantedBps = 160_000))
+        assertEquals(key, CacheKeys.pickFor(key, listOf(key), keepKey = "yt:dQw4w9WgXcQ:251", rungItag = null, wantedBps = 0))
+        assertNull(CacheKeys.pickFor(key, emptyList(), keepKey = null, rungItag = null, wantedBps = 0))
+        // A video's copy is still pickKey's choice.
+        val a = CacheKeys.of("dQw4w9WgXcQ", 251, 3_000_000L)
+        assertNull(CacheKeys.pickFor("dQw4w9WgXcQ", listOf(a), keepKey = CacheKeys.of("dQw4w9WgXcQ", 140), rungItag = 251, wantedBps = 0))
+        assertEquals(a, CacheKeys.pickFor("dQw4w9WgXcQ", listOf(a), keepKey = null, rungItag = 251, wantedBps = 0))
+    }
+
+    @Test
+    fun aLikedJukeboxMp3IsKeptLikeALikedVideo() {
+        val liked = CacheKeys.ofMp3("IZq8cMcx.mp3")!!
+        val other = CacheKeys.ofMp3("FEHdI7AK.mp3")!!
+        val l = CacheLedger(12 * mb)
+        l.setLiked(listOf(liked, "likeda00000"), known = false)
+        l.onAdded(liked, 3 * mb, touched = 1)
+        l.onAdded(liked, 1 * mb, touched = 2)
+        l.onAdded(CacheKeys.of("likeda00000", 251), 4 * mb, touched = 3)
+        l.onAdded(other, 4 * mb, touched = 9)
+        assertTrue(l.isLiked(liked))
+        assertEquals(listOf(liked), l.keysOf(liked))
+        assertEquals(8 * mb, l.likedBytes)
+        // Over by 8 MB: the MP3 nobody liked first, however recent; then the least recently liked.
+        assertEquals(listOf(other, CacheKeys.of("likeda00000", 251)), l.victims(8 * mb))
+        // Unliked, it is an ordinary listening entry.
+        l.setLiked(listOf("likeda00000"))
+        assertFalse(l.isLiked(liked))
+        assertEquals(listOf(liked, other), l.victims(8 * mb))
+    }
+
+    @Test
     fun wholeOnlyWithAKnownLengthAndEveryByteThere() {
         assertTrue(CacheKeys.isWhole(4_000_000L) { it == 4_000_000L })
         assertFalse(CacheKeys.isWhole(4_000_000L) { false })

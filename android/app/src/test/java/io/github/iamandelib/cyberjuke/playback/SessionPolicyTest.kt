@@ -151,6 +151,25 @@ class SessionPolicyTest {
     }
 
     @Test
+    fun audioIdsAreVideoIdsOrAJukeboxMp3sFileName() {
+        assertEquals("mp3:IZq8cMcx.mp3", SessionPolicy.mp3AudioId("IZq8cMcx.mp3"))
+        assertEquals("IZq8cMcx.mp3", SessionPolicy.mp3FileOfAudioId("mp3:IZq8cMcx.mp3"))
+        assertTrue(SessionPolicy.isValidAudioId("dQw4w9WgXcQ"))
+        assertTrue(SessionPolicy.isValidAudioId("mp3:IZq8cMcx.mp3"))
+        for (bad in listOf(
+            null, "", "mp3:", "mp3:x.ogg", "mp3:../x.mp3", "mp3:a/b.mp3", "mp3:x.mp3?y", "MP3:IZq8cMcx.mp3",
+            "IZq8cMcx.mp3", "https://latex.gg/share/IZq8cMcx.mp3", "dQw4w9WgXc", "yt:dQw4w9WgXcQ:251",
+        )) {
+            assertFalse(bad.toString(), SessionPolicy.isValidAudioId(bad))
+        }
+        assertNull(SessionPolicy.mp3AudioId("../x.mp3"))
+        assertNull(SessionPolicy.mp3AudioId(null))
+        assertNull(SessionPolicy.mp3FileOfAudioId("dQw4w9WgXcQ"))
+        // Never a video id: those have no ':'.
+        assertFalse(SessionPolicy.isValidYtId(SessionPolicy.mp3AudioId("abcdefg.mp3")))
+    }
+
+    @Test
     fun incomingItemsOnlyKeepValidYouTubeIds() {
         assertEquals("fJ9rUzIMcZQ", SessionPolicy.ytIdForIncoming("fJ9rUzIMcZQ", null))
         assertEquals("fJ9rUzIMcZQ", SessionPolicy.ytIdForIncoming(null, "fJ9rUzIMcZQ"))

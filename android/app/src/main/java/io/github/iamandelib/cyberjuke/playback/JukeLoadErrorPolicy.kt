@@ -22,19 +22,20 @@ import java.io.FileNotFoundException
 internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
     override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
         val e = loadErrorInfo.exception
-        val ytId = JukeUris.ytIdOf(loadErrorInfo.loadEventInfo.dataSpec.uri)
+        val uri = loadErrorInfo.loadEventInfo.dataSpec.uri
+        val ytId = JukeUris.ytIdOf(uri)
         val facts = Facts(
             httpCode = e.findCause<HttpDataSource.InvalidResponseCodeException>()?.responseCode,
             httpTransport = e.findCause<HttpDataSource.HttpDataSourceException>() != null,
             ytLoad = ytId != null,
-            mp3Load = JukeUris.mp3UrlOf(loadErrorInfo.loadEventInfo.dataSpec.uri) != null,
+            mp3Load = JukeUris.mp3UrlOf(uri) != null,
             fileError = e.findCause<FileDataSource.FileDataSourceException>() != null,
             errorCount = loadErrorInfo.errorCount,
             default = super.getRetryDelayMsFor(loadErrorInfo),
         )
         val delay = delayFor(e, facts)
         // The cache's file is skipped for a moment, so the retry fetches from the network.
-        if (delay == LoadRetry.CACHE_RETRY_MS && ytId != null) AudioCache.misses.missed(ytId)
+        if (delay == LoadRetry.CACHE_RETRY_MS) JukeUris.audioIdOf(uri)?.let { AudioCache.misses.missed(it) }
         return delay
     }
 
@@ -75,10 +76,10 @@ internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
             if (f.httpCode != null && f.httpCode in NO_RETRY_HTTP) return C.TIME_UNSET
             if (f.mp3Load && f.httpCode != null && f.httpCode in 400..499) return C.TIME_UNSET
             // A listening-cache file gone (low storage) or unreadable: the retry fetches the bytes
-            // from the network, not from the cache (the video is skipped there for a moment); the
-            // default never retries a missing file: a dead track.
+            // from the network, not from the cache (the track is skipped there for a moment); the
+            // default never retries a missing file: a dead track. A Jukebox MP3 is cached too.
             LoadRetry.cacheFileRetryMs(
-                ytLoad = f.ytLoad,
+                ytLoad = f.ytLoad || f.mp3Load,
                 fileError = f.fileError || e.findCause<FileNotFoundException>() != null,
             )?.let { return it }
             // What the default never retries (a malformed file, a missing one) stays that way.

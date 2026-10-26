@@ -39,6 +39,21 @@ internal object JukeUris {
         return SessionPolicy.mp3UrlForFile(uri.lastPathSegment)
     }
 
+    /**
+     * The audio id of a `cyberjuke://` URI ([SessionPolicy.isValidAudioId]): the video id of a
+     * YouTube one, `mp3:<file>` of a Jukebox MP3, else null. What the listening cache, the
+     * liked saver and the gate know a track by.
+     */
+    fun audioIdOf(uri: Uri?): String? {
+        ytIdOf(uri)?.let { return it }
+        if (uri == null || uri.scheme != SCHEME || uri.host != HOST_MP3) return null
+        return SessionPolicy.mp3AudioId(uri.lastPathSegment)
+    }
+
+    /** The item's audio id ([audioIdOf]): its video id, else its MP3's (from the URI or the metadata). */
+    fun audioIdOf(item: MediaItem?): String? =
+        ytIdOf(item) ?: SessionPolicy.mp3AudioId(SessionPolicy.mp3FileOf(mp3UrlOf(item)))
+
     /** The item is a Jukebox MP3 (its URI, or on a controller, which gets no URI, its metadata). */
     fun isMp3(item: MediaItem?): Boolean = mp3UrlOf(item) != null
 
@@ -161,8 +176,8 @@ internal object JukeTracks {
         }
         val membersOnly = o.optBoolean("membersOnly", false)
         TrackExtras.put(id, o.str("by"), o.str("postUrl"), membersOnly, restored)
-        // Its audio is tagged in the listening cache, so a sign-out removes it.
-        if (membersOnly && ytId != null) AudioCache.markMembers(listOf(ytId))
+        // Its audio is tagged in the listening cache, so a sign-out removes it (an MP3's too).
+        if (membersOnly) JukeUris.audioIdOf(uri)?.let { AudioCache.markMembers(listOf(it)) }
         val extras = Bundle().apply {
             if (ytId != null) putString(JukeUris.EXTRA_YT_ID, ytId) else putString(JukeUris.EXTRA_MP3, mp3)
         }

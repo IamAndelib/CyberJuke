@@ -126,7 +126,7 @@ internal object LoadAhead {
 }
 
 /**
- * Which tracks may open their stream: the playing one and the next (by ytId, whether or not
+ * Which tracks may open their stream: the playing one and the next (by audio id, whether or not
  * [LoadAhead] lets the next load ahead yet). OneAheadLoadControl stops loading beyond them, but
  * ExoPlayer still prepares the item after next, and preparing opens its source: an extraction,
  * and a connection left idle. Its resolution waits here instead (YtDataSpecResolver, on the

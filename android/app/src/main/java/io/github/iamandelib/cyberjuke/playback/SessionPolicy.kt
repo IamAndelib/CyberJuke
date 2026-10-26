@@ -149,6 +149,23 @@ internal object SessionPolicy {
     /** The one URL of a Jukebox MP3 file name ([mp3FileOf]'s inverse), or null for anything else. */
     fun mp3UrlForFile(file: String?): String? = file?.takeIf { isValidMp3File(it) }?.let { "https://latex.gg/share/$it" }
 
+    /** What an MP3's audio id starts with ([mp3AudioId]); a video id never has a ':'. */
+    const val MP3_AUDIO_PREFIX = "mp3:"
+
+    /**
+     * The audio id of a Jukebox MP3 file name ("mp3:IZq8cMcx.mp3"), or null for anything else.
+     * One audio id per thing the listening cache keeps: a video's is its 11-character id, an
+     * MP3's this; the two can never be the same.
+     */
+    fun mp3AudioId(file: String?): String? = file?.takeIf { isValidMp3File(it) }?.let { MP3_AUDIO_PREFIX + it }
+
+    /** The MP3 file name of an audio id ([mp3AudioId]'s inverse), or null when it isn't an MP3's. */
+    fun mp3FileOfAudioId(id: String?): String? =
+        id?.takeIf { it.startsWith(MP3_AUDIO_PREFIX) }?.substring(MP3_AUDIO_PREFIX.length)?.takeIf { isValidMp3File(it) }
+
+    /** An audio id the cache, Liked and the saved set take: a video id, or a Jukebox MP3's ([mp3AudioId]). */
+    fun isValidAudioId(id: String?): Boolean = isValidYtId(id) || mp3FileOfAudioId(id) != null
+
     /** A cover's path on Cyberspace's image server: under /uploads/, no dot segments, no escapes. */
     private val COVER_PATH = Regex("^/uploads/(?:[A-Za-z0-9_-][A-Za-z0-9._-]*/)*[A-Za-z0-9_-][A-Za-z0-9._-]*$")
 

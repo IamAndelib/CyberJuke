@@ -22,7 +22,10 @@ internal object FormatKeep {
  * and file, instead of the stream URL, which expires and changes with every extraction. The
  * file's length (`clen` in the stream URL) is part of it, so another file under the same format
  * (a re-encode, a dubbed track) never mixes with the bytes of the first; `yt:<ytId>:<itag>`
- * when the URL doesn't say. Pure (CachePolicyTest).
+ * when the URL doesn't say. A Jukebox MP3's key is its audio id, `mp3:<file>` ([ofMp3]): one
+ * fixed file per post on latex.gg, with no format or length to tell apart. Every key names the
+ * audio id it keeps ([audioIdOf]), the 11-character video id or the MP3's, which never meet.
+ * Pure (CachePolicyTest).
  */
 internal object CacheKeys {
     private const val PREFIX = "yt:"
@@ -46,10 +49,22 @@ internal object CacheKeys {
     fun of(ytId: String, itag: Int, clen: Long? = null): String =
         if (clen != null && clen > 0) "$PREFIX$ytId:$itag:$clen" else "$PREFIX$ytId:$itag"
 
-    /** A YouTube audio key: only these go through the cache (the CI tone and HLS don't). */
+    /** A YouTube audio key. */
     fun isYt(key: String?): Boolean = key != null && parse(key) != null
 
     fun ytIdOf(key: String): String? = parse(key)?.first
+
+    /** A Jukebox MP3's key ([SessionPolicy.mp3AudioId] of its file name), or null for anything else. */
+    fun ofMp3(file: String?): String? = SessionPolicy.mp3AudioId(file)
+
+    /** A Jukebox MP3's key. */
+    fun isMp3(key: String?): Boolean = SessionPolicy.mp3FileOfAudioId(key) != null
+
+    /** A key that goes through the cache: YouTube audio or a Jukebox MP3 (the CI tone and HLS don't). */
+    fun isCacheable(key: String?): Boolean = isYt(key) || isMp3(key)
+
+    /** The audio id [key] keeps: the video id of a `yt:` key, an MP3's key itself; null for anything else. */
+    fun audioIdOf(key: String): String? = ytIdOf(key) ?: key.takeIf { isMp3(it) }
 
     fun itagOf(key: String): Int? = parse(key)?.second
 
@@ -81,11 +96,14 @@ internal object CacheKeys {
     }
 
     /**
-     * A `yt:` load's flags on its way into the cache: without FLAG_DONT_CACHE_IF_LENGTH_UNKNOWN.
+     * A cached load's flags on its way into the cache: without FLAG_DONT_CACHE_IF_LENGTH_UNKNOWN.
      * ExoPlayer sets it on every progressive load, to keep a live stream out of a cache, and
      * CacheDataSink then writes nothing when the response has no Content-Length (googlevideo's
-     * answer to a POST may have none). A YouTube audio file is never live: it is cached anyway,
-     * and the cache stores its length when the read reaches its end.
+     * answer to a POST may have none). A YouTube audio file is never live, nor is a Jukebox MP3
+     * (an uploaded file): each is cached anyway, and the cache stores its length when the read
+     * reaches its end. (Whether latex.gg sends a Content-Length and honours Range requests, which
+     * a partly cached MP3 needs for the rest, is not verified from here; without Range support
+     * the rest is read from the start of the file again, as any HTTP source does.)
      */
     fun cacheFlags(flags: Int): Int = flags and DataSpec.FLAG_DONT_CACHE_IF_LENGTH_UNKNOWN.inv()
 
@@ -122,11 +140,19 @@ internal object CacheKeys {
         val itag = pick(whole.mapNotNull { itagOf(it) }, null, rungItag, wantedBps) ?: return null
         return whole.firstOrNull { itagOf(it) == itag }
     }
+
+    /**
+     * The key to play of [audioId]'s [whole] copies: a Jukebox MP3 has one file and no formats,
+     * so its whole copy plays whatever the quality setting or a resume asks; a video's is
+     * [pickKey]'s choice.
+     */
+    fun pickFor(audioId: String, whole: List<String>, keepKey: String?, rungItag: Int?, wantedBps: Int): String? =
+        if (isMp3(audioId)) whole.firstOrNull() else pickKey(whole, keepKey, rungItag, wantedBps)
 }
 
 /**
  * The bookkeeping behind JukeCacheEvictor: what the cache holds per key (the sum of its spans,
- * when it was last used), and which videos are liked, in order. The cache has a size limit
+ * when it was last used), and which audio ids (videos and Jukebox MP3s) are liked, in order. The cache has a size limit
  * (changeable); over it, whole keys go:
  * 1. listening entries (not liked), least recently used first;
  * 2. liked entries only when liked songs alone are over the limit, least recently liked first.
@@ -136,7 +162,7 @@ internal object CacheKeys {
  * lock. Pure (CachePolicyTest).
  */
 internal class CacheLedger(limitBytes: Long) {
-    private class Entry(val key: String, val ytId: String) {
+    private class Entry(val key: String, val audioId: String) {
         var bytes = 0L
         var touched = 0L
 
@@ -145,7 +171,7 @@ internal class CacheLedger(limitBytes: Long) {
     }
 
     private val entries = HashMap<String, Entry>()
-    private val keysByYt = HashMap<String, MutableSet<String>>()
+    private val keysByAudio = HashMap<String, MutableSet<String>>()
 
     /** Listening entries, least recently used first. */
     private val listening = TreeSet<Entry>(compareBy<Entry>({ it.touched }, { it.key }))
@@ -155,7 +181,7 @@ internal class CacheLedger(limitBytes: Long) {
 
     private var rank: Map<String, Int> = emptyMap()
 
-    /** The liked videos, newest like first. */
+    /** The liked audio ids, newest like first. */
     var liked: List<String> = emptyList()
         private set
 
@@ -170,11 +196,11 @@ internal class CacheLedger(limitBytes: Long) {
         private set
 
     fun onAdded(key: String, bytes: Long, touched: Long) {
-        val ytId = CacheKeys.ytIdOf(key) ?: key
-        val e = entries[key] ?: Entry(key, ytId).also {
-            it.likedRank = rank[ytId] ?: -1
+        val audioId = CacheKeys.audioIdOf(key) ?: key
+        val e = entries[key] ?: Entry(key, audioId).also {
+            it.likedRank = rank[audioId] ?: -1
             entries[key] = it
-            keysByYt.getOrPut(ytId) { HashSet(2) }.add(key)
+            keysByAudio.getOrPut(audioId) { HashSet(2) }.add(key)
         }
         unlist(e)
         e.bytes += bytes
@@ -195,9 +221,9 @@ internal class CacheLedger(limitBytes: Long) {
             return
         }
         entries.remove(key)
-        keysByYt[e.ytId]?.let { keys ->
+        keysByAudio[e.audioId]?.let { keys ->
             keys.remove(key)
-            if (keys.isEmpty()) keysByYt.remove(e.ytId)
+            if (keys.isEmpty()) keysByAudio.remove(e.audioId)
         }
     }
 
@@ -207,7 +233,7 @@ internal class CacheLedger(limitBytes: Long) {
      */
     fun resetSpans() {
         entries.clear()
-        keysByYt.clear()
+        keysByAudio.clear()
         listening.clear()
         likedEntries.clear()
         total = 0L
@@ -223,35 +249,35 @@ internal class CacheLedger(limitBytes: Long) {
     }
 
     /**
-     * The liked videos, newest like first (unliking makes one an ordinary listening entry).
+     * The liked audio ids, newest like first (unliking makes one an ordinary listening entry).
      * Returns the ones liked just now: those new since the last call when there are at most
      * [MAX_FRESH] (a few hearts tapped); none on the first call ([known] false, nothing to compare
      * with) or after a bigger change (a sign-in bringing likes back): those are the backfill's.
      */
-    fun setLiked(ytIds: List<String>, known: Boolean = true): List<String> {
+    fun setLiked(ids: List<String>, known: Boolean = true): List<String> {
         val before = rank
-        val next = HashMap<String, Int>(ytIds.size * 2)
-        ytIds.forEachIndexed { i, id -> next.putIfAbsent(id, i) }
-        val added = if (known) ytIds.filter { it !in before }.distinct() else emptyList()
+        val next = HashMap<String, Int>(ids.size * 2)
+        ids.forEachIndexed { i, id -> next.putIfAbsent(id, i) }
+        val added = if (known) ids.filter { it !in before }.distinct() else emptyList()
         val fresh = if (added.size <= MAX_FRESH) added else emptyList()
         rank = next
-        liked = ytIds.distinct()
+        liked = ids.distinct()
         listening.clear()
         likedEntries.clear()
         likedBytes = 0L
         for (e in entries.values) {
-            e.likedRank = next[e.ytId] ?: -1
+            e.likedRank = next[e.audioId] ?: -1
             if (e.likedRank >= 0) likedBytes += e.bytes
             relist(e)
         }
         return fresh
     }
 
-    fun isLiked(ytId: String): Boolean = ytId in rank
+    fun isLiked(audioId: String): Boolean = audioId in rank
 
-    /** The keys of [ytId]'s cached formats, most recently used first. */
-    fun keysOf(ytId: String): List<String> =
-        keysByYt[ytId]?.mapNotNull { entries[it] }?.sortedByDescending { it.touched }?.map { it.key } ?: emptyList()
+    /** The keys of [audioId]'s cached formats, most recently used first. */
+    fun keysOf(audioId: String): List<String> =
+        keysByAudio[audioId]?.mapNotNull { entries[it] }?.sortedByDescending { it.touched }?.map { it.key } ?: emptyList()
 
     /** The cached bytes of [key] (0 when none). Tests only. */
     fun bytesOf(key: String): Long = entries[key]?.bytes ?: 0L
@@ -452,7 +478,8 @@ internal class CacheMisses(private val clock: () -> Long = { System.currentTimeM
 }
 
 /**
- * Members-only audio in the cache, so signing out removes it all, whatever put it there:
+ * Members-only audio in the cache, so signing out removes it all, whatever put it there. By
+ * audio id ([SessionPolicy.isValidAudioId]): a members-only Jukebox MP3 goes like a video.
  * - [mark]: a video known to be members-only (a queue item marked so, a members-only like);
  * - [onCached]: it reached the cache, so it is tagged (AudioCache keeps the tags in a file);
  * - [signOut]: every tagged or known one is to go, and while signed out none of them may come

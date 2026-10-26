@@ -69,6 +69,8 @@ import kotlin.math.roundToInt
  *   first), setCacheLimit({ mb }), clearCache(), signedOut() (members-only audio goes, and stays
  *   out until signedIn()), cachedIds() -> { ytIds }: the liked songs saved whole, which play
  *   offline. cacheChanged { ytIds } sends that set again when it changes, at most every 2 s.
+ *   Each `ytIds` holds audio ids ([SessionPolicy.isValidAudioId]): a video id, or `mp3:<file>`
+ *   for a Jukebox MP3 (its latex.gg file name); anything else is dropped.
  *   The upkeep calls resolve once done, and reject when there is no cache.
  * - trackError is { trackId, message, skipped, kind: 'network' | 'track', resumes }: 'network'
  *   when the connection failed (paused on the item; `resumes`: it plays on by itself once the
@@ -816,14 +818,15 @@ class JukePlayerPlugin : Plugin() {
     }
 
     /**
-     * `setLikedIds({ ytIds, membersOnly? })`: the liked songs, newest like first (at most
-     * BRIDGE_MAX_ITEMS), and which of them are members-only. Kept in the cache last, and saved
-     * for offline; a few liked since the last call are saved now.
+     * `setLikedIds({ ytIds, membersOnly? })`: the liked songs' audio ids (a video id, or
+     * `mp3:<file>`), newest like first (at most BRIDGE_MAX_ITEMS), and which of them are
+     * members-only. Kept in the cache last, and saved for offline; a few liked since the last
+     * call are saved now.
      */
     @PluginMethod
     fun setLikedIds(call: PluginCall) {
-        val ids = ytIdsArg(call, "ytIds") ?: return
-        val members = if (call.data.has("membersOnly")) ytIdsArg(call, "membersOnly") ?: return else emptyList()
+        val ids = audioIdsArg(call, "ytIds") ?: return
+        val members = if (call.data.has("membersOnly")) audioIdsArg(call, "membersOnly") ?: return else emptyList()
         AudioCache.markMembers(members)
         upkeep(call, "setLikedIds") { AudioCache.setLiked(ids) }
     }
@@ -864,7 +867,7 @@ class JukePlayerPlugin : Plugin() {
     }
 
     /**
-     * `cachedIds()`: `{ ytIds }`, the liked songs saved whole (they play offline). On the
+     * `cachedIds()`: `{ ytIds }`, the audio ids of the liked songs saved whole (they play offline). On the
      * background thread too: the first call opens the cache, which waits for its index to be
      * read, and every plugin call would wait behind that on the plugins' one thread.
      */
@@ -880,11 +883,11 @@ class JukePlayerPlugin : Plugin() {
         }
     }
 
-    /** The call's [key] ids (valid ones only), or null after rejecting it (missing, TOO_LARGE). */
-    private fun ytIdsArg(call: PluginCall, key: String): List<String>? {
+    /** The call's [key] audio ids (valid ones only), or null after rejecting it (missing, TOO_LARGE). */
+    private fun audioIdsArg(call: PluginCall, key: String): List<String>? {
         val arr = call.getArray(key) ?: return null.also { call.reject("$key is required") }
         return try {
-            BridgeLimits.idsOf(arr).filter { SessionPolicy.isValidYtId(it) }
+            BridgeLimits.idsOf(arr).filter { SessionPolicy.isValidAudioId(it) }
         } catch (e: TooLargeException) {
             call.reject(e.message, QueueCommands.TOO_LARGE)
             null
