@@ -5,11 +5,13 @@
  * event, the web player inline) and this adds more, one refill at a time:
  *  - a Jukebox seed: similar Jukebox tracks from the cached catalog (data/similar);
  *  - a Global seed: YouTube Music's radio for it (web player only; natively the playback
- *    service runs Global radios itself, so they refill with the screen off).
+ *    service runs Global radios itself, so they refill with the screen off);
+ *  - a Signal Radio seed: the next round of its station (player/radio), all its tracks again.
  * Nothing while autoplay is off (the setting, C3) or repeat is on.
  */
 import { isGlobal, type Track } from '../data/model';
 import { similarTracks } from '../data/similar';
+import { stationOfTrackId, stationQueue } from './radio';
 import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, type Player, type QueueLow } from './types';
 
 /** How long a batch just added counts as ahead even before the player's state shows it (native's lags the call). */
@@ -51,7 +53,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
    * state had when the call returned; once that changes, the batch is in it (or was
    * dropped: repeat, a new list).
    */
-  let batch: { seedId: string; ids: string[]; at: number; queue?: readonly Track[] } | null = null;
+  let batch: { seedId: string; ids: string[]; at: number; queue?: readonly Track[]; round?: boolean } | null = null;
   /**
    * A Jukebox signal that came while the catalog was still loading (first launch, sign-in,
    * a reloaded WebView): nothing to pick from yet, so it waits for `catalogReady`.
@@ -65,19 +67,27 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     if (e.seedId && e.seedId !== seed.id) return; // a signal for an older seed
     const inQueue = new Set(s.queue.flatMap((t) => [t.id, t.ytId]));
     // The signal may be older than the last refill (one that came in during it): count
-    // again. A batch the state doesn't show yet is ahead too, and not picked again.
-    if (batch && (batch.seedId !== seed.id || now() - batch.at > BATCH_LAG_MS || (batch.queue && batch.queue !== s.queue) || batch.ids.some((id) => inQueue.has(id)))) batch = null;
+    // again. A batch the state doesn't show yet is ahead too, and not picked again. (A
+    // station's round holds tracks already in the queue: its ids say nothing about that.)
+    if (batch && (batch.seedId !== seed.id || now() - batch.at > BATCH_LAG_MS || (batch.queue && batch.queue !== s.queue) || (!batch.round && batch.ids.some((id) => inQueue.has(id))))) batch = null;
     const lagging = batch?.ids ?? [];
     for (const id of lagging) inQueue.add(id);
     const left = Math.max(e.left, s.upNext.filter((u) => u.auto).length) + lagging.length;
     if (left > AUTOPLAY_LOW) return;
     const count = left <= 0 ? AUTOPLAY_FIRST : AUTOPLAY_MORE;
-    const add = async (tracks: Track[]) => {
-      const b: NonNullable<typeof batch> = { seedId: seed.id, ids: tracks.map((t) => t.id), at: now() };
+    const add = async (tracks: Track[], round = false) => {
+      const b: NonNullable<typeof batch> = { seedId: seed.id, ids: tracks.map((t) => t.id), at: now(), ...(round && { round }) };
       batch = b;
       await player.addAutoplay(tracks, seed.id);
       b.queue = player.state.peek().queue;
     };
+
+    // A station plays on: its next round, which doesn't start with the last track queued.
+    const station = stationOfTrackId(seed.id);
+    if (station) {
+      await add(stationQueue(station, s.queue.at(-1)?.ytId, deps.rng), true);
+      return;
+    }
 
     if (isGlobal(seed)) {
       if (player.kind === 'native' || deps.blocked()) return;

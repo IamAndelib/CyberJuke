@@ -155,6 +155,33 @@ describe('autoplay', () => {
     expect(b.radio).not.toHaveBeenCalled();
   });
 
+  it('a Signal Radio seed goes on with the next round of its station, natively too, never with Global radio or the catalog', async () => {
+    const { stationById, stationTracks } = await import('./radio');
+    const st = stationById('cold-wave')!;
+    const round = stationTracks(st);
+    const seed = round[0];
+    const last = round.at(-1)!;
+    const a = setup({ current: seed, seed, index: 0, queue: [...round], upNext: round.slice(1).map((t, i) => ({ track: t, index: i + 1 })) });
+    (a.player as { kind: string }).kind = 'native';
+    await a.ap.fill({ left: 0, seedId: seed.id });
+    expect(a.added).toHaveLength(1);
+    const [ids, seedId] = a.added[0];
+    expect(seedId).toBe(seed.id);
+    expect([...ids].sort()).toEqual(round.map((t) => t.id).sort());
+    expect(ids[0]).not.toBe(last.id);
+    expect(a.radio).not.toHaveBeenCalled();
+    // Asked again before the state shows the round (native lags the call): nothing more.
+    await a.ap.fill({ left: 0, seedId: seed.id });
+    expect(a.added).toHaveLength(1);
+    // The state shows it, and it has run low: the round after that.
+    const next = ids.map((id) => round.find((t) => t.id === id)!);
+    a.s.value = { ...a.s.value, queue: [...round, ...next], index: round.length + next.length - 4, upNext: next.slice(-3).map((t, k) => ({ track: t, index: round.length + next.length - 3 + k, auto: true })) };
+    await a.ap.fill({ left: 3, seedId: seed.id });
+    expect(a.added).toHaveLength(2);
+    expect(a.added[1][0]).toHaveLength(round.length);
+    expect(a.added[1][0][0]).not.toBe(next.at(-1)!.id);
+  });
+
   it('nothing with repeat on or for an old seed', async () => {
     const seed = track('c0');
     const { ap, added, s } = setup({ current: seed, seed, queue: [seed], repeat: 'all' });

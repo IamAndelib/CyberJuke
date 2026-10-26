@@ -142,6 +142,12 @@ describe('stored tracks', () => {
     expect(asTracks('nope')).toEqual([]);
   });
 
+  it('keeps a Signal Radio track a Signal Radio track (Liked and history survive a restart)', () => {
+    const sig = { ...track, id: 'sig:cipher:abcdefghijk', ytId: 'abcdefghijk', genre: 'CIPHER', by: '', postTitle: '', postUrl: '', source: 'signal' };
+    expect(isTrackFull(sig)).toBe(true);
+    expect(asTrack(JSON.parse(JSON.stringify(sig)))).toEqual(sig);
+  });
+
   it('asTrack keeps the album of a Global album track, and drops anything else there', () => {
     expect(asTrack({ ...track, album: 'Blue Lines' })?.album).toBe('Blue Lines');
     expect(asTrack({ ...track, album: '' })).not.toHaveProperty('album');

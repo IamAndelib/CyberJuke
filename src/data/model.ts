@@ -28,7 +28,8 @@ export interface Track {
   /**
    * Where the track came from. Missing means 'jukebox' (everything stored before
    * Global search existed). 'ytmusic' tracks come from Global search / "More by":
-   * id `ytm:<ytId>`, and genre, poster and post URL are empty.
+   * id `ytm:<ytId>`, and genre, poster and post URL are empty. 'signal' tracks are Signal
+   * Radio's (player/radio): id `sig:<station>:<ytId>`, the station's callsign as genre, no post.
    */
   source?: TrackOrigin;
   /**
@@ -43,7 +44,7 @@ export interface Track {
   album?: string;
 }
 
-export type TrackOrigin = 'jukebox' | 'ytmusic';
+export type TrackOrigin = 'jukebox' | 'ytmusic' | 'signal';
 
 /** A track that isn't a Jukebox post (Global, from native, a placeholder): the post fields left empty. */
 export function makeTrack(t: Pick<Track, 'id' | 'ytId' | 'title' | 'artist'> & Partial<Track>): Track {
@@ -53,6 +54,11 @@ export function makeTrack(t: Pick<Track, 'id' | 'ytId' | 'title' | 'artist'> & P
 /** True for tracks from Global search (not shared on the Jukebox). */
 export function isGlobal(t: Pick<Track, 'source'> | null | undefined): boolean {
   return t?.source === 'ytmusic';
+}
+
+/** True for Signal Radio's station tracks. */
+export function isSignal(t: Pick<Track, 'source'> | null | undefined): boolean {
+  return t?.source === 'signal';
 }
 
 export const SITE_ORIGIN = 'https://beta.cyberspace.online';

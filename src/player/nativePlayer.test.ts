@@ -125,6 +125,17 @@ describe('NativePlayer: after the WebView is recreated (K4)', () => {
     emit('state', st(1000, { queueIds: undefined, queueIdsUnchanged: true }));
     expect(p.state.value.upNext[1].track.title).toBe('Title C');
   });
+
+  it('names Signal Radio tracks from the bundled stations, seed included', async () => {
+    const { STATIONS, stationTracks } = await import('./radio');
+    const [a, b] = stationTracks(STATIONS[0]);
+    const p = new NativePlayer();
+    emit('state', state({ trackId: a.id, seedId: a.id, queueIds: [a.id, b.id, 'sig:nowhere:abcdefghijk'], upNextIds: [b.id, 'sig:nowhere:abcdefghijk'], upNextKinds: 'la', upNextIndex: [1, 2] }));
+    expect(p.state.value.current).toBe(a);
+    expect(p.state.value.current?.source).toBe('signal');
+    expect(p.state.value.seed).toBe(a);
+    expect(p.state.value.upNext.map((u) => u.track.title)).toEqual([b.title, 'Unknown track']);
+  });
 });
 
 describe('NativePlayer: a session native restored after a restart', () => {

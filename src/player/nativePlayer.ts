@@ -10,6 +10,7 @@ import { toast } from '../stores/toast';
 import { YT_ID_RE, parseNativeState } from '../core/guards';
 import { logError } from '../core/log';
 import { trackErrorText } from './errorText';
+import { stationTrack } from './radio';
 import { BRIDGE_MAX_ITEMS, BRIDGE_MAX_STRING, JukePlayer, STALE_INDEX, type NativeState, type NativeTrack, type RepeatMode } from './native';
 import { EMPTY_STATE, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextItem, type UpNextKind } from './types';
 
@@ -163,7 +164,8 @@ export class NativePlayer implements Player {
   }
 
   private resolve(id: string): Track {
-    return this.known.get(id) ?? knownTrack(id) ?? catalogById.peek().get(id) ?? this.described.get(id) ?? placeholder(id);
+    // A station track is known from the bundled stations, also after the WebView was recreated.
+    return this.known.get(id) ?? knownTrack(id) ?? catalogById.peek().get(id) ?? stationTrack(id) ?? this.described.get(id) ?? placeholder(id);
   }
 
   private resync(): void {
