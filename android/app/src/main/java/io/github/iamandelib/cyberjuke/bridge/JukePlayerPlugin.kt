@@ -654,7 +654,7 @@ class JukePlayerPlugin : Plugin() {
         withController(call) { c ->
             sendCommand(call, c, QueueCommands.REMOVE_IDS, args) {
                 if (it.playbackState == Player.STATE_IDLE && it.mediaItemCount > 0 && it.playWhenReady &&
-                    !NetBlock.isBlocked()
+                    !blocked(it)
                 ) {
                     it.prepare()
                 }
@@ -706,7 +706,7 @@ class JukePlayerPlugin : Plugin() {
         withController(call) { c ->
             if (c.hasNextMediaItem()) {
                 c.seekToNextMediaItem()
-                if (c.playbackState == Player.STATE_IDLE && !NetBlock.isBlocked()) c.prepare()
+                if (c.playbackState == Player.STATE_IDLE && !blocked(c)) c.prepare()
             }
             call.resolve()
         }
@@ -717,7 +717,7 @@ class JukePlayerPlugin : Plugin() {
         withController(call) { c ->
             // Restarts the current track if past the first few seconds, like most players.
             c.seekToPrevious()
-            if (c.playbackState == Player.STATE_IDLE && c.mediaItemCount > 0 && !NetBlock.isBlocked()) c.prepare()
+            if (c.playbackState == Player.STATE_IDLE && c.mediaItemCount > 0 && !blocked(c)) c.prepare()
             call.resolve()
         }
     }
@@ -737,7 +737,7 @@ class JukePlayerPlugin : Plugin() {
                     putExpect(expectId)
                 }
                 sendCommand(call, c, QueueCommands.SKIP_TO, args) {
-                    if (it.playbackState == Player.STATE_IDLE && !NetBlock.isBlocked()) it.prepare()
+                    if (it.playbackState == Player.STATE_IDLE && !blocked(it)) it.prepare()
                     call.resolve()
                 }
             }
@@ -1040,9 +1040,16 @@ class JukePlayerPlugin : Plugin() {
      * While a back-off runs: pause (no prepare, no extraction) and remind the web. [play]: the
      * user asked to play, so it starts once the back-off is over.
      */
+    /**
+     * A YouTube back-off holds [c]'s current item: no prepare (it would extract). A Jukebox MP3
+     * isn't YouTube's, so it plays on through one.
+     */
+    private fun blocked(c: MediaController): Boolean = NetBlock.isBlocked() && !JukeUris.isMp3(c.currentMediaItem)
+
     private fun refuseWhileBlocked(c: MediaController, play: Boolean = true): Boolean {
         val (until, reason) = NetBlock.active()
         if (reason == null) return false
+        if (JukeUris.isMp3(c.currentMediaItem)) return false
         // Already false in the usual case; the service only cancels a resume on a change.
         if (c.playWhenReady) c.playWhenReady = false
         if (play) NetBlock.wantResume()
@@ -1111,11 +1118,13 @@ class JukePlayerPlugin : Plugin() {
             val extra = TrackExtras.get(id)
             // Ours (Global radio), or the last session's: the page may know neither.
             if (!(id.startsWith(QueueCommands.GLOBAL_PREFIX) || extra?.restored == true) || id in announcedTracks) continue
-            val ytId = JukeUris.ytIdOf(item) ?: continue
+            val ytId = JukeUris.ytIdOf(item)
+            val mp3 = if (ytId == null) JukeUris.mp3UrlOf(item) ?: continue else null
             announcedTracks.add(id)
             val o = JSObject()
             o.put("id", id)
-            o.put("ytId", ytId)
+            o.put("ytId", ytId ?: "")
+            mp3?.let { o.put("mp3", it) }
             o.put("title", item.mediaMetadata.title?.toString() ?: "")
             o.put("artist", item.mediaMetadata.artist?.toString() ?: "")
             o.put("artworkUrl", item.mediaMetadata.artworkUri?.toString() ?: "")

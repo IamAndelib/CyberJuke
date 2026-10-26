@@ -121,6 +121,30 @@ class SessionPolicyTest {
     }
 
     @Test
+    fun jukeboxMp3sAreLatexShareLinksOnly() {
+        assertTrue(SessionPolicy.isValidMp3Url("https://latex.gg/share/IZq8cMcx.mp3"))
+        assertEquals("IZq8cMcx.mp3", SessionPolicy.mp3FileOf("https://latex.gg/share/IZq8cMcx.mp3"))
+        for (bad in listOf(
+            "http://latex.gg/share/IZq8cMcx.mp3",
+            "https://latex.gg/share/IZq8cMcx",
+            "https://latex.gg/files/IZq8cMcx.mp3",
+            "https://evil.latex.gg/share/IZq8cMcx.mp3",
+            "https://latex.gg.evil.example/share/IZq8cMcx.mp3",
+            "https://latex.gg/share/../x.mp3",
+            "https://latex.gg/share/IZq8cMcx.mp3?x=1",
+            "file:///sdcard/x.mp3",
+            "",
+        )) {
+            assertFalse(bad, SessionPolicy.isValidMp3Url(bad))
+            assertNull(bad, SessionPolicy.mp3FileOf(bad))
+        }
+        assertFalse(SessionPolicy.isValidMp3Url(null))
+        assertTrue(SessionPolicy.isValidMp3File("IZq8cMcx.mp3"))
+        assertFalse(SessionPolicy.isValidMp3File("../IZq8cMcx.mp3"))
+        assertFalse(SessionPolicy.isValidMp3File("x.mp3/y"))
+    }
+
+    @Test
     fun incomingItemsOnlyKeepValidYouTubeIds() {
         assertEquals("fJ9rUzIMcZQ", SessionPolicy.ytIdForIncoming("fJ9rUzIMcZQ", null))
         assertEquals("fJ9rUzIMcZQ", SessionPolicy.ytIdForIncoming(null, "fJ9rUzIMcZQ"))
@@ -136,6 +160,12 @@ class SessionPolicyTest {
     @Test
     fun artworkOnlyFromYtimg() {
         assertTrue(SessionPolicy.isAllowedArtwork("https://i.ytimg.com/vi/fJ9rUzIMcZQ/hqdefault.jpg"))
+        // A Jukebox MP3's cover, from Cyberspace's uploads only.
+        assertTrue(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online/uploads/jukebox/Q7qx/1792922249462-97625ca1611e2070.jpg"))
+        assertFalse(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online/admin/x.jpg"))
+        assertFalse(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online/uploads/x.jpg?redirect=evil"))
+        assertFalse(SessionPolicy.isAllowedArtwork("http://bunker.cyberspace.online/uploads/x.jpg"))
+        assertFalse(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online.evil.example/uploads/x.jpg"))
         assertFalse(SessionPolicy.isAllowedArtwork("http://i.ytimg.com/vi/x/hqdefault.jpg"))
         assertFalse(SessionPolicy.isAllowedArtwork("https://i.ytimg.com.evil.example/x.jpg"))
         assertFalse(SessionPolicy.isAllowedArtwork("https://evil.example/i.ytimg.com/x.jpg"))

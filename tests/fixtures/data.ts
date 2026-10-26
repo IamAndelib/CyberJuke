@@ -25,6 +25,17 @@ export const MEMBERS_POSTS = [
   { id: 'membersPost003', title: 'Backroom Radio', artist: 'Midnight Members', genre: 'lo-fi', yt: 'Mbr00000003', by: 'nightowl' },
 ];
 /** A public post by a banned author: only the members query returns it; the phone must hide it. */
+/**
+ * Jukebox MP3s (Cyberspace 4.0): latex.gg share links with a cover, as the site stores
+ * them. Old enough not to move any of the newest rows other tests count on.
+ */
+export const MP3_POSTS = [
+  { id: 'mp3Post0001', title: 'Träume', file: 'IZq8cMcx', by: 'tronex', daysAgo: 40 },
+  { id: 'mp3Post0002', title: 'Anniversary Mix', file: 'FEHdI7AK', by: 'jm2c', daysAgo: 41 },
+] as const;
+export const mp3Url = (file: string) => `https://latex.gg/share/${file}.mp3`;
+export const coverUrl = (file: string) => `https://bunker.cyberspace.online/uploads/jukebox/fakeUid/${file}.webp`;
+
 export const BANNED_POST = { id: 'bannedPost001', title: 'Banned Broadcast', artist: 'Nobody', genre: 'noise', yt: 'Ban00000001', by: 'spammer' };
 
 export type FsValue = Record<string, unknown>;
@@ -140,6 +151,14 @@ const str = (v: string) => ({ stringValue: v });
 const bool = (v: boolean) => ({ booleanValue: v });
 const int = (v: number) => ({ integerValue: String(v) });
 const ts = (v: string) => ({ timestampValue: v });
+
+function mp3Audio(title: string, artist: string, genre: string, file: string): FsValue {
+  return {
+    mapValue: {
+      fields: { type: str('audio'), origin: str('latex'), src: str(mp3Url(file)), cover: str(coverUrl(file)), title: str(title), artist: str(artist), genre: str(genre) },
+    },
+  };
+}
 
 function audio(title: string, artist: string, genre: string, yt: string): FsValue {
   return {
@@ -264,6 +283,10 @@ export function buildDataset(now = Math.floor(Date.now() / 3_600_000) * 3_600_00
   // Members-only posts and a banned author's post, newer than every public post.
   MEMBERS_POSTS.forEach((p, i) =>
     docs.push(doc({ id: p.id, by: p.by, title: p.title, genre: p.genre, createdAt: new Date(now - 20 * 60_000 - i * 1000).toISOString(), attachments: [audio(p.title, p.artist, p.genre, p.yt)], isPublic: false })),
+  );
+  // Jukebox MP3s, by artists and in genres the Jukebox already has.
+  MP3_POSTS.forEach((p, i) =>
+    docs.push(doc({ id: p.id, by: p.by, title: p.title, genre: genres[1], createdAt: new Date(now - p.daysAgo * DAY).toISOString(), attachments: [mp3Audio(p.title, artists[5 + i], genres[1], p.file)] })),
   );
   docs.push(
     doc({ id: BANNED_POST.id, by: BANNED_POST.by, title: BANNED_POST.title, genre: BANNED_POST.genre, createdAt: new Date(now - 20 * 60_000 - 500).toISOString(), attachments: [audio(BANNED_POST.title, BANNED_POST.artist, BANNED_POST.genre, BANNED_POST.yt)], banned: true }),

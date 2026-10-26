@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { asTrack, asTracks, isTrackFull, parseMusicItem, parseMusicPage, parseNativeState, parseRunQueryRows } from './guards';
+import { asTrack, hasAudio, asTracks, isTrackFull, parseMusicItem, parseMusicPage, parseNativeState, parseRunQueryRows } from './guards';
 
 const track = {
   id: 'p1',
@@ -140,6 +140,22 @@ describe('stored tracks', () => {
     expect(asTrack({ ...track, ytId: '<script>' })).toBeNull();
     expect(asTracks([track, null, { id: '' }, track])).toHaveLength(2);
     expect(asTracks('nope')).toEqual([]);
+  });
+
+  it('keeps a Jukebox MP3 (no video id, a latex.gg link), and nothing else in its place', () => {
+    const mp3 = { ...track, ytId: '', mp3: 'https://latex.gg/share/IZq8cMcx.mp3' };
+    expect(isTrackFull(mp3)).toBe(true);
+    expect(asTrack(mp3)).toEqual(mp3);
+    expect(hasAudio(mp3)).toBe(true);
+    for (const bad of ['https://evil.com/share/x.mp3', 'http://latex.gg/share/x.mp3', 'https://latex.gg/share/x.wav', 42]) {
+      expect(isTrackFull({ ...mp3, mp3: bad }), String(bad)).toBe(false);
+      expect(asTrack({ ...mp3, mp3: bad }), String(bad)).toBeNull();
+    }
+    expect(isTrackFull({ ...mp3, ytId: 'bad' })).toBe(false);
+    expect(asTrack({ ...mp3, ytId: '<script>' })).toEqual(mp3);
+    expect(hasAudio({ ytId: '' })).toBe(false);
+    expect(hasAudio(null)).toBe(false);
+    expect(hasAudio(track)).toBe(true);
   });
 
   it('asTrack keeps the album of a Global album track, and drops anything else there', () => {

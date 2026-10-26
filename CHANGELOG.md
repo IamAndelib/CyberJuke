@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### The app
+- **Jukebox MP3s:** since Cyberspace 4.0 a Jukebox post can be an MP3 on latex.gg instead of a YouTube link. They show with their own cover and play like any other track (in lists, Liked, Recently played, autoplay and after a restart); before, the app left them out. Sharing one shares its post. A YouTube slowdown doesn't stop them, and one latex.gg can't serve is skipped.
+
 ## [1.2.0] - 2026-10-19
 
 ### The app

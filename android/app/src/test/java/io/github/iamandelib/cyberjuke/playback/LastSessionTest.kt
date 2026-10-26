@@ -57,6 +57,32 @@ class LastSessionTest {
     }
 
     @Test
+    fun aJukeboxMp3ComesBackAsAnMp3() {
+        // An MP3 has no video id: the session keeps its latex.gg link instead (it used to be
+        // dropped whole, the moment one MP3 was in the list).
+        val link = "https://latex.gg/share/IZq8cMcx.mp3"
+        val mp3 = entry(1).copy(ytId = "", mp3 = link, artworkUrl = "https://bunker.cyberspace.online/uploads/jukebox/x/1.jpg")
+        val s = LastSession.of(listOf(entry(0), mp3), 1, 5_000L, 0L, false, null, 0, null, null)!!
+        val back = LastSession.decode(s.encode())!!
+        assertEquals(s, back)
+        assertEquals(listOf(null, link), back.entries.map { it.mp3 })
+        val track = back.entries[1].toNativeTrack()
+        assertEquals(link, track.getString("mp3"))
+        assertEquals("", track.getString("ytId"))
+        assertEquals(false, back.entries[0].toNativeTrack().has("mp3"))
+        // Only a latex.gg share link: anything else in its place drops the session.
+        for (bad in listOf("https://evil.example/x.mp3", "file:///sdcard/x.mp3", "")) {
+            val o = JSONObject(s.encode())
+            o.getJSONArray("tracks").getJSONObject(1).put("mp3", bad)
+            assertNull(bad, LastSession.decode(o.toString()))
+        }
+        // A video id wins over a stray link: the entry is the video's.
+        val both = JSONObject(s.encode())
+        both.getJSONArray("tracks").getJSONObject(0).put("mp3", link)
+        assertNull(LastSession.decode(both.toString())!!.entries[0].mp3)
+    }
+
+    @Test
     fun aLongListKeepsAWindowAroundTheCurrentTrack() {
         val n = 2000
         val order = IntArray(n) { n - 1 - it }

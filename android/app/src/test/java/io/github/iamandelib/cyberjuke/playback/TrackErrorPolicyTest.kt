@@ -104,6 +104,36 @@ class TrackErrorPolicyTest {
     }
 
     @Test
+    fun aJukeboxMp3FailingOnLatexIsSkippedNeverABlock() {
+        val mp3 = Facts(kind = null, mp3 = true, networkValidated = true)
+        // A refusal, an expired-looking 403, latex.gg down, the file gone: this track's, skipped.
+        // No fresh link, no IPv4 switch, no YouTube back-off: those are about YouTube.
+        for (code in listOf(403, 404, 410, 429, 500, 502, 503)) {
+            assertEquals("HTTP $code", Action.Skip, TrackErrorPolicy.decide(mp3.copy(httpCode = code, viaIpv6 = true, canSwitchToIpv4 = true, urlAgeMs = 1_000L)))
+        }
+        // latex.gg not answering with the network up: the next track (YouTube) would play.
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(mp3.copy(ioNetwork = true)))
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(mp3.copy(ioOther = true)))
+        // Five in a row still stop, and the last track pauses at its end.
+        assertEquals(Action.Stop, TrackErrorPolicy.decide(mp3.copy(httpCode = 404, consecutiveFailures = 4)))
+        assertEquals(Action.PauseAtEnd, TrackErrorPolicy.decide(mp3.copy(httpCode = 404, hasNext = false)))
+    }
+
+    @Test
+    fun aJukeboxMp3PausesForAnOutageOnlyWhenTheConnectionIsGone() {
+        val mp3 = Facts(kind = null, mp3 = true)
+        // No network: every track would fail, so wait for it as for a video.
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(mp3.copy(ioNetwork = true, networkValidated = false)))
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(mp3.copy(ioOther = true, networkValidated = false)))
+        // The connection dropped while it played: resume it, once at that spot.
+        val midTrack = mp3.copy(ioOther = true, playedThisItem = true)
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(midTrack))
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(midTrack.copy(failuresHere = 1)))
+        // A YouTube back-off running says nothing about latex.gg.
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(mp3.copy(blocked = true, httpCode = 404)))
+    }
+
+    @Test
     fun anUnclearIoFailureIsAnOutageWhenTheNetworkIsDown() {
         // A reset connection or an early end of stream, and no validated network: the next
         // track would fail too, so pause and resume instead of skipping a good track.

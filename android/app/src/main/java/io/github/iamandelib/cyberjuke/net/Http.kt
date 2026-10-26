@@ -291,6 +291,16 @@ internal object Hosts {
 
     fun hostOf(url: String): String? = url.toHttpUrlOrNull()?.host
 
+    private val MP3_FILE = Regex("^[A-Za-z0-9_-]+\\.mp3$", RegexOption.IGNORE_CASE)
+
+    /** A Jukebox MP3 ExoPlayer may load: https on latex.gg, `/share/<file>.mp3`, nothing else. */
+    fun isLatexMp3(url: String): Boolean {
+        val u = url.toHttpUrlOrNull() ?: return false
+        val segs = u.pathSegments
+        return u.isHttps && u.host == "latex.gg" && u.port == 443 && u.query == null && u.fragment == null &&
+            u.username.isEmpty() && segs.size == 2 && segs[0] == "share" && MP3_FILE.matches(segs[1])
+    }
+
     /** A stream, manifest or segment URL ExoPlayer may load: https on a YouTube media host. */
     fun isAllowedMediaUrl(url: String): Boolean {
         val u = url.toHttpUrlOrNull() ?: return false

@@ -133,6 +133,19 @@ internal object SessionPolicy {
 
     fun isValidYtId(id: String?): Boolean = id != null && YT_ID.matches(id)
 
+    /** A Jukebox MP3 (Cyberspace 4.0): a latex.gg share link, the only kind the site accepts. */
+    private val MP3_URL = Regex("^https://latex\\.gg/share/([A-Za-z0-9_-]+\\.mp3)$", RegexOption.IGNORE_CASE)
+
+    fun isValidMp3Url(url: String?): Boolean = url != null && MP3_URL.matches(url)
+
+    /** The file name of a Jukebox MP3 link ("IZq8cMcx.mp3"), or null when it isn't one. */
+    fun mp3FileOf(url: String?): String? = url?.let { MP3_URL.matchEntire(it)?.groupValues?.get(1) }
+
+    /** A Jukebox MP3's file name as it comes back in our own URI. */
+    private val MP3_FILE = Regex("^[A-Za-z0-9_-]+\\.mp3$", RegexOption.IGNORE_CASE)
+
+    fun isValidMp3File(file: String?): Boolean = file != null && MP3_FILE.matches(file)
+
     /**
      * The ytId to rebuild an incoming item's URI from: the one in our own `cyberjuke://yt/<id>`
      * URI, else the metadata extra; null (drop the item) unless it is a valid 11-char id.
@@ -146,7 +159,11 @@ internal object SessionPolicy {
         return null
     }
 
-    /** Artwork is only loaded from `https://i.ytimg.com/...`; anything else is dropped. */
+    /**
+     * Artwork is only loaded from `https://i.ytimg.com/...` (video thumbnails) and
+     * `https://bunker.cyberspace.online/uploads/...` (the covers of Jukebox MP3s); anything
+     * else is dropped.
+     */
     fun isAllowedArtwork(url: String?): Boolean {
         if (url.isNullOrEmpty()) return false
         val uri = try {
@@ -154,7 +171,8 @@ internal object SessionPolicy {
         } catch (_: Exception) {
             return false
         }
-        return uri.scheme == "https" && uri.host == "i.ytimg.com" && uri.userInfo == null &&
-            (uri.port == -1 || uri.port == 443)
+        if (uri.scheme != "https" || uri.userInfo != null || !(uri.port == -1 || uri.port == 443)) return false
+        return uri.host == "i.ytimg.com" ||
+            (uri.host == "bunker.cyberspace.online" && uri.rawPath.orEmpty().startsWith("/uploads/") && uri.rawQuery == null)
     }
 }

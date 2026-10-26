@@ -10,17 +10,45 @@ import org.json.JSONObject
 import java.security.SecureRandom
 import java.util.concurrent.CopyOnWriteArraySet
 
-/** Custom URI scheme for queue items. The real stream URL is resolved lazily at load time. */
+/**
+ * Custom URI scheme for queue items. The real stream URL is resolved lazily at load time:
+ * `cyberjuke://yt/<ytId>` for a YouTube video, `cyberjuke://mp3/<file>` for a Jukebox MP3,
+ * whose one possible URL ([mp3UrlOf]) is rebuilt from its latex.gg file name.
+ */
 internal object JukeUris {
     const val SCHEME = "cyberjuke"
     private const val HOST_YT = "yt"
+    private const val HOST_MP3 = "mp3"
     const val EXTRA_YT_ID = "ytId"
+    /** A Jukebox MP3's latex.gg link, in its metadata extras (the last session and `tracks` echo it). */
+    const val EXTRA_MP3 = "mp3"
+    private const val MP3_BASE = "https://latex.gg/share/"
 
     fun forYt(ytId: String): Uri = Uri.parse("$SCHEME://$HOST_YT/${Uri.encode(ytId)}")
+
+    /** Null unless [url] is a Jukebox MP3 link ([SessionPolicy.isValidMp3Url]). */
+    fun forMp3(url: String): Uri? = SessionPolicy.mp3FileOf(url)?.let { Uri.parse("$SCHEME://$HOST_MP3/$it") }
 
     fun ytIdOf(uri: Uri?): String? {
         if (uri == null || uri.scheme != SCHEME || uri.host != HOST_YT) return null
         return uri.lastPathSegment?.takeIf { it.isNotEmpty() }
+    }
+
+    /** The latex.gg URL of a `cyberjuke://mp3/<file>` URI, or null for any other URI. */
+    fun mp3UrlOf(uri: Uri?): String? {
+        if (uri == null || uri.scheme != SCHEME || uri.host != HOST_MP3) return null
+        val file = uri.lastPathSegment?.takeIf { SessionPolicy.isValidMp3File(it) } ?: return null
+        return MP3_BASE + file
+    }
+
+    /** The item is a Jukebox MP3 (its URI, or on a controller, which gets no URI, its metadata). */
+    fun isMp3(item: MediaItem?): Boolean = mp3UrlOf(item) != null
+
+    /** The item's MP3 link: from its URI, else the metadata extra (a restored item). */
+    fun mp3UrlOf(item: MediaItem?): String? {
+        if (item == null) return null
+        return mp3UrlOf(item.localConfiguration?.uri)
+            ?: item.mediaMetadata.extras?.getString(EXTRA_MP3)?.takeIf { SessionPolicy.isValidMp3Url(it) }
     }
 
     /** ytId from the URI, falling back to the metadata extras. */
@@ -119,16 +147,27 @@ internal object JukeTracks {
         return items
     }
 
-    /** [restored]: a track of the last session (see [TrackExtras.Extra.restored]). */
+    /**
+     * [restored]: a track of the last session (see [TrackExtras.Extra.restored]). A track plays
+     * a YouTube video (`ytId`) or, with `ytId` "", a Jukebox MP3 (`mp3`, a latex.gg link).
+     */
     fun toMediaItem(o: JSONObject, restored: Boolean = false): MediaItem {
         val id = o.str("id") ?: throw IllegalArgumentException("track.id missing")
-        val ytId = o.str("ytId") ?: throw IllegalArgumentException("track.ytId missing ($id)")
-        if (!SessionPolicy.isValidYtId(ytId)) throw IllegalArgumentException("track.ytId invalid ($id)")
+        val ytId = o.str("ytId")
+        val mp3 = o.str("mp3")
+        val uri = when {
+            ytId != null && SessionPolicy.isValidYtId(ytId) -> JukeUris.forYt(ytId)
+            ytId == null && mp3 != null -> JukeUris.forMp3(mp3) ?: throw IllegalArgumentException("track.mp3 invalid ($id)")
+            ytId == null -> throw IllegalArgumentException("track.ytId missing ($id)")
+            else -> throw IllegalArgumentException("track.ytId invalid ($id)")
+        }
         val membersOnly = o.optBoolean("membersOnly", false)
         TrackExtras.put(id, o.str("by"), o.str("postUrl"), membersOnly, restored)
         // Its audio is tagged in the listening cache, so a sign-out removes it.
-        if (membersOnly) AudioCache.markMembers(listOf(ytId))
-        val extras = Bundle().apply { putString(JukeUris.EXTRA_YT_ID, ytId) }
+        if (membersOnly && ytId != null) AudioCache.markMembers(listOf(ytId))
+        val extras = Bundle().apply {
+            if (ytId != null) putString(JukeUris.EXTRA_YT_ID, ytId) else putString(JukeUris.EXTRA_MP3, mp3)
+        }
         val metadata = MediaMetadata.Builder()
             .setTitle(o.str("title"))
             .setArtist(o.str("artist"))
@@ -140,7 +179,7 @@ internal object JukeTracks {
             .build()
         return MediaItem.Builder()
             .setMediaId(id)
-            .setUri(JukeUris.forYt(ytId))
+            .setUri(uri)
             .setMediaMetadata(metadata)
             .build()
     }

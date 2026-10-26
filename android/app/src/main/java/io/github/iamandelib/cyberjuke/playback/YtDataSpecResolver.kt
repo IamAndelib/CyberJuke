@@ -14,7 +14,8 @@ import java.util.concurrent.atomic.AtomicLong
  * Maps cyberjuke://yt/<id> to the real googlevideo URL + headers, on the loader thread. Every
  * load goes through here: only https YouTube media URLs leave it (L5), plus the CI test tone
  * asset on debuggable builds. A track saved whole in the listening cache ([AudioCache]) leaves
- * with no URL at all, only its cache key.
+ * with no URL at all, only its cache key. A Jukebox MP3 (cyberjuke://mp3/<file>) leaves as
+ * its latex.gg link, as is: no extraction, no YouTube headers, no gate.
  */
 @OptIn(UnstableApi::class)
 internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
@@ -28,6 +29,7 @@ internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
     val gate = OpenGate()
 
     override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
+        JukeUris.mp3UrlOf(dataSpec.uri)?.let { return mp3Spec(dataSpec, it) }
         val ytId = JukeUris.ytIdOf(dataSpec.uri)
         if (ytId == LaunchOptions.CI_TONE && allowCiTone) {
             return dataSpec.buildUpon().setUri(Uri.parse(LaunchOptions.CI_TONE_ASSET)).build()
@@ -65,6 +67,13 @@ internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
         val spec = requestSpec(dataSpec, stream.url, headers, rn = true)
         if (!stream.audioOnly || stream.itag <= 0) return spec
         return spec.buildUpon().setKey(CacheKeys.of(ytId, stream.itag, StreamUrls.clen(stream.url))).build()
+    }
+
+    /** A Jukebox MP3: the file itself, from latex.gg ([Hosts.isLatexMp3]), with the request's own headers. */
+    @Throws(IOException::class)
+    fun mp3Spec(dataSpec: DataSpec, url: String): DataSpec {
+        if (!Hosts.isLatexMp3(url)) throw IOException("Refusing to load an MP3 that isn't a latex.gg share link")
+        return dataSpec.buildUpon().setUri(Uri.parse(url)).build()
     }
 
     private fun requestSpec(dataSpec: DataSpec, url: String, headers: Map<String, String>, rn: Boolean): DataSpec {
