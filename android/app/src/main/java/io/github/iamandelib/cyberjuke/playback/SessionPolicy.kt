@@ -146,6 +146,12 @@ internal object SessionPolicy {
 
     fun isValidMp3File(file: String?): Boolean = file != null && MP3_FILE.matches(file)
 
+    /** The one URL of a Jukebox MP3 file name ([mp3FileOf]'s inverse), or null for anything else. */
+    fun mp3UrlForFile(file: String?): String? = file?.takeIf { isValidMp3File(it) }?.let { "https://latex.gg/share/$it" }
+
+    /** A cover's path on Cyberspace's image server: under /uploads/, no dot segments, no escapes. */
+    private val COVER_PATH = Regex("^/uploads/(?:[A-Za-z0-9_-][A-Za-z0-9._-]*/)*[A-Za-z0-9_-][A-Za-z0-9._-]*$")
+
     /**
      * The ytId to rebuild an incoming item's URI from: the one in our own `cyberjuke://yt/<id>`
      * URI, else the metadata extra; null (drop the item) unless it is a valid 11-char id.
@@ -173,6 +179,6 @@ internal object SessionPolicy {
         }
         if (uri.scheme != "https" || uri.userInfo != null || !(uri.port == -1 || uri.port == 443)) return false
         return uri.host == "i.ytimg.com" ||
-            (uri.host == "bunker.cyberspace.online" && uri.rawPath.orEmpty().startsWith("/uploads/") && uri.rawQuery == null)
+            (uri.host == "bunker.cyberspace.online" && COVER_PATH.matches(uri.rawPath.orEmpty()) && uri.rawQuery == null && uri.rawFragment == null)
     }
 }

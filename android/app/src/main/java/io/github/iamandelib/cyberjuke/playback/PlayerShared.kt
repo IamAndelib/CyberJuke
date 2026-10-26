@@ -22,7 +22,6 @@ internal object JukeUris {
     const val EXTRA_YT_ID = "ytId"
     /** A Jukebox MP3's latex.gg link, in its metadata extras (the last session and `tracks` echo it). */
     const val EXTRA_MP3 = "mp3"
-    private const val MP3_BASE = "https://latex.gg/share/"
 
     fun forYt(ytId: String): Uri = Uri.parse("$SCHEME://$HOST_YT/${Uri.encode(ytId)}")
 
@@ -37,8 +36,7 @@ internal object JukeUris {
     /** The latex.gg URL of a `cyberjuke://mp3/<file>` URI, or null for any other URI. */
     fun mp3UrlOf(uri: Uri?): String? {
         if (uri == null || uri.scheme != SCHEME || uri.host != HOST_MP3) return null
-        val file = uri.lastPathSegment?.takeIf { SessionPolicy.isValidMp3File(it) } ?: return null
-        return MP3_BASE + file
+        return SessionPolicy.mp3UrlForFile(uri.lastPathSegment)
     }
 
     /** The item is a Jukebox MP3 (its URI, or on a controller, which gets no URI, its metadata). */

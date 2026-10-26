@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicLong
  * load goes through here: only https YouTube media URLs leave it (L5), plus the CI test tone
  * asset on debuggable builds. A track saved whole in the listening cache ([AudioCache]) leaves
  * with no URL at all, only its cache key. A Jukebox MP3 (cyberjuke://mp3/<file>) leaves as
- * its latex.gg link, as is: no extraction, no YouTube headers, no gate.
+ * its latex.gg link, as is: no extraction and no YouTube headers, only its turn at the gate.
  */
 @OptIn(UnstableApi::class)
 internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
@@ -29,7 +29,11 @@ internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
     val gate = OpenGate()
 
     override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
-        JukeUris.mp3UrlOf(dataSpec.uri)?.let { return mp3Spec(dataSpec, it) }
+        JukeUris.mp3UrlOf(dataSpec.uri)?.let { url ->
+            // Its turn, too: prepared early, the file after next would be requested now.
+            gate.await(url)
+            return mp3Spec(dataSpec, url)
+        }
         val ytId = JukeUris.ytIdOf(dataSpec.uri)
         if (ytId == LaunchOptions.CI_TONE && allowCiTone) {
             return dataSpec.buildUpon().setUri(Uri.parse(LaunchOptions.CI_TONE_ASSET)).build()

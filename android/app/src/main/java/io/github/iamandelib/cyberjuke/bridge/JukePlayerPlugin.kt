@@ -1037,15 +1037,15 @@ class JukePlayerPlugin : Plugin() {
     // ---- YouTube back-off (main thread) ---------------------------------------------------
 
     /**
-     * While a back-off runs: pause (no prepare, no extraction) and remind the web. [play]: the
-     * user asked to play, so it starts once the back-off is over.
-     */
-    /**
      * A YouTube back-off holds [c]'s current item: no prepare (it would extract). A Jukebox MP3
      * isn't YouTube's, so it plays on through one.
      */
     private fun blocked(c: MediaController): Boolean = NetBlock.isBlocked() && !JukeUris.isMp3(c.currentMediaItem)
 
+    /**
+     * While a back-off runs: pause (no prepare, no extraction) and remind the web. [play]: the
+     * user asked to play, so it starts once the back-off is over. Not for a Jukebox MP3.
+     */
     private fun refuseWhileBlocked(c: MediaController, play: Boolean = true): Boolean {
         val (until, reason) = NetBlock.active()
         if (reason == null) return false

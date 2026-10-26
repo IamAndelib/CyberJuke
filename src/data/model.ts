@@ -120,8 +120,12 @@ export function parseYouTubeId(src: string | null | undefined): string | null {
   return YT_ID_RE.test(id) ? id : null;
 }
 
-/** A Jukebox MP3's cover: an image the site stored with the post. Anything else is ignored. */
-const COVER_RE = /^https:\/\/bunker\.cyberspace\.online\/uploads\/[^?#]+$/;
+/**
+ * A Jukebox MP3's cover: an image the site stored with the post, under /uploads/ (no dot
+ * segments, no escapes, no query). Anything else is ignored. The native rule is the same
+ * (SessionPolicy.isAllowedArtwork).
+ */
+const COVER_RE = /^https:\/\/bunker\.cyberspace\.online\/uploads\/(?:[A-Za-z0-9_-][A-Za-z0-9._-]*\/)*[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
 export const isCoverUrl = (x: unknown): x is string => typeof x === 'string' && COVER_RE.test(x);
 
 export function artworkUrl(ytId: string): string {

@@ -43,6 +43,19 @@ class JukeLoadErrorPolicyTest {
     }
 
     @Test
+    fun aJukeboxMp3ThatLatexRefusesIsNotRetried() {
+        // Gone, private, refused: the file's answer. Skipped at once instead of ~15 s of retries.
+        for (code in listOf(400, 401, 403, 404, 410, 429)) {
+            assertEquals(code.toString(), never, delay(IOException("$code"), Facts(httpCode = code, mp3Load = true)))
+        }
+        // latex.gg failing (5xx) or the connection breaking is retried as for anything else.
+        assertEquals(2_000L, delay(IOException("503"), Facts(httpCode = 503, mp3Load = true, errorCount = 3)))
+        assertEquals(1_000L, delay(wrapped(SocketTimeoutException("read")), Facts(mp3Load = true, errorCount = 1)))
+        // A video's 404 is still the default's.
+        assertEquals(0L, delay(IOException("404"), Facts(httpCode = 404, ytLoad = true, errorCount = 1)))
+    }
+
+    @Test
     fun aCacheFileGoneOnAYouTubeLoadIsFetchedAgainSoon() {
         assertEquals(LoadRetry.CACHE_RETRY_MS, delay(wrapped(FileNotFoundException("span")), Facts(ytLoad = true, default = never)))
         assertEquals(LoadRetry.CACHE_RETRY_MS, delay(IOException("read"), Facts(ytLoad = true, fileError = true, default = never)))

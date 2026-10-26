@@ -140,6 +140,12 @@ class SessionPolicyTest {
         }
         assertFalse(SessionPolicy.isValidMp3Url(null))
         assertTrue(SessionPolicy.isValidMp3File("IZq8cMcx.mp3"))
+        // The item's file name rebuilds exactly the link it came from, and nothing else.
+        val link = "https://latex.gg/share/IZq8cMcx.mp3"
+        assertEquals(link, SessionPolicy.mp3UrlForFile(SessionPolicy.mp3FileOf(link)))
+        assertNull(SessionPolicy.mp3UrlForFile("../x.mp3"))
+        assertNull(SessionPolicy.mp3UrlForFile("x.mp3?y"))
+        assertNull(SessionPolicy.mp3UrlForFile(null))
         assertFalse(SessionPolicy.isValidMp3File("../IZq8cMcx.mp3"))
         assertFalse(SessionPolicy.isValidMp3File("x.mp3/y"))
     }
@@ -158,7 +164,7 @@ class SessionPolicyTest {
     }
 
     @Test
-    fun artworkOnlyFromYtimg() {
+    fun artworkOnlyFromYtimgAndCyberspaceUploads() {
         assertTrue(SessionPolicy.isAllowedArtwork("https://i.ytimg.com/vi/fJ9rUzIMcZQ/hqdefault.jpg"))
         // A Jukebox MP3's cover, from Cyberspace's uploads only.
         assertTrue(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online/uploads/jukebox/Q7qx/1792922249462-97625ca1611e2070.jpg"))
@@ -166,6 +172,10 @@ class SessionPolicyTest {
         assertFalse(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online/uploads/x.jpg?redirect=evil"))
         assertFalse(SessionPolicy.isAllowedArtwork("http://bunker.cyberspace.online/uploads/x.jpg"))
         assertFalse(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online.evil.example/uploads/x.jpg"))
+        // No way out of /uploads/: no dot segments, no escapes.
+        assertFalse(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online/uploads/../admin/x.jpg"))
+        assertFalse(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online/uploads/./x.jpg"))
+        assertFalse(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online/uploads/%2e%2e/x.jpg"))
         assertFalse(SessionPolicy.isAllowedArtwork("http://i.ytimg.com/vi/x/hqdefault.jpg"))
         assertFalse(SessionPolicy.isAllowedArtwork("https://i.ytimg.com.evil.example/x.jpg"))
         assertFalse(SessionPolicy.isAllowedArtwork("https://evil.example/i.ytimg.com/x.jpg"))

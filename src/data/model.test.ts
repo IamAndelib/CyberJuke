@@ -188,8 +188,17 @@ describe('tracksFromDocument edge cases', () => {
   });
 
   it('keeps an MP3 without a usable cover, with no artwork', () => {
-    const [t] = tracksFromDocument(withAttachments([mp3('https://latex.gg/share/IZq8cMcx.mp3', { cover: 'https://evil.com/x.jpg' })]));
-    expect(t.artworkUrl).toBe('');
+    for (const cover of [
+      'https://evil.com/x.jpg',
+      'http://bunker.cyberspace.online/uploads/x.jpg',
+      'https://bunker.cyberspace.online/admin/x.jpg',
+      'https://bunker.cyberspace.online/uploads/../admin/x.jpg',
+      'https://bunker.cyberspace.online/uploads/%2e%2e/x.jpg',
+      'https://bunker.cyberspace.online/uploads/x.jpg?go=1',
+    ]) {
+      const [t] = tracksFromDocument(withAttachments([mp3('https://latex.gg/share/IZq8cMcx.mp3', { cover })]));
+      expect(t.artworkUrl, cover).toBe('');
+    }
   });
 
   it('reads a post that mixes a YouTube and an MP3 attachment', () => {

@@ -27,6 +27,7 @@ internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
             httpCode = e.findCause<HttpDataSource.InvalidResponseCodeException>()?.responseCode,
             httpTransport = e.findCause<HttpDataSource.HttpDataSourceException>() != null,
             ytLoad = ytId != null,
+            mp3Load = JukeUris.mp3UrlOf(loadErrorInfo.loadEventInfo.dataSpec.uri) != null,
             fileError = e.findCause<FileDataSource.FileDataSourceException>() != null,
             errorCount = loadErrorInfo.errorCount,
             default = super.getRetryDelayMsFor(loadErrorInfo),
@@ -49,6 +50,8 @@ internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
         val httpTransport: Boolean = false,
         /** A load of a YouTube track (a cyberjuke://yt/ URI), not a manifest or an asset. */
         val ytLoad: Boolean = false,
+        /** A load of a Jukebox MP3 (a cyberjuke://mp3/ URI): a 4xx is the file's (gone, private), never retried. */
+        val mp3Load: Boolean = false,
         /** A listening-cache file couldn't be read (FileDataSourceException; a missing file shows in the error itself). */
         val fileError: Boolean = false,
         /** The [errorCount]th error in a row, from 1. */
@@ -70,6 +73,7 @@ internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
             val resolve = e.findCause<ResolveException>()
             if (resolve != null && resolve.permanent) return C.TIME_UNSET
             if (f.httpCode != null && f.httpCode in NO_RETRY_HTTP) return C.TIME_UNSET
+            if (f.mp3Load && f.httpCode != null && f.httpCode in 400..499) return C.TIME_UNSET
             // A listening-cache file gone (low storage) or unreadable: the retry fetches the bytes
             // from the network, not from the cache (the video is skipped there for a moment); the
             // default never retries a missing file: a dead track.

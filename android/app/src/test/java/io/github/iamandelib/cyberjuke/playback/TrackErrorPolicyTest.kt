@@ -129,8 +129,28 @@ class TrackErrorPolicyTest {
         val midTrack = mp3.copy(ioOther = true, playedThisItem = true)
         assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(midTrack))
         assertEquals(Action.Skip, TrackErrorPolicy.decide(midTrack.copy(failuresHere = 1)))
+        // ...and a connection failure (a read timeout) while it played: an outage too.
+        assertEquals(Action.Pause(resume = true), TrackErrorPolicy.decide(mp3.copy(ioNetwork = true, playedThisItem = true)))
         // A YouTube back-off running says nothing about latex.gg.
         assertEquals(Action.Skip, TrackErrorPolicy.decide(mp3.copy(blocked = true, httpCode = 404)))
+    }
+
+    @Test
+    fun aYouTubeBackOffHoldsVideosButNotJukeboxMp3s() {
+        // A resume waits for the back-off's end, unless what's current is an MP3 (it plays through).
+        assertEquals(true, BackOffHold.resumeWaits(blocked = true, currentIsMp3 = false))
+        assertEquals(false, BackOffHold.resumeWaits(blocked = true, currentIsMp3 = true))
+        assertEquals(false, BackOffHold.resumeWaits(blocked = false, currentIsMp3 = false))
+        // During a back-off a pause on a video is a refused play (its resume stays); on an MP3 it
+        // is the user's, so the MP3 doesn't start again by itself when the back-off ends.
+        assertEquals(false, BackOffHold.pauseIsUsers(blocked = true, currentIsMp3 = false))
+        assertEquals(true, BackOffHold.pauseIsUsers(blocked = true, currentIsMp3 = true))
+        assertEquals(true, BackOffHold.pauseIsUsers(blocked = false, currentIsMp3 = false))
+        // An MP3 playing through a back-off spends the resume a refused video left.
+        assertEquals(true, BackOffHold.playingSpendsResume(waitingForNetwork = false, blocked = true, currentIsMp3 = true))
+        assertEquals(false, BackOffHold.playingSpendsResume(waitingForNetwork = false, blocked = true, currentIsMp3 = false))
+        assertEquals(true, BackOffHold.playingSpendsResume(waitingForNetwork = true, blocked = false, currentIsMp3 = false))
+        assertEquals(false, BackOffHold.playingSpendsResume(waitingForNetwork = false, blocked = false, currentIsMp3 = true))
     }
 
     @Test
