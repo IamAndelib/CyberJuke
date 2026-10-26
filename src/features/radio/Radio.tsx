@@ -1,5 +1,7 @@
 import { computed } from '@preact/signals';
-import { isPlaying, player, playContext } from '../../player';
+import { online } from '../../core/network';
+import { currentPlaysOffline, isPlaying, player, playContext } from '../../player';
+import { isSaved, savedOffline } from '../../stores/savedOffline';
 import { BAND_NAMES, STATIONS, stationFreq, stationLabel, stationQueue, stationTracks, type Band, type Station } from '../../player/radio';
 import { Icon } from '../../ui/icons';
 import { Screen } from '../../ui/components/Screen';
@@ -41,12 +43,25 @@ function showInfo(s: Station): void {
   });
 }
 
+/**
+ * Offline, as a track row (TrackRow): a station dims unless it can play. That is the one on
+ * air while its track still plays, or one with a liked song saved on the phone (the offline
+ * guard plays just those). A tap on a dimmed one is refused with the reason; ⓘ still opens.
+ */
+function playsOffline(s: Station, on: boolean): boolean {
+  if (on) return currentPlaysOffline.value;
+  const saved = savedOffline.value;
+  return stationTracks(s).some((t) => isSaved(t, saved));
+}
+
 function StationRow({ s, on }: { s: Station; on: boolean }) {
   const freq = stationFreq(s);
+  const off = !online.value && !playsOffline(s, on);
   return (
-    <li class={'row station' + (on ? ' is-current' : '')} data-testid="station" data-station={s.id} aria-current={on || undefined}>
+    <li class={'row station' + (on ? ' is-current' : '') + (off ? ' off' : '')} data-testid="station" data-station={s.id} aria-current={on || undefined}>
       <button
         class="row-main"
+        aria-disabled={off || undefined}
         onClick={() => tuneIn(s)}
         aria-label={on ? `${s.callsign}, ${freq}, on air: open Now Playing` : `Tune in to ${s.callsign}, ${freq}`}
         data-testid="station-tune"

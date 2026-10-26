@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { clockStart, expectStable, FAKE_TRACK_MS, openNowPlaying, openSettings, playOn, seedStorage, SETTINGS_KEY, start } from '../helpers';
+import { OFFLINE } from '../../src/core/offlineText';
+import { clockStart, expectStable, FAKE_TRACK_MS, openNowPlaying, openSettings, playOn, seedStorage, setOffline, SETTINGS_KEY, start } from '../helpers';
 
 /** Signal Radio: the Radio tab, tuning in, a station that plays on, and its tracks kept. */
 
@@ -174,6 +175,30 @@ test("a station's track played from another list is just a track there: with Aut
   await expectStable(() => place(page), 1000);
   expect(await place(page)).toEqual({ at: 2, of: 2 });
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveCount(0);
+});
+
+test('offline the stations dim like any track that cannot play, and a tap says why; the one on air stays bright', async ({ page, backend }) => {
+  await start(page);
+  await openRadio(page);
+  const stations = page.getByTestId('station');
+  const cipher = page.locator('[data-testid="station"][data-station="cipher"]');
+  await setOffline(page, backend, true);
+  await expect(stations.and(page.locator('.off'))).toHaveCount(16);
+  await expect(cipher.getByTestId('station-tune')).toHaveAttribute('aria-disabled', 'true');
+  // The ⓘ still opens.
+  await expect(cipher.getByTestId('station-info')).not.toHaveAttribute('aria-disabled');
+  await cipher.getByTestId('station-tune').click({ force: true });
+  await expect(page.getByTestId('toast').last()).toHaveText(OFFLINE.tap);
+  await expect(page.getByTestId('mini-player')).toHaveCount(0);
+  await setOffline(page, backend, false);
+  await expect(stations.and(page.locator('.off'))).toHaveCount(0);
+  await expect(cipher.getByTestId('station-tune')).not.toHaveAttribute('aria-disabled');
+
+  // Tuned in, then the connection drops: the station playing stays bright, the rest dim.
+  await tune(page, 'cipher');
+  await setOffline(page, backend, true);
+  await expect(stations.and(page.locator('.off'))).toHaveCount(15);
+  await expect(cipher).not.toHaveClass(/\boff\b/);
 });
 
 for (const [width, theme] of [[320, 'dark'], [360, 'dark'], [320, 'c64'], [320, 'brutalist'], [320, 'vt320']] as const) {
