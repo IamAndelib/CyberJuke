@@ -12,6 +12,7 @@ import java.net.SocketTimeoutException
 /** The liked saver's job: what each way a save can go becomes ([SaveOutcome]), the world faked through [SaveJob.Deps]. */
 class SaveJobTest {
     private val id = "dQw4w9WgXcQ"
+    private val mp3Id = "mp3:IZq8cMcx.mp3"
     private val audio = ResolvedStream(id, "https://r1.googlevideo.com/videoplayback", emptyMap(), "opus", 0L, itag = 251, audioOnly = true)
     private val muxed = audio.copy(itag = 18, audioOnly = false)
 
@@ -37,9 +38,9 @@ class SaveJobTest {
 
         override fun quiet() = quiet
 
-        override fun isDenied(ytId: String) = denied.also { calls.add("denied") }
+        override fun isDenied(audioId: String) = denied.also { calls.add("denied") }
 
-        override fun isWhole(ytId: String): Boolean {
+        override fun isWhole(audioId: String): Boolean {
             calls.add("whole")
             return if (written) wholeAfterWrite else whole
         }
@@ -51,6 +52,15 @@ class SaveJobTest {
 
         override fun writer(ytId: String, stream: ResolvedStream): SaveJob.Writer? {
             calls.add("writer")
+            return newWriter()
+        }
+
+        override fun mp3Writer(audioId: String): SaveJob.Writer? {
+            calls.add("mp3Writer")
+            return newWriter()
+        }
+
+        private fun newWriter(): SaveJob.Writer? {
             noWriter?.let { throw it }
             if (!hasCache) return null
             return object : SaveJob.Writer {
@@ -66,10 +76,10 @@ class SaveJobTest {
             }
         }
 
-        override fun refused(e: IOException) = e is Refused
+        override fun refused(e: IOException, mp3: Boolean) = e is Refused
 
-        fun run(fresh: Boolean = true): SaveOutcome {
-            val j = SaveJob(id, fresh, this)
+        fun run(fresh: Boolean = true, audioId: String = id): SaveOutcome {
+            val j = SaveJob(audioId, fresh, this)
             job = j
             return j.run()
         }
@@ -182,5 +192,45 @@ class SaveJobTest {
             throw ResolveException(id, "network", null, FailureKind.NETWORK)
         }
         assertEquals(SaveOutcome.CANCELLED, failing.run())
+    }
+
+    @Test
+    fun aJukeboxMp3IsSavedWithNoExtraction() {
+        // Its file straight from latex.gg, through the same writer and the same check.
+        val w = World(resolve = { throw AssertionError("an MP3 is never extracted") })
+        assertEquals(SaveOutcome.SAVED, w.run(audioId = mp3Id))
+        assertEquals(listOf("denied", "whole", "mp3Writer", "cache", "whole"), w.calls)
+        // Already whole: nothing fetched.
+        val whole = World(whole = true)
+        assertEquals(SaveOutcome.SAVED, whole.run(audioId = mp3Id))
+        assertFalse("mp3Writer" in whole.calls)
+    }
+
+    @Test
+    fun aYouTubeBackOffDoesNotHoldAJukeboxMp3() {
+        // A back-off holds a video's save (no extraction), not an MP3's: latex.gg isn't YouTube.
+        assertEquals(SaveOutcome.CANCELLED, World(quiet = true).run())
+        assertEquals(SaveOutcome.SAVED, World(quiet = true).run(audioId = mp3Id))
+        // So a connection lost while one runs is a strike, back-off or not, as for any failure.
+        assertEquals(SaveOutcome.STOPPED, World(quiet = true, write = { throw IOException("reset") }).run(audioId = mp3Id))
+    }
+
+    @Test
+    fun aJukeboxMp3sSaveFailsAndStopsAsAVideosDoes() {
+        // Members-only while signed out, or cancelled: no fault of the song.
+        assertEquals(SaveOutcome.CANCELLED, World(denied = true).run(audioId = mp3Id))
+        // No cache, a write that isn't whole yet, a dropped connection: strikes.
+        assertEquals(SaveOutcome.STOPPED, World(hasCache = false).run(audioId = mp3Id))
+        assertEquals(SaveOutcome.STOPPED, World(wholeAfterWrite = false).run(audioId = mp3Id))
+        assertEquals(SaveOutcome.STOPPED, World(write = { throw IOException("reset") }).run(audioId = mp3Id))
+        // Refused: given up.
+        assertEquals(SaveOutcome.FAILED, World(write = { throw Refused() }).run(audioId = mp3Id))
+        // Cancelled mid-way: the writer is told.
+        val w = World(write = { j ->
+            j.cancel()
+            throw IOException("cancelled")
+        })
+        assertEquals(SaveOutcome.CANCELLED, w.run(audioId = mp3Id))
+        assertTrue(w.cancelledWriter)
     }
 }

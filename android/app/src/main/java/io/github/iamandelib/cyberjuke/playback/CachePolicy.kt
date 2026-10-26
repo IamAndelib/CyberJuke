@@ -410,6 +410,17 @@ internal enum class SaveFailure {
 }
 
 /**
+ * Whether a liked save's writer was refused for good (not again this service's life), from the
+ * HTTP status it got ([httpCode], null for none). A video's link refused at all: expired or a
+ * block. A Jukebox MP3 ([mp3]) only on a 4xx (the file gone or private), as playback never
+ * retries one ([JukeLoadErrorPolicy]); latex.gg failing (a 5xx) is a strike, tried again later.
+ * Pure (CachePolicyTest).
+ */
+internal object SaveRefusal {
+    fun refused(httpCode: Int?, mp3: Boolean): Boolean = httpCode != null && (!mp3 || httpCode in 400..499)
+}
+
+/**
  * Saves that stopped (not cancelled) per song, and when each may be tried again: after the n-th
  * stop the song waits [FIRST_WAIT_MS] doubled each time (30 s, 1, 2, 4 min), the [MAX]th stop
  * gives up on it for the service's life. Media3's DownloadManager retries a download five times
@@ -572,8 +583,9 @@ internal class MembersAudio {
  *   again after [MIN_GAP_MS] like any other.
  * - Older likes (the backfill) only on an unmetered network (Wi-Fi), at most one extraction per
  *   [MIN_GAP_MS], and only while the cache has room for liked songs ([Facts.likedFull]).
- * - Never while offline, during a YouTube back-off ([Facts.quiet]) or while playback needs the
- *   network ([PlaybackNeed]): playback always comes first (a running save gives way, [keepGoing]).
+ * - Never while offline, or while playback needs the network ([PlaybackNeed]): playback always
+ *   comes first (a running save gives way, [keepGoing]). During a YouTube back-off
+ *   ([Facts.quiet]) only Jukebox MP3s (audio ids `mp3:<file>`): no extraction, not YouTube's.
  * - Never without a cache to save into ([Facts.cache]): no extraction for nothing.
  *
  * Event-driven: asked again when something it depends on changes. The one timer is
@@ -604,6 +616,7 @@ internal object LikedSaverPolicy {
         val skip: Set<String> = emptySet(),
         val online: Boolean = true,
         val unmetered: Boolean = true,
+        /** A YouTube back-off: no video is saved (no extraction); a Jukebox MP3 still is. */
         val quiet: Boolean = false,
         val playbackNeedsNetwork: Boolean = false,
         val busy: Boolean = false,
@@ -629,10 +642,12 @@ internal object LikedSaverPolicy {
     fun next(f: Facts): String? = pick(f, f.sinceLastMs)
 
     private fun pick(f: Facts, sinceLastMs: Long): String? {
-        if (!f.cache || f.busy || !f.online || f.quiet || f.playbackNeedsNetwork) return null
+        if (!f.cache || f.busy || !f.online || f.playbackNeedsNetwork) return null
         // Each candidate's denied answer is asked once (and only for those looked at).
         val denied = HashMap<String, Boolean>()
-        val todo = f.liked.asSequence().filter { it !in f.saved && it !in f.skip && !denied.getOrPut(it) { f.denied(it) } }
+        val todo = f.liked.asSequence().filter {
+            it !in f.saved && it !in f.skip && (!f.quiet || CacheKeys.isMp3(it)) && !denied.getOrPut(it) { f.denied(it) }
+        }
         todo.firstOrNull { it in f.fresh && it !in f.tried }?.let { return it }
         if (sinceLastMs < MIN_GAP_MS) return null
         todo.firstOrNull { it in f.fresh }?.let { return it }
@@ -652,9 +667,9 @@ internal object LikedSaverPolicy {
         return listOfNotNull(gap, f.retryInMs).minOrNull()
     }
 
-    /** Whether a save of a [fresh] (or backfill) like may go on, or must stop and give way. */
-    fun keepGoing(f: Facts, fresh: Boolean): Boolean =
-        f.cache && f.online && !f.quiet && !f.playbackNeedsNetwork && (fresh || f.unmetered)
+    /** Whether a save of a [fresh] (or backfill) like, a Jukebox MP3's if [mp3], may go on, or must stop and give way. */
+    fun keepGoing(f: Facts, fresh: Boolean, mp3: Boolean = false): Boolean =
+        f.cache && f.online && (mp3 || !f.quiet) && !f.playbackNeedsNetwork && (fresh || f.unmetered)
 }
 
 /**

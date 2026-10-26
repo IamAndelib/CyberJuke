@@ -383,6 +383,38 @@ class CachePolicyTest {
     }
 
     @Test
+    fun aYouTubeBackOffHoldsLikedVideosButNotJukeboxMp3s() {
+        val mp3 = "mp3:IZq8cMcx.mp3"
+        val f = Facts(listOf("new00000000", mp3, "old00000000"), saved = emptySet(), quiet = true)
+        // No extraction during a back-off; an MP3 isn't YouTube's, so it is saved meanwhile.
+        assertEquals(mp3, LikedSaverPolicy.next(f))
+        assertNull(LikedSaverPolicy.next(f.copy(liked = listOf("new00000000", "old00000000"))))
+        // Its other rules hold: the gap, Wi-Fi for the backfill, playback first, online.
+        assertNull(LikedSaverPolicy.next(f.copy(unmetered = false)))
+        assertNull(LikedSaverPolicy.next(f.copy(sinceLastMs = 1_000L)))
+        assertNull(LikedSaverPolicy.next(f.copy(playbackNeedsNetwork = true)))
+        assertNull(LikedSaverPolicy.next(f.copy(online = false)))
+        // A back-off beginning stops a video's save, not an MP3's.
+        assertFalse(LikedSaverPolicy.keepGoing(f, fresh = true))
+        assertTrue(LikedSaverPolicy.keepGoing(f, fresh = true, mp3 = true))
+        assertFalse(LikedSaverPolicy.keepGoing(f.copy(playbackNeedsNetwork = true), fresh = true, mp3 = true))
+    }
+
+    @Test
+    fun aJukeboxMp3IsRefusedForGoodOnlyWhenTheFileIsGone() {
+        // A video's link refused at all: expired, or a block.
+        assertTrue(SaveRefusal.refused(403, mp3 = false))
+        assertTrue(SaveRefusal.refused(503, mp3 = false))
+        // An MP3: a 4xx is the file's (gone, private); latex.gg failing is tried again later.
+        assertTrue(SaveRefusal.refused(404, mp3 = true))
+        assertTrue(SaveRefusal.refused(403, mp3 = true))
+        assertFalse(SaveRefusal.refused(503, mp3 = true))
+        // No status (the connection broke): never a refusal.
+        assertFalse(SaveRefusal.refused(null, mp3 = false))
+        assertFalse(SaveRefusal.refused(null, mp3 = true))
+    }
+
+    @Test
     fun aBackOffOrABrokenExtractorIsNoFaultOfTheSong() {
         // The song itself: given up on. The connection: a strike (SaveStrikes: waits, then gives up).
         assertEquals(SaveFailure.GIVE_UP, SaveFailure.of(FailureKind.CONTENT))
