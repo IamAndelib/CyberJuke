@@ -24,6 +24,7 @@ const fake = vi.hoisted(() => {
       },
       setLikedIds: cmd('setLikedIds'),
       setCacheLimit: cmd('setCacheLimit'),
+      setDownloadOnMobileData: cmd('setDownloadOnMobileData'),
       clearCache: cmd('clearCache'),
       signedOut: cmd('signedOut'),
       signedIn: cmd('signedIn'),
@@ -53,6 +54,7 @@ describe('the listening cache wiring', () => {
   it('at start sends Liked (newest first) and the size, and asks what is saved', async () => {
     expect(fake.of('setLikedIds')).toEqual([{ ytIds: ['bxxxxxxxxxx', 'axxxxxxxxxx'], membersOnly: [] }]);
     expect(fake.of('setCacheLimit')).toEqual([{ mb: 256 }]);
+    expect(fake.of('setDownloadOnMobileData')).toEqual([{ enabled: false }]);
     await vi.waitFor(() => expect([...savedOffline.value]).toEqual(['aaaaaaaaaaa']));
   });
 
@@ -78,6 +80,16 @@ describe('the listening cache wiring', () => {
     expect(fake.of('setCacheLimit')).toEqual([{ mb: 128 }]);
     lib.updateSettings({ theme: 'c64' });
     expect(fake.of('setCacheLimit')).toHaveLength(1);
+  });
+
+  it('follows Download using mobile data', () => {
+    fake.calls.length = 0;
+    lib.updateSettings({ downloadOnMobileData: true });
+    expect(fake.of('setDownloadOnMobileData')).toEqual([{ enabled: true }]);
+    lib.updateSettings({ theme: 'vt320' });
+    expect(fake.of('setDownloadOnMobileData')).toHaveLength(1);
+    lib.updateSettings({ downloadOnMobileData: false });
+    expect(fake.of('setDownloadOnMobileData')).toEqual([{ enabled: true }, { enabled: false }]);
   });
 
   it('takes the saved set native reports when it changes', () => {

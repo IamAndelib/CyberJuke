@@ -32,7 +32,6 @@ class SaveJobTest {
         var hasCache: Boolean = true,
         var write: (SaveJob) -> Unit = {},
         var limit: Long = 256 * mb,
-        var unmetered: Boolean = true,
         /** What the writer reports before the bytes are written: (length, -1 unknown; cached so far). */
         var reports: List<Pair<Long, Long>> = emptyList(),
         /** What it reports once the last byte came (a length learned only at the end), with no stop after. */
@@ -49,8 +48,6 @@ class SaveJobTest {
         override fun quiet() = quiet
 
         override fun limitBytes() = limit
-
-        override fun unmetered() = unmetered
 
         override fun discard(audioId: String) {
             discarded.add(audioId)
@@ -103,8 +100,8 @@ class SaveJobTest {
 
         override fun refused(e: IOException, mp3: Boolean) = SaveRefusal.refused((e as? Http)?.code, mp3)
 
-        fun run(fresh: Boolean = true, audioId: String = id): SaveOutcome {
-            val j = SaveJob(audioId, fresh, this)
+        fun run(audioId: String = id): SaveOutcome {
+            val j = SaveJob(audioId, this)
             job = j
             return j.run()
         }
@@ -131,7 +128,7 @@ class SaveJobTest {
         assertEquals(SaveOutcome.CANCELLED, World(quiet = true).run())
         assertEquals(SaveOutcome.CANCELLED, World(denied = true).run())
         val w = World()
-        val j = SaveJob(id, fresh = true, deps = w)
+        val j = SaveJob(id, deps = w)
         j.cancel()
         assertEquals(SaveOutcome.CANCELLED, j.run())
         assertTrue(w.calls.isEmpty())
@@ -295,24 +292,5 @@ class SaveJobTest {
         val atEnd = World(limit = 128 * mb, endReport = 100 * mb to 100 * mb)
         assertEquals(SaveOutcome.FAILED, atEnd.run(audioId = mp3Id))
         assertEquals(listOf(mp3Id), atEnd.discarded)
-    }
-
-    @Test
-    fun aLongSongLikedJustNowOnMobileDataWaitsForWifi() {
-        // Liked just now on mobile data: a 60 MB mix isn't fetched now; the Wi-Fi backfill will.
-        val data = World(unmetered = false, reports = listOf(60 * mb to 0L))
-        assertEquals(SaveOutcome.WIFI_ONLY, data.run(fresh = true, audioId = mp3Id))
-        assertTrue(data.cancelledWriter)
-        assertFalse("bytes" in data.calls)
-        assertTrue(data.discarded.isEmpty())
-        // No length: it stops once more than that has come, keeping it for the backfill to go on from.
-        val noLength = World(unmetered = false, reports = listOf(-1L to 30 * mb, -1L to 41 * mb))
-        assertEquals(SaveOutcome.WIFI_ONLY, noLength.run(fresh = true, audioId = mp3Id))
-        assertTrue(noLength.discarded.isEmpty())
-        // A short one is saved on mobile data at once, a long one on Wi-Fi, and the backfill
-        // (which only runs on Wi-Fi) isn't held by this.
-        assertEquals(SaveOutcome.SAVED, World(unmetered = false, reports = listOf(30 * mb to 0L)).run(fresh = true, audioId = mp3Id))
-        assertEquals(SaveOutcome.SAVED, World(unmetered = true, reports = listOf(60 * mb to 0L)).run(fresh = true, audioId = mp3Id))
-        assertEquals(SaveOutcome.SAVED, World(unmetered = false, reports = listOf(60 * mb to 0L)).run(fresh = false, audioId = mp3Id))
     }
 }

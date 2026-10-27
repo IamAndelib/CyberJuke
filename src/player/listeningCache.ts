@@ -5,7 +5,7 @@
  *  - the liked songs (newest like first) and which are members-only, sent at start and when
  *    Liked changes (a burst of likes sends once); none while Liked couldn't be read (native
  *    keeps the Liked it has rather than hear that this session's likes are all of it);
- *  - the size setting, sent at start and on change, and Clear cache;
+ *  - the size and Download using mobile data settings, sent at start and on change, and Clear cache;
  *  - signing out (and starting signed out): Liked at once, then `signedOut()`, so native drops
  *    every members-only track's audio and caches none until a sign-in;
  *  - which liked songs are saved: asked at start, then native says when that changes.
@@ -67,10 +67,11 @@ function send(name: string, call: () => Promise<unknown>, ...shown: unknown[]): 
 
 const sendLiked = (o: { ytIds: string[]; membersOnly: string[] }) => send('setLikedIds', () => JukePlayer.setLikedIds(o), o.ytIds);
 const sendLimit = (mb: CacheMb) => send('setCacheLimit', () => JukePlayer.setCacheLimit({ mb }), { mb });
+const sendMobileData = (enabled: boolean) => send('setDownloadOnMobileData', () => JukePlayer.setDownloadOnMobileData({ enabled }), { enabled });
 const sendSignedOut = () => send('signedOut', () => JukePlayer.signedOut());
 const sendSignedIn = () => send('signedIn', () => JukePlayer.signedIn());
 
-/** Settings' Clear cache: everything goes; playback goes on, and liked songs are saved again on Wi-Fi. */
+/** Settings' Clear cache: everything goes; playback goes on, and liked songs are saved again (on Wi-Fi, or with Download using mobile data, on any network). */
 export function clearListeningCache(): Promise<void> {
   if (!native) {
     record(['clearCache']);
@@ -116,6 +117,14 @@ export function startListeningCache(): void {
     if (mb === lastMb) return;
     lastMb = mb;
     sendLimit(mb);
+  });
+
+  let lastMobileData: boolean | null = null;
+  effect(() => {
+    const on = settings.value.downloadOnMobileData;
+    if (on === lastMobileData) return;
+    lastMobileData = on;
+    sendMobileData(on);
   });
 
   // Signed out (or starting signed out), the members-only tracks just left Liked: native hears

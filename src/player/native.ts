@@ -135,8 +135,8 @@ interface JukePlayerPlugin {
   /**
    * The listening cache: the liked songs, newest like first (at most BRIDGE_MAX_ITEMS), and which
    * of them are members-only (their audio is tagged, so a sign-out removes it). Native keeps them
-   * in the cache last, saves a few liked since the last call at once and older ones on Wi-Fi, so
-   * they play offline. The upkeep calls (this, setCacheLimit, clearCache, signedOut) resolve once
+   * in the cache last, and saves them so they play offline (those liked since the last call
+   * first), on Wi-Fi only unless setDownloadOnMobileData is on. The upkeep calls (this, setCacheLimit, clearCache, signedOut) resolve once
    * done, and reject when there is no cache.
    * Every `ytIds` here, in cachedIds and in cacheChanged holds audio ids (isAudioId): a video id,
    * or `mp3:<file>` for a Jukebox MP3 (audioIdOf). Native drops any other entry.
@@ -144,6 +144,8 @@ interface JukePlayerPlugin {
   setLikedIds(o: { ytIds: string[]; membersOnly: string[] }): Promise<void>;
   /** The listening cache's size; 128, 256 or 512 (anything else is 256). A smaller one evicts at once. */
   setCacheLimit(o: { mb: number }): Promise<void>;
+  /** Download using mobile data: liked songs are saved on any network, not only Wi-Fi. Off by default; needs no cache. */
+  setDownloadOnMobileData(o: { enabled: boolean }): Promise<void>;
   /** Empties the listening cache. Playback goes on. */
   clearCache(): Promise<void>;
   /**

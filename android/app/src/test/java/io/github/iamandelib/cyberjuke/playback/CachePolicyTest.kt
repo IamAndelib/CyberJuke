@@ -303,18 +303,34 @@ class CachePolicyTest {
     fun backfillNewestLikeFirstOnWifiOnly() {
         assertEquals("new00000000", LikedSaverPolicy.next(Facts(liked, saved = emptySet())))
         assertEquals("mid00000000", LikedSaverPolicy.next(Facts(liked, saved = setOf("new00000000"))))
-        // Mobile data: no backlog.
+        // Mobile data: no backlog, unless Download using mobile data is on.
         assertNull(LikedSaverPolicy.next(Facts(liked, saved = emptySet(), unmetered = false)))
+        assertEquals("new00000000", LikedSaverPolicy.next(Facts(liked, saved = emptySet(), unmetered = false, mobileDataAllowed = true)))
         // All saved: nothing to do.
         assertNull(LikedSaverPolicy.next(Facts(liked, saved = liked.toSet())))
     }
 
     @Test
-    fun aSongLikedJustNowIsSavedOnAnyNetworkAtOnce() {
-        val f = Facts(liked, saved = emptySet(), fresh = setOf("mid00000000"), unmetered = false, sinceLastMs = 1_000L, likedFull = true)
+    fun aSongLikedJustNowIsSavedFirstOnWifi() {
+        val f = Facts(liked, saved = emptySet(), fresh = setOf("mid00000000"), sinceLastMs = 1_000L, likedFull = true)
+        // Before the backlog, the gap and a full cache.
         assertEquals("mid00000000", LikedSaverPolicy.next(f))
-        assertTrue(LikedSaverPolicy.keepGoing(f, fresh = true))
-        assertFalse(LikedSaverPolicy.keepGoing(f, fresh = false))
+        assertTrue(LikedSaverPolicy.keepGoing(f))
+    }
+
+    @Test
+    fun onMobileDataNothingIsDownloadedUnlessAllowed() {
+        val f = Facts(liked, saved = emptySet(), fresh = setOf("mid00000000"), unmetered = false)
+        // Liked just now on mobile data: it waits for Wi-Fi, and so does a running save.
+        assertNull(LikedSaverPolicy.next(f))
+        assertFalse(LikedSaverPolicy.keepGoing(f))
+        assertFalse(LikedSaverPolicy.keepGoing(f, mp3 = true))
+        assertNull(LikedSaverPolicy.recheckInMs(f.copy(sinceLastMs = 1_000L)))
+        // Download using mobile data on: as on Wi-Fi.
+        val allowed = f.copy(mobileDataAllowed = true)
+        assertEquals("mid00000000", LikedSaverPolicy.next(allowed))
+        assertTrue(LikedSaverPolicy.keepGoing(allowed))
+        assertEquals("new00000000", LikedSaverPolicy.next(allowed.copy(fresh = emptySet())))
     }
 
     @Test
@@ -334,23 +350,15 @@ class CachePolicyTest {
     }
 
     @Test
-    fun aSongTooBigForTheCacheOrForMobileDataRightNowIsNotSaved() {
+    fun aSongTooBigForTheCacheIsNotSaved() {
         val reserve = LikedSaverPolicy.LISTENING_RESERVE_BYTES
-        val onData = LikedSaverPolicy.FRESH_ON_DATA_MAX_BYTES
-        // Over what the limit leaves beside listening: never, on any network, fresh or not.
-        for (fresh in listOf(true, false)) {
-            for (unmetered in listOf(true, false)) {
-                assertEquals(SaveSize.TOO_BIG, LikedSaverPolicy.size(128 * mb - reserve + 1, 128 * mb, fresh, unmetered))
-                assertEquals(SaveSize.TOO_BIG, LikedSaverPolicy.size(150 * mb, 128 * mb, fresh, unmetered))
-            }
-        }
-        assertEquals(SaveSize.FITS, LikedSaverPolicy.size(128 * mb - reserve, 128 * mb, fresh = false, unmetered = true))
-        assertEquals(SaveSize.FITS, LikedSaverPolicy.size(150 * mb, 256 * mb, fresh = true, unmetered = true))
-        // Liked just now on mobile data: up to a modest size; a longer one waits for Wi-Fi.
-        assertEquals(SaveSize.FITS, LikedSaverPolicy.size(onData, 256 * mb, fresh = true, unmetered = false))
-        assertEquals(SaveSize.WIFI_ONLY, LikedSaverPolicy.size(onData + 1, 256 * mb, fresh = true, unmetered = false))
-        // A YouTube track (about 4 MB) is never held.
-        assertEquals(SaveSize.FITS, LikedSaverPolicy.size(4 * mb, 128 * mb, fresh = true, unmetered = false))
+        // Over what the limit leaves beside listening: never.
+        assertTrue(LikedSaverPolicy.tooBig(128 * mb - reserve + 1, 128 * mb))
+        assertTrue(LikedSaverPolicy.tooBig(150 * mb, 128 * mb))
+        assertFalse(LikedSaverPolicy.tooBig(128 * mb - reserve, 128 * mb))
+        assertFalse(LikedSaverPolicy.tooBig(150 * mb, 256 * mb))
+        // A YouTube track (about 4 MB) always fits.
+        assertFalse(LikedSaverPolicy.tooBig(4 * mb, 128 * mb))
     }
 
     @Test
@@ -361,13 +369,14 @@ class CachePolicyTest {
     @Test
     fun aRunningSaveGivesWay() {
         val f = Facts(liked, saved = emptySet())
-        assertTrue(LikedSaverPolicy.keepGoing(f, fresh = false))
+        assertTrue(LikedSaverPolicy.keepGoing(f))
         // The current track starts loading (a rebuffer, a skip, a new list): playback comes first.
-        assertFalse(LikedSaverPolicy.keepGoing(f.copy(playbackNeedsNetwork = true), fresh = true))
-        // A back-off, the connection gone, or Wi-Fi left for mobile data during a backfill.
-        assertFalse(LikedSaverPolicy.keepGoing(f.copy(quiet = true), fresh = true))
-        assertFalse(LikedSaverPolicy.keepGoing(f.copy(online = false), fresh = true))
-        assertFalse(LikedSaverPolicy.keepGoing(f.copy(unmetered = false), fresh = false))
+        assertFalse(LikedSaverPolicy.keepGoing(f.copy(playbackNeedsNetwork = true)))
+        // A back-off, the connection gone, or Wi-Fi left for mobile data (not allowed).
+        assertFalse(LikedSaverPolicy.keepGoing(f.copy(quiet = true)))
+        assertFalse(LikedSaverPolicy.keepGoing(f.copy(online = false)))
+        assertFalse(LikedSaverPolicy.keepGoing(f.copy(unmetered = false)))
+        assertTrue(LikedSaverPolicy.keepGoing(f.copy(unmetered = false, mobileDataAllowed = true)))
     }
 
     @Test
@@ -377,7 +386,7 @@ class CachePolicyTest {
         assertNull(LikedSaverPolicy.next(f))
         assertNull(LikedSaverPolicy.next(f.copy(fresh = emptySet())))
         assertNull(LikedSaverPolicy.recheckInMs(f.copy(sinceLastMs = 10_000L)))
-        assertFalse(LikedSaverPolicy.keepGoing(f, fresh = true))
+        assertFalse(LikedSaverPolicy.keepGoing(f))
         assertEquals("new00000000", LikedSaverPolicy.next(f.copy(cache = true)))
     }
 
@@ -417,9 +426,9 @@ class CachePolicyTest {
 
     @Test
     fun aFreshLikeSkipsTheGapOnlyOnItsFirstTry() {
-        val f = Facts(liked, saved = emptySet(), fresh = setOf("mid00000000"), unmetered = false, sinceLastMs = 1_000L)
+        val f = Facts(liked, saved = emptySet(), fresh = setOf("mid00000000"), sinceLastMs = 1_000L)
         assertEquals("mid00000000", LikedSaverPolicy.next(f))
-        // Tried and not saved: again, but only after the gap (still on any network).
+        // Tried and not saved: again, but only after the gap.
         val tried = f.copy(tried = setOf("mid00000000"))
         assertNull(LikedSaverPolicy.next(tried))
         assertEquals("mid00000000", LikedSaverPolicy.next(tried.copy(sinceLastMs = LikedSaverPolicy.MIN_GAP_MS)))
@@ -432,6 +441,7 @@ class CachePolicyTest {
         // Nothing to do, or something else in the way (an event will come): no timer.
         assertNull(LikedSaverPolicy.recheckInMs(f.copy(saved = liked.toSet())))
         assertNull(LikedSaverPolicy.recheckInMs(f.copy(unmetered = false)))
+        assertEquals(LikedSaverPolicy.MIN_GAP_MS - 10_000L, LikedSaverPolicy.recheckInMs(f.copy(unmetered = false, mobileDataAllowed = true)))
         assertNull(LikedSaverPolicy.recheckInMs(f.copy(online = false)))
         assertNull(LikedSaverPolicy.recheckInMs(f.copy(playbackNeedsNetwork = true)))
         assertNull(LikedSaverPolicy.recheckInMs(f.copy(busy = true)))
@@ -445,15 +455,15 @@ class CachePolicyTest {
         // No extraction during a back-off; an MP3 isn't YouTube's, so it is saved meanwhile.
         assertEquals(mp3, LikedSaverPolicy.next(f))
         assertNull(LikedSaverPolicy.next(f.copy(liked = listOf("new00000000", "old00000000"))))
-        // Its other rules hold: the gap, Wi-Fi for the backfill, playback first, online.
+        // Its other rules hold: the gap, Wi-Fi, playback first, online.
         assertNull(LikedSaverPolicy.next(f.copy(unmetered = false)))
         assertNull(LikedSaverPolicy.next(f.copy(sinceLastMs = 1_000L)))
         assertNull(LikedSaverPolicy.next(f.copy(playbackNeedsNetwork = true)))
         assertNull(LikedSaverPolicy.next(f.copy(online = false)))
         // A back-off beginning stops a video's save, not an MP3's.
-        assertFalse(LikedSaverPolicy.keepGoing(f, fresh = true))
-        assertTrue(LikedSaverPolicy.keepGoing(f, fresh = true, mp3 = true))
-        assertFalse(LikedSaverPolicy.keepGoing(f.copy(playbackNeedsNetwork = true), fresh = true, mp3 = true))
+        assertFalse(LikedSaverPolicy.keepGoing(f))
+        assertTrue(LikedSaverPolicy.keepGoing(f, mp3 = true))
+        assertFalse(LikedSaverPolicy.keepGoing(f.copy(playbackNeedsNetwork = true), mp3 = true))
     }
 
     @Test
@@ -731,15 +741,16 @@ class CachePolicyTest {
     }
 
     @Test
-    fun afterClearCacheThePlayingLikedSongIsSavedAgainOnAnyNetwork() {
+    fun afterClearCacheThePlayingLikedSongIsSavedAgainFirst() {
         // Cleared while a liked song plays (and the next is liked): their bytes are in the
         // player's memory, so nothing writes them back. They count as liked just now.
         val fresh = LikedSaverPolicy.freshAfterClear(liked, pair = setOf("mid00000000", "notliked000"))
         assertEquals(setOf("mid00000000"), fresh)
-        val f = Facts(liked, saved = emptySet(), fresh = fresh, unmetered = false, sinceLastMs = 1_000L)
-        // While the player still loads it: not yet. Loaded: saved, on mobile data too.
+        val f = Facts(liked, saved = emptySet(), fresh = fresh, sinceLastMs = 1_000L)
+        // While the player still loads it: not yet. Loaded: saved first; on mobile data, once on Wi-Fi.
         assertNull(LikedSaverPolicy.next(f.copy(skip = setOf("mid00000000"))))
         assertEquals("mid00000000", LikedSaverPolicy.next(f))
+        assertNull(LikedSaverPolicy.next(f.copy(unmetered = false)))
     }
 
     @Test

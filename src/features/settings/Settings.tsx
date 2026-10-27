@@ -76,8 +76,8 @@ const QUALITY_DESCS: Record<Quality, string> = {
 
 const CROSSFADE_LABELS: Record<CrossfadeMs, string> = { 0: 'Off', 3000: '3 s', 6000: '6 s', 10000: '10 s' };
 
-/** After Clear cache: liked songs come back by themselves. */
-const CACHE_CLEARED = 'Cache cleared. Liked songs are saved again on Wi-Fi.';
+/** Where liked songs are saved again after Clear cache: on Wi-Fi, unless Download using mobile data is on. */
+const savedAgain = (mobileData: boolean) => (mobileData ? 'saved again' : 'saved again on Wi-Fi');
 
 /** Where the code and the releases are (opened in the browser; github.com is allowlisted). */
 function A({ href, children }: { href: string; children: string }) {
@@ -138,11 +138,12 @@ function ListeningCacheSetting() {
   const clear = () =>
     askConfirm({
       title: 'Clear the listening cache?',
-      body: 'The music kept on the phone goes, saved liked songs too. They are saved again on Wi-Fi.',
+      body: `The music kept on the phone goes, saved liked songs too. They are ${savedAgain(settings.value.downloadOnMobileData)}.`,
       confirm: 'Clear cache',
       run: () =>
         clearListeningCache().then(
-          () => void toast(CACHE_CLEARED),
+          // After Clear cache: liked songs come back by themselves.
+          () => void toast(`Cache cleared. Liked songs are ${savedAgain(settings.value.downloadOnMobileData)}.`),
           () => void toast("Couldn't clear the cache"),
         ),
     });
@@ -560,6 +561,15 @@ export function Settings() {
           </div>
         </div>
         <ListeningCacheSetting />
+        <div class="setting">
+          <div class="setting-text">
+            <div class="setting-name">Download using mobile data</div>
+            <div class="setting-desc" id="mobile-data-desc">
+              Saves liked songs for offline on mobile data too, not only on Wi-Fi.
+            </div>
+          </div>
+          <Toggle on={s.downloadOnMobileData} onChange={(v) => updateSettings({ downloadOnMobileData: v })} label="Download using mobile data" describedBy="mobile-data-desc" testid="mobile-data-toggle" />
+        </div>
         <div class="setting stack">
           <div class="setting-text">
             <div class="setting-name">IPv4</div>

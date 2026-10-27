@@ -276,7 +276,7 @@ class PlaybackService : MediaSessionService() {
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
             // The IPv4 setting's Auto memory is per kind of network.
             if (NetPrefs.onNetwork(networkKey(caps))) StreamResolver.clear()
-            // Online, and on Wi-Fi: the liked saver's backfill (it acts on a change only).
+            // Online, and on Wi-Fi (unmetered): the liked saver's saves (it acts on a change only).
             val validated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
             val unmetered = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
             AudioCache.online = validated
@@ -530,7 +530,7 @@ class PlaybackService : MediaSessionService() {
         // with the streaming timeouts (a stall is noticed, and retried, while the buffer plays).
         // YouTube audio and Jukebox MP3s go through the listening cache in between (the resolver
         // gives each its key): what plays is kept, and what's kept whole plays without the network.
-        AudioCache.init(this, PlayerPrefsStore.cacheMb(this))
+        AudioCache.init(this, PlayerPrefsStore.cacheMb(this), PlayerPrefsStore.downloadOnMobileData(this))
         AudioCache.addListener(likedSaver.cacheListener)
         AudioCache.addLikedListener(likedSaver.likedListener)
         val upstream = DefaultDataSource.Factory(this, OkHttpDataSource.Factory(Http.streaming))
