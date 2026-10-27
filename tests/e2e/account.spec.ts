@@ -271,9 +271,11 @@ test.describe('a token Firestore rejects', () => {
 
 test('a sign-in still out when Settings is closed: reopened, it shows it going, starts no second one, then its error', async ({ page, backend }) => {
   await start(page);
-  // The answer comes late.
+  // The answer comes late: only once Settings has been reopened and checked.
+  let answer = () => {};
+  const answered = new Promise<void>((r) => (answer = r));
   await page.route(/^https:\/\/identitytoolkit\.googleapis\.com\//, async (route) => {
-    await new Promise((r) => setTimeout(r, 1500));
+    await answered;
     await route.fallback();
   });
   await openSettings(page);
@@ -286,6 +288,7 @@ test('a sign-in still out when Settings is closed: reopened, it shows it going, 
   await openSettings(page);
   await expect(page.getByTestId('signin-email')).toHaveValue(AUTH_USER.email);
   await expect(page.getByTestId('signin-submit')).toHaveAttribute('aria-busy', 'true');
+  answer();
   await expect(page.getByTestId('signin-error')).toBeVisible();
   await expect(page.getByTestId('signin-submit')).toHaveAttribute('aria-busy', 'false');
   expect(backend.calls.signIn).toBe(1);
