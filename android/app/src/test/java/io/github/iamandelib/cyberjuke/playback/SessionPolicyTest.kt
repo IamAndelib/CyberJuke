@@ -151,6 +151,26 @@ class SessionPolicyTest {
     }
 
     @Test
+    fun aTrackPlaysItsVideoOrElseItsMp3() {
+        val link = "https://latex.gg/share/IZq8cMcx.mp3"
+        assertEquals(SessionPolicy.Playable.Yt("fJ9rUzIMcZQ"), SessionPolicy.playableOf("fJ9rUzIMcZQ", null))
+        // Only the file name is kept: the URL is rebuilt from it, and the link stays out of the item.
+        assertEquals(SessionPolicy.Playable.Mp3("IZq8cMcx.mp3"), SessionPolicy.playableOf(null, link))
+        // Both: the video wins, as in the browser player.
+        assertEquals(SessionPolicy.Playable.Yt("fJ9rUzIMcZQ"), SessionPolicy.playableOf("fJ9rUzIMcZQ", link))
+        // A bad ytId is an error even with a good MP3; the errors name the field, never a value.
+        for ((ytId, mp3, message) in listOf(
+            Triple("fJ9rUzIMcZ", link, "track.ytId invalid"),
+            Triple(null, "https://evil.example/share/IZq8cMcx.mp3", "track.mp3 invalid"),
+            Triple(null, null, "track.ytId missing"),
+        )) {
+            val e = runCatching { SessionPolicy.playableOf(ytId, mp3) }.exceptionOrNull()
+            assertTrue("$ytId $mp3", e is IllegalArgumentException)
+            assertEquals(message, e!!.message)
+        }
+    }
+
+    @Test
     fun incomingItemsOnlyKeepValidYouTubeIds() {
         assertEquals("fJ9rUzIMcZQ", SessionPolicy.ytIdForIncoming("fJ9rUzIMcZQ", null))
         assertEquals("fJ9rUzIMcZQ", SessionPolicy.ytIdForIncoming(null, "fJ9rUzIMcZQ"))
