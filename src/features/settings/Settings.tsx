@@ -14,6 +14,7 @@ import {
   type Quality,
   type ThemeId,
 } from '../../stores/library';
+import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import { player } from '../../player';
 import { clearListeningCache } from '../../player/listeningCache';
@@ -214,18 +215,27 @@ function CrossfadeSetting() {
   );
 }
 
+/**
+ * The sign-in form's email, progress and error, kept outside the form: Settings is a page, and
+ * Back closes it while a sign-in may still be out. Reopened, it shows that sign-in (and doesn't
+ * start a second one) and then its error.
+ */
+const signInEmail = signal('');
+const signInBusy = signal(false);
+const signInError = signal<string | null>(null);
+
 /** Settings → Account, signed out: "Sign in with Cyberspace". The password is never kept. */
 function SignInForm() {
-  const [email, setEmail] = useState('');
+  const email = signInEmail.value;
+  const busy = signInBusy.value;
+  const error = signInError.value;
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const submit = async (e: Event) => {
     e.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError(null);
+    if (signInBusy.peek()) return;
+    signInBusy.value = true;
+    signInError.value = null;
     try {
       const user = await auth.signIn(email, password);
       setPassword('');
@@ -236,9 +246,9 @@ function SignInForm() {
         user.saved ? 2400 : 5000,
       );
     } catch (err) {
-      setError(err instanceof AuthError ? err.message : authErrorText('UNKNOWN'));
+      signInError.value = err instanceof AuthError ? err.message : authErrorText('UNKNOWN');
     } finally {
-      setBusy(false);
+      signInBusy.value = false;
     }
   };
   return (
@@ -261,7 +271,7 @@ function SignInForm() {
           autocapitalize="off"
           spellcheck={false}
           value={email}
-          onInput={(e) => setEmail((e.currentTarget as HTMLInputElement).value)}
+          onInput={(e) => (signInEmail.value = (e.currentTarget as HTMLInputElement).value)}
           disabled={busy}
           data-testid="signin-email"
         />

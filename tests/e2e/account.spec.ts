@@ -268,3 +268,24 @@ test.describe('a token Firestore rejects', () => {
     expect(backend.tokens).toContain('Bearer fake-id-2');
   });
 });
+
+test('a sign-in still out when Settings is closed: reopened, it shows it going, starts no second one, then its error', async ({ page, backend }) => {
+  await start(page);
+  // The answer comes late.
+  await page.route(/^https:\/\/identitytoolkit\.googleapis\.com\//, async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.fallback();
+  });
+  await openSettings(page);
+  await page.getByTestId('signin-email').fill(AUTH_USER.email);
+  await page.getByTestId('signin-password').fill('wrong password');
+  await page.getByTestId('signin-submit').click();
+  await expect(page.getByTestId('signin-submit')).toHaveAttribute('aria-busy', 'true');
+  await page.getByTestId('settings-back').click();
+  await openSettings(page);
+  await expect(page.getByTestId('signin-email')).toHaveValue(AUTH_USER.email);
+  await expect(page.getByTestId('signin-submit')).toHaveAttribute('aria-busy', 'true');
+  await expect(page.getByTestId('signin-error')).toBeVisible();
+  await expect(page.getByTestId('signin-submit')).toHaveAttribute('aria-busy', 'false');
+  expect(backend.calls.signIn).toBe(1);
+});
