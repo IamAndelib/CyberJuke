@@ -42,7 +42,7 @@ import { startBlockEvents } from '../player/blockEvents';
 import { source } from '../data';
 import { App, Overlays } from './App';
 import { BootError } from './BootError';
-import { styleSystemBars } from './windowChrome';
+import { firstScreenShown, keepThemeBackground, styleSystemBars } from './windowChrome';
 import { Home } from '../features/home/Home';
 import { Library, openLiked } from '../features/library/Library';
 import { Screen } from '../ui/components/Screen';
@@ -79,6 +79,7 @@ function applyTheme(): void {
     root.style.colorScheme = dark ? 'dark' : 'light';
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg);
     styleSystemBars(dark);
+    keepThemeBackground(bg);
   });
 }
 
@@ -209,6 +210,7 @@ async function boot(): Promise<void> {
     root,
   );
   mark('render');
+  firstScreenShown();
   startCatalog(firstPage);
   afterFirstPage(firstPage, () => void startUpdates(native ? () => JukePlayer.getAppInfo() : undefined));
   startFreshness();
@@ -220,4 +222,5 @@ boot().catch((e) => {
   logError('boot', e);
   const root = document.getElementById('app');
   if (root) render(<BootError detail={describeError(e)} onRetry={() => location.reload()} />, root);
+  firstScreenShown();
 });

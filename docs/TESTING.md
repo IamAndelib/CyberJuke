@@ -7,6 +7,7 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 ## Install
 - [ ] It installs next to the regular CyberJuke (if you have it) and shows as **CyberJuke Preview**, with its icon.
 - [ ] The first start shows Home with tracks within a few seconds.
+- [ ] Opening the app shows the jukebox on black (also on Android 12 and newer: not a plain or white icon), then Home, with no black or empty screen in between. With Settings → Theme **Light**, close the app completely and open it: after the jukebox, Home shows in the light theme at once, with no black flash. The jukebox never stays more than a couple of seconds, even on a slow connection.
 
 ## Playback
 - [ ] A Home track plays. So do a genre track, an artist page track and a **Global** search result.

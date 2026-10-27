@@ -1,6 +1,5 @@
-import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { cssVar, opened, openSettings, playerCalls, recordOpens, seedStorage, SETTINGS_KEY, start, waitForTracks } from '../helpers';
+import { cssVar, opened, openSettings, playerCalls, recordOpens, seedStorage, SETTINGS_KEY, start, waitForTracks, windowChrome } from '../helpers';
 
 /** Settings: themes, NSFW, the new-tracks interval, the IPv4 setting and the card order. */
 
@@ -72,18 +71,17 @@ test('switching theme changes the CSS variables and persists', async ({ page }) 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'brutalist');
 });
 
-/** What the page told the Android window (recorded on the web: windowChrome.ts). */
-const windowChrome = (page: Page, kind: string) =>
-  page.evaluate((k) => (window as unknown as { __cyberjukeWindowChrome: [string, string][] }).__cyberjukeWindowChrome.filter(([c]) => c === k).map(([, v]) => v), kind);
-
-test('the system bars follow the theme: light icons on a dark theme, dark ones on a light theme', async ({ page }) => {
+test('the window follows the theme: bar icons light on a dark theme and dark on a light one, and its background kept', async ({ page }) => {
   await start(page);
   expect(await windowChrome(page, 'bars')).toEqual(['dark']);
+  expect(await windowChrome(page, 'background')).toEqual(['#000']);
   await openSettings(page);
   await page.getByTestId('theme-light').click();
   await expect.poll(() => windowChrome(page, 'bars')).toEqual(['dark', 'light']);
+  expect(await windowChrome(page, 'background')).toEqual(['#000', '#efe5c0']);
   await page.getByTestId('theme-c64').click();
   await expect.poll(() => windowChrome(page, 'bars')).toEqual(['dark', 'light', 'dark']);
+  expect(await windowChrome(page, 'background')).toEqual(['#000', '#efe5c0', '#2a2ab8']);
 });
 
 test('changing a setting other than the theme leaves the theme alone (no restyle)', async ({ page }) => {

@@ -18,7 +18,12 @@
     </style>
 
 
+    <!-- The launch splash (MainActivity keeps it up until the page's first screen): the jukebox
+         on black, on every Android version, then AppTheme.NoActionBar. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <item name="windowSplashScreenBackground">@android:color/black</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>
