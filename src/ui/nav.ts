@@ -314,7 +314,7 @@ let lastHereLabel: string | null = null;
 
 /**
  * Open Search on top of the current page. With a context, Search adds the Here scope
- * and opens on it; without one (Home, the Genres/Artists grids, Settings) it opens on
+ * and opens on it; without one (Home, the Genres/Artists grids) it opens on
  * Jukebox. P9: the last query comes back (selected, so typing replaces it), except
  * that a Here scope other than the last one starts empty.
  */

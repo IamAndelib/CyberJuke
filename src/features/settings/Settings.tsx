@@ -410,8 +410,7 @@ function NetStatusLine() {
   const [text, setText] = useState<string | null>(null);
   const ipv4 = settings.value.ipv4;
   const blocked = block.blocked.value;
-  // Tabs stay mounted: ask again each time Settings comes back into view (Auto may have
-  // switched meanwhile, without a block).
+  // Ask each time Settings is in view (Auto may have switched meanwhile, without a block).
   const active = usePageActive();
   useEffect(() => {
     if (!active) return;
@@ -437,7 +436,7 @@ function checkedText(at: number): string {
   return `Checked ${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-/** A newer release is out: at the top of Settings (the Settings tab shows a dot meanwhile). */
+/** A newer release is out: at the top of Settings (Home's Settings button shows a dot meanwhile). */
 function UpdateBanner() {
   const r = updateAvailable.value;
   if (!r) return null;

@@ -70,8 +70,9 @@ interface JukePlayerPlugin {
   setQueue(o: { tracks: NativeTrack[]; startIndex: number; positionMs?: number; playWhenReady: boolean; context?: { label: string; mode: 'radio' | 'list' } }): Promise<void>;
   /**
    * Jukebox autoplay picks for `seedId` (after queueLow); dropped if the seed changed, autoplay is off or repeat is on.
-   * A Signal Radio seed (id `sig:…`) is a station, not autoplay: queueLow and its next rounds come whatever the
-   * Autoplay setting (setAutoplay(false) keeps them too).
+   * A station the Radio tab started (a `sig:…` seed in a list labelled `Signal Radio · <CALLSIGN>`) is not autoplay:
+   * queueLow and its next rounds come whatever the Autoplay setting (setAutoplay(false) keeps them too). A station's
+   * track in any other list (Liked, Recently played) is just a track.
    */
   addAutoplay(o: { tracks: NativeTrack[]; seedId: string }): Promise<void>;
   /** The Autoplay setting; off drops the autoplay tracks still to come. */

@@ -14,6 +14,8 @@ internal object Stations {
      * goes off): Autoplay on, or a station playing (its list's [contextLabel], a station track as
      * the seed), which plays on round after round whatever the setting: it isn't autoplay, it is
      * the station. A station's track in another list (Liked, Recently played) is just a track.
+     * The web (player/radio.ts stationPlaying) also checks that the label names the seed's own
+     * station; native doesn't know callsigns, and only the Radio tab makes such a label.
      */
     fun keepsGoing(autoplayEnabled: Boolean, seedId: String?, contextLabel: String?): Boolean =
         autoplayEnabled || (seedId?.startsWith(PREFIX) == true && contextLabel?.startsWith(LABEL) == true)
