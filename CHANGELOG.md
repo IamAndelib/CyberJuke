@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- A quick tap on the Settings button or a Back arrow now shows its press before the screen changes, as a slower tap does.
+
 ## [1.3.0] - 2026-10-27
 
 ### The app

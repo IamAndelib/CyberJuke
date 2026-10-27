@@ -7,9 +7,8 @@ import { SHELF_LABEL, SHELF_ORDER, shelfToken, type MusicItem, type ReleaseKind 
 import { catalog } from '../../stores/catalog';
 import { displayArtist, jukeboxTracksBy } from '../../stores/artists';
 import { toggleFavoriteArtistWithUndo } from '../../stores/undo';
-import { Icon } from '../../ui/icons';
 import { useFavArtist } from '../../ui/useFavs';
-import { popPage, useSearchContext, type AlbumRef } from '../../ui/nav';
+import { useSearchContext, type AlbumRef } from '../../ui/nav';
 import { CatalogError, PlayShuffle, Tracks } from '../../ui/components/TrackList';
 import { list as listCtx } from '../../ui/playAll';
 import { SkeletonRows } from '../../ui/components/TrackRow';
@@ -36,6 +35,7 @@ import {
 import { feedKey, feeds, fillFeed, isFilling, type Feed } from '../../stores/feed';
 import { useFeed } from '../../ui/usePaged';
 import { plural } from '../../core/text';
+import { BackButton } from '../../ui/components/BackButton';
 
 function ShelfSkeleton() {
   return (
@@ -78,9 +78,7 @@ export function ArtistPage({ name: raw }: { name: string }) {
       subtitle="Artist"
       scrollKey={`artist:${key}`}
       left={
-        <button class="icon-btn" aria-label="Back" onClick={popPage} data-testid="artist-back">
-          <Icon name="back" />
-        </button>
+        <BackButton testid="artist-back" />
       }
       right={<ArtistFavButton name={name} />}
       onRefresh={refreshCatalog}

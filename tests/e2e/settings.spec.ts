@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { cssVar, opened, openSettings, playerCalls, recordOpens, seedStorage, SETTINGS_KEY, start, waitForTracks } from '../helpers';
 
@@ -387,4 +388,97 @@ test('radio groups and the Library tabs are one Tab stop each, worked with the a
   await page.keyboard.press('ArrowRight');
   await expect(page.getByTestId('lib-recent')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('lib-recent')).toBeFocused();
+});
+
+// A quick tap is over before a frame paints, and these buttons replace the screen they are on:
+// the press must show (for its ~120 ms) before the screen changes, as with a long press.
+for (const { name, open, testid, next } of [
+  { name: 'the Settings button', open: async (_page: Page) => undefined, testid: 'open-settings', next: 'screen-settings' },
+  { name: "Settings' Back arrow", open: async (page: Page) => {
+    await page.getByTestId('open-settings').click();
+  }, testid: 'settings-back', next: 'screen-home' },
+  { name: "a genre page's Back arrow", open: async (page: Page) => {
+    await page.getByTestId('tab-genres').click();
+    await page.getByTestId('genre-grid').getByTestId('genre-tile').first().click();
+  }, testid: 'genre-back', next: 'genre-grid' },
+]) {
+  test(`a quick tap on ${name} shows its press before the screen changes`, async ({ page }) => {
+    await start(page);
+    await open(page);
+    const btn = page.getByTestId(testid);
+    await expect(btn).toBeVisible();
+    const run = await btn.evaluate(async (el, nextId) => {
+      const shows = () => {
+        const n = document.querySelector<HTMLElement>(`[data-testid="${nextId}"]`);
+        return !!n && n.checkVisibility();
+      };
+      const t0 = performance.now();
+      const ev = { pointerType: 'touch', isPrimary: true, bubbles: true } as const;
+      el.dispatchEvent(new PointerEvent('pointerdown', ev));
+      el.dispatchEvent(new PointerEvent('pointerup', ev));
+      (el as HTMLElement).click();
+      const frames: { t: number; pressed: boolean; next: boolean }[] = [];
+      await new Promise<void>((r) => {
+        const f = () => {
+          const next = shows();
+          frames.push({ t: performance.now() - t0, pressed: el.classList.contains('pressed'), next });
+          if (next || performance.now() - t0 > 3000) r();
+          else requestAnimationFrame(f);
+        };
+        requestAnimationFrame(f);
+      });
+      return frames;
+    }, next);
+    const before = run.filter((f) => !f.next);
+    // Painted pressed, in every frame before the screen changed, for at least ~100 ms.
+    expect(before.length).toBeGreaterThan(0);
+    expect(before.every((f) => f.pressed)).toBe(true);
+    expect(run.at(-1)!.next).toBe(true);
+    expect(run.at(-1)!.t).toBeGreaterThanOrEqual(100);
+  });
+}
+
+// The waiting action runs before a tap that follows it, so it acts on the screen it was tapped on.
+test('a quick Back and then at once a tab: the page is closed, on its own tab', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-grid').getByTestId('genre-tile').first().click();
+  await expect(page.getByTestId('genre-back')).toBeVisible();
+  await page.getByTestId('genre-back').click();
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('tab-genres').click();
+  await expect(page.getByTestId('genre-grid')).toBeVisible();
+  await expect(page.getByTestId('genre-back')).toBeHidden();
+});
+
+test("a quick Back on Settings and then at once Radio: Radio stays, it doesn't jump to Home", async ({ page }) => {
+  await start(page);
+  await openSettings(page);
+  await page.getByTestId('settings-back').click();
+  await page.getByTestId('tab-radio').click();
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('screen-radio')).toBeVisible();
+  await expect(page.getByTestId('tab-radio')).toHaveAttribute('aria-current', 'page');
+});
+
+test('a click with no press (keyboard, TalkBack) opens Settings at once', async ({ page }) => {
+  await start(page);
+  const frames = await page.getByTestId('open-settings').evaluate(async (el) => {
+    (el as HTMLElement).click();
+    let n = 0;
+    await new Promise<void>((r) => {
+      const f = () => {
+        n++;
+        if (document.querySelector('[data-testid="screen-settings"]') || n > 60) r();
+        else requestAnimationFrame(f);
+      };
+      requestAnimationFrame(f);
+    });
+    return n;
+  });
+  expect(frames).toBe(1);
+  await page.keyboard.press('Escape');
+  await page.getByTestId('open-settings').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('screen-settings')).toBeVisible();
 });

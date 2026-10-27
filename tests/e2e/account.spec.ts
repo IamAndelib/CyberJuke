@@ -282,6 +282,7 @@ test('a sign-in still out when Settings is closed: reopened, it shows it going, 
   await page.getByTestId('signin-submit').click();
   await expect(page.getByTestId('signin-submit')).toHaveAttribute('aria-busy', 'true');
   await page.getByTestId('settings-back').click();
+  await expect(page.getByTestId('screen-home')).toBeVisible();
   await openSettings(page);
   await expect(page.getByTestId('signin-email')).toHaveValue(AUTH_USER.email);
   await expect(page.getByTestId('signin-submit')).toHaveAttribute('aria-busy', 'true');

@@ -116,7 +116,9 @@ h3 {
   border-radius: var(--radius);
   flex: none;
 }
-.icon-btn:active:not(:disabled) {
+/* .pressed (usePress): a quick tap, shown for at least ~120 ms. */
+.icon-btn:active:not(:disabled),
+.icon-btn.pressed:not(:disabled) {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;

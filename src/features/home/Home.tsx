@@ -14,6 +14,7 @@ import { OfflineGate } from '../../ui/components/OfflineGate';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
 import { openSettings } from '../../ui/nav';
+import { usePressThen } from '../../ui/usePress';
 import { refreshCatalog } from '../../ui/refresh';
 import { NewTracksPill } from './NewTracksPill';
 import { Rail, RailRow, type RailItem } from '../../ui/components/Rail';
@@ -204,8 +205,10 @@ export function Home() {
 /** Settings, top right on Home; a dot when a newer release is out (stores/updates). */
 function SettingsButton() {
   const update = updateAvailable.value;
+  // Settings replaces Home: the press shows first (a quick tap is over before a frame paints).
+  const press = usePressThen<HTMLButtonElement>(openSettings);
   return (
-    <button class="icon-btn settings-btn" aria-label={update ? 'Settings (update available)' : 'Settings'} onClick={openSettings} data-testid="open-settings">
+    <button ref={press.ref} class="icon-btn settings-btn" aria-label={update ? 'Settings (update available)' : 'Settings'} onClick={press.onClick} data-testid="open-settings">
       <Icon name="settings" />
       {update && <span class="update-dot" aria-hidden="true" data-testid="settings-update-dot" />}
     </button>
