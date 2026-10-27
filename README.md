@@ -187,7 +187,7 @@ CyberJuke is being prepared for [F-Droid](https://f-droid.org):
 - Store listing in [`fastlane/metadata/android/en-US/`](fastlane/metadata/android/en-US).
 - Literal `versionCode`/`versionName` in `android/app/build.gradle`, and a changelog per version in `fastlane/.../changelogs/<versionCode>.txt`.
 - Reproducible builds (no dependency-metadata block, no build timestamps), so F-Droid can ship the same developer-signed APK as GitHub and the two update each other.
-- F-Droid will mark it **NonFreeNet**: it depends on YouTube and on Cyberspace's backend.
+- F-Droid will mark it **NonFreeNet**: it depends on YouTube, on Cyberspace's backend and on latex.gg (Jukebox MP3s).
 
 The draft recipe and the submission steps are in [`docs/fdroid/`](docs/fdroid).
 
