@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import { Icon } from '../../ui/icons';
 import { openSearch, pageSearchContext, tab } from '../../ui/nav';
-import { usePress } from '../../ui/usePress';
+import { afterPress } from '../../ui/press';
 
 /** Scrolling this far in one direction hides (down) or shows (up) the button. */
 const FAB_SCROLL_PX = 24;
@@ -23,8 +23,6 @@ export function SearchFab() {
   const ctx = pageSearchContext.value;
   const cur = tab.value;
   const dock = useRef<HTMLDivElement>(null);
-  const btn = useRef<HTMLButtonElement>(null);
-  usePress(btn);
 
   // Another tab or page: back in view until that one scrolls down.
   useEffect(() => dock.current?.classList.remove('away'), [ctx, cur]);
@@ -60,10 +58,10 @@ export function SearchFab() {
   return (
     <div class="fab" ref={dock}>
       <button
-        ref={btn}
         class="pixel-btn"
         aria-label={ctx ? `Search in ${ctx.label}` : 'Search the Jukebox'}
-        onClick={() => openSearch(ctx)}
+        // The button goes as Search opens: its press shows first.
+        onClick={(e) => afterPress(e.currentTarget, () => openSearch(ctx))}
         data-testid="search-fab"
       >
         <Icon name="search" size={28} />

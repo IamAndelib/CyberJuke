@@ -195,6 +195,11 @@
   margin-top: 4px;
   padding: 2px 8px;
 }
+/* Its link keeps a 44px target in the small chip. */
+.np-offline .offline-link {
+  min-height: 44px;
+  margin: -10px 0;
+}
 .np-art {
   margin: 8px calc(var(--gutter) + 18px) 26px calc(var(--gutter) + 8px);
   max-width: 420px;
@@ -354,7 +359,8 @@
     0 0 0 3px var(--color-bg),
     0 0 0 5px var(--color-fg);
 }
-.play-btn:active {
+.play-btn:active,
+.play-btn.pressed {
   transform: scale(0.94);
 }
 
@@ -382,8 +388,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.np-post:active {
-  background: var(--color-surface);
+.np-post:active,
+.np-post.pressed {
+  background: var(--press);
 }
 
 .upnext {

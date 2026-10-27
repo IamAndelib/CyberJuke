@@ -1,12 +1,11 @@
 import { Icon } from '../icons';
 import { popPage } from '../nav';
-import { usePressThen } from '../usePress';
+import { afterPress } from '../press';
 
 /** A page's Back arrow: shows its press, then leaves (`onBack`, by default the page on top). */
-export function BackButton({ testid, onBack = popPage }: { testid: string; onBack?: () => void }) {
-  const press = usePressThen<HTMLButtonElement>(() => void onBack());
+export function BackButton({ testid, onBack = popPage, label = 'Back' }: { testid: string; onBack?: () => void; label?: string }) {
   return (
-    <button ref={press.ref} class="icon-btn" aria-label="Back" onClick={press.onClick} data-testid={testid}>
+    <button class="icon-btn" aria-label={label} onClick={(e) => afterPress(e.currentTarget, () => void onBack())} data-testid={testid}>
       <Icon name="back" />
     </button>
   );

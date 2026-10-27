@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
-- A quick tap on the Settings button, a Back arrow, or the genre or artist in Now Playing now shows its press before the screen changes, as a slower tap does.
+- Every button shows its press on a quick tap now, as a slower tap does: the Settings icon, the Back arrows, the search button, the genre or artist in Now Playing, the tabs, chips, rows and tiles. The screen still changes straight away. With reduced motion on, the press still shows; only its movement is gone.
 
 ## [1.3.0] - 2026-10-27
 

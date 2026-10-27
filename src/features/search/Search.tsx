@@ -13,7 +13,6 @@ import { Icon } from '../../ui/icons';
 import {
   openArtistPage,
   openGenrePage,
-  popPage,
   read,
   searchContext,
   searchMode,
@@ -27,6 +26,8 @@ import { Rail, RailRow, RailSep, type RailItem } from '../../ui/components/Rail'
 import { CatalogError, ChunkedTracks, EmptyState, Tracks } from '../../ui/components/TrackList';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
+import { BackButton } from '../../ui/components/BackButton';
+import { afterPress } from '../../ui/press';
 import { OfflineGate } from '../../ui/components/OfflineGate';
 import { CoverRow, GlobalError, LoadMore, MUSIC_ITEM_OPTS, MusicRow, searchLoader } from '../../ui/components/Music';
 import { useFeed } from '../../ui/usePaged';
@@ -424,7 +425,7 @@ function RecentSearches({ onPick }: { onPick: (q: string) => void }) {
               type="button"
               class="icon-btn recent-x"
               aria-label={`Remove “${q}” from recent searches`}
-              onClick={() => removeRecentSearch(q)}
+              onClick={(e) => afterPress(e.currentTarget, () => removeRecentSearch(q))}
               data-testid="recent-search-remove"
             >
               <Icon name="close" size={18} />
@@ -470,9 +471,7 @@ export function Search() {
     <header class="topbar search-bar">
       <div class="search-row">
         <div class="topbar-left">
-          <button class="icon-btn" aria-label="Close search" onClick={popPage} data-testid="search-close">
-            <Icon name="back" />
-          </button>
+          <BackButton testid="search-close" label="Close search" />
         </div>
         <label class="search-field">
           <span class="search-prompt" aria-hidden="true">
@@ -503,10 +502,12 @@ export function Search() {
               class="search-clear"
               aria-label="Clear search"
               onPointerDown={(e) => e.preventDefault()}
-              onClick={() => {
-                query.value = '';
-                input.current?.focus();
-              }}
+              onClick={(e) =>
+                afterPress(e.currentTarget, () => {
+                  query.value = '';
+                  input.current?.focus();
+                })
+              }
               data-testid="search-clear"
             >
               <Icon name="close" size={20} />

@@ -41,7 +41,7 @@ import { UpNext } from './UpNext';
 import { useModal, useSheetContent } from '../../ui/useModal';
 import { useLiked } from '../../ui/useFavs';
 import { shareTrack } from '../../ui/share';
-import { usePressThen } from '../../ui/usePress';
+import { afterPress } from '../../ui/press';
 
 function fmt(ms: number): string {
   if (!isFinite(ms) || ms < 0) ms = 0;
@@ -592,7 +592,7 @@ function NowPlayingContent() {
               {showLyrics ? (
                 <LyricsPanel track={t} />
               ) : (
-                <button class="np-art-btn" onClick={() => (lyricsOpen.value = true)} aria-label="Show lyrics" data-testid="np-art">
+                <button class="np-art-btn" onClick={(e) => afterPress(e.currentTarget, () => (lyricsOpen.value = true))} aria-label="Show lyrics" data-testid="np-art">
                   <Art track={t} size="fill" />
                 </button>
               )}
@@ -720,10 +720,9 @@ function NpOffline() {
 
 /** Genre tag in Now Playing: tapping opens the genre page. */
 function NpGenre({ genre }: { genre: string }) {
-  // The page replaces Now Playing: the press shows first (a quick tap is over before a frame paints).
-  const press = usePressThen<HTMLButtonElement>(() => openGenrePage(genre));
+  // The page replaces Now Playing: its press shows first.
   return (
-    <button ref={press.ref} class="tag np-genre" onClick={press.onClick} aria-label={`Open genre ${genre}`} data-testid="np-genre">
+    <button class="tag np-genre" onClick={(e) => afterPress(e.currentTarget, () => openGenrePage(genre))} aria-label={`Open genre ${genre}`} data-testid="np-genre">
       <span class="np-genre-text">{genre}</span>
     </button>
   );
@@ -732,10 +731,6 @@ function NpGenre({ genre }: { genre: string }) {
 /** Artist line in Now Playing: tapping opens the artist page (or a chooser for several). */
 function NpArtist({ track }: { track: Track }) {
   const names = splitArtists(track.artist);
-  // As NpGenre: the artist page replaces Now Playing, so the press shows first. The chooser
-  // opens over it, with the press still in sight, so it opens at once.
-  const press = usePressThen<HTMLButtonElement>(() => openArtistPage(names[0]));
-  const choose = () => (names.length === 1 ? press.onClick() : (artistChoice.value = names));
   if (!names.length)
     return (
       <div class="np-artist">
@@ -745,9 +740,10 @@ function NpArtist({ track }: { track: Track }) {
   return (
     <div class="np-artist">
       <button
-        ref={press.ref}
         class="np-link"
-        onClick={choose}
+        // As NpGenre: the artist page replaces Now Playing, so its press shows first. The
+        // chooser opens over Now Playing, with the press in sight, so it opens at once.
+        onClick={(e) => (names.length === 1 ? afterPress(e.currentTarget, () => openArtistPage(names[0])) : (artistChoice.value = names))}
         aria-label={names.length === 1 ? `Open artist ${names[0]}` : `Choose an artist: ${names.join(', ')}`}
         aria-haspopup={names.length > 1 ? 'dialog' : undefined}
         data-testid="np-artist"

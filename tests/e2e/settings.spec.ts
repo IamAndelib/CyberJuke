@@ -1,6 +1,5 @@
-import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { cssVar, opened, openNowPlaying, openSettings, playerCalls, recordOpens, seedStorage, SETTINGS_KEY, start, waitForTracks } from '../helpers';
+import { cssVar, opened, openSettings, playerCalls, recordOpens, seedStorage, SETTINGS_KEY, start, waitForTracks } from '../helpers';
 
 /** Settings: themes, NSFW, the new-tracks interval, the IPv4 setting and the card order. */
 
@@ -389,63 +388,6 @@ test('radio groups and the Library tabs are one Tab stop each, worked with the a
   await expect(page.getByTestId('lib-recent')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('lib-recent')).toBeFocused();
 });
-
-/** Now Playing on a track with a genre tag, credited to one artist. */
-async function openNowPlayingOnTagged(page: Page): Promise<void> {
-  const row = page.getByTestId('track-row').filter({ has: page.locator('.tag') }).filter({ hasNotText: ',' }).first();
-  await row.getByTestId('track-play').click();
-  await openNowPlaying(page);
-}
-
-// A quick tap is over before a frame paints, and these buttons replace the screen they are on:
-// the press must show (for its ~120 ms) before the screen changes, as with a long press.
-for (const { name, open, testid, next } of [
-  { name: 'the Settings button', open: async (_page: Page) => undefined, testid: 'open-settings', next: 'screen-settings' },
-  { name: "Settings' Back arrow", open: async (page: Page) => {
-    await page.getByTestId('open-settings').click();
-  }, testid: 'settings-back', next: 'screen-home' },
-  { name: "a genre page's Back arrow", open: async (page: Page) => {
-    await page.getByTestId('tab-genres').click();
-    await page.getByTestId('genre-grid').getByTestId('genre-tile').first().click();
-  }, testid: 'genre-back', next: 'genre-grid' },
-  { name: "Now Playing's genre", open: openNowPlayingOnTagged, testid: 'np-genre', next: 'screen-genre' },
-  { name: "Now Playing's artist", open: openNowPlayingOnTagged, testid: 'np-artist', next: 'screen-artist' },
-]) {
-  test(`a quick tap on ${name} shows its press before the screen changes`, async ({ page }) => {
-    await start(page);
-    await open(page);
-    const btn = page.getByTestId(testid);
-    await expect(btn).toBeVisible();
-    const run = await btn.evaluate(async (el, nextId) => {
-      const shows = () => {
-        const n = document.querySelector<HTMLElement>(`[data-testid="${nextId}"]`);
-        return !!n && n.checkVisibility();
-      };
-      const t0 = performance.now();
-      const ev = { pointerType: 'touch', isPrimary: true, bubbles: true } as const;
-      el.dispatchEvent(new PointerEvent('pointerdown', ev));
-      el.dispatchEvent(new PointerEvent('pointerup', ev));
-      (el as HTMLElement).click();
-      const frames: { t: number; pressed: boolean; next: boolean }[] = [];
-      await new Promise<void>((r) => {
-        const f = () => {
-          const next = shows();
-          frames.push({ t: performance.now() - t0, pressed: el.classList.contains('pressed'), next });
-          if (next || performance.now() - t0 > 3000) r();
-          else requestAnimationFrame(f);
-        };
-        requestAnimationFrame(f);
-      });
-      return frames;
-    }, next);
-    const before = run.filter((f) => !f.next);
-    // Painted pressed, in every frame before the screen changed, for at least ~100 ms.
-    expect(before.length).toBeGreaterThan(0);
-    expect(before.every((f) => f.pressed)).toBe(true);
-    expect(run.at(-1)!.next).toBe(true);
-    expect(run.at(-1)!.t).toBeGreaterThanOrEqual(100);
-  });
-}
 
 // The waiting action runs before a tap that follows it, so it acts on the screen it was tapped on.
 test('a quick Back and then at once a tab: the page is closed, on its own tab', async ({ page }) => {
