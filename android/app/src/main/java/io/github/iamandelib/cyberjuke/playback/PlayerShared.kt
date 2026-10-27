@@ -155,9 +155,9 @@ internal object JukeTracks {
         val mp3 = o.str("mp3")
         val uri = when {
             ytId != null && SessionPolicy.isValidYtId(ytId) -> JukeUris.forYt(ytId)
-            ytId == null && mp3 != null -> JukeUris.forMp3(mp3) ?: throw IllegalArgumentException("track.mp3 invalid ($id)")
-            ytId == null -> throw IllegalArgumentException("track.ytId missing ($id)")
-            else -> throw IllegalArgumentException("track.ytId invalid ($id)")
+            ytId == null && mp3 != null -> JukeUris.forMp3(mp3) ?: throw IllegalArgumentException("track.mp3 invalid")
+            ytId == null -> throw IllegalArgumentException("track.ytId missing")
+            else -> throw IllegalArgumentException("track.ytId invalid")
         }
         val membersOnly = o.optBoolean("membersOnly", false)
         TrackExtras.put(id, o.str("by"), o.str("postUrl"), membersOnly, restored)
