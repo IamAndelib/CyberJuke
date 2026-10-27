@@ -296,4 +296,17 @@ internal object Hosts {
         val u = url.toHttpUrlOrNull() ?: return false
         return u.isHttps && isYouTubeMedia(u.host)
     }
+
+    /** The hosts of the album and playlist pages the music plugin opens. */
+    private val MUSIC_PAGE_HOSTS = setOf("music.youtube.com", "www.youtube.com", "youtube.com")
+
+    /**
+     * An album or playlist URL `JukeMusic.playlist` may open: https on YouTube Music or
+     * YouTube itself, the default port, no user info. Every URL the plugin hands out is one.
+     */
+    fun isMusicPageUrl(url: String): Boolean {
+        val u = url.toHttpUrlOrNull() ?: return false
+        return u.isHttps && u.port == 443 && u.username.isEmpty() && u.password.isEmpty() &&
+            u.host in MUSIC_PAGE_HOSTS
+    }
 }

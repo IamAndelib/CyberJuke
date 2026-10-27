@@ -11,10 +11,13 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import io.github.iamandelib.cyberjuke.lyrics.Lyrics
 import io.github.iamandelib.cyberjuke.net.FailureKind
+import io.github.iamandelib.cyberjuke.net.Hosts
 import io.github.iamandelib.cyberjuke.net.NetBlock
 import io.github.iamandelib.cyberjuke.net.Surface
+import io.github.iamandelib.cyberjuke.playback.BridgeLimits
 import io.github.iamandelib.cyberjuke.playback.PlayerBus
 import io.github.iamandelib.cyberjuke.playback.SessionPolicy
+import io.github.iamandelib.cyberjuke.playback.TooLargeException
 import io.github.iamandelib.cyberjuke.playback.isDebuggable
 import io.github.iamandelib.cyberjuke.yt.ArtistPage
 import io.github.iamandelib.cyberjuke.yt.YtCompat
@@ -54,7 +57,9 @@ import java.util.concurrent.Executors
  * fallback) rejects BOT_CHECK without a request. A limit on one of them switches to IPv4 or
  * retries once first (YtGuard), and then holds the music features only, not playback.
  *
- * Rejections carry code BOT_CHECK, NETWORK or UNAVAILABLE.
+ * Rejections carry code BOT_CHECK, NETWORK or UNAVAILABLE. A string argument over the bridge's
+ * cap (BridgeLimits, K6) and a playlist URL that isn't https on music.youtube.com,
+ * www.youtube.com or youtube.com reject UNAVAILABLE without a request.
  *
  * All NewPipe work runs on a small background pool; lyrics run on their own single thread,
  * one request at a time. `next` (and the artist page's `more` tokens) are opaque tokens
@@ -88,6 +93,7 @@ class MusicPlugin : Plugin() {
         if (query.isNullOrEmpty()) {
             call.reject("query is required", "UNAVAILABLE"); return
         }
+        if (overCap(call, "query" to query)) return
         val filter = YtMusic.Filter.parse(call.getString("filter"))
         if (filter == null) {
             call.reject("filter must be songs, albums, artists or playlists", "UNAVAILABLE"); return
@@ -113,6 +119,9 @@ class MusicPlugin : Plugin() {
         if (url.isNullOrEmpty()) {
             call.reject("url is required", "UNAVAILABLE"); return
         }
+        if (!Hosts.isMusicPageUrl(url)) {
+            call.reject("url must be a YouTube Music or YouTube album or playlist", "UNAVAILABLE"); return
+        }
         run(call, "playlist $url") {
             val p = YtMusic.playlist(url)
             val out = itemsToJs(p.items, p.next)
@@ -130,6 +139,7 @@ class MusicPlugin : Plugin() {
         if (name.isNullOrEmpty()) {
             call.reject("name is required", "UNAVAILABLE"); return
         }
+        if (overCap(call, "name" to name)) return
         run(call, "artist '$name'") { itemsToJs(YtMusic.artist(name), null) }
     }
 
@@ -205,6 +215,7 @@ class MusicPlugin : Plugin() {
         // Optional (only the YouTube fallback uses it): an invalid one is left out.
         val ytId = call.getString("ytId")?.trim()?.takeIf { SessionPolicy.isValidYtId(it) }
         val album = call.getString("album")?.trim()?.takeIf { it.isNotEmpty() }
+        if (overCap(call, "title" to title, "artist" to artist, "album" to album)) return
         val duration = call.numArg("durationSec")?.toDouble()?.takeIf { it > 0 }
         // Not guarded: LRCLIB answers during a back-off; only the YouTube fallback is refused.
         run(call, "lyrics '$artist - $title'", lyricsExecutor, guarded = false) {
@@ -226,6 +237,22 @@ class MusicPlugin : Plugin() {
      * same IP): rejects BOT_CHECK. Lyrics still ask LRCLIB; their YouTube Music fallback is
      * refused in InnerTube.
      */
+    /**
+     * Rejects the call (UNAVAILABLE, the music contract's code) when a string argument is over
+     * the bridge's cap (K6); true if it did.
+     */
+    private fun overCap(call: PluginCall, vararg args: Pair<String, String?>): Boolean {
+        for ((what, value) in args) {
+            try {
+                BridgeLimits.checkString(value, what)
+            } catch (e: TooLargeException) {
+                call.reject(e.message, "UNAVAILABLE")
+                return true
+            }
+        }
+        return false
+    }
+
     private fun refuseWhileBlocked(call: PluginCall): Boolean {
         if (!NetBlock.isBlocked(Surface.MUSIC)) return false
         call.reject("BOT_CHECK: YouTube is limiting requests from this network", "BOT_CHECK")

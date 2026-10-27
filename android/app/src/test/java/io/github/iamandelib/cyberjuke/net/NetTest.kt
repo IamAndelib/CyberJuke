@@ -154,4 +154,22 @@ class NetTest {
         assertFalse(Hosts.isAllowedMediaUrl("content://media/1"))
         assertFalse(Hosts.isAllowedMediaUrl("asset:///ci-tone.ogg"))
     }
+
+    @Test
+    fun musicPagesAreHttpsOnYouTubeMusicOrYouTube() {
+        assertTrue(Hosts.isMusicPageUrl("https://music.youtube.com/playlist?list=OLAK5uy_abc"))
+        assertTrue(Hosts.isMusicPageUrl("https://music.youtube.com/browse/MPREb_abc"))
+        assertTrue(Hosts.isMusicPageUrl("https://www.youtube.com/playlist?list=PLabc"))
+        assertTrue(Hosts.isMusicPageUrl("https://youtube.com/playlist?list=PLabc"))
+        assertTrue(Hosts.isMusicPageUrl("https://MUSIC.youtube.com:443/playlist?list=PLabc"))
+        assertFalse(Hosts.isMusicPageUrl("http://music.youtube.com/playlist?list=PLabc"))
+        assertFalse(Hosts.isMusicPageUrl("https://music.youtube.com:8443/playlist?list=PLabc"))
+        assertFalse(Hosts.isMusicPageUrl("https://user@music.youtube.com/playlist?list=PLabc"))
+        assertFalse(Hosts.isMusicPageUrl("https://music.youtube.com.example.org/playlist?list=PLabc"))
+        assertFalse(Hosts.isMusicPageUrl("https://m.youtube.com/playlist?list=PLabc"))
+        assertFalse(Hosts.isMusicPageUrl("https://example.org/?u=https://music.youtube.com/"))
+        assertFalse(Hosts.isMusicPageUrl("file:///data/data/x"))
+        assertFalse(Hosts.isMusicPageUrl("OLAK5uy_abc"))
+        assertFalse(Hosts.isMusicPageUrl(""))
+    }
 }
