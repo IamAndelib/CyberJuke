@@ -7,12 +7,14 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.net.SocketTimeoutException
 
 /** The liked saver's job: what each way a save can go becomes ([SaveOutcome]), the world faked through [SaveJob.Deps]. */
 class SaveJobTest {
     private val id = "dQw4w9WgXcQ"
     private val mp3Id = "mp3:IZq8cMcx.mp3"
+    private val mb = 1024L * 1024L
     private val audio = ResolvedStream(id, "https://r1.googlevideo.com/videoplayback", emptyMap(), "opus", 0L, itag = 251, audioOnly = true)
     private val muxed = audio.copy(itag = 18, audioOnly = false)
 
@@ -29,6 +31,12 @@ class SaveJobTest {
         var resolve: () -> ResolvedStream = { audio },
         var hasCache: Boolean = true,
         var write: (SaveJob) -> Unit = {},
+        var limit: Long = 256 * mb,
+        var unmetered: Boolean = true,
+        /** What the writer reports before the bytes are written: (length, -1 unknown; cached so far). */
+        var reports: List<Pair<Long, Long>> = emptyList(),
+        /** What it reports once the last byte came (a length learned only at the end), with no stop after. */
+        var endReport: Pair<Long, Long>? = null,
     ) : SaveJob.Deps {
         val calls = ArrayList<String>()
         var job: SaveJob? = null
@@ -36,8 +44,17 @@ class SaveJobTest {
         /** writer() throws this instead of giving a writer. */
         var noWriter: IOException? = null
         private var written = false
+        val discarded = ArrayList<String>()
 
         override fun quiet() = quiet
+
+        override fun limitBytes() = limit
+
+        override fun unmetered() = unmetered
+
+        override fun discard(audioId: String) {
+            discarded.add(audioId)
+        }
 
         override fun isDenied(audioId: String) = denied.also { calls.add("denied") }
 
@@ -51,23 +68,30 @@ class SaveJobTest {
             return resolve.invoke()
         }
 
-        override fun writer(ytId: String, stream: ResolvedStream): SaveJob.Writer? {
+        override fun writer(ytId: String, stream: ResolvedStream, progress: SaveJob.Progress): SaveJob.Writer? {
             calls.add("writer")
-            return newWriter()
+            return newWriter(progress)
         }
 
-        override fun mp3Writer(audioId: String): SaveJob.Writer? {
+        override fun mp3Writer(audioId: String, progress: SaveJob.Progress): SaveJob.Writer? {
             calls.add("mp3Writer")
-            return newWriter()
+            return newWriter(progress)
         }
 
-        private fun newWriter(): SaveJob.Writer? {
+        private fun newWriter(progress: SaveJob.Progress): SaveJob.Writer? {
             noWriter?.let { throw it }
             if (!hasCache) return null
             return object : SaveJob.Writer {
                 override fun cache() {
                     calls.add("cache")
+                    // As CacheWriter: a cancel shows at the next check, as an InterruptedIOException.
+                    for ((length, cached) in reports) {
+                        progress.onProgress(length, cached)
+                        if (cancelledWriter) throw InterruptedIOException()
+                    }
                     write(job!!)
+                    calls.add("bytes")
+                    endReport?.let { (length, cached) -> progress.onProgress(length, cached) }
                     written = true
                 }
 
@@ -99,7 +123,7 @@ class SaveJobTest {
     fun theWholeSaveIsAnExtractionThenTheBytesThenTheCheck() {
         val w = World()
         assertEquals(SaveOutcome.SAVED, w.run())
-        assertEquals(listOf("denied", "whole", "resolve", "writer", "cache", "whole"), w.calls)
+        assertEquals(listOf("denied", "whole", "resolve", "writer", "cache", "bytes", "whole"), w.calls)
     }
 
     @Test
@@ -200,7 +224,7 @@ class SaveJobTest {
         // Its file straight from latex.gg, through the same writer and the same check.
         val w = World(resolve = { throw AssertionError("an MP3 is never extracted") })
         assertEquals(SaveOutcome.SAVED, w.run(audioId = mp3Id))
-        assertEquals(listOf("denied", "whole", "mp3Writer", "cache", "whole"), w.calls)
+        assertEquals(listOf("denied", "whole", "mp3Writer", "cache", "bytes", "whole"), w.calls)
         // Already whole: nothing fetched.
         val whole = World(whole = true)
         assertEquals(SaveOutcome.SAVED, whole.run(audioId = mp3Id))
@@ -238,5 +262,57 @@ class SaveJobTest {
         })
         assertEquals(SaveOutcome.CANCELLED, w.run(audioId = mp3Id))
         assertTrue(w.cancelledWriter)
+    }
+
+    @Test
+    fun aSongTooBigForTheCacheIsGivenUpOnBeforeItsBytesCome() {
+        // A 150 MB mix (or a long video) in a 128 MB cache: its length, told when the request
+        // opens, is over what the cache leaves beside listening. Stopped before a byte is read,
+        // given up on, and whatever of it was in the cache goes.
+        for (audioId in listOf(mp3Id, id)) {
+            val w = World(limit = 128 * mb, reports = listOf(150 * mb to 0L))
+            assertEquals(audioId, SaveOutcome.FAILED, w.run(audioId = audioId))
+            assertTrue(w.cancelledWriter)
+            assertFalse("bytes" in w.calls)
+            assertEquals(listOf(audioId), w.discarded)
+        }
+        // Up to the limit less the listening reserve, it fits.
+        val reserve = LikedSaverPolicy.LISTENING_RESERVE_BYTES
+        assertEquals(SaveOutcome.SAVED, World(limit = 128 * mb, reports = listOf(128 * mb - reserve to 0L)).run(audioId = mp3Id))
+        assertEquals(SaveOutcome.FAILED, World(limit = 128 * mb, reports = listOf(128 * mb - reserve + 1 to 0L)).run(audioId = mp3Id))
+        // A bigger cache takes it.
+        assertEquals(SaveOutcome.SAVED, World(limit = 512 * mb, reports = listOf(150 * mb to 0L)).run(audioId = mp3Id))
+    }
+
+    @Test
+    fun withNoLengthTheSaveStopsOnceTheBytesAreTooMany() {
+        // latex.gg sent no Content-Length: the bytes so far count, and the save stops at the cap.
+        val w = World(limit = 128 * mb, reports = listOf(-1L to 50 * mb, -1L to 97 * mb, -1L to 120 * mb))
+        assertEquals(SaveOutcome.FAILED, w.run(audioId = mp3Id))
+        assertTrue(w.cancelledWriter)
+        assertEquals(listOf(mp3Id), w.discarded)
+        // A length learned only with the last byte (no stop comes after it) still counts.
+        val atEnd = World(limit = 128 * mb, endReport = 100 * mb to 100 * mb)
+        assertEquals(SaveOutcome.FAILED, atEnd.run(audioId = mp3Id))
+        assertEquals(listOf(mp3Id), atEnd.discarded)
+    }
+
+    @Test
+    fun aLongSongLikedJustNowOnMobileDataWaitsForWifi() {
+        // Liked just now on mobile data: a 60 MB mix isn't fetched now; the Wi-Fi backfill will.
+        val data = World(unmetered = false, reports = listOf(60 * mb to 0L))
+        assertEquals(SaveOutcome.WIFI_ONLY, data.run(fresh = true, audioId = mp3Id))
+        assertTrue(data.cancelledWriter)
+        assertFalse("bytes" in data.calls)
+        assertTrue(data.discarded.isEmpty())
+        // No length: it stops once more than that has come, keeping it for the backfill to go on from.
+        val noLength = World(unmetered = false, reports = listOf(-1L to 30 * mb, -1L to 41 * mb))
+        assertEquals(SaveOutcome.WIFI_ONLY, noLength.run(fresh = true, audioId = mp3Id))
+        assertTrue(noLength.discarded.isEmpty())
+        // A short one is saved on mobile data at once, a long one on Wi-Fi, and the backfill
+        // (which only runs on Wi-Fi) isn't held by this.
+        assertEquals(SaveOutcome.SAVED, World(unmetered = false, reports = listOf(30 * mb to 0L)).run(fresh = true, audioId = mp3Id))
+        assertEquals(SaveOutcome.SAVED, World(unmetered = true, reports = listOf(60 * mb to 0L)).run(fresh = true, audioId = mp3Id))
+        assertEquals(SaveOutcome.SAVED, World(unmetered = false, reports = listOf(60 * mb to 0L)).run(fresh = false, audioId = mp3Id))
     }
 }

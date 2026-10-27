@@ -334,6 +334,26 @@ class CachePolicyTest {
     }
 
     @Test
+    fun aSongTooBigForTheCacheOrForMobileDataRightNowIsNotSaved() {
+        val reserve = LikedSaverPolicy.LISTENING_RESERVE_BYTES
+        val onData = LikedSaverPolicy.FRESH_ON_DATA_MAX_BYTES
+        // Over what the limit leaves beside listening: never, on any network, fresh or not.
+        for (fresh in listOf(true, false)) {
+            for (unmetered in listOf(true, false)) {
+                assertEquals(SaveSize.TOO_BIG, LikedSaverPolicy.size(128 * mb - reserve + 1, 128 * mb, fresh, unmetered))
+                assertEquals(SaveSize.TOO_BIG, LikedSaverPolicy.size(150 * mb, 128 * mb, fresh, unmetered))
+            }
+        }
+        assertEquals(SaveSize.FITS, LikedSaverPolicy.size(128 * mb - reserve, 128 * mb, fresh = false, unmetered = true))
+        assertEquals(SaveSize.FITS, LikedSaverPolicy.size(150 * mb, 256 * mb, fresh = true, unmetered = true))
+        // Liked just now on mobile data: up to a modest size; a longer one waits for Wi-Fi.
+        assertEquals(SaveSize.FITS, LikedSaverPolicy.size(onData, 256 * mb, fresh = true, unmetered = false))
+        assertEquals(SaveSize.WIFI_ONLY, LikedSaverPolicy.size(onData + 1, 256 * mb, fresh = true, unmetered = false))
+        // A YouTube track (about 4 MB) is never held.
+        assertEquals(SaveSize.FITS, LikedSaverPolicy.size(4 * mb, 128 * mb, fresh = true, unmetered = false))
+    }
+
+    @Test
     fun neverWhatThePlayerLoadsAnywayNorAFailure() {
         assertEquals("old00000000", LikedSaverPolicy.next(Facts(liked, saved = emptySet(), skip = setOf("new00000000", "mid00000000"))))
     }

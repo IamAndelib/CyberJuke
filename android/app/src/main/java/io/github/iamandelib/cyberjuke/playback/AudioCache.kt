@@ -168,6 +168,10 @@ internal object AudioCache {
         limitMb = sizeOf(mb)
     }
 
+    /** The size limit now (Settings), in bytes. */
+    val limitBytes: Long
+        get() = limitMb * MB
+
     /** One of [SIZES_MB]; anything else is the default. */
     fun sizeOf(mb: Int): Int = if (mb in SIZES_MB) mb else DEFAULT_MB
 
@@ -331,6 +335,11 @@ internal object AudioCache {
             evict(c, 0L, null)
             publish()
         } != null
+    }
+
+    /** [audioId]'s audio goes: a liked save too big to keep ([LikedSaverPolicy.size]). */
+    fun discard(audioId: String) {
+        locked { c -> ledger.keysOf(audioId).forEach { c.removeResource(it) } }
     }
 
     /** Clear cache (Settings): everything goes. Playback goes on (from the network). */
