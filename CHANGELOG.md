@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### The app
+- On Android 12 and newer, your settings and recent searches go into your Google backup only when it is end-to-end encrypted, which needs a screen lock on the phone. Liked songs, history and your login were never in backups, and still aren't.
+
 ## [1.2.0] - 2026-10-19
 
 ### The app
