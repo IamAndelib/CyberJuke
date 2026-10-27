@@ -74,7 +74,7 @@ After publishing: verify the APK's checksum, signing certificate and version, ru
 ### Publishing
 
 1. Add a `## [x.y.z] - YYYY-MM-DD` section to `CHANGELOG.md` on `main` (move the Unreleased items into it).
-2. Run **Actions → Release** with the version. It checks the version is higher than the one in `android/app/build.gradle` (or equal to it, for a version the tree already carries that has no tag yet), commits the bump (Gradle, `package.json`, and `fastlane/.../changelogs/<versionCode>.txt` if missing), builds an unsigned APK from that commit, then signs and publishes it in the protected `release` environment, tagging the commit `v<version>`.
+2. Run **Actions → Release** with the version. It checks the version is higher than the one in `android/app/build.gradle` (or equal to it, for a version the tree already carries that has no tag yet), commits the bump (Gradle, `package.json`, and `fastlane/.../changelogs/<versionCode>.txt` if missing), builds an unsigned APK from that commit and signs it in the protected `release` environment. A job without the signing secrets then checks the signed APK is that build plus a signature (F-Droid's check), and the last one publishes it, tagging the commit `v<version>`.
 
 versionCode is `major × 1,000,000 + minor × 1,000 + patch` (1.0.0 → 1000000, 1.2.3 → 1002003).
 
