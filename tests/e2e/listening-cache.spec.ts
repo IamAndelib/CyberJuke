@@ -253,7 +253,7 @@ test('Settings → Listening cache: 256 MB by default, three sizes sent to the p
   const toggle = page.getByTestId('mobile-data-toggle');
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await expect(toggle).toHaveAccessibleName('Download using mobile data');
-  await expect(toggle).toHaveAccessibleDescription('Saves liked songs for offline on mobile data too, not only on Wi-Fi.');
+  await expect(toggle).toHaveAccessibleDescription('Saves liked songs on mobile data too.');
   await expect.poll(mobileData).toEqual([{ enabled: false }]);
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
