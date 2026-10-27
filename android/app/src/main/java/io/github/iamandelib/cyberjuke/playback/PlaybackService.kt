@@ -354,10 +354,12 @@ class PlaybackService : MediaSessionService() {
         }
 
         // Stopped by a back-off while playing, or Play pressed during one: where the sound was
-        // going, and the resume's timer, now with its wake lock.
+        // going, and the resume's timer, now with its wake lock. An MP3 doesn't wait for the
+        // back-off (its outage tries keep their own wake lock), so nothing stays awake for it.
         override fun onResumeWanted() {
             handler.post {
                 pausedOnExternal = hasExternalOutput()
+                if (!BackOffHold.resumeWaits(blocked = true, currentIsMp3 = JukeUris.isMp3(player?.currentMediaItem))) return@post
                 NetBlock.active().first.takeIf { it > 0L }?.let { scheduleResume(it) }
             }
         }
