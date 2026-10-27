@@ -141,3 +141,15 @@ test("a pressed See all keeps its text visible (it inverted to the text's own co
   const [fg, bg] = await all.evaluate((el) => [getComputedStyle(el).color, getComputedStyle(el).backgroundColor]);
   expect(fg).not.toBe(bg);
 });
+
+test('Search starts a new query at the top, not where the last list was scrolled to', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('search-fab').click();
+  const top = page.locator('.tab-pane.on .page.top');
+  const screen = top.locator('.screen');
+  await expect(top.getByTestId('track-row').first()).toBeVisible();
+  await screen.evaluate((el) => (el.scrollTop = 1200));
+  await page.getByTestId('search-input').fill('the');
+  await expect(page.getByTestId('search-results')).toBeVisible();
+  await expect.poll(() => screen.evaluate((el) => el.scrollTop)).toBe(0);
+});

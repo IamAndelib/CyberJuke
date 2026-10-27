@@ -135,7 +135,14 @@ export function Screen({
     const el = scroller.current;
     if (!el || !scrollKey) return;
     const target = positions.get(scrollKey);
-    if (target == null) return;
+    // A new key (Search's next query) starts at the top, not where the last one was.
+    if (target == null) {
+      if (el.scrollTop) {
+        el.scrollTop = 0;
+        updateTop();
+      }
+      return;
+    }
     const apply = () => {
       el.scrollTop = target;
       return Math.abs(el.scrollTop - target) <= 1;
