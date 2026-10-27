@@ -7,6 +7,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import okhttp3.ResponseBody
 import java.io.IOException
 import java.net.Inet4Address
@@ -26,7 +27,8 @@ import java.util.concurrent.TimeUnit
  * streaming) can never be reused for it, and nothing has to be closed on the caller's thread.
  *
  * A whole call through [client] (connect, request, the full response) ends after [CALL_S];
- * responses it reads whole go through [stringAtMost]. Streaming has no overall limit.
+ * responses it reads whole go through [stringAtMost]. Streaming has no overall limit. LRCLIB
+ * goes through [lyrics], which takes answers from lrclib.net only.
  *
  * No Android types in this file: the JVM canary test (YouTubeCanaryTest) uses it as is.
  */
@@ -76,6 +78,25 @@ internal object Http {
         override fun newCall(request: Request): Call = current().newCall(request)
     }
 
+    /**
+     * [client] for LRCLIB: every hop of a call, redirects included, must be on [Hosts.LRCLIB]
+     * ([HostLock], a network interceptor, sees each one). Same pools and timeouts as [client].
+     */
+    private fun forLyrics(c: OkHttpClient): OkHttpClient = c.newBuilder()
+        .addNetworkInterceptor(HostLock(Hosts.LRCLIB))
+        .build()
+
+    private val systemLyrics = lazy { forLyrics(system.value) }
+    private val ipv4Lyrics = lazy { forLyrics(ipv4.value) }
+
+    /** The LRCLIB client for a request made now. */
+    fun currentLyrics(): OkHttpClient = if (NetPrefs.preferIpv4) ipv4Lyrics.value else systemLyrics.value
+
+    /** What the lyrics lookup asks LRCLIB through. */
+    val lyrics: Call.Factory = object : Call.Factory {
+        override fun newCall(request: Request): Call = currentLyrics().newCall(request)
+    }
+
     /** The streaming client for a request made now. */
     fun currentStreaming(): OkHttpClient = if (NetPrefs.preferIpv4) ipv4Streaming.value else systemStreaming.value
 
@@ -111,6 +132,17 @@ internal fun ResponseBody.stringAtMost(maxBytes: Long): String {
     // Buffers at most one byte past the cap: when that much is there, the body is over it.
     if (source().request(maxBytes + 1)) throw BodyTooLargeException("response body is over $maxBytes bytes")
     return string()
+}
+
+/**
+ * A network interceptor that fails every hop of a call, redirects included, whose host isn't
+ * exactly [host], before the request goes out on it.
+ */
+internal class HostLock(val host: String) : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        if (chain.request().url.host != host) throw IOException("only $host may answer this call")
+        return chain.proceed(chain.request())
+    }
 }
 
 /** IPv4 or IPv6: which one a YouTube request actually went out on. */
@@ -302,6 +334,9 @@ internal object NetPrefs {
 
 /** Exact host checks (never substring matches on the whole URL). */
 internal object Hosts {
+    /** The lyrics service; [Http.lyrics] accepts answers from it alone. */
+    const val LRCLIB = "lrclib.net"
+
     private fun isUnder(host: String, domain: String) = host == domain || host.endsWith(".$domain")
 
     /** youtube.com and its subdomains: they get the SOCS consent cookie. */

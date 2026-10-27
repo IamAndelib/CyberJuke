@@ -2,6 +2,7 @@ package io.github.iamandelib.cyberjuke.lyrics
 
 import android.content.Context
 import android.util.Log
+import io.github.iamandelib.cyberjuke.net.Hosts
 import io.github.iamandelib.cyberjuke.net.Http
 import io.github.iamandelib.cyberjuke.net.stringAtMost
 import io.github.iamandelib.cyberjuke.yt.InnerTube
@@ -26,7 +27,7 @@ import java.io.IOException
  */
 internal object Lyrics {
     private const val TAG = "CyberJukeLyrics"
-    private const val LRCLIB = "https://lrclib.net/api"
+    private const val LRCLIB = "https://${Hosts.LRCLIB}/api"
     private const val DURATION_TOLERANCE_SEC = 3.0
 
     /** The largest LRCLIB answer read (a search's results are tens of kB). */
@@ -116,7 +117,8 @@ internal object Lyrics {
             .header("User-Agent", userAgent)
             .header("Accept", "application/json")
             .build()
-        Http.client.newCall(request).execute().use { response ->
+        // Http.lyrics: the answer comes from lrclib.net only, also after a redirect.
+        Http.lyrics.newCall(request).execute().use { response ->
             return when (response.code) {
                 200 -> {
                     @Suppress("UNNECESSARY_SAFE_CALL", "USELESS_ELVIS")
