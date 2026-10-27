@@ -43,6 +43,16 @@ describe('stations.json (scripts/update-stations.mjs)', () => {
     }
   });
 
+  it('has no control, zero-width or bidi characters, and no field over 300 characters (the script checks it too)', () => {
+    // eslint-disable-next-line no-control-regex -- control characters are exactly what this looks for.
+    const hidden = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/;
+    const texts = stations.flatMap((s) => [s.callsign, s.tagline, s.desc, ...s.tracks.flatMap((t) => [t.title, t.artist])]);
+    for (const t of texts) {
+      expect(hidden.test(t), t).toBe(false);
+      expect(t.length, t).toBeLessThanOrEqual(300);
+    }
+  });
+
   it('keeps titles as written: quotes, ampersands and accents decoded', () => {
     const titles = stations.flatMap((s) => s.tracks.map((t) => `${t.title} -- ${t.artist}`));
     expect(titles).toContain("(Can't You) Trip Like I Do -- Filter & The Crystal Method");

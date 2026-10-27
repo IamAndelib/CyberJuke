@@ -126,6 +126,18 @@ function parseSource(js) {
   return out;
 }
 
+/** Control, zero-width and bidi characters: nothing the app should show, and they can hide text from a review. */
+// eslint-disable-next-line no-control-regex -- control characters are exactly what this refuses.
+const HIDDEN_CHARS = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/;
+/** Longest text a field may have (the longest today is a 199-character description). */
+const MAX_TEXT = 300;
+
+/** Text shown in the app, as upstream wrote it: no hidden characters, not absurdly long. */
+function checkText(where, s) {
+  if (HIDDEN_CHARS.test(s)) fail(`${where}: control or bidi character`);
+  if (s.length > MAX_TEXT) fail(`${where}: over ${MAX_TEXT} characters`);
+}
+
 function build(md, js) {
   const roster = parseRoster(md);
   const source = parseSource(js);
@@ -149,7 +161,10 @@ function build(md, js) {
       if (seen.has(t.ytId)) fail(`${r.callsign}: video ${t.ytId} twice`);
       seen.add(t.ytId);
       if (!t.title || !t.artist) fail(`${r.callsign}: track ${t.ytId} has no title or artist`);
+      checkText(`${r.callsign}: track ${t.ytId} title`, t.title);
+      checkText(`${r.callsign}: track ${t.ytId} artist`, t.artist);
     }
+    for (const [k, v] of [['callsign', r.callsign], ['tagline', r.tagline], ['desc', s.desc]]) checkText(`${r.callsign}: ${k}`, v);
     return { id: s.id, band: r.band, freq: r.freq, callsign: r.callsign, tagline: r.tagline, desc: s.desc, tracks: r.tracks };
   });
   const tracks = stations.reduce((n, s) => n + s.tracks.length, 0);
