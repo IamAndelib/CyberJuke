@@ -601,18 +601,21 @@ internal class MembersAudio {
  * - One at a time, newest like first; never one the player is still loading anyway (the
  *   playing track or the next, [PlaybackNeed.stillLoading]), one that failed this session, nor
  *   one waiting for its retry after a stop ([SaveStrikes]).
- * - A song liked just now ([Facts.fresh]) is saved on any network, at once; if that try fails,
- *   again after [MIN_GAP_MS] like any other.
- * - Older likes (the backfill) only on an unmetered network (Wi-Fi), at most one extraction per
- *   [MIN_GAP_MS], and only while the cache has room for liked songs ([Facts.likedFull]).
+ * - Only on an unmetered network (Wi-Fi), or on any network once Settings' Download using
+ *   mobile data is on ([Facts.mobileDataAllowed]). Leaving Wi-Fi stops a running save; it goes
+ *   on from what it has on the next Wi-Fi. (A song that plays is kept in the cache as it streams,
+ *   on any network: those bytes cost nothing more.)
+ * - A song liked just now ([Facts.fresh]) first, at once; if that try fails, again after
+ *   [MIN_GAP_MS] like any other.
+ * - Older likes (the backfill) at most one extraction per [MIN_GAP_MS], and only while the
+ *   cache has room for liked songs ([Facts.likedFull]).
  * - Never while offline, or while playback needs the network ([PlaybackNeed]): playback always
  *   comes first (a running save gives way, [keepGoing]). During a YouTube back-off
  *   ([Facts.quiet]) only Jukebox MP3s (audio ids `mp3:<file>`): no extraction, not YouTube's.
  * - Never without a cache to save into ([Facts.cache]): no extraction for nothing.
- * - Never a song too big for it ([size]; a long Jukebox mix can be 150 MB): over the limit less
- *   [LISTENING_RESERVE_BYTES] it is given up on; liked just now, it is saved on mobile data only
- *   up to [FRESH_ON_DATA_MAX_BYTES], and a longer one is left to the Wi-Fi backfill. The save
- *   learns the size when its request opens, or as the bytes come when the response doesn't say.
+ * - Never a song too big for it ([tooBig]; a long Jukebox mix can be 150 MB): over the limit
+ *   less [LISTENING_RESERVE_BYTES] it is given up on. The save learns the size when its request
+ *   opens, or as the bytes come when the response doesn't say.
  *
  * Event-driven: asked again when something it depends on changes. The one timer is
  * [recheckInMs]: a one-shot re-check for the end of the gap, pending only while the gap alone
@@ -625,9 +628,6 @@ internal object LikedSaverPolicy {
 
     /** Liked songs leave this much of the limit to listening (the playing and next tracks). */
     const val LISTENING_RESERVE_BYTES = 32L * 1024 * 1024
-
-    /** A song liked just now is saved on mobile data up to this size; a longer one waits for Wi-Fi. */
-    const val FRESH_ON_DATA_MAX_BYTES = 40L * 1024 * 1024
 
     data class Facts(
         /** Newest like first. */
@@ -644,7 +644,10 @@ internal object LikedSaverPolicy {
          */
         val skip: Set<String> = emptySet(),
         val online: Boolean = true,
+        /** The network is unmetered (Wi-Fi). */
         val unmetered: Boolean = true,
+        /** Settings' Download using mobile data (off by default): saves go on any network. */
+        val mobileDataAllowed: Boolean = false,
         /** A YouTube back-off: no video is saved (no extraction); a Jukebox MP3 still is. */
         val quiet: Boolean = false,
         val playbackNeedsNetwork: Boolean = false,
@@ -663,7 +666,7 @@ internal object LikedSaverPolicy {
     /**
      * After Clear cache: the liked songs of the player's [pair] (playing and next) count as
      * liked just now. Their bytes are in the player's memory, so nothing writes them back;
-     * saved like a new like, on any network, once the player has loaded them.
+     * saved first, like a new like, once the player has loaded them.
      */
     fun freshAfterClear(liked: Collection<String>, pair: Set<String>): Set<String> = pair.filterTo(HashSet()) { it in liked }
 
@@ -671,7 +674,7 @@ internal object LikedSaverPolicy {
     fun next(f: Facts): String? = pick(f, f.sinceLastMs)
 
     private fun pick(f: Facts, sinceLastMs: Long): String? {
-        if (!f.cache || f.busy || !f.online || f.playbackNeedsNetwork) return null
+        if (!f.cache || f.busy || !f.online || f.playbackNeedsNetwork || !networkAllows(f)) return null
         // Each candidate's denied answer is asked once (and only for those looked at).
         val denied = HashMap<String, Boolean>()
         val todo = f.liked.asSequence().filter {
@@ -680,9 +683,12 @@ internal object LikedSaverPolicy {
         todo.firstOrNull { it in f.fresh && it !in f.tried }?.let { return it }
         if (sinceLastMs < MIN_GAP_MS) return null
         todo.firstOrNull { it in f.fresh }?.let { return it }
-        if (!f.unmetered || f.likedFull) return null
+        if (f.likedFull) return null
         return todo.firstOrNull()
     }
+
+    /** Wi-Fi, or any network with Download using mobile data on. */
+    private fun networkAllows(f: Facts) = f.unmetered || f.mobileDataAllowed
 
     /**
      * When to ask again (the one postDelayed): at the end of the gap, if only the gap holds back
@@ -696,46 +702,29 @@ internal object LikedSaverPolicy {
         return listOfNotNull(gap, f.retryInMs).minOrNull()
     }
 
-    /** Whether a save of a [fresh] (or backfill) like, a Jukebox MP3's if [mp3], may go on, or must stop and give way. */
-    fun keepGoing(f: Facts, fresh: Boolean, mp3: Boolean = false): Boolean =
-        f.cache && f.online && (mp3 || !f.quiet) && !f.playbackNeedsNetwork && (fresh || f.unmetered)
+    /** Whether a save, a Jukebox MP3's if [mp3], may go on, or must stop and give way. */
+    fun keepGoing(f: Facts, mp3: Boolean = false): Boolean =
+        f.cache && f.online && (mp3 || !f.quiet) && !f.playbackNeedsNetwork && networkAllows(f)
 
     /**
-     * What a song's size ([bytes]: its length, or what has come so far when that isn't known)
-     * means for its save, in a cache of [limit] bytes:
-     * - [SaveSize.TOO_BIG] over the limit less [LISTENING_RESERVE_BYTES]: saved, it would leave
-     *   listening no room and liked songs alone over the limit, pushing each other out, and the
-     *   backfill would download it again and again;
-     * - [SaveSize.WIFI_ONLY] for one liked just now ([fresh]) on mobile data ([unmetered] false)
-     *   over [FRESH_ON_DATA_MAX_BYTES]: left to the Wi-Fi backfill;
-     * - else [SaveSize.FITS].
+     * Whether a song of [bytes] (its length, or what has come so far when that isn't known) is
+     * too big to save in a cache of [limit] bytes: over the limit less [LISTENING_RESERVE_BYTES].
+     * Saved, it would leave listening no room and liked songs alone over the limit, pushing each
+     * other out, and the backfill would download it again and again.
      */
-    fun size(bytes: Long, limit: Long, fresh: Boolean, unmetered: Boolean): SaveSize = when {
-        bytes > limit - LISTENING_RESERVE_BYTES -> SaveSize.TOO_BIG
-        fresh && !unmetered && bytes > FRESH_ON_DATA_MAX_BYTES -> SaveSize.WIFI_ONLY
-        else -> SaveSize.FITS
-    }
-}
-
-/** What a song's size means for its liked save ([LikedSaverPolicy.size]). */
-internal enum class SaveSize {
-    FITS,
-    TOO_BIG,
-    WIFI_ONLY,
+    fun tooBig(bytes: Long, limit: Long): Boolean = bytes > limit - LISTENING_RESERVE_BYTES
 }
 
 /**
  * How a liked save ended: [SAVED] (whole in the cache), [FAILED] (not this service's life: also
  * a song too big for the cache), [STOPPED] (a strike: tried again later, [SaveStrikes]),
- * [CANCELLED] (no fault of the song), [WIFI_ONLY] (liked just now, too long for mobile data: no
- * longer liked just now, so the Wi-Fi backfill saves it). Pure.
+ * [CANCELLED] (no fault of the song). Pure.
  */
 internal enum class SaveOutcome {
     SAVED,
     FAILED,
     STOPPED,
     CANCELLED,
-    WIFI_ONLY,
     ;
 
     companion object {

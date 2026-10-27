@@ -61,17 +61,19 @@ import kotlin.math.roundToInt
  *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, setCrossfade, setGapless, getState,
  *   getAppInfo, getLaunchOptions, getBlockState, setNetworkPrefs, retryNow, getNetStatus,
  *   setGestureExclusion, addAutoplay, setAutoplay, restore, removeIds, setLikedIds,
- *   setCacheLimit, clearCache, signedOut, signedIn, cachedIds; events 'state', 'trackError',
+ *   setCacheLimit, setDownloadOnMobileData, clearCache, signedOut, signedIn, cachedIds; events 'state', 'trackError',
  *   'blocked', 'unblocked', 'extractorBroken', 'queueLow', 'tracks', 'openNowPlaying',
  *   'cacheChanged'.
  *
  * - The listening cache ([AudioCache]): setLikedIds({ ytIds, membersOnly? }) (newest like
- *   first), setCacheLimit({ mb }), clearCache(), signedOut() (members-only audio goes, and stays
+ *   first), setCacheLimit({ mb }), setDownloadOnMobileData({ enabled }) (liked songs saved
+ *   on any network, not only Wi-Fi), clearCache(), signedOut() (members-only audio goes, and stays
  *   out until signedIn()), cachedIds() -> { ytIds }: the liked songs saved whole, which play
  *   offline. cacheChanged { ytIds } sends that set again when it changes, at most every 2 s.
  *   Each `ytIds` holds audio ids ([SessionPolicy.isValidAudioId]): a video id, or `mp3:<file>`
  *   for a Jukebox MP3 (its latex.gg file name); anything else is dropped.
- *   The upkeep calls resolve once done, and reject when there is no cache.
+ *   The upkeep calls resolve once done, and reject when there is no cache;
+ *   setDownloadOnMobileData needs none.
  * - trackError is { trackId, message, skipped, kind: 'network' | 'track', resumes }: 'network'
  *   when the connection failed (paused on the item; `resumes`: it plays on by itself once the
  *   network is back), 'track' when the track itself did.
@@ -256,7 +258,7 @@ class JukePlayerPlugin : Plugin() {
 
     override fun load() {
         NetPrefsStore.load(context)
-        AudioCache.init(context, PlayerPrefsStore.cacheMb(context))
+        AudioCache.init(context, PlayerPrefsStore.cacheMb(context), PlayerPrefsStore.downloadOnMobileData(context))
         AudioCache.addListener(cacheListener)
         AudioCache.addOnlineListener(onlineListener)
         PlayerBus.add(trackErrorListener)
@@ -820,8 +822,8 @@ class JukePlayerPlugin : Plugin() {
     /**
      * `setLikedIds({ ytIds, membersOnly? })`: the liked songs' audio ids (a video id, or
      * `mp3:<file>`), newest like first (at most BRIDGE_MAX_ITEMS), and which of them are
-     * members-only. Kept in the cache last, and saved for offline; a few liked since the last
-     * call are saved now.
+     * members-only. Kept in the cache last, and saved for offline (those liked since the last
+     * call first), on Wi-Fi unless Download using mobile data is on.
      */
     @PluginMethod
     fun setLikedIds(call: PluginCall) {
@@ -839,7 +841,19 @@ class JukePlayerPlugin : Plugin() {
         upkeep(call, "setCacheLimit") { AudioCache.setLimitMb(mb) }
     }
 
-    /** `clearCache()`: Settings' Clear cache. Playback goes on; liked songs are saved again on Wi-Fi. */
+    /**
+     * `setDownloadOnMobileData({ enabled })`: Settings' Download using mobile data (off by
+     * default). Off, liked songs are saved on Wi-Fi only, and a save running on mobile data stops.
+     */
+    @PluginMethod
+    fun setDownloadOnMobileData(call: PluginCall) {
+        val enabled = call.getBoolean("enabled") ?: return call.reject("enabled is required")
+        PlayerPrefsStore.setDownloadOnMobileData(context, enabled)
+        AudioCache.setDownloadOnMobileData(enabled)
+        call.resolve()
+    }
+
+    /** `clearCache()`: Settings' Clear cache. Playback goes on; liked songs are saved again (on Wi-Fi, unless Download using mobile data is on). */
     @PluginMethod
     fun clearCache(call: PluginCall) {
         upkeep(call, "clearCache") { AudioCache.clear() }

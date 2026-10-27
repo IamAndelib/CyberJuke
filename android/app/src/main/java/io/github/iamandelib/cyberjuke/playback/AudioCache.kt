@@ -50,7 +50,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Threads: the ledger and the saved set are only touched under the cache's own lock (its span
  * callbacks hold it; everything else takes it). The main thread only reads the published
- * snapshots ([savedLiked], [liked], [likedFull]), never the cache itself. Nothing here runs on a
+ * snapshots ([savedLiked], [liked], [likedFull]) and [downloadOnMobileData], never the cache itself. Nothing here runs on a
  * timer.
  */
 @OptIn(UnstableApi::class)
@@ -66,12 +66,15 @@ internal object AudioCache {
     val SIZES_MB = listOf(128, 256, 512)
     private const val MB = 1024L * 1024L
 
-    /** The liked songs saved whole changed ([savedLiked]), or the cache was cleared; any thread. */
+    /** The liked songs saved whole changed ([savedLiked]), the cache was cleared, or Download using mobile data changed; any thread. */
     fun interface Listener {
         fun onSavedChanged()
 
         /** Clear cache emptied it. */
         fun onCleared() = Unit
+
+        /** Download using mobile data ([downloadOnMobileData]) was turned on or off. */
+        fun onMobileDataChanged() = Unit
     }
 
     /** The liked list changed; [fresh]: liked just now. Any thread. */
@@ -162,8 +165,18 @@ internal object AudioCache {
     var likedFull: Boolean = false
         private set
 
-    /** Cheap: remembers the context and the limit. The cache itself opens on first use. */
-    fun init(context: Context, mb: Int) {
+    /** Settings' Download using mobile data: liked songs are saved on any network, not only Wi-Fi. */
+    @Volatile
+    var downloadOnMobileData: Boolean = false
+        private set
+
+    /**
+     * Cheap: remembers the context, the limit and [downloadOnMobileData]. The cache itself opens on
+     * first use. The saved setting is taken only by the first call (the service's or the bridge's):
+     * a later one could carry a value read before a change the page has sent since.
+     */
+    fun init(context: Context, mb: Int, mobileData: Boolean) {
+        if (appContext == null) downloadOnMobileData = mobileData
         appContext = context.applicationContext
         limitMb = sizeOf(mb)
     }
@@ -327,6 +340,13 @@ internal object AudioCache {
         return true
     }
 
+    /** Download using mobile data (Settings); the saver hears it at once (no cache needed). */
+    fun setDownloadOnMobileData(on: Boolean) {
+        if (on == downloadOnMobileData) return
+        downloadOnMobileData = on
+        listeners.forEach { it.onMobileDataChanged() }
+    }
+
     /** The size limit; a smaller one evicts at once (it may delete files). */
     fun setLimitMb(mb: Int): Boolean {
         limitMb = sizeOf(mb)
@@ -337,7 +357,7 @@ internal object AudioCache {
         } != null
     }
 
-    /** [audioId]'s audio goes: a liked save too big to keep ([LikedSaverPolicy.size]). */
+    /** [audioId]'s audio goes: a liked save too big to keep ([LikedSaverPolicy.tooBig]). */
     fun discard(audioId: String) {
         locked { c -> ledger.keysOf(audioId).forEach { c.removeResource(it) } }
     }

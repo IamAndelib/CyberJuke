@@ -32,7 +32,7 @@ describe('theme migration', () => {
   it('migrates a saved GRiD theme to Brutalist and saves it', async () => {
     store.set('settings', JSON.stringify({ theme: 'grid', showNsfw: true, quality: 'low' }));
     await lib.loadLibrary();
-    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: false, cacheMb: 256, crossfadeMs: 0, gapless: true, version: lib.SETTINGS_VERSION });
+    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: false, cacheMb: 256, crossfadeMs: 0, gapless: true, downloadOnMobileData: false, version: lib.SETTINGS_VERSION });
     await flush();
     expect(JSON.parse(store.get('settings')!).theme).toBe('brutalist');
   });
@@ -253,6 +253,27 @@ describe('gapless setting', () => {
       store.set('settings', JSON.stringify({ gapless: junk, version: 2 }));
       await lib.loadLibrary();
       expect(lib.settings.value.gapless).toBe(true);
+    }
+  });
+});
+
+describe('download using mobile data setting', () => {
+  it('is off unless turned on, also in settings saved before it existed, and keeps on', async () => {
+    await lib.loadLibrary();
+    expect(lib.settings.value.downloadOnMobileData).toBe(false);
+    store.set('settings', JSON.stringify({ theme: 'vt320', gapless: false, version: 3 }));
+    await lib.loadLibrary();
+    expect(lib.settings.value).toMatchObject({ downloadOnMobileData: false, theme: 'vt320', gapless: false });
+    lib.updateSettings({ downloadOnMobileData: true });
+    await flush();
+    expect(JSON.parse(store.get('settings')!)).toMatchObject({ downloadOnMobileData: true });
+    await lib.loadLibrary();
+    expect(lib.settings.value.downloadOnMobileData).toBe(true);
+    // Only a saved true turns it on.
+    for (const junk of ['true', 1, null, 'yes']) {
+      store.set('settings', JSON.stringify({ downloadOnMobileData: junk, version: 3 }));
+      await lib.loadLibrary();
+      expect(lib.settings.value.downloadOnMobileData).toBe(false);
     }
   });
 });

@@ -75,6 +75,11 @@ export interface Settings {
    * player ignores it.
    */
   gapless: boolean;
+  /**
+   * Download using mobile data: liked songs are saved for offline on any network. Off (the
+   * default), only on Wi-Fi; what plays is kept in the listening cache either way. Native only.
+   */
+  downloadOnMobileData: boolean;
   /** The saved format's version: each migration below runs once. */
   version: number;
 }
@@ -100,6 +105,7 @@ const DEFAULT_SETTINGS: Settings = {
   cacheMb: 256,
   crossfadeMs: 0,
   gapless: true,
+  downloadOnMobileData: false,
   version: SETTINGS_VERSION,
 };
 
@@ -272,6 +278,8 @@ export async function loadSettings(): Promise<void> {
   if (!CROSSFADES.includes(merged.crossfadeMs)) merged.crossfadeMs = DEFAULT_SETTINGS.crossfadeMs;
   // Saved before Gapless playback (or unknown): on.
   merged.gapless = merged.gapless !== false;
+  // Saved before Download using mobile data (or unknown): off.
+  merged.downloadOnMobileData = merged.downloadOnMobileData === true;
   settings.value = merged;
   if (migrated || preferIpv4 !== undefined || upgraded) write(K_SETTINGS, merged);
 }

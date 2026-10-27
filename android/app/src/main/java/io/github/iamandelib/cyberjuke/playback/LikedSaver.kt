@@ -14,22 +14,23 @@ import java.io.IOException
 
 /**
  * Saves liked songs into the listening cache, so they play offline ([LikedSaverPolicy] decides
- * when and which). A song liked while online is saved at once (usually it is already, having
- * just played); older likes are filled in one at a time, newest first, on Wi-Fi only. A
+ * when and which), on Wi-Fi only unless Settings' Download using mobile data is on. A song
+ * liked just now goes first (usually it is saved already, having just played: what plays is
+ * kept as it streams, on any network); older likes are filled in one at a time, newest first. A
  * Jukebox MP3 is saved the same way, by its audio id (`mp3:<file>`), with no extraction: its
  * file comes straight from latex.gg, and a YouTube back-off doesn't hold it.
  *
  * Lives in PlaybackService, so it only runs while the service already does (the app is open or
  * playing): no job, no alarm, nothing that wakes the phone. Event-driven: asked again when
- * playback's loading changes, the network or the liked list changes, the cache is cleared, a
- * back-off ends or a save finishes. Its one timer ([recheck]) is a one-shot postDelayed for the
+ * playback's loading changes, the network, the liked list or Download using mobile data
+ * changes, the cache is cleared, a back-off ends or a save finishes. Its one timer ([recheck]) is a one-shot postDelayed for the
  * end of the gap between two extractions (pending only while the gap alone holds back a save
  * that could start) or for the retry of a save that stopped ([SaveStrikes]), whichever is
  * sooner; cancelled by the next check and by [stop]. Downloads run on the one
  * background thread ([Background]), one at a time, through a [CacheWriter] (only the bytes not
  * yet cached are fetched), and give way at once when playback needs the network ([giveWay],
- * [PlaybackNeed]). A song too big for the cache, or liked just now and too long for mobile data,
- * stops as soon as its size is known ([LikedSaverPolicy.size]).
+ * [PlaybackNeed]). A song too big for the cache stops as soon as its size is known
+ * ([LikedSaverPolicy.tooBig]).
  *
  * Main thread, except [SaveJob.run].
  */
@@ -47,13 +48,10 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
     }
 
     private var online = false
-
-    /** Also read by the running save ([SaveJob.Deps.unmetered]), on its thread. */
-    @Volatile
     private var unmetered = false
     private var stopped = false
 
-    /** Liked just now this session: saved on any network. */
+    /** Liked just now this session: saved first. */
     private val fresh = HashSet<String>()
 
     /** Fresh ones already tried once: their retries wait for the gap. */
@@ -81,6 +79,10 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         override fun onCleared() {
             handler.post { cleared() }
         }
+
+        override fun onMobileDataChanged() {
+            handler.post { check() }
+        }
     }
 
     val likedListener = AudioCache.LikedListener { freshIds ->
@@ -107,8 +109,9 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         if (stopped) return
         val f = facts()
         job?.let { running ->
-            // Playback needs the network, or the song became members-only while signed out.
-            if (!LikedSaverPolicy.keepGoing(f, running.fresh, CacheKeys.isMp3(running.audioId)) || AudioCache.isDenied(running.audioId)) {
+            // Playback needs the network, Wi-Fi left (with Download using mobile data off), or the
+            // song became members-only while signed out.
+            if (!LikedSaverPolicy.keepGoing(f, CacheKeys.isMp3(running.audioId)) || AudioCache.isDenied(running.audioId)) {
                 running.cancel()
             }
             return
@@ -129,8 +132,8 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
 
     /**
      * Clear cache: the liked songs playing and next count as liked just now
-     * ([LikedSaverPolicy.freshAfterClear]), so they are saved again, on any network, once the
-     * player has loaded them.
+     * ([LikedSaverPolicy.freshAfterClear]), so they are saved again first, once the player has
+     * loaded them.
      */
     private fun cleared() {
         val again = LikedSaverPolicy.freshAfterClear(AudioCache.liked, host.loadingPair())
@@ -157,6 +160,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             skip = host.stillLoading() + failed + strikes.waiting(now),
             online = online,
             unmetered = unmetered,
+            mobileDataAllowed = AudioCache.downloadOnMobileData,
             quiet = NetBlock.isQuiet(),
             playbackNeedsNetwork = host.playbackNeedsNetwork(),
             busy = job != null,
@@ -172,7 +176,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         // An MP3's download counts like an extraction: the backfill stays spaced out either way.
         lastExtractionAt = SystemClock.elapsedRealtime()
         if (isFresh) tried.add(audioId)
-        val j = SaveJob(audioId, isFresh, SaveJob.Live { unmetered })
+        val j = SaveJob(audioId, SaveJob.Live())
         job = j
         // Set before it is queued: upkeep arriving before it runs still stops it.
         AudioCache.cancelSave = { j.cancel() }
@@ -213,13 +217,6 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
                 Log.i(TAG, "Liked save stopped")
                 if (strikes.stopped(j.audioId, SystemClock.elapsedRealtime())) failed.add(j.audioId)
             }
-            // Too long for mobile data: no longer liked just now, so the Wi-Fi backfill saves it
-            // (from where this one stopped).
-            SaveOutcome.WIFI_ONLY -> {
-                Log.i(TAG, "Liked save left for Wi-Fi")
-                fresh.remove(j.audioId)
-                tried.remove(j.audioId)
-            }
             SaveOutcome.CANCELLED -> Unit
         }
         check()
@@ -230,9 +227,9 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
      * [Writer]; a Jukebox MP3 ([audioId] `mp3:<file>`) has no extraction, only its file's bytes.
      * Cancelled from any thread; runs on [Background]'s thread. The world it needs comes
      * through [Deps] ([Live] in the app), so the outcome table is a JVM test (SaveJobTest).
-     * Stops once the song's size says it doesn't fit ([LikedSaverPolicy.size]).
+     * Stops once the song's size says it doesn't fit ([LikedSaverPolicy.tooBig]).
      */
-    internal class SaveJob(val audioId: String, val fresh: Boolean, private val deps: Deps) {
+    internal class SaveJob(val audioId: String, private val deps: Deps) {
         /** A Jukebox MP3: no extraction, and YouTube's back-off is none of its business. */
         private val mp3 = CacheKeys.isMp3(audioId)
 
@@ -256,9 +253,6 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
 
             /** The cache's size limit now, in bytes. */
             fun limitBytes(): Long
-
-            /** The network is unmetered (Wi-Fi) now. */
-            fun unmetered(): Boolean
 
             /** Removes [audioId]'s audio from the cache (a song too big to keep). */
             fun discard(audioId: String)
@@ -294,8 +288,8 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             fun cancel()
         }
 
-        /** The app's: [NetBlock], [AudioCache], [StreamResolver], a [CacheWriter], and the saver's network ([isUnmetered]). */
-        class Live(private val isUnmetered: () -> Boolean) : Deps {
+        /** The app's: [NetBlock], [AudioCache], [StreamResolver] and a [CacheWriter]. */
+        class Live : Deps {
             override fun quiet() = NetBlock.isQuiet()
 
             override fun isDenied(audioId: String) = AudioCache.isDenied(audioId)
@@ -305,8 +299,6 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             override fun hasCache() = AudioCache.open() != null
 
             override fun limitBytes() = AudioCache.limitBytes
-
-            override fun unmetered() = isUnmetered()
 
             override fun discard(audioId: String) = AudioCache.discard(audioId)
 
@@ -345,8 +337,8 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         @Volatile
         private var writer: Writer? = null
 
-        /** The song's size said stop ([LikedSaverPolicy.size]); set on the job's thread. */
-        private var size = SaveSize.FITS
+        /** The song's size said it doesn't fit ([LikedSaverPolicy.tooBig]); set on the job's thread. */
+        private var tooBig = false
 
         fun cancel() {
             cancelled = true
@@ -359,22 +351,17 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
          * of its bytes are read.
          */
         private val progress = Progress { length, cached ->
-            if (size == SaveSize.FITS) {
-                size = LikedSaverPolicy.size(if (length > 0) length else cached, deps.limitBytes(), fresh, deps.unmetered())
-                if (size != SaveSize.FITS) writer?.cancel()
+            if (!tooBig) {
+                tooBig = LikedSaverPolicy.tooBig(if (length > 0) length else cached, deps.limitBytes())
+                if (tooBig) writer?.cancel()
             }
         }
 
         /**
          * A save its size stopped: one too big for the cache is given up on, and what it has in
-         * the cache goes (liked bytes it can never use); one liked just now and too long for
-         * mobile data waits for the Wi-Fi backfill, which goes on from what it has. Null: no such stop.
+         * the cache goes (liked bytes it can never use). Null: no such stop.
          */
-        private fun sizeOutcome(): SaveOutcome? = when (size) {
-            SaveSize.FITS -> null
-            SaveSize.TOO_BIG -> SaveOutcome.FAILED.also { deps.discard(audioId) }
-            SaveSize.WIFI_ONLY -> SaveOutcome.WIFI_ONLY
-        }
+        private fun sizeOutcome(): SaveOutcome? = if (tooBig) SaveOutcome.FAILED.also { deps.discard(audioId) } else null
 
         /** A YouTube back-off is in force: it holds a video's save, never an MP3's. */
         private fun quiet() = !mp3 && deps.quiet()

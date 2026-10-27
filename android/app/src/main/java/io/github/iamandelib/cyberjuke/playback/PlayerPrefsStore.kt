@@ -3,8 +3,8 @@ package io.github.iamandelib.cyberjuke.playback
 import android.content.Context
 
 /**
- * The page's player settings (Autoplay, audio quality, the listening cache's size, Crossfade,
- * Gapless playback),
+ * The page's player settings (Autoplay, audio quality, the listening cache's size, Download
+ * using mobile data, Crossfade, Gapless playback),
  * kept here too (SharedPreferences [PREFS], beside [NetPrefsStore]) and read when the service
  * starts: it can start, and play, before the page has loaded to send them.
  */
@@ -16,6 +16,7 @@ internal object PlayerPrefsStore {
     private const val KEY_CACHE_MB = "cacheMb"
     private const val KEY_CROSSFADE_MS = "crossfadeMs"
     private const val KEY_GAPLESS = "gapless"
+    private const val KEY_DOWNLOAD_ON_MOBILE_DATA = "downloadOnMobileData"
 
     private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -37,6 +38,13 @@ internal object PlayerPrefsStore {
 
     fun setCacheMb(context: Context, mb: Int) {
         prefs(context).edit().putInt(KEY_CACHE_MB, AudioCache.sizeOf(mb)).apply()
+    }
+
+    /** Download using mobile data (liked songs saved on any network); off unless turned on. */
+    fun downloadOnMobileData(context: Context): Boolean = prefs(context).getBoolean(KEY_DOWNLOAD_ON_MOBILE_DATA, false)
+
+    fun setDownloadOnMobileData(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_DOWNLOAD_ON_MOBILE_DATA, enabled).apply()
     }
 
     /** The crossfade in ms, 0 for Off (the default, and anything unknown). */
