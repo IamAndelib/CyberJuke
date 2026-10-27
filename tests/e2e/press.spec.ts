@@ -125,3 +125,19 @@ test('in a list, a touch waits the tap timeout before pressing, a quick tap show
   const scrolled = await pressTimeline(page, 'track-play', 160, true);
   expect(scrolled.every((s) => !s.on)).toBe(true);
 });
+
+test("a pressed See all keeps its text visible (it inverted to the text's own colour)", async ({ page }) => {
+  await start(page);
+  await page.getByTestId('tab-artists').click();
+  await page.getByTestId('artist-tile').first().click();
+  const all = page.getByTestId('artist-albums').getByTestId('see-all');
+  await expect(all).toBeVisible();
+  // Held down (:active), as a slow press shows it.
+  const cdp = await page.context().newCDPSession(page);
+  const { root } = await cdp.send('DOM.getDocument');
+  const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: '[data-testid="artist-albums"] [data-testid="see-all"]' });
+  await cdp.send('CSS.enable');
+  await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: ['active'] });
+  const [fg, bg] = await all.evaluate((el) => [getComputedStyle(el).color, getComputedStyle(el).backgroundColor]);
+  expect(fg).not.toBe(bg);
+});

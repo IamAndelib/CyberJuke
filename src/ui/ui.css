@@ -1269,10 +1269,6 @@
   font-size: 13px;
   color: var(--color-fg-dim);
 }
-.see-all:active,
-.see-all.pressed {
-  color: var(--color-fg);
-}
 .shelf-year {
   margin-top: -4px;
   font-size: 12px;

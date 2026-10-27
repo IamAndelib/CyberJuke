@@ -4,6 +4,7 @@
 
 ### Fixed
 - Every button shows its press on a quick tap now, as a slower tap does: the Settings icon, the Back arrows, the search button, the genre or artist in Now Playing, the tabs, chips, rows and tiles. The screen still changes straight away. With reduced motion on, the press still shows; only its movement is gone.
+- A pressed **[See all]** no longer hides its own text.
 
 ## [1.3.0] - 2026-10-27
 
