@@ -1,6 +1,7 @@
 package io.github.iamandelib.cyberjuke.playback
 
 import androidx.media3.common.Player
+import io.github.iamandelib.cyberjuke.net.Hosts
 import java.net.URI
 import java.security.MessageDigest
 
@@ -133,18 +134,20 @@ internal object SessionPolicy {
 
     fun isValidYtId(id: String?): Boolean = id != null && YT_ID.matches(id)
 
-    /** A Jukebox MP3 (Cyberspace 4.0): a latex.gg share link, the only kind the site accepts. */
-    private val MP3_URL = Regex("^https://latex\\.gg/share/([A-Za-z0-9_-]+\\.mp3)$", RegexOption.IGNORE_CASE)
+    /**
+     * A Jukebox MP3 (Cyberspace 4.0): a latex.gg share link, the only kind the site accepts,
+     * whose file name is one [Hosts.isLatexMp3File] accepts.
+     */
+    private val MP3_URL = Regex("^https://latex\\.gg/share/([^/?#]+)$", RegexOption.IGNORE_CASE)
 
-    fun isValidMp3Url(url: String?): Boolean = url != null && MP3_URL.matches(url)
+    fun isValidMp3Url(url: String?): Boolean = mp3FileOf(url) != null
 
     /** The file name of a Jukebox MP3 link ("IZq8cMcx.mp3"), or null when it isn't one. */
-    fun mp3FileOf(url: String?): String? = url?.let { MP3_URL.matchEntire(it)?.groupValues?.get(1) }
+    fun mp3FileOf(url: String?): String? =
+        url?.let { MP3_URL.matchEntire(it)?.groupValues?.get(1) }?.takeIf { isValidMp3File(it) }
 
     /** A Jukebox MP3's file name as it comes back in our own URI. */
-    private val MP3_FILE = Regex("^[A-Za-z0-9_-]+\\.mp3$", RegexOption.IGNORE_CASE)
-
-    fun isValidMp3File(file: String?): Boolean = file != null && MP3_FILE.matches(file)
+    fun isValidMp3File(file: String?): Boolean = Hosts.isLatexMp3File(file)
 
     /** The one URL of a Jukebox MP3 file name ([mp3FileOf]'s inverse), or null for anything else. */
     fun mp3UrlForFile(file: String?): String? = file?.takeIf { isValidMp3File(it) }?.let { "https://latex.gg/share/$it" }
