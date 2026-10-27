@@ -229,7 +229,9 @@ test('back-to-top: finger down stops a fling, finger up jumps to the top, with n
   await expectStable(() => screen.evaluate((el) => el.scrollTop), 500);
   expect(await screen.evaluate((el) => el.scrollTop)).toBe(at);
 
-  // Keyboard still works (Enter clicks it).
+  // Keyboard still works (Enter clicks it). Scroll back down first: on a slow machine the
+  // touch above can land after the jump has passed the point where the button hides.
+  await screen.evaluate((el) => el.scrollTo(0, el.clientHeight * 3));
   await expect(btn).toBeVisible();
   await btn.focus();
   await page.keyboard.press('Enter');

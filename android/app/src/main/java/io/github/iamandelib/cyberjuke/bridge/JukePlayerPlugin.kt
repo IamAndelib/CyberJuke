@@ -61,15 +61,19 @@ import kotlin.math.roundToInt
  *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, setCrossfade, setGapless, getState,
  *   getAppInfo, getLaunchOptions, getBlockState, setNetworkPrefs, retryNow, getNetStatus,
  *   setGestureExclusion, addAutoplay, setAutoplay, restore, removeIds, setLikedIds,
- *   setCacheLimit, clearCache, signedOut, signedIn, cachedIds; events 'state', 'trackError',
+ *   setCacheLimit, setDownloadOnMobileData, clearCache, signedOut, signedIn, cachedIds; events 'state', 'trackError',
  *   'blocked', 'unblocked', 'extractorBroken', 'queueLow', 'tracks', 'openNowPlaying',
  *   'cacheChanged'.
  *
  * - The listening cache ([AudioCache]): setLikedIds({ ytIds, membersOnly? }) (newest like
- *   first), setCacheLimit({ mb }), clearCache(), signedOut() (members-only audio goes, and stays
+ *   first), setCacheLimit({ mb }), setDownloadOnMobileData({ enabled }) (liked songs saved
+ *   on any network, not only Wi-Fi), clearCache(), signedOut() (members-only audio goes, and stays
  *   out until signedIn()), cachedIds() -> { ytIds }: the liked songs saved whole, which play
  *   offline. cacheChanged { ytIds } sends that set again when it changes, at most every 2 s.
- *   The upkeep calls resolve once done, and reject when there is no cache.
+ *   Each `ytIds` holds audio ids ([SessionPolicy.isValidAudioId]): a video id, or `mp3:<file>`
+ *   for a Jukebox MP3 (its latex.gg file name); anything else is dropped.
+ *   The upkeep calls resolve once done, and reject when there is no cache;
+ *   setDownloadOnMobileData needs none.
  * - trackError is { trackId, message, skipped, kind: 'network' | 'track', resumes }: 'network'
  *   when the connection failed (paused on the item; `resumes`: it plays on by itself once the
  *   network is back), 'track' when the track itself did.
@@ -254,7 +258,7 @@ class JukePlayerPlugin : Plugin() {
 
     override fun load() {
         NetPrefsStore.load(context)
-        AudioCache.init(context, PlayerPrefsStore.cacheMb(context))
+        AudioCache.init(context, PlayerPrefsStore.cacheMb(context), PlayerPrefsStore.downloadOnMobileData(context))
         AudioCache.addListener(cacheListener)
         AudioCache.addOnlineListener(onlineListener)
         PlayerBus.add(trackErrorListener)
@@ -654,7 +658,7 @@ class JukePlayerPlugin : Plugin() {
         withController(call) { c ->
             sendCommand(call, c, QueueCommands.REMOVE_IDS, args) {
                 if (it.playbackState == Player.STATE_IDLE && it.mediaItemCount > 0 && it.playWhenReady &&
-                    !NetBlock.isBlocked()
+                    !blocked(it)
                 ) {
                     it.prepare()
                 }
@@ -706,7 +710,7 @@ class JukePlayerPlugin : Plugin() {
         withController(call) { c ->
             if (c.hasNextMediaItem()) {
                 c.seekToNextMediaItem()
-                if (c.playbackState == Player.STATE_IDLE && !NetBlock.isBlocked()) c.prepare()
+                if (c.playbackState == Player.STATE_IDLE && !blocked(c)) c.prepare()
             }
             call.resolve()
         }
@@ -717,7 +721,7 @@ class JukePlayerPlugin : Plugin() {
         withController(call) { c ->
             // Restarts the current track if past the first few seconds, like most players.
             c.seekToPrevious()
-            if (c.playbackState == Player.STATE_IDLE && c.mediaItemCount > 0 && !NetBlock.isBlocked()) c.prepare()
+            if (c.playbackState == Player.STATE_IDLE && c.mediaItemCount > 0 && !blocked(c)) c.prepare()
             call.resolve()
         }
     }
@@ -737,7 +741,7 @@ class JukePlayerPlugin : Plugin() {
                     putExpect(expectId)
                 }
                 sendCommand(call, c, QueueCommands.SKIP_TO, args) {
-                    if (it.playbackState == Player.STATE_IDLE && !NetBlock.isBlocked()) it.prepare()
+                    if (it.playbackState == Player.STATE_IDLE && !blocked(it)) it.prepare()
                     call.resolve()
                 }
             }
@@ -816,14 +820,15 @@ class JukePlayerPlugin : Plugin() {
     }
 
     /**
-     * `setLikedIds({ ytIds, membersOnly? })`: the liked songs, newest like first (at most
-     * BRIDGE_MAX_ITEMS), and which of them are members-only. Kept in the cache last, and saved
-     * for offline; a few liked since the last call are saved now.
+     * `setLikedIds({ ytIds, membersOnly? })`: the liked songs' audio ids (a video id, or
+     * `mp3:<file>`), newest like first (at most BRIDGE_MAX_ITEMS), and which of them are
+     * members-only. Kept in the cache last, and saved for offline (those liked since the last
+     * call first), on Wi-Fi unless Download using mobile data is on.
      */
     @PluginMethod
     fun setLikedIds(call: PluginCall) {
-        val ids = ytIdsArg(call, "ytIds") ?: return
-        val members = if (call.data.has("membersOnly")) ytIdsArg(call, "membersOnly") ?: return else emptyList()
+        val ids = audioIdsArg(call, "ytIds") ?: return
+        val members = if (call.data.has("membersOnly")) audioIdsArg(call, "membersOnly") ?: return else emptyList()
         AudioCache.markMembers(members)
         upkeep(call, "setLikedIds") { AudioCache.setLiked(ids) }
     }
@@ -836,7 +841,19 @@ class JukePlayerPlugin : Plugin() {
         upkeep(call, "setCacheLimit") { AudioCache.setLimitMb(mb) }
     }
 
-    /** `clearCache()`: Settings' Clear cache. Playback goes on; liked songs are saved again on Wi-Fi. */
+    /**
+     * `setDownloadOnMobileData({ enabled })`: Settings' Download using mobile data (off by
+     * default). Off, liked songs are saved on Wi-Fi only, and a save running on mobile data stops.
+     */
+    @PluginMethod
+    fun setDownloadOnMobileData(call: PluginCall) {
+        val enabled = call.getBoolean("enabled") ?: return call.reject("enabled is required")
+        PlayerPrefsStore.setDownloadOnMobileData(context, enabled)
+        AudioCache.setDownloadOnMobileData(enabled)
+        call.resolve()
+    }
+
+    /** `clearCache()`: Settings' Clear cache. Playback goes on; liked songs are saved again (on Wi-Fi, unless Download using mobile data is on). */
     @PluginMethod
     fun clearCache(call: PluginCall) {
         upkeep(call, "clearCache") { AudioCache.clear() }
@@ -864,7 +881,7 @@ class JukePlayerPlugin : Plugin() {
     }
 
     /**
-     * `cachedIds()`: `{ ytIds }`, the liked songs saved whole (they play offline). On the
+     * `cachedIds()`: `{ ytIds }`, the audio ids of the liked songs saved whole (they play offline). On the
      * background thread too: the first call opens the cache, which waits for its index to be
      * read, and every plugin call would wait behind that on the plugins' one thread.
      */
@@ -880,11 +897,11 @@ class JukePlayerPlugin : Plugin() {
         }
     }
 
-    /** The call's [key] ids (valid ones only), or null after rejecting it (missing, TOO_LARGE). */
-    private fun ytIdsArg(call: PluginCall, key: String): List<String>? {
+    /** The call's [key] audio ids (valid ones only), or null after rejecting it (missing, TOO_LARGE). */
+    private fun audioIdsArg(call: PluginCall, key: String): List<String>? {
         val arr = call.getArray(key) ?: return null.also { call.reject("$key is required") }
         return try {
-            BridgeLimits.idsOf(arr).filter { SessionPolicy.isValidYtId(it) }
+            BridgeLimits.idsOf(arr).filter { SessionPolicy.isValidAudioId(it) }
         } catch (e: TooLargeException) {
             call.reject(e.message, QueueCommands.TOO_LARGE)
             null
@@ -1037,12 +1054,19 @@ class JukePlayerPlugin : Plugin() {
     // ---- YouTube back-off (main thread) ---------------------------------------------------
 
     /**
+     * A YouTube back-off holds [c]'s current item: no prepare (it would extract). A Jukebox MP3
+     * isn't YouTube's, so it plays on through one.
+     */
+    private fun blocked(c: MediaController): Boolean = NetBlock.isBlocked() && !JukeUris.isMp3(c.currentMediaItem)
+
+    /**
      * While a back-off runs: pause (no prepare, no extraction) and remind the web. [play]: the
-     * user asked to play, so it starts once the back-off is over.
+     * user asked to play, so it starts once the back-off is over. Not for a Jukebox MP3.
      */
     private fun refuseWhileBlocked(c: MediaController, play: Boolean = true): Boolean {
         val (until, reason) = NetBlock.active()
         if (reason == null) return false
+        if (JukeUris.isMp3(c.currentMediaItem)) return false
         // Already false in the usual case; the service only cancels a resume on a change.
         if (c.playWhenReady) c.playWhenReady = false
         if (play) NetBlock.wantResume()
@@ -1111,11 +1135,13 @@ class JukePlayerPlugin : Plugin() {
             val extra = TrackExtras.get(id)
             // Ours (Global radio), or the last session's: the page may know neither.
             if (!(id.startsWith(QueueCommands.GLOBAL_PREFIX) || extra?.restored == true) || id in announcedTracks) continue
-            val ytId = JukeUris.ytIdOf(item) ?: continue
+            val ytId = JukeUris.ytIdOf(item)
+            val mp3 = if (ytId == null) JukeUris.mp3UrlOf(item) ?: continue else null
             announcedTracks.add(id)
             val o = JSObject()
             o.put("id", id)
-            o.put("ytId", ytId)
+            o.put("ytId", ytId ?: "")
+            mp3?.let { o.put("mp3", it) }
             o.put("title", item.mediaMetadata.title?.toString() ?: "")
             o.put("artist", item.mediaMetadata.artist?.toString() ?: "")
             o.put("artworkUrl", item.mediaMetadata.artworkUri?.toString() ?: "")

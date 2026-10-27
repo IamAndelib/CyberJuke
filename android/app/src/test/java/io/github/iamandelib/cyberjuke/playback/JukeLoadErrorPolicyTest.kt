@@ -43,9 +43,38 @@ class JukeLoadErrorPolicyTest {
     }
 
     @Test
+    fun aJukeboxMp3ThatLatexRefusesIsNotRetried() {
+        // Gone, private, refused: the file's answer. Skipped at once instead of ~15 s of retries.
+        for (code in listOf(400, 401, 403, 404, 410, 451)) {
+            assertEquals(code.toString(), never, delay(IOException("$code"), Facts(httpCode = code, mp3Load = true)))
+        }
+        // latex.gg failing (5xx) or the connection breaking is retried as for anything else.
+        assertEquals(2_000L, delay(IOException("503"), Facts(httpCode = 503, mp3Load = true, errorCount = 3)))
+        assertEquals(1_000L, delay(wrapped(SocketTimeoutException("read")), Facts(mp3Load = true, errorCount = 1)))
+        // A video's 404 is still the default's.
+        assertEquals(0L, delay(IOException("404"), Facts(httpCode = 404, ytLoad = true, errorCount = 1)))
+    }
+
+    @Test
+    fun aBusyLatexIsWaitedForWithTheCappedBackOff() {
+        // 408 and 429 from latex.gg mean "not now": a burst of them must not skip track after track.
+        val expected = listOf(1_000L, 2_000L, 4_000L, 8_000L, 8_000L, 8_000L)
+        for (code in LoadRetry.TRANSIENT_HTTP) {
+            for ((i, ms) in expected.withIndex()) {
+                assertEquals("$code #${i + 1}", ms, delay(IOException("$code"), Facts(httpCode = code, mp3Load = true, errorCount = i + 1)))
+            }
+        }
+        assertEquals(setOf(408, 429), LoadRetry.TRANSIENT_HTTP)
+        // YouTube's 429 is still never retried here (a refusal: a fresh link, then the back-off).
+        assertEquals(never, delay(IOException("429"), Facts(httpCode = 429, ytLoad = true)))
+    }
+
+    @Test
     fun aCacheFileGoneOnAYouTubeLoadIsFetchedAgainSoon() {
         assertEquals(LoadRetry.CACHE_RETRY_MS, delay(wrapped(FileNotFoundException("span")), Facts(ytLoad = true, default = never)))
         assertEquals(LoadRetry.CACHE_RETRY_MS, delay(IOException("read"), Facts(ytLoad = true, fileError = true, default = never)))
+        // A Jukebox MP3 is in the listening cache too: fetched again from latex.gg.
+        assertEquals(LoadRetry.CACHE_RETRY_MS, delay(wrapped(FileNotFoundException("span")), Facts(mp3Load = true, default = never)))
         // The same file error on anything else (an asset, a manifest) is what the default says: a dead track.
         assertEquals(never, delay(wrapped(FileNotFoundException("asset")), Facts(ytLoad = false, default = never)))
         // A video that can't play isn't rescued by a cache miss on the same load.

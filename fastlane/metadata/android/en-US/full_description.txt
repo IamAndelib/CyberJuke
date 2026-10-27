@@ -23,10 +23,10 @@
 <p>Without an account, CyberJuke shows the Jukebox's public posts. Signing in with your Cyberspace account also shows the members-only shared tracks. Your password goes only to Cyberspace's own login service (Firebase Auth, the same one the website uses) and is never stored. The login token is encrypted on the phone with an Android Keystore key, is excluded from backups, and is deleted when you sign out.</p>
 
 <p><b>Privacy</b></p>
-<p>No analytics, no tracking, no ads. CyberJuke talks only to Cyberspace's backend (the track list, and the login if you sign in), YouTube (audio, artwork, Global search, artist pages and Global radio) and LRCLIB (lrclib.net) when you open lyrics. (Installed from GitHub instead, it can also ask GitHub at most once a day whether a new release is out, if you turn that on; installed from F-Droid, it never does.) Your library, history and listening cache stay on the phone, outside backups; your settings may go into your own Android backup.</p>
+<p>No analytics, no tracking, no ads. CyberJuke talks only to Cyberspace's backend (the track list, and the login if you sign in), YouTube (audio, artwork, Global search, artist pages and Global radio), latex.gg (Jukebox MP3s) and LRCLIB (lrclib.net) when you open lyrics. (Installed from GitHub instead, it can also ask GitHub at most once a day whether a new release is out, if you turn that on; installed from F-Droid, it never does.) Your library, history and listening cache stay on the phone, outside backups; your settings may go into your own Android backup.</p>
 
 <p><b>YouTube and NewPipe</b></p>
-<p>Every Jukebox track is a YouTube link. CyberJuke plays the audio with NewPipeExtractor, the library behind NewPipe, and Media3/ExoPlayer. This is why it has the NonFreeNet anti-feature, and it means:</p>
+<p>Most Jukebox tracks are YouTube links (some are MP3s). CyberJuke plays the audio with NewPipeExtractor, the library behind NewPipe, and Media3/ExoPlayer. This is why it has the NonFreeNet anti-feature, and it means:</p>
 <ul>
 <li>When YouTube changes something, playback can stop working for everyone until NewPipeExtractor and CyberJuke are updated.</li>
 <li>YouTube sometimes limits requests from a network (VPNs, Tor and some mobile networks more often). CyberJuke switches to IPv4 by itself (YouTube flags IPv6 more often) and retries; if it is still refused, it pauses instead of skipping, tells you how long it waits, and resumes by itself after a short wait.</li>

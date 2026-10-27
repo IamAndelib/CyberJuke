@@ -10,17 +10,65 @@ import org.json.JSONObject
 import java.security.SecureRandom
 import java.util.concurrent.CopyOnWriteArraySet
 
-/** Custom URI scheme for queue items. The real stream URL is resolved lazily at load time. */
+/**
+ * Custom URI scheme for queue items. The real stream URL is resolved lazily at load time:
+ * `cyberjuke://yt/<ytId>` for a YouTube video, `cyberjuke://mp3/<file>` for a Jukebox MP3,
+ * whose one possible URL ([mp3UrlOf]) is rebuilt from its latex.gg file name.
+ */
 internal object JukeUris {
     const val SCHEME = "cyberjuke"
     private const val HOST_YT = "yt"
+    private const val HOST_MP3 = "mp3"
     const val EXTRA_YT_ID = "ytId"
 
     fun forYt(ytId: String): Uri = Uri.parse("$SCHEME://$HOST_YT/${Uri.encode(ytId)}")
 
+    /** A Jukebox MP3 by its file name ([SessionPolicy.Playable.Mp3], already checked). */
+    fun forMp3File(file: String): Uri = Uri.parse("$SCHEME://$HOST_MP3/$file")
+
     fun ytIdOf(uri: Uri?): String? {
         if (uri == null || uri.scheme != SCHEME || uri.host != HOST_YT) return null
         return uri.lastPathSegment?.takeIf { it.isNotEmpty() }
+    }
+
+    /** The latex.gg URL of a `cyberjuke://mp3/<file>` URI, or null for any other URI. */
+    fun mp3UrlOf(uri: Uri?): String? {
+        if (uri == null || uri.scheme != SCHEME || uri.host != HOST_MP3) return null
+        return SessionPolicy.mp3UrlForFile(uri.lastPathSegment)
+    }
+
+    /**
+     * The audio id of a `cyberjuke://` URI ([SessionPolicy.isValidAudioId]): the video id of a
+     * YouTube one, `mp3:<file>` of a Jukebox MP3, else null. What the listening cache, the
+     * liked saver and the gate know a track by.
+     */
+    fun audioIdOf(uri: Uri?): String? {
+        ytIdOf(uri)?.let { return it }
+        if (uri == null || uri.scheme != SCHEME || uri.host != HOST_MP3) return null
+        return SessionPolicy.mp3AudioId(uri.lastPathSegment)
+    }
+
+    /** The item's audio id ([audioIdOf]): its video id, else its MP3's (from the URI or the metadata). */
+    fun audioIdOf(item: MediaItem?): String? =
+        ytIdOf(item) ?: SessionPolicy.mp3AudioId(SessionPolicy.mp3FileOf(mp3UrlOf(item)))
+
+    /** The item is a Jukebox MP3 ([mp3UrlOf]). */
+    fun isMp3(item: MediaItem?): Boolean = mp3UrlOf(item) != null
+
+    /**
+     * The item's MP3 link: from its URI; an item without one (a controller's copy) that isn't
+     * a video, from [TrackExtras] ([SessionPolicy.mp3LinkOf]). Never in its metadata: other
+     * apps read that (the platform session copies its extras).
+     */
+    fun mp3UrlOf(item: MediaItem?): String? {
+        if (item == null) return null
+        val uri = item.localConfiguration?.uri
+        return SessionPolicy.mp3LinkOf(
+            hasUri = uri != null,
+            uriLink = mp3UrlOf(uri),
+            ytIdExtra = item.mediaMetadata.extras?.getString(EXTRA_YT_ID),
+            keptLink = if (uri == null) TrackExtras.get(item.mediaId)?.mp3 else null,
+        )
     }
 
     /** ytId from the URI, falling back to the metadata extras. */
@@ -32,14 +80,24 @@ internal object JukeUris {
 }
 
 /**
- * Per-track data the web gave us that other apps must not see (S1): the poster (`by`) and the
- * post URL. MediaMetadata extras are readable by every connected controller, so these live
- * here, keyed by mediaId, instead. Read back for the last session and the `tracks` event
- * (membersOnly must survive both, or a sign-out could miss a restored members-only track).
+ * Per-track data the web gave us that other apps must not see (S1): the poster (`by`), the
+ * post URL and a Jukebox MP3's latex.gg link. MediaMetadata extras are readable by every
+ * connected controller, so these live here, keyed by mediaId, instead. Read back for the last
+ * session and the `tracks` event (membersOnly must survive both, or a sign-out could miss a
+ * restored members-only track).
  */
 internal object TrackExtras {
-    /** [restored]: from the last session, not (yet) from the page, which may not know it. */
-    data class Extra(val by: String?, val postUrl: String?, val membersOnly: Boolean = false, val restored: Boolean = false)
+    /**
+     * [restored]: from the last session, not (yet) from the page, which may not know it.
+     * [mp3]: the MP3's link, as rebuilt from its file name ([SessionPolicy.mp3UrlForFile]).
+     */
+    data class Extra(
+        val by: String?,
+        val postUrl: String?,
+        val membersOnly: Boolean = false,
+        val restored: Boolean = false,
+        val mp3: String? = null,
+    )
 
     /** A bounded LRU, far above what one session holds (a 2000-track list, plus queued and autoplay tracks). */
     private const val MAX = 20_000
@@ -47,12 +105,12 @@ internal object TrackExtras {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Extra>?) = size > MAX
     }
 
-    fun put(mediaId: String, by: String?, postUrl: String?, membersOnly: Boolean = false, restored: Boolean = false) {
+    fun put(mediaId: String, by: String?, postUrl: String?, membersOnly: Boolean = false, restored: Boolean = false, mp3: String? = null) {
         synchronized(map) {
-            if (by == null && postUrl == null && !membersOnly && !restored) {
+            if (by == null && postUrl == null && !membersOnly && !restored && mp3 == null) {
                 map.remove(mediaId)
             } else {
-                map[mediaId] = Extra(by, postUrl, membersOnly, restored)
+                map[mediaId] = Extra(by, postUrl, membersOnly, restored, mp3)
             }
         }
     }
@@ -119,16 +177,25 @@ internal object JukeTracks {
         return items
     }
 
-    /** [restored]: a track of the last session (see [TrackExtras.Extra.restored]). */
+    /**
+     * [restored]: a track of the last session (see [TrackExtras.Extra.restored]). A track plays
+     * a YouTube video (`ytId`) or, with `ytId` "", a Jukebox MP3 (`mp3`, a latex.gg link):
+     * [SessionPolicy.playableOf]. An MP3's link stays in [TrackExtras], out of its metadata.
+     */
     fun toMediaItem(o: JSONObject, restored: Boolean = false): MediaItem {
         val id = o.str("id") ?: throw IllegalArgumentException("track.id missing")
-        val ytId = o.str("ytId") ?: throw IllegalArgumentException("track.ytId missing ($id)")
-        if (!SessionPolicy.isValidYtId(ytId)) throw IllegalArgumentException("track.ytId invalid ($id)")
+        val playable = SessionPolicy.playableOf(o.str("ytId"), o.str("mp3"))
+        val ytId = (playable as? SessionPolicy.Playable.Yt)?.id
+        val mp3File = (playable as? SessionPolicy.Playable.Mp3)?.file
+        val uri = when (playable) {
+            is SessionPolicy.Playable.Yt -> JukeUris.forYt(playable.id)
+            is SessionPolicy.Playable.Mp3 -> JukeUris.forMp3File(playable.file)
+        }
         val membersOnly = o.optBoolean("membersOnly", false)
-        TrackExtras.put(id, o.str("by"), o.str("postUrl"), membersOnly, restored)
-        // Its audio is tagged in the listening cache, so a sign-out removes it.
-        if (membersOnly) AudioCache.markMembers(listOf(ytId))
-        val extras = Bundle().apply { putString(JukeUris.EXTRA_YT_ID, ytId) }
+        TrackExtras.put(id, o.str("by"), o.str("postUrl"), membersOnly, restored, SessionPolicy.mp3UrlForFile(mp3File))
+        // Its audio is tagged in the listening cache, so a sign-out removes it (an MP3's too).
+        if (membersOnly) JukeUris.audioIdOf(uri)?.let { AudioCache.markMembers(listOf(it)) }
+        val extras = Bundle().apply { ytId?.let { putString(JukeUris.EXTRA_YT_ID, it) } }
         val metadata = MediaMetadata.Builder()
             .setTitle(o.str("title"))
             .setArtist(o.str("artist"))
@@ -140,7 +207,7 @@ internal object JukeTracks {
             .build()
         return MediaItem.Builder()
             .setMediaId(id)
-            .setUri(JukeUris.forYt(ytId))
+            .setUri(uri)
             .setMediaMetadata(metadata)
             .build()
     }

@@ -29,6 +29,23 @@ describe('savedOffline', () => {
     setSavedOffline([]);
   });
 
+  it('knows a saved Jukebox MP3 by its audio id', () => {
+    const mp3 = { id: 'p1', ytId: '', mp3: 'https://latex.gg/share/IZq8cMcx.mp3' } as Track;
+    const other = { id: 'p2', ytId: '', mp3: 'https://latex.gg/share/FEHdI7AK.mp3' } as Track;
+    liked.value = [other, mp3, a];
+    setSavedOffline(['mp3:IZq8cMcx.mp3', a.ytId]);
+    expect(isSaved(mp3)).toBe(true);
+    expect(isSaved(other)).toBe(false);
+    expect(savedLiked.value).toEqual([mp3, a]);
+    expect(savedQueue([other, mp3, a], 1, savedOffline.value)).toEqual({ tracks: [mp3, a], start: 0 });
+    // Not by its link, nor by a placeholder's empty id.
+    setSavedOffline(['https://latex.gg/share/IZq8cMcx.mp3', '']);
+    expect(isSaved(mp3)).toBe(false);
+    expect(isSaved({ id: 'x', ytId: '' } as Track)).toBe(false);
+    liked.value = [];
+    setSavedOffline([]);
+  });
+
   it('lists the liked songs that play offline, in Liked order', () => {
     liked.value = [d, c, b, a];
     setSavedOffline([a.ytId, c.ytId, 'notliked00']);

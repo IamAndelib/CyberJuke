@@ -9,7 +9,7 @@
  *  - a Signal Radio station playing: its next round (player/radio), all its tracks again.
  * Nothing while autoplay is off (the setting, C3), but for a station, or while repeat is on.
  */
-import { isGlobal, type Track } from '../data/model';
+import { audioKey, isGlobal, type Track } from '../data/model';
 import { similarTracks } from '../data/similar';
 import { stationPlaying, stationQueue } from './radio';
 import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, type Player, type QueueLow } from './types';
@@ -65,7 +65,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     const seed = s.seed ?? s.current;
     if (!seed || !s.current || s.repeat !== 'off') return;
     if (e.seedId && e.seedId !== seed.id) return; // a signal for an older seed
-    const inQueue = new Set(s.queue.flatMap((t) => [t.id, t.ytId]));
+    const inQueue = new Set(s.queue.flatMap((t) => [t.id, audioKey(t)]));
     // The signal may be older than the last refill (one that came in during it): count
     // again. A batch the state doesn't show yet is ahead too, and not picked again. (A
     // station's round holds tracks already in the queue: its ids say nothing about that.)

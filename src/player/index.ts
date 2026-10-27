@@ -16,6 +16,7 @@ import { catalog } from '../stores/catalog';
 import { toast } from '../stores/toast';
 import { auth } from '../data/auth';
 import { music, musicTracks } from '../data/ytmusic';
+import { hasAudio } from '../core/guards';
 import { logError } from '../core/log';
 import { heldFor } from '../core/held';
 import { online } from '../core/network';
@@ -190,7 +191,7 @@ let lastRecentId: string | null = null;
 // Recently played: a track once it plays (not the one the app reopens on, paused).
 effect(() => {
   const cur = currentTrack.value;
-  if (cur && cur.ytId && isPlaying.value && cur.id !== lastRecentId) {
+  if (cur && hasAudio(cur) && isPlaying.value && cur.id !== lastRecentId) {
     lastRecentId = cur.id;
     addRecent(cur);
   }

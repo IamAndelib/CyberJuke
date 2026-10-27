@@ -34,10 +34,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  *   nothing blocks the main thread in onDestroy, and nothing is lost when the process dies
  *   (every span is indexed as it is written). One that fails to start is released and not tried
  *   again in the process ([startFailed]): playback streams.
- * - Keys are `yt:<ytId>:<itag>:<clen>` ([CacheKeys]), set by [YtDataSpecResolver]; only those
- *   go through the cache ([CacheRouter]), so the CI tone and HLS are untouched.
+ * - Keys are `yt:<ytId>:<itag>:<clen>`, and `mp3:<file>` for a Jukebox MP3 ([CacheKeys]), set
+ *   by [YtDataSpecResolver]; only those go through the cache ([CacheRouter]), so the CI tone
+ *   and HLS are untouched. Everything else here (liked, saved, members-only) goes by the audio
+ *   id the key keeps ([CacheKeys.audioIdOf]): a video id or an MP3's `mp3:<file>`.
  * - A track saved whole plays from it with no extraction and no request
- *   ([StreamResolver.cachedKey]).
+ *   ([StreamResolver.cachedKey]; an MP3 by its key alone, [YtDataSpecResolver]).
  * - Which liked songs are saved whole is kept up to date from the span callbacks and sent to
  *   the page as `cacheChanged` (only when that set changes).
  * - Members-only audio is tagged as it comes in ([MembersAudio], the tags in a file beside the
@@ -48,7 +50,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Threads: the ledger and the saved set are only touched under the cache's own lock (its span
  * callbacks hold it; everything else takes it). The main thread only reads the published
- * snapshots ([savedLiked], [liked], [likedFull]), never the cache itself. Nothing here runs on a
+ * snapshots ([savedLiked], [liked], [likedFull]) and [downloadOnMobileData], never the cache itself. Nothing here runs on a
  * timer.
  */
 @OptIn(UnstableApi::class)
@@ -64,12 +66,15 @@ internal object AudioCache {
     val SIZES_MB = listOf(128, 256, 512)
     private const val MB = 1024L * 1024L
 
-    /** The liked songs saved whole changed ([savedLiked]), or the cache was cleared; any thread. */
+    /** The liked songs saved whole changed ([savedLiked]), the cache was cleared, or Download using mobile data changed; any thread. */
     fun interface Listener {
         fun onSavedChanged()
 
         /** Clear cache emptied it. */
         fun onCleared() = Unit
+
+        /** Download using mobile data ([downloadOnMobileData]) was turned on or off. */
+        fun onMobileDataChanged() = Unit
     }
 
     /** The liked list changed; [fresh]: liked just now. Any thread. */
@@ -150,7 +155,7 @@ internal object AudioCache {
     var savedLiked: Set<String> = emptySet()
         private set
 
-    /** The liked videos, newest like first (a snapshot). */
+    /** The liked songs (audio ids), newest like first (a snapshot). */
     @Volatile
     var liked: List<String> = emptyList()
         private set
@@ -160,11 +165,25 @@ internal object AudioCache {
     var likedFull: Boolean = false
         private set
 
-    /** Cheap: remembers the context and the limit. The cache itself opens on first use. */
-    fun init(context: Context, mb: Int) {
+    /** Settings' Download using mobile data: liked songs are saved on any network, not only Wi-Fi. */
+    @Volatile
+    var downloadOnMobileData: Boolean = false
+        private set
+
+    /**
+     * Cheap: remembers the context, the limit and [downloadOnMobileData]. The cache itself opens on
+     * first use. The saved setting is taken only by the first call (the service's or the bridge's):
+     * a later one could carry a value read before a change the page has sent since.
+     */
+    fun init(context: Context, mb: Int, mobileData: Boolean) {
+        if (appContext == null) downloadOnMobileData = mobileData
         appContext = context.applicationContext
         limitMb = sizeOf(mb)
     }
+
+    /** The size limit now (Settings), in bytes. */
+    val limitBytes: Long
+        get() = limitMb * MB
 
     /** One of [SIZES_MB]; anything else is the default. */
     fun sizeOf(mb: Int): Int = if (mb in SIZES_MB) mb else DEFAULT_MB
@@ -209,7 +228,7 @@ internal object AudioCache {
             }
             cache = c
             // Marked while it started (markMembers had no cache to go through yet), after their
-            // audio was counted in: tagged or removed now, every video marked so far.
+            // audio was counted in: tagged or removed now, every song marked so far.
             Background.run("markMembers") { reconcileMembers(c, members.marked()) }
             c
         } catch (e: Exception) {
@@ -244,48 +263,48 @@ internal object AudioCache {
 
     // ---- reading -----------------------------------------------------------------------------
 
-    /** The keys of [ytId] saved whole, most recently used first. Under the lock. */
-    private fun wholeKeys(c: Cache, ytId: String): List<String> = ledger.keysOf(ytId).filter { key ->
+    /** The keys of [audioId] saved whole, most recently used first. Under the lock. */
+    private fun wholeKeys(c: Cache, audioId: String): List<String> = ledger.keysOf(audioId).filter { key ->
         val length = c.getContentMetadata(key).get(ContentMetadata.KEY_CONTENT_LENGTH, -1L)
         CacheKeys.isWhole(length) { c.isCached(key, 0L, it) }
     }
 
     /**
-     * The key of [ytId]'s copy to play from the cache ([CacheKeys.pickKey]: a resume only in the
-     * very file it was playing, [keepKey]; else by [rungItag], at least [wantedBps]), or null to
-     * load it as usual. Loader thread.
+     * The key of [audioId]'s copy to play from the cache ([CacheKeys.pickFor]: for a video a
+     * resume only in the very file it was playing, [keepKey]; else by [rungItag], at least
+     * [wantedBps]; a Jukebox MP3's one file), or null to load it as usual. Loader thread.
      */
-    fun wholeKey(ytId: String, keepKey: String?, rungItag: Int?, wantedBps: Int): String? {
-        if (members.denied(ytId)) return null
-        return locked { c -> CacheKeys.pickKey(wholeKeys(c, ytId), keepKey, rungItag, wantedBps) }
+    fun wholeKey(audioId: String, keepKey: String? = null, rungItag: Int? = null, wantedBps: Int = 0): String? {
+        if (members.denied(audioId)) return null
+        return locked { c -> CacheKeys.pickFor(audioId, wholeKeys(c, audioId), keepKey, rungItag, wantedBps) }
     }
 
-    /** Whether [ytId] is saved whole (any format). */
-    fun isWhole(ytId: String): Boolean = locked { c -> wholeKeys(c, ytId).isNotEmpty() } == true
+    /** Whether [audioId] is saved whole (any format). */
+    fun isWhole(audioId: String): Boolean = locked { c -> wholeKeys(c, audioId).isNotEmpty() } == true
 
-    /** Signed out: this video's audio may not be cached ([MembersAudio.denied]). */
-    fun isDenied(ytId: String): Boolean = members.denied(ytId)
+    /** Signed out: this track's audio may not be cached ([MembersAudio.denied]). */
+    fun isDenied(audioId: String): Boolean = members.denied(audioId)
 
     /**
-     * These videos are members-only (queue items, liked tracks): their audio is tagged in the
+     * These audio ids are members-only (queue items, liked tracks): their audio is tagged in the
      * cache. Audio already there is tagged now (signed in) or removed now (signed out), off the
      * calling thread (it may be the main one); a cache not open yet does both as it opens, when
      * it counts its spans, and once it has started for marks that came while it counted.
      */
-    fun markMembers(ytIds: Collection<String>) {
-        if (ytIds.isEmpty()) return
-        ytIds.forEach { members.mark(it) }
+    fun markMembers(ids: Collection<String>) {
+        if (ids.isEmpty()) return
+        ids.forEach { members.mark(it) }
         val c = cache ?: return
-        Background.run("markMembers") { reconcileMembers(c, ytIds) }
+        Background.run("markMembers") { reconcileMembers(c, ids) }
     }
 
     /**
-     * The audio of these members-only videos already in the cache: tagged, or removed while
+     * The audio of these members-only tracks already in the cache: tagged, or removed while
      * signed out ([MembersAudio.reconcile]). Off the calling thread, under the cache's lock.
      */
-    private fun reconcileMembers(c: SimpleCache, ytIds: Collection<String>) {
+    private fun reconcileMembers(c: SimpleCache, ids: Collection<String>) {
         val r = synchronized(c) {
-            members.reconcile(ytIds.filter { ledger.keysOf(it).isNotEmpty() }).also { r ->
+            members.reconcile(ids.filter { ledger.keysOf(it).isNotEmpty() }).also { r ->
                 r.remove.forEach { id -> ledger.keysOf(id).forEach { c.removeResource(it) } }
             }
         }
@@ -301,14 +320,14 @@ internal object AudioCache {
     // ---- the page's settings (off the main thread; false: no cache) ---------------------------
 
     /**
-     * The liked videos, newest like first. Liked songs are evicted last, least recently liked
-     * first; an unliked one is an ordinary listening entry from now on.
+     * The liked audio ids (videos and Jukebox MP3s), newest like first. Liked songs are evicted
+     * last, least recently liked first; an unliked one is an ordinary listening entry from now on.
      */
-    fun setLiked(ytIds: List<String>): Boolean {
+    fun setLiked(ids: List<String>): Boolean {
         val fresh = locked { c ->
             val known = likedKnown
             likedKnown = true
-            val justLiked = ledger.setLiked(ytIds, known)
+            val justLiked = ledger.setLiked(ids, known)
             liked = ledger.liked
             // Unliked: no longer a saved liked song.
             val dropped = saved.retainAll(liked.toSet())
@@ -321,6 +340,13 @@ internal object AudioCache {
         return true
     }
 
+    /** Download using mobile data (Settings); the saver hears it at once (no cache needed). */
+    fun setDownloadOnMobileData(on: Boolean) {
+        if (on == downloadOnMobileData) return
+        downloadOnMobileData = on
+        listeners.forEach { it.onMobileDataChanged() }
+    }
+
     /** The size limit; a smaller one evicts at once (it may delete files). */
     fun setLimitMb(mb: Int): Boolean {
         limitMb = sizeOf(mb)
@@ -329,6 +355,11 @@ internal object AudioCache {
             evict(c, 0L, null)
             publish()
         } != null
+    }
+
+    /** [audioId]'s audio goes: a liked save too big to keep ([LikedSaverPolicy.tooBig]). */
+    fun discard(audioId: String) {
+        locked { c -> ledger.keysOf(audioId).forEach { c.removeResource(it) } }
     }
 
     /** Clear cache (Settings): everything goes. Playback goes on (from the network). */
@@ -342,7 +373,7 @@ internal object AudioCache {
     }
 
     /**
-     * Signed out (or starting signed out): every tagged or known members-only video's audio goes,
+     * Signed out (or starting signed out): every tagged or known members-only song's audio goes,
      * and none may come back in until [signedIn]. Cheap when there is none.
      */
     fun signedOut(): Boolean {
@@ -370,7 +401,7 @@ internal object AudioCache {
         return CacheDataSource(c, CacheMissGuard(OkHttpDataSource.Factory(Http.streaming).createDataSource()), 0)
     }
 
-    /** Playback's data sources: YouTube audio through the cache, the rest straight to [upstream]. */
+    /** Playback's data sources: YouTube audio and Jukebox MP3s through the cache, the rest straight to [upstream]. */
     fun dataSourceFactory(upstream: DataSource.Factory): DataSource.Factory = CacheRouter.Factory(upstream)
 
     // ---- under the lock -----------------------------------------------------------------------
@@ -379,10 +410,10 @@ internal object AudioCache {
         for (key in ledger.victims(extra, protect)) c.removeResource(key)
     }
 
-    /** Rechecks which of [ytIds] (liked ones) are saved whole; tells the listeners when that changed. */
-    private fun refreshSaved(c: Cache, ytIds: Collection<String>, changedAlready: Boolean = false) {
+    /** Rechecks which of [ids] (liked ones) are saved whole; tells the listeners when that changed. */
+    private fun refreshSaved(c: Cache, ids: Collection<String>, changedAlready: Boolean = false) {
         var changed = changedAlready
-        for (id in ytIds) {
+        for (id in ids) {
             val whole = ledger.isLiked(id) && wholeKeys(c, id).isNotEmpty()
             changed = (if (whole) saved.add(id) else saved.remove(id)) || changed
         }
@@ -401,19 +432,21 @@ internal object AudioCache {
 
         override fun onCacheInitialized() = Unit
 
+        // The key being written may go itself: a song that isn't liked, too big to fit beside the
+        // liked ones ([CacheLedger.victims]).
         override fun onStartFile(cache: Cache, key: String, position: Long, length: Long) {
             if (length > 0) evict(cache, length, key)
         }
 
         override fun onSpanAdded(cache: Cache, span: CacheSpan) {
             ledger.onAdded(span.key, span.length, span.lastTouchTimestamp)
-            val ytId = CacheKeys.ytIdOf(span.key)
+            val audioId = CacheKeys.audioIdOf(span.key)
             // Signed out, members-only audio that slipped in (a load already under way) goes.
-            if (ytId != null && members.denied(ytId)) {
+            if (audioId != null && members.denied(audioId)) {
                 cache.removeResource(span.key)
                 return
             }
-            if (ytId != null && members.onCached(ytId)) {
+            if (audioId != null && members.onCached(audioId)) {
                 appContext?.let { writeIds(it, MEMBERS_FILE, members.tagged().toList()) }
             }
             evict(cache, 0L, span.key)
@@ -430,8 +463,8 @@ internal object AudioCache {
         }
 
         private fun changed(cache: Cache, key: String) {
-            val ytId = CacheKeys.ytIdOf(key) ?: return
-            if (ledger.isLiked(ytId) || ytId in saved) refreshSaved(cache, listOf(ytId))
+            val audioId = CacheKeys.audioIdOf(key) ?: return
+            if (ledger.isLiked(audioId) || audioId in saved) refreshSaved(cache, listOf(audioId))
             publish()
         }
     }
@@ -439,7 +472,7 @@ internal object AudioCache {
     // ---- id lists on disk (beside the cache: never cleared, never backed up) -------------------
 
     private fun readIds(ctx: Context, name: String): List<String>? = try {
-        File(ctx.noBackupFilesDir, name).takeIf { it.isFile }?.readLines()?.filter { SessionPolicy.isValidYtId(it) }
+        File(ctx.noBackupFilesDir, name).takeIf { it.isFile }?.readLines()?.filter { SessionPolicy.isValidAudioId(it) }
     } catch (e: IOException) {
         null
     }
@@ -464,11 +497,12 @@ internal object AudioCache {
 internal class CacheMissException : IOException("Not in the listening cache any more")
 
 /**
- * [AudioCache.dataSourceFactory]'s sources: a load with a YouTube cache key ([CacheKeys]) goes
- * through the cache (reads what's there, writes what it fetches, also when the response doesn't
- * say its length: [CacheKeys.cacheFlags]), anything else (the CI tone, HLS) straight to the
- * upstream, as does a members-only video while signed out or one whose copy was just found
- * missing or unreadable ([AudioCache.misses]). Without a cache, everything goes straight.
+ * [AudioCache.dataSourceFactory]'s sources: a load with a YouTube or Jukebox MP3 cache key
+ * ([CacheKeys.isCacheable]) goes through the cache (reads what's there, writes what it fetches,
+ * also when the response doesn't say its length: [CacheKeys.cacheFlags]), anything else (the CI
+ * tone, HLS) straight to the upstream, as does a members-only track while signed out or one
+ * whose copy was just found missing or unreadable ([AudioCache.misses]). Without a cache,
+ * everything goes straight.
  *
  * The cache can never stop the track: playback's [CacheDataSource] has FLAG_IGNORE_CACHE_ON_ERROR,
  * as InnerTune's and Metrolist's do. A cache error (a span file gone or unreadable, a write
@@ -492,10 +526,10 @@ internal class CacheRouter(private val cached: DataSource?, private val plain: D
 
     override fun open(dataSpec: DataSpec): Long {
         val key = dataSpec.key
-        // Not a members-only video while signed out, nor one whose cached copy was just found
+        // Not a members-only song while signed out, nor one whose cached copy was just found
         // missing or unreadable (its retry reads the network, not the same file).
-        val viaCache = cached != null && key != null && CacheKeys.isYt(key) &&
-            CacheKeys.ytIdOf(key)?.let { AudioCache.isDenied(it) || AudioCache.misses.recent(it) } != true
+        val viaCache = cached != null && key != null && CacheKeys.isCacheable(key) &&
+            CacheKeys.audioIdOf(key)?.let { AudioCache.isDenied(it) || AudioCache.misses.recent(it) } != true
         val ds = if (viaCache) cached else plain
         current = ds
         // Cached even when the response has no length ([CacheKeys.cacheFlags]).
@@ -528,10 +562,11 @@ internal class CacheRouter(private val cached: DataSource?, private val plain: D
  * The cache's upstream.
  * - A track played from the cache keeps our own `cyberjuke://` URI (it has no stream URL): if
  *   any of it is missing after all, reading fails at once ([CacheMissException], no request), the
- *   video is skipped by the cache for a moment ([AudioCache.misses]), and the load's retry
+ *   song is skipped by the cache for a moment ([AudioCache.misses]), and the load's retry
  *   resolves it as usual.
  * - It reports the URL it was asked for, never one a redirect led to, so the cache doesn't store
- *   a googlevideo URL in its index (stream URLs stay in memory only).
+ *   a googlevideo URL in its index (stream URLs stay in memory only). A Jukebox MP3 is asked
+ *   for by its latex.gg link, which is rebuilt from its key anyway.
  */
 @OptIn(UnstableApi::class)
 internal class CacheMissGuard(private val inner: DataSource) : DataSource {
@@ -541,7 +576,7 @@ internal class CacheMissGuard(private val inner: DataSource) : DataSource {
 
     override fun open(dataSpec: DataSpec): Long {
         if (dataSpec.uri.scheme == JukeUris.SCHEME) {
-            JukeUris.ytIdOf(dataSpec.uri)?.let { AudioCache.misses.missed(it) }
+            JukeUris.audioIdOf(dataSpec.uri)?.let { AudioCache.misses.missed(it) }
             throw CacheMissException()
         }
         asked = dataSpec.uri

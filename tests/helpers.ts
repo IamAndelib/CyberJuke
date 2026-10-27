@@ -156,7 +156,8 @@ export const runFor = (page: Page, ms: number) => page.clock.runFor(ms);
  * time); the music, the history and the app's hourly habits come out the same.
  */
 export async function playOn(page: Page, ms: number): Promise<void> {
-  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
+  // A few seconds ahead: on a busy machine a second can pass before the pause is set.
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 5000);
   // A track still starting up (the fake player's 150 ms) plays first.
   await runFor(page, 200);
   for (let left = ms; left > 0; left -= FAKE_TRACK_MS + 200) {

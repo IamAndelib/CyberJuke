@@ -90,6 +90,9 @@ export class WebPlayer implements Player {
   private q = new Queue<Track>();
   private yt: YTPlayer | null = null;
   private ytReady: Promise<YTPlayer> | null = null;
+  /** Jukebox MP3s play in an audio element (the IFrame player plays only YouTube). */
+  private audio: HTMLAudioElement | null = null;
+  /** What's loaded: a video id or an MP3 link. */
   private loadedId: string | null = null;
   private poll: ReturnType<typeof setInterval> | null = null;
   /** The current list's context (one object per playList). */
@@ -115,6 +118,60 @@ export class WebPlayer implements Player {
   private loadedAhead(yt: YTPlayer): number {
     const loadedTo = (yt.getVideoLoadedFraction?.() ?? 0) * (yt.getDuration() || 0);
     return Math.max(0, Math.round((loadedTo - yt.getCurrentTime()) * 1000));
+  }
+
+  /** The current track is a Jukebox MP3, loaded in the audio element. */
+  private onMp3(): boolean {
+    const t = this.q.current;
+    return !!t?.mp3 && !!this.audio && this.loadedId === t.mp3;
+  }
+
+  /** Position and buffer of the audio element, as the IFrame player's are sampled. */
+  private audioSample(a: HTMLAudioElement): Pick<PlayerState, 'positionMs' | 'sampledAt' | 'bufferedAheadMs'> {
+    const pos = a.currentTime;
+    let loadedTo = pos;
+    for (let i = 0; i < a.buffered.length; i++) if (a.buffered.start(i) <= pos + 0.5) loadedTo = Math.max(loadedTo, a.buffered.end(i));
+    return { positionMs: Math.round(pos * 1000), sampledAt: performance.now(), bufferedAheadMs: Math.max(0, Math.round((loadedTo - pos) * 1000)) };
+  }
+
+  private audioEl(): HTMLAudioElement {
+    if (this.audio) return this.audio;
+    const a = new Audio();
+    a.preload = 'auto';
+    const duration = () => (Number.isFinite(a.duration) ? Math.round(a.duration * 1000) : 0);
+    // Events of a track that's no longer current (a skip mid-load) are ignored.
+    const on = (type: string, fn: () => void) => a.addEventListener(type, () => this.onMp3() && fn());
+    on('playing', () => {
+      this.publish({ isPlaying: true, isBuffering: false, durationMs: duration(), ...this.audioSample(a) });
+      this.startPoll();
+    });
+    on('pause', () => {
+      if (a.ended) return;
+      this.stopPoll();
+      this.publish({ isPlaying: false, isBuffering: false, ...this.audioSample(a) });
+    });
+    on('waiting', () => this.publish({ isBuffering: true, ...this.audioSample(a) }));
+    on('durationchange', () => this.publish({ durationMs: duration() }));
+    on('ended', () => {
+      this.stopPoll();
+      this.advance(true);
+    });
+    on('error', () => {
+      toast(`Skipped "${this.q.current?.title ?? UNTITLED}": unavailable`);
+      this.advance(false, true);
+    });
+    this.audio = a;
+    return a;
+  }
+
+  private playAudio(a: HTMLAudioElement): void {
+    // A new src rejects the previous play() (AbortError) after the next one was asked for: that
+    // one is not about the track now loading. Only a refusal of this track's play shows paused.
+    const src = this.loadedId;
+    a.play().catch((e: unknown) => {
+      if ((e as { name?: unknown } | null)?.name === 'AbortError' || !this.onMp3() || this.loadedId !== src) return;
+      this.publish({ isPlaying: false, isBuffering: false });
+    });
   }
 
   private publish(patch: Partial<PlayerState> = {}): void {
@@ -211,6 +268,12 @@ export class WebPlayer implements Player {
   private onYtState(code: number): void {
     const yt = this.yt;
     if (!yt) return;
+    // An MP3 is playing: the paused video's events aren't about it, but a video still loading
+    // when it took over must not start under it.
+    if (this.q.current?.mp3) {
+      if (code === YT_PLAYING) yt.pauseVideo();
+      return;
+    }
     const now = performance.now();
     if (code === YT_PLAYING) {
       this.publish({
@@ -235,6 +298,7 @@ export class WebPlayer implements Player {
 
   private onYtError(code: number): void {
     const t = this.q.current;
+    if (t?.mp3) return;
     const name = t ? `"${t.title}"` : 'track';
     if (SKIP_ERROR_CODES.has(code) || code === 2 || code === 5) {
       toast(`Skipped ${name}: unavailable`);
@@ -246,8 +310,9 @@ export class WebPlayer implements Player {
     if (this.poll) return;
     this.poll = setInterval(() => {
       // Positions are interpolated between samples; no need to sample a hidden page.
-      if (!this.yt || document.hidden) return;
-      this.s.value = { ...this.s.value, positionMs: Math.round(this.yt.getCurrentTime() * 1000), sampledAt: performance.now(), bufferedAheadMs: this.loadedAhead(this.yt) };
+      if (document.hidden) return;
+      if (this.onMp3()) this.s.value = { ...this.s.value, ...this.audioSample(this.audio!) };
+      else if (this.yt) this.s.value = { ...this.s.value, positionMs: Math.round(this.yt.getCurrentTime() * 1000), sampledAt: performance.now(), bufferedAheadMs: this.loadedAhead(this.yt) };
     }, 1000);
   }
 
@@ -256,17 +321,29 @@ export class WebPlayer implements Player {
     this.poll = null;
   }
 
-  /** Load the queue's current track into the IFrame player. */
+  /** Load the queue's current track into the IFrame player (an MP3 into the audio element). */
   private async loadCurrent(autoplay: boolean, force = false): Promise<void> {
     const t = this.q.current;
     if (!t) {
       this.stopPoll();
       this.yt?.pauseVideo();
+      this.audio?.pause();
       this.loadedId = null;
       this.publish({ isPlaying: false, isBuffering: false, positionMs: 0, durationMs: 0, bufferedAheadMs: 0 });
       return;
     }
     this.publish({ isPlaying: autoplay, isBuffering: autoplay, positionMs: 0, durationMs: 0, sampledAt: performance.now(), bufferedAheadMs: 0 });
+    if (t.mp3) {
+      this.yt?.pauseVideo();
+      const a = this.audioEl();
+      if (this.loadedId !== t.mp3 || force) {
+        this.loadedId = t.mp3;
+        a.src = t.mp3;
+      }
+      if (autoplay) this.playAudio(a);
+      return;
+    }
+    this.audio?.pause();
     let yt: YTPlayer;
     try {
       yt = await this.ensurePlayer();
@@ -314,7 +391,10 @@ export class WebPlayer implements Player {
 
   async play(): Promise<void> {
     if (!this.q.current) return;
-    if (this.yt && this.loadedId === this.q.current.ytId) {
+    if (this.onMp3()) {
+      this.publish({ isPlaying: true });
+      this.playAudio(this.audio!);
+    } else if (this.yt && this.loadedId === this.q.current.ytId) {
       this.publish({ isPlaying: true });
       this.yt.playVideo();
     } else await this.loadCurrent(true);
@@ -322,6 +402,7 @@ export class WebPlayer implements Player {
 
   async pause(): Promise<void> {
     this.yt?.pauseVideo();
+    this.audio?.pause();
     this.publish({ isPlaying: false, isBuffering: false, waitingForNetwork: false, positionMs: livePosition(this.s.value), sampledAt: performance.now() });
   }
 
@@ -342,7 +423,8 @@ export class WebPlayer implements Player {
   }
 
   async seek(positionMs: number): Promise<void> {
-    this.yt?.seekTo(positionMs / 1000, true);
+    if (this.onMp3()) this.audio!.currentTime = positionMs / 1000;
+    else this.yt?.seekTo(positionMs / 1000, true);
     this.publish({ positionMs, sampledAt: performance.now() });
   }
 

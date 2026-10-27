@@ -121,6 +121,89 @@ class SessionPolicyTest {
     }
 
     @Test
+    fun jukeboxMp3sAreLatexShareLinksOnly() {
+        assertTrue(SessionPolicy.isValidMp3Url("https://latex.gg/share/IZq8cMcx.mp3"))
+        assertEquals("IZq8cMcx.mp3", SessionPolicy.mp3FileOf("https://latex.gg/share/IZq8cMcx.mp3"))
+        for (bad in listOf(
+            "http://latex.gg/share/IZq8cMcx.mp3",
+            "https://latex.gg/share/IZq8cMcx",
+            "https://latex.gg/files/IZq8cMcx.mp3",
+            "https://evil.latex.gg/share/IZq8cMcx.mp3",
+            "https://latex.gg.evil.example/share/IZq8cMcx.mp3",
+            "https://latex.gg/share/../x.mp3",
+            "https://latex.gg/share/IZq8cMcx.mp3?x=1",
+            "file:///sdcard/x.mp3",
+            "",
+        )) {
+            assertFalse(bad, SessionPolicy.isValidMp3Url(bad))
+            assertNull(bad, SessionPolicy.mp3FileOf(bad))
+        }
+        assertFalse(SessionPolicy.isValidMp3Url(null))
+        assertTrue(SessionPolicy.isValidMp3File("IZq8cMcx.mp3"))
+        // The item's file name rebuilds exactly the link it came from, and nothing else.
+        val link = "https://latex.gg/share/IZq8cMcx.mp3"
+        assertEquals(link, SessionPolicy.mp3UrlForFile(SessionPolicy.mp3FileOf(link)))
+        assertNull(SessionPolicy.mp3UrlForFile("../x.mp3"))
+        assertNull(SessionPolicy.mp3UrlForFile("x.mp3?y"))
+        assertNull(SessionPolicy.mp3UrlForFile(null))
+        assertFalse(SessionPolicy.isValidMp3File("../IZq8cMcx.mp3"))
+        assertFalse(SessionPolicy.isValidMp3File("x.mp3/y"))
+    }
+
+    @Test
+    fun audioIdsAreVideoIdsOrAJukeboxMp3sFileName() {
+        assertEquals("mp3:IZq8cMcx.mp3", SessionPolicy.mp3AudioId("IZq8cMcx.mp3"))
+        assertEquals("IZq8cMcx.mp3", SessionPolicy.mp3FileOfAudioId("mp3:IZq8cMcx.mp3"))
+        assertTrue(SessionPolicy.isValidAudioId("dQw4w9WgXcQ"))
+        assertTrue(SessionPolicy.isValidAudioId("mp3:IZq8cMcx.mp3"))
+        for (bad in listOf(
+            null, "", "mp3:", "mp3:x.ogg", "mp3:../x.mp3", "mp3:a/b.mp3", "mp3:x.mp3?y", "MP3:IZq8cMcx.mp3",
+            "IZq8cMcx.mp3", "https://latex.gg/share/IZq8cMcx.mp3", "dQw4w9WgXc", "yt:dQw4w9WgXcQ:251",
+        )) {
+            assertFalse(bad.toString(), SessionPolicy.isValidAudioId(bad))
+        }
+        assertNull(SessionPolicy.mp3AudioId("../x.mp3"))
+        assertNull(SessionPolicy.mp3AudioId(null))
+        assertNull(SessionPolicy.mp3FileOfAudioId("dQw4w9WgXcQ"))
+        // Never a video id: those have no ':'.
+        assertFalse(SessionPolicy.isValidYtId(SessionPolicy.mp3AudioId("abcdefg.mp3")))
+    }
+
+    @Test
+    fun aTrackPlaysItsVideoOrElseItsMp3() {
+        val link = "https://latex.gg/share/IZq8cMcx.mp3"
+        assertEquals(SessionPolicy.Playable.Yt("fJ9rUzIMcZQ"), SessionPolicy.playableOf("fJ9rUzIMcZQ", null))
+        // Only the file name is kept: the URL is rebuilt from it, and the link stays out of the item.
+        assertEquals(SessionPolicy.Playable.Mp3("IZq8cMcx.mp3"), SessionPolicy.playableOf(null, link))
+        // Both: the video wins, as in the browser player.
+        assertEquals(SessionPolicy.Playable.Yt("fJ9rUzIMcZQ"), SessionPolicy.playableOf("fJ9rUzIMcZQ", link))
+        // A bad ytId is an error even with a good MP3; the errors name the field, never a value.
+        for ((ytId, mp3, message) in listOf(
+            Triple("fJ9rUzIMcZ", link, "track.ytId invalid"),
+            Triple(null, "https://evil.example/share/IZq8cMcx.mp3", "track.mp3 invalid"),
+            Triple(null, null, "track.ytId missing"),
+        )) {
+            val e = runCatching { SessionPolicy.playableOf(ytId, mp3) }.exceptionOrNull()
+            assertTrue("$ytId $mp3", e is IllegalArgumentException)
+            assertEquals(message, e!!.message)
+        }
+    }
+
+    @Test
+    fun anItemsMp3LinkComesFromItsUriOrTheLinkKeptInTheApp() {
+        val link = "https://latex.gg/share/IZq8cMcx.mp3"
+        // The service's own item: its cyberjuke://mp3/ URI says it all, a video's URI says no.
+        assertEquals(link, SessionPolicy.mp3LinkOf(hasUri = true, uriLink = link, ytIdExtra = null, keptLink = null))
+        assertNull(SessionPolicy.mp3LinkOf(hasUri = true, uriLink = null, ytIdExtra = "fJ9rUzIMcZQ", keptLink = link))
+        // A copy without a URI: the link kept by mediaId, so the plugin still sees an MP3 (and
+        // lets it play through a YouTube back-off), unless the copy is a video's.
+        assertEquals(link, SessionPolicy.mp3LinkOf(hasUri = false, uriLink = null, ytIdExtra = null, keptLink = link))
+        assertNull(SessionPolicy.mp3LinkOf(hasUri = false, uriLink = null, ytIdExtra = "fJ9rUzIMcZQ", keptLink = link))
+        assertNull(SessionPolicy.mp3LinkOf(hasUri = false, uriLink = null, ytIdExtra = null, keptLink = null))
+        assertNull(SessionPolicy.mp3LinkOf(hasUri = false, uriLink = null, ytIdExtra = null, keptLink = "https://evil.example/x.mp3"))
+    }
+
+    @Test
     fun incomingItemsOnlyKeepValidYouTubeIds() {
         assertEquals("fJ9rUzIMcZQ", SessionPolicy.ytIdForIncoming("fJ9rUzIMcZQ", null))
         assertEquals("fJ9rUzIMcZQ", SessionPolicy.ytIdForIncoming(null, "fJ9rUzIMcZQ"))
@@ -134,8 +217,18 @@ class SessionPolicyTest {
     }
 
     @Test
-    fun artworkOnlyFromYtimg() {
+    fun artworkOnlyFromYtimgAndCyberspaceUploads() {
         assertTrue(SessionPolicy.isAllowedArtwork("https://i.ytimg.com/vi/fJ9rUzIMcZQ/hqdefault.jpg"))
+        // A Jukebox MP3's cover, from Cyberspace's uploads only.
+        assertTrue(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online/uploads/jukebox/Q7qx/1792922249462-97625ca1611e2070.jpg"))
+        assertFalse(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online/admin/x.jpg"))
+        assertFalse(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online/uploads/x.jpg?redirect=evil"))
+        assertFalse(SessionPolicy.isAllowedArtwork("http://bunker.cyberspace.online/uploads/x.jpg"))
+        assertFalse(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online.evil.example/uploads/x.jpg"))
+        // No way out of /uploads/: no dot segments, no escapes.
+        assertFalse(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online/uploads/../admin/x.jpg"))
+        assertFalse(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online/uploads/./x.jpg"))
+        assertFalse(SessionPolicy.isAllowedArtwork("https://bunker.cyberspace.online/uploads/%2e%2e/x.jpg"))
         assertFalse(SessionPolicy.isAllowedArtwork("http://i.ytimg.com/vi/x/hqdefault.jpg"))
         assertFalse(SessionPolicy.isAllowedArtwork("https://i.ytimg.com.evil.example/x.jpg"))
         assertFalse(SessionPolicy.isAllowedArtwork("https://evil.example/i.ytimg.com/x.jpg"))

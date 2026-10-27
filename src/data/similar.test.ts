@@ -21,6 +21,7 @@ function track(p: Partial<Track> & { artist: string }): Track {
     ...(p.saves !== undefined && { saves: p.saves }),
     ...(p.membersOnly && { membersOnly: true }),
     ...(p.source && { source: p.source }),
+    ...(p.mp3 && { mp3: p.mp3 }),
   };
 }
 
@@ -172,6 +173,18 @@ describe('similarTracks: exclusions and filters', () => {
     expect(ids).not.toContain('seed');
     for (const t of [tracks[2], tracks[3], tracks[4], tracks[5]]) expect(ids).not.toContain(t.id);
     expect(ids.filter((id) => id === tracks[1].id || id === 'dup-post')).toHaveLength(1);
+  });
+
+  it('tells Jukebox MP3s apart by their link (they have no video id)', () => {
+    const mp3 = (id: string, file: string, artist: string) => track({ id, ytId: '', mp3: `https://latex.gg/share/${file}.mp3`, artist, genre: 'hip hop' });
+    const seed = mp3('seed-mp3', 'SEED0001', 'Mephisztoe');
+    const a = mp3('a', 'AAAA0001', 'Tronex');
+    const b = mp3('b', 'BBBB0001', 'Jm2c');
+    const again = { ...a, id: 'a-repost' };
+    const picks = similarTracks([seed, a, b, again], opts(seed, { count: 10 })).map((t) => t.id);
+    expect(picks).toContain('b');
+    expect(picks.filter((id) => id === 'a' || id === 'a-repost')).toHaveLength(1);
+    expect(picks).not.toContain('seed-mp3');
   });
 
   it('hides NSFW tracks unless shown, members-only tracks unless signed in', () => {

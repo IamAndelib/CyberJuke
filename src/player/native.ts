@@ -8,8 +8,11 @@ import type { CrossfadeMs, Quality } from '../stores/library';
 /**
  * `album`: the album the track was opened from (Track.album), for the same-album rule of
  * Crossfade. Native keeps it with the last session and echoes it in `tracks`.
+ * `mp3`: a Jukebox MP3 (Track.mp3, a latex.gg share link matching MP3_URL_RE), played
+ * from that URL; its `ytId` is ''. Native keeps it with the last session and echoes it.
+ * `artworkUrl` is then the post's cover (https://bunker.cyberspace.online/uploads/…).
  */
-export interface NativeTrack { id: string; ytId: string; title: string; artist: string; artworkUrl: string; by?: string; postUrl?: string; membersOnly?: boolean; album?: string }
+export interface NativeTrack { id: string; ytId: string; title: string; artist: string; artworkUrl: string; by?: string; postUrl?: string; membersOnly?: boolean; album?: string; mp3?: string }
 export type RepeatMode = 'off' | 'all' | 'one';
 export interface NativeState {
   /**
@@ -60,7 +63,8 @@ export const BRIDGE_MAX_STRING = 2000;
 export const STALE_INDEX = 'STALE_INDEX';
 /**
  * setQueue, queueNext and addAutoplay reject the whole call ("Invalid tracks: track.ytId
- * invalid") when any ytId isn't 11 characters of [A-Za-z0-9_-]: filter before calling.
+ * invalid") when a track has neither a ytId of 11 characters of [A-Za-z0-9_-] nor (with
+ * ytId '') an `mp3` matching MP3_URL_RE: filter before calling (hasAudio).
  * More than BRIDGE_MAX_ITEMS tracks, or a string over BRIDGE_MAX_STRING, is TOO_LARGE.
  * While blocked, setQueue replaces the queue without preparing it (and resolves), and
  * play() is refused when nothing is loaded. trackError is never sent for blocks.
@@ -136,13 +140,17 @@ interface JukePlayerPlugin {
   /**
    * The listening cache: the liked songs, newest like first (at most BRIDGE_MAX_ITEMS), and which
    * of them are members-only (their audio is tagged, so a sign-out removes it). Native keeps them
-   * in the cache last, saves a few liked since the last call at once and older ones on Wi-Fi, so
-   * they play offline. The upkeep calls (this, setCacheLimit, clearCache, signedOut) resolve once
+   * in the cache last, and saves them so they play offline (those liked since the last call
+   * first), on Wi-Fi only unless setDownloadOnMobileData is on. The upkeep calls (this, setCacheLimit, clearCache, signedOut) resolve once
    * done, and reject when there is no cache.
+   * Every `ytIds` here, in cachedIds and in cacheChanged holds audio ids (isAudioId): a video id,
+   * or `mp3:<file>` for a Jukebox MP3 (audioIdOf). Native drops any other entry.
    */
   setLikedIds(o: { ytIds: string[]; membersOnly: string[] }): Promise<void>;
   /** The listening cache's size; 128, 256 or 512 (anything else is 256). A smaller one evicts at once. */
   setCacheLimit(o: { mb: number }): Promise<void>;
+  /** Download using mobile data: liked songs are saved on any network, not only Wi-Fi. Off by default; needs no cache. */
+  setDownloadOnMobileData(o: { enabled: boolean }): Promise<void>;
   /** Empties the listening cache. Playback goes on. */
   clearCache(): Promise<void>;
   /**
@@ -152,7 +160,7 @@ interface JukePlayerPlugin {
   signedOut(): Promise<void>;
   /** Signed in: members-only audio may be cached again. */
   signedIn(): Promise<void>;
-  /** The liked songs saved whole on the phone, by ytId: they play offline. */
+  /** The liked songs saved whole on the phone, by audio id: they play offline. */
   cachedIds(): Promise<{ ytIds: string[] }>;
   /** Keep a screen area (CSS px relative to the WebView) out of the system back gesture; null clears it. */
   setGestureExclusion(rect: { left: number; top: number; width: number; height: number } | null): Promise<void>;

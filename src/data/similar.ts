@@ -17,7 +17,7 @@
  * same artist twice in a row, at most 2 tracks by one artist in any 10. When good matches run
  * out it widens to the seed's genre family, then to popular Jukebox tracks.
  */
-import { isGlobal, type Track } from './model';
+import { audioKey, isGlobal, type Track } from './model';
 import { artistKey, splitArtists } from './artists';
 import { normalize, words } from './text';
 
@@ -216,10 +216,10 @@ export function similarTracks(catalog: readonly Track[], o: SimilarOptions): Tra
 
   const out = new Set<string>(o.exclude ?? []);
   out.add(o.seed.id);
-  out.add(o.seed.ytId);
+  out.add(audioKey(o.seed));
   for (const t of recent.slice(0, EXCLUDE_RECENT)) {
     out.add(t.id);
-    out.add(t.ytId);
+    out.add(audioKey(t));
   }
 
   const seed = featOf(o.seed);
@@ -232,10 +232,11 @@ export function similarTracks(catalog: readonly Track[], o: SimilarOptions): Tra
   const scored: Scored[] = [];
   for (const f of idx.feats) {
     const t = f.track;
-    if (isGlobal(t) || out.has(t.id) || out.has(t.ytId) || seen.has(t.ytId)) continue;
+    const key = audioKey(t);
+    if (isGlobal(t) || out.has(t.id) || out.has(key) || seen.has(key)) continue;
     if (t.nsfw && !o.showNsfw) continue;
     if (t.membersOnly && !o.signedIn) continue;
-    seen.add(t.ytId);
+    seen.add(key);
     const toSeed = pairScore(idx, seed, f);
     const like = drift.length ? SEED_SHARE * toSeed + (1 - SEED_SHARE) * mean(drift.map((d) => pairScore(idx, d, f))) : toSeed;
     scored.push({ f, like, score: like + boost(idx, t, now) });

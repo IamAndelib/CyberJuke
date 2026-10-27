@@ -39,6 +39,7 @@ internal data class LastSession(
     /** One track: the NativeTrack fields and its part of Up next. */
     data class Entry(
         val id: String,
+        /** The video id; "" for a Jukebox MP3 ([mp3]). */
         val ytId: String,
         val title: String?,
         val artist: String?,
@@ -50,11 +51,14 @@ internal data class LastSession(
         val membersOnly: Boolean = false,
         /** The album it was opened from (MediaMetadata.albumTitle): Crossfade's same-album rule needs it back. */
         val album: String? = null,
+        /** A Jukebox MP3's latex.gg link ([SessionPolicy.isValidMp3Url]); then [ytId] is "". */
+        val mp3: String? = null,
     ) {
         /** The NativeTrack JSON that [JukeTracks.toMediaItem] takes. */
         fun toNativeTrack(): JSONObject = JSONObject().apply {
             put("id", id)
             put("ytId", ytId)
+            mp3?.let { put("mp3", it) }
             title?.let { put("title", it) }
             artist?.let { put("artist", it) }
             artworkUrl?.let { put("artworkUrl", it) }
@@ -185,7 +189,9 @@ internal data class LastSession(
 
         /**
          * Null for anything that isn't a session this version wrote, or one with a track it
-         * can't play ([validYtId]): a broken file is dropped, never half restored.
+         * can't play (neither a [validYtId] nor a Jukebox MP3 link): a broken file is dropped,
+         * never half restored. (A session with an MP3 is still version 1: older builds, which
+         * can't play one, drop it as such.)
          */
         fun decode(text: String, validYtId: (String) -> Boolean = SessionPolicy::isValidYtId): LastSession? = try {
             val o = JSONObject(text)
@@ -194,11 +200,16 @@ internal data class LastSession(
             if (arr.length() == 0 || arr.length() > MAX_ENTRIES) return null
             val entries = (0 until arr.length()).map { i ->
                 val t = arr.getJSONObject(i)
-                val ytId = t.str("ytId") ?: return null
-                if (!validYtId(ytId)) return null
+                val ytId = t.str("ytId")
+                val mp3 = t.str("mp3")
+                when {
+                    ytId != null -> if (!validYtId(ytId)) return null
+                    !SessionPolicy.isValidMp3Url(mp3) -> return null
+                }
                 Entry(
                     id = t.str("id") ?: return null,
-                    ytId = ytId,
+                    ytId = ytId ?: "",
+                    mp3 = mp3.takeIf { ytId == null },
                     title = t.str("title"),
                     artist = t.str("artist"),
                     artworkUrl = t.str("artworkUrl"),

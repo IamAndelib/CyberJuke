@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { asTrack, asTracks, isTrackFull, parseMusicItem, parseMusicPage, parseNativeState, parseRunQueryRows } from './guards';
+import { asTrack, audioIdOf, hasAudio, asTracks, isAudioId, isTrackFull, parseMusicItem, parseMusicPage, parseNativeState, parseRunQueryRows } from './guards';
 
 const track = {
   id: 'p1',
@@ -140,6 +140,38 @@ describe('stored tracks', () => {
     expect(asTrack({ ...track, ytId: '<script>' })).toBeNull();
     expect(asTracks([track, null, { id: '' }, track])).toHaveLength(2);
     expect(asTracks('nope')).toEqual([]);
+  });
+
+  it('keeps a Jukebox MP3 (no video id, a latex.gg link), and nothing else in its place', () => {
+    const mp3 = { ...track, ytId: '', mp3: 'https://latex.gg/share/IZq8cMcx.mp3' };
+    expect(isTrackFull(mp3)).toBe(true);
+    expect(asTrack(mp3)).toEqual(mp3);
+    expect(hasAudio(mp3)).toBe(true);
+    for (const bad of ['https://evil.com/share/x.mp3', 'http://latex.gg/share/x.mp3', 'https://latex.gg/share/x.wav', 42]) {
+      expect(isTrackFull({ ...mp3, mp3: bad }), String(bad)).toBe(false);
+      expect(asTrack({ ...mp3, mp3: bad }), String(bad)).toBeNull();
+    }
+    expect(isTrackFull({ ...mp3, ytId: 'bad' })).toBe(false);
+    // Never both: a video id wins.
+    expect(isTrackFull({ ...mp3, ytId: 'abcdefghijk' })).toBe(false);
+    expect(asTrack({ ...mp3, ytId: 'abcdefghijk' })).not.toHaveProperty('mp3');
+    expect(asTrack({ ...mp3, ytId: '<script>' })).toEqual(mp3);
+    expect(hasAudio({ ytId: '' })).toBe(false);
+    expect(hasAudio(null)).toBe(false);
+    expect(hasAudio(track)).toBe(true);
+  });
+
+  it('names the audio of a track as the native listening cache does: the video id, or mp3: and the file name of its MP3', () => {
+    expect(audioIdOf(track)).toBe(track.ytId);
+    expect(audioIdOf({ ytId: '', mp3: 'https://latex.gg/share/IZq8cMcx.mp3' })).toBe('mp3:IZq8cMcx.mp3');
+    // A placeholder, or a link that isn't a Jukebox MP3: nothing to cache.
+    expect(audioIdOf({ ytId: '' })).toBe('');
+    expect(audioIdOf({ ytId: '', mp3: 'https://evil.example/share/x.mp3' })).toBe('');
+    expect(audioIdOf(null)).toBe('');
+    for (const ok of ['abcdefghijk', 'mp3:IZq8cMcx.mp3', 'mp3:a-b_C.MP3']) expect(isAudioId(ok), ok).toBe(true);
+    for (const bad of ['', 'mp3:', 'mp3:x.ogg', 'mp3:../x.mp3', 'mp3:a/b.mp3', 'MP3:IZq8cMcx.mp3', 'IZq8cMcx.mp3', 'https://latex.gg/share/IZq8cMcx.mp3', 'short', 42, null]) {
+      expect(isAudioId(bad), String(bad)).toBe(false);
+    }
   });
 
   it('keeps a Signal Radio track a Signal Radio track (Liked and history survive a restart)', () => {

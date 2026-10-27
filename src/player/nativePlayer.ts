@@ -3,11 +3,11 @@
  * this class only forwards commands and mirrors native state from events.
  */
 import { computed, effect, signal, untracked } from '@preact/signals';
-import { UNKNOWN_ARTIST, UNTITLED, artworkUrl, makeTrack, type Track } from '../data/model';
+import { UNKNOWN_ARTIST, UNTITLED, artworkUrl, isCoverUrl, makeTrack, type Track } from '../data/model';
 import { history, knownTrack, liked, IPV4_MODES, type CrossfadeMs, type Ipv4Mode, type Quality } from '../stores/library';
 import { catalog } from '../stores/catalog';
 import { toast } from '../stores/toast';
-import { YT_ID_RE, parseNativeState } from '../core/guards';
+import { YT_ID_RE, hasAudio, isMp3Url, parseNativeState } from '../core/guards';
 import { logError } from '../core/log';
 import { trackErrorText } from './errorText';
 import { stationTrack } from './radio';
@@ -29,6 +29,7 @@ export function toNative(t: Track): NativeTrack {
     postUrl: link(t.postUrl),
     ...(t.membersOnly && { membersOnly: true }),
     ...(t.album && { album: clip(t.album) }),
+    ...(t.mp3 && { mp3: t.mp3 }),
   };
 }
 
@@ -53,15 +54,18 @@ const catalogById = computed(() => new Map(catalog.all.value.map((t) => [t.id, t
  * of the last session it restored after a restart (the app may know it no more).
  */
 function fromNative(t: NativeTrack): Track | null {
-  if (!t || typeof t.id !== 'string' || !t.id || typeof t.ytId !== 'string' || !YT_ID_RE.test(t.ytId)) return null;
+  if (!t || typeof t.id !== 'string' || !t.id || typeof t.ytId !== 'string') return null;
+  const mp3 = t.ytId === '' && isMp3Url(t.mp3) ? t.mp3 : undefined;
+  if (!mp3 && !YT_ID_RE.test(t.ytId)) return null;
   return makeTrack({
     id: t.id,
     ytId: t.ytId,
+    ...(mp3 && { mp3 }),
     title: typeof t.title === 'string' && t.title ? t.title : UNTITLED,
     artist: typeof t.artist === 'string' && t.artist ? t.artist : UNKNOWN_ARTIST,
     by: typeof t.by === 'string' ? t.by : '',
     postUrl: typeof t.postUrl === 'string' ? t.postUrl : '',
-    artworkUrl: artworkUrl(t.ytId),
+    artworkUrl: mp3 ? (isCoverUrl(t.artworkUrl) ? t.artworkUrl : '') : artworkUrl(t.ytId),
     ...(t.membersOnly === true && { membersOnly: true }),
     ...(typeof t.album === 'string' && t.album && { album: t.album }),
     ...(t.id.startsWith('ytm:') && { source: 'ytmusic' as const }),
@@ -203,7 +207,7 @@ export class NativePlayer implements Player {
       queue = st.queueIds.map((id) => this.resolve(id));
       // A placeholder, or a track only native described (no genre, no post): named again
       // once Liked, history or the catalog know it.
-      this.unresolved = queue.some((t) => !t.ytId || this.described.get(t.id) === t);
+      this.unresolved = queue.some((t) => !hasAudio(t) || this.described.get(t.id) === t);
       const index = st.index >= 0 && st.index < queue.length ? st.index : -1;
       // Up next rows by the list index native gives (K1). Without one (an older native),
       // the id's next unused slot after the current track, then from the top.
@@ -437,9 +441,9 @@ export class NativePlayer implements Player {
   }
 }
 
-/** A track native accepts (a valid 11-character video id, an id it takes). */
+/** A track native accepts (a valid 11-character video id or a Jukebox MP3, an id it takes). */
 function isPlayable(t: Track): boolean {
-  return YT_ID_RE.test(t.ytId) && !!t.id && t.id.length <= BRIDGE_MAX_STRING;
+  return hasAudio(t) && !!t.id && t.id.length <= BRIDGE_MAX_STRING;
 }
 
 function playable(tracks: Track[]): Track[] {

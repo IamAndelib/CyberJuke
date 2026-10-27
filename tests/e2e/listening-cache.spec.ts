@@ -206,7 +206,7 @@ test('offline, Now Playing says so too: with liked songs saved its line opens Li
   await expect(page.getByTestId('np-offline')).toHaveCount(0);
 });
 
-test('Settings → Listening cache: 256 MB by default, three sizes sent to the player and kept, and Clear cache', async ({ page }) => {
+test('Settings → Listening cache: 256 MB by default, three sizes sent to the player and kept, Clear cache, and Download using mobile data', async ({ page }) => {
   await page.goto('/');
   const sent = async () => (await playerCalls(page)).filter((c) => c[0] === 'setCacheLimit').map((c) => c[1]);
   await expect.poll(sent).toEqual([{ mb: 256 }]);
@@ -246,4 +246,22 @@ test('Settings → Listening cache: 256 MB by default, three sizes sent to the p
   await expect.poll(sent).toEqual([{ mb: 128 }]);
   await openSettings(page);
   await expect(page.getByTestId('cache-128')).toHaveAttribute('aria-checked', 'true');
+
+  // Download using mobile data: off by default (liked songs are saved on Wi-Fi only), sent to
+  // the player, and kept. On, Clear cache no longer says "on Wi-Fi".
+  const mobileData = async () => (await playerCalls(page)).filter((c) => c[0] === 'setDownloadOnMobileData').map((c) => c[1]);
+  const toggle = page.getByTestId('mobile-data-toggle');
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect(toggle).toHaveAccessibleName('Download using mobile data');
+  await expect(toggle).toHaveAccessibleDescription('Saves liked songs for offline on mobile data too, not only on Wi-Fi.');
+  await expect.poll(mobileData).toEqual([{ enabled: false }]);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expect.poll(mobileData).toEqual([{ enabled: false }, { enabled: true }]);
+  await page.getByTestId('cache-clear').click();
+  await expect(sheet).toContainText('saved liked songs too. They are saved again.');
+  await page.getByTestId('confirm-ok').click();
+  await expect(page.getByTestId('toast')).toHaveText('Cache cleared. Liked songs are saved again.');
+  await page.reload();
+  await expect.poll(mobileData).toEqual([{ enabled: true }]);
 });

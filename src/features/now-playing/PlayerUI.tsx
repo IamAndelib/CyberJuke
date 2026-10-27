@@ -29,6 +29,7 @@ import { openExternal, openPost, youtubeUrl } from '../../ui/links';
 import { positionNow, useTickValue } from '../../ui/useTick';
 import { splitArtists } from '../../data/artists';
 import { isGlobal, isSignal, type Track } from '../../data/model';
+import { hasAudio } from '../../core/guards';
 import { reducedMotion } from '../../core/motion';
 import { OFFLINE } from '../../core/offlineText';
 import { Art } from '../../ui/components/Art';
@@ -784,8 +785,8 @@ export function TrackMenu() {
   useModal(open != null, sheet);
   const close = () => (menuTrack.value = null);
   const fav = useLiked(t?.id);
-  // A track still being looked up (no video yet) can't be queued, shared or liked.
-  const known = !!t?.ytId;
+  // A track still being looked up (nothing to play yet) can't be queued, shared or liked.
+  const known = hasAudio(t);
   return (
     <div class={'sheet-wrap' + (open ? ' open' : '')} aria-hidden={!open} inert={!open}>
       <div class="scrim" onClick={close} />

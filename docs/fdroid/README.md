@@ -38,7 +38,7 @@ The recipe holds only the newest release (fdroiddata asks for that until an app 
 2. Open a merge request using the "App inclusion" template. Mention:
    - It is a Capacitor app; `scandelete: node_modules` removes the prebuilt binaries the scanner flags in it, after the web build.
    - Reproducible builds with the developer's signature (`Binaries` + `AllowedAPKSigningKeys`), so F-Droid and GitHub APKs update each other.
-   - `NonFreeNet`: YouTube playback through NewPipeExtractor, and Cyberspace's backend (Firestore).
+   - `NonFreeNet`: YouTube playback through NewPipeExtractor, Jukebox MP3s from latex.gg, and Cyberspace's backend (Firestore).
    - NewPipeExtractor comes from JitPack, as in NewPipe's own recipe.
 3. The F-Droid CI builds it; fix anything its `fdroid lint`/`build` jobs report.
 

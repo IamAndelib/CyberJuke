@@ -11,6 +11,7 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { activeLine, lyrics as client, type Lyrics, type LyricsOutcome } from '../../data/lyrics';
 import type { Track } from '../../data/model';
+import { hasAudio } from '../../core/guards';
 import { durationMs, isAdvancing, livePosition, player, type PlayerState } from '../../player';
 import { online } from '../../core/network';
 import { OFFLINE } from '../../core/offlineText';
@@ -59,13 +60,13 @@ function useLyrics(track: Track, durationMs: number): [LyricsOutcome | null, () 
     }
     setState({ id: track.id, outcome: null });
     // Not known yet (a placeholder while the list resolves): wait for the real track.
-    if (!durReady || !track.ytId) return;
+    if (!durReady || !hasAudio(track)) return;
     void client.get(track, durationMs).then((outcome) => live && setState({ id: track.id, outcome }));
     return () => {
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Keyed by the track's id: a new Track object for the same id (or a duration update) mustn't refetch.
-  }, [track.id, !!track.ytId, durReady, attempt]);
+  }, [track.id, hasAudio(track), durReady, attempt]);
   return [state.id === track.id ? state.outcome : null, () => setAttempt((n) => n + 1)];
 }
 

@@ -50,11 +50,19 @@ internal object LoadRetry {
 
     const val MAX_DELAY_MS = 8_000L
 
-    /** A YouTube load's cache file that went away: retried this soon ([cacheFileRetryMs]). */
+    /**
+     * HTTP statuses that mean "not now" rather than "no": a request timeout and too many
+     * requests. On a host whose other 4xx are final (latex.gg) they are retried like a broken
+     * connection. YouTube's 429 is a refusal instead (JukeLoadErrorPolicy.NO_RETRY_HTTP).
+     */
+    val TRANSIENT_HTTP: Set<Int> = setOf(408, 429)
+
+    /** A cached load's file that went away (a video's or a Jukebox MP3's): retried this soon ([cacheFileRetryMs]). */
     const val CACHE_RETRY_MS = 500L
 
     /**
-     * A YouTube load ([ytLoad]) that failed reading a listening-cache file ([fileError]: not
+     * A load through the listening cache ([ytLoad]: a video's, or a Jukebox MP3's, which
+     * JukeLoadErrorPolicy passes as one too) that failed reading a cache file ([fileError]: not
      * found, or a file read error): the cache drops the span when it notices, so a retry soon
      * fetches it instead (the default would never retry a missing file: a dead track). Null for
      * anything else.
@@ -126,7 +134,7 @@ internal object LoadAhead {
 }
 
 /**
- * Which tracks may open their stream: the playing one and the next (by ytId, whether or not
+ * Which tracks may open their stream: the playing one and the next (by audio id, whether or not
  * [LoadAhead] lets the next load ahead yet). OneAheadLoadControl stops loading beyond them, but
  * ExoPlayer still prepares the item after next, and preparing opens its source: an extraction,
  * and a connection left idle. Its resolution waits here instead (YtDataSpecResolver, on the

@@ -4,7 +4,8 @@
  *   Firebase login): `backend`, configured with `test.use({ backendOptions })`;
  * - the fake JukeMusic plugin (Global search, artist pages, lyrics):
  *   `test.use({ musicOptions })`, or `musicOptions: false` for none;
- * - stand-ins for YouTube thumbnails and the IFrame player;
+ * - stand-ins for YouTube thumbnails and the IFrame player, and for Jukebox MP3s on
+ *   latex.gg with their covers;
  * - no handover grace: a lost connection counts as offline at once;
  * - `window.__cyberjukeVisibility(state)` to fake the page going to the background and back;
  * - checks after the test: no CSP violation and no uncaught page error.
@@ -13,10 +14,12 @@
 import { test as base, expect } from '@playwright/test';
 import { stubBackend, type Backend, type BackendOptions } from './backend';
 import { stubMusic, type MusicStubOptions } from './music';
+import { stubLatex } from './latex';
 import { stubYouTube } from './youtube';
 
 export { expect };
-export { ATTACHMENT_ONLY_GENRE, AUTH_USER, AUTH_USER_B, BANNED_POST, MEMBERS_POSTS } from './data';
+export { ATTACHMENT_ONLY_GENRE, AUTH_USER, AUTH_USER_B, BANNED_POST, MEMBERS_POSTS, MP3_POSTS, coverUrl, mp3Url } from './data';
+export { FAKE_MP3_SECONDS } from './latex';
 export type { Backend } from './backend';
 
 interface Options {
@@ -94,6 +97,7 @@ export const test = base.extend<Options & Fixtures>({
         };
       });
       await stubYouTube(page);
+      await stubLatex(page);
       if (musicOptions !== false) await stubMusic(page, musicOptions);
       await use();
     },
