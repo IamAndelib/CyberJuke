@@ -27,6 +27,7 @@ const { default: globals } = await import('globals');
 /** `import … from '<relative path into one of these layers>'`. */
 const into = (layers) => `^(\\.\\./)+(${layers.join('|')})(/|$)`;
 const UP = 'Imports go down the layers only: app → features → ui → stores / player / data → core.';
+const HTML = 'Render text with JSX, not HTML strings.';
 
 /** One no-restricted-imports block for the files of a layer. */
 function layer(files, layers, { allowTypeImports = false, extra = [] } = {}) {
@@ -87,6 +88,14 @@ export default tseslint.config(
       // React Compiler rules in the plugin's newer presets don't apply to Preact.
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
+      // Everything on screen is rendered as text by Preact, never parsed as HTML: much of it
+      // (titles, artists, post text) comes from other people's posts.
+      'no-restricted-syntax': [
+        'error',
+        { selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']", message: HTML },
+        { selector: 'AssignmentExpression[left.property.name=/^(innerHTML|outerHTML)$/]', message: HTML },
+        { selector: "CallExpression[callee.property.name='insertAdjacentHTML']", message: HTML },
+      ],
     },
   },
   {
