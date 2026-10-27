@@ -13,6 +13,7 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] A **Jukebox MP3** plays (Search "Träume" or "Anniversary Mix", both latex.gg MP3s): its square cover shows in the list, in Now Playing, the notification and on the lock screen; seeking works; it moves on to the next track at its end. Swipe the app away and reopen it: it comes back, paused, where it was.
 - [ ] With the screen off and the app in the background, music keeps playing and moves on to the next track.
 - [ ] Notification and lock screen: play/pause, next and previous work, and they show the title and artwork.
+- [ ] While music plays, the status bar shows the CyberJuke jukebox (a small arched box), not a music note; so does the notification's header.
 - [ ] On a fresh install (Android 13 or newer), the first play asks for no permission, and the notification still shows its controls.
 - [ ] Unplugging headphones or disconnecting Bluetooth pauses playback.
 - [ ] Switch between Wi-Fi and mobile data **during** a song: playback continues, or resumes by itself within a few seconds. No "YouTube is limiting requests" banner.

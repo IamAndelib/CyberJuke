@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### The app
+- The music notification shows CyberJuke's jukebox in the status bar, instead of a plain music note.
+
 ## [1.3.0] - 2026-10-27
 
 ### The app
