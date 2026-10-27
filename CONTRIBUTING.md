@@ -54,7 +54,7 @@ Screenshots and logcat end up in `smoke/`. YouTube often blocks datacenter IPs, 
 
 No signing key is committed to this repository.
 
-`capacitor.config.json` is plain JSON so that `cap sync` needs no code to load it on any Node.js, including Debian's, which the F-Droid recipe uses. One copy goes into every build type, so two of its settings also apply to debug builds: `loggingBehavior: "none"` keeps JS console output out of logcat, and `webContentsDebuggingEnabled: false` stops the WebView being inspected with chrome://inspect (native logs are unaffected). `cordova.accessOrigins: []` stops `cap sync` writing `<access origin="*"/>` into the generated `res/xml/config.xml`; no Cordova plugins are used.
+`capacitor.config.json` is plain JSON so that `cap sync` needs no code to load it on any Node.js, including Debian's, which the F-Droid recipe uses. One copy goes into every build type, so two of its settings also apply to debug builds: `loggingBehavior: "none"` keeps JS console output out of logcat, and `webContentsDebuggingEnabled: false` stops the WebView being inspected with chrome://inspect (native logs are unaffected). `cordova.accessOrigins: []` stops `cap sync` writing `<access origin="*"/>` into the generated `res/xml/config.xml`; no Cordova plugins are used. `cordova.preferences.DisableDeploy: "true"` (written there too) stops Capacitor from loading the web files from a saved server path instead of the APK's own: the app has no live updates.
 
 ## Releases (maintainers)
 
