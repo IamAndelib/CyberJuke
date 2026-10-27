@@ -435,7 +435,8 @@ internal enum class SaveFailure {
  * tried again later and given up on after [SaveStrikes.MAX]. Pure (CachePolicyTest).
  */
 internal object SaveRefusal {
-    private val TRANSIENT_4XX = setOf(408, 416, 429)
+    /** Playback's "not now" statuses ([LoadRetry.TRANSIENT_HTTP]), and a range asked from a length never sent. */
+    private val TRANSIENT_4XX = LoadRetry.TRANSIENT_HTTP + 416
 
     fun refused(httpCode: Int?, mp3: Boolean): Boolean =
         httpCode != null && (!mp3 || (httpCode in 400..499 && httpCode !in TRANSIENT_4XX))
