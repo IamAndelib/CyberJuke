@@ -32,7 +32,7 @@ import { catalog } from '../stores/catalog';
 import { startFreshness } from '../stores/newTracks';
 import { startAccount } from '../stores/account';
 import { auth } from '../data/auth';
-import { goBack, openNowPlayingWhen } from '../ui/nav';
+import { goBack, openNowPlayingWhen, openSettings, selectTab } from '../ui/nav';
 import { retryWatchedFeeds } from '../stores/feed';
 import { JukePlayer } from '../player/native';
 import { hasCurrent, setOpenLiked, startPlayerPrefs, startQueuePurge } from '../player';
@@ -173,7 +173,10 @@ async function boot(): Promise<void> {
   void stored.then(startListeningCache);
   setOpenLiked(openLiked);
   // Sign-ins and sign-outs are followed from here on (restore() may already be refreshing the login).
-  startAccount(stored);
+  startAccount(stored, () => {
+    selectTab('home');
+    openSettings();
+  });
   // Home's first page is asked for now, not after the first render: the login decides
   // the query, and Home's list gets this same request when it mounts (the source shares
   // a load in progress). Always from the network: nothing of Latest is kept on disk.

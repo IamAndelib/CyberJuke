@@ -60,6 +60,18 @@ describe('startAccount', () => {
     await vi.waitFor(() => expect(calls).toEqual(['return:u1', 'drop:u1']));
   });
 
+  it('the expired-login message has a Settings button that opens Settings (the app hands in how)', async () => {
+    const { startAccount } = await import('./account');
+    const { toast } = await import('./toast');
+    const openSettings = vi.fn();
+    startAccount(Promise.resolve(), openSettings);
+    fakeAuth.emit(false, 'expired');
+    const action = vi.mocked(toast).mock.calls.at(-1)?.[2];
+    expect(action?.label).toBe('Settings');
+    action?.run();
+    expect(openSettings).toHaveBeenCalledOnce();
+  });
+
   it('signed out at startup: members-only tracks are dropped once the lists are read', async () => {
     fakeAuth.uid = null;
     const { startAccount } = await import('./account');
