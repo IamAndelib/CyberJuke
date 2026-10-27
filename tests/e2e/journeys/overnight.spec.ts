@@ -58,8 +58,11 @@ test('four hours of Liked, then autoplay: no message, the history pruned, the li
 
   // The night, in four hours.
   const HOURS = 4;
+  const perHour: number[] = [];
   for (let h = 1; h <= HOURS; h++) {
+    const before = backend.queries.length;
     await playOn(page, 60 * 60_000);
+    perHour.push(backend.queries.length - before);
     await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Pause');
     expect(await toastsSeen(page), `messages in hour ${h}`).toEqual([]);
   }
@@ -68,10 +71,12 @@ test('four hours of Liked, then autoplay: no message, the history pruned, the li
   expect(q.current?.title).not.toMatch(/^Liked /);
   expect(q.list).toEqual([]);
   expect(q.autoplay.length).toBeGreaterThanOrEqual(15);
-  // Only the new-tracks check asked Cyberspace for anything overnight (about every 15 minutes;
-  // a check still out when the clock jumps on runs into its timeout and waits for the next): no feed, no catalog.
+  // Only the new-tracks check asked Cyberspace for anything overnight, about every 15 minutes, in
+  // every hour of it: no feed, no catalog. (How many fit in an hour here depends on the machine:
+  // a check still out when the fake clock jumps a whole track on runs into its timeout and waits
+  // for the next, which real time on a phone never does.)
   const overnight = backend.queries.slice(queriesBefore);
-  expect(overnight.length).toBeGreaterThanOrEqual(HOURS * 3);
+  for (const [h, n] of perHour.entries()) expect(n, `checks in hour ${h + 1}`).toBeGreaterThanOrEqual(1);
   expect(overnight.length).toBeLessThanOrEqual(HOURS * 4 + 1);
   expect(overnight.every((x) => x.limit === 25)).toBe(true);
   expect(overnight.some((x) => isFeedQuery(x) || x.limit === 300)).toBe(false);

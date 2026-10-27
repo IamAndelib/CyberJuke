@@ -18,7 +18,7 @@ on:
         type: choice
         options: [release, pinned-node]
       debian_node:
-        description: "Build the web part with Debian's nodejs from this suite instead (e.g. trixie-backports), as the F-Droid recipe can"
+        description: "Build the web part with Debian's nodejs from this suite instead (e.g. forky), as the F-Droid recipe does"
         required: false
         default: ''
         type: string
