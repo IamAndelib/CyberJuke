@@ -73,6 +73,8 @@ class JukeLoadErrorPolicyTest {
     fun aCacheFileGoneOnAYouTubeLoadIsFetchedAgainSoon() {
         assertEquals(LoadRetry.CACHE_RETRY_MS, delay(wrapped(FileNotFoundException("span")), Facts(ytLoad = true, default = never)))
         assertEquals(LoadRetry.CACHE_RETRY_MS, delay(IOException("read"), Facts(ytLoad = true, fileError = true, default = never)))
+        // A Jukebox MP3 is in the listening cache too: fetched again from latex.gg.
+        assertEquals(LoadRetry.CACHE_RETRY_MS, delay(wrapped(FileNotFoundException("span")), Facts(mp3Load = true, default = never)))
         // The same file error on anything else (an asset, a manifest) is what the default says: a dead track.
         assertEquals(never, delay(wrapped(FileNotFoundException("asset")), Facts(ytLoad = false, default = never)))
         // A video that can't play isn't rescued by a cache miss on the same load.

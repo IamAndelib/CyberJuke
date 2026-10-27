@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fixture from './__fixtures__/runquery-sample.json';
-import { artworkUrl, isHiddenDoc, isMembersOnlyDoc, parseYouTubeId, smallArtworkUrl, tracksFromDocument, tracksFromRows, type FsDocument, type FsRunQueryRow } from './model';
+import { artworkUrl, audioKey, isHiddenDoc, isMembersOnlyDoc, parseYouTubeId, smallArtworkUrl, tracksFromDocument, tracksFromRows, type FsDocument, type FsRunQueryRow } from './model';
 
 const rows = fixture as unknown as FsRunQueryRow[];
 
@@ -236,6 +236,17 @@ describe('members-only and hidden posts', () => {
     expect(tracksFromDocument(base({ isBanned: { booleanValue: true } }))).toEqual([]);
     expect(tracksFromDocument(base({ isShadowBanned: { booleanValue: true } }))).toEqual([]);
     expect(tracksFromDocument(base({ isBanned: { booleanValue: false }, isShadowBanned: { booleanValue: false } }))).not.toEqual([]);
+  });
+});
+
+describe('audioKey', () => {
+  it('is the same for two links to one latex.gg file, in any case of host name', () => {
+    const a = { id: 'p1', ytId: '', mp3: 'https://latex.gg/share/IZq8cMcx.mp3' };
+    const b = { id: 'p2', ytId: '', mp3: 'https://LATEX.GG/share/IZq8cMcx.mp3' };
+    expect(audioKey(a)).toBe(audioKey(b));
+    expect(audioKey({ ...b, mp3: 'https://latex.gg/share/Other001.mp3' })).not.toBe(audioKey(a));
+    expect(audioKey({ id: 'v', ytId: 'abcdefghijk' })).toBe('abcdefghijk');
+    expect(audioKey({ id: 'placeholder', ytId: '' })).toBe('placeholder');
   });
 });
 

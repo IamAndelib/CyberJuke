@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test, FAKE_MP3_SECONDS, MP3_POSTS, coverUrl } from '../fixtures';
-import { expectStable, musicCalls, openNowPlaying, openSearch, start } from '../helpers';
+import { expectStable, musicCalls, openNowPlaying, openSearch, playerCalls, setOffline, start } from '../helpers';
 
 /** Jukebox MP3s (Cyberspace 4.0): posts whose audio is a latex.gg MP3 with a cover. */
 
@@ -93,4 +93,39 @@ test('an MP3 that is gone from latex.gg is skipped with a note', async ({ page }
   const row = await findInSearch(page, first.title);
   await row.getByTestId('track-play').click();
   await expect(page.getByTestId('toast').last()).toHaveText(`Skipped "${first.title}": unavailable`);
+});
+
+test('a liked MP3 is saved for offline by its file name: offline it stays bright and starts, an unsaved one is dimmed', async ({ page, backend }) => {
+  await start(page);
+  for (const p of [first, second]) {
+    await page.getByTestId('tab-home').click();
+    const row = await findInSearch(page, p.title);
+    await menu(page, row, 'menu-like');
+    await expect(page.getByTestId('toast').last()).toHaveText('Added to Liked songs');
+    await page.keyboard.press('Escape');
+  }
+  // Native hears of both by their audio ids (the file names), newest like first.
+  const audioIds = [second, first].map((p) => `mp3:${p.file}.mp3`);
+  await expect.poll(async () => (await playerCalls(page)).filter((c) => c[0] === 'setLikedIds').at(-1)).toEqual(['setLikedIds', audioIds]);
+  // Native reports the first one saved whole (as the listening-cache tests do).
+  await page.evaluate((ids) => (window as unknown as { __cyberjukeCache: { saved(ids: string[]): void } }).__cyberjukeCache.saved(ids), [`mp3:${first.file}.mp3`]);
+
+  await page.getByTestId('tab-library').click();
+  await page.getByTestId('lib-liked').click();
+  const rows = page.getByTestId('liked-list').getByTestId('track-row');
+  await expect(rows.getByTestId('track-title')).toHaveText([second.title, first.title]);
+  await setOffline(page, backend, true);
+  await expect(page.getByTestId('offline-banner')).toHaveText('[ offline ] no carrier · your liked songs still play');
+  const saved = rows.filter({ hasText: first.title });
+  const unsaved = rows.filter({ hasText: second.title });
+  await expect(saved).not.toHaveClass(/\boff\b/);
+  await expect(saved.getByTestId('track-play')).not.toHaveAttribute('aria-disabled');
+  await expect(unsaved).toHaveClass(/\boff\b/);
+  await expect(unsaved.getByTestId('track-play')).toHaveAttribute('aria-disabled', 'true');
+  // The unsaved one says so and nothing starts; the saved one plays.
+  await unsaved.getByTestId('track-play').click({ force: true });
+  await expect(page.getByTestId('toast').last()).toHaveText('Not saved yet. Needs a connection.');
+  await expect(page.getByTestId('mini-player')).toHaveCount(0);
+  await saved.getByTestId('track-play').click();
+  await expect(page.getByTestId('mini-title')).toHaveText(first.title);
 });

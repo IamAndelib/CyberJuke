@@ -29,6 +29,25 @@ export function hasAudio(t: Pick<Track, 'ytId' | 'mp3'> | null | undefined): boo
   return !!t && (YT_ID_RE.test(t.ytId) || isMp3Url(t.mp3));
 }
 
+/** A Jukebox MP3's audio id: `mp3:` and its latex.gg file name (the prefix as written, the file as MP3_URL_RE takes it). */
+const MP3_AUDIO_ID_RE = /^mp3:[A-Za-z0-9_-]+\.[Mm][Pp]3$/;
+
+/**
+ * What the native listening cache knows a track's audio by (SessionPolicy.isValidAudioId): a
+ * video id, or `mp3:<file>` for a Jukebox MP3. Liked, the saved set and the bridge carry these.
+ */
+export const isAudioId = (x: unknown): x is string => isStr(x) && (YT_ID_RE.test(x) || MP3_AUDIO_ID_RE.test(x));
+
+/**
+ * A track's audio id (isAudioId): its video id, else `mp3:<file>` of its MP3 link (as native
+ * builds it from the same file name), else '' (a placeholder: nothing to cache).
+ */
+export function audioIdOf(t: Pick<Track, 'ytId' | 'mp3'> | null | undefined): string {
+  if (!t) return '';
+  if (YT_ID_RE.test(t.ytId)) return t.ytId;
+  return isMp3Url(t.mp3) ? `mp3:${t.mp3.slice(t.mp3.lastIndexOf('/') + 1)}` : '';
+}
+
 /** Up next lists at most this many tracks (native sends as many: StateEncoder.MAX_UP_NEXT). */
 export const UP_NEXT_MAX = 50;
 

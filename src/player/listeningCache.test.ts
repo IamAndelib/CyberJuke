@@ -36,7 +36,7 @@ vi.mock('./native', async (orig) => ({ ...(await orig<object>()), JukePlayer: fa
 
 const lib = await import('../stores/library');
 const { savedOffline } = await import('../stores/savedOffline');
-const { LIKED_SEND_DELAY_MS, clearListeningCache, likedPayload, startListeningCache, ytIdsOf } = await import('./listeningCache');
+const { LIKED_SEND_DELAY_MS, audioIdsOf, clearListeningCache, likedPayload, startListeningCache } = await import('./listeningCache');
 
 const t = (id: string, membersOnly = false): Track => ({ id, ytId: id.padEnd(11, 'x'), membersOnly }) as Track;
 
@@ -91,6 +91,18 @@ describe('the listening cache wiring', () => {
     expect(likedPayload([t('m1', true), t('pub'), t('m1', true)])).toEqual({ ytIds: ['m1xxxxxxxxx', 'pubxxxxxxxx'], membersOnly: ['m1xxxxxxxxx'] });
   });
 
+  it('sends a liked Jukebox MP3 by its audio id, so native keeps it, saves it and drops it at sign-out if members-only', () => {
+    const mp3 = (id: string, file: string, membersOnly = false): Track => ({ id, ytId: '', mp3: `https://latex.gg/share/${file}.mp3`, membersOnly }) as Track;
+    expect(likedPayload([mp3('p1', 'IZq8cMcx'), t('pub'), mp3('p2', 'FEHdI7AK', true), mp3('p1', 'IZq8cMcx')])).toEqual({
+      ytIds: ['mp3:IZq8cMcx.mp3', 'pubxxxxxxxx', 'mp3:FEHdI7AK.mp3'],
+      membersOnly: ['mp3:FEHdI7AK.mp3'],
+    });
+    // Saved whole, native says so by the same id: it plays offline.
+    fake.listeners.get('cacheChanged')!({ ytIds: ['mp3:IZq8cMcx.mp3'] });
+    expect([...savedOffline.value]).toEqual(['mp3:IZq8cMcx.mp3']);
+    fake.listeners.get('cacheChanged')!({ ytIds: [] });
+  });
+
   it('signing out sends the new Liked at once, then signedOut, so native drops members-only audio', () => {
     lib.liked.value = [t('m1', true), t('pub')];
     vi.advanceTimersByTime(LIKED_SEND_DELAY_MS);
@@ -137,8 +149,8 @@ describe('the listening cache wiring', () => {
   });
 
   it('sends valid ids only, each once, at most what the bridge takes', () => {
-    expect(ytIdsOf([t('a'), { id: 'x', ytId: 'bad' } as Track, t('a'), t('b')])).toEqual(['axxxxxxxxxx', 'bxxxxxxxxxx']);
+    expect(audioIdsOf([t('a'), { id: 'x', ytId: 'bad' } as Track, { id: 'y', ytId: '', mp3: 'https://evil.example/x.mp3' } as Track, t('a'), t('b')])).toEqual(['axxxxxxxxxx', 'bxxxxxxxxxx']);
     const many = Array.from({ length: 2100 }, (_, i) => ({ id: `${i}`, ytId: `${i}`.padStart(11, 'v') }) as Track);
-    expect(ytIdsOf(many)).toHaveLength(2000);
+    expect(audioIdsOf(many)).toHaveLength(2000);
   });
 });

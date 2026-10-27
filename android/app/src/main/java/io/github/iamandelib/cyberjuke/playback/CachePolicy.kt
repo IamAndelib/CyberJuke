@@ -22,7 +22,10 @@ internal object FormatKeep {
  * and file, instead of the stream URL, which expires and changes with every extraction. The
  * file's length (`clen` in the stream URL) is part of it, so another file under the same format
  * (a re-encode, a dubbed track) never mixes with the bytes of the first; `yt:<ytId>:<itag>`
- * when the URL doesn't say. Pure (CachePolicyTest).
+ * when the URL doesn't say. A Jukebox MP3's key is its audio id, `mp3:<file>` ([ofMp3]): one
+ * fixed file per post on latex.gg, with no format or length to tell apart. Every key names the
+ * audio id it keeps ([audioIdOf]), the 11-character video id or the MP3's, which never meet.
+ * Pure (CachePolicyTest).
  */
 internal object CacheKeys {
     private const val PREFIX = "yt:"
@@ -46,10 +49,22 @@ internal object CacheKeys {
     fun of(ytId: String, itag: Int, clen: Long? = null): String =
         if (clen != null && clen > 0) "$PREFIX$ytId:$itag:$clen" else "$PREFIX$ytId:$itag"
 
-    /** A YouTube audio key: only these go through the cache (the CI tone and HLS don't). */
+    /** A YouTube audio key. */
     fun isYt(key: String?): Boolean = key != null && parse(key) != null
 
     fun ytIdOf(key: String): String? = parse(key)?.first
+
+    /** A Jukebox MP3's key ([SessionPolicy.mp3AudioId] of its file name), or null for anything else. */
+    fun ofMp3(file: String?): String? = SessionPolicy.mp3AudioId(file)
+
+    /** A Jukebox MP3's key. */
+    fun isMp3(key: String?): Boolean = SessionPolicy.mp3FileOfAudioId(key) != null
+
+    /** A key that goes through the cache: YouTube audio or a Jukebox MP3 (the CI tone and HLS don't). */
+    fun isCacheable(key: String?): Boolean = isYt(key) || isMp3(key)
+
+    /** The audio id [key] keeps: the video id of a `yt:` key, an MP3's key itself; null for anything else. */
+    fun audioIdOf(key: String): String? = ytIdOf(key) ?: key.takeIf { isMp3(it) }
 
     fun itagOf(key: String): Int? = parse(key)?.second
 
@@ -81,11 +96,14 @@ internal object CacheKeys {
     }
 
     /**
-     * A `yt:` load's flags on its way into the cache: without FLAG_DONT_CACHE_IF_LENGTH_UNKNOWN.
+     * A cached load's flags on its way into the cache: without FLAG_DONT_CACHE_IF_LENGTH_UNKNOWN.
      * ExoPlayer sets it on every progressive load, to keep a live stream out of a cache, and
      * CacheDataSink then writes nothing when the response has no Content-Length (googlevideo's
-     * answer to a POST may have none). A YouTube audio file is never live: it is cached anyway,
-     * and the cache stores its length when the read reaches its end.
+     * answer to a POST may have none). A YouTube audio file is never live, nor is a Jukebox MP3
+     * (an uploaded file): each is cached anyway, and the cache stores its length when the read
+     * reaches its end. (Whether latex.gg sends a Content-Length and honours Range requests, which
+     * a partly cached MP3 needs for the rest, is not verified from here; without Range support
+     * the rest is read from the start of the file again, as any HTTP source does.)
      */
     fun cacheFlags(flags: Int): Int = flags and DataSpec.FLAG_DONT_CACHE_IF_LENGTH_UNKNOWN.inv()
 
@@ -122,21 +140,32 @@ internal object CacheKeys {
         val itag = pick(whole.mapNotNull { itagOf(it) }, null, rungItag, wantedBps) ?: return null
         return whole.firstOrNull { itagOf(it) == itag }
     }
+
+    /**
+     * The key to play of [audioId]'s [whole] copies: a Jukebox MP3 has one file and no formats,
+     * so its whole copy plays whatever the quality setting or a resume asks; a video's is
+     * [pickKey]'s choice.
+     */
+    fun pickFor(audioId: String, whole: List<String>, keepKey: String?, rungItag: Int?, wantedBps: Int): String? =
+        if (isMp3(audioId)) whole.firstOrNull() else pickKey(whole, keepKey, rungItag, wantedBps)
 }
 
 /**
  * The bookkeeping behind JukeCacheEvictor: what the cache holds per key (the sum of its spans,
- * when it was last used), and which videos are liked, in order. The cache has a size limit
- * (changeable); over it, whole keys go:
- * 1. listening entries (not liked), least recently used first;
- * 2. liked entries only when liked songs alone are over the limit, least recently liked first.
+ * when it was last used), and which audio ids (videos and Jukebox MP3s) are liked, in order. The
+ * cache has a size limit (changeable); over it, whole keys go:
+ * 1. listening entries (not liked), least recently used first; the one being written last;
+ * 2. liked entries only when liked songs alone are over the limit (a smaller limit, or a liked
+ *    song being written), least recently liked first.
+ * A song that isn't liked never pushes a liked one out: when it doesn't fit beside the liked
+ * songs (a long Jukebox mix), it is the one that goes, and playback reads on from the network.
  *
  * Kept up to date incrementally from the cache's span callbacks (no scans); only a change of the
  * liked list sorts the entries again. Not thread-safe: AudioCache calls it under the cache's
  * lock. Pure (CachePolicyTest).
  */
 internal class CacheLedger(limitBytes: Long) {
-    private class Entry(val key: String, val ytId: String) {
+    private class Entry(val key: String, val audioId: String) {
         var bytes = 0L
         var touched = 0L
 
@@ -145,7 +174,7 @@ internal class CacheLedger(limitBytes: Long) {
     }
 
     private val entries = HashMap<String, Entry>()
-    private val keysByYt = HashMap<String, MutableSet<String>>()
+    private val keysByAudio = HashMap<String, MutableSet<String>>()
 
     /** Listening entries, least recently used first. */
     private val listening = TreeSet<Entry>(compareBy<Entry>({ it.touched }, { it.key }))
@@ -155,7 +184,7 @@ internal class CacheLedger(limitBytes: Long) {
 
     private var rank: Map<String, Int> = emptyMap()
 
-    /** The liked videos, newest like first. */
+    /** The liked audio ids, newest like first. */
     var liked: List<String> = emptyList()
         private set
 
@@ -170,11 +199,11 @@ internal class CacheLedger(limitBytes: Long) {
         private set
 
     fun onAdded(key: String, bytes: Long, touched: Long) {
-        val ytId = CacheKeys.ytIdOf(key) ?: key
-        val e = entries[key] ?: Entry(key, ytId).also {
-            it.likedRank = rank[ytId] ?: -1
+        val audioId = CacheKeys.audioIdOf(key) ?: key
+        val e = entries[key] ?: Entry(key, audioId).also {
+            it.likedRank = rank[audioId] ?: -1
             entries[key] = it
-            keysByYt.getOrPut(ytId) { HashSet(2) }.add(key)
+            keysByAudio.getOrPut(audioId) { HashSet(2) }.add(key)
         }
         unlist(e)
         e.bytes += bytes
@@ -195,9 +224,9 @@ internal class CacheLedger(limitBytes: Long) {
             return
         }
         entries.remove(key)
-        keysByYt[e.ytId]?.let { keys ->
+        keysByAudio[e.audioId]?.let { keys ->
             keys.remove(key)
-            if (keys.isEmpty()) keysByYt.remove(e.ytId)
+            if (keys.isEmpty()) keysByAudio.remove(e.audioId)
         }
     }
 
@@ -207,7 +236,7 @@ internal class CacheLedger(limitBytes: Long) {
      */
     fun resetSpans() {
         entries.clear()
-        keysByYt.clear()
+        keysByAudio.clear()
         listening.clear()
         likedEntries.clear()
         total = 0L
@@ -223,54 +252,68 @@ internal class CacheLedger(limitBytes: Long) {
     }
 
     /**
-     * The liked videos, newest like first (unliking makes one an ordinary listening entry).
+     * The liked audio ids, newest like first (unliking makes one an ordinary listening entry).
      * Returns the ones liked just now: those new since the last call when there are at most
      * [MAX_FRESH] (a few hearts tapped); none on the first call ([known] false, nothing to compare
      * with) or after a bigger change (a sign-in bringing likes back): those are the backfill's.
      */
-    fun setLiked(ytIds: List<String>, known: Boolean = true): List<String> {
+    fun setLiked(ids: List<String>, known: Boolean = true): List<String> {
         val before = rank
-        val next = HashMap<String, Int>(ytIds.size * 2)
-        ytIds.forEachIndexed { i, id -> next.putIfAbsent(id, i) }
-        val added = if (known) ytIds.filter { it !in before }.distinct() else emptyList()
+        val next = HashMap<String, Int>(ids.size * 2)
+        ids.forEachIndexed { i, id -> next.putIfAbsent(id, i) }
+        val added = if (known) ids.filter { it !in before }.distinct() else emptyList()
         val fresh = if (added.size <= MAX_FRESH) added else emptyList()
         rank = next
-        liked = ytIds.distinct()
+        liked = ids.distinct()
         listening.clear()
         likedEntries.clear()
         likedBytes = 0L
         for (e in entries.values) {
-            e.likedRank = next[e.ytId] ?: -1
+            e.likedRank = next[e.audioId] ?: -1
             if (e.likedRank >= 0) likedBytes += e.bytes
             relist(e)
         }
         return fresh
     }
 
-    fun isLiked(ytId: String): Boolean = ytId in rank
+    fun isLiked(audioId: String): Boolean = audioId in rank
 
-    /** The keys of [ytId]'s cached formats, most recently used first. */
-    fun keysOf(ytId: String): List<String> =
-        keysByYt[ytId]?.mapNotNull { entries[it] }?.sortedByDescending { it.touched }?.map { it.key } ?: emptyList()
+    /** The keys of [audioId]'s cached formats, most recently used first. */
+    fun keysOf(audioId: String): List<String> =
+        keysByAudio[audioId]?.mapNotNull { entries[it] }?.sortedByDescending { it.touched }?.map { it.key } ?: emptyList()
 
-    /** The cached bytes of [key] (0 when none). Tests only. */
+    /** The cached bytes of [key] (0 when none). */
     fun bytesOf(key: String): Long = entries[key]?.bytes ?: 0L
 
     /**
-     * The keys to remove, in order, so that [extra] more bytes fit under the limit; never
-     * [protect] (the key being written). Empty when it all fits.
+     * The keys to remove, in order, so that [extra] more bytes of [protect] (the key being
+     * written; null for none, as after a smaller limit) fit under the limit. Empty when it all
+     * fits. Other listening entries go first; then, for a [protect] that isn't liked, only that
+     * key itself (once it doesn't fit beside the liked songs), never a liked one; otherwise the
+     * liked entries other than [protect].
      */
     fun victims(extra: Long = 0L, protect: String? = null): List<String> {
         var over = total + extra - limit
         if (over <= 0) return emptyList()
         val out = ArrayList<String>()
-        for (set in listOf(listening, likedEntries)) {
-            for (e in set) {
-                if (e.key == protect) continue
-                out.add(e.key)
-                over -= e.bytes
-                if (over <= 0) return out
-            }
+        for (e in listening) {
+            if (e.key == protect) continue
+            out.add(e.key)
+            over -= e.bytes
+            if (over <= 0) return out
+        }
+        if (protect != null && !isLiked(CacheKeys.audioIdOf(protect) ?: protect)) {
+            // As Media3's LeastRecentlyUsedCacheEvictor may: the spans of the key being written
+            // go (its content stays while the write holds its lock), and playback reads what it
+            // needs again from the network.
+            if (bytesOf(protect) > 0) out.add(protect)
+            return out
+        }
+        for (e in likedEntries) {
+            if (e.key == protect) continue
+            out.add(e.key)
+            over -= e.bytes
+            if (over <= 0) return out
         }
         return out
     }
@@ -384,6 +427,22 @@ internal enum class SaveFailure {
 }
 
 /**
+ * Whether a liked save's writer was refused for good (not again this service's life), from the
+ * HTTP status it got ([httpCode], null for none). A video's link refused at all: expired or a
+ * block. A Jukebox MP3 ([mp3]) only on a 4xx that says the file is gone or private, as playback
+ * never retries one ([JukeLoadErrorPolicy]). latex.gg failing (a 5xx), timing out (408), rate
+ * limiting (429) or refusing a range (416, from a length it never sent) is a strike instead,
+ * tried again later and given up on after [SaveStrikes.MAX]. Pure (CachePolicyTest).
+ */
+internal object SaveRefusal {
+    /** Playback's "not now" statuses ([LoadRetry.TRANSIENT_HTTP]), and a range asked from a length never sent. */
+    private val TRANSIENT_4XX = LoadRetry.TRANSIENT_HTTP + 416
+
+    fun refused(httpCode: Int?, mp3: Boolean): Boolean =
+        httpCode != null && (!mp3 || (httpCode in 400..499 && httpCode !in TRANSIENT_4XX))
+}
+
+/**
  * Saves that stopped (not cancelled) per song, and when each may be tried again: after the n-th
  * stop the song waits [FIRST_WAIT_MS] doubled each time (30 s, 1, 2, 4 min), the [MAX]th stop
  * gives up on it for the service's life. Media3's DownloadManager retries a download five times
@@ -396,22 +455,22 @@ internal class SaveStrikes {
     /** When each waiting song's retry is due; only entries not yet due are kept. */
     private val dueAt = HashMap<String, Long>()
 
-    /** Counts a stop at [now]; true when [ytId] is to be given up on now, else it waits its turn. */
-    fun stopped(ytId: String, now: Long): Boolean {
-        val n = (counts[ytId] ?: 0) + 1
-        counts[ytId] = n
+    /** Counts a stop at [now]; true when [audioId] is to be given up on now, else it waits its turn. */
+    fun stopped(audioId: String, now: Long): Boolean {
+        val n = (counts[audioId] ?: 0) + 1
+        counts[audioId] = n
         if (n >= MAX) {
-            dueAt.remove(ytId)
+            dueAt.remove(audioId)
             return true
         }
-        dueAt[ytId] = now + waitMs(n)
+        dueAt[audioId] = now + waitMs(n)
         return false
     }
 
-    /** [ytId] was saved after all: its stops are forgotten, so a later trouble starts afresh. */
-    fun forget(ytId: String) {
-        counts.remove(ytId)
-        dueAt.remove(ytId)
+    /** [audioId] was saved after all: its stops are forgotten, so a later trouble starts afresh. */
+    fun forget(audioId: String) {
+        counts.remove(audioId)
+        dueAt.remove(audioId)
     }
 
     /** The songs waiting for their retry at [now] (not to be saved yet). */
@@ -435,16 +494,16 @@ internal class SaveStrikes {
 }
 
 /**
- * Videos whose cached copy turned out to be missing when read (evicted, or its file gone): for
- * [SKIP_MS] they are not served from the cache, so the load's retry goes to the network instead
- * of to the same miss. Thread-safe. Pure (CachePolicyTest).
+ * Songs (audio ids: videos and Jukebox MP3s) whose cached copy turned out to be missing when read
+ * (evicted, or its file gone): for [SKIP_MS] they are not served from the cache, so the load's
+ * retry goes to the network instead of to the same miss. Thread-safe. Pure (CachePolicyTest).
  */
 internal class CacheMisses(private val clock: () -> Long = { System.currentTimeMillis() }) {
     private val lru = TtlLru<String, Boolean>(64)
 
-    fun missed(ytId: String) = lru.put(ytId, true, clock() + SKIP_MS)
+    fun missed(audioId: String) = lru.put(audioId, true, clock() + SKIP_MS)
 
-    fun recent(ytId: String): Boolean = lru.get(ytId, clock()) == true
+    fun recent(audioId: String): Boolean = lru.get(audioId, clock()) == true
 
     companion object {
         const val SKIP_MS = 60_000L
@@ -452,8 +511,9 @@ internal class CacheMisses(private val clock: () -> Long = { System.currentTimeM
 }
 
 /**
- * Members-only audio in the cache, so signing out removes it all, whatever put it there:
- * - [mark]: a video known to be members-only (a queue item marked so, a members-only like);
+ * Members-only audio in the cache, so signing out removes it all, whatever put it there. By
+ * audio id ([SessionPolicy.isValidAudioId]): a members-only Jukebox MP3 goes like a video.
+ * - [mark]: a song known to be members-only (a queue item marked so, a members-only like);
  * - [onCached]: it reached the cache, so it is tagged (AudioCache keeps the tags in a file);
  * - [signOut]: every tagged or known one is to go, and while signed out none of them may come
  *   back in ([denied]: the cache is bypassed for them, and a span that slips in is removed);
@@ -469,33 +529,33 @@ internal class MembersAudio {
     private var signedOut = false
 
     @Synchronized
-    fun mark(ytId: String) {
-        known.add(ytId)
-        if (signedOut) deny.add(ytId)
+    fun mark(audioId: String) {
+        known.add(audioId)
+        if (signedOut) deny.add(audioId)
     }
 
     /** The tags kept from an earlier run. */
     @Synchronized
-    fun load(ytIds: Collection<String>) {
-        tags.addAll(ytIds)
+    fun load(audioIds: Collection<String>) {
+        tags.addAll(audioIds)
     }
 
-    /** [ytId]'s audio reached the cache; true when that's a new tag (to be written down). */
+    /** [audioId]'s audio reached the cache; true when that's a new tag (to be written down). */
     @Synchronized
-    fun onCached(ytId: String): Boolean = !signedOut && ytId in known && tags.add(ytId)
+    fun onCached(audioId: String): Boolean = !signedOut && audioId in known && tags.add(audioId)
 
     @Synchronized
     fun tagged(): Set<String> = HashSet(tags)
 
-    /** The videos marked members-only in this run. */
+    /** The songs marked members-only in this run. */
     @Synchronized
     fun marked(): Set<String> = HashSet(known)
 
-    /** What [reconcile] found: the videos whose audio is to go, and whether a tag is new. */
+    /** What [reconcile] found: the songs whose audio is to go, and whether a tag is new. */
     data class Reconciled(val remove: List<String>, val tagged: Boolean)
 
     /**
-     * Brings the audio of members-only videos already in the cache ([inCache]) in line: signed
+     * Brings the audio of members-only songs already in the cache ([inCache]) in line: signed
      * out, it is to go ([Reconciled.remove]); signed in, it is tagged ([Reconciled.tagged]: a new
      * tag, to be written down). For marks that come after the audio was counted in (the cache
      * was starting then, or the audio was already there).
@@ -511,9 +571,9 @@ internal class MembersAudio {
     }
 
     @Synchronized
-    fun denied(ytId: String): Boolean = signedOut && ytId in deny
+    fun denied(audioId: String): Boolean = signedOut && audioId in deny
 
-    /** Signed out: the videos whose audio is to go now. */
+    /** Signed out: the songs whose audio is to go now. */
     @Synchronized
     fun signOut(): Set<String> {
         signedOut = true
@@ -522,10 +582,10 @@ internal class MembersAudio {
         return gone
     }
 
-    /** The audio of [ytIds] is out of the cache: their tags go. */
+    /** The audio of [audioIds] is out of the cache: their tags go. */
     @Synchronized
-    fun removed(ytIds: Collection<String>) {
-        tags.removeAll(ytIds.toSet())
+    fun removed(audioIds: Collection<String>) {
+        tags.removeAll(audioIds.toSet())
     }
 
     @Synchronized
@@ -545,9 +605,14 @@ internal class MembersAudio {
  *   again after [MIN_GAP_MS] like any other.
  * - Older likes (the backfill) only on an unmetered network (Wi-Fi), at most one extraction per
  *   [MIN_GAP_MS], and only while the cache has room for liked songs ([Facts.likedFull]).
- * - Never while offline, during a YouTube back-off ([Facts.quiet]) or while playback needs the
- *   network ([PlaybackNeed]): playback always comes first (a running save gives way, [keepGoing]).
+ * - Never while offline, or while playback needs the network ([PlaybackNeed]): playback always
+ *   comes first (a running save gives way, [keepGoing]). During a YouTube back-off
+ *   ([Facts.quiet]) only Jukebox MP3s (audio ids `mp3:<file>`): no extraction, not YouTube's.
  * - Never without a cache to save into ([Facts.cache]): no extraction for nothing.
+ * - Never a song too big for it ([size]; a long Jukebox mix can be 150 MB): over the limit less
+ *   [LISTENING_RESERVE_BYTES] it is given up on; liked just now, it is saved on mobile data only
+ *   up to [FRESH_ON_DATA_MAX_BYTES], and a longer one is left to the Wi-Fi backfill. The save
+ *   learns the size when its request opens, or as the bytes come when the response doesn't say.
  *
  * Event-driven: asked again when something it depends on changes. The one timer is
  * [recheckInMs]: a one-shot re-check for the end of the gap, pending only while the gap alone
@@ -560,6 +625,9 @@ internal object LikedSaverPolicy {
 
     /** Liked songs leave this much of the limit to listening (the playing and next tracks). */
     const val LISTENING_RESERVE_BYTES = 32L * 1024 * 1024
+
+    /** A song liked just now is saved on mobile data up to this size; a longer one waits for Wi-Fi. */
+    const val FRESH_ON_DATA_MAX_BYTES = 40L * 1024 * 1024
 
     data class Facts(
         /** Newest like first. */
@@ -577,6 +645,7 @@ internal object LikedSaverPolicy {
         val skip: Set<String> = emptySet(),
         val online: Boolean = true,
         val unmetered: Boolean = true,
+        /** A YouTube back-off: no video is saved (no extraction); a Jukebox MP3 still is. */
         val quiet: Boolean = false,
         val playbackNeedsNetwork: Boolean = false,
         val busy: Boolean = false,
@@ -598,14 +667,16 @@ internal object LikedSaverPolicy {
      */
     fun freshAfterClear(liked: Collection<String>, pair: Set<String>): Set<String> = pair.filterTo(HashSet()) { it in liked }
 
-    /** The video to save now, or null. */
+    /** The song (audio id) to save now, or null. */
     fun next(f: Facts): String? = pick(f, f.sinceLastMs)
 
     private fun pick(f: Facts, sinceLastMs: Long): String? {
-        if (!f.cache || f.busy || !f.online || f.quiet || f.playbackNeedsNetwork) return null
+        if (!f.cache || f.busy || !f.online || f.playbackNeedsNetwork) return null
         // Each candidate's denied answer is asked once (and only for those looked at).
         val denied = HashMap<String, Boolean>()
-        val todo = f.liked.asSequence().filter { it !in f.saved && it !in f.skip && !denied.getOrPut(it) { f.denied(it) } }
+        val todo = f.liked.asSequence().filter {
+            it !in f.saved && it !in f.skip && (!f.quiet || CacheKeys.isMp3(it)) && !denied.getOrPut(it) { f.denied(it) }
+        }
         todo.firstOrNull { it in f.fresh && it !in f.tried }?.let { return it }
         if (sinceLastMs < MIN_GAP_MS) return null
         todo.firstOrNull { it in f.fresh }?.let { return it }
@@ -625,20 +696,46 @@ internal object LikedSaverPolicy {
         return listOfNotNull(gap, f.retryInMs).minOrNull()
     }
 
-    /** Whether a save of a [fresh] (or backfill) like may go on, or must stop and give way. */
-    fun keepGoing(f: Facts, fresh: Boolean): Boolean =
-        f.cache && f.online && !f.quiet && !f.playbackNeedsNetwork && (fresh || f.unmetered)
+    /** Whether a save of a [fresh] (or backfill) like, a Jukebox MP3's if [mp3], may go on, or must stop and give way. */
+    fun keepGoing(f: Facts, fresh: Boolean, mp3: Boolean = false): Boolean =
+        f.cache && f.online && (mp3 || !f.quiet) && !f.playbackNeedsNetwork && (fresh || f.unmetered)
+
+    /**
+     * What a song's size ([bytes]: its length, or what has come so far when that isn't known)
+     * means for its save, in a cache of [limit] bytes:
+     * - [SaveSize.TOO_BIG] over the limit less [LISTENING_RESERVE_BYTES]: saved, it would leave
+     *   listening no room and liked songs alone over the limit, pushing each other out, and the
+     *   backfill would download it again and again;
+     * - [SaveSize.WIFI_ONLY] for one liked just now ([fresh]) on mobile data ([unmetered] false)
+     *   over [FRESH_ON_DATA_MAX_BYTES]: left to the Wi-Fi backfill;
+     * - else [SaveSize.FITS].
+     */
+    fun size(bytes: Long, limit: Long, fresh: Boolean, unmetered: Boolean): SaveSize = when {
+        bytes > limit - LISTENING_RESERVE_BYTES -> SaveSize.TOO_BIG
+        fresh && !unmetered && bytes > FRESH_ON_DATA_MAX_BYTES -> SaveSize.WIFI_ONLY
+        else -> SaveSize.FITS
+    }
+}
+
+/** What a song's size means for its liked save ([LikedSaverPolicy.size]). */
+internal enum class SaveSize {
+    FITS,
+    TOO_BIG,
+    WIFI_ONLY,
 }
 
 /**
- * How a liked save ended: [SAVED] (whole in the cache), [FAILED] (not this service's life),
- * [STOPPED] (a strike: tried again later, [SaveStrikes]), [CANCELLED] (no fault of the song). Pure.
+ * How a liked save ended: [SAVED] (whole in the cache), [FAILED] (not this service's life: also
+ * a song too big for the cache), [STOPPED] (a strike: tried again later, [SaveStrikes]),
+ * [CANCELLED] (no fault of the song), [WIFI_ONLY] (liked just now, too long for mobile data: no
+ * longer liked just now, so the Wi-Fi backfill saves it). Pure.
  */
 internal enum class SaveOutcome {
     SAVED,
     FAILED,
     STOPPED,
     CANCELLED,
+    WIFI_ONLY,
     ;
 
     companion object {

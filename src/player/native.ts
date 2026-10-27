@@ -138,6 +138,8 @@ interface JukePlayerPlugin {
    * in the cache last, saves a few liked since the last call at once and older ones on Wi-Fi, so
    * they play offline. The upkeep calls (this, setCacheLimit, clearCache, signedOut) resolve once
    * done, and reject when there is no cache.
+   * Every `ytIds` here, in cachedIds and in cacheChanged holds audio ids (isAudioId): a video id,
+   * or `mp3:<file>` for a Jukebox MP3 (audioIdOf). Native drops any other entry.
    */
   setLikedIds(o: { ytIds: string[]; membersOnly: string[] }): Promise<void>;
   /** The listening cache's size; 128, 256 or 512 (anything else is 256). A smaller one evicts at once. */
@@ -151,7 +153,7 @@ interface JukePlayerPlugin {
   signedOut(): Promise<void>;
   /** Signed in: members-only audio may be cached again. */
   signedIn(): Promise<void>;
-  /** The liked songs saved whole on the phone, by ytId: they play offline. */
+  /** The liked songs saved whole on the phone, by audio id: they play offline. */
   cachedIds(): Promise<{ ytIds: string[] }>;
   /** Keep a screen area (CSS px relative to the WebView) out of the system back gesture; null clears it. */
   setGestureExclusion(rect: { left: number; top: number; width: number; height: number } | null): Promise<void>;

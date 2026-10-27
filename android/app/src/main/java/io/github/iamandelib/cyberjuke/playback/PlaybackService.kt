@@ -95,8 +95,9 @@ class PlaybackService : MediaSessionService() {
     private var oneAhead: OneAheadLoadControl? = null
 
     /**
-     * Where every player of the service loads from ([buildPlayer]): YouTube audio through the
-     * listening cache, the network behind it, with the resolver giving each load its URL and key.
+     * Where every player of the service loads from ([buildPlayer]): YouTube audio and Jukebox
+     * MP3s through the listening cache, the network behind it, with the resolver giving each load
+     * its URL and key.
      */
     private lateinit var dataSources: DataSource.Factory
 
@@ -226,8 +227,8 @@ class PlaybackService : MediaSessionService() {
             override fun stillLoading(): Set<String> {
                 val p = player ?: return emptySet()
                 val next = p.nextMediaItemIndex
-                val nextId = if (next == C.INDEX_UNSET || next >= p.mediaItemCount) null else JukeUris.ytIdOf(p.getMediaItemAt(next))
-                return PlaybackNeed.stillLoading(loadOf(p), JukeUris.ytIdOf(p.currentMediaItem), nextId)
+                val nextId = if (next == C.INDEX_UNSET || next >= p.mediaItemCount) null else JukeUris.audioIdOf(p.getMediaItemAt(next))
+                return PlaybackNeed.stillLoading(loadOf(p), JukeUris.audioIdOf(p.currentMediaItem), nextId)
             }
 
             override fun playbackNeedsNetwork(): Boolean = player?.let { PlaybackNeed.needsNetwork(loadOf(it)) } == true
@@ -527,8 +528,8 @@ class PlaybackService : MediaSessionService() {
 
         // DefaultDataSource handles asset:// (CI test tone) and delegates http(s) to OkHttp,
         // with the streaming timeouts (a stall is noticed, and retried, while the buffer plays).
-        // YouTube audio goes through the listening cache in between (the resolver gives it its
-        // key): what plays is kept, and what's kept whole plays without the network.
+        // YouTube audio and Jukebox MP3s go through the listening cache in between (the resolver
+        // gives each its key): what plays is kept, and what's kept whole plays without the network.
         AudioCache.init(this, PlayerPrefsStore.cacheMb(this))
         AudioCache.addListener(likedSaver.cacheListener)
         AudioCache.addLikedListener(likedSaver.likedListener)
@@ -1210,8 +1211,6 @@ class PlaybackService : MediaSessionService() {
         handler.removeCallbacks(transitionDeadline)
     }
 
-    private fun gateKeyOf(item: MediaItem?): String? = JukeUris.ytIdOf(item) ?: JukeUris.mp3UrlOf(item)
-
     /** Tells the load control which items play now and next (in play order: shuffle, repeat). */
     private fun updateLoadAhead() {
         val lc = oneAhead ?: return
@@ -1231,11 +1230,11 @@ class PlaybackService : MediaSessionService() {
         lc.currentIndex = p.currentMediaItemIndex
         // The pair may open its stream (the next one must prepare, whether it loads ahead or not);
         // the item after next, prepared early, waits.
-        // A Jukebox MP3 never waits at the gate, but is in the pair: two MP3s in a row must not
-        // leave it empty (which lets everything through).
+        // By audio id: a Jukebox MP3 waits its turn too, and two MP3s in a row must not leave the
+        // pair empty (which lets everything through). The liked saver knows them by it as well.
         val ids = HashSet<String>(2)
-        gateKeyOf(p.currentMediaItem)?.let { ids.add(it) }
-        if (next != C.INDEX_UNSET) gateKeyOf(p.getMediaItemAt(next))?.let { ids.add(it) }
+        JukeUris.audioIdOf(p.currentMediaItem)?.let { ids.add(it) }
+        if (next != C.INDEX_UNSET) JukeUris.audioIdOf(p.getMediaItemAt(next))?.let { ids.add(it) }
         loadingIds = ids
         // During a crossfade the incoming player's track is this one's next: in the pair.
         YtDataSpecResolver.gate.allow(ids)

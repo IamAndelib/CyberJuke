@@ -15,7 +15,8 @@ import java.util.concurrent.atomic.AtomicLong
  * load goes through here: only https YouTube media URLs leave it (L5), plus the CI test tone
  * asset on debuggable builds. A track saved whole in the listening cache ([AudioCache]) leaves
  * with no URL at all, only its cache key. A Jukebox MP3 (cyberjuke://mp3/<file>) leaves as
- * its latex.gg link, as is: no extraction and no YouTube headers, only its turn at the gate.
+ * its latex.gg link, as is, with its cache key `mp3:<file>` ([CacheKeys.ofMp3]): no extraction
+ * and no YouTube headers, only its turn at the gate; saved whole, with its key alone.
  */
 @OptIn(UnstableApi::class)
 internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
@@ -30,8 +31,14 @@ internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
 
     override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
         JukeUris.mp3UrlOf(dataSpec.uri)?.let { url ->
+            val audioId = JukeUris.audioIdOf(dataSpec.uri) ?: throw IOException("Not a Jukebox MP3")
             // Its turn, too: prepared early, the file after next would be requested now.
-            gate.await(url)
+            gate.await(audioId)
+            // Saved whole in the listening cache: played from it with no request. Its URI stays
+            // ours, as a video's does (CacheMissGuard). One file, so any whole copy will do.
+            if (!AudioCache.misses.recent(audioId)) {
+                AudioCache.wholeKey(audioId)?.let { key -> return dataSpec.buildUpon().setKey(key).build() }
+            }
             return mp3Spec(dataSpec, url)
         }
         val ytId = JukeUris.ytIdOf(dataSpec.uri)
@@ -73,11 +80,16 @@ internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
         return spec.buildUpon().setKey(CacheKeys.of(ytId, stream.itag, StreamUrls.clen(stream.url))).build()
     }
 
-    /** A Jukebox MP3: the file itself, from latex.gg ([Hosts.isLatexMp3]), with the request's own headers. */
+    /**
+     * A Jukebox MP3: the file itself, from latex.gg ([Hosts.isLatexMp3]), with the request's own
+     * headers and its cache key ([CacheKeys.ofMp3]), so it is read from and written to the
+     * listening cache. The liked saver's too.
+     */
     @Throws(IOException::class)
     fun mp3Spec(dataSpec: DataSpec, url: String): DataSpec {
         if (!Hosts.isLatexMp3(url)) throw IOException("Refusing to load an MP3 that isn't a latex.gg share link")
-        return dataSpec.buildUpon().setUri(Uri.parse(url)).build()
+        val key = CacheKeys.ofMp3(SessionPolicy.mp3FileOf(url)) ?: throw IOException("Not a Jukebox MP3")
+        return dataSpec.buildUpon().setUri(Uri.parse(url)).setKey(key).build()
     }
 
     private fun requestSpec(dataSpec: DataSpec, url: String, headers: Map<String, String>, rn: Boolean): DataSpec {
