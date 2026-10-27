@@ -72,7 +72,7 @@ When the preview has passed testing:
 
 1. Tell me, and I'll move the CHANGELOG's "Unreleased" notes into a new version section (done for 1.0.0).
 2. On GitHub go to **Actions → Release → Run workflow**, type `1.0.0`, then **Run**.
-3. If you added yourself as a required reviewer (step 2, optional), the run pauses at **Sign and publish**: open it, click **Review deployments**, tick `release` and **Approve**. Otherwise it simply carries on.
+3. If you added yourself as a required reviewer (step 2, optional), the run pauses at **Sign**: open it, click **Review deployments**, tick `release` and **Approve**. Otherwise it simply carries on.
 4. A few minutes later, **Releases** shows **CyberJuke v1.0.0** with `CyberJuke-1.0.0.apk`. That's the real app, signed with your release key.
 
 Later versions work the same way: add a CHANGELOG section, then run Release with the new number (for example `1.0.1`).

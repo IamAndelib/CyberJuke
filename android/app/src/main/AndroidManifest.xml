@@ -12,15 +12,22 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
+        <!-- No WebView usage metrics to Google: the app sends no analytics of any kind. -->
+        <meta-data android:name="android.webkit.WebView.MetricsOptOut" android:value="true" />
+
         <!-- configChanges: these don't recreate the activity (which would reload the page and
              lose its state). fontScale and fontWeightAdjustment are left out on purpose: the
-             WebView takes the text size and bold text up only when it is created. -->
+             WebView takes the text size and bold text up only when it is created.
+             taskAffinity="": its task shares an affinity with no other task, defence in depth;
+             the launcher, Recents and the media notification (an explicit PendingIntent to
+             this activity) open it as before. -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|layoutDirection|smallestScreenSize|screenLayout|uiMode|colorMode|navigation|density|mcc|mnc|grammaticalGender"
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
+            android:taskAffinity=""
             android:exported="true">
 
             <intent-filter>

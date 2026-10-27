@@ -12,6 +12,9 @@ concurrency:
 
 permissions: {}
 
+env:
+  NODE_VERSION: '22.22.0' # exact: the Release build; the recipe's Debian nodejs must match it (reproducible.yml debian_node)
+
 jobs:
   screenshots:
     name: Render screenshots
@@ -26,7 +29,7 @@ jobs:
 
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - run: npm ci --ignore-scripts

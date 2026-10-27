@@ -18,9 +18,13 @@
     members-only tags are in no_backup/ (audio/, audio-liked, audio-members), which Android
     never backs up.
   The cache directory (lyrics) is never backed up by Android.
+
+  disableIfNoEncryptionCapabilities: what is left (settings, recent searches) goes to the cloud
+  only in an end-to-end encrypted backup, which needs a screen lock. full_backup_content.xml
+  has no such switch (only per-<include> flags), so on Android 11 and older it stays as it was.
 -->
 <data-extraction-rules>
-    <cloud-backup>
+    <cloud-backup disableIfNoEncryptionCapabilities="true">
         <exclude domain="sharedpref" path="cyberjuke_secure.xml" />
         <exclude domain="sharedpref" path="last_session.xml" />
         <exclude domain="file" path="cyberjuke/" />
