@@ -145,6 +145,21 @@ class NetTest {
     }
 
     @Test
+    fun jukeboxMp3sLoadOnlyFromLatexShareLinks() {
+        assertTrue(Hosts.isLatexMp3("https://latex.gg/share/IZq8cMcx.mp3"))
+        assertFalse(Hosts.isLatexMp3("http://latex.gg/share/IZq8cMcx.mp3"))
+        assertFalse(Hosts.isLatexMp3("https://latex.gg:8443/share/IZq8cMcx.mp3"))
+        assertFalse(Hosts.isLatexMp3("https://cdn.latex.gg/share/IZq8cMcx.mp3"))
+        assertFalse(Hosts.isLatexMp3("https://latex.gg/share/a/IZq8cMcx.mp3"))
+        assertFalse(Hosts.isLatexMp3("https://latex.gg/share/IZq8cMcx.mp3?x=1"))
+        assertFalse(Hosts.isLatexMp3("https://user@latex.gg/share/IZq8cMcx.mp3"))
+        assertFalse(Hosts.isLatexMp3("https://latex.gg/share/IZq8cMcx.ogg"))
+        // Never a YouTube media URL, and never the other way round.
+        assertFalse(Hosts.isLatexMp3("https://rr3---sn-abc.googlevideo.com/videoplayback?itag=251"))
+        assertFalse(Hosts.isAllowedMediaUrl("https://latex.gg/share/IZq8cMcx.mp3"))
+    }
+
+    @Test
     fun mediaUrlsMustBeHttpsOnYouTubeMediaHosts() {
         assertTrue(Hosts.isAllowedMediaUrl("https://rr3---sn-abc.googlevideo.com/videoplayback?expire=1&itag=251"))
         assertTrue(Hosts.isAllowedMediaUrl("https://manifest.googlevideo.com/api/manifest/hls_variant/expire/1/file/index.m3u8"))

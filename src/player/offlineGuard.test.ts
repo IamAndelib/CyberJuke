@@ -94,6 +94,20 @@ describe('offlineGuard', () => {
     expect(refused).not.toHaveBeenCalled();
   });
 
+  it('offline, a saved Jukebox MP3 plays and an unsaved one is refused', async () => {
+    const saved = { id: 'p1', ytId: '', mp3: 'https://latex.gg/share/IZq8cMcx.mp3' } as Track;
+    const unsaved = { id: 'p2', ytId: '', mp3: 'https://latex.gg/share/FEHdI7AK.mp3' } as Track;
+    const { inner, p, refused, offline } = setup({ queue: [saved], current: saved, isPlaying: false, bufferedAheadMs: 0 }, ['mp3:IZq8cMcx.mp3'], ['p1', 'p2']);
+    offline();
+    await p.play();
+    expect(inner.play).toHaveBeenCalledTimes(1);
+    await p.playList([unsaved, saved], 1);
+    expect(inner.playList).toHaveBeenCalledWith([saved], 0, undefined);
+    await p.playList([unsaved, saved], 0);
+    expect(inner.playList).toHaveBeenCalledTimes(1);
+    expect(refused.mock.calls).toEqual([['unsaved']]);
+  });
+
   it('offline, a track the app reopened on, not saved and with nothing loaded, is refused like its row', async () => {
     // Liked but not saved yet: says so.
     const liked = setup({ queue: [track], current: track, isPlaying: false, bufferedAheadMs: 0 }, [], [track.id]);

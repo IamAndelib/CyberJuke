@@ -159,6 +159,39 @@ describe('NativePlayer: a session native restored after a restart', () => {
     expect(p.state.value.upNext.map((u) => 'album' in u.track)).toEqual([false, false]);
   });
 
+  const MP3 = 'https://latex.gg/share/IZq8cMcx.mp3';
+  const COVER = 'https://bunker.cyberspace.online/uploads/jukebox/u/1.jpg';
+
+  it('sends a Jukebox MP3 to native with its link (no video id), and plays a list that has one', async () => {
+    const m = tr('M', { ytId: '', mp3: MP3, artworkUrl: COVER });
+    expect(toNative(m)).toMatchObject({ id: 'M', ytId: '', mp3: MP3, artworkUrl: COVER });
+    expect('mp3' in toNative(tr('A'))).toBe(false);
+    const p = new NativePlayer();
+    await p.playList([tr('A'), m], 1, { label: 'Liked', mode: 'list' });
+    const call = fake.plugin.setQueue.mock.calls[0][0];
+    expect(call.tracks.map((t: { id: string; mp3?: string }) => [t.id, t.mp3])).toEqual([
+      ['A', undefined],
+      ['M', MP3],
+    ]);
+    expect(call.startIndex).toBe(1);
+  });
+
+  it('names a restored MP3 from what native describes, with its cover; a bad link or cover is dropped', () => {
+    const p = new NativePlayer();
+    emit('tracks', {
+      tracks: [
+        { id: 'M', ytId: '', mp3: MP3, title: 'Träume', artist: 'Mephisztoe', artworkUrl: COVER },
+        { id: 'N', ytId: '', mp3: MP3, title: 'Cover gone', artist: 'Y', artworkUrl: 'https://evil.example/x.jpg' },
+        { id: 'X', ytId: '', mp3: 'https://evil.example/x.mp3', title: 'Bad', artist: 'Y', artworkUrl: '' },
+      ],
+    });
+    emit('state', state({ trackId: 'M', queueIds: ['M', 'N', 'X'], upNextIds: ['N', 'X'], upNextKinds: 'll', upNextIndex: [1, 2] }));
+    expect(p.state.value.current).toMatchObject({ id: 'M', ytId: '', mp3: MP3, title: 'Träume', artworkUrl: COVER });
+    const [n, x] = p.state.value.upNext.map((u) => u.track);
+    expect([n.mp3, n.artworkUrl]).toEqual([MP3, '']);
+    expect([x.title, x.mp3]).toEqual(['Unknown track', undefined]);
+  });
+
   it('sends members-only to native, so a restored session still knows it', () => {
     expect(toNative(tr('M', { membersOnly: true })).membersOnly).toBe(true);
     expect('membersOnly' in toNative(tr('A'))).toBe(false);

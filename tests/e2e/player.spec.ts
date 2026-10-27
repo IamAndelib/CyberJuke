@@ -342,14 +342,18 @@ test('a swipe down closes Now Playing in one motion: on from the finger, never b
   const h = page.viewportSize()!.height;
   // Every frame from the release on: the sheet's offset, and when.
   await page.evaluate(() => {
-    const w = window as unknown as { __frames: [number, number][]; __end: number };
+    const w = window as unknown as { __frames: [number, number][]; __end: number; __start: number | null };
     w.__frames = [];
     w.__end = 0;
+    w.__start = null;
     const np = document.querySelector<HTMLElement>('[data-testid="now-playing"]')!;
     window.addEventListener('touchend', () => {
       w.__end = performance.now();
       const t0 = w.__end;
       const sample = () => {
+        // When the closing motion itself began (same clock as performance.now()).
+        const run = np.getAnimations().find((a) => (a as CSSTransition).transitionProperty === 'transform');
+        if (w.__start === null && run?.startTime != null) w.__start = Number(run.startTime) - t0;
         const m = new DOMMatrix(getComputedStyle(np).transform);
         w.__frames.push([performance.now() - t0, m.m42]);
         if (performance.now() - t0 < 900) requestAnimationFrame(sample);
@@ -360,15 +364,21 @@ test('a swipe down closes Now Playing in one motion: on from the finger, never b
   await touchDrag(page, 200, 150, 150 + h * 0.3, 240);
   await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
   await expect.poll(() => page.evaluate(() => (window as unknown as { __frames: [number, number][] }).__frames.at(-1)?.[0] ?? 0)).toBeGreaterThan(850);
-  const frames = await page.evaluate(() => (window as unknown as { __frames: [number, number][] }).__frames);
+  const { frames, began } = await page.evaluate(() => {
+    const w = window as unknown as { __frames: [number, number][]; __start: number | null };
+    return { frames: w.__frames, began: w.__start };
+  });
+  expect(began, 'the close is a transition').not.toBeNull();
   const start0 = frames[0][1];
   const sheet = await page.getByTestId('now-playing').evaluate((el) => el.clientHeight);
   // Never back up towards the top.
   for (let i = 1; i < frames.length; i++) expect(frames[i][1], `frame ${i}`).toBeGreaterThanOrEqual(frames[i - 1][1] - 0.5);
-  // Straight on from the finger: well under way 80 ms after the release (the old close stood
-  // still that long, then sped off: two steps), and all the way down.
+  // Straight on from the finger: well under way 80 ms into the motion (the old close stood
+  // still that long on a slow-start curve, then sped off: two steps), and all the way down.
+  // Timed from the motion's own start, not the release: a busy machine can draw the first
+  // frames after the release late, which says nothing about the curve.
   // (The first frame from 80 ms on: on a busy machine none may come sooner.)
-  const from = (ms: number) => frames.find(([t]) => t >= ms)![1];
+  const from = (ms: number) => frames.find(([t]) => t >= began! + ms)![1];
   expect((from(80) - start0) / (sheet - start0)).toBeGreaterThan(0.3);
   expect(frames.at(-1)![1]).toBeGreaterThanOrEqual(sheet - 1);
 });

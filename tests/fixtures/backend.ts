@@ -18,6 +18,11 @@ export interface BackendOptions {
   rejectFirstToken?: boolean;
   /** Extra latency for runQuery, ms (the start value of `Backend.delay`). */
   delay?: number;
+  /**
+   * The Jukebox has MP3 posts too (MP3_POSTS). Off by default: an MP3 plays in a real audio
+   * element, in real time, which a test on the faked clock can't move on.
+   */
+  mp3?: boolean;
 }
 
 export interface Backend {
@@ -45,14 +50,16 @@ const CORS = {
   'access-control-allow-methods': 'GET, POST, OPTIONS',
 };
 
-let shared: Dataset | null = null;
-/** One dataset per worker (it only depends on the hour). */
-function dataset(): Dataset {
-  return (shared ??= buildDataset());
+const shared = new Map<boolean, Dataset>();
+/** One dataset per worker and kind (it only depends on the hour). */
+function dataset(mp3: boolean): Dataset {
+  let d = shared.get(mp3);
+  if (!d) shared.set(mp3, (d = buildDataset(undefined, { mp3 })));
+  return d;
 }
 
 export async function stubBackend(page: Page, opts: BackendOptions = {}): Promise<Backend> {
-  const data = dataset();
+  const data = dataset(opts.mp3 === true);
   const b: Backend = {
     data,
     calls: { signIn: 0, refresh: 0, userDoc: 0, members: 0, unauthorized: 0, public: 0 },

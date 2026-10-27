@@ -11,7 +11,8 @@ import io.github.iamandelib.cyberjuke.net.FailureKind
  * the next track would fail too: no validated network, or this track had been playing. A
  * stream refusal
  * (429, or 403 on a fresh URL) gets one fresh link first, over IPv4 when it came over IPv6 and
- * the setting is Auto; only a second refusal is a block.
+ * the setting is Auto; only a second refusal is a block. A Jukebox MP3 fails on its own host
+ * (latex.gg), where none of YouTube's rules apply ([Facts.mp3]).
  */
 internal object TrackErrorPolicy {
     /** A 403 within this long of resolving the URL is stream-token enforcement, not expiry. */
@@ -67,6 +68,8 @@ internal object TrackErrorPolicy {
         val consecutiveFailures: Int = 0,
         /** Outage pauses ([Action.Pause] with resume) in a row before this one, nothing played between. */
         val outagePauses: Int = 0,
+        /** The item is a Jukebox MP3 (a latex.gg file), not a YouTube video. */
+        val mp3: Boolean = false,
     )
 
     sealed class Action {
@@ -101,6 +104,7 @@ internal object TrackErrorPolicy {
     }
 
     fun decide(f: Facts): Action {
+        if (f.mp3) return mp3(f)
         if (f.blocked) return Action.WaitBlocked
         f.kind?.blockReason?.let { return Action.Block(it) }
         when (f.kind) {
@@ -156,6 +160,21 @@ internal object TrackErrorPolicy {
         return pausedOn && isCurrent && (played || positionMs > 0L)
     }
 
+    /**
+     * A Jukebox MP3: no back-off, fresh link or IPv4 switch (they are about YouTube), and its
+     * host failing says nothing about the next track, which is most likely on YouTube. So an
+     * outage only when the device has no network, or a connection that drops while this file was
+     * playing (an unclear failure once at its spot, as for a video); anything else (an HTTP
+     * error, latex.gg not answering, the file gone) is this track's: skip it.
+     */
+    private fun mp3(f: Facts): Action {
+        if (f.httpCode == null && (f.ioNetwork || f.ioOther)) {
+            if (!f.networkValidated) return outage(f)
+            if (f.playedThisItem && f.failuresHere + 1 < MAX_FAILURES_HERE) return outage(f)
+        }
+        return perVideo(f)
+    }
+
     private fun outage(f: Facts, freshLink: Boolean = false) =
         Action.Pause(resume = f.outagePauses + 1 < MAX_OUTAGE_RESUMES, freshLink = freshLink)
 
@@ -165,6 +184,25 @@ internal object TrackErrorPolicy {
         !f.isCurrent || f.hasNext -> Action.Skip
         else -> Action.PauseAtEnd
     }
+}
+
+/**
+ * What a YouTube back-off holds back, as pure rules (TrackErrorPolicyTest). A Jukebox MP3 isn't
+ * YouTube's: it plays through a back-off, so nothing about it waits for one.
+ */
+internal object BackOffHold {
+    /** A resume of the current item (after an outage or the back-off) waits for the back-off to end. */
+    fun resumeWaits(blocked: Boolean, currentIsMp3: Boolean): Boolean = blocked && !currentIsMp3
+
+    /**
+     * A pause is the user's, so nothing resumes later; during a back-off a pause on a video is
+     * a refused play (the plugin made it one) and keeps its resume.
+     */
+    fun pauseIsUsers(blocked: Boolean, currentIsMp3: Boolean): Boolean = !blocked || currentIsMp3
+
+    /** Playing again: a pending resume is spent (an outage's, or one an MP3 played through a back-off). */
+    fun playingSpendsResume(waitingForNetwork: Boolean, blocked: Boolean, currentIsMp3: Boolean): Boolean =
+        waitingForNetwork || (blocked && currentIsMp3)
 }
 
 /**

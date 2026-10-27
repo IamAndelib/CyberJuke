@@ -1,7 +1,8 @@
 /**
  * Share a track: Android's share sheet through @capacitor/share; in the browser
  * navigator.share, or else the link is copied. The link is the track on
- * music.youtube.com (content the owner asked for, not a UI label).
+ * music.youtube.com (content the owner asked for, not a UI label); a Jukebox MP3, which
+ * isn't on YouTube, shares its post.
  */
 import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
@@ -9,11 +10,12 @@ import type { Track } from '../data/model';
 import { toast } from '../stores/toast';
 import { TEST_HOOKS } from '../core/testHooks';
 
-function shareUrl(t: Pick<Track, 'ytId'>): string {
+function shareUrl(t: Pick<Track, 'ytId' | 'postUrl'>): string {
+  if (!t.ytId) return t.postUrl;
   return `https://music.youtube.com/watch?v=${encodeURIComponent(t.ytId)}`;
 }
 
-export function sharePayload(t: Pick<Track, 'ytId' | 'title' | 'artist'>): { title: string; text: string; url: string } {
+export function sharePayload(t: Pick<Track, 'ytId' | 'postUrl' | 'title' | 'artist'>): { title: string; text: string; url: string } {
   const label = t.artist ? `${t.title} — ${t.artist}` : t.title;
   return { title: label, text: label, url: shareUrl(t) };
 }

@@ -37,7 +37,7 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 - **Sign in with Cyberspace** (optional): the Jukebox also shows the members-only shared tracks, marked `[members]`. See [Signing in](#signing-in).
 - **Library**: liked tracks and recently played, stored on your phone.
 - **Background playback**: the notification, lock screen and headset buttons all work, and the queue keeps going with the screen off. Tapping the notification opens Now Playing.
-- **Listening cache**: the music you play and the next track are kept on the phone (128, 256 or 512 MB, in Settings), so a sudden drop in the signal doesn't stop the music, and liked songs are saved so they play offline. CyberJuke is made for online listening: offline, only the liked songs already saved play, and a paused song resumes from what it has loaded.
+- **Listening cache**: the music you play and the next track are kept on the phone (128, 256 or 512 MB, in Settings), so a sudden drop in the signal doesn't stop the music, and liked songs are saved so they play offline. Liked songs are downloaded on Wi-Fi only (a network Android doesn't mark as metered: a phone's hotspot, and some VPNs, count as mobile data), unless you turn on **Download using mobile data**; what you play is kept as it streams on any network, which costs no extra data. CyberJuke is made for online listening: offline, only the liked songs already saved play, and a paused song resumes from what it has loaded.
 - **Audio quality**: **Auto** (the default) plays the best quality the connection keeps up with, stepping down after stalls and back up once it's calm, only between tracks; **High** and **Low** stay put.
 - **Crossfade** (optional): the end of a track blends into the next, over 3, 6 or 10 seconds (Settings → Crossfade).
 - **Gapless playback** (on by default): the next track is readied while this one plays, so they follow without a pause. Off, it loads only when this one ends, so a skip costs little data.
@@ -94,7 +94,7 @@ Releases are built by the `Release` workflow from a tagged commit with no caches
 |---|---|
 | **UI** | Preact and TypeScript (`src/`) in a [Capacitor](https://capacitorjs.com) WebView, in layers that only import downward: `app/` (boot, shell) → `features/` (one folder per screen) → `ui/` (shared components and hooks) → `stores/`, `player/`, `data/` → `core/` (storage, cache, errors, guards). ESLint enforces the direction. Stores (`src/stores/`) hold the catalog, library, history and settings as signals. |
 | **Track list** | Reads the same public post data the Cyberspace website shows on its Jukebox page, through `src/data/firestore.ts`. All data access goes through the `TrackSource` interface in `src/data/source.ts`, so it can be swapped for the [official Cyberspace API](https://api.cyberspace.online) by changing one file. |
-| **Playback** | Every Jukebox track is a YouTube link. A native Android player (`android/app/src/main/java/.../playback/`; Capacitor plugins in `bridge/`, YouTube code in `yt/`, lyrics in `lyrics/`, HTTP and back-off in `net/`) resolves the audio stream with [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) and plays it with Media3/ExoPlayer in a media session. The queue lives in that native service, which is what keeps music going with the screen off. The web side talks to it through a Capacitor plugin (`src/player/native.ts`). |
+| **Playback** | Jukebox tracks are YouTube links, and since Cyberspace 4.0 some are MP3 files on [latex.gg](https://latex.gg), played as they are. A native Android player (`android/app/src/main/java/.../playback/`; Capacitor plugins in `bridge/`, YouTube code in `yt/`, lyrics in `lyrics/`, HTTP and back-off in `net/`) resolves the audio stream with [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) and plays it with Media3/ExoPlayer in a media session. The queue lives in that native service, which is what keeps music going with the screen off. The web side talks to it through a Capacitor plugin (`src/player/native.ts`). |
 | **Global search, artist pages** | YouTube Music data, read on the phone through the `JukeMusic` plugin (`src/data/ytmusic.ts` on the web side): the artist's own page for top songs and the discography, NewPipeExtractor for search, albums and playlists. Results are cached for 10 minutes. |
 | **Lyrics** | Looked up on [LRCLIB](https://lrclib.net) when the lyrics panel is open, else the lyrics YouTube Music shows (from LyricFind), and cached on the phone. |
 | **Update check** | Asks GitHub's API for the latest release: at most once a day while the app is open, only if you turn it on (Settings → Updates; off by default), or when you tap Check now. Never for installs from F-Droid. |
@@ -112,7 +112,7 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 | Settings, favourite genres and artists, recent searches | App data (Capacitor Preferences). Android may include these in your own Google backup; on Android 12 and newer only when that backup is end-to-end encrypted (the phone has a screen lock) |
 | The cached Jukebox catalog and lyrics | App data and cache. The catalog is dropped on sign-in and sign-out; signing out drops members-only tracks' lyrics |
 | What was playing last (the queue and where in it), so the app reopens on it | App files, excluded from backups; signing out removes members-only tracks from it |
-| Audio of your liked songs and of recently played and next tracks (the listening cache) | Up to the chosen size, on the phone only, never backed up (app files that Android neither backs up nor clears to free space, and its index excluded from backups). It is kept by video ID and format, never by stream URL. Members-only tracks are removed on sign-out, and none is kept while signed out. Clear cache in Settings |
+| Audio of your liked songs and of recently played and next tracks (the listening cache) | Up to the chosen size, on the phone only, never backed up (app files that Android neither backs up nor clears to free space, and its index excluded from backups). It is kept by video ID and format (a Jukebox MP3 by its latex.gg file name), never by stream URL. Members-only tracks are removed on sign-out, and none is kept while signed out. Clear cache in Settings |
 | Login token, user id and @username (only if you sign in) | Encrypted with an Android Keystore key; excluded from Android cloud and device-transfer backups |
 | Stream URLs, YouTube Music results | Memory only |
 
@@ -122,9 +122,11 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 |---|---|---|
 | Cyberspace's backend (Google Firestore) | Requests for Jukebox posts; your login token if signed in | Browsing the Jukebox |
 | Cyberspace's login (Google Identity Toolkit / Secure Token) | Your email and password; token refreshes | Only if you sign in |
-| YouTube | The video ID of the track being played or prefetched, or of a liked song being saved to play offline | Playback; saving a song you just liked (or the liked song playing when you clear the cache); older liked songs are downloaded on an unmetered network (Wi-Fi), while the app is open (also in the background) or playing |
+| YouTube | The video ID of the track being played or prefetched, or of a liked song being saved to play offline | Playback; saving liked songs to play offline (a song you just liked first, or the liked song playing when you clear the cache), on an unmetered network (Wi-Fi) only unless **Download using mobile data** is on, while the app is open (also in the background) or playing |
 | YouTube Music | Your Global search query, or the artist you open; the video ID of a Global track, for its radio (also in the background while autoplay refills); the video ID of the playing track when LRCLIB has no lyrics for it | Global search, artist pages, Global autoplay, lyrics fallback |
+| latex.gg | A request for the MP3 file of a Jukebox track that is one (latex.gg receives your IP address and the file requested) | Playing or prefetching such a track (the next track is prepared while the current one plays), and saving a liked one for offline (as liked songs are: on Wi-Fi, or on any network with **Download using mobile data** on) |
 | YouTube and Google image servers (`i.ytimg.com`, `*.googleusercontent.com`, `*.ggpht.com`) | Artwork requests | Lists, artist pages and Now Playing |
+| Cyberspace's image server (`bunker.cyberspace.online`) | Requests for the covers of Jukebox MP3s | Lists, Now Playing, and the notification and lock screen while one plays |
 | LRCLIB | Artist, title and duration of the current track | Lyrics panel open |
 | GitHub (`api.github.com`) | A request for the latest CyberJuke release (nothing about you or your library) | At most once a day when the app opens or comes back (an hour after a failed check), or **Check now**; only once you turn it on in Settings → Updates (off by default); never for F-Droid installs |
 
@@ -185,7 +187,7 @@ CyberJuke is being prepared for [F-Droid](https://f-droid.org):
 - Store listing in [`fastlane/metadata/android/en-US/`](fastlane/metadata/android/en-US).
 - Literal `versionCode`/`versionName` in `android/app/build.gradle`, and a changelog per version in `fastlane/.../changelogs/<versionCode>.txt`.
 - Reproducible builds (no dependency-metadata block, no build timestamps), so F-Droid can ship the same developer-signed APK as GitHub and the two update each other.
-- F-Droid will mark it **NonFreeNet**: it depends on YouTube and on Cyberspace's backend.
+- F-Droid will mark it **NonFreeNet**: it depends on YouTube, on Cyberspace's backend and on latex.gg (Jukebox MP3s).
 
 The draft recipe and the submission steps are in [`docs/fdroid/`](docs/fdroid).
 

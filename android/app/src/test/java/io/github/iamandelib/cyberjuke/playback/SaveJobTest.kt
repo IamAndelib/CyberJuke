@@ -7,16 +7,20 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.net.SocketTimeoutException
 
 /** The liked saver's job: what each way a save can go becomes ([SaveOutcome]), the world faked through [SaveJob.Deps]. */
 class SaveJobTest {
     private val id = "dQw4w9WgXcQ"
+    private val mp3Id = "mp3:IZq8cMcx.mp3"
+    private val mb = 1024L * 1024L
     private val audio = ResolvedStream(id, "https://r1.googlevideo.com/videoplayback", emptyMap(), "opus", 0L, itag = 251, audioOnly = true)
     private val muxed = audio.copy(itag = 18, audioOnly = false)
 
     /** A refusal the writer reports (the production one: an HTTP status). */
-    private class Refused : IOException("403")
+    /** The writer's request answered [code] (what Media3's InvalidResponseCodeException carries). */
+    private class Http(val code: Int) : IOException("$code")
 
     /** The world as a test sets it up; every call is recorded. */
     private inner class World(
@@ -27,6 +31,11 @@ class SaveJobTest {
         var resolve: () -> ResolvedStream = { audio },
         var hasCache: Boolean = true,
         var write: (SaveJob) -> Unit = {},
+        var limit: Long = 256 * mb,
+        /** What the writer reports before the bytes are written: (length, -1 unknown; cached so far). */
+        var reports: List<Pair<Long, Long>> = emptyList(),
+        /** What it reports once the last byte came (a length learned only at the end), with no stop after. */
+        var endReport: Pair<Long, Long>? = null,
     ) : SaveJob.Deps {
         val calls = ArrayList<String>()
         var job: SaveJob? = null
@@ -34,12 +43,19 @@ class SaveJobTest {
         /** writer() throws this instead of giving a writer. */
         var noWriter: IOException? = null
         private var written = false
+        val discarded = ArrayList<String>()
 
         override fun quiet() = quiet
 
-        override fun isDenied(ytId: String) = denied.also { calls.add("denied") }
+        override fun limitBytes() = limit
 
-        override fun isWhole(ytId: String): Boolean {
+        override fun discard(audioId: String) {
+            discarded.add(audioId)
+        }
+
+        override fun isDenied(audioId: String) = denied.also { calls.add("denied") }
+
+        override fun isWhole(audioId: String): Boolean {
             calls.add("whole")
             return if (written) wholeAfterWrite else whole
         }
@@ -49,14 +65,30 @@ class SaveJobTest {
             return resolve.invoke()
         }
 
-        override fun writer(ytId: String, stream: ResolvedStream): SaveJob.Writer? {
+        override fun writer(ytId: String, stream: ResolvedStream, progress: SaveJob.Progress): SaveJob.Writer? {
             calls.add("writer")
+            return newWriter(progress)
+        }
+
+        override fun mp3Writer(audioId: String, progress: SaveJob.Progress): SaveJob.Writer? {
+            calls.add("mp3Writer")
+            return newWriter(progress)
+        }
+
+        private fun newWriter(progress: SaveJob.Progress): SaveJob.Writer? {
             noWriter?.let { throw it }
             if (!hasCache) return null
             return object : SaveJob.Writer {
                 override fun cache() {
                     calls.add("cache")
+                    // As CacheWriter: a cancel shows at the next check, as an InterruptedIOException.
+                    for ((length, cached) in reports) {
+                        progress.onProgress(length, cached)
+                        if (cancelledWriter) throw InterruptedIOException()
+                    }
                     write(job!!)
+                    calls.add("bytes")
+                    endReport?.let { (length, cached) -> progress.onProgress(length, cached) }
                     written = true
                 }
 
@@ -66,10 +98,10 @@ class SaveJobTest {
             }
         }
 
-        override fun refused(e: IOException) = e is Refused
+        override fun refused(e: IOException, mp3: Boolean) = SaveRefusal.refused((e as? Http)?.code, mp3)
 
-        fun run(fresh: Boolean = true): SaveOutcome {
-            val j = SaveJob(id, fresh, this)
+        fun run(audioId: String = id): SaveOutcome {
+            val j = SaveJob(audioId, this)
             job = j
             return j.run()
         }
@@ -88,7 +120,7 @@ class SaveJobTest {
     fun theWholeSaveIsAnExtractionThenTheBytesThenTheCheck() {
         val w = World()
         assertEquals(SaveOutcome.SAVED, w.run())
-        assertEquals(listOf("denied", "whole", "resolve", "writer", "cache", "whole"), w.calls)
+        assertEquals(listOf("denied", "whole", "resolve", "writer", "cache", "bytes", "whole"), w.calls)
     }
 
     @Test
@@ -96,7 +128,7 @@ class SaveJobTest {
         assertEquals(SaveOutcome.CANCELLED, World(quiet = true).run())
         assertEquals(SaveOutcome.CANCELLED, World(denied = true).run())
         val w = World()
-        val j = SaveJob(id, fresh = true, deps = w)
+        val j = SaveJob(id, deps = w)
         j.cancel()
         assertEquals(SaveOutcome.CANCELLED, j.run())
         assertTrue(w.calls.isEmpty())
@@ -142,7 +174,7 @@ class SaveJobTest {
         // Written, but a span playback had locked was read past: not whole yet, a strike.
         assertEquals(SaveOutcome.STOPPED, World(wholeAfterWrite = false).run())
         // Refused (an expired link, a block): given up.
-        assertEquals(SaveOutcome.FAILED, World(write = { throw Refused() }).run())
+        assertEquals(SaveOutcome.FAILED, World(write = { throw Http(403) }).run())
         // The connection broke: a strike.
         assertEquals(SaveOutcome.STOPPED, World(write = { throw IOException("reset") }).run())
         // The request couldn't even be built (no link): a strike.
@@ -182,5 +214,83 @@ class SaveJobTest {
             throw ResolveException(id, "network", null, FailureKind.NETWORK)
         }
         assertEquals(SaveOutcome.CANCELLED, failing.run())
+    }
+
+    @Test
+    fun aJukeboxMp3IsSavedWithNoExtraction() {
+        // Its file straight from latex.gg, through the same writer and the same check.
+        val w = World(resolve = { throw AssertionError("an MP3 is never extracted") })
+        assertEquals(SaveOutcome.SAVED, w.run(audioId = mp3Id))
+        assertEquals(listOf("denied", "whole", "mp3Writer", "cache", "bytes", "whole"), w.calls)
+        // Already whole: nothing fetched.
+        val whole = World(whole = true)
+        assertEquals(SaveOutcome.SAVED, whole.run(audioId = mp3Id))
+        assertFalse("mp3Writer" in whole.calls)
+    }
+
+    @Test
+    fun aYouTubeBackOffDoesNotHoldAJukeboxMp3() {
+        // A back-off holds a video's save (no extraction), not an MP3's: latex.gg isn't YouTube.
+        assertEquals(SaveOutcome.CANCELLED, World(quiet = true).run())
+        assertEquals(SaveOutcome.SAVED, World(quiet = true).run(audioId = mp3Id))
+        // So a connection lost while one runs is a strike, back-off or not, as for any failure.
+        assertEquals(SaveOutcome.STOPPED, World(quiet = true, write = { throw IOException("reset") }).run(audioId = mp3Id))
+    }
+
+    @Test
+    fun aJukeboxMp3sSaveFailsAndStopsAsAVideosDoes() {
+        // Members-only while signed out, or cancelled: no fault of the song.
+        assertEquals(SaveOutcome.CANCELLED, World(denied = true).run(audioId = mp3Id))
+        // No cache, a write that isn't whole yet, a dropped connection: strikes.
+        assertEquals(SaveOutcome.STOPPED, World(hasCache = false).run(audioId = mp3Id))
+        assertEquals(SaveOutcome.STOPPED, World(wholeAfterWrite = false).run(audioId = mp3Id))
+        assertEquals(SaveOutcome.STOPPED, World(write = { throw IOException("reset") }).run(audioId = mp3Id))
+        // Refused: given up.
+        assertEquals(SaveOutcome.FAILED, World(write = { throw Http(403) }).run(audioId = mp3Id))
+        // latex.gg failing or rate limiting: tried again later, where a video's link would be done.
+        for (code in listOf(503, 429)) {
+            assertEquals("$code", SaveOutcome.STOPPED, World(write = { throw Http(code) }).run(audioId = mp3Id))
+            assertEquals("$code", SaveOutcome.FAILED, World(write = { throw Http(code) }).run())
+        }
+        // Cancelled mid-way: the writer is told.
+        val w = World(write = { j ->
+            j.cancel()
+            throw IOException("cancelled")
+        })
+        assertEquals(SaveOutcome.CANCELLED, w.run(audioId = mp3Id))
+        assertTrue(w.cancelledWriter)
+    }
+
+    @Test
+    fun aSongTooBigForTheCacheIsGivenUpOnBeforeItsBytesCome() {
+        // A 150 MB mix (or a long video) in a 128 MB cache: its length, told when the request
+        // opens, is over what the cache leaves beside listening. Stopped before a byte is read,
+        // given up on, and whatever of it was in the cache goes.
+        for (audioId in listOf(mp3Id, id)) {
+            val w = World(limit = 128 * mb, reports = listOf(150 * mb to 0L))
+            assertEquals(audioId, SaveOutcome.FAILED, w.run(audioId = audioId))
+            assertTrue(w.cancelledWriter)
+            assertFalse("bytes" in w.calls)
+            assertEquals(listOf(audioId), w.discarded)
+        }
+        // Up to the limit less the listening reserve, it fits.
+        val reserve = LikedSaverPolicy.LISTENING_RESERVE_BYTES
+        assertEquals(SaveOutcome.SAVED, World(limit = 128 * mb, reports = listOf(128 * mb - reserve to 0L)).run(audioId = mp3Id))
+        assertEquals(SaveOutcome.FAILED, World(limit = 128 * mb, reports = listOf(128 * mb - reserve + 1 to 0L)).run(audioId = mp3Id))
+        // A bigger cache takes it.
+        assertEquals(SaveOutcome.SAVED, World(limit = 512 * mb, reports = listOf(150 * mb to 0L)).run(audioId = mp3Id))
+    }
+
+    @Test
+    fun withNoLengthTheSaveStopsOnceTheBytesAreTooMany() {
+        // latex.gg sent no Content-Length: the bytes so far count, and the save stops at the cap.
+        val w = World(limit = 128 * mb, reports = listOf(-1L to 50 * mb, -1L to 97 * mb, -1L to 120 * mb))
+        assertEquals(SaveOutcome.FAILED, w.run(audioId = mp3Id))
+        assertTrue(w.cancelledWriter)
+        assertEquals(listOf(mp3Id), w.discarded)
+        // A length learned only with the last byte (no stop comes after it) still counts.
+        val atEnd = World(limit = 128 * mb, endReport = 100 * mb to 100 * mb)
+        assertEquals(SaveOutcome.FAILED, atEnd.run(audioId = mp3Id))
+        assertEquals(listOf(mp3Id), atEnd.discarded)
     }
 }

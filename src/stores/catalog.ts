@@ -18,6 +18,10 @@
  * from the Preferences keys of the same name) and the fetch times under `<key>.meta`
  * (a small Preferences key). The tracks are written only when they changed, so an
  * hourly check that finds nothing new writes a few bytes, not the whole catalog.
+ *
+ * The meta also holds the catalog's format (CATALOG_FORMAT). A catalog saved by an older
+ * format lacks posts the app now shows (1.2.0's has no MP3 posts) that an incremental
+ * fetch would never bring, being older than its newest post: it gets one full refetch.
  */
 import { computed, signal, type ReadonlySignal } from '@preact/signals';
 import type { Track } from '../data/model';
@@ -42,6 +46,11 @@ export function catalogKey(signedIn: boolean): string {
 function metaKey(key: string): string {
   return key + '.meta';
 }
+/**
+ * What a saved catalog holds; a lower (or missing) one is refetched in full. 2: Jukebox MP3
+ * posts are in it.
+ */
+export const CATALOG_FORMAT = 2;
 export const INCREMENTAL_AFTER_MS = 60 * 60 * 1000;
 export const FULL_AFTER_MS = 24 * 60 * 60 * 1000;
 
@@ -122,9 +131,11 @@ function parsePersisted(raw: string | null, meta: string | null): Persisted | nu
     } catch {
       /* no times: treated as stale */
     }
+    const current = (Number(m.fmt) || 0) >= CATALOG_FORMAT;
     return {
       v: 1,
-      fullAt: Number(m.fullAt) || 0,
+      // An older format's full fetch doesn't count: the next refresh is a full one.
+      fullAt: current ? Number(m.fullAt) || 0 : 0,
       checkedAt: Number(m.checkedAt) || 0,
       tracks: p.tracks.filter(isTrackFull),
     };
@@ -171,7 +182,7 @@ export function createCatalog(deps: CatalogDeps): Catalog {
       saved = all.value;
       deps.storage.set(k, JSON.stringify({ v: 1, tracks: all.value })).catch(() => {});
     }
-    deps.storage.set(metaKey(k), JSON.stringify({ fullAt, checkedAt })).catch(() => {});
+    deps.storage.set(metaKey(k), JSON.stringify({ fullAt, checkedAt, fmt: CATALOG_FORMAT })).catch(() => {});
   }
 
   async function run(force: boolean): Promise<void> {

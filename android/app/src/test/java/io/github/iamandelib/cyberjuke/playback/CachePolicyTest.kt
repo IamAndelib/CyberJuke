@@ -29,6 +29,66 @@ class CachePolicyTest {
     }
 
     @Test
+    fun aJukeboxMp3IsKeptByItsFileNameAndGoesThroughTheCache() {
+        val key = CacheKeys.ofMp3("IZq8cMcx.mp3")!!
+        assertEquals("mp3:IZq8cMcx.mp3", key)
+        // Its key is its audio id (as Liked, the saved set and the gate know it): no format, no length.
+        assertEquals(SessionPolicy.mp3AudioId("IZq8cMcx.mp3"), key)
+        assertEquals(key, CacheKeys.audioIdOf(key))
+        assertTrue(CacheKeys.isMp3(key))
+        assertTrue(CacheKeys.isCacheable(key))
+        assertFalse(CacheKeys.isYt(key))
+        assertNull(CacheKeys.ytIdOf(key))
+        assertNull(CacheKeys.itagOf(key))
+        // A video's key still names its video, and goes through the cache as before.
+        assertEquals("dQw4w9WgXcQ", CacheKeys.audioIdOf(CacheKeys.of("dQw4w9WgXcQ", 251, 3_000_000L)))
+        assertTrue(CacheKeys.isCacheable(CacheKeys.of("dQw4w9WgXcQ", 251)))
+        // Nothing else does: not the link itself, nor a file name that isn't one.
+        for (k in listOf(null, "mp3:", "mp3:x.ogg", "mp3:../x.mp3", "mp3:a/b.mp3", "https://latex.gg/share/IZq8cMcx.mp3", "IZq8cMcx.mp3", "asset:///ci-tone.ogg", "yt:abc")) {
+            assertFalse(k.toString(), CacheKeys.isCacheable(k))
+        }
+        assertNull(CacheKeys.ofMp3("../x.mp3"))
+        assertNull(CacheKeys.audioIdOf("mp3:x.ogg"))
+    }
+
+    @Test
+    fun aWholeJukeboxMp3PlaysWhateverTheQualityOrAResumeAsks() {
+        val key = CacheKeys.ofMp3("IZq8cMcx.mp3")!!
+        // pickKey goes by format, and an MP3 has none: it would never play from the cache.
+        assertNull(CacheKeys.pickKey(listOf(key), keepKey = null, rungItag = 251, wantedBps = 160_000))
+        // Its one file plays, on High, on a resume, whatever was asked.
+        assertEquals(key, CacheKeys.pickFor(key, listOf(key), keepKey = null, rungItag = 251, wantedBps = 160_000))
+        assertEquals(key, CacheKeys.pickFor(key, listOf(key), keepKey = "yt:dQw4w9WgXcQ:251", rungItag = null, wantedBps = 0))
+        assertNull(CacheKeys.pickFor(key, emptyList(), keepKey = null, rungItag = null, wantedBps = 0))
+        // A video's copy is still pickKey's choice.
+        val a = CacheKeys.of("dQw4w9WgXcQ", 251, 3_000_000L)
+        assertNull(CacheKeys.pickFor("dQw4w9WgXcQ", listOf(a), keepKey = CacheKeys.of("dQw4w9WgXcQ", 140), rungItag = 251, wantedBps = 0))
+        assertEquals(a, CacheKeys.pickFor("dQw4w9WgXcQ", listOf(a), keepKey = null, rungItag = 251, wantedBps = 0))
+    }
+
+    @Test
+    fun aLikedJukeboxMp3IsKeptLikeALikedVideo() {
+        val liked = CacheKeys.ofMp3("IZq8cMcx.mp3")!!
+        val other = CacheKeys.ofMp3("FEHdI7AK.mp3")!!
+        val l = CacheLedger(12 * mb)
+        l.setLiked(listOf(liked, "likeda00000"), known = false)
+        l.onAdded(liked, 3 * mb, touched = 1)
+        l.onAdded(liked, 1 * mb, touched = 2)
+        l.onAdded(CacheKeys.of("likeda00000", 251), 4 * mb, touched = 3)
+        l.onAdded(other, 4 * mb, touched = 9)
+        assertTrue(l.isLiked(liked))
+        assertEquals(listOf(liked), l.keysOf(liked))
+        assertEquals(8 * mb, l.likedBytes)
+        // The liked MP3 grows by 8 MB: the MP3 nobody liked first, however recent; then, liked
+        // songs alone being over the limit, the least recently liked.
+        assertEquals(listOf(other, CacheKeys.of("likeda00000", 251)), l.victims(8 * mb, protect = liked))
+        // Unliked, it is an ordinary listening entry.
+        l.setLiked(listOf("likeda00000"))
+        assertFalse(l.isLiked(liked))
+        assertEquals(listOf(liked, other), l.victims(8 * mb))
+    }
+
+    @Test
     fun wholeOnlyWithAKnownLengthAndEveryByteThere() {
         assertTrue(CacheKeys.isWhole(4_000_000L) { it == 4_000_000L })
         assertFalse(CacheKeys.isWhole(4_000_000L) { false })
@@ -83,8 +143,43 @@ class CachePolicyTest {
         l.onAdded(CacheKeys.of("listen0000a", 251), 2 * mb, touched = 9)
         // Over by 2 MB: the listening entry, however recent.
         assertEquals(listOf(CacheKeys.of("listen0000a", 251)), l.victims())
-        // Over by 6 MB: then the least recently liked (a), whatever its last use.
-        assertEquals(listOf(CacheKeys.of("listen0000a", 251), CacheKeys.of("likeda00000", 251)), l.victims(4 * mb))
+        // Liked c grows by 4 MB: liked songs alone are over the limit now, so after the listening
+        // entry the least recently liked (a) goes, whatever its last use; never c itself.
+        assertEquals(
+            listOf(CacheKeys.of("listen0000a", 251), CacheKeys.of("likeda00000", 251)),
+            l.victims(4 * mb, protect = CacheKeys.of("likedc00000", 251)),
+        )
+        // The listening entry grows by 4 MB instead: liked songs alone fit, so none of them goes;
+        // the listening entry, which doesn't fit beside them, is the one that goes.
+        assertEquals(listOf(CacheKeys.of("listen0000a", 251)), l.victims(4 * mb, protect = CacheKeys.of("listen0000a", 251)))
+    }
+
+    @Test
+    fun aGrowingSongNobodyLikedNeverPushesALikedOneOut() {
+        // A long Jukebox mix (or a long video) nobody liked, in a 128 MB cache with 100 MB liked.
+        for (playing in listOf(CacheKeys.ofMp3("IZq8cMcx.mp3")!!, CacheKeys.of("longmix0000", 251, 150 * mb))) {
+            val l = CacheLedger(128 * mb)
+            l.setLiked(listOf("likeda00000", "likedb00000"), known = false)
+            l.onAdded(CacheKeys.of("likeda00000", 251), 50 * mb, touched = 1)
+            l.onAdded(CacheKeys.of("likedb00000", 251), 50 * mb, touched = 2)
+            l.onAdded(CacheKeys.of("listen0000a", 251), 4 * mb, touched = 3)
+            val liked = setOf(CacheKeys.of("likeda00000", 251), CacheKeys.of("likedb00000", 251))
+            val evict = { keys: List<String> ->
+                assertTrue("$playing pushed out a liked song: $keys", keys.none { it in liked })
+                for (k in keys) l.onRemoved(k, l.bytesOf(k))
+            }
+            // Written 5 MB at a time, as CacheDataSink does: evicted for when each file starts
+            // (onStartFile) and when it is added (onSpanAdded).
+            for (t in 10L until 40L) {
+                evict(l.victims(5 * mb, protect = playing))
+                l.onAdded(playing, 5 * mb, touched = t)
+                evict(l.victims(protect = playing))
+                assertTrue(l.total <= 128 * mb)
+            }
+            // The liked songs are all still there; the other listening entry went first.
+            assertEquals(100 * mb, l.likedBytes)
+            assertEquals(0L, l.bytesOf(CacheKeys.of("listen0000a", 251)))
+        }
     }
 
     @Test
@@ -208,18 +303,34 @@ class CachePolicyTest {
     fun backfillNewestLikeFirstOnWifiOnly() {
         assertEquals("new00000000", LikedSaverPolicy.next(Facts(liked, saved = emptySet())))
         assertEquals("mid00000000", LikedSaverPolicy.next(Facts(liked, saved = setOf("new00000000"))))
-        // Mobile data: no backlog.
+        // Mobile data: no backlog, unless Download using mobile data is on.
         assertNull(LikedSaverPolicy.next(Facts(liked, saved = emptySet(), unmetered = false)))
+        assertEquals("new00000000", LikedSaverPolicy.next(Facts(liked, saved = emptySet(), unmetered = false, mobileDataAllowed = true)))
         // All saved: nothing to do.
         assertNull(LikedSaverPolicy.next(Facts(liked, saved = liked.toSet())))
     }
 
     @Test
-    fun aSongLikedJustNowIsSavedOnAnyNetworkAtOnce() {
-        val f = Facts(liked, saved = emptySet(), fresh = setOf("mid00000000"), unmetered = false, sinceLastMs = 1_000L, likedFull = true)
+    fun aSongLikedJustNowIsSavedFirstOnWifi() {
+        val f = Facts(liked, saved = emptySet(), fresh = setOf("mid00000000"), sinceLastMs = 1_000L, likedFull = true)
+        // Before the backlog, the gap and a full cache.
         assertEquals("mid00000000", LikedSaverPolicy.next(f))
-        assertTrue(LikedSaverPolicy.keepGoing(f, fresh = true))
-        assertFalse(LikedSaverPolicy.keepGoing(f, fresh = false))
+        assertTrue(LikedSaverPolicy.keepGoing(f))
+    }
+
+    @Test
+    fun onMobileDataNothingIsDownloadedUnlessAllowed() {
+        val f = Facts(liked, saved = emptySet(), fresh = setOf("mid00000000"), unmetered = false)
+        // Liked just now on mobile data: it waits for Wi-Fi, and so does a running save.
+        assertNull(LikedSaverPolicy.next(f))
+        assertFalse(LikedSaverPolicy.keepGoing(f))
+        assertFalse(LikedSaverPolicy.keepGoing(f, mp3 = true))
+        assertNull(LikedSaverPolicy.recheckInMs(f.copy(sinceLastMs = 1_000L)))
+        // Download using mobile data on: as on Wi-Fi.
+        val allowed = f.copy(mobileDataAllowed = true)
+        assertEquals("mid00000000", LikedSaverPolicy.next(allowed))
+        assertTrue(LikedSaverPolicy.keepGoing(allowed))
+        assertEquals("new00000000", LikedSaverPolicy.next(allowed.copy(fresh = emptySet())))
     }
 
     @Test
@@ -239,6 +350,18 @@ class CachePolicyTest {
     }
 
     @Test
+    fun aSongTooBigForTheCacheIsNotSaved() {
+        val reserve = LikedSaverPolicy.LISTENING_RESERVE_BYTES
+        // Over what the limit leaves beside listening: never.
+        assertTrue(LikedSaverPolicy.tooBig(128 * mb - reserve + 1, 128 * mb))
+        assertTrue(LikedSaverPolicy.tooBig(150 * mb, 128 * mb))
+        assertFalse(LikedSaverPolicy.tooBig(128 * mb - reserve, 128 * mb))
+        assertFalse(LikedSaverPolicy.tooBig(150 * mb, 256 * mb))
+        // A YouTube track (about 4 MB) always fits.
+        assertFalse(LikedSaverPolicy.tooBig(4 * mb, 128 * mb))
+    }
+
+    @Test
     fun neverWhatThePlayerLoadsAnywayNorAFailure() {
         assertEquals("old00000000", LikedSaverPolicy.next(Facts(liked, saved = emptySet(), skip = setOf("new00000000", "mid00000000"))))
     }
@@ -246,13 +369,14 @@ class CachePolicyTest {
     @Test
     fun aRunningSaveGivesWay() {
         val f = Facts(liked, saved = emptySet())
-        assertTrue(LikedSaverPolicy.keepGoing(f, fresh = false))
+        assertTrue(LikedSaverPolicy.keepGoing(f))
         // The current track starts loading (a rebuffer, a skip, a new list): playback comes first.
-        assertFalse(LikedSaverPolicy.keepGoing(f.copy(playbackNeedsNetwork = true), fresh = true))
-        // A back-off, the connection gone, or Wi-Fi left for mobile data during a backfill.
-        assertFalse(LikedSaverPolicy.keepGoing(f.copy(quiet = true), fresh = true))
-        assertFalse(LikedSaverPolicy.keepGoing(f.copy(online = false), fresh = true))
-        assertFalse(LikedSaverPolicy.keepGoing(f.copy(unmetered = false), fresh = false))
+        assertFalse(LikedSaverPolicy.keepGoing(f.copy(playbackNeedsNetwork = true)))
+        // A back-off, the connection gone, or Wi-Fi left for mobile data (not allowed).
+        assertFalse(LikedSaverPolicy.keepGoing(f.copy(quiet = true)))
+        assertFalse(LikedSaverPolicy.keepGoing(f.copy(online = false)))
+        assertFalse(LikedSaverPolicy.keepGoing(f.copy(unmetered = false)))
+        assertTrue(LikedSaverPolicy.keepGoing(f.copy(unmetered = false, mobileDataAllowed = true)))
     }
 
     @Test
@@ -262,7 +386,7 @@ class CachePolicyTest {
         assertNull(LikedSaverPolicy.next(f))
         assertNull(LikedSaverPolicy.next(f.copy(fresh = emptySet())))
         assertNull(LikedSaverPolicy.recheckInMs(f.copy(sinceLastMs = 10_000L)))
-        assertFalse(LikedSaverPolicy.keepGoing(f, fresh = true))
+        assertFalse(LikedSaverPolicy.keepGoing(f))
         assertEquals("new00000000", LikedSaverPolicy.next(f.copy(cache = true)))
     }
 
@@ -302,9 +426,9 @@ class CachePolicyTest {
 
     @Test
     fun aFreshLikeSkipsTheGapOnlyOnItsFirstTry() {
-        val f = Facts(liked, saved = emptySet(), fresh = setOf("mid00000000"), unmetered = false, sinceLastMs = 1_000L)
+        val f = Facts(liked, saved = emptySet(), fresh = setOf("mid00000000"), sinceLastMs = 1_000L)
         assertEquals("mid00000000", LikedSaverPolicy.next(f))
-        // Tried and not saved: again, but only after the gap (still on any network).
+        // Tried and not saved: again, but only after the gap.
         val tried = f.copy(tried = setOf("mid00000000"))
         assertNull(LikedSaverPolicy.next(tried))
         assertEquals("mid00000000", LikedSaverPolicy.next(tried.copy(sinceLastMs = LikedSaverPolicy.MIN_GAP_MS)))
@@ -317,10 +441,48 @@ class CachePolicyTest {
         // Nothing to do, or something else in the way (an event will come): no timer.
         assertNull(LikedSaverPolicy.recheckInMs(f.copy(saved = liked.toSet())))
         assertNull(LikedSaverPolicy.recheckInMs(f.copy(unmetered = false)))
+        assertEquals(LikedSaverPolicy.MIN_GAP_MS - 10_000L, LikedSaverPolicy.recheckInMs(f.copy(unmetered = false, mobileDataAllowed = true)))
         assertNull(LikedSaverPolicy.recheckInMs(f.copy(online = false)))
         assertNull(LikedSaverPolicy.recheckInMs(f.copy(playbackNeedsNetwork = true)))
         assertNull(LikedSaverPolicy.recheckInMs(f.copy(busy = true)))
         assertNull(LikedSaverPolicy.recheckInMs(f.copy(sinceLastMs = LikedSaverPolicy.MIN_GAP_MS)))
+    }
+
+    @Test
+    fun aYouTubeBackOffHoldsLikedVideosButNotJukeboxMp3s() {
+        val mp3 = "mp3:IZq8cMcx.mp3"
+        val f = Facts(listOf("new00000000", mp3, "old00000000"), saved = emptySet(), quiet = true)
+        // No extraction during a back-off; an MP3 isn't YouTube's, so it is saved meanwhile.
+        assertEquals(mp3, LikedSaverPolicy.next(f))
+        assertNull(LikedSaverPolicy.next(f.copy(liked = listOf("new00000000", "old00000000"))))
+        // Its other rules hold: the gap, Wi-Fi, playback first, online.
+        assertNull(LikedSaverPolicy.next(f.copy(unmetered = false)))
+        assertNull(LikedSaverPolicy.next(f.copy(sinceLastMs = 1_000L)))
+        assertNull(LikedSaverPolicy.next(f.copy(playbackNeedsNetwork = true)))
+        assertNull(LikedSaverPolicy.next(f.copy(online = false)))
+        // A back-off beginning stops a video's save, not an MP3's.
+        assertFalse(LikedSaverPolicy.keepGoing(f))
+        assertTrue(LikedSaverPolicy.keepGoing(f, mp3 = true))
+        assertFalse(LikedSaverPolicy.keepGoing(f.copy(playbackNeedsNetwork = true), mp3 = true))
+    }
+
+    @Test
+    fun aJukeboxMp3IsRefusedForGoodOnlyWhenTheFileIsGone() {
+        // A video's link refused at all: expired, or a block.
+        assertTrue(SaveRefusal.refused(403, mp3 = false))
+        assertTrue(SaveRefusal.refused(503, mp3 = false))
+        // An MP3: a 4xx is the file's (gone, private); latex.gg failing is tried again later.
+        assertTrue(SaveRefusal.refused(404, mp3 = true))
+        assertTrue(SaveRefusal.refused(403, mp3 = true))
+        assertFalse(SaveRefusal.refused(503, mp3 = true))
+        // A timeout, a rate limit or a refused range passes: a strike, not the end.
+        for (code in listOf(408, 416, 429)) {
+            assertFalse("$code", SaveRefusal.refused(code, mp3 = true))
+            assertTrue("$code", SaveRefusal.refused(code, mp3 = false))
+        }
+        // No status (the connection broke): never a refusal.
+        assertFalse(SaveRefusal.refused(null, mp3 = false))
+        assertFalse(SaveRefusal.refused(null, mp3 = true))
     }
 
     @Test
@@ -579,15 +741,16 @@ class CachePolicyTest {
     }
 
     @Test
-    fun afterClearCacheThePlayingLikedSongIsSavedAgainOnAnyNetwork() {
+    fun afterClearCacheThePlayingLikedSongIsSavedAgainFirst() {
         // Cleared while a liked song plays (and the next is liked): their bytes are in the
         // player's memory, so nothing writes them back. They count as liked just now.
         val fresh = LikedSaverPolicy.freshAfterClear(liked, pair = setOf("mid00000000", "notliked000"))
         assertEquals(setOf("mid00000000"), fresh)
-        val f = Facts(liked, saved = emptySet(), fresh = fresh, unmetered = false, sinceLastMs = 1_000L)
-        // While the player still loads it: not yet. Loaded: saved, on mobile data too.
+        val f = Facts(liked, saved = emptySet(), fresh = fresh, sinceLastMs = 1_000L)
+        // While the player still loads it: not yet. Loaded: saved first; on mobile data, once on Wi-Fi.
         assertNull(LikedSaverPolicy.next(f.copy(skip = setOf("mid00000000"))))
         assertEquals("mid00000000", LikedSaverPolicy.next(f))
+        assertNull(LikedSaverPolicy.next(f.copy(unmetered = false)))
     }
 
     @Test
