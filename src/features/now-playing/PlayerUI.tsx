@@ -41,6 +41,7 @@ import { UpNext } from './UpNext';
 import { useModal, useSheetContent } from '../../ui/useModal';
 import { useLiked } from '../../ui/useFavs';
 import { shareTrack } from '../../ui/share';
+import { usePressThen } from '../../ui/usePress';
 
 function fmt(ms: number): string {
   if (!isFinite(ms) || ms < 0) ms = 0;
@@ -623,11 +624,7 @@ function NowPlayingContent() {
               <div class="np-tags">
                 {t.membersOnly && <MembersTag class="np-members" />}
                 {/* A station track's "genre" is its station's callsign, shown below instead. */}
-                {t.genre && !isSignal(t) && (
-                  <button class="tag np-genre" onClick={() => openGenrePage(t.genre)} aria-label={`Open genre ${t.genre}`} data-testid="np-genre">
-                    <span class="np-genre-text">{t.genre}</span>
-                  </button>
-                )}
+                {t.genre && !isSignal(t) && <NpGenre genre={t.genre} />}
               </div>
             )}
           </div>
@@ -721,9 +718,24 @@ function NpOffline() {
   return <OfflineLine class="np-offline" testid="np-offline" />;
 }
 
+/** Genre tag in Now Playing: tapping opens the genre page. */
+function NpGenre({ genre }: { genre: string }) {
+  // The page replaces Now Playing: the press shows first (a quick tap is over before a frame paints).
+  const press = usePressThen<HTMLButtonElement>(() => openGenrePage(genre));
+  return (
+    <button ref={press.ref} class="tag np-genre" onClick={press.onClick} aria-label={`Open genre ${genre}`} data-testid="np-genre">
+      <span class="np-genre-text">{genre}</span>
+    </button>
+  );
+}
+
 /** Artist line in Now Playing: tapping opens the artist page (or a chooser for several). */
 function NpArtist({ track }: { track: Track }) {
   const names = splitArtists(track.artist);
+  // As NpGenre: the artist page replaces Now Playing, so the press shows first. The chooser
+  // opens over it, with the press still in sight, so it opens at once.
+  const press = usePressThen<HTMLButtonElement>(() => openArtistPage(names[0]));
+  const choose = () => (names.length === 1 ? press.onClick() : (artistChoice.value = names));
   if (!names.length)
     return (
       <div class="np-artist">
@@ -733,8 +745,9 @@ function NpArtist({ track }: { track: Track }) {
   return (
     <div class="np-artist">
       <button
+        ref={press.ref}
         class="np-link"
-        onClick={() => (names.length === 1 ? openArtistPage(names[0]) : (artistChoice.value = names))}
+        onClick={choose}
         aria-label={names.length === 1 ? `Open artist ${names[0]}` : `Choose an artist: ${names.join(', ')}`}
         aria-haspopup={names.length > 1 ? 'dialog' : undefined}
         data-testid="np-artist"

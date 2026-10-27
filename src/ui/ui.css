@@ -815,7 +815,8 @@
   overflow-wrap: anywhere;
   text-align: left;
 }
-.np-link:active {
+.np-link:active,
+.np-link.pressed {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;

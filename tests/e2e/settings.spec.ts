@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { cssVar, opened, openSettings, playerCalls, recordOpens, seedStorage, SETTINGS_KEY, start, waitForTracks } from '../helpers';
+import { cssVar, opened, openNowPlaying, openSettings, playerCalls, recordOpens, seedStorage, SETTINGS_KEY, start, waitForTracks } from '../helpers';
 
 /** Settings: themes, NSFW, the new-tracks interval, the IPv4 setting and the card order. */
 
@@ -390,6 +390,13 @@ test('radio groups and the Library tabs are one Tab stop each, worked with the a
   await expect(page.getByTestId('lib-recent')).toBeFocused();
 });
 
+/** Now Playing on a track with a genre tag, credited to one artist. */
+async function openNowPlayingOnTagged(page: Page): Promise<void> {
+  const row = page.getByTestId('track-row').filter({ has: page.locator('.tag') }).filter({ hasNotText: ',' }).first();
+  await row.getByTestId('track-play').click();
+  await openNowPlaying(page);
+}
+
 // A quick tap is over before a frame paints, and these buttons replace the screen they are on:
 // the press must show (for its ~120 ms) before the screen changes, as with a long press.
 for (const { name, open, testid, next } of [
@@ -401,6 +408,8 @@ for (const { name, open, testid, next } of [
     await page.getByTestId('tab-genres').click();
     await page.getByTestId('genre-grid').getByTestId('genre-tile').first().click();
   }, testid: 'genre-back', next: 'genre-grid' },
+  { name: "Now Playing's genre", open: openNowPlayingOnTagged, testid: 'np-genre', next: 'screen-genre' },
+  { name: "Now Playing's artist", open: openNowPlayingOnTagged, testid: 'np-artist', next: 'screen-artist' },
 ]) {
   test(`a quick tap on ${name} shows its press before the screen changes`, async ({ page }) => {
     await start(page);

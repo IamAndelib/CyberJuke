@@ -22,7 +22,8 @@
   position: absolute;
   inset: -12px -6px;
 }
-.np-genre:active {
+.np-genre:active,
+.np-genre.pressed {
   background: var(--color-fg);
   color: var(--color-bg);
   border-color: var(--color-fg);
