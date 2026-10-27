@@ -6,6 +6,7 @@ import android.os.SystemClock;
 import android.util.Log;
 import android.view.ViewGroup;
 import android.webkit.RenderProcessGoneDetail;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
@@ -58,7 +59,11 @@ public class MainActivity extends BridgeActivity {
             creating = false;
         }
         // No bridge without a working WebView (Capacitor shows its own error then).
-        if (getBridge() != null) getBridge().addWebViewListener(new RendererWatch());
+        if (getBridge() != null) {
+            getBridge().addWebViewListener(new RendererWatch());
+            WebView webView = getBridge().getWebView();
+            if (webView != null) restrictWebView(webView.getSettings());
+        }
         // CI only (debuggable builds): ci_music_search / ci_artist / ci_lyrics / ci_artist_page extras log one check each.
         MusicPlugin.maybeRunCiChecks(this, getIntent());
     }
@@ -98,6 +103,19 @@ public class MainActivity extends BridgeActivity {
             recreateOnResume = false;
             recreate();
         }
+    }
+
+    /**
+     * Only what the page uses, on top of the settings Capacitor's Bridge gives the WebView. The
+     * page comes from Capacitor's https://localhost server, never from file:// or content://
+     * URLs, and asks for no location. window.open still works from a tap (Chromium lets a
+     * user gesture open a window either way), which is how outside links reach the browser.
+     */
+    private static void restrictWebView(WebSettings settings) {
+        settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(false);
+        settings.setGeolocationEnabled(false);
+        settings.setJavaScriptCanOpenWindowsAutomatically(false);
     }
 
     /**
