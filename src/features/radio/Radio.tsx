@@ -1,8 +1,8 @@
 import { computed } from '@preact/signals';
 import { online } from '../../core/network';
 import { currentPlaysOffline, isPlaying, player, playContext } from '../../player';
-import { isSaved, savedOffline } from '../../stores/savedOffline';
 import { BAND_NAMES, STATIONS, stationFreq, stationLabel, stationQueue, stationTracks, type Band, type Station } from '../../player/radio';
+import type { Track } from '../../data/model';
 import { Icon } from '../../ui/icons';
 import { Screen } from '../../ui/components/Screen';
 import { askConfirm, nowPlayingOpen, useSearchContext } from '../../ui/nav';
@@ -17,18 +17,19 @@ const onAir = computed<Station | null>(() => {
   return label ? (STATIONS.find((s) => stationLabel(s) === label) ?? null) : null;
 });
 
-/** Every station track, for Here on this tab. */
-const ALL_TRACKS = STATIONS.flatMap((s) => stationTracks(s));
-const allTracks = () => ALL_TRACKS;
+/** Every station track, for Here on this tab: built the first time Search asks. */
+let allStationTracks: Track[] | null = null;
+const allTracks = () => (allStationTracks ??= STATIONS.flatMap((s) => stationTracks(s)));
 
 /**
  * Tune in: a fresh round of the station, then the next ones (player/radio). The station that's
- * on already opens Now Playing instead (and plays, if paused), so a tap doesn't restart it.
+ * on already doesn't restart: playing, Now Playing opens; paused, it plays (as a track row does,
+ * so offline a refused play opens nothing).
  */
 function tuneIn(s: Station): void {
   if (onAir.peek() === s) {
-    if (!isPlaying.peek()) void player.play();
-    nowPlayingOpen.value = true;
+    if (isPlaying.peek()) nowPlayingOpen.value = true;
+    else void player.play();
     return;
   }
   void playFrom(stationQueue(s), 0, list(stationLabel(s)));
@@ -43,20 +44,12 @@ function showInfo(s: Station): void {
   });
 }
 
-/**
- * Offline, as a track row (TrackRow): a station dims unless it can play. That is the one on
- * air while its track still plays, or one with a liked song saved on the phone (the offline
- * guard plays just those). A tap on a dimmed one is refused with the reason; ⓘ still opens.
- */
-function playsOffline(s: Station, on: boolean): boolean {
-  if (on) return currentPlaysOffline.value;
-  const saved = savedOffline.value;
-  return stationTracks(s).some((t) => isSaved(t, saved));
-}
-
 function StationRow({ s, on }: { s: Station; on: boolean }) {
   const freq = stationFreq(s);
-  const off = !online.value && !playsOffline(s, on);
+  // Offline, as a track row (TrackRow): a station needs the network, so it dims; only the one on
+  // air stays bright while its track still plays. A tap on a dimmed one is refused with the
+  // reason; ⓘ still opens.
+  const off = !online.value && !(on && currentPlaysOffline.value);
   return (
     <li class={'row station' + (on ? ' is-current' : '') + (off ? ' off' : '')} data-testid="station" data-station={s.id} aria-current={on || undefined}>
       <button

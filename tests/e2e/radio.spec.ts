@@ -201,6 +201,33 @@ test('offline the stations dim like any track that cannot play, and a tap says w
   await expect(cipher).not.toHaveClass(/\boff\b/);
 });
 
+test('offline a station dims even with one of its tracks saved: a round starts anywhere, and needs the network', async ({ page, backend }) => {
+  await start(page);
+  await openRadio(page);
+  const cipher = page.locator('[data-testid="station"][data-station="cipher"]');
+  await page.evaluate((ids) => (window as unknown as { __cyberjukeCache: { saved(ids: string[]): void } }).__cyberjukeCache.saved(ids), [station('cipher').tracks[0].ytId]);
+  await setOffline(page, backend, true);
+  await expect(cipher).toHaveClass(/\boff\b/);
+  await expect(cipher.getByTestId('station-tune')).toHaveAttribute('aria-disabled', 'true');
+});
+
+test('the station on air, paused: a tap plays it on (as a track row does), and Now Playing stays shut', async ({ page }) => {
+  await start(page);
+  await openRadio(page);
+  const cipher = page.locator('[data-testid="station"][data-station="cipher"]');
+  await tune(page, 'cipher');
+  const first = (await page.getByTestId('mini-title').textContent())!.trim();
+  await page.getByTestId('mini-toggle').click();
+  await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Play');
+  await cipher.getByTestId('station-tune').click();
+  await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Pause');
+  await expect(page.getByTestId('mini-title')).toHaveText(first);
+  await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
+  // Playing, the same tap opens Now Playing.
+  await cipher.getByTestId('station-tune').click();
+  await expect(page.getByTestId('now-playing')).toHaveClass(/open/);
+});
+
 for (const [width, theme] of [[320, 'dark'], [360, 'dark'], [320, 'c64'], [320, 'brutalist'], [320, 'vt320']] as const) {
   test(`five tabs fit at ${width} px in ${theme}, every label whole and apart`, async ({ page }) => {
     await page.setViewportSize({ width, height: 740 });

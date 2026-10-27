@@ -32,11 +32,11 @@ export const BAND_NAMES: Record<Band, string> = { ym: 'YM band', zm: 'ZM band' }
 
 const PREFIX = 'sig:';
 
+/** How a station's list is labelled: what the Radio tab starts it with, nothing else can (natively Stations.LABEL). */
+const STATION_LABEL = 'Signal Radio · ';
+
 /** What Now Playing shows as the source of a station: "Signal Radio · CIPHER". */
 export const stationLabel = (s: Pick<Station, 'callsign'>): string => `${STATION_LABEL}${s.callsign}`;
-
-/** How a station's list is labelled: what the Radio tab starts it with, nothing else can (natively Stations.LABEL). */
-export const STATION_LABEL = 'Signal Radio · ';
 
 /** The dial reading, as the site shows it: one decimal ("273.0"). */
 export const stationFreq = (s: Pick<Station, 'freq'>): string => s.freq.toFixed(1);
