@@ -171,6 +171,20 @@ class SessionPolicyTest {
     }
 
     @Test
+    fun anItemsMp3LinkComesFromItsUriOrTheLinkKeptInTheApp() {
+        val link = "https://latex.gg/share/IZq8cMcx.mp3"
+        // The service's own item: its cyberjuke://mp3/ URI says it all, a video's URI says no.
+        assertEquals(link, SessionPolicy.mp3LinkOf(hasUri = true, uriLink = link, ytIdExtra = null, keptLink = null))
+        assertNull(SessionPolicy.mp3LinkOf(hasUri = true, uriLink = null, ytIdExtra = "fJ9rUzIMcZQ", keptLink = link))
+        // A copy without a URI: the link kept by mediaId, so the plugin still sees an MP3 (and
+        // lets it play through a YouTube back-off), unless the copy is a video's.
+        assertEquals(link, SessionPolicy.mp3LinkOf(hasUri = false, uriLink = null, ytIdExtra = null, keptLink = link))
+        assertNull(SessionPolicy.mp3LinkOf(hasUri = false, uriLink = null, ytIdExtra = "fJ9rUzIMcZQ", keptLink = link))
+        assertNull(SessionPolicy.mp3LinkOf(hasUri = false, uriLink = null, ytIdExtra = null, keptLink = null))
+        assertNull(SessionPolicy.mp3LinkOf(hasUri = false, uriLink = null, ytIdExtra = null, keptLink = "https://evil.example/x.mp3"))
+    }
+
+    @Test
     fun incomingItemsOnlyKeepValidYouTubeIds() {
         assertEquals("fJ9rUzIMcZQ", SessionPolicy.ytIdForIncoming("fJ9rUzIMcZQ", null))
         assertEquals("fJ9rUzIMcZQ", SessionPolicy.ytIdForIncoming(null, "fJ9rUzIMcZQ"))

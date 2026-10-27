@@ -149,6 +149,17 @@ internal object SessionPolicy {
     /** The one URL of a Jukebox MP3 file name ([mp3FileOf]'s inverse), or null for anything else. */
     fun mp3UrlForFile(file: String?): String? = file?.takeIf { isValidMp3File(it) }?.let { "https://latex.gg/share/$it" }
 
+    /**
+     * An item's MP3 link ([JukeUris.mp3UrlOf]): the one its URI gives ([uriLink]) when it has a
+     * URI ([hasUri]), else none for a video (a [ytIdExtra]), else the one kept in TrackExtras
+     * ([keptLink]). Never from the metadata, which other apps can read.
+     */
+    fun mp3LinkOf(hasUri: Boolean, uriLink: String?, ytIdExtra: String?, keptLink: String?): String? = when {
+        hasUri -> uriLink
+        ytIdExtra != null -> null
+        else -> keptLink?.takeIf { isValidMp3Url(it) }
+    }
+
     /** What a track from the page plays ([playableOf]). */
     sealed class Playable {
         data class Yt(val id: String) : Playable()

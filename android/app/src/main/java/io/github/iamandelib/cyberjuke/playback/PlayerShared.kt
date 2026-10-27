@@ -42,14 +42,18 @@ internal object JukeUris {
 
     /**
      * The item's MP3 link: from its URI; an item without one (a controller's copy) that isn't
-     * a video, from [TrackExtras]. Never in its metadata: other apps read that (the platform
-     * session copies its extras), and a members-only post's file must not reach them.
+     * a video, from [TrackExtras] ([SessionPolicy.mp3LinkOf]). Never in its metadata: other
+     * apps read that (the platform session copies its extras).
      */
     fun mp3UrlOf(item: MediaItem?): String? {
         if (item == null) return null
-        item.localConfiguration?.uri?.let { return mp3UrlOf(it) }
-        if (item.mediaMetadata.extras?.getString(EXTRA_YT_ID) != null) return null
-        return TrackExtras.get(item.mediaId)?.mp3
+        val uri = item.localConfiguration?.uri
+        return SessionPolicy.mp3LinkOf(
+            hasUri = uri != null,
+            uriLink = mp3UrlOf(uri),
+            ytIdExtra = item.mediaMetadata.extras?.getString(EXTRA_YT_ID),
+            keptLink = if (uri == null) TrackExtras.get(item.mediaId)?.mp3 else null,
+        )
     }
 
     /** ytId from the URI, falling back to the metadata extras. */
