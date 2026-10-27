@@ -1,6 +1,6 @@
 import { AUTH_USER, expect, MEMBERS_POSTS, test } from '../../fixtures';
 import type { Page } from '@playwright/test';
-import { playerCalls, setOffline, start, toastsGone, waitForTracks } from '../../helpers';
+import { openSettings, playerCalls, setOffline, start, toastsGone, waitForTracks } from '../../helpers';
 
 /**
  * Signed in, a members-only track is liked and played; the listening cache is still saving it
@@ -19,7 +19,7 @@ const saved = (page: Page, ytIds: string[]) => page.evaluate((ids) => (window as
 
 test('signing out while a members-only like is being saved: Liked is sent first, then signedOut; the track is gone everywhere, quietly', async ({ page, backend }) => {
   await start(page);
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   await page.getByTestId('signin-email').fill(AUTH_USER.email);
   await page.getByTestId('signin-password').fill(AUTH_USER.password);
   await page.getByTestId('signin-submit').click();
@@ -46,7 +46,7 @@ test('signing out while a members-only like is being saved: Liked is sent first,
   const before = (await cacheCalls()).length;
 
   // Sign out (it asks first).
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   await page.getByTestId('signout').click();
   await page.getByTestId('confirm-ok').click();
   await expect(page.getByTestId('signin-form')).toBeVisible();

@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { artistChoice, menuTrack, nowPlayingOpen, openNowPlayingWhen } from './nav';
+import { artistChoice, goBack, menuTrack, nowPlayingOpen, openNowPlayingWhen, openSettings, selectTab, stacks, tab, topEntry } from './nav';
 import type { Track } from '../data/model';
 
 describe('openNowPlayingWhen (notification tap)', () => {
@@ -41,5 +41,35 @@ describe('openNowPlayingWhen (notification tap)', () => {
     vi.advanceTimersByTime(5000);
     has.value = true;
     expect(nowPlayingOpen.value).toBe(false);
+  });
+});
+
+describe('Settings (its own screen, opened from Home)', () => {
+  afterEach(() => {
+    selectTab('home');
+    nowPlayingOpen.value = false;
+  });
+
+  it('is not a page on Home: Home stays as it was, and the Home tab shows Home', () => {
+    selectTab('home');
+    openSettings();
+    expect(tab.value).toBe('settings');
+    expect(stacks.value.home).toEqual([]);
+    // Another tab, then Home: Home itself, not Settings.
+    selectTab('genres');
+    selectTab('home');
+    expect(tab.value).toBe('home');
+    expect(topEntry.value).toBeNull();
+  });
+
+  it('closes over Now Playing and goes back to Home on Back, Android back or Escape', () => {
+    for (const switchTab of [true, false]) {
+      nowPlayingOpen.value = true;
+      openSettings();
+      expect(nowPlayingOpen.value).toBe(false);
+      expect(goBack(switchTab)).toBe(true);
+      expect(tab.value).toBe('home');
+      expect(topEntry.value).toBeNull();
+    }
   });
 });

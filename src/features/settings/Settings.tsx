@@ -14,6 +14,7 @@ import {
   type Quality,
   type ThemeId,
 } from '../../stores/library';
+import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import { player } from '../../player';
 import { clearListeningCache } from '../../player/listeningCache';
@@ -23,9 +24,10 @@ import { RELEASES_URL, REPO_URL } from '../../data/model';
 import { toast } from '../../stores/toast';
 import { app, checkFailed, checkForUpdates, checking, installUnknown, lastCheck, updateAvailable } from '../../stores/updates';
 import { Screen } from '../../ui/components/Screen';
+import { Icon } from '../../ui/icons';
 import { openExternal } from '../../ui/links';
 import { arrowChoice } from '../../ui/arrowChoice';
-import { askConfirm, usePageActive } from '../../ui/nav';
+import { askConfirm, closeSettings, usePageActive } from '../../ui/nav';
 
 function Swatch({ id }: { id: ThemeId }) {
   const on = settings.value.theme === id;
@@ -214,18 +216,27 @@ function CrossfadeSetting() {
   );
 }
 
+/**
+ * The sign-in form's email, progress and error, kept outside the form: Settings is a page, and
+ * Back closes it while a sign-in may still be out. Reopened, it shows that sign-in (and doesn't
+ * start a second one) and then its error.
+ */
+const signInEmail = signal('');
+const signInBusy = signal(false);
+const signInError = signal<string | null>(null);
+
 /** Settings → Account, signed out: "Sign in with Cyberspace". The password is never kept. */
 function SignInForm() {
-  const [email, setEmail] = useState('');
+  const email = signInEmail.value;
+  const busy = signInBusy.value;
+  const error = signInError.value;
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const submit = async (e: Event) => {
     e.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError(null);
+    if (signInBusy.peek()) return;
+    signInBusy.value = true;
+    signInError.value = null;
     try {
       const user = await auth.signIn(email, password);
       setPassword('');
@@ -236,9 +247,9 @@ function SignInForm() {
         user.saved ? 2400 : 5000,
       );
     } catch (err) {
-      setError(err instanceof AuthError ? err.message : authErrorText('UNKNOWN'));
+      signInError.value = err instanceof AuthError ? err.message : authErrorText('UNKNOWN');
     } finally {
-      setBusy(false);
+      signInBusy.value = false;
     }
   };
   return (
@@ -261,7 +272,7 @@ function SignInForm() {
           autocapitalize="off"
           spellcheck={false}
           value={email}
-          onInput={(e) => setEmail((e.currentTarget as HTMLInputElement).value)}
+          onInput={(e) => (signInEmail.value = (e.currentTarget as HTMLInputElement).value)}
           disabled={busy}
           data-testid="signin-email"
         />
@@ -400,8 +411,7 @@ function NetStatusLine() {
   const [text, setText] = useState<string | null>(null);
   const ipv4 = settings.value.ipv4;
   const blocked = block.blocked.value;
-  // Tabs stay mounted: ask again each time Settings comes back into view (Auto may have
-  // switched meanwhile, without a block).
+  // Ask each time Settings is in view (Auto may have switched meanwhile, without a block).
   const active = usePageActive();
   useEffect(() => {
     if (!active) return;
@@ -427,7 +437,7 @@ function checkedText(at: number): string {
   return `Checked ${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-/** A newer release is out: at the top of Settings (the Settings tab shows a dot meanwhile). */
+/** A newer release is out: at the top of Settings (Home's Settings button shows a dot meanwhile). */
 function UpdateBanner() {
   const r = updateAvailable.value;
   if (!r) return null;
@@ -506,7 +516,18 @@ function Updates() {
 export function Settings() {
   const s = settings.value;
   return (
-    <Screen testid="screen-settings" title="Settings" subtitle={`CyberJuke v${__APP_VERSION__}`} scrollKey="settings" backToTop={false}>
+    <Screen
+      testid="screen-settings"
+      title="Settings"
+      subtitle={`CyberJuke v${__APP_VERSION__}`}
+      scrollKey="settings"
+      backToTop={false}
+      left={
+        <button class="icon-btn" aria-label="Back" onClick={closeSettings} data-testid="settings-back">
+          <Icon name="back" />
+        </button>
+      }
+    >
       <UpdateBanner />
       <Account />
 
@@ -639,6 +660,10 @@ export function Settings() {
           <A href="https://github.com/TeamNewPipe/NewPipeExtractor">NewPipeExtractor</A> (GPL-3.0) for playback and
           Global search.
         </p>
+        <p data-testid="about-signal">
+          <b>Signal Radio:</b> <A href="https://github.com/hyphen8d/signal">SIGNAL by hyphen8d (MIT)</A>, the stations
+          Cyberspace's Jukebox plays as Signal Radio, bundled with the app.
+        </p>
       </section>
 
       <section class="card prose" data-testid="licenses">
@@ -667,7 +692,7 @@ export function Settings() {
           <p data-testid="libraries">
             NewPipeExtractor (GPL-3.0); AndroidX Media3 and other AndroidX libraries, OkHttp, Okio, Kotlin,
             kotlinx.coroutines, Guava, nanojson and Apache Cordova (Apache-2.0); Preact, @preact/signals, Capacitor, the
-            Ionic filesystem library and jsoup (MIT); Rhino (MPL-2.0); Protocol Buffers and JSR 305 (BSD-3-Clause);
+            Ionic filesystem library, jsoup and the Signal Radio stations by hyphen8d (MIT); Rhino (MPL-2.0); Protocol Buffers and JSR 305 (BSD-3-Clause);
             desugar_jdk_libs (GPL-2.0 with the Classpath Exception).
           </p>
         </details>

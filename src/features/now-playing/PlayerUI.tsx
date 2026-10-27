@@ -28,7 +28,7 @@ import { artistChoice, lyricsOpen, menuTrack, nowPlayingOpen, openArtistPage, op
 import { openExternal, openPost, youtubeUrl } from '../../ui/links';
 import { positionNow, useTickValue } from '../../ui/useTick';
 import { splitArtists } from '../../data/artists';
-import { isGlobal, type Track } from '../../data/model';
+import { isGlobal, isSignal, type Track } from '../../data/model';
 import { hasAudio } from '../../core/guards';
 import { reducedMotion } from '../../core/motion';
 import { OFFLINE } from '../../core/offlineText';
@@ -619,10 +619,11 @@ function NowPlayingContent() {
               </div>
               <NpLike track={t} />
             </div>
-            {(t.membersOnly || t.genre) && (
+            {(t.membersOnly || (t.genre && !isSignal(t))) && (
               <div class="np-tags">
                 {t.membersOnly && <MembersTag class="np-members" />}
-                {t.genre && (
+                {/* A station track's "genre" is its station's callsign, shown below instead. */}
+                {t.genre && !isSignal(t) && (
                   <button class="tag np-genre" onClick={() => openGenrePage(t.genre)} aria-label={`Open genre ${t.genre}`} data-testid="np-genre">
                     <span class="np-genre-text">{t.genre}</span>
                   </button>
@@ -638,6 +639,11 @@ function NowPlayingContent() {
             <div class="np-post np-global" data-testid="np-global">
               <span>From Global search</span>
               <Icon name="search" size={18} />
+            </div>
+          ) : isSignal(t) ? (
+            <div class="np-post np-global" data-testid="np-signal">
+              <span>On Signal Radio · {t.genre}</span>
+              <Icon name="radio" size={18} />
             </div>
           ) : t.by && (
             <button class="np-post" onClick={() => openPost(t.postUrl)} data-testid="np-post">

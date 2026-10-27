@@ -10,6 +10,7 @@ import { TEST_HOOKS, exposeForTests } from '../core/testHooks';
 import { UNTITLED } from '../data/model';
 import { trackErrorText, type TrackErrorFacts } from './errorText';
 import { Queue } from './queue';
+import { stationPlaying } from './radio';
 import type { RepeatMode } from './native';
 import type { CrossfadeMs, Ipv4Mode, Quality } from '../stores/library';
 import { AUTOPLAY_LOW, EMPTY_STATE, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
@@ -196,10 +197,15 @@ export class WebPlayer implements Player {
     this.checkLow();
   }
 
+  /** More follows the list for [seedId]: Autoplay on, or a Signal Radio station playing (always). */
+  private keepsGoing(seedId: string | undefined): boolean {
+    return this.autoplayOn || !!stationPlaying(this.context, seedId);
+  }
+
   /** AP4, inline: with 5 autoplay tracks or fewer to go, ask for more (once per state). */
   private checkLow(): void {
     const seed = this.seed;
-    if (!this.autoplayOn || this.q.repeat !== 'off' || !this.q.current || !seed) {
+    if (!seed || !this.keepsGoing(seed.id) || this.q.repeat !== 'off' || !this.q.current) {
       this.lowKey = null;
       return;
     }
@@ -478,13 +484,13 @@ export class WebPlayer implements Player {
   async restore(track: Track, kind: UpNextKind, beforeId: string | null): Promise<void> {
     if (!this.q.current) return this.playList([track], 0);
     // Autoplay rows don't come back while autoplay is off or repeat is on (they'd be dropped).
-    if (kind === 'autoplay' && (!this.autoplayOn || this.q.repeat !== 'off')) return;
+    if (kind === 'autoplay' && (!this.keepsGoing(this.seed?.id) || this.q.repeat !== 'off')) return;
     this.q.restore(track, kind, beforeId);
     this.publish();
   }
 
   async addAutoplay(tracks: Track[], seedId: string): Promise<void> {
-    if (!tracks.length || !this.autoplayOn || this.q.repeat !== 'off' || this.seed?.id !== seedId) return;
+    if (!tracks.length || !this.keepsGoing(seedId) || this.q.repeat !== 'off' || this.seed?.id !== seedId) return;
     const wasEmpty = !this.q.current;
     this.q.addAuto(tracks);
     this.publish();
@@ -493,7 +499,8 @@ export class WebPlayer implements Player {
 
   async setAutoplay(enabled: boolean): Promise<void> {
     this.autoplayOn = enabled;
-    if (!enabled) this.q.dropAuto();
+    // A station's next rounds stay: it plays on whatever the setting.
+    if (!enabled && !stationPlaying(this.context, this.seed?.id)) this.q.dropAuto();
     this.publish();
   }
 

@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { box, openNowPlaying, openSearch, playerCalls, scrollTo, scrollTopOf, seedStorage, start, toastsGone, touchDrag, touchSwipe, touchTap, waitForTracks } from '../helpers';
+import { box, openNowPlaying, openSearch, openSettings, playerCalls, scrollTo, scrollTopOf, seedStorage, start, toastsGone, touchDrag, touchSwipe, touchTap, waitForTracks } from '../helpers';
 
 /**
  * Wave 1c interaction: navigation in place (P4, P5, SM7, M10), undo toasts and confirm
@@ -454,7 +454,7 @@ test('the artist page says when the Jukebox could not load, and Retry loads it (
 
 test('Autoplay is on by default and the setting is kept; Settings lines are short (C3, U2)', async ({ page }) => {
   await page.goto('/');
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   const toggle = page.getByTestId('autoplay-toggle');
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   const settings = page.getByTestId('screen-settings');
@@ -465,14 +465,14 @@ test('Autoplay is on by default and the setting is kept; Settings lines are shor
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await page.reload();
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   await expect(page.getByTestId('autoplay-toggle')).toHaveAttribute('aria-checked', 'false');
 });
 
 test('saved settings without the Autoplay key keep it on', async ({ page }) => {
   await seedStorage(page, { 'CapacitorStorage.settings': { theme: 'dark', showNsfw: false, quality: 'high' } });
   await page.goto('/');
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   await expect(page.getByTestId('autoplay-toggle')).toHaveAttribute('aria-checked', 'true');
   await toastsGone(page);
 });

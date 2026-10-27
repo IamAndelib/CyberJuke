@@ -56,6 +56,16 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 - [ ] Settings → **Autoplay** off: playback stops when the list ends.
 - [ ] Let autoplay run for an hour or more: it keeps going without repeating the same songs.
 
+## Signal Radio
+- [ ] The **Radio** tab comes after Library; all five tab labels show whole (also on a small phone). Settings opens from the icon at the top right of Home (no label), with no tab highlighted while it shows, and Back returns to Home. From Settings, tap Genres, then Home: Home shows, not Settings. The Radio tab's header says "by hyphen8d", with nothing under the station list. Airplane mode on: the stations dim (the one playing stays bright), and tapping one says "No carrier. Connect to play." It lists the YM and ZM bands, each station with its frequency, name and tagline.
+- [ ] Tap a station: it plays one of its tracks, the station is marked with a radio icon, and Now Playing says "Playing from Signal Radio · " and its name. Up next shows the rest of the station, then "More from …".
+- [ ] Tap the station that's on: Now Playing opens, and the music doesn't restart; paused, the tap plays it on. Tap another station: its tracks play, and the mark moves.
+- [ ] On the Radio tab, Search (Here) finds a song from any station; tapping it plays that song.
+- [ ] The ⓘ button shows what the station plays and how many tracks it has; **Tune in** starts it.
+- [ ] Let a station play with the screen off for longer than its round (about 2 hours for a 32-track station): it keeps going, a new shuffle of the same station.
+- [ ] Swipe the app away while a station plays and reopen it: Now Playing and Up next show the station's titles, not "Unknown track".
+- [ ] Settings → **Autoplay** off, then tune in and let it play past its first round: it keeps going. A Jukebox list still stops at its end.
+
 ## Browsing and gestures
 - [ ] Open a genre page and tap ★ in the top bar: the genre shows under ★ Favourites on the Genres tab. Same on an artist page.
 - [ ] Now Playing: the ♥ sits beside the title and artist; a long title scrolls without running under it.
@@ -74,7 +84,7 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 - [ ] Liking a track or favouriting (★) a genre or artist shows a short "added" message with no Undo, and the star or heart fills at once, even with a long Artists list. On the Genres and Artists tabs the starred tile moves up into ★ Favourites straight away (not also left in the grid), and unstarring puts it back in its place.
 - [ ] Swipe an **Undo** message at the bottom (e.g. after unliking) left, then another right: each one goes. A short drag springs back. A swipe that starts on **Undo** doesn't undo. Right after a swipe, one tap on ♥ or a ★ works (a fast flick too).
 - [ ] Only one message shows at a time: star several genres quickly, and each new message replaces the last. Like a song in Now Playing, then scroll or tap anywhere else: the message goes at once. Its **Undo** still works.
-- [ ] Settings → **Updates**: the automatic check is off on a fresh install and after upgrading from 1.1.x, and nothing asks GitHub until you turn it on or tap **Check now**; **Check now** says "Up to date (x.y.z)" or, when a newer release is out, shows it at the top of Settings with **Download**, and a dot on the Settings tab. Turning the toggle on stays on after a restart. Installed from F-Droid, the card only says updates come through F-Droid.
+- [ ] Settings → **Updates**: the automatic check is off on a fresh install and after upgrading from 1.1.x, and nothing asks GitHub until you turn it on or tap **Check now**; **Check now** says "Up to date (x.y.z)" or, when a newer release is out, shows it at the top of Settings with **Download**, and a dot on the Settings button at the top right of Home. Turning the toggle on stays on after a restart. Installed from F-Droid, the card only says updates come through F-Droid.
 - [ ] The ⋯ menu of a liked song says **Unlike**; of any other song, **Like**. After **Next**, the Now Playing ♥ shows the new song's state.
 - [ ] Every theme (Settings → Theme) is readable.
 

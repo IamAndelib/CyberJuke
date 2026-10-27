@@ -1,0 +1,268 @@
+import { readFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { expect, test } from '../fixtures';
+import { OFFLINE } from '../../src/core/offlineText';
+import { clockStart, expectStable, FAKE_TRACK_MS, openNowPlaying, openSearch, openSettings, playOn, seedStorage, setOffline, SETTINGS_KEY, start } from '../helpers';
+
+/** Signal Radio: the Radio tab, tuning in, a station that plays on, and its tracks kept. */
+
+interface QTrack {
+  id: string;
+  title: string;
+  source: string;
+}
+interface QState {
+  context: { label: string; mode: 'radio' | 'list' } | null;
+  current: QTrack | null;
+  seed: QTrack | null;
+  list: QTrack[];
+  autoplay: QTrack[];
+}
+const queueState = (page: Page) => page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => QState }).__cyberjukeQueue());
+
+interface StationData {
+  id: string;
+  desc: string;
+  tracks: { ytId: string; title: string }[];
+}
+const STATIONS = (JSON.parse(readFileSync(new URL('../../src/data/radio/stations.json', import.meta.url), 'utf8')) as { stations: StationData[] }).stations;
+const station = (id: string) => STATIONS.find((s) => s.id === id)!;
+const titlesOf = (id: string) => station(id).tracks.map((t) => t.title);
+
+/** "3 of 64 · Playing from …": the place in the list, and the list's length. */
+async function place(page: Page): Promise<{ at: number; of: number }> {
+  const m = /^(\d+) of (\d+)/.exec((await page.getByTestId('np-from').textContent()) ?? '');
+  return m ? { at: Number(m[1]), of: Number(m[2]) } : { at: 0, of: 0 };
+}
+
+async function openRadio(page: Page) {
+  await page.getByTestId('tab-radio').click();
+  await expect(page.getByTestId('screen-radio')).toBeVisible();
+}
+
+async function tune(page: Page, id: string) {
+  await page.locator(`[data-testid="station"][data-station="${id}"]`).getByTestId('station-tune').click();
+  await expect(page.getByTestId('mini-player')).toBeVisible();
+}
+
+test('the Radio tab lists both bands; tuning in plays the station and Now Playing says so', async ({ page }) => {
+  await start(page);
+  await openRadio(page);
+  const screen = page.getByTestId('screen-radio');
+  await expect(screen.locator('.topbar')).toContainText('Signal Radio');
+  await expect(page.getByTestId('band-ym').getByTestId('station')).toHaveCount(8);
+  await expect(page.getByTestId('band-zm').getByTestId('station')).toHaveCount(8);
+  const cipher = page.locator('[data-testid="station"][data-station="cipher"]');
+  await expect(cipher).toContainText('133.7');
+  await expect(cipher).toContainText('CIPHER');
+  await expect(cipher).toContainText('digital infiltration, late-night breakbeat');
+  await expect(page.locator('[data-testid="station"][data-station="cold-wave"]')).toContainText('273.0');
+  await expect(screen.locator('[aria-current]')).toHaveCount(0);
+
+  await tune(page, 'cipher');
+  expect(titlesOf('cipher')).toContain((await page.getByTestId('mini-title').textContent())!.trim());
+  // The station row is marked as on air.
+  await expect(cipher).toHaveAttribute('aria-current', 'true');
+  await expect(cipher.getByTestId('station-on')).toBeVisible();
+  await expect(screen.locator('[aria-current]')).toHaveCount(1);
+
+  // The round is the list (all 50 tracks, once each), the next round autoplay.
+  const q = await queueState(page);
+  expect(q.context).toEqual({ label: 'Signal Radio · CIPHER', mode: 'list' });
+  expect(q.current?.source).toBe('signal');
+  expect(q.current?.id).toMatch(/^sig:cipher:[A-Za-z0-9_-]{11}$/);
+  await expect.poll(async () => (await queueState(page)).autoplay.length).toBeGreaterThan(0);
+
+  await openNowPlaying(page);
+  await expect(page.getByTestId('np-from')).toContainText('Signal Radio · CIPHER');
+  await expect(page.getByTestId('np-signal')).toHaveText('On Signal Radio · CIPHER');
+  // No post to open, no genre page for a callsign.
+  await expect(page.getByTestId('np-post')).toHaveCount(0);
+  await expect(page.getByTestId('np-genre')).toHaveCount(0);
+  await expect.poll(() => place(page)).toEqual({ at: 1, of: 100 });
+  await expect(page.getByTestId('upnext-list-label')).toHaveText('Next from: Signal Radio · CIPHER');
+  await page.getByTestId('np-close').click();
+
+  // The info button: the station's description and size, and Tune in.
+  await page.locator('[data-testid="station"][data-station="the-crypt"]').getByTestId('station-info').click();
+  const sheet = page.getByTestId('confirm-sheet');
+  await expect(sheet).toContainText('THE CRYPT · 1031.0');
+  await expect(sheet).toContainText('32 tracks');
+  await expect(sheet).toContainText(station('the-crypt').desc);
+  await page.getByTestId('confirm-ok').click();
+  // Another station: its own tracks, and the mark moves.
+  await expect(page.locator('[data-testid="station"][data-station="the-crypt"]')).toHaveAttribute('aria-current', 'true');
+  await expect(cipher).not.toHaveAttribute('aria-current');
+  await expect.poll(async () => (await queueState(page)).context?.label).toBe('Signal Radio · THE CRYPT');
+  expect(titlesOf('the-crypt')).toContain((await page.getByTestId('mini-title').textContent())!.trim());
+  const crypt = await queueState(page);
+  expect([crypt.current, ...crypt.list].every((t) => t!.id.startsWith('sig:the-crypt:'))).toBe(true);
+});
+
+test('a station plays on past its rounds, and its tracks are kept like any other', async ({ page }) => {
+  await clockStart(page);
+  await start(page);
+  await openRadio(page);
+  await tune(page, 'the-crypt');
+  await openNowPlaying(page);
+  // The first round, and the next one queued behind it.
+  await expect.poll(() => place(page)).toEqual({ at: 1, of: 64 });
+  // Past both of them but the last few: another round comes.
+  await playOn(page, 60 * (FAKE_TRACK_MS + 200));
+  await expect.poll(() => place(page)).toEqual({ at: 61, of: 96 });
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from THE CRYPT');
+  const q = await queueState(page);
+  expect(q.context?.label).toBe('Signal Radio · THE CRYPT');
+  expect([...q.list, ...q.autoplay].every((t) => t.id.startsWith('sig:the-crypt:'))).toBe(true);
+  const now = q.current!.title;
+  expect(titlesOf('the-crypt')).toContain(now);
+  await page.getByTestId('np-close').click();
+
+  // Played station tracks come back after a reload with their titles (Recently played).
+  await page.reload();
+  await page.getByTestId('tab-library').click();
+  await page.getByTestId('lib-recent').click();
+  const recent = page.getByTestId('recent-list').getByTestId('track-title');
+  await expect(recent.first()).toHaveText(now);
+});
+
+test('a station plays on with Autoplay off too: it is the station, not autoplay', async ({ page }) => {
+  await start(page);
+  await openSettings(page);
+  const toggle = page.getByTestId('autoplay-toggle');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await openRadio(page);
+  await tune(page, 'slow-orbit');
+  // Its next round (32 more) follows the first, as with Autoplay on.
+  await openNowPlaying(page);
+  await expect.poll(() => place(page)).toEqual({ at: 1, of: 64 });
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from SLOW ORBIT');
+  // Turning Autoplay off while a station plays leaves its rounds alone.
+  await page.getByTestId('np-close').click();
+  await openSettings(page);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await openNowPlaying(page);
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from SLOW ORBIT');
+  expect(await place(page)).toEqual({ at: 1, of: 64 });
+});
+
+test("a station's track played from another list is just a track there: with Autoplay off it stops at the end", async ({ page }) => {
+  await start(page);
+  await openSettings(page);
+  const toggle = page.getByTestId('autoplay-toggle');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await openRadio(page);
+  await tune(page, 'slow-orbit');
+  const first = (await page.getByTestId('mini-title').textContent())!.trim();
+  await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Pause');
+  await page.getByTestId('mini-next').click();
+  await expect(page.getByTestId('mini-title')).not.toHaveText(first);
+  // From Recently played, which now holds two of the station's tracks: the older one.
+  await page.getByTestId('tab-library').click();
+  await page.getByTestId('lib-recent').click();
+  const rows = page.getByTestId('recent-list').getByTestId('track-row');
+  await expect(rows).toHaveCount(2);
+  await rows.filter({ hasText: first }).getByTestId('track-play').click();
+  await expect(page.getByTestId('mini-title')).toHaveText(first);
+  await openNowPlaying(page);
+  await expect(page.getByTestId('np-from')).toContainText('Recently played');
+  // The two plays and nothing after them: no round of the station.
+  await expectStable(() => place(page), 1000);
+  expect(await place(page)).toEqual({ at: 2, of: 2 });
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveCount(0);
+});
+
+test('offline the stations dim like any track that cannot play, and a tap says why; the one on air stays bright', async ({ page, backend }) => {
+  await start(page);
+  await openRadio(page);
+  const stations = page.getByTestId('station');
+  const cipher = page.locator('[data-testid="station"][data-station="cipher"]');
+  await setOffline(page, backend, true);
+  await expect(stations.and(page.locator('.off'))).toHaveCount(16);
+  await expect(cipher.getByTestId('station-tune')).toHaveAttribute('aria-disabled', 'true');
+  // The ⓘ still opens.
+  await expect(cipher.getByTestId('station-info')).not.toHaveAttribute('aria-disabled');
+  await cipher.getByTestId('station-tune').click({ force: true });
+  await expect(page.getByTestId('toast').last()).toHaveText(OFFLINE.tap);
+  await expect(page.getByTestId('mini-player')).toHaveCount(0);
+  await setOffline(page, backend, false);
+  await expect(stations.and(page.locator('.off'))).toHaveCount(0);
+  await expect(cipher.getByTestId('station-tune')).not.toHaveAttribute('aria-disabled');
+
+  // Tuned in, then the connection drops: the station playing stays bright, the rest dim.
+  await tune(page, 'cipher');
+  await setOffline(page, backend, true);
+  await expect(stations.and(page.locator('.off'))).toHaveCount(15);
+  await expect(cipher).not.toHaveClass(/\boff\b/);
+});
+
+test('offline a station dims even with one of its tracks saved: a round starts anywhere, and needs the network', async ({ page, backend }) => {
+  await start(page);
+  await openRadio(page);
+  const cipher = page.locator('[data-testid="station"][data-station="cipher"]');
+  await page.evaluate((ids) => (window as unknown as { __cyberjukeCache: { saved(ids: string[]): void } }).__cyberjukeCache.saved(ids), [station('cipher').tracks[0].ytId]);
+  await setOffline(page, backend, true);
+  await expect(cipher).toHaveClass(/\boff\b/);
+  await expect(cipher.getByTestId('station-tune')).toHaveAttribute('aria-disabled', 'true');
+});
+
+test('the station on air, paused: a tap plays it on (as a track row does), and Now Playing stays shut', async ({ page }) => {
+  await start(page);
+  await openRadio(page);
+  const cipher = page.locator('[data-testid="station"][data-station="cipher"]');
+  await tune(page, 'cipher');
+  const first = (await page.getByTestId('mini-title').textContent())!.trim();
+  await page.getByTestId('mini-toggle').click();
+  await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Play');
+  await cipher.getByTestId('station-tune').click();
+  await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Pause');
+  await expect(page.getByTestId('mini-title')).toHaveText(first);
+  await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
+  // Playing, the same tap opens Now Playing.
+  await cipher.getByTestId('station-tune').click();
+  await expect(page.getByTestId('now-playing')).toHaveClass(/open/);
+});
+
+test('Here on the Radio tab searches every station track, and plays the one found', async ({ page }) => {
+  await start(page);
+  await openRadio(page);
+  await openSearch(page);
+  await expect(page.getByTestId('mode-here')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('search-input')).toHaveAttribute('placeholder', 'Search in Signal Radio');
+  await page.getByTestId('search-input').fill('vintervaldet');
+  const found = page.getByTestId('here-results').getByTestId('track-title');
+  await expect(found).toHaveText(['Vinterväldet']);
+  await found.first().click();
+  await expect(page.getByTestId('mini-title')).toHaveText('Vinterväldet');
+});
+
+for (const [width, theme] of [[320, 'dark'], [360, 'dark'], [320, 'c64'], [320, 'brutalist'], [320, 'vt320']] as const) {
+  test(`five tabs fit at ${width} px in ${theme}, every label whole and apart`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 740 });
+    await seedStorage(page, { [SETTINGS_KEY]: { theme } });
+    await start(page);
+    const tabs = page.locator('.tabbar .tab');
+    await expect(tabs).toHaveCount(5);
+    await expect(tabs.locator('.tab-label')).toHaveText(['Home', 'Genres', 'Artists', 'Library', 'Radio']);
+    const fits = await page.locator('.tabbar').evaluate((bar) => {
+      const labels = [...bar.querySelectorAll<HTMLElement>('.tab-label')];
+      const rects = labels.map((l) => l.getBoundingClientRect());
+      return {
+        bar: bar.scrollWidth <= bar.clientWidth,
+        labels: labels.map((l, i) => {
+          const tab = l.closest('.tab')!.getBoundingClientRect();
+          const r = rects[i];
+          return r.left >= tab.left - 0.5 && r.right <= tab.right + 0.5 && l.scrollWidth <= Math.ceil(r.width) && r.height < 20;
+        }),
+        // Neighbouring labels never read as one word: a visible gap between them.
+        apart: rects.slice(1).every((r, i) => r.left - rects[i].right >= 3),
+      };
+    });
+    expect(fits).toEqual({ bar: true, labels: [true, true, true, true, true], apart: true });
+  });
+}

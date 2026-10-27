@@ -2,8 +2,10 @@
  * App navigation: which tab is showing, each tab's own stack of pages, and the overlays
  * (Now Playing, the ⋯ menu, the artist chooser, confirm sheets).
  *
- * Every tab has a root screen (Home, the Genres and Artists grids, Library, Settings)
+ * Every tab has a root screen (Home, the Genres and Artists grids, Library, Signal Radio)
  * and a stack of pages pushed on top of it: artist, genre, album, "See all" and Search.
+ * Settings is a screen of its own, opened from Home's top bar: shown like a tab without a
+ * button in the tab bar (none is highlighted on it), left by any tab or by Back.
  * A page opens in place on the current tab, from anywhere (Home, Search, Now Playing,
  * another artist), and Back pops it, returning exactly where you were. Visited tabs
  * stay mounted (App), so their scroll and artwork survive a tab switch.
@@ -14,8 +16,8 @@ import { useContext, useEffect, useRef } from 'preact/hooks';
 import type { Track } from '../data/model';
 import type { ReleaseKind } from '../data/ytmusic';
 
-export type Tab = 'home' | 'genres' | 'artists' | 'library' | 'settings';
-const TABS: readonly Tab[] = ['home', 'genres', 'artists', 'library', 'settings'];
+export type Tab = 'home' | 'radio' | 'genres' | 'artists' | 'library' | 'settings';
+const TABS: readonly Tab[] = ['home', 'genres', 'artists', 'library', 'radio', 'settings'];
 
 /** An album or playlist from Global search. What we know before it loads is shown at once. */
 export interface AlbumRef {
@@ -56,7 +58,7 @@ export interface StackEntry {
   tap: { x: number; y: number } | null;
 }
 
-const EMPTY_STACKS: Record<Tab, StackEntry[]> = { home: [], genres: [], artists: [], library: [], settings: [] };
+const EMPTY_STACKS: Record<Tab, StackEntry[]> = { home: [], radio: [], genres: [], artists: [], library: [], settings: [] };
 
 export const tab = signal<Tab>('home');
 /** Each tab's pages above its root, bottom first. */
@@ -228,6 +230,17 @@ export function openAlbumPage(album: AlbumRef): void {
   pushPage({ kind: 'album', album });
 }
 
+/** Settings, its own screen (Home's top bar button): no tab is highlighted while it shows. */
+export function openSettings(): void {
+  closeOverlays();
+  tab.value = 'settings';
+}
+
+/** Leave Settings for Home, where it opens from (its Back arrow, Back, Escape). */
+export function closeSettings(): void {
+  tab.value = 'home';
+}
+
 /** "See all" grid of one shelf, over the artist page. */
 export function openReleasesPage(release: ReleasesRef): void {
   pushPage({ kind: 'releases', release });
@@ -306,7 +319,7 @@ let lastHereLabel: string | null = null;
 
 /**
  * Open Search on top of the current page. With a context, Search adds the Here scope
- * and opens on it; without one (Home, the Genres/Artists grids, Settings) it opens on
+ * and opens on it; without one (Home, the Genres/Artists grids) it opens on
  * Jukebox. P9: the last query comes back (selected, so typing replaces it), except
  * that a Here scope other than the last one starts empty.
  */
@@ -353,8 +366,8 @@ export function useSearchContext(ctx: SearchContext | null): void {
 
 /**
  * Close the topmost thing: a sheet, then lyrics, then Now Playing, then the page on top
- * of the current tab. With `switchTab` (Android back), a tab's root other than Home
- * goes back to Home. Returns false when there is nothing left to close.
+ * of the current tab, then Settings (to Home). With `switchTab` (Android back), a tab's
+ * root other than Home goes back to Home. Returns false when there is nothing left to close.
  */
 export function goBack(switchTab = true): boolean {
   if (confirmRequest.value) {
@@ -375,6 +388,10 @@ export function goBack(switchTab = true): boolean {
     return true;
   }
   if (popPage()) return true;
+  if (tab.value === 'settings') {
+    closeSettings();
+    return true;
+  }
   if (switchTab && tab.value !== 'home') {
     tab.value = 'home';
     return true;

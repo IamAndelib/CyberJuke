@@ -1,6 +1,6 @@
 import { AUTH_USER, expect, MEMBERS_POSTS, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { nextFrame, openNowPlaying, seedStorage, setLyricsMode, SETTINGS_KEY, shot, toastsGone } from '../helpers';
+import { nextFrame, openNowPlaying, openSettings, seedStorage, setLyricsMode, SETTINGS_KEY, shot, toastsGone } from '../helpers';
 
 /**
  * Phone-size screenshots of every screen, written to test-results/screenshots/ (a CI
@@ -192,7 +192,7 @@ test('every screen (dark)', async ({ page }) => {
   await page.getByTestId('tab-library').click();
   await settle(page);
   await shot(page, '08-library');
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   await settle(page);
   await shot(page, '09-settings');
   await page.getByTestId('about').scrollIntoViewIfNeeded();
@@ -246,7 +246,7 @@ test('history days, the new-tracks pill, the block banner (dark)', async ({ page
 
 test('account: sign-in, an error, signed in, members-only rows (dark)', async ({ page }) => {
   await open(page);
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   await scrollToTestId(page, 'screen-settings', 'account');
   await shot(page, 'account-signin');
   await page.getByTestId('signin-email').fill(AUTH_USER.email);
@@ -346,11 +346,35 @@ test('narrow phone (360px): search, artist page, Now Playing, settings', async (
   await settle(page);
   await shot(page, 'narrow-now-playing');
   await page.getByTestId('np-close').click();
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   await page.getByTestId('check-every').scrollIntoViewIfNeeded();
   await settle(page);
   await shot(page, 'narrow-settings');
 });
+
+// Signal Radio, a station on air, at the narrowest widths the five tabs must fit (and the usual one).
+for (const theme of THEMES) {
+  for (const width of [320, 360, 412]) {
+    test(`Signal Radio (${theme}, ${width}px)`, async ({ page }) => {
+      await open(page, theme, width);
+      await page.getByTestId('tab-radio').click();
+      await page.locator('[data-testid="station"][data-station="cold-wave"]').getByTestId('station-tune').click();
+      await expect(page.getByTestId('mini-player')).toBeVisible();
+      await settle(page);
+      await shot(page, `radio-${theme}-${width}`);
+      if (width !== 360) return;
+      await page.locator('[data-testid="station"][data-station="cipher"]').getByTestId('station-info').click();
+      await expect(page.getByTestId('confirm-sheet')).toBeVisible();
+      await settle(page);
+      await shot(page, `radio-info-${theme}`);
+      await page.getByTestId('confirm-cancel').click();
+      await openNowPlaying(page);
+      await page.getByTestId('up-next').evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await settle(page);
+      await shot(page, `radio-now-playing-${theme}`);
+    });
+  }
+}
 
 type ShowToast = (text: string, ms?: number, action?: { label: string; run: () => void }) => number;
 /** Show a message and wait for it to finish sliding in. */
@@ -386,7 +410,7 @@ for (const theme of THEMES) {
       await settle(page);
       await shot(page, `offline-genres-${tag}`);
 
-      await page.getByTestId('tab-settings').click();
+      await openSettings(page);
       await settle(page);
       await shot(page, `settings-${tag}`);
       await page.getByTestId('about').scrollIntoViewIfNeeded();

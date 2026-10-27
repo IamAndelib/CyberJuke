@@ -1,14 +1,14 @@
 /**
  * Updates: is a newer stable release out? Asks GitHub for the latest release (the one the
  * README's download link points to) and compares it with this install.
- * - Automatic (Settings → Updates, on by default): at most once a day, when the app opens or
+ * - Automatic (Settings → Updates, off until turned on): at most once a day, when the app opens or
  *   comes back to the foreground (after a failed check, not again for an hour). "Check now"
  *   any time.
  * - Installed through F-Droid (or another F-Droid client): F-Droid brings the updates, so
  *   the app never asks GitHub. Until the app knows how it was installed, it doesn't ask
  *   either (nor if it can't tell).
  * - A newer release shows in Settings (with a link to download it) and as a dot on the
- *   Settings tab.
+ *   Settings button at the top right of Home.
  */
 import { computed, signal } from '@preact/signals';
 import { Capacitor } from '@capacitor/core';

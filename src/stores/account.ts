@@ -47,7 +47,7 @@ let started = false;
  * carries none. What this changes in Liked and history waits for `libraryRead` (they
  * are read alongside the first render), in the order it happened.
  */
-export function startAccount(libraryRead: Promise<unknown> = Promise.resolve()): void {
+export function startAccount(libraryRead: Promise<unknown> = Promise.resolve(), openSettings?: () => void): void {
   if (started) return;
   started = true;
   const afterRead = (fn: () => unknown) => void libraryRead.then(fn, fn);
@@ -76,6 +76,11 @@ export function startAccount(libraryRead: Promise<unknown> = Promise.resolve()):
       if (signedInAs) afterRead(() => returnMembersOnly(signedInAs));
     }
     void resetForSignIn();
-    if (reason === 'expired') toast('Your Cyberspace login expired. Sign in again in Settings.', 4000);
+    if (reason === 'expired') {
+      const text = 'Your Cyberspace login expired. Sign in again in Settings.';
+      // Its button opens Settings (top right of Home; the app hands in how).
+      if (openSettings) toast(text, undefined, { label: 'Settings', run: openSettings });
+      else toast(text, 4000);
+    }
   });
 }

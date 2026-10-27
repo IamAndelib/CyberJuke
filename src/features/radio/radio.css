@@ -1,0 +1,27 @@
+/* Signal Radio: a station row is the dial reading, the callsign and its tagline. */
+
+.station .row-main {
+  min-height: 64px;
+}
+.station-freq {
+  flex: none;
+  /* "1688.0" and "133.7" line up on the decimal point. */
+  min-width: 6ch;
+  text-align: right;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-fg-dim);
+}
+.station .row-title {
+  font-family: var(--font-display);
+  letter-spacing: 0.5px;
+}
+.station.is-current .station-freq,
+.station-on {
+  color: var(--color-accent);
+}
+.station-on {
+  flex: none;
+  display: flex;
+}

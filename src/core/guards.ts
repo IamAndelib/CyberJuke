@@ -162,7 +162,7 @@ export function parseRunQueryRows(x: unknown): FsRunQueryRow[] | null {
 
 // ---- Stored tracks ---------------------------------------------------------------------
 
-const ORIGINS: readonly TrackOrigin[] = ['jukebox', 'ytmusic'];
+const ORIGINS: readonly TrackOrigin[] = ['jukebox', 'ytmusic', 'signal'];
 const TRACK_STRINGS = ['id', 'ytId', 'title', 'artist', 'genre', 'by', 'postTitle', 'postUrl', 'createdAt', 'artworkUrl'] as const;
 
 /** Every field of a Track present and of the right type (optional ones when set). */

@@ -33,18 +33,18 @@ import { ArtistPage } from '../features/artists/Artist';
 import { ArtistGrid } from '../features/artists/Artists';
 import { GenreDetail, GenreGrid } from '../features/genres/Genres';
 import { Home } from '../features/home/Home';
+import { Radio } from '../features/radio/Radio';
 import { Library } from '../features/library/Library';
 import { ReleasesPage } from '../features/artists/Releases';
 import { Search } from '../features/search/Search';
 import { Settings } from '../features/settings/Settings';
-import { updateAvailable } from '../stores/updates';
 
 const TAB_ITEMS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
   { id: 'genres', label: 'Genres', icon: 'genres' },
   { id: 'artists', label: 'Artists', icon: 'artists' },
   { id: 'library', label: 'Library', icon: 'library' },
-  { id: 'settings', label: 'Settings', icon: 'settings' },
+  { id: 'radio', label: 'Radio', icon: 'radio' },
 ];
 
 /** SM7: a pushed page slides in over this long; the page under it hides once it has. */
@@ -94,11 +94,9 @@ function TabBar() {
           aria-current={cur === t.id ? 'page' : undefined}
           onClick={() => (cur === t.id ? retapTab(t.id) : selectTab(t.id))}
           data-testid={`tab-${t.id}`}
-          aria-label={t.id === 'settings' && updateAvailable.value ? 'Settings (update available)' : undefined}
         >
           <Icon name={t.icon} size={24} />
           <span class="tab-label">{t.label}</span>
-          {t.id === 'settings' && updateAvailable.value && <span class="tab-dot" aria-hidden="true" data-testid="settings-update-dot" />}
         </button>
       ))}
     </nav>
@@ -109,6 +107,8 @@ function TabRoot({ t }: { t: Tab }) {
   switch (t) {
     case 'home':
       return <Home />;
+    case 'radio':
+      return <Radio />;
     case 'genres':
       return <GenreGrid />;
     case 'artists':
@@ -270,8 +270,8 @@ export function App() {
   // Only whether something is loaded: playback itself never re-renders the app.
   const hasPlayer = hasCurrent.value;
   const topKind = useComputed(() => topEntry.value?.page.kind ?? null).value;
-  // The search button shows over every page but Search itself and the Settings root.
-  const showFab = topKind !== 'search' && (topKind != null || cur !== 'settings');
+  // The search button shows over every page but Search and Settings.
+  const showFab = cur !== 'settings' && topKind !== 'search';
   const visited = useRef(new Set<Tab>());
   visited.current.add(cur);
   const app = useRef<HTMLDivElement>(null);
@@ -293,6 +293,8 @@ export function App() {
         {TAB_ITEMS.filter((t) => visited.current.has(t.id)).map((t) => (
           <TabPane key={t.id} t={t.id} active={t.id === cur} />
         ))}
+        {/* Settings has no tab button, and is mounted only while it shows (fresh each time). */}
+        {cur === 'settings' && <TabPane key="settings" t="settings" active />}
         {showFab && <SearchFab />}
       </main>
       <BlockBanner />

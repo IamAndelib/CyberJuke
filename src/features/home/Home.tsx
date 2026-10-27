@@ -7,11 +7,13 @@ import { catalog, mostSaved, type SavedRange } from '../../stores/catalog';
 import { catalogGenre, chipGenres } from '../../stores/genres';
 import { favoriteGenres, showNsfw } from '../../stores/library';
 import { toast } from '../../stores/toast';
+import { updateAvailable } from '../../stores/updates';
 import { Icon } from '../../ui/icons';
 import { CatalogError, EmptyState, PagedTracks, Tracks } from '../../ui/components/TrackList';
 import { OfflineGate } from '../../ui/components/OfflineGate';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
+import { openSettings } from '../../ui/nav';
 import { refreshCatalog } from '../../ui/refresh';
 import { NewTracksPill } from './NewTracksPill';
 import { Rail, RailRow, type RailItem } from '../../ui/components/Rail';
@@ -181,6 +183,7 @@ export function Home() {
       testid="screen-home"
       title={<span class="brand">CYBERJUKE</span>}
       subtitle="The Cyberspace Jukebox"
+      right={<SettingsButton />}
       scrollKey={`home:${sort}:${sort === 'saved' ? savedRange.value : ''}:${g ?? ''}`}
       onRefresh={async () => {
         if (sort === 'saved') await refreshCatalog();
@@ -195,5 +198,16 @@ export function Home() {
         {sort === 'latest' ? <PagedTracks paged={paged} ctx={radio(g == null ? 'Home · Latest' : `Home · ${g}`)} queue={queue} chunkKey={key} /> : <MostSaved genre={g} />}
       </OfflineGate>
     </Screen>
+  );
+}
+
+/** Settings, top right on Home; a dot when a newer release is out (stores/updates). */
+function SettingsButton() {
+  const update = updateAvailable.value;
+  return (
+    <button class="icon-btn settings-btn" aria-label={update ? 'Settings (update available)' : 'Settings'} onClick={openSettings} data-testid="open-settings">
+      <Icon name="settings" />
+      {update && <span class="update-dot" aria-hidden="true" data-testid="settings-update-dot" />}
+    </button>
   );
 }

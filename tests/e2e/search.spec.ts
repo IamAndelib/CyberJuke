@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { musicCalls, openSearch, scrollTo, start, waitForTracks } from '../helpers';
+import { musicCalls, openSearch, openSettings, scrollTo, start, waitForTracks } from '../helpers';
 
 /** Search: Jukebox (the local catalog), Global (the music plugin) and Here (the screen it was opened from). */
 
@@ -196,7 +196,7 @@ test('a Global track shows "From Global search", and no visible text names YouTu
   await expect(page.getByTestId('menu-more-by').first()).toBeVisible();
   await page.getByTestId('menu-like').click();
   await page.getByTestId('np-close').click();
-  for (const t of ['genres', 'artists', 'library', 'settings'] as const) {
+  for (const t of ['genres', 'artists', 'library', 'radio'] as const) {
     await page.getByTestId(`tab-${t}`).click();
     await expect(page.getByTestId(`screen-${t}`)).toBeVisible();
     await grab();
@@ -205,7 +205,7 @@ test('a Global track shows "From Global search", and no visible text names YouTu
   await expect(page.getByTestId('liked-list').getByTestId('track-row')).toHaveCount(1);
   await page.getByTestId('lib-recent').click();
   await expect(page.getByTestId('recent-list').getByTestId('track-row').first()).toBeVisible();
-  await page.getByTestId('tab-settings').click();
+  await openSettings(page);
   await page.locator('details').evaluateAll((els) => els.forEach((d) => ((d as HTMLDetailsElement).open = true)));
   await grab();
   for (const text of seen) expect(text).not.toMatch(/youtube/i);
