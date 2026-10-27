@@ -1,12 +1,15 @@
 name: Release
 
-# Manual release, in three jobs:
-#   prepare           checks the version and CHANGELOG.md, and commits the version bump
-#                     (android/app/build.gradle, package.json) to main
-#   build             builds an unsigned release APK from that commit (read-only token, no
-#                     secrets, no dependency install scripts)
-#   sign-and-publish  signs it with apksigner in the protected "release" environment and
-#                     publishes the GitHub release, tagging the bump commit v<version>
+# Manual release, in five jobs, each one after the one before:
+#   prepare  checks the version and CHANGELOG.md, and commits the version bump
+#            (android/app/build.gradle, package.json) to main
+#   build    builds an unsigned release APK from that commit (read-only token, no secrets,
+#            no dependency install scripts)
+#   sign     signs it with apksigner in the protected "release" environment, the only job
+#            that sees the signing secrets; it runs nothing but apksigner
+#   compare  checks the signed APK is the unsigned build plus a signature (F-Droid's check,
+#            a tool from PyPI), with a read-only token and no secrets
+#   publish  publishes the GitHub release, tagging the bump commit v<version> (no secrets)
 # F-Droid builds the same tagged commit and, with reproducible builds, ships this signed APK.
 on:
   workflow_dispatch:
@@ -219,14 +222,14 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  sign-and-publish:
-    name: Sign and publish v${{ inputs.version }}
+  sign:
+    name: Sign v${{ inputs.version }}
     needs: [prepare, build]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: release
     permissions:
-      contents: write # create the tag and the release
+      contents: read # the signing script, from the release commit
     steps:
       - name: Check signing secrets
         env:
@@ -244,15 +247,13 @@ jobs:
             exit 1
           fi
 
-      # CHANGELOG.md (the release notes) and the signing scripts, from the release commit.
+      # Only the signing script, from the release commit.
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ needs.prepare.outputs.sha }}
           persist-credentials: false
           sparse-checkout: |
-            CHANGELOG.md
             scripts/sign-apk.sh
-            scripts/apk-compare.sh
           sparse-checkout-cone-mode: false
 
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
@@ -285,14 +286,76 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/release.jks"
 
-      # After the keystore is gone (this runs a tool from PyPI). Nothing is published unless
-      # F-Droid's own check would pass: the signed APK is the unsigned build plus a signature.
-      - name: Check the signed APK is reproducible
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: signed-apk
+          path: |
+            out/CyberJuke-${{ inputs.version }}.apk
+            out/CyberJuke-${{ inputs.version }}.apk.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  # Outside the "release" environment, so the tool it runs from PyPI never shares a job with
+  # the signing secrets. Nothing is published unless F-Droid's own check would pass: the
+  # signed APK is the unsigned build plus a signature.
+  compare:
+    name: Check the signed APK is reproducible
+    needs: [prepare, sign]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read # the comparison script, from the release commit
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/apk-compare.sh
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: unsigned-apk
+          path: unsigned
+
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: signed-apk
+          path: out
+
+      - name: Compare
         run: |
           if ! bash scripts/apk-compare.sh "out/CyberJuke-$VERSION.apk" "unsigned/CyberJuke-$VERSION-unsigned.apk"; then
             echo "::error title=Not reproducible::Signing changed the APK beyond adding a signature; F-Droid could not ship it. Nothing was published."
             exit 1
           fi
+
+  publish:
+    name: Publish v${{ inputs.version }}
+    needs: [prepare, compare]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the tag and the release
+    steps:
+      # CHANGELOG.md (the release notes), from the release commit.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            CHANGELOG.md
+          sparse-checkout-cone-mode: false
+
+      # The APK and checksum the sign job wrote, as compare checked them.
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: signed-apk
+          path: out
+
+      - name: Check the checksum
+        run: (cd out && sha256sum -c "CyberJuke-$VERSION.apk.sha256")
 
       - name: Release notes from CHANGELOG.md
         id: notes

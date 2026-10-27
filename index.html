@@ -5,14 +5,15 @@
     <!--
       Content Security Policy: only the app's own scripts and styles run; images come
       from the app, the video host's image servers and Cyberspace's (Jukebox MP3 covers);
-      requests go only to Cyberspace's database and login, and GitHub's releases API (the
-      update check). Audio elements may load latex.gg MP3s (the browser build's player;
-      on the phone the native player plays them). Styles set from
+      requests go only to the paths the app calls: Cyberspace's database (its one project),
+      its sign-in and token refresh, and GitHub's latest-release API (the update check).
+      Audio elements may load latex.gg MP3s (the browser build's player; on the phone the
+      native player plays them). Styles set from
       code (style properties) are not affected. The two preconnects below only open the
       connections Home is about to use (its first query, the cover art) a little sooner:
       hosts already allowed here, nothing sent.
     -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; img-src 'self' data: https://*.ytimg.com https://*.googleusercontent.com https://*.ggpht.com https://bunker.cyberspace.online; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.github.com; style-src 'self'; font-src 'self'; media-src https://latex.gg; worker-src 'none'; manifest-src 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; img-src 'self' data: https://*.ytimg.com https://*.googleusercontent.com https://*.ggpht.com https://bunker.cyberspace.online; connect-src 'self' https://firestore.googleapis.com/v1/projects/cyberspace-cyberspace/ https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword https://securetoken.googleapis.com/v1/token https://api.github.com/repos/IamAndelib/CyberJuke/releases/latest; style-src 'self'; font-src 'self'; media-src https://latex.gg; worker-src 'none'; manifest-src 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="color-scheme" content="dark light" />
     <meta name="theme-color" content="#000000" />

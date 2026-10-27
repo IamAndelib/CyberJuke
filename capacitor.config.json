@@ -8,6 +8,9 @@
     "webContentsDebuggingEnabled": false
   },
   "cordova": {
-    "accessOrigins": []
+    "accessOrigins": [],
+    "preferences": {
+      "DisableDeploy": "true"
+    }
   }
 }

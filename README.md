@@ -102,14 +102,14 @@ Releases are built by the `Release` workflow from a tagged commit with no caches
 
 ## Privacy and data
 
-CyberJuke has no account of its own, no analytics, no ads and no tracking. It contains no Google Play Services or Firebase SDK.
+CyberJuke has no account of its own, no analytics, no ads and no tracking. It contains no Google Play Services or Firebase SDK, and it opts out of the Android WebView's usage metrics.
 
 **Stored on the phone** (in the app's private storage):
 
 | What | Where |
 |---|---|
 | Liked tracks and recently played | App files, excluded from backups (they can hold members-only tracks). Signing out removes members-only tracks from both. They are kept on the phone, out of sight and apart for each account, and come back when that account signs in again: likes always, plays while they are still within Recently played's 3 days |
-| Settings, favourite genres and artists, recent searches | App data (Capacitor Preferences). Android may include these in your own Google backup |
+| Settings, favourite genres and artists, recent searches | App data (Capacitor Preferences). Android may include these in your own Google backup; on Android 12 and newer only when that backup is end-to-end encrypted (the phone has a screen lock) |
 | The cached Jukebox catalog and lyrics | App data and cache. The catalog is dropped on sign-in and sign-out; signing out drops members-only tracks' lyrics |
 | What was playing last (the queue and where in it), so the app reopens on it | App files, excluded from backups; signing out removes members-only tracks from it |
 | Audio of your liked songs and of recently played and next tracks (the listening cache) | Up to the chosen size, on the phone only, never backed up (app files that Android neither backs up nor clears to free space, and its index excluded from backups). It is kept by video ID and format (a Jukebox MP3 by its latex.gg file name), never by stream URL. Members-only tracks are removed on sign-out, and none is kept while signed out. Clear cache in Settings |
