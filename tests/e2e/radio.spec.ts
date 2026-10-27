@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { OFFLINE } from '../../src/core/offlineText';
-import { clockStart, expectStable, FAKE_TRACK_MS, openNowPlaying, openSettings, playOn, seedStorage, setOffline, SETTINGS_KEY, start } from '../helpers';
+import { clockStart, expectStable, FAKE_TRACK_MS, openNowPlaying, openSearch, openSettings, playOn, seedStorage, setOffline, SETTINGS_KEY, start } from '../helpers';
 
 /** Signal Radio: the Radio tab, tuning in, a station that plays on, and its tracks kept. */
 
@@ -226,6 +226,19 @@ test('the station on air, paused: a tap plays it on (as a track row does), and N
   // Playing, the same tap opens Now Playing.
   await cipher.getByTestId('station-tune').click();
   await expect(page.getByTestId('now-playing')).toHaveClass(/open/);
+});
+
+test('Here on the Radio tab searches every station track, and plays the one found', async ({ page }) => {
+  await start(page);
+  await openRadio(page);
+  await openSearch(page);
+  await expect(page.getByTestId('mode-here')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('search-input')).toHaveAttribute('placeholder', 'Search in Signal Radio');
+  await page.getByTestId('search-input').fill('vintervaldet');
+  const found = page.getByTestId('here-results').getByTestId('track-title');
+  await expect(found).toHaveText(['Vinterväldet']);
+  await found.first().click();
+  await expect(page.getByTestId('mini-title')).toHaveText('Vinterväldet');
 });
 
 for (const [width, theme] of [[320, 'dark'], [360, 'dark'], [320, 'c64'], [320, 'brutalist'], [320, 'vt320']] as const) {
