@@ -102,7 +102,7 @@ Releases are built by the `Release` workflow from a tagged commit with no caches
 
 ## Privacy and data
 
-CyberJuke has no account of its own, no analytics, no ads and no tracking. It contains no Google Play Services or Firebase SDK.
+CyberJuke has no account of its own, no analytics, no ads and no tracking. It contains no Google Play Services or Firebase SDK, and it opts out of the Android WebView's usage metrics.
 
 **Stored on the phone** (in the app's private storage):
 
