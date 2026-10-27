@@ -403,6 +403,8 @@ internal object AudioCache {
 
         override fun onCacheInitialized() = Unit
 
+        // The key being written may go itself: a song that isn't liked, too big to fit beside the
+        // liked ones ([CacheLedger.victims]).
         override fun onStartFile(cache: Cache, key: String, position: Long, length: Long) {
             if (length > 0) evict(cache, length, key)
         }

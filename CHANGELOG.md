@@ -5,6 +5,9 @@
 ### The app
 - **Jukebox MP3s:** since Cyberspace 4.0 a Jukebox post can be an MP3 on latex.gg instead of a YouTube link. They show with their own cover and play like any other track (in lists, Liked, Recently played, autoplay and after a restart); before, the app left them out. Sharing one shares its post. They are kept in the listening cache like any track, and a liked one is saved so it plays offline. A YouTube slowdown doesn't stop them playing or being saved, and one latex.gg can't serve is skipped.
 
+### Fixed
+- A long track you haven't liked no longer pushes your saved liked songs out of the listening cache: when it doesn't fit beside them, it plays from the network instead.
+
 ## [1.2.0] - 2026-10-19
 
 ### The app

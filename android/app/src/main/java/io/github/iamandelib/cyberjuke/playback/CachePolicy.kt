@@ -152,10 +152,13 @@ internal object CacheKeys {
 
 /**
  * The bookkeeping behind JukeCacheEvictor: what the cache holds per key (the sum of its spans,
- * when it was last used), and which audio ids (videos and Jukebox MP3s) are liked, in order. The cache has a size limit
- * (changeable); over it, whole keys go:
- * 1. listening entries (not liked), least recently used first;
- * 2. liked entries only when liked songs alone are over the limit, least recently liked first.
+ * when it was last used), and which audio ids (videos and Jukebox MP3s) are liked, in order. The
+ * cache has a size limit (changeable); over it, whole keys go:
+ * 1. listening entries (not liked), least recently used first; the one being written last;
+ * 2. liked entries only when liked songs alone are over the limit (a smaller limit, or a liked
+ *    song being written), least recently liked first.
+ * A song that isn't liked never pushes a liked one out: when it doesn't fit beside the liked
+ * songs (a long Jukebox mix), it is the one that goes, and playback reads on from the network.
  *
  * Kept up to date incrementally from the cache's span callbacks (no scans); only a change of the
  * liked list sorts the entries again. Not thread-safe: AudioCache calls it under the cache's
@@ -279,24 +282,38 @@ internal class CacheLedger(limitBytes: Long) {
     fun keysOf(audioId: String): List<String> =
         keysByAudio[audioId]?.mapNotNull { entries[it] }?.sortedByDescending { it.touched }?.map { it.key } ?: emptyList()
 
-    /** The cached bytes of [key] (0 when none). Tests only. */
+    /** The cached bytes of [key] (0 when none). */
     fun bytesOf(key: String): Long = entries[key]?.bytes ?: 0L
 
     /**
-     * The keys to remove, in order, so that [extra] more bytes fit under the limit; never
-     * [protect] (the key being written). Empty when it all fits.
+     * The keys to remove, in order, so that [extra] more bytes of [protect] (the key being
+     * written; null for none, as after a smaller limit) fit under the limit. Empty when it all
+     * fits. Other listening entries go first; then, for a [protect] that isn't liked, only that
+     * key itself (once it doesn't fit beside the liked songs), never a liked one; otherwise the
+     * liked entries other than [protect].
      */
     fun victims(extra: Long = 0L, protect: String? = null): List<String> {
         var over = total + extra - limit
         if (over <= 0) return emptyList()
         val out = ArrayList<String>()
-        for (set in listOf(listening, likedEntries)) {
-            for (e in set) {
-                if (e.key == protect) continue
-                out.add(e.key)
-                over -= e.bytes
-                if (over <= 0) return out
-            }
+        for (e in listening) {
+            if (e.key == protect) continue
+            out.add(e.key)
+            over -= e.bytes
+            if (over <= 0) return out
+        }
+        if (protect != null && !isLiked(CacheKeys.audioIdOf(protect) ?: protect)) {
+            // As Media3's LeastRecentlyUsedCacheEvictor may: the spans of the key being written
+            // go (its content stays while the write holds its lock), and playback reads what it
+            // needs again from the network.
+            if (bytesOf(protect) > 0) out.add(protect)
+            return out
+        }
+        for (e in likedEntries) {
+            if (e.key == protect) continue
+            out.add(e.key)
+            over -= e.bytes
+            if (over <= 0) return out
         }
         return out
     }

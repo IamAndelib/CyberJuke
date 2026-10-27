@@ -79,8 +79,9 @@ class CachePolicyTest {
         assertTrue(l.isLiked(liked))
         assertEquals(listOf(liked), l.keysOf(liked))
         assertEquals(8 * mb, l.likedBytes)
-        // Over by 8 MB: the MP3 nobody liked first, however recent; then the least recently liked.
-        assertEquals(listOf(other, CacheKeys.of("likeda00000", 251)), l.victims(8 * mb))
+        // The liked MP3 grows by 8 MB: the MP3 nobody liked first, however recent; then, liked
+        // songs alone being over the limit, the least recently liked.
+        assertEquals(listOf(other, CacheKeys.of("likeda00000", 251)), l.victims(8 * mb, protect = liked))
         // Unliked, it is an ordinary listening entry.
         l.setLiked(listOf("likeda00000"))
         assertFalse(l.isLiked(liked))
@@ -142,8 +143,43 @@ class CachePolicyTest {
         l.onAdded(CacheKeys.of("listen0000a", 251), 2 * mb, touched = 9)
         // Over by 2 MB: the listening entry, however recent.
         assertEquals(listOf(CacheKeys.of("listen0000a", 251)), l.victims())
-        // Over by 6 MB: then the least recently liked (a), whatever its last use.
-        assertEquals(listOf(CacheKeys.of("listen0000a", 251), CacheKeys.of("likeda00000", 251)), l.victims(4 * mb))
+        // Liked c grows by 4 MB: liked songs alone are over the limit now, so after the listening
+        // entry the least recently liked (a) goes, whatever its last use; never c itself.
+        assertEquals(
+            listOf(CacheKeys.of("listen0000a", 251), CacheKeys.of("likeda00000", 251)),
+            l.victims(4 * mb, protect = CacheKeys.of("likedc00000", 251)),
+        )
+        // The listening entry grows by 4 MB instead: liked songs alone fit, so none of them goes;
+        // the listening entry, which doesn't fit beside them, is the one that goes.
+        assertEquals(listOf(CacheKeys.of("listen0000a", 251)), l.victims(4 * mb, protect = CacheKeys.of("listen0000a", 251)))
+    }
+
+    @Test
+    fun aGrowingSongNobodyLikedNeverPushesALikedOneOut() {
+        // A long Jukebox mix (or a long video) nobody liked, in a 128 MB cache with 100 MB liked.
+        for (playing in listOf(CacheKeys.ofMp3("IZq8cMcx.mp3")!!, CacheKeys.of("longmix0000", 251, 150 * mb))) {
+            val l = CacheLedger(128 * mb)
+            l.setLiked(listOf("likeda00000", "likedb00000"), known = false)
+            l.onAdded(CacheKeys.of("likeda00000", 251), 50 * mb, touched = 1)
+            l.onAdded(CacheKeys.of("likedb00000", 251), 50 * mb, touched = 2)
+            l.onAdded(CacheKeys.of("listen0000a", 251), 4 * mb, touched = 3)
+            val liked = setOf(CacheKeys.of("likeda00000", 251), CacheKeys.of("likedb00000", 251))
+            val evict = { keys: List<String> ->
+                assertTrue("$playing pushed out a liked song: $keys", keys.none { it in liked })
+                for (k in keys) l.onRemoved(k, l.bytesOf(k))
+            }
+            // Written 5 MB at a time, as CacheDataSink does: evicted for when each file starts
+            // (onStartFile) and when it is added (onSpanAdded).
+            for (t in 10L until 40L) {
+                evict(l.victims(5 * mb, protect = playing))
+                l.onAdded(playing, 5 * mb, touched = t)
+                evict(l.victims(protect = playing))
+                assertTrue(l.total <= 128 * mb)
+            }
+            // The liked songs are all still there; the other listening entry went first.
+            assertEquals(100 * mb, l.likedBytes)
+            assertEquals(0L, l.bytesOf(CacheKeys.of("listen0000a", 251)))
+        }
     }
 
     @Test
