@@ -4,6 +4,7 @@
 
 ### The app
 - Haptic feedback: a short buzz when holding a track opens its menu, a light tick for ♥ and ★, and one as a swipe down on Now Playing goes far enough to close it. It follows your phone's Touch feedback setting. Before, the long press was meant to buzz but never did.
+- Back on Home now shows Android's back-to-home animation as you swipe (Android 13 and newer, where the phone shows it). The app goes to the background as before, and the music plays on. Back still closes menus, Now Playing and pages first.
 
 ## [1.3.0] - 2026-10-27
 

@@ -7,6 +7,11 @@
     "loggingBehavior": "none",
     "webContentsDebuggingEnabled": false
   },
+  "plugins": {
+    "App": {
+      "disableBackButtonHandler": true
+    }
+  },
   "cordova": {
     "accessOrigins": [],
     "preferences": {

@@ -95,6 +95,11 @@ export const playerCalls = (page: Page) => page.evaluate(() => window.__cyberjuk
 /** The haptic ticks the page asked for (ui/haptics.ts), in order. */
 export const haptics = (page: Page) => page.evaluate(() => (window as unknown as { __cyberjukeHaptics: string[] }).__cyberjukeHaptics.slice());
 
+/** Android back, as native sends it to the page while its back callback is on (app/back.ts). */
+export const androidBack = (page: Page) => page.evaluate(() => void document.dispatchEvent(new Event('backbutton')));
+/** What the page told native about back (true: it has something to close) and each move to the background, in order. */
+export const backCalls = (page: Page) => page.evaluate(() => (window as unknown as { __cyberjukeBack: (boolean | 'background')[] }).__cyberjukeBack.slice());
+
 /** How much of the current track native reports loaded ahead, in ms (0: the track the app reopens on). */
 export const bufferedAhead = (page: Page, ms: number) => page.evaluate((v) => (window as unknown as { __cyberjukeBufferedAhead(ms: number): void }).__cyberjukeBufferedAhead(v), ms);
 

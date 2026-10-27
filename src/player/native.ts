@@ -134,6 +134,12 @@ interface JukePlayerPlugin {
   retryNow(): Promise<void>;
   /** Android's own touch feedback on the WebView (no permission; off with the system's Touch feedback). Any other kind rejects. */
   haptic(o: { kind: HapticKind }): Promise<void>;
+  /**
+   * Whether the page has something for Android back to close (nav.ts canGoBack). While it has,
+   * back comes to the page as the `backbutton` document event; at its root, Android 12+ take
+   * back themselves (predictive back to home), and older Android still send it.
+   */
+  setCanGoBack(o: { canGoBack: boolean }): Promise<void>;
   /** For the Settings diagnostics line. */
   getNetStatus(): Promise<{
     family?: string;

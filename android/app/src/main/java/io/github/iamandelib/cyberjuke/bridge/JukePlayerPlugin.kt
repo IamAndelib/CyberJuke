@@ -10,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import androidx.activity.OnBackPressedCallback
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.media3.common.MediaItem
@@ -60,7 +61,7 @@ import kotlin.math.roundToInt
  * Capacitor bridge to PlaybackService. Contract (TS side):
  *   setQueue, queueNext, removeItem, moveItem, play, pause, seekTo, skipToNext,
  *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, setCrossfade, setGapless, getState,
- *   haptic,
+ *   haptic, setCanGoBack (Android back then comes as the `backbutton` document event),
  *   getAppInfo, getLaunchOptions, getBlockState, setNetworkPrefs, retryNow, getNetStatus,
  *   setGestureExclusion, addAutoplay, setAutoplay, restore, removeIds, setLikedIds,
  *   setCacheLimit, setDownloadOnMobileData, clearCache, signedOut, signedIn, cachedIds; events 'state', 'trackError',
@@ -258,7 +259,20 @@ class JukePlayerPlugin : Plugin() {
         notifyListeners("trackError", data)
     }
 
+    /**
+     * Android back, while [BackPolicy] gives it to the page (setCanGoBack): sent to it as the
+     * `backbutton` document event, as Capacitor's App plugin does (its own handler is off:
+     * App.disableBackButtonHandler, which would intercept back always).
+     */
+    private val pageBack = object : OnBackPressedCallback(BackPolicy.intercept(Build.VERSION.SDK_INT, canGoBack = false)) {
+        override fun handleOnBackPressed() {
+            bridge?.triggerDocumentJSEvent("backbutton")
+        }
+    }
+
     override fun load() {
+        // The activity's (removed with it); main thread, while the bridge is created.
+        activity.onBackPressedDispatcher.addCallback(activity, pageBack)
         NetPrefsStore.load(context)
         AudioCache.init(context, PlayerPrefsStore.cacheMb(context), PlayerPrefsStore.downloadOnMobileData(context))
         AudioCache.addListener(cacheListener)
@@ -1023,6 +1037,20 @@ class JukePlayerPlugin : Plugin() {
         val constant = Haptics.constantFor(call.getString("kind")) ?: return call.reject("kind must be 'longPress', 'confirm' or 'threshold'")
         main.post {
             bridge?.webView?.let { ViewCompat.performHapticFeedback(it, constant) }
+            call.resolve()
+        }
+    }
+
+    /**
+     * `setCanGoBack({ canGoBack })`: whether the page has something for back to close (a sheet,
+     * Now Playing, a page, Settings, a tab other than Home). Turns the back callback on or off
+     * ([BackPolicy]); at the page's root Android 12+ handle back themselves.
+     */
+    @PluginMethod
+    fun setCanGoBack(call: PluginCall) {
+        val canGoBack = call.getBoolean("canGoBack") ?: return call.reject("canGoBack is required")
+        main.post {
+            pageBack.isEnabled = BackPolicy.intercept(Build.VERSION.SDK_INT, canGoBack)
             call.resolve()
         }
     }

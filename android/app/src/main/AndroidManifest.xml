@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- enableOnBackInvokedCallback: predictive back (Android 13+; the default from Android 16
+         for this targetSdk). Back reaches the page only while it has something to close
+         (JukePlayerPlugin's back callback, BackPolicy); at its root Android takes it and shows
+         the back-to-home animation. -->
     <application
+        android:enableOnBackInvokedCallback="true"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/full_backup_content"
