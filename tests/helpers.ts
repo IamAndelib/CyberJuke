@@ -92,6 +92,9 @@ export const musicCalls = (page: Page) => page.evaluate(() => (window as unknown
 /** Calls the web player made that the native plugin would receive. */
 export const playerCalls = (page: Page) => page.evaluate(() => window.__cyberjukePlayerCalls ?? []);
 
+/** The haptic ticks the page asked for (ui/haptics.ts), in order. */
+export const haptics = (page: Page) => page.evaluate(() => (window as unknown as { __cyberjukeHaptics: string[] }).__cyberjukeHaptics.slice());
+
 /** How much of the current track native reports loaded ahead, in ms (0: the track the app reopens on). */
 export const bufferedAhead = (page: Page, ms: number) => page.evaluate((v) => (window as unknown as { __cyberjukeBufferedAhead(ms: number): void }).__cyberjukeBufferedAhead(v), ms);
 

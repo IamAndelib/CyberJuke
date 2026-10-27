@@ -76,6 +76,7 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 - [ ] Tap an artist or a genre (from Home, Search or Now Playing): it opens on the tab you're on, and **Back** returns exactly where you were, at the same scroll position.
 - [ ] Tap the tab you're already on: it scrolls to the top. Tap again: it goes back to that tab's first page.
 - [ ] Long-press a track row: its menu opens, and releasing your finger doesn't tap anything in the menu.
+- [ ] With the phone's **Touch feedback** on (Settings → Sound & vibration → Vibration & haptics, the name varies): long-pressing a track row buzzes briefly as its menu opens; tapping ♥ in Now Playing or a ★ (genre or artist, tile or page) gives a light tick, both to add and to remove; dragging Now Playing down ticks once when it has gone far enough to close on release (drag it back up and down again: it ticks again). With Touch feedback off, none of these buzz.
 - [ ] Long titles scroll slowly in Now Playing and in the mini player.
 - [ ] Long-pressing text (headers, titles) doesn't select it.
 - [ ] Swipe up on the mini player: Now Playing opens. Swipe Now Playing down and let go: it carries on down and closes in one motion.

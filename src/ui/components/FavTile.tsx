@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact';
+import { haptic } from '../haptics';
 import { Icon } from '../icons';
 
 /** What a tile is: its test ids (`genre-cell`, `artist-fav`…), data attribute and name style. */
@@ -66,6 +67,7 @@ export function FavTile({
           const keyboard = e.detail === 0 && document.activeElement === star;
           moved = { x: e.clientX, y: e.clientY, t: performance.now() };
           onToggle();
+          haptic('confirm');
           if (keyboard) refocus(star.closest('.screen'), kind, name);
         }}
         data-testid={`${kind}-fav`}
@@ -101,7 +103,10 @@ export function PageStar({ name, fav, onToggle, testid }: { name: string; fav: b
       class={'icon-btn like' + (fav ? ' on' : '')}
       aria-pressed={fav}
       aria-label={fav ? `Remove ${name} from favourites` : `Add ${name} to favourites`}
-      onClick={onToggle}
+      onClick={() => {
+        onToggle();
+        haptic('confirm');
+      }}
       data-testid={testid}
     >
       <Icon name={fav ? 'star' : 'starOutline'} size={26} />
