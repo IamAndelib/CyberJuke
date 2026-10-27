@@ -152,7 +152,7 @@ internal object AudioCache {
     var savedLiked: Set<String> = emptySet()
         private set
 
-    /** The liked videos, newest like first (a snapshot). */
+    /** The liked songs (audio ids), newest like first (a snapshot). */
     @Volatile
     var liked: List<String> = emptyList()
         private set
@@ -215,7 +215,7 @@ internal object AudioCache {
             }
             cache = c
             // Marked while it started (markMembers had no cache to go through yet), after their
-            // audio was counted in: tagged or removed now, every video marked so far.
+            // audio was counted in: tagged or removed now, every song marked so far.
             Background.run("markMembers") { reconcileMembers(c, members.marked()) }
             c
         } catch (e: Exception) {
@@ -353,7 +353,7 @@ internal object AudioCache {
     }
 
     /**
-     * Signed out (or starting signed out): every tagged or known members-only video's audio goes,
+     * Signed out (or starting signed out): every tagged or known members-only song's audio goes,
      * and none may come back in until [signedIn]. Cheap when there is none.
      */
     fun signedOut(): Boolean {
@@ -506,7 +506,7 @@ internal class CacheRouter(private val cached: DataSource?, private val plain: D
 
     override fun open(dataSpec: DataSpec): Long {
         val key = dataSpec.key
-        // Not a members-only video while signed out, nor one whose cached copy was just found
+        // Not a members-only song while signed out, nor one whose cached copy was just found
         // missing or unreadable (its retry reads the network, not the same file).
         val viaCache = cached != null && key != null && CacheKeys.isCacheable(key) &&
             CacheKeys.audioIdOf(key)?.let { AudioCache.isDenied(it) || AudioCache.misses.recent(it) } != true
@@ -542,7 +542,7 @@ internal class CacheRouter(private val cached: DataSource?, private val plain: D
  * The cache's upstream.
  * - A track played from the cache keeps our own `cyberjuke://` URI (it has no stream URL): if
  *   any of it is missing after all, reading fails at once ([CacheMissException], no request), the
- *   video is skipped by the cache for a moment ([AudioCache.misses]), and the load's retry
+ *   song is skipped by the cache for a moment ([AudioCache.misses]), and the load's retry
  *   resolves it as usual.
  * - It reports the URL it was asked for, never one a redirect led to, so the cache doesn't store
  *   a googlevideo URL in its index (stream URLs stay in memory only). A Jukebox MP3 is asked

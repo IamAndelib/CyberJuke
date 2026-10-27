@@ -50,11 +50,12 @@ internal object LoadRetry {
 
     const val MAX_DELAY_MS = 8_000L
 
-    /** A YouTube load's cache file that went away: retried this soon ([cacheFileRetryMs]). */
+    /** A cached load's file that went away (a video's or a Jukebox MP3's): retried this soon ([cacheFileRetryMs]). */
     const val CACHE_RETRY_MS = 500L
 
     /**
-     * A YouTube load ([ytLoad]) that failed reading a listening-cache file ([fileError]: not
+     * A load through the listening cache ([ytLoad]: a video's, or a Jukebox MP3's, which
+     * JukeLoadErrorPolicy passes as one too) that failed reading a cache file ([fileError]: not
      * found, or a file read error): the cache drops the span when it notices, so a retry soon
      * fetches it instead (the default would never retry a missing file: a dead track). Null for
      * anything else.

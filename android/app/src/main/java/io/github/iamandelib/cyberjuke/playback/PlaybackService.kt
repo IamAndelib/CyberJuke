@@ -95,8 +95,9 @@ class PlaybackService : MediaSessionService() {
     private var oneAhead: OneAheadLoadControl? = null
 
     /**
-     * Where every player of the service loads from ([buildPlayer]): YouTube audio through the
-     * listening cache, the network behind it, with the resolver giving each load its URL and key.
+     * Where every player of the service loads from ([buildPlayer]): YouTube audio and Jukebox
+     * MP3s through the listening cache, the network behind it, with the resolver giving each load
+     * its URL and key.
      */
     private lateinit var dataSources: DataSource.Factory
 

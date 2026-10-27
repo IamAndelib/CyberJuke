@@ -454,22 +454,22 @@ internal class SaveStrikes {
     /** When each waiting song's retry is due; only entries not yet due are kept. */
     private val dueAt = HashMap<String, Long>()
 
-    /** Counts a stop at [now]; true when [ytId] is to be given up on now, else it waits its turn. */
-    fun stopped(ytId: String, now: Long): Boolean {
-        val n = (counts[ytId] ?: 0) + 1
-        counts[ytId] = n
+    /** Counts a stop at [now]; true when [audioId] is to be given up on now, else it waits its turn. */
+    fun stopped(audioId: String, now: Long): Boolean {
+        val n = (counts[audioId] ?: 0) + 1
+        counts[audioId] = n
         if (n >= MAX) {
-            dueAt.remove(ytId)
+            dueAt.remove(audioId)
             return true
         }
-        dueAt[ytId] = now + waitMs(n)
+        dueAt[audioId] = now + waitMs(n)
         return false
     }
 
-    /** [ytId] was saved after all: its stops are forgotten, so a later trouble starts afresh. */
-    fun forget(ytId: String) {
-        counts.remove(ytId)
-        dueAt.remove(ytId)
+    /** [audioId] was saved after all: its stops are forgotten, so a later trouble starts afresh. */
+    fun forget(audioId: String) {
+        counts.remove(audioId)
+        dueAt.remove(audioId)
     }
 
     /** The songs waiting for their retry at [now] (not to be saved yet). */
@@ -493,16 +493,16 @@ internal class SaveStrikes {
 }
 
 /**
- * Videos whose cached copy turned out to be missing when read (evicted, or its file gone): for
- * [SKIP_MS] they are not served from the cache, so the load's retry goes to the network instead
- * of to the same miss. Thread-safe. Pure (CachePolicyTest).
+ * Songs (audio ids: videos and Jukebox MP3s) whose cached copy turned out to be missing when read
+ * (evicted, or its file gone): for [SKIP_MS] they are not served from the cache, so the load's
+ * retry goes to the network instead of to the same miss. Thread-safe. Pure (CachePolicyTest).
  */
 internal class CacheMisses(private val clock: () -> Long = { System.currentTimeMillis() }) {
     private val lru = TtlLru<String, Boolean>(64)
 
-    fun missed(ytId: String) = lru.put(ytId, true, clock() + SKIP_MS)
+    fun missed(audioId: String) = lru.put(audioId, true, clock() + SKIP_MS)
 
-    fun recent(ytId: String): Boolean = lru.get(ytId, clock()) == true
+    fun recent(audioId: String): Boolean = lru.get(audioId, clock()) == true
 
     companion object {
         const val SKIP_MS = 60_000L
@@ -512,7 +512,7 @@ internal class CacheMisses(private val clock: () -> Long = { System.currentTimeM
 /**
  * Members-only audio in the cache, so signing out removes it all, whatever put it there. By
  * audio id ([SessionPolicy.isValidAudioId]): a members-only Jukebox MP3 goes like a video.
- * - [mark]: a video known to be members-only (a queue item marked so, a members-only like);
+ * - [mark]: a song known to be members-only (a queue item marked so, a members-only like);
  * - [onCached]: it reached the cache, so it is tagged (AudioCache keeps the tags in a file);
  * - [signOut]: every tagged or known one is to go, and while signed out none of them may come
  *   back in ([denied]: the cache is bypassed for them, and a span that slips in is removed);
@@ -528,33 +528,33 @@ internal class MembersAudio {
     private var signedOut = false
 
     @Synchronized
-    fun mark(ytId: String) {
-        known.add(ytId)
-        if (signedOut) deny.add(ytId)
+    fun mark(audioId: String) {
+        known.add(audioId)
+        if (signedOut) deny.add(audioId)
     }
 
     /** The tags kept from an earlier run. */
     @Synchronized
-    fun load(ytIds: Collection<String>) {
-        tags.addAll(ytIds)
+    fun load(audioIds: Collection<String>) {
+        tags.addAll(audioIds)
     }
 
-    /** [ytId]'s audio reached the cache; true when that's a new tag (to be written down). */
+    /** [audioId]'s audio reached the cache; true when that's a new tag (to be written down). */
     @Synchronized
-    fun onCached(ytId: String): Boolean = !signedOut && ytId in known && tags.add(ytId)
+    fun onCached(audioId: String): Boolean = !signedOut && audioId in known && tags.add(audioId)
 
     @Synchronized
     fun tagged(): Set<String> = HashSet(tags)
 
-    /** The videos marked members-only in this run. */
+    /** The songs marked members-only in this run. */
     @Synchronized
     fun marked(): Set<String> = HashSet(known)
 
-    /** What [reconcile] found: the videos whose audio is to go, and whether a tag is new. */
+    /** What [reconcile] found: the songs whose audio is to go, and whether a tag is new. */
     data class Reconciled(val remove: List<String>, val tagged: Boolean)
 
     /**
-     * Brings the audio of members-only videos already in the cache ([inCache]) in line: signed
+     * Brings the audio of members-only songs already in the cache ([inCache]) in line: signed
      * out, it is to go ([Reconciled.remove]); signed in, it is tagged ([Reconciled.tagged]: a new
      * tag, to be written down). For marks that come after the audio was counted in (the cache
      * was starting then, or the audio was already there).
@@ -570,9 +570,9 @@ internal class MembersAudio {
     }
 
     @Synchronized
-    fun denied(ytId: String): Boolean = signedOut && ytId in deny
+    fun denied(audioId: String): Boolean = signedOut && audioId in deny
 
-    /** Signed out: the videos whose audio is to go now. */
+    /** Signed out: the songs whose audio is to go now. */
     @Synchronized
     fun signOut(): Set<String> {
         signedOut = true
@@ -581,10 +581,10 @@ internal class MembersAudio {
         return gone
     }
 
-    /** The audio of [ytIds] is out of the cache: their tags go. */
+    /** The audio of [audioIds] is out of the cache: their tags go. */
     @Synchronized
-    fun removed(ytIds: Collection<String>) {
-        tags.removeAll(ytIds.toSet())
+    fun removed(audioIds: Collection<String>) {
+        tags.removeAll(audioIds.toSet())
     }
 
     @Synchronized
@@ -666,7 +666,7 @@ internal object LikedSaverPolicy {
      */
     fun freshAfterClear(liked: Collection<String>, pair: Set<String>): Set<String> = pair.filterTo(HashSet()) { it in liked }
 
-    /** The video to save now, or null. */
+    /** The song (audio id) to save now, or null. */
     fun next(f: Facts): String? = pick(f, f.sinceLastMs)
 
     private fun pick(f: Facts, sinceLastMs: Long): String? {

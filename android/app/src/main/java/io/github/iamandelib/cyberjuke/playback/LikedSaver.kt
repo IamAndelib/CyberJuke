@@ -36,7 +36,7 @@ import java.io.IOException
 @OptIn(UnstableApi::class)
 internal class LikedSaver(private val handler: Handler, private val host: Host) {
     interface Host {
-        /** The videos the player loads anyway (the playing track and the next). */
+        /** The songs (audio ids) the player loads anyway (the playing track and the next). */
         fun loadingPair(): Set<String>
 
         /** Of those, the ones it is still loading ([PlaybackNeed.stillLoading]): left to it meanwhile. */
