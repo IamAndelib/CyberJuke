@@ -50,6 +50,13 @@ internal object LoadRetry {
 
     const val MAX_DELAY_MS = 8_000L
 
+    /**
+     * HTTP statuses that mean "not now" rather than "no": a request timeout and too many
+     * requests. On a host whose other 4xx are final (latex.gg) they are retried like a broken
+     * connection. YouTube's 429 is a refusal instead (JukeLoadErrorPolicy.NO_RETRY_HTTP).
+     */
+    val TRANSIENT_HTTP: Set<Int> = setOf(408, 429)
+
     /** A cached load's file that went away (a video's or a Jukebox MP3's): retried this soon ([cacheFileRetryMs]). */
     const val CACHE_RETRY_MS = 500L
 

@@ -83,7 +83,7 @@ Later versions work the same way: add a CHANGELOG section, then run Release with
 2. Create a free account on <https://gitlab.com> and **fork** <https://gitlab.com/fdroid/fdroiddata>.
 3. In your fork, add the file as `metadata/io.github.iamandelib.cyberjuke.yml`.
 4. Open a **merge request** using the "App inclusion" template. [`docs/fdroid/README.md`](fdroid/README.md) lists what to mention.
-5. F-Droid's volunteers review it. Expect questions and a few days to weeks. The app gets the **NonFreeNet** label, because it uses YouTube and Cyberspace's servers; that's normal for apps like NewPipe.
+5. F-Droid's volunteers review it. Expect questions and a few days to weeks. The app gets the **NonFreeNet** label, because it uses YouTube, latex.gg and Cyberspace's servers; that's normal for apps like NewPipe.
 6. **Reproducible builds:** F-Droid builds the same commit itself, and when its build matches yours, it ships **your** signed APK. So F-Droid and GitHub installs update each other.
 
 ## 8. Optional

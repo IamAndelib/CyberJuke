@@ -6,7 +6,7 @@ vi.mock('@capacitor/preferences', () => ({
   Preferences: { get: async () => ({ value: null }), set: async () => {} },
 }));
 
-const { CATALOG_KEY, CATALOG_MEMBERS_KEY, FULL_AFTER_MS, INCREMENTAL_AFTER_MS, catalogKey, createCatalog, genreCounts, mergeById, mostSaved } =
+const { CATALOG_FORMAT, CATALOG_KEY, CATALOG_MEMBERS_KEY, FULL_AFTER_MS, INCREMENTAL_AFTER_MS, catalogKey, createCatalog, genreCounts, mergeById, mostSaved } =
   await import('./catalog');
 
 function t(id: string, createdAt: string, p: Partial<Track> = {}): Track {
@@ -145,16 +145,40 @@ describe('createCatalog', () => {
 
   it('restores from storage and only tops up what is stale', async () => {
     const now = Date.UTC(2026, 9, 8);
-    const stored = { v: 1, fullAt: now - 2 * INCREMENTAL_AFTER_MS, checkedAt: now - 2 * INCREMENTAL_AFTER_MS, tracks: [t('a', D(1)), t('b', D(2))] };
+    const stored = { v: 1, fmt: CATALOG_FORMAT, fullAt: now - 2 * INCREMENTAL_AFTER_MS, checkedAt: now - 2 * INCREMENTAL_AFTER_MS, tracks: [t('a', D(1)), t('b', D(2))] };
     const s = setup({ stored, start: now });
     await s.cat.refresh();
     expect(s.calls).toEqual([new Date(D(2))]);
     expect(s.cat.tracks.value.map((x) => x.id)).toEqual(['c', 'b', 'a']);
   });
 
+  it('a catalog saved in an older format is refetched in full once, whatever its age', async () => {
+    // 1.2.0 saved no MP3 posts and no format; an incremental fetch only brings posts newer than
+    // its newest one, so an older MP3 post would stay missing until the 24-hour refetch.
+    const now = Date.UTC(2026, 9, 8);
+    const old = { fullAt: now - 2 * INCREMENTAL_AFTER_MS, checkedAt: now - 2 * INCREMENTAL_AFTER_MS };
+    const mp3 = t('m', D(1), { ytId: '', mp3: 'https://latex.gg/share/IZq8cMcx.mp3' });
+    const s = setup({ tracks: [mp3, t('b', D(2)), t('c', D(3))], start: now });
+    s.storage.data.set(CATALOG_KEY, JSON.stringify({ v: 1, tracks: [t('b', D(2)), t('c', D(3))] }));
+    s.storage.data.set(CATALOG_KEY + '.meta', JSON.stringify(old));
+    await s.cat.restoreSaved();
+    expect(s.cat.tracks.value.map((x) => x.id)).toEqual(['c', 'b']); // shown at once, as saved
+    await s.cat.refresh();
+    expect(s.calls).toEqual([undefined]);
+    expect(s.cat.tracks.value.map((x) => x.id)).toEqual(['c', 'b', 'm']);
+    expect(JSON.parse(s.storage.data.get(CATALOG_KEY + '.meta')!).fmt).toBe(CATALOG_FORMAT);
+    // Then the usual rules: nothing within the hour, an incremental fetch after it.
+    s.tick(INCREMENTAL_AFTER_MS - 1);
+    await s.cat.refresh();
+    expect(s.calls).toHaveLength(1);
+    s.tick(1);
+    await s.cat.refresh();
+    expect(s.calls[1]).toEqual(new Date(D(3)));
+  });
+
   it('a fresh cache is used as-is without any request', async () => {
     const now = Date.UTC(2026, 9, 8);
-    const s = setup({ stored: { v: 1, fullAt: now - 1000, checkedAt: now - 1000, tracks: [t('a', D(1))] }, start: now });
+    const s = setup({ stored: { v: 1, fmt: CATALOG_FORMAT, fullAt: now - 1000, checkedAt: now - 1000, tracks: [t('a', D(1))] }, start: now });
     await s.cat.refresh();
     expect(s.source.catalog).not.toHaveBeenCalled();
     expect(s.cat.status.value).toBe('ready');
@@ -322,7 +346,7 @@ describe('catalog per sign-in state', () => {
   });
 
   it('restores only the catalog of the current state', async () => {
-    const saved = (ids: string[]) => JSON.stringify({ v: 1, fullAt: Date.UTC(2026, 9, 8), checkedAt: Date.UTC(2026, 9, 8), tracks: ids.map((id) => t(id, D(1))) });
+    const saved = (ids: string[]) => JSON.stringify({ v: 1, fmt: CATALOG_FORMAT, fullAt: Date.UTC(2026, 9, 8), checkedAt: Date.UTC(2026, 9, 8), tracks: ids.map((id) => t(id, D(1))) });
     const s = signedSetup(false, { [CATALOG_KEY]: saved(['public-one']), [CATALOG_MEMBERS_KEY]: saved(['members-one']) });
     await s.cat.refresh();
     expect(s.cat.all.value.map((x) => x.id)).toEqual(['public-one']);
@@ -371,7 +395,7 @@ describe('saving', () => {
     const trackWrites = () => s.storage.set.mock.calls.filter((c) => c[0] === CATALOG_KEY).length;
     expect(trackWrites()).toBe(1);
     expect(JSON.parse(s.storage.data.get(CATALOG_KEY)!)).toEqual({ v: 1, tracks: expect.any(Array) });
-    expect(JSON.parse(s.storage.data.get(CATALOG_KEY + '.meta')!)).toEqual({ fullAt: expect.any(Number), checkedAt: expect.any(Number) });
+    expect(JSON.parse(s.storage.data.get(CATALOG_KEY + '.meta')!)).toEqual({ fullAt: expect.any(Number), checkedAt: expect.any(Number), fmt: CATALOG_FORMAT });
     s.tick(INCREMENTAL_AFTER_MS + 1);
     await s.cat.refresh(); // nothing new
     expect(trackWrites()).toBe(1);

@@ -1,6 +1,7 @@
 package io.github.iamandelib.cyberjuke.playback
 
 import androidx.media3.common.Player
+import io.github.iamandelib.cyberjuke.net.Hosts
 import java.net.URI
 import java.security.MessageDigest
 
@@ -133,18 +134,20 @@ internal object SessionPolicy {
 
     fun isValidYtId(id: String?): Boolean = id != null && YT_ID.matches(id)
 
-    /** A Jukebox MP3 (Cyberspace 4.0): a latex.gg share link, the only kind the site accepts. */
-    private val MP3_URL = Regex("^https://latex\\.gg/share/([A-Za-z0-9_-]+\\.mp3)$", RegexOption.IGNORE_CASE)
+    /**
+     * A Jukebox MP3 (Cyberspace 4.0): a latex.gg share link, the only kind the site accepts,
+     * whose file name is one [Hosts.isLatexMp3File] accepts.
+     */
+    private val MP3_URL = Regex("^https://latex\\.gg/share/([^/?#]+)$", RegexOption.IGNORE_CASE)
 
-    fun isValidMp3Url(url: String?): Boolean = url != null && MP3_URL.matches(url)
+    fun isValidMp3Url(url: String?): Boolean = mp3FileOf(url) != null
 
     /** The file name of a Jukebox MP3 link ("IZq8cMcx.mp3"), or null when it isn't one. */
-    fun mp3FileOf(url: String?): String? = url?.let { MP3_URL.matchEntire(it)?.groupValues?.get(1) }
+    fun mp3FileOf(url: String?): String? =
+        url?.let { MP3_URL.matchEntire(it)?.groupValues?.get(1) }?.takeIf { isValidMp3File(it) }
 
     /** A Jukebox MP3's file name as it comes back in our own URI. */
-    private val MP3_FILE = Regex("^[A-Za-z0-9_-]+\\.mp3$", RegexOption.IGNORE_CASE)
-
-    fun isValidMp3File(file: String?): Boolean = file != null && MP3_FILE.matches(file)
+    fun isValidMp3File(file: String?): Boolean = Hosts.isLatexMp3File(file)
 
     /** The one URL of a Jukebox MP3 file name ([mp3FileOf]'s inverse), or null for anything else. */
     fun mp3UrlForFile(file: String?): String? = file?.takeIf { isValidMp3File(it) }?.let { "https://latex.gg/share/$it" }
@@ -165,6 +168,36 @@ internal object SessionPolicy {
 
     /** An audio id the cache, Liked and the saved set take: a video id, or a Jukebox MP3's ([mp3AudioId]). */
     fun isValidAudioId(id: String?): Boolean = isValidYtId(id) || mp3FileOfAudioId(id) != null
+
+    /**
+     * An item's MP3 link ([JukeUris.mp3UrlOf]): the one its URI gives ([uriLink]) when it has a
+     * URI ([hasUri]), else none for a video (a [ytIdExtra]), else the one kept in TrackExtras
+     * ([keptLink]). Never from the metadata, which other apps can read.
+     */
+    fun mp3LinkOf(hasUri: Boolean, uriLink: String?, ytIdExtra: String?, keptLink: String?): String? = when {
+        hasUri -> uriLink
+        ytIdExtra != null -> null
+        else -> keptLink?.takeIf { isValidMp3Url(it) }
+    }
+
+    /** What a track from the page plays ([playableOf]). */
+    sealed class Playable {
+        data class Yt(val id: String) : Playable()
+
+        /** A Jukebox MP3, by its latex.gg file name (its URL is rebuilt from it, [mp3UrlForFile]). */
+        data class Mp3(val file: String) : Playable()
+    }
+
+    /**
+     * What a NativeTrack with these fields ("" read as null) plays: a video when it has a
+     * ytId, which then wins over any `mp3`; an MP3 only with no ytId at all. Throws
+     * IllegalArgumentException naming the bad field (never its value).
+     */
+    fun playableOf(ytId: String?, mp3: String?): Playable = when {
+        ytId != null -> if (isValidYtId(ytId)) Playable.Yt(ytId) else throw IllegalArgumentException("track.ytId invalid")
+        mp3 != null -> mp3FileOf(mp3)?.let { Playable.Mp3(it) } ?: throw IllegalArgumentException("track.mp3 invalid")
+        else -> throw IllegalArgumentException("track.ytId missing")
+    }
 
     /** A cover's path on Cyberspace's image server: under /uploads/, no dot segments, no escapes. */
     private val COVER_PATH = Regex("^/uploads/(?:[A-Za-z0-9_-][A-Za-z0-9._-]*/)*[A-Za-z0-9_-][A-Za-z0-9._-]*$")

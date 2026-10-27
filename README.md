@@ -124,9 +124,9 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 | Cyberspace's login (Google Identity Toolkit / Secure Token) | Your email and password; token refreshes | Only if you sign in |
 | YouTube | The video ID of the track being played or prefetched, or of a liked song being saved to play offline | Playback; saving a song you just liked (or the liked song playing when you clear the cache); older liked songs are downloaded on an unmetered network (Wi-Fi), while the app is open (also in the background) or playing |
 | YouTube Music | Your Global search query, or the artist you open; the video ID of a Global track, for its radio (also in the background while autoplay refills); the video ID of the playing track when LRCLIB has no lyrics for it | Global search, artist pages, Global autoplay, lyrics fallback |
-| latex.gg | A request for the MP3 file of a Jukebox track that is one (latex.gg receives your IP address and the file requested) | Playing such a track, and saving a liked one for offline (as liked songs are: at once, older likes on Wi-Fi) |
+| latex.gg | A request for the MP3 file of a Jukebox track that is one (latex.gg receives your IP address and the file requested) | Playing or prefetching such a track (the next track is prepared while the current one plays), and saving a liked one for offline (as liked songs are: at once, older likes on Wi-Fi) |
 | YouTube and Google image servers (`i.ytimg.com`, `*.googleusercontent.com`, `*.ggpht.com`) | Artwork requests | Lists, artist pages and Now Playing |
-| Cyberspace's image server (`bunker.cyberspace.online`) | Requests for the covers of Jukebox MP3s | Lists and Now Playing |
+| Cyberspace's image server (`bunker.cyberspace.online`) | Requests for the covers of Jukebox MP3s | Lists, Now Playing, and the notification and lock screen while one plays |
 | LRCLIB | Artist, title and duration of the current track | Lyrics panel open |
 | GitHub (`api.github.com`) | A request for the latest CyberJuke release (nothing about you or your library) | At most once a day when the app opens or comes back (an hour after a failed check), or **Check now**; only once you turn it on in Settings → Updates (off by default); never for F-Droid installs |
 
@@ -187,7 +187,7 @@ CyberJuke is being prepared for [F-Droid](https://f-droid.org):
 - Store listing in [`fastlane/metadata/android/en-US/`](fastlane/metadata/android/en-US).
 - Literal `versionCode`/`versionName` in `android/app/build.gradle`, and a changelog per version in `fastlane/.../changelogs/<versionCode>.txt`.
 - Reproducible builds (no dependency-metadata block, no build timestamps), so F-Droid can ship the same developer-signed APK as GitHub and the two update each other.
-- F-Droid will mark it **NonFreeNet**: it depends on YouTube and on Cyberspace's backend.
+- F-Droid will mark it **NonFreeNet**: it depends on YouTube, on Cyberspace's backend and on latex.gg (Jukebox MP3s).
 
 The draft recipe and the submission steps are in [`docs/fdroid/`](docs/fdroid).
 

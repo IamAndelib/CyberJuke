@@ -355,10 +355,12 @@ class PlaybackService : MediaSessionService() {
         }
 
         // Stopped by a back-off while playing, or Play pressed during one: where the sound was
-        // going, and the resume's timer, now with its wake lock.
+        // going, and the resume's timer, now with its wake lock. An MP3 doesn't wait for the
+        // back-off (its outage tries keep their own wake lock), so nothing stays awake for it.
         override fun onResumeWanted() {
             handler.post {
                 pausedOnExternal = hasExternalOutput()
+                if (!BackOffHold.resumeWaits(blocked = true, currentIsMp3 = JukeUris.isMp3(player?.currentMediaItem))) return@post
                 NetBlock.active().first.takeIf { it > 0L }?.let { scheduleResume(it) }
             }
         }
@@ -610,10 +612,14 @@ class PlaybackService : MediaSessionService() {
         // A Jukebox MP3 without a seek table (no Xing/VBRI header) is still seekable, at its
         // constant bitrate; YouTube's streams (fMP4, WebM) have their own index. Its ID3 tags
         // are not read: the post says what it is (an embedded picture would otherwise go to
-        // the notification and every controller, whatever its size).
-        val extractors = DefaultExtractorsFactory()
-            .setConstantBitrateSeekingEnabled(true)
-            .setMp3ExtractorFlags(Mp3Extractor.FLAG_DISABLE_ID3_METADATA)
+        // the notification and every controller, whatever its size). It is read as an MP3 only
+        // (JukeExtractors).
+        val extractors = JukeExtractors(
+            DefaultExtractorsFactory()
+                .setConstantBitrateSeekingEnabled(true)
+                .setMp3ExtractorFlags(Mp3Extractor.FLAG_DISABLE_ID3_METADATA),
+            mp3Flags = Mp3Extractor.FLAG_DISABLE_ID3_METADATA or Mp3Extractor.FLAG_ENABLE_CONSTANT_BITRATE_SEEKING,
+        )
         val exo = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSources, extractors).setLoadErrorHandlingPolicy(JukeLoadErrorPolicy()))
             .setLoadControl(loadControl)
