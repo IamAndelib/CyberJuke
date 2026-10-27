@@ -41,6 +41,8 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.LoadEventInfo
 import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.mp3.Mp3Extractor
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -352,10 +354,12 @@ class PlaybackService : MediaSessionService() {
         }
 
         // Stopped by a back-off while playing, or Play pressed during one: where the sound was
-        // going, and the resume's timer, now with its wake lock.
+        // going, and the resume's timer, now with its wake lock. An MP3 doesn't wait for the
+        // back-off (its outage tries keep their own wake lock), so nothing stays awake for it.
         override fun onResumeWanted() {
             handler.post {
                 pausedOnExternal = hasExternalOutput()
+                if (!BackOffHold.resumeWaits(blocked = true, currentIsMp3 = JukeUris.isMp3(player?.currentMediaItem))) return@post
                 NetBlock.active().first.takeIf { it > 0L }?.let { scheduleResume(it) }
             }
         }
@@ -457,7 +461,7 @@ class PlaybackService : MediaSessionService() {
         handler.removeCallbacks(blockEnded)
         val p = player ?: return
         val (until, _) = NetBlock.active()
-        if (until > 0L) {
+        if (until > 0L && BackOffHold.resumeWaits(blocked = true, currentIsMp3 = JukeUris.isMp3(p.currentMediaItem))) {
             scheduleResume(until)
             return
         }
@@ -604,8 +608,19 @@ class PlaybackService : MediaSessionService() {
                 .setTargetBufferBytes(BufferPolicy.TARGET_BYTES)
                 .build(),
         )
+        // A Jukebox MP3 without a seek table (no Xing/VBRI header) is still seekable, at its
+        // constant bitrate; YouTube's streams (fMP4, WebM) have their own index. Its ID3 tags
+        // are not read: the post says what it is (an embedded picture would otherwise go to
+        // the notification and every controller, whatever its size). It is read as an MP3 only
+        // (JukeExtractors).
+        val extractors = JukeExtractors(
+            DefaultExtractorsFactory()
+                .setConstantBitrateSeekingEnabled(true)
+                .setMp3ExtractorFlags(Mp3Extractor.FLAG_DISABLE_ID3_METADATA),
+            mp3Flags = Mp3Extractor.FLAG_DISABLE_ID3_METADATA or Mp3Extractor.FLAG_ENABLE_CONSTANT_BITRATE_SEEKING,
+        )
         val exo = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSources).setLoadErrorHandlingPolicy(JukeLoadErrorPolicy()))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSources, extractors).setLoadErrorHandlingPolicy(JukeLoadErrorPolicy()))
             .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, handleAudioFocus)
             .setHandleAudioBecomingNoisy(true)
@@ -850,7 +865,8 @@ class PlaybackService : MediaSessionService() {
                 playWhenReady = player?.playWhenReady == true,
                 now = now,
             )
-            if (rebuffer) governor.onRebuffer(now)
+            // Auto quality is about YouTube's streams: a slow latex.gg (a Jukebox MP3) doesn't count.
+            if (rebuffer && !JukeUris.isMp3(player?.currentMediaItem)) governor.onRebuffer(now)
             when (playbackState) {
                 Player.STATE_BUFFERING -> transitions.onBuffering(now)
                 Player.STATE_READY -> judged(transitions.onReady(now))
@@ -884,7 +900,9 @@ class PlaybackService : MediaSessionService() {
                 // Playing again: an outage's tries are over, and nothing waits for the network
                 // (Play pressed during the wait: the wait goes, and says so).
                 stopOutageRetry()
-                if (NetBlock.waitingForNetwork()) NetBlock.takeResume()
+                if (BackOffHold.playingSpendsResume(NetBlock.waitingForNetwork(), NetBlock.isBlocked(), JukeUris.isMp3(player?.currentMediaItem))) {
+                    NetBlock.takeResume()
+                }
             }
             schedulePrefetch()
             // Where it stopped, and while it plays every few seconds (a crash loses no more).
@@ -906,8 +924,9 @@ class PlaybackService : MediaSessionService() {
                 return
             }
             // A pause outside a back-off is the user's: nothing to resume later. (During one,
-            // a refused play the plugin turned into a pause keeps its resume.)
-            if (!playWhenReady && !NetBlock.isBlocked()) {
+            // a refused play the plugin turned into a pause keeps its resume; an MP3 plays
+            // through a back-off, so its pause is the user's.)
+            if (!playWhenReady && BackOffHold.pauseIsUsers(NetBlock.isBlocked(), JukeUris.isMp3(player?.currentMediaItem))) {
                 NetBlock.cancelResume()
                 releaseResumeWakeLock()
                 stopOutageRetry()
@@ -1050,7 +1069,8 @@ class PlaybackService : MediaSessionService() {
             governedQuality = quality
             governor.onSettingChanged()
         }
-        if (quality != AudioQuality.AUTO) return
+        // A Jukebox MP3 has one fixed file: no rung to pick, and it doesn't count as a track at a rung.
+        if (quality != AudioQuality.AUTO || JukeUris.isMp3(item)) return
         val ladder = JukeUris.ytIdOf(item)?.let { StreamResolver.lastServed(it) }?.ladderBps ?: emptyList()
         val before = StreamResolver.autoRung
         val rung = governor.onTrackStarted(SystemClock.elapsedRealtime(), ladder)
@@ -1190,6 +1210,8 @@ class PlaybackService : MediaSessionService() {
         handler.removeCallbacks(transitionDeadline)
     }
 
+    private fun gateKeyOf(item: MediaItem?): String? = JukeUris.ytIdOf(item) ?: JukeUris.mp3UrlOf(item)
+
     /** Tells the load control which items play now and next (in play order: shuffle, repeat). */
     private fun updateLoadAhead() {
         val lc = oneAhead ?: return
@@ -1209,9 +1231,11 @@ class PlaybackService : MediaSessionService() {
         lc.currentIndex = p.currentMediaItemIndex
         // The pair may open its stream (the next one must prepare, whether it loads ahead or not);
         // the item after next, prepared early, waits.
+        // A Jukebox MP3 never waits at the gate, but is in the pair: two MP3s in a row must not
+        // leave it empty (which lets everything through).
         val ids = HashSet<String>(2)
-        JukeUris.ytIdOf(p.currentMediaItem)?.let { ids.add(it) }
-        if (next != C.INDEX_UNSET) JukeUris.ytIdOf(p.getMediaItemAt(next))?.let { ids.add(it) }
+        gateKeyOf(p.currentMediaItem)?.let { ids.add(it) }
+        if (next != C.INDEX_UNSET) gateKeyOf(p.getMediaItemAt(next))?.let { ids.add(it) }
         loadingIds = ids
         // During a crossfade the incoming player's track is this one's next: in the pair.
         YtDataSpecResolver.gate.allow(ids)
@@ -1309,10 +1333,13 @@ class PlaybackService : MediaSessionService() {
             val extras = item.mediaMetadata.extras
             val serial = extras?.getLong(QueueCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L
             val extra = TrackExtras.get(item.mediaId)
+            val ytId = JukeUris.ytIdOf(item)
+            val mp3 = if (ytId == null) JukeUris.mp3UrlOf(item) ?: return null else null
             entries.add(
                 LastSession.Entry(
                     id = item.mediaId,
-                    ytId = JukeUris.ytIdOf(item) ?: return null,
+                    ytId = ytId ?: "",
+                    mp3 = mp3,
                     title = item.mediaMetadata.title?.toString(),
                     artist = item.mediaMetadata.artist?.toString(),
                     artworkUrl = item.mediaMetadata.artworkUri?.toString(),
@@ -1400,6 +1427,7 @@ class PlaybackService : MediaSessionService() {
             hasNext = p.hasNextMediaItem(),
             consecutiveFailures = consecutiveFailures,
             outagePauses = outagePauses,
+            mp3 = JukeUris.isMp3(item),
         )
         // A track broken at one spot fails there again after each resume (READY in between).
         // Counted only where the unclear failure decides (not a connection failure, say).
@@ -1783,8 +1811,9 @@ class PlaybackService : MediaSessionService() {
          * Items from a controller (also reached through the default onSetMediaItems): the URI is
          * always rebuilt as `cyberjuke://yt/<id>` from a valid 11-character ytId (from our URI
          * or the metadata extra), never taken from the controller, so no controller can make us
-         * fetch an arbitrary URL or read a local file. Artwork only from https://i.ytimg.com.
-         * Items without a valid id are dropped.
+         * fetch an arbitrary URL or read a local file. Artwork only from what
+         * [SessionPolicy.isAllowedArtwork] allows. Items without a valid id are dropped; so are
+         * Jukebox MP3s, which only the page hands in.
          */
         override fun onAddMediaItems(
             mediaSession: MediaSession,
@@ -1794,7 +1823,7 @@ class PlaybackService : MediaSessionService() {
             val ciTone = if (isPlugin(mediaSession, controller) && isDebuggable()) LaunchOptions.CI_TONE else null
             val restored = mediaItems.mapNotNull { item -> sanitize(item, ciTone) }.toMutableList()
             if (restored.size != mediaItems.size) {
-                Log.w(TAG, "Dropped ${mediaItems.size - restored.size} item(s) without a valid id")
+                Log.w(TAG, "Dropped ${mediaItems.size - restored.size} item(s) without a valid video id (MP3s are never taken from a controller)")
             }
             return Futures.immediateFuture(restored)
         }

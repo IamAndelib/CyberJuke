@@ -17,6 +17,18 @@ const strings = (x: unknown): string[] => (Array.isArray(x) ? x.filter(isStr) : 
 
 export const YT_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 
+/**
+ * A Jukebox MP3: a public latex.gg share link, the only kind the site accepts (its own
+ * validator, Cyberspace 4.0). Nothing else is ever handed to the player as a URL.
+ */
+export const MP3_URL_RE = /^https:\/\/latex\.gg\/share\/[A-Za-z0-9_-]+\.mp3$/i;
+export const isMp3Url = (x: unknown): x is string => isStr(x) && MP3_URL_RE.test(x);
+
+/** A track the player can load: a YouTube video id or a Jukebox MP3 (placeholders have neither). */
+export function hasAudio(t: Pick<Track, 'ytId' | 'mp3'> | null | undefined): boolean {
+  return !!t && (YT_ID_RE.test(t.ytId) || isMp3Url(t.mp3));
+}
+
 /** Up next lists at most this many tracks (native sends as many: StateEncoder.MAX_UP_NEXT). */
 export const UP_NEXT_MAX = 50;
 
@@ -138,7 +150,11 @@ const TRACK_STRINGS = ['id', 'ytId', 'title', 'artist', 'genre', 'by', 'postTitl
 export function isTrackFull(x: unknown): x is Track {
   if (!isObj(x)) return false;
   for (const k of TRACK_STRINGS) if (!isStr(x[k])) return false;
-  if (!x.id || !YT_ID_RE.test(x.ytId as string) || typeof x.nsfw !== 'boolean') return false;
+  if (x.mp3 !== undefined && !isMp3Url(x.mp3)) return false;
+  if (x.ytId !== '' && !YT_ID_RE.test(x.ytId as string)) return false;
+  // An MP3 has no video id (Track.mp3): never both.
+  if (x.mp3 !== undefined && x.ytId !== '') return false;
+  if (!x.id || !hasAudio(x as Pick<Track, 'ytId' | 'mp3'>) || typeof x.nsfw !== 'boolean') return false;
   if (x.saves !== undefined && finite(x.saves) === undefined) return false;
   if (x.replies !== undefined && finite(x.replies) === undefined) return false;
   if (x.source !== undefined && !ORIGINS.includes(x.source as TrackOrigin)) return false;
@@ -148,13 +164,19 @@ export function isTrackFull(x: unknown): x is Track {
 
 /**
  * A stored track, repaired: missing text fields become '' and `nsfw` false, so lists
- * saved by older versions survive. Null without an id, a valid video id and a title.
+ * saved by older versions survive. Null without an id, a title and something to play
+ * (a valid video id or a Jukebox MP3 link).
  */
 export function asTrack(x: unknown): Track | null {
-  if (!isObj(x) || !isStr(x.id) || !x.id || !isStr(x.ytId) || !YT_ID_RE.test(x.ytId) || !isStr(x.title)) return null;
+  if (!isObj(x) || !isStr(x.id) || !x.id || !isStr(x.title)) return null;
+  const ytId = isStr(x.ytId) && YT_ID_RE.test(x.ytId) ? x.ytId : '';
+  // An MP3 has no video id (Track.mp3): a video id wins.
+  const mp3 = !ytId && isMp3Url(x.mp3) ? x.mp3 : undefined;
+  if (!ytId && !mp3) return null;
   const t: Track = {
     id: x.id,
-    ytId: x.ytId,
+    ytId,
+    ...(mp3 && { mp3 }),
     title: x.title,
     artist: isStr(x.artist) ? x.artist : '',
     genre: isStr(x.genre) ? x.genre : '',

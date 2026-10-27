@@ -163,6 +163,52 @@ describe('tracksFromDocument edge cases', () => {
     expect(t[0].id).toBe('zxQ91atgkGA6lzKlLobH-2');
   });
 
+  // Cyberspace 4.0: an MP3 attachment, exactly as the site stores it.
+  const COVER = 'https://bunker.cyberspace.online/uploads/jukebox/Q7qxDvsvrvUsGoFQ3AUbsCQtkyx1/1792922249462-97625ca1611e2070.jpg';
+  const mp3 = (src: string, extra: Record<string, string> = {}) =>
+    att(src, { origin: 'latex', cover: COVER, artist: 'Mephisztoe', title: 'Träume', genre: 'hip hop', ...extra });
+
+  it('reads a latex.gg MP3 attachment, with its cover', () => {
+    const [t] = tracksFromDocument(withAttachments([mp3('https://latex.gg/share/IZq8cMcx.mp3')]));
+    expect(t).toMatchObject({ id: 'zxQ91atgkGA6lzKlLobH', ytId: '', mp3: 'https://latex.gg/share/IZq8cMcx.mp3', title: 'Träume', artist: 'Mephisztoe', genre: 'hip hop', artworkUrl: COVER });
+  });
+
+  it('plays only latex.gg share links ending in .mp3', () => {
+    const bad = [
+      'http://latex.gg/share/IZq8cMcx.mp3',
+      'https://latex.gg/share/IZq8cMcx',
+      'https://latex.gg/files/IZq8cMcx.mp3',
+      'https://evil.latex.gg/share/IZq8cMcx.mp3',
+      'https://latex.gg.evil.com/share/IZq8cMcx.mp3',
+      'https://latex.gg/share/../x.mp3',
+      'https://latex.gg/share/IZq8cMcx.mp3?x=1',
+      'https://youtu.be/ccccccccccc',
+    ];
+    for (const src of bad) expect(tracksFromDocument(withAttachments([mp3(src)])), src).toEqual([]);
+  });
+
+  it('keeps an MP3 without a usable cover, with no artwork', () => {
+    for (const cover of [
+      'https://evil.com/x.jpg',
+      'http://bunker.cyberspace.online/uploads/x.jpg',
+      'https://bunker.cyberspace.online/admin/x.jpg',
+      'https://bunker.cyberspace.online/uploads/../admin/x.jpg',
+      'https://bunker.cyberspace.online/uploads/%2e%2e/x.jpg',
+      'https://bunker.cyberspace.online/uploads/x.jpg?go=1',
+    ]) {
+      const [t] = tracksFromDocument(withAttachments([mp3('https://latex.gg/share/IZq8cMcx.mp3', { cover })]));
+      expect(t.artworkUrl, cover).toBe('');
+    }
+  });
+
+  it('reads a post that mixes a YouTube and an MP3 attachment', () => {
+    const t = tracksFromDocument(withAttachments([att('https://youtu.be/ccccccccccc'), mp3('https://latex.gg/share/IZq8cMcx.mp3')]));
+    expect(t.map((x) => [x.id, x.ytId, x.mp3])).toEqual([
+      ['zxQ91atgkGA6lzKlLobH-0', 'ccccccccccc', undefined],
+      ['zxQ91atgkGA6lzKlLobH-1', '', 'https://latex.gg/share/IZq8cMcx.mp3'],
+    ]);
+  });
+
   it('returns nothing for a post without attachments', () => {
     expect(tracksFromDocument({ name: 'a/b/posts/x', fields: {} })).toEqual([]);
   });

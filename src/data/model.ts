@@ -3,12 +3,18 @@
  * Pure functions only: no network, no globals. Unit-tested against
  * real fixtures in __fixtures__/runquery-sample.json.
  */
-import { YT_ID_RE } from '../core/guards';
+import { MP3_URL_RE, YT_ID_RE } from '../core/guards';
 
 export interface Track {
   /** Firestore doc id, plus `-<attachmentIndex>` when the post has several audio attachments. */
   id: string;
+  /** The YouTube video id; '' for a Jukebox MP3 (and for placeholders). */
   ytId: string;
+  /**
+   * A Jukebox MP3 (Cyberspace 4.0): its latex.gg share link (MP3_URL_RE), played as is.
+   * Set exactly when the post's audio is an MP3; such a track has no ytId.
+   */
+  mp3?: string;
   title: string;
   artist: string;
   /** Free-text genre as entered by the poster (trimmed); '' when missing. */
@@ -48,6 +54,11 @@ export type TrackOrigin = 'jukebox' | 'ytmusic';
 /** A track that isn't a Jukebox post (Global, from native, a placeholder): the post fields left empty. */
 export function makeTrack(t: Pick<Track, 'id' | 'ytId' | 'title' | 'artist'> & Partial<Track>): Track {
   return { genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '', ...t };
+}
+
+/** What makes two tracks the same audio: the video id, else the MP3 link, else the id (a placeholder). */
+export function audioKey(t: Pick<Track, 'id' | 'ytId' | 'mp3'>): string {
+  return t.ytId || t.mp3 || t.id;
 }
 
 /** True for tracks from Global search (not shared on the Jukebox). */
@@ -108,6 +119,14 @@ export function parseYouTubeId(src: string | null | undefined): string | null {
   if (candidate.length > 11 && /[A-Za-z0-9_-]/.test(candidate[11])) return null;
   return YT_ID_RE.test(id) ? id : null;
 }
+
+/**
+ * A Jukebox MP3's cover: an image the site stored with the post, under /uploads/ (no dot
+ * segments, no escapes, no query). Anything else is ignored. The native rule is the same
+ * (SessionPolicy.isAllowedArtwork).
+ */
+const COVER_RE = /^https:\/\/bunker\.cyberspace\.online\/uploads\/(?:[A-Za-z0-9_-][A-Za-z0-9._-]*\/)*[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
+export const isCoverUrl = (x: unknown): x is string => typeof x === 'string' && COVER_RE.test(x);
 
 export function artworkUrl(ytId: string): string {
   return `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
@@ -208,7 +227,7 @@ export function isMembersOnlyDoc(doc: FsDocument): boolean {
   return !!v && 'booleanValue' in v && v.booleanValue === false;
 }
 
-/** Turn one post document into zero or more Tracks (one per playable YouTube audio attachment). */
+/** Turn one post document into zero or more Tracks (one per playable audio attachment: YouTube or a latex.gg MP3). */
 export function tracksFromDocument(doc: FsDocument): Track[] {
   if (isHiddenDoc(doc)) return [];
   const f = doc.fields ?? {};
@@ -233,13 +252,11 @@ export function tracksFromDocument(doc: FsDocument): Track[] {
 
   const out: Track[] = [];
   for (const { index, fields } of audio) {
-    const origin = str(fields.origin);
-    if (origin && origin !== 'youtube') continue;
-    const ytId = parseYouTubeId(str(fields.src));
-    if (!ytId) continue;
+    const source = audioOf(fields);
+    if (!source) continue;
     out.push({
       id: audio.length > 1 ? `${id}-${index}` : id,
-      ytId,
+      ...source,
       title: str(fields.title).trim() || UNTITLED,
       artist: str(fields.artist).trim() || UNKNOWN_ARTIST,
       genre: (str(fields.genre) || str(f.audioAttachmentGenre)).trim(),
@@ -248,13 +265,29 @@ export function tracksFromDocument(doc: FsDocument): Track[] {
       postUrl: url,
       createdAt,
       nsfw,
-      artworkUrl: artworkUrl(ytId),
       ...(saves !== undefined && { saves }),
       ...(replies !== undefined && { replies }),
       ...(membersOnly && { membersOnly: true }),
     });
   }
   return out;
+}
+
+/**
+ * What an audio attachment plays: a YouTube video (origin `youtube`, or none in older
+ * posts) or a latex.gg MP3 (origin `latex`, with its own cover). Null for anything else.
+ */
+function audioOf(fields: Record<string, FsValue>): Pick<Track, 'ytId' | 'mp3' | 'artworkUrl'> | null {
+  const origin = str(fields.origin);
+  const src = str(fields.src).trim();
+  if (origin === 'latex') {
+    if (!MP3_URL_RE.test(src)) return null;
+    const cover = str(fields.cover).trim();
+    return { ytId: '', mp3: src, artworkUrl: isCoverUrl(cover) ? cover : '' };
+  }
+  if (origin && origin !== 'youtube') return null;
+  const ytId = parseYouTubeId(src);
+  return ytId ? { ytId, artworkUrl: artworkUrl(ytId) } : null;
 }
 
 export function tracksFromRows(rows: FsRunQueryRow[]): Track[] {

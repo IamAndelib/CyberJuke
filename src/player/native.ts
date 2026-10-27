@@ -8,8 +8,11 @@ import type { CrossfadeMs, Quality } from '../stores/library';
 /**
  * `album`: the album the track was opened from (Track.album), for the same-album rule of
  * Crossfade. Native keeps it with the last session and echoes it in `tracks`.
+ * `mp3`: a Jukebox MP3 (Track.mp3, a latex.gg share link matching MP3_URL_RE), played
+ * from that URL; its `ytId` is ''. Native keeps it with the last session and echoes it.
+ * `artworkUrl` is then the post's cover (https://bunker.cyberspace.online/uploads/…).
  */
-export interface NativeTrack { id: string; ytId: string; title: string; artist: string; artworkUrl: string; by?: string; postUrl?: string; membersOnly?: boolean; album?: string }
+export interface NativeTrack { id: string; ytId: string; title: string; artist: string; artworkUrl: string; by?: string; postUrl?: string; membersOnly?: boolean; album?: string; mp3?: string }
 export type RepeatMode = 'off' | 'all' | 'one';
 export interface NativeState {
   /**
@@ -60,7 +63,8 @@ export const BRIDGE_MAX_STRING = 2000;
 export const STALE_INDEX = 'STALE_INDEX';
 /**
  * setQueue, queueNext and addAutoplay reject the whole call ("Invalid tracks: track.ytId
- * invalid") when any ytId isn't 11 characters of [A-Za-z0-9_-]: filter before calling.
+ * invalid") when a track has neither a ytId of 11 characters of [A-Za-z0-9_-] nor (with
+ * ytId '') an `mp3` matching MP3_URL_RE: filter before calling (hasAudio).
  * More than BRIDGE_MAX_ITEMS tracks, or a string over BRIDGE_MAX_STRING, is TOO_LARGE.
  * While blocked, setQueue replaces the queue without preparing it (and resolves), and
  * play() is refused when nothing is loaded. trackError is never sent for blocks.

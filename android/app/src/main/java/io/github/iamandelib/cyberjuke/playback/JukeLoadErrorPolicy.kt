@@ -14,7 +14,8 @@ import java.io.FileNotFoundException
 /**
  * Don't keep retrying what can never succeed or would make things worse: unavailable videos,
  * bot checks, a running back-off, and HTTP 403/410/429 (429 must never be retried; 403/410 are
- * handled by re-resolving in PlaybackService). Everything else is retried [LoadRetry.NETWORK_RETRIES]
+ * handled by re-resolving in PlaybackService), or a Jukebox MP3's 4xx other than
+ * [LoadRetry.TRANSIENT_HTTP]. Everything else is retried [LoadRetry.NETWORK_RETRIES]
  * times before the player hears of it, while the buffer keeps playing; a network failure with a
  * capped back-off ([LoadRetry]), the rest with the default delays.
  */
@@ -27,6 +28,7 @@ internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
             httpCode = e.findCause<HttpDataSource.InvalidResponseCodeException>()?.responseCode,
             httpTransport = e.findCause<HttpDataSource.HttpDataSourceException>() != null,
             ytLoad = ytId != null,
+            mp3Load = JukeUris.mp3UrlOf(loadErrorInfo.loadEventInfo.dataSpec.uri) != null,
             fileError = e.findCause<FileDataSource.FileDataSourceException>() != null,
             errorCount = loadErrorInfo.errorCount,
             default = super.getRetryDelayMsFor(loadErrorInfo),
@@ -49,6 +51,11 @@ internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
         val httpTransport: Boolean = false,
         /** A load of a YouTube track (a cyberjuke://yt/ URI), not a manifest or an asset. */
         val ytLoad: Boolean = false,
+        /**
+         * A load of a Jukebox MP3 (a cyberjuke://mp3/ URI): a 4xx is the file's (gone, private),
+         * never retried, except latex.gg asking to wait ([LoadRetry.TRANSIENT_HTTP]).
+         */
+        val mp3Load: Boolean = false,
         /** A listening-cache file couldn't be read (FileDataSourceException; a missing file shows in the error itself). */
         val fileError: Boolean = false,
         /** The [errorCount]th error in a row, from 1. */
@@ -69,6 +76,12 @@ internal class JukeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
             if (e.findCause<BlockedException>() != null) return C.TIME_UNSET
             val resolve = e.findCause<ResolveException>()
             if (resolve != null && resolve.permanent) return C.TIME_UNSET
+            if (f.mp3Load && f.httpCode != null) {
+                // latex.gg busy: waits with the capped back-off, so a burst doesn't skip track
+                // after track. Any other 4xx is this file's answer.
+                if (f.httpCode in LoadRetry.TRANSIENT_HTTP) return LoadRetry.retryDelayMs(f.errorCount, network = true)
+                if (f.httpCode in 400..499) return C.TIME_UNSET
+            }
             if (f.httpCode != null && f.httpCode in NO_RETRY_HTTP) return C.TIME_UNSET
             // A listening-cache file gone (low storage) or unreadable: the retry fetches the bytes
             // from the network, not from the cache (the video is skipped there for a moment); the

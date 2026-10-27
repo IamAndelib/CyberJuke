@@ -3,6 +3,7 @@
  * back exactly where it was. Use these from the UI rather than the bare toggles.
  */
 import type { Track } from '../data/model';
+import { hasAudio } from '../core/guards';
 import {
   type Removed,
   clearRecent,
@@ -31,7 +32,7 @@ const BRIEF_MS = 1800;
 /** Like or unlike; an unlike can be undone. Returns the new liked state. */
 export function toggleLikeWithUndo(track: Track): boolean {
   // A track not known yet (a placeholder while the player's list resolves) can't be saved.
-  if (!track.ytId && !isLiked(track.id)) {
+  if (!hasAudio(track) && !isLiked(track.id)) {
     toast('Still loading this track. Try again in a moment.', BRIEF_MS);
     return false;
   }

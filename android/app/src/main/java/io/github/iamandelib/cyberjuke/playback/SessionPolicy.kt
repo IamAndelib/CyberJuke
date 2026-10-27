@@ -1,6 +1,7 @@
 package io.github.iamandelib.cyberjuke.playback
 
 import androidx.media3.common.Player
+import io.github.iamandelib.cyberjuke.net.Hosts
 import java.net.URI
 import java.security.MessageDigest
 
@@ -134,6 +135,57 @@ internal object SessionPolicy {
     fun isValidYtId(id: String?): Boolean = id != null && YT_ID.matches(id)
 
     /**
+     * A Jukebox MP3 (Cyberspace 4.0): a latex.gg share link, the only kind the site accepts,
+     * whose file name is one [Hosts.isLatexMp3File] accepts.
+     */
+    private val MP3_URL = Regex("^https://latex\\.gg/share/([^/?#]+)$", RegexOption.IGNORE_CASE)
+
+    fun isValidMp3Url(url: String?): Boolean = mp3FileOf(url) != null
+
+    /** The file name of a Jukebox MP3 link ("IZq8cMcx.mp3"), or null when it isn't one. */
+    fun mp3FileOf(url: String?): String? =
+        url?.let { MP3_URL.matchEntire(it)?.groupValues?.get(1) }?.takeIf { isValidMp3File(it) }
+
+    /** A Jukebox MP3's file name as it comes back in our own URI. */
+    fun isValidMp3File(file: String?): Boolean = Hosts.isLatexMp3File(file)
+
+    /** The one URL of a Jukebox MP3 file name ([mp3FileOf]'s inverse), or null for anything else. */
+    fun mp3UrlForFile(file: String?): String? = file?.takeIf { isValidMp3File(it) }?.let { "https://latex.gg/share/$it" }
+
+    /**
+     * An item's MP3 link ([JukeUris.mp3UrlOf]): the one its URI gives ([uriLink]) when it has a
+     * URI ([hasUri]), else none for a video (a [ytIdExtra]), else the one kept in TrackExtras
+     * ([keptLink]). Never from the metadata, which other apps can read.
+     */
+    fun mp3LinkOf(hasUri: Boolean, uriLink: String?, ytIdExtra: String?, keptLink: String?): String? = when {
+        hasUri -> uriLink
+        ytIdExtra != null -> null
+        else -> keptLink?.takeIf { isValidMp3Url(it) }
+    }
+
+    /** What a track from the page plays ([playableOf]). */
+    sealed class Playable {
+        data class Yt(val id: String) : Playable()
+
+        /** A Jukebox MP3, by its latex.gg file name (its URL is rebuilt from it, [mp3UrlForFile]). */
+        data class Mp3(val file: String) : Playable()
+    }
+
+    /**
+     * What a NativeTrack with these fields ("" read as null) plays: a video when it has a
+     * ytId, which then wins over any `mp3`; an MP3 only with no ytId at all. Throws
+     * IllegalArgumentException naming the bad field (never its value).
+     */
+    fun playableOf(ytId: String?, mp3: String?): Playable = when {
+        ytId != null -> if (isValidYtId(ytId)) Playable.Yt(ytId) else throw IllegalArgumentException("track.ytId invalid")
+        mp3 != null -> mp3FileOf(mp3)?.let { Playable.Mp3(it) } ?: throw IllegalArgumentException("track.mp3 invalid")
+        else -> throw IllegalArgumentException("track.ytId missing")
+    }
+
+    /** A cover's path on Cyberspace's image server: under /uploads/, no dot segments, no escapes. */
+    private val COVER_PATH = Regex("^/uploads/(?:[A-Za-z0-9_-][A-Za-z0-9._-]*/)*[A-Za-z0-9_-][A-Za-z0-9._-]*$")
+
+    /**
      * The ytId to rebuild an incoming item's URI from: the one in our own `cyberjuke://yt/<id>`
      * URI, else the metadata extra; null (drop the item) unless it is a valid 11-char id.
      * [extraAllowed] lets debuggable builds pass the CI test tone id through.
@@ -146,7 +198,11 @@ internal object SessionPolicy {
         return null
     }
 
-    /** Artwork is only loaded from `https://i.ytimg.com/...`; anything else is dropped. */
+    /**
+     * Artwork is only loaded from `https://i.ytimg.com/...` (video thumbnails) and
+     * `https://bunker.cyberspace.online/uploads/...` (the covers of Jukebox MP3s); anything
+     * else is dropped.
+     */
     fun isAllowedArtwork(url: String?): Boolean {
         if (url.isNullOrEmpty()) return false
         val uri = try {
@@ -154,7 +210,8 @@ internal object SessionPolicy {
         } catch (_: Exception) {
             return false
         }
-        return uri.scheme == "https" && uri.host == "i.ytimg.com" && uri.userInfo == null &&
-            (uri.port == -1 || uri.port == 443)
+        if (uri.scheme != "https" || uri.userInfo != null || !(uri.port == -1 || uri.port == 443)) return false
+        return uri.host == "i.ytimg.com" ||
+            (uri.host == "bunker.cyberspace.online" && COVER_PATH.matches(uri.rawPath.orEmpty()) && uri.rawQuery == null && uri.rawFragment == null)
     }
 }

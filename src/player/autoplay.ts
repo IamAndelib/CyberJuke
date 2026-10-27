@@ -8,7 +8,7 @@
  *    service runs Global radios itself, so they refill with the screen off).
  * Nothing while autoplay is off (the setting, C3) or repeat is on.
  */
-import { isGlobal, type Track } from '../data/model';
+import { audioKey, isGlobal, type Track } from '../data/model';
 import { similarTracks } from '../data/similar';
 import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, type Player, type QueueLow } from './types';
 
@@ -63,7 +63,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     const seed = s.seed ?? s.current;
     if (!seed || !s.current || s.repeat !== 'off') return;
     if (e.seedId && e.seedId !== seed.id) return; // a signal for an older seed
-    const inQueue = new Set(s.queue.flatMap((t) => [t.id, t.ytId]));
+    const inQueue = new Set(s.queue.flatMap((t) => [t.id, audioKey(t)]));
     // The signal may be older than the last refill (one that came in during it): count
     // again. A batch the state doesn't show yet is ahead too, and not picked again.
     if (batch && (batch.seedId !== seed.id || now() - batch.at > BATCH_LAG_MS || (batch.queue && batch.queue !== s.queue) || batch.ids.some((id) => inQueue.has(id)))) batch = null;
