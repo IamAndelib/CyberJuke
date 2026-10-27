@@ -11,8 +11,9 @@ test('Settings opens from the icon at the top right of Home, not from the tab ba
   await expect(open).toHaveText('');
   await open.click();
   await expect(page.getByTestId('screen-settings')).toBeVisible();
-  // A page over Home: Home stays the current tab, and there is no search button here.
-  await expect(page.getByTestId('tab-home')).toHaveAttribute('aria-current', 'page');
+  // Its own screen: no tab is the current one, and there is no search button here.
+  await expect(page.locator('.tabbar [aria-current]')).toHaveCount(0);
+  await expect(page.locator('.tabbar .tab.on')).toHaveCount(0);
   await expect(page.getByTestId('search-fab')).toHaveCount(0);
   await page.getByTestId('settings-back').click();
   await expect(page.getByTestId('screen-home')).toBeVisible();
@@ -22,6 +23,29 @@ test('Settings opens from the icon at the top right of Home, not from the tab ba
   await expect(page.getByTestId('screen-settings')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('screen-home')).toBeVisible();
+});
+
+test('Settings and Home are separate: a tab leaves Settings, and Home shows Home, not Settings again', async ({ page }) => {
+  await start(page);
+  const settings = page.getByTestId('screen-settings');
+  const home = page.getByTestId('tab-home');
+  await page.getByTestId('open-settings').click();
+  await expect(settings).toBeVisible();
+  // Another tab, then Home: Home, with Home highlighted.
+  await page.getByTestId('tab-genres').click();
+  await expect(page.getByTestId('tab-genres')).toHaveAttribute('aria-current', 'page');
+  await expect(settings).toHaveCount(0);
+  await home.click();
+  await expect(page.getByTestId('screen-home')).toBeVisible();
+  await expect(home).toHaveAttribute('aria-current', 'page');
+  await expect(settings).toHaveCount(0);
+  // The Home tab itself, tapped from Settings: Home.
+  await page.getByTestId('open-settings').click();
+  await expect(settings).toBeVisible();
+  await home.click();
+  await expect(page.getByTestId('screen-home')).toBeVisible();
+  await expect(home).toHaveAttribute('aria-current', 'page');
+  await expect(settings).toHaveCount(0);
 });
 
 test('switching theme changes the CSS variables and persists', async ({ page }) => {

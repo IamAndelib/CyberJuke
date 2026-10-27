@@ -115,6 +115,8 @@ function TabRoot({ t }: { t: Tab }) {
       return <ArtistGrid />;
     case 'library':
       return <Library />;
+    case 'settings':
+      return <Settings />;
   }
 }
 
@@ -130,8 +132,6 @@ function PageView({ page }: { page: Page }) {
       return <ReleasesPage key={page.release.token + '|' + page.release.kind} release={page.release} />;
     case 'search':
       return <Search />;
-    case 'settings':
-      return <Settings />;
   }
 }
 
@@ -271,7 +271,7 @@ export function App() {
   const hasPlayer = hasCurrent.value;
   const topKind = useComputed(() => topEntry.value?.page.kind ?? null).value;
   // The search button shows over every page but Search and Settings.
-  const showFab = topKind !== 'search' && topKind !== 'settings';
+  const showFab = cur !== 'settings' && topKind !== 'search';
   const visited = useRef(new Set<Tab>());
   visited.current.add(cur);
   const app = useRef<HTMLDivElement>(null);
@@ -293,6 +293,8 @@ export function App() {
         {TAB_ITEMS.filter((t) => visited.current.has(t.id)).map((t) => (
           <TabPane key={t.id} t={t.id} active={t.id === cur} />
         ))}
+        {/* Settings has no tab button, and is mounted only while it shows (fresh each time). */}
+        {cur === 'settings' && <TabPane key="settings" t="settings" active />}
         {showFab && <SearchFab />}
       </main>
       <BlockBanner />

@@ -27,7 +27,7 @@ import { Screen } from '../../ui/components/Screen';
 import { Icon } from '../../ui/icons';
 import { openExternal } from '../../ui/links';
 import { arrowChoice } from '../../ui/arrowChoice';
-import { askConfirm, popPage, usePageActive } from '../../ui/nav';
+import { askConfirm, closeSettings, usePageActive } from '../../ui/nav';
 
 function Swatch({ id }: { id: ThemeId }) {
   const on = settings.value.theme === id;
@@ -523,7 +523,7 @@ export function Settings() {
       scrollKey="settings"
       backToTop={false}
       left={
-        <button class="icon-btn" aria-label="Back" onClick={popPage} data-testid="settings-back">
+        <button class="icon-btn" aria-label="Back" onClick={closeSettings} data-testid="settings-back">
           <Icon name="back" />
         </button>
       }

@@ -43,11 +43,7 @@ export async function openSettings(page: Page): Promise<void> {
   const settings = page.getByTestId('screen-settings');
   if (await settings.isVisible()) return;
   const home = page.getByTestId('tab-home');
-  if ((await home.getAttribute('aria-current')) !== 'page') {
-    await home.click();
-    // Left open over Home: it shows again.
-    if (await settings.isVisible()) return;
-  }
+  if ((await home.getAttribute('aria-current')) !== 'page') await home.click();
   await page.getByTestId('open-settings').click();
   await expect(settings).toBeVisible();
 }

@@ -57,7 +57,7 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 - [ ] Let autoplay run for an hour or more: it keeps going without repeating the same songs.
 
 ## Signal Radio
-- [ ] The **Radio** tab comes after Library; all five tab labels show whole (also on a small phone). Settings opens from the icon at the top right of Home (no label), and Back returns to Home. The Radio tab's header says "by hyphen8d", with nothing under the station list. Airplane mode on: the stations dim (the one playing stays bright), and tapping one says "No carrier. Connect to play." It lists the YM and ZM bands, each station with its frequency, name and tagline.
+- [ ] The **Radio** tab comes after Library; all five tab labels show whole (also on a small phone). Settings opens from the icon at the top right of Home (no label), with no tab highlighted while it shows, and Back returns to Home. From Settings, tap Genres, then Home: Home shows, not Settings. The Radio tab's header says "by hyphen8d", with nothing under the station list. Airplane mode on: the stations dim (the one playing stays bright), and tapping one says "No carrier. Connect to play." It lists the YM and ZM bands, each station with its frequency, name and tagline.
 - [ ] Tap a station: it plays one of its tracks, the station is marked with a radio icon, and Now Playing says "Playing from Signal Radio · " and its name. Up next shows the rest of the station, then "More from …".
 - [ ] Tap the station that's on: Now Playing opens, and the music doesn't restart; paused, the tap plays it on. Tap another station: its tracks play, and the mark moves.
 - [ ] On the Radio tab, Search (Here) finds a song from any station; tapping it plays that song.
