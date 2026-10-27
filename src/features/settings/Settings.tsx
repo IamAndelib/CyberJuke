@@ -586,7 +586,7 @@ export function Settings() {
           <div class="setting-text">
             <div class="setting-name">Download using mobile data</div>
             <div class="setting-desc" id="mobile-data-desc">
-              Saves liked songs for offline on mobile data too, not only on Wi-Fi.
+              Saves liked songs on mobile data too.
             </div>
           </div>
           <Toggle on={s.downloadOnMobileData} onChange={(v) => updateSettings({ downloadOnMobileData: v })} label="Download using mobile data" describedBy="mobile-data-desc" testid="mobile-data-toggle" />

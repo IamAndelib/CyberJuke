@@ -112,6 +112,13 @@ test('README highlights', async ({ page }) => {
   await page.getByTestId('tab-library').click();
   await settle(page);
   await shot(page, 'media-09-library');
+
+  // Signal Radio, a station on air.
+  await page.getByTestId('tab-radio').click();
+  await page.getByTestId('station-tune').first().click();
+  await expect(page.getByTestId('station-on')).toBeVisible();
+  await settle(page);
+  await shot(page, 'media-10-radio');
 });
 
 // One test per theme: each gets a fresh page, so its seeded settings apply.

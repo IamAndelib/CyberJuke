@@ -29,7 +29,7 @@ rm -f media/screenshots/*.png
 declare -A NAMES=(
   [01-home]=home [02-now-playing]=now-playing [03-up-next]=up-next [04-lyrics]=lyrics
   [05-artist]=artist [06-genre]=genre [07-search]=search [08-here-genres]=here-search
-  [09-library]=library
+  [09-library]=library [10-radio]=radio
 )
 for k in "${!NAMES[@]}"; do
   shrink "$SHOTS/media-$k.png" "media/screenshots/${NAMES[$k]}.png" 540
@@ -73,7 +73,7 @@ convert -size 1280x640 xc:'#000000' \
 STORE=fastlane/metadata/android/en-US/images/phoneScreenshots
 rm -f "$STORE"/*.png
 n=1
-for k in 01-home 02-now-playing 03-up-next 04-lyrics 05-artist 07-search 08-here-genres 09-library; do
+for k in 01-home 02-now-playing 03-up-next 04-lyrics 05-artist 07-search 08-here-genres 09-library 10-radio; do
   convert "$SHOTS/media-$k.png" "${PNG8[@]}" "PNG8:$STORE/$n.png"
   n=$((n + 1))
 done

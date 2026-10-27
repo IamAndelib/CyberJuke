@@ -1,0 +1,5 @@
+- Jukebox MP3s: posts with an MP3 on latex.gg now play, with their own cover; liked ones play offline
+- Signal Radio: a new Radio tab with hyphen8d's curated stations, which play on and on
+- Settings moved to the top right of Home
+- Liked songs download on Wi-Fi only; Settings > Download using mobile data allows mobile data too
+- A long track no longer pushes saved liked songs out of the listening cache

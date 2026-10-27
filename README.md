@@ -24,6 +24,7 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 | <img src="media/screenshots/home.png" width="230" alt="Home"><br>**Home**: the latest Jukebox posts, genre filters and Shuffle | <img src="media/screenshots/now-playing.png" width="230" alt="Now Playing"><br>**Now Playing**: big artwork, seek, shuffle, repeat, like | <img src="media/screenshots/up-next.png" width="230" alt="Up next"><br>**Up next**: your queue first, then autoplay of similar songs |
 | <img src="media/screenshots/lyrics.png" width="230" alt="Lyrics"><br>**Synced lyrics**: tap the artwork, in any language | <img src="media/screenshots/artist.png" width="230" alt="Artist page"><br>**Artist pages**: what people shared, then the discography | <img src="media/screenshots/genre.png" width="230" alt="Genre page"><br>**Genres**: every genre, with Play and Shuffle |
 | <img src="media/screenshots/search.png" width="230" alt="Search"><br>**Search**: the whole Jukebox, typo-tolerant, or Global | <img src="media/screenshots/here-search.png" width="230" alt="Here search on the Genres tab"><br>**Here**: search just the page you're on | <img src="media/screenshots/library.png" width="230" alt="Library"><br>**Library**: liked tracks and recently played |
+| <img src="media/screenshots/radio.png" width="230" alt="Signal Radio"><br>**Signal Radio**: hyphen8d's curated stations, played on and on | | |
 
 ## Features
 
