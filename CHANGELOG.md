@@ -4,6 +4,7 @@
 
 ### Fixed
 - Every button shows its press on a quick tap now, as a slower tap does: the Settings icon, the Back arrows, the search button, the genre or artist in Now Playing, the tabs, chips, rows and tiles. The screen still changes straight away. With reduced motion on, the press still shows; only its movement is gone.
+- A toast fades out when it goes, instead of vanishing.
 - A pressed **[See all]** no longer hides its own text.
 - Search shows each new query's results from the top, not scrolled to where the last list was.
 

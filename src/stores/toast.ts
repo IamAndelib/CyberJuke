@@ -14,7 +14,7 @@ interface ToastAction {
   membersOnly?: boolean;
 }
 
-interface Toast {
+export interface Toast {
   id: number;
   text: string;
   action?: ToastAction;

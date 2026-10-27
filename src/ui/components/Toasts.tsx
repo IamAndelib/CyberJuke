@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { reducedMotion } from '../../core/motion';
+import { MOTION_SHORT2_MS } from '../../core/durations';
 import { nowPlayingOpen } from '../nav';
 import { hasCurrent } from '../../player';
 import { block } from '../../stores/block';
-import { dismissAllToasts, dismissToast, holdToast, releaseToast, runToastAction, toasts } from '../../stores/toast';
+import { dismissAllToasts, dismissToast, holdToast, releaseToast, runToastAction, toasts, type Toast } from '../../stores/toast';
 
 /** A drag shorter than this, or more vertical than sideways, isn't a swipe. */
 const SWIPE_SLOP_PX = 8;
@@ -12,6 +13,8 @@ const SWIPE_AWAY_FRACTION = 0.35;
 const SWIPE_FLICK_PX_PER_MS = 0.5;
 /** The fly-out (and spring-back), in the app's stepped motion. */
 const SWIPE_ANIM_MS = 150;
+/** Toasts swiped away: they have flown out already, so they don't fade out again. */
+const flown = new Set<number>();
 /** Room between a toast and what's under it. */
 const TOAST_GAP_PX = 18;
 const TOAST_GAP_ABOVE_BUTTON_PX = 12;
@@ -40,8 +43,36 @@ function toastBottom(): string | null {
   return `${bottom}px`;
 }
 
+/**
+ * The toast that just went with none in its place, kept while it fades out (ui.css
+ * .toast.leaving): a timeout, a tap elsewhere or its own button. Same key: its node, and
+ * its button's press, are kept.
+ */
+function useLeavingToast(list: Toast[]): Toast | null {
+  const prev = useRef(list);
+  const leaving = useRef<Toast | null>(null);
+  const [, rerender] = useState(0);
+  if (prev.current !== list) {
+    const was = prev.current[0];
+    prev.current = list;
+    leaving.current = !list.length && was && !flown.has(was.id) && !reducedMotion() ? was : null;
+    if (was) flown.delete(was.id);
+  }
+  const going = leaving.current;
+  useEffect(() => {
+    if (!going) return;
+    const id = setTimeout(() => {
+      if (leaving.current === going) leaving.current = null;
+      rerender((n) => n + 1);
+    }, MOTION_SHORT2_MS + 30);
+    return () => clearTimeout(id);
+  }, [going]);
+  return going;
+}
+
 export function Toasts() {
   const list = toasts.value;
+  const going = useLeavingToast(list);
   // Placed again when what's under a toast changes while it shows: Now Playing opens or
   // closes (Back closes it untouched), the mini player or a banner appears.
   const under = [nowPlayingOpen.value, hasCurrent.value, block.banner.value, block.brokenBanner.value];
@@ -73,6 +104,7 @@ export function Toasts() {
       {list.map((t) => (
         <ToastItem key={t.id} id={t.id} text={t.text} action={t.action?.label} />
       ))}
+      {going && <ToastItem key={going.id} id={going.id} text={going.text} action={going.action?.label} leaving />}
     </div>
   );
 }
@@ -91,7 +123,7 @@ interface Drag {
 }
 
 /** A toast that a sideways swipe (either way) dismisses; a short drag springs back. */
-function ToastItem({ id, text, action }: { id: number; text: string; action?: string }) {
+function ToastItem({ id, text, action, leaving }: { id: number; text: string; action?: string; leaving?: boolean }) {
   const el = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
   // A swipe that began on the button must not also press it.
@@ -182,6 +214,7 @@ function ToastItem({ id, text, action }: { id: number; text: string; action?: st
         return;
       }
       place(Math.sign(d.dx) * (width + 48), true);
+      flown.add(id);
       setTimeout(() => dismissToast(id), SWIPE_ANIM_MS);
       return;
     }
@@ -192,8 +225,9 @@ function ToastItem({ id, text, action }: { id: number; text: string; action?: st
   return (
     <div
       ref={el}
-      class={'toast' + (action ? ' has-action' : '')}
-      data-testid="toast"
+      class={'toast' + (action ? ' has-action' : '') + (leaving ? ' leaving' : '')}
+      data-testid={leaving ? 'toast-leaving' : 'toast'}
+      aria-hidden={leaving ? 'true' : undefined}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerEnd}

@@ -962,6 +962,17 @@
     opacity: 0;
   }
 }
+/* Gone with nothing in its place: a short stepped fade (Toasts.tsx). */
+.toast.leaving {
+  pointer-events: none;
+  animation: toast-out var(--motion-short2) steps(2) forwards;
+}
+@keyframes toast-out {
+  to {
+    transform: translateY(4px);
+    opacity: 0;
+  }
+}
 
 /* ---- Rail: a slim text row, the current item underlined ---------------------------- */
 

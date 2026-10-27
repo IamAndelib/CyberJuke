@@ -515,3 +515,33 @@ test('pull to refresh offline says to connect, then refresh, and keeps the grid'
   await expect(page.getByTestId('toast')).toHaveText('No carrier. Connect, then refresh.');
   await expect(screen.getByTestId('genre-tile')).toHaveCount(tiles);
 });
+type ShowToast = (text: string, ms?: number) => number;
+
+test('a toast that goes fades out; one replaced by the next goes at once', async ({ page }) => {
+  await start(page);
+  const show = (text: string) => page.evaluate((t) => (window as unknown as { __cyberjukeToast: ShowToast }).__cyberjukeToast(t, 10_000), text);
+  await show('first');
+  await expect(page.getByTestId('toast')).toHaveText('first');
+  await show('second');
+  // Replaced: no fading copy of the first.
+  await expect(page.getByTestId('toast-leaving')).toHaveCount(0);
+  await expect(page.getByTestId('toast')).toHaveText('second');
+  // A touch elsewhere sends it: it fades (aria-hidden), then goes. Watched from inside the
+  // page, since the fade is short.
+  const faded = await page.evaluate(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const seen = () => {
+          const el = document.querySelector('[data-testid="toast-leaving"]');
+          return !!el && el.textContent === 'second' && el.getAttribute('aria-hidden') === 'true';
+        };
+        const mo = new MutationObserver(() => seen() && (mo.disconnect(), resolve(true)));
+        mo.observe(document.body, { subtree: true, childList: true, attributes: true });
+        setTimeout(() => (mo.disconnect(), resolve(seen())), 2000);
+        document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, isPrimary: true }));
+      }),
+  );
+  expect(faded).toBe(true);
+  await expect(page.getByTestId('toast-leaving')).toHaveCount(0);
+  await expect(page.getByTestId('toast')).toHaveCount(0);
+});
