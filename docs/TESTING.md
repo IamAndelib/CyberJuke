@@ -88,6 +88,7 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 - [ ] Settings → **Updates**: the automatic check is off on a fresh install and after upgrading from 1.1.x, and nothing asks GitHub until you turn it on or tap **Check now**; **Check now** says "Up to date (x.y.z)" or, when a newer release is out, shows it at the top of Settings with **Download**, and a dot on the Settings button at the top right of Home. Turning the toggle on stays on after a restart. Installed from F-Droid, the card only says updates come through F-Droid.
 - [ ] The ⋯ menu of a liked song says **Unlike**; of any other song, **Like**. After **Next**, the Now Playing ♥ shows the new song's state.
 - [ ] Every theme (Settings → Theme) is readable.
+- [ ] Settings → Theme **Light**, then **Bubblegum**: the clock and icons at the top and the navigation buttons or bar at the bottom are dark and easy to see; on **Dark** and **C64** they are light. Turn the phone sideways and back, and switch the phone's dark mode on and off: they stay that way. Close the app completely and open it: the screen doesn't shift down after it shows, and there's no grey or white strip above or below the app.
 
 ## Account (if you use Cyberspace sign-in)
 - [ ] Sign in: tracks marked **[members]** appear.

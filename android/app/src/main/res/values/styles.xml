@@ -13,6 +13,8 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- Behind the page until it draws: black like the splash, not the light theme's grey. -->
+        <item name="android:windowBackground">@android:color/black</item>
     </style>
 
 

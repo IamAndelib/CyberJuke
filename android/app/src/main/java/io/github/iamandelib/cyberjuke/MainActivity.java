@@ -8,6 +8,7 @@ import android.view.ViewGroup;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import androidx.activity.EdgeToEdge;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
 import io.github.iamandelib.cyberjuke.bridge.JukePlayerPlugin;
@@ -58,6 +59,9 @@ public class MainActivity extends BridgeActivity {
         } finally {
             creating = false;
         }
+        // Edge to edge on every Android version, as Capacitor's SystemBars expects (it is on
+        // anyway from Android 15): the page draws under transparent bars and pads itself.
+        EdgeToEdge.enable(this);
         // No bridge without a working WebView (Capacitor shows its own error then).
         if (getBridge() != null) {
             getBridge().addWebViewListener(new RendererWatch());

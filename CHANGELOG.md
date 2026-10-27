@@ -5,6 +5,9 @@
 ### The app
 - The music notification shows CyberJuke's jukebox in the status bar, instead of a plain music note.
 
+### Fixed
+- The status bar and the navigation bar follow the theme: dark icons on the light themes, light ones on the dark themes, also after turning the phone or switching the phone's dark mode. The screen no longer shifts down just after the app opens, and there's no grey strip at the top or bottom.
+
 ## [1.3.0] - 2026-10-27
 
 ### The app

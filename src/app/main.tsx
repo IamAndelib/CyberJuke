@@ -20,7 +20,6 @@ import { render } from 'preact';
 import { computed, effect } from '@preact/signals';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
-import { StatusBar, Style } from '@capacitor/status-bar';
 import { installRenderCounter } from '../core/renderCount';
 import { describeError } from '../core/errors';
 import { logError } from '../core/log';
@@ -43,6 +42,7 @@ import { startBlockEvents } from '../player/blockEvents';
 import { source } from '../data';
 import { App, Overlays } from './App';
 import { BootError } from './BootError';
+import { styleSystemBars } from './windowChrome';
 import { Home } from '../features/home/Home';
 import { Library, openLiked } from '../features/library/Library';
 import { Screen } from '../ui/components/Screen';
@@ -78,9 +78,7 @@ function applyTheme(): void {
     const dark = cs.getPropertyValue('--scheme').trim() !== 'light';
     root.style.colorScheme = dark ? 'dark' : 'light';
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg);
-    if (native) {
-      StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {});
-    }
+    styleSystemBars(dark);
   });
 }
 
