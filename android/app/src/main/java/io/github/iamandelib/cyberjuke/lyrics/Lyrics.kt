@@ -3,6 +3,7 @@ package io.github.iamandelib.cyberjuke.lyrics
 import android.content.Context
 import android.util.Log
 import io.github.iamandelib.cyberjuke.net.Http
+import io.github.iamandelib.cyberjuke.net.stringAtMost
 import io.github.iamandelib.cyberjuke.yt.InnerTube
 import io.github.iamandelib.cyberjuke.yt.YtCompat
 import io.github.iamandelib.cyberjuke.yt.findFirst
@@ -27,6 +28,9 @@ internal object Lyrics {
     private const val TAG = "CyberJukeLyrics"
     private const val LRCLIB = "https://lrclib.net/api"
     private const val DURATION_TOLERANCE_SEC = 3.0
+
+    /** The largest LRCLIB answer read (a search's results are tens of kB). */
+    private const val MAX_BODY_BYTES = 2L * 1024 * 1024
 
     data class Result(
         val found: Boolean,
@@ -116,7 +120,7 @@ internal object Lyrics {
             return when (response.code) {
                 200 -> {
                     @Suppress("UNNECESSARY_SAFE_CALL", "USELESS_ELVIS")
-                    response.body?.string() ?: ""
+                    response.body?.stringAtMost(MAX_BODY_BYTES) ?: ""
                 }
                 400, 404 -> null
                 else -> throw IOException("LRCLIB HTTP ${response.code}")

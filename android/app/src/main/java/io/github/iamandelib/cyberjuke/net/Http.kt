@@ -7,6 +7,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.ResponseBody
+import java.io.IOException
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
@@ -23,6 +25,9 @@ import java.util.concurrent.TimeUnit
  * IPv4 every new request goes out on an IPv4 connection; a busy IPv6 connection (a track still
  * streaming) can never be reused for it, and nothing has to be closed on the caller's thread.
  *
+ * A whole call through [client] (connect, request, the full response) ends after [CALL_S];
+ * responses it reads whole go through [stringAtMost]. Streaming has no overall limit.
+ *
  * No Android types in this file: the JVM canary test (YouTubeCanaryTest) uses it as is.
  */
 internal object Http {
@@ -32,6 +37,7 @@ internal object Http {
         .addNetworkInterceptor(Families.interceptor)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        .callTimeout(CALL_S, TimeUnit.SECONDS)
         // Everything we fetch is https: never follow a redirect down to http (L5).
         .followSslRedirects(false)
         .build()
@@ -48,6 +54,8 @@ internal object Http {
     private fun forStreaming(c: OkHttpClient): OkHttpClient = c.newBuilder()
         .connectTimeout(STREAM_CONNECT_S, TimeUnit.SECONDS)
         .readTimeout(STREAM_READ_S, TimeUnit.SECONDS)
+        // No overall limit: a stream reads for as long as the track plays.
+        .callTimeout(0, TimeUnit.SECONDS)
         .build()
 
     private val systemStreaming = lazy { forStreaming(system.value) }
@@ -57,6 +65,9 @@ internal object Http {
     const val STREAM_CONNECT_S = 10L
     const val STREAM_READ_S = 12L
 
+    /** Seconds a whole non-streaming call may take. */
+    const val CALL_S = 60L
+
     /** The client for a request made now. */
     fun current(): OkHttpClient = if (NetPrefs.preferIpv4) ipv4.value else system.value
 
@@ -65,10 +76,12 @@ internal object Http {
         override fun newCall(request: Request): Call = current().newCall(request)
     }
 
+    /** The streaming client for a request made now. */
+    fun currentStreaming(): OkHttpClient = if (NetPrefs.preferIpv4) ipv4Streaming.value else systemStreaming.value
+
     /** [client] with the streaming timeouts: what ExoPlayer loads audio through. */
     val streaming: Call.Factory = object : Call.Factory {
-        override fun newCall(request: Request): Call =
-            (if (NetPrefs.preferIpv4) ipv4Streaming.value else systemStreaming.value).newCall(request)
+        override fun newCall(request: Request): Call = currentStreaming().newCall(request)
     }
 
     /** Drops idle pooled connections, so the next request resolves again (a new network). */
@@ -81,6 +94,23 @@ internal object Http {
             }
         }
     }
+}
+
+/** A response body over the size its reader allows ([stringAtMost]). */
+internal class BodyTooLargeException(message: String) : IOException(message)
+
+/**
+ * The body as a string, as [ResponseBody.string] reads it (charset, byte order mark), but never
+ * more than [maxBytes] of it in memory: a Content-Length over the cap fails before anything is
+ * read, and a body without one (chunked, or gzip that OkHttp unpacks) fails once it passes the
+ * cap. For responses read whole; audio streaming never comes here.
+ */
+internal fun ResponseBody.stringAtMost(maxBytes: Long): String {
+    val declared = contentLength()
+    if (declared > maxBytes) throw BodyTooLargeException("response body is $declared bytes (max $maxBytes)")
+    // Buffers at most one byte past the cap: when that much is there, the body is over it.
+    if (source().request(maxBytes + 1)) throw BodyTooLargeException("response body is over $maxBytes bytes")
+    return string()
 }
 
 /** IPv4 or IPv6: which one a YouTube request actually went out on. */

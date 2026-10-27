@@ -3,6 +3,7 @@ package io.github.iamandelib.cyberjuke.yt
 import io.github.iamandelib.cyberjuke.net.Hosts
 import io.github.iamandelib.cyberjuke.net.Http
 import io.github.iamandelib.cyberjuke.net.NetBlock
+import io.github.iamandelib.cyberjuke.net.stringAtMost
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Call
 import okhttp3.RequestBody
@@ -54,7 +55,7 @@ internal class DownloaderImpl private constructor(private val client: Call.Facto
             }
             // OkHttp 5: body is non-null (the safe call keeps this compiling on 4.x too).
             @Suppress("UNNECESSARY_SAFE_CALL", "USELESS_ELVIS")
-            val responseBody: String = response.body?.string() ?: ""
+            val responseBody: String = response.body?.stringAtMost(MAX_BODY_BYTES) ?: ""
             return Response(
                 response.code,
                 response.message,
@@ -68,6 +69,12 @@ internal class DownloaderImpl private constructor(private val client: Call.Facto
     companion object {
         /** Requests sent to the network (the canary checks the lean path's count). */
         val requests = AtomicInteger()
+
+        /**
+         * The largest response read: YouTube's pages and player script are a few MB, so this
+         * leaves plenty of room while keeping one response from filling the memory.
+         */
+        const val MAX_BODY_BYTES = 16L * 1024 * 1024
 
         /** Latest Firefox ESR on Windows, same as NewPipe. */
         const val USER_AGENT =
