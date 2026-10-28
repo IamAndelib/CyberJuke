@@ -16,9 +16,11 @@ test('search opens straight to the latest tracks, in chunks, with no hint text',
   await expect(page.getByTestId('search')).not.toContainText('Search all');
   await expect(latest.getByTestId('track-title').first()).toHaveText(newest);
   const rows = latest.getByTestId('track-row');
-  expect(await rows.count()).toBe(60);
+  // About a screen first (the frame after the tap draws only that), more as you scroll.
+  const first = await rows.count();
+  expect(first).toBeLessThanOrEqual(30);
   await scrollTo(page, 'search', 1e6);
-  await expect.poll(() => rows.count()).toBeGreaterThan(60);
+  await expect.poll(() => rows.count()).toBeGreaterThan(first);
   const title = (await rows.nth(3).getByTestId('track-title').textContent())!.trim();
   await rows.nth(3).getByTestId('track-play').click();
   await expect(page.getByTestId('mini-title')).toHaveText(title);

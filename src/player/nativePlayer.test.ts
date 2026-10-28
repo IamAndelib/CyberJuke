@@ -30,6 +30,8 @@ const fake = vi.hoisted(() => {
       addAutoplay: cmd(),
       play: cmd(),
       pause: cmd(),
+      setShuffle: cmd(),
+      setRepeat: cmd(),
     },
   };
 });
@@ -256,6 +258,29 @@ describe('NativePlayer: play/pause', () => {
     emit('state', state({ isPlaying: false, queueIds: ['A'], upNextIds: [], upNextKinds: '', bufferedAheadMs: 30_000 }));
     await p.playList([tr('B')], 0);
     expect(p.state.value.bufferedAheadMs).toBe(0);
+  });
+});
+
+describe('NativePlayer: shuffle and repeat', () => {
+  it('show at once, and a state event sent before native took them does not undo them', async () => {
+    const p = new NativePlayer();
+    emit('state', state({ queueIds: ['A'], upNextIds: [], upNextKinds: '' }));
+    let answer: () => void = () => {};
+    fake.plugin.setShuffle.mockImplementationOnce(() => new Promise<void>((r) => (answer = r)));
+    const done = p.setShuffle(true);
+    expect(p.state.value.shuffle).toBe(true);
+    void p.setRepeat('all');
+    expect(p.state.value.repeat).toBe('all');
+    // A tick from before: shuffle off, repeat off.
+    emit('state', state({ queueIds: ['A'], upNextIds: [], upNextKinds: '' }));
+    expect(p.state.value.shuffle).toBe(true);
+    expect(p.state.value.repeat).toBe('all');
+    fake.plugin.getState.mockResolvedValueOnce(state({ queueIds: ['A'], upNextIds: [], upNextKinds: '', shuffle: true, repeat: 'all' }));
+    answer();
+    await done;
+    await flush();
+    expect(fake.plugin.getState).toHaveBeenCalled();
+    expect(p.state.value.shuffle).toBe(true);
   });
 });
 

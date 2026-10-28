@@ -1,6 +1,7 @@
 import type { RefObject } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 import { setGestureExclusion } from '../gestureExclusion';
+import { whenIdle } from '../../core/idle';
 
 /** The thumb fades this long after scrolling stops. */
 const SCROLLBAR_HIDE_MS = 1200;
@@ -213,8 +214,10 @@ export function FastScroller({
     });
     const body = el.querySelector(':scope > .screen-body');
     if (body) mo.observe(body, { childList: true, subtree: true });
-    schedule();
+    // The first measure forces a layout: once the screen has shown, not in the tap's frame.
+    const cancelFirst = whenIdle(schedule, 300, 50);
     return () => {
+      cancelFirst();
       el.removeEventListener('scroll', onScroll);
       ro?.disconnect();
       mo.disconnect();

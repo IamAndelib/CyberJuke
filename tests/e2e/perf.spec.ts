@@ -197,3 +197,42 @@ test('a track change re-renders the current rows, not the lists; history renders
   console.info(`3 track changes on Recently played: ${JSON.stringify(recent)}`);
   expect(recent.TrackRow ?? 0).toBeLessThanOrEqual(12);
 });
+
+test('opening Search draws about a screen of the Jukebox in its first frame, not 60 rows', async ({ page }) => {
+  await start(page);
+  await expect(page.getByTestId('track-row').first()).toBeVisible();
+  const rows = await page.getByTestId('search-fab').evaluate(async (el) => {
+    (el as HTMLElement).click();
+    return new Promise<number>((r) => {
+      const f = () => {
+        const list = document.querySelector('[data-testid="search-latest"]');
+        if (list) r(list.querySelectorAll('[data-testid="track-row"]').length);
+        else requestAnimationFrame(f);
+      };
+      requestAnimationFrame(f);
+    });
+  });
+  expect(rows).toBeGreaterThan(0);
+  expect(rows).toBeLessThanOrEqual(15);
+});
+
+
+test('the first visit to Artists draws about a screen of tiles in its first frame, the rest after', async ({ page }) => {
+  await start(page);
+  await expect(page.getByTestId('track-row').first()).toBeVisible();
+  const tiles = await page.getByTestId('tab-artists').evaluate(async (el) => {
+    (el as HTMLElement).click();
+    return new Promise<number>((r) => {
+      const f = () => {
+        const grid = document.querySelector('[data-testid="artist-grid"]');
+        if (grid) r(grid.querySelectorAll('[data-testid="artist-tile"]').length);
+        else requestAnimationFrame(f);
+      };
+      requestAnimationFrame(f);
+    });
+  });
+  expect(tiles).toBeGreaterThan(0);
+  expect(tiles).toBeLessThanOrEqual(24);
+  // The rest follow in idle time.
+  await expect.poll(() => page.getByTestId('artist-grid').getByTestId('artist-tile').count()).toBeGreaterThan(24);
+});

@@ -132,7 +132,8 @@ test('back-to-top: finger down stops a fling, finger up jumps to the top, with n
   await expect(page.getByTestId('search-latest').getByTestId('track-row').first()).toBeVisible();
   const screen = page.getByTestId('search');
   const btn = screen.getByTestId('back-to-top');
-  await screen.evaluate((el) => el.scrollTo(0, el.clientHeight * 2));
+  // Two screens down: the list grows as it's scrolled, so scroll on until it's that long.
+  await expect.poll(() => screen.evaluate((el) => (el.scrollTo(0, el.clientHeight * 2), el.scrollTop >= el.clientHeight * 2 - 1))).toBe(true);
   await expect(btn).toBeVisible();
   // Touch pointer events on the button, as a finger sends them.
   await page.evaluate(() => {

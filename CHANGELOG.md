@@ -15,6 +15,9 @@
 - Opening the app shows the jukebox on black until Home is ready, on every Android version, and then Home in your theme straight away: a light theme no longer flashes black first.
 - Haptic feedback: a short buzz when holding a track opens its menu, a light tick for ♥ and ★, and one as a swipe down on Now Playing goes far enough to close it. It follows your phone's Touch feedback setting. Before, the long press was meant to buzz but never did.
 - Back on Home now shows Android's back-to-home animation as you swipe (Android 13 and newer, where the phone shows it). The app goes to the background as before, and the music plays on. Back still closes menus, Now Playing and pages first.
+- Search opens faster: it draws a screen of the Jukebox first and builds its index after it shows, not in the tap.
+- The first visit to Genres or Artists draws a screen of tiles straight away; the rest follow a moment later.
+- **[Play]** on a list starts a moment sooner, and the shuffle and repeat buttons change as you tap them, not when the player answers.
 
 ## [1.3.0] - 2026-10-27
 

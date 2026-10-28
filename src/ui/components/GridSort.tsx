@@ -30,8 +30,8 @@ function AZHead({ letter }: { letter: string }) {
   );
 }
 
-/** Grid tiles per chunk: the first screens render at once, the rest in idle time. */
-const GRID_CHUNK = 120;
+/** Grid tiles per chunk: about a screen (two to a row) in the first frame, the rest in idle time. */
+const GRID_CHUNK = 24;
 
 /** Every genre or artist as tiles, Popular (the list's order) or A–Z, rendered in chunks. */
 export function TileGrid<T>(props: {
