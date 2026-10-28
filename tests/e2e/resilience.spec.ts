@@ -1,7 +1,7 @@
 import { expect, test } from '../fixtures';
 import { failImagesOnce, setImagesOffline } from '../fixtures/youtube';
 import type { Locator, Page } from '@playwright/test';
-import { bufferedAhead, expectStable, isFeedQuery, opened, openNowPlaying, openSearch, playerCalls, recordOpens, scrollTo, seedStorage, setOffline, setVisibility, start, waitForTracks } from '../helpers';
+import { bufferedAhead, expectStable, isFeedQuery, opened, openNowPlaying, openSearch, playerCalls, recordOpens, scrollTo, seedStorage, setOffline, setVisibility, start, waitForTracks, windowChrome } from '../helpers';
 
 /**
  * When things go wrong: YouTube limiting the network or changing something (Y1),
@@ -496,6 +496,8 @@ test.describe('a start that fails', () => {
     await page.goto('/');
     await expect(page.getByTestId('boot-error')).toContainText("CyberJuke couldn't start");
     await expect(page.getByTestId('boot-error-detail')).toContainText('Simulated boot failure');
+    // The launch splash goes for the error screen too, at once.
+    expect(await windowChrome(page, 'firstScreen')).toEqual(['']);
     await page.evaluate(() => localStorage.removeItem('__cyberjukeFailBoot'));
     await page.getByTestId('boot-retry').click();
     await waitForTracks(page);

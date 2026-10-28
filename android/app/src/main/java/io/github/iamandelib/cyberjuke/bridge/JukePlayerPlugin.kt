@@ -25,6 +25,8 @@ import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.google.common.util.concurrent.ListenableFuture
+import io.github.iamandelib.cyberjuke.MainActivity
+import io.github.iamandelib.cyberjuke.ThemeWindow
 import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.Families
 import io.github.iamandelib.cyberjuke.net.Family
@@ -60,7 +62,8 @@ import kotlin.math.roundToInt
  *   setQueue, queueNext, removeItem, moveItem, play, pause, seekTo, skipToNext,
  *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, setCrossfade, setGapless, getState,
  *   getAppInfo, getLaunchOptions, getBlockState, setNetworkPrefs, retryNow, getNetStatus,
- *   setGestureExclusion, addAutoplay, setAutoplay, restore, removeIds, setLikedIds,
+ *   setGestureExclusion, setThemeBackground, firstScreenShown, addAutoplay, setAutoplay, restore,
+ *   removeIds, setLikedIds,
  *   setCacheLimit, setDownloadOnMobileData, clearCache, signedOut, signedIn, cachedIds; events 'state', 'trackError',
  *   'blocked', 'unblocked', 'extractorBroken', 'queueLow', 'tracks', 'openNowPlaying',
  *   'cacheChanged'.
@@ -1047,6 +1050,31 @@ class JukePlayerPlugin : Plugin() {
                 val b = (centreY + h / 2.0).roundToInt()
                 view.systemGestureExclusionRects = listOf(Rect(l, t, r, b))
             }
+            call.resolve()
+        }
+    }
+
+    /**
+     * `setThemeBackground({ color })`: the theme's background, `#rgb` or `#rrggbb`. Kept for the
+     * next start ([ThemeWindow]: the window and the WebView open in it, before the page has
+     * loaded) and put on them now. Anything else rejects.
+     */
+    @PluginMethod
+    fun setThemeBackground(call: PluginCall) {
+        val color = ThemeWindow.parse(call.getString("color")) ?: return call.reject("color must be #rgb or #rrggbb")
+        ThemeWindow.save(context, color)
+        main.post {
+            (activity as? MainActivity)?.applyBackground(color)
+            call.resolve()
+        }
+    }
+
+    /** `firstScreenShown()`: the page has rendered its first screen; the launch splash may go. */
+    @PluginMethod
+    fun firstScreenShown(call: PluginCall) {
+        // Posted like setThemeBackground: the background sent before it is on before the splash goes.
+        main.post {
+            (activity as? MainActivity)?.firstScreenShown()
             call.resolve()
         }
     }

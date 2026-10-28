@@ -1,6 +1,6 @@
 import type { Page, Route } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { isFeedQuery, start, waitForTracks } from '../helpers';
+import { isFeedQuery, start, waitForTracks, windowChrome } from '../helpers';
 
 /**
  * Launch: Home's Latest is always fetched fresh, so the work is in asking for it first.
@@ -36,6 +36,16 @@ test.describe('a Latest page that takes a while', () => {
     expect(backend.queries.filter(isFirstPage)).toHaveLength(1);
     // With the field mask: only what a track is made of.
     expect(backend.queries[0].select?.fields.map((f) => f.fieldPath)).toEqual(expect.arrayContaining(['attachments', 'title', 'createdAt', 'isNSFW']));
+  });
+
+  test('the launch splash goes once Home has rendered in its theme, not after Latest has answered', async ({ page }) => {
+    await start(page);
+    expect(await windowChrome(page, 'firstScreen')).toEqual(['']);
+    // The bars and the window's background were set first, in that start's theme.
+    const kinds = await page.evaluate(() => (window as unknown as { __cyberjukeWindowChrome: [string, string][] }).__cyberjukeWindowChrome.map(([k]) => k));
+    expect(kinds).toEqual(['bars', 'background', 'firstScreen']);
+    const m = await marks(page);
+    expect(m.render).toBeLessThan(m.response);
   });
 });
 

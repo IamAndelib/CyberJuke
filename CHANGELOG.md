@@ -8,6 +8,11 @@
 - A toast fades out when it goes, instead of vanishing.
 - A pressed **[See all]** no longer hides its own text.
 - Search shows each new query's results from the top, not scrolled to where the last list was.
+### The app
+- The music notification shows CyberJuke's jukebox in the status bar, instead of a plain music note.
+
+- The status bar and the navigation bar follow the theme: dark icons on the light themes, light ones on the dark themes, also after turning the phone or switching the phone's dark mode. The screen no longer shifts down just after the app opens, and there's no grey strip at the top or bottom.
+- Opening the app shows the jukebox on black until Home is ready, on every Android version, and then Home in your theme straight away: a light theme no longer flashes black first.
 
 ## [1.3.0] - 2026-10-27
 
