@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### The app
+- Back on Home now shows Android's back-to-home animation as you swipe (Android 13 and newer, where the phone shows it). The app goes to the background as before, and the music plays on. Back still closes menus, Now Playing and pages first.
 - The music notification shows CyberJuke's jukebox in the status bar, instead of a plain music note.
 
 ### Fixed

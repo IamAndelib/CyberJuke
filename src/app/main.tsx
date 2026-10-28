@@ -20,7 +20,6 @@ import { installPress } from '../ui/press';
 import { render } from 'preact';
 import { computed, effect } from '@preact/signals';
 import { Capacitor } from '@capacitor/core';
-import { App as CapApp } from '@capacitor/app';
 import { installRenderCounter } from '../core/renderCount';
 import { describeError } from '../core/errors';
 import { logError } from '../core/log';
@@ -32,7 +31,7 @@ import { catalog } from '../stores/catalog';
 import { startFreshness } from '../stores/newTracks';
 import { startAccount } from '../stores/account';
 import { auth } from '../data/auth';
-import { goBack, openNowPlayingWhen, openSettings } from '../ui/nav';
+import { openNowPlayingWhen, openSettings } from '../ui/nav';
 import { retryWatchedFeeds } from '../stores/feed';
 import { JukePlayer } from '../player/native';
 import { hasCurrent, setOpenLiked, startPlayerPrefs, startQueuePurge } from '../player';
@@ -43,6 +42,7 @@ import { startBlockEvents } from '../player/blockEvents';
 import { source } from '../data';
 import { App, Overlays } from './App';
 import { BootError } from './BootError';
+import { wireBack } from './back';
 import { firstScreenShown, keepThemeBackground, styleSystemBars } from './windowChrome';
 import { Home } from '../features/home/Home';
 import { Library, openLiked } from '../features/library/Library';
@@ -88,16 +88,6 @@ function applyTheme(): void {
 function wireNotificationTap(): void {
   if (!native) return;
   JukePlayer.addListener('openNowPlaying', () => openNowPlayingWhen(hasCurrent)).catch((e) => logError('openNowPlaying', e));
-}
-
-function wireBackButton(): void {
-  if (!native) return;
-  CapApp.addListener('backButton', () => {
-    if (!goBack()) {
-      // Keep music playing: background the app instead of finishing the activity.
-      CapApp.minimizeApp().catch(() => CapApp.exitApp());
-    }
-  }).catch((e) => logError('backButton', e));
 }
 
 /**
@@ -200,7 +190,7 @@ async function boot(): Promise<void> {
     // Still offline, the art would only fail again.
     if (online.peek()) artGen.value++;
   });
-  wireBackButton();
+  wireBack();
   wireNotificationTap();
   startBlockEvents();
   const root = document.getElementById('app')!;
