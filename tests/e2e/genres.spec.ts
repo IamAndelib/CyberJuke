@@ -1,5 +1,5 @@
 import { ATTACHMENT_ONLY_GENRE, expect, test } from '../fixtures';
-import { openNowPlaying, start, waitForTracks } from '../helpers';
+import { isFeedQuery, openNowPlaying, start, waitForTracks } from '../helpers';
 
 /** Genres and Artists grids: Popular / A–Z, favorites, genre pages. */
 
@@ -199,4 +199,32 @@ test("a genre page shows the songs already on the phone while Cyberspace's page 
   await answered;
   await expect(page.getByTestId('screen-genre').getByTestId('skeleton')).toHaveCount(0);
   expect((await rows.getByTestId('track-title').allTextContents()).slice(0, early.length)).toEqual(early);
+});
+
+test("a genre page keeps the songs on the phone when Cyberspace's page fails, with Retry under them", async ({ page }) => {
+  await start(page);
+  await page.getByTestId('tab-genres').click();
+  const tile = page.getByTestId('genre-grid').getByTestId('genre-tile').first();
+  await expect(tile).toBeVisible();
+  const genre = (await tile.getAttribute('data-genre'))!;
+  // The genre's own page fails (the catalog is already on the phone).
+  let fail = true;
+  await page.route(/firestore\.googleapis\.com\/.*:runQuery/, (route) => {
+    const q = JSON.parse(route.request().postData() ?? '{}').structuredQuery;
+    if (fail && route.request().method() === 'POST' && isFeedQuery(q) && JSON.stringify(q.where).includes(`"${genre}"`)) return route.fulfill({ status: 503, headers: { 'access-control-allow-origin': '*' }, body: '{}' });
+    return route.fallback();
+  });
+  await tile.click();
+  const screen = page.getByTestId('screen-genre');
+  const rows = screen.getByTestId('track-row');
+  const retry = screen.getByRole('button', { name: 'Retry loading more' });
+  await expect(retry).toBeVisible();
+  // The rows stay: no error screen in their place.
+  await expect(rows.first()).toBeVisible();
+  await expect(screen.getByTestId('error')).toHaveCount(0);
+  // Retry, now that it answers: Cyberspace's page.
+  fail = false;
+  await retry.click();
+  await expect(retry).toHaveCount(0);
+  await expect(rows.first()).toBeVisible();
 });
