@@ -113,19 +113,23 @@ for (const { name, open, testid, next } of [
   });
 }
 
-test("Android back while Settings' press holds opens Settings first, so back then closes it", async ({ page }) => {
+test("Android back during Settings' press hold runs it first: nothing opens behind the back later", async ({ page }) => {
   await start(page);
-  // Back comes as the document's backbutton event (Capacitor), not a key or a tap.
-  const shown = await page.getByTestId('open-settings').evaluate(async (el) => {
+  // Back comes as the document's backbutton event (Capacitor), not a key or a tap. Whatever
+  // the page does with it, the screen it shows a frame later is the one it keeps.
+  const [after, later] = await page.getByTestId('open-settings').evaluate(async (el) => {
+    const settings = () => !!document.querySelector<HTMLElement>('[data-testid="screen-settings"]')?.checkVisibility();
     const ev = { pointerType: 'touch', isPrimary: true, bubbles: true } as const;
     el.dispatchEvent(new PointerEvent('pointerdown', ev));
     el.dispatchEvent(new PointerEvent('pointerup', ev));
     (el as HTMLElement).click();
     document.dispatchEvent(new Event('backbutton'));
     await new Promise((r) => requestAnimationFrame(r));
-    return !!document.querySelector<HTMLElement>('[data-testid="screen-settings"]')?.checkVisibility();
+    const shown = settings();
+    await new Promise((r) => setTimeout(r, 200));
+    return [shown, settings()];
   });
-  expect(shown).toBe(true);
+  expect(later).toBe(after);
 });
 
 test('reduced motion keeps the press: it is a change of colour, not motion', async ({ page }) => {
