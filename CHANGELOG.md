@@ -7,6 +7,7 @@
 - The first visit to Genres or Artists draws a screen of tiles straight away; the rest follow a moment later.
 - **[Play]** on a list starts a moment sooner, and the shuffle and repeat buttons change as you tap them, not when the player answers.
 - Tapping a song in a list responds sooner: autoplay picks the songs that follow once the app is idle, not in the tap.
+- A post with several songs lists them in the post's own order everywhere, as on Cyberspace; Search and **[Play]** on a whole genre had them backwards.
 
 ## [1.3.0] - 2026-10-27
 
