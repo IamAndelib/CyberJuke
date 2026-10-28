@@ -105,7 +105,7 @@ export function ArtistPage({ name: raw }: { name: string }) {
             <p class="section-note dim">Nothing by {name} has been shared on the Jukebox yet.</p>
           )}
         </section>
-  
+
         {failed ? (
           <SearchSections name={name} />
         ) : page.snap.status === 'loading' ? (

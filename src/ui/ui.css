@@ -624,13 +624,6 @@
 .segmented .count {
   margin-left: 4px;
 }
-.segmented.small {
-  margin: 0;
-  flex: none;
-}
-.segmented.small button {
-  min-width: 64px;
-}
 /* Back-to-top: [^] bottom-centre, same hard checkered shadow as the search button.
    A zero-height sticky dock at the end of the scroller pins it to the scrollport's
    bottom edge (the top of the mini player or tab bar), centred, so it never meets the
