@@ -34,6 +34,7 @@ import { globalFeeds } from '../../stores/feed';
 import { list, radio } from '../../ui/playAll';
 import { plural } from '../../core/text';
 import { OFFLINE } from '../../core/offlineText';
+import { whenIdle } from '../../core/idle';
 
 const DEBOUNCE_MS = 120;
 const GLOBAL_DEBOUNCE_MS = 400;
@@ -46,6 +47,8 @@ const GLOBAL_CTX = radio('Global');
 const globalFilter = signal<MusicFilter>('songs');
 /** Rebuilt only when the catalog (or the NSFW filter) changes. */
 const index = computed(() => buildIndex(catalog.tracks.value));
+/** Search opens over the tap that opened it: the whole Jukebox grows from about a screen of rows. */
+const FIRST_ROWS = 15;
 
 const FILTERS: RailItem<MusicFilter>[] = (['songs', 'albums', 'artists', 'playlists'] as const).map((id) => ({
   id,
@@ -254,10 +257,11 @@ function TrackHereResults({ q, ctx }: { q: string; ctx: SearchContext }) {
 function JukeboxResults({ q }: { q: string }) {
   const tracks = catalog.tracks.value;
   const status = catalog.status.value;
-  const idx = index.value;
+  // An empty query lists the Jukebox: the index isn't needed (nor built) for that.
+  const idx = q.trim() ? index.value : null;
   const genreList = genres.value;
   // Recomputed only when the query or the catalog changes (not on every render).
-  const hits = useMemo(() => (q.trim() ? searchTracks(idx, q) : []), [idx, q]);
+  const hits = useMemo(() => (idx ? searchTracks(idx, q) : []), [idx, q]);
   const gHits = useMemo(() => (q.trim() ? searchGenres(genreList, q) : []), [genreList, q]);
   if (!tracks.length) {
     if (status === 'error') {
@@ -271,7 +275,7 @@ function JukeboxResults({ q }: { q: string }) {
     );
   }
   // Empty query: the whole Jukebox, newest first.
-  if (!q.trim()) return <ChunkedTracks tracks={tracks} ctx={SEARCH_CTX} chunkKey="search:jukebox:" testid="search-latest" />;
+  if (!q.trim()) return <ChunkedTracks tracks={tracks} ctx={SEARCH_CTX} chunkKey="search:jukebox:" testid="search-latest" step={FIRST_ROWS} />;
 
   if (!hits.length && !gHits.length) {
     return (
@@ -438,6 +442,8 @@ function RecentSearches({ onPick }: { onPick: (q: string) => void }) {
 
 export function Search() {
   const input = useRef<HTMLInputElement>(null);
+  // The index for the first query is built while Search shows, not in that keystroke.
+  useEffect(() => whenIdle(() => void index.value, 1000, 100), []);
   const q = query.value;
   const ctx = searchContext.value;
   // Here only exists with a context.

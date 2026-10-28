@@ -2,13 +2,14 @@
  * Autoplay (AP4): keeps 20-25 similar tracks ahead of the end of the list.
  *
  * The player says when it runs low (5 autoplay tracks or fewer to go: native's `queueLow`
- * event, the web player inline) and this adds more, one refill at a time:
+ * event, the web player inline) and this adds more once the app is idle, one refill at a time:
  *  - a Jukebox seed: similar Jukebox tracks from the cached catalog (data/similar);
  *  - a Global seed: YouTube Music's radio for it (web player only; natively the playback
  *    service runs Global radios itself, so they refill with the screen off);
  *  - a Signal Radio station playing: its next round (player/radio), all its tracks again.
  * Nothing while autoplay is off (the setting, C3), but for a station, or while repeat is on.
  */
+import { whenIdle } from '../core/idle';
 import { audioKey, isGlobal, type Track } from '../data/model';
 import { similarTracks } from '../data/similar';
 import { stationPlaying, stationQueue } from './radio';
@@ -151,6 +152,22 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     if (e) void fill(e);
   }
 
-  const off = player.onQueueLow((e) => void fill(e));
-  return { fill, catalogReady, stop: off };
+  // Once the app is idle: a new list sends this on the tap that starts it, and the
+  // pick (data/similar) would hold that tap's first frame. The list itself plays meanwhile.
+  // A newer signal replaces one still waiting (the latest only, as in fill). With the
+  // screen off there is no frame to keep, and a hidden page's idle time may be throttled.
+  let idle = () => {};
+  const off = player.onQueueLow((e) => {
+    idle();
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') void fill(e);
+    else idle = whenIdle(() => void fill(e), 1000, 50);
+  });
+  return {
+    fill,
+    catalogReady,
+    stop: () => {
+      idle();
+      off();
+    },
+  };
 }

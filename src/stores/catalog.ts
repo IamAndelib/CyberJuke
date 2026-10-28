@@ -105,9 +105,18 @@ export interface Catalog {
   reset(): Promise<void>;
 }
 
+/** A track's post and its place in it (`<post>-<n>` for a post with several songs, data/model). */
+const postOf = (id: string): [string, number] => {
+  const m = /^(.+)-(\d+)$/.exec(id);
+  return m ? [m[1], Number(m[2])] : [id, 0];
+};
+
+/** Newest first; at the same moment the later post first, and a post's songs in its own order, as Cyberspace lists them. */
 function byNewest(a: Track, b: Track): number {
   if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1;
-  return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+  const [pa, na] = postOf(a.id);
+  const [pb, nb] = postOf(b.id);
+  return pa !== pb ? (pa < pb ? 1 : -1) : na - nb;
 }
 
 /** Merge `incoming` into `existing` by id (incoming wins), newest first. */
