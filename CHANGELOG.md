@@ -7,7 +7,6 @@
 - Back on Home now shows Android's back-to-home animation as you swipe (Android 13 and newer, where the phone shows it). The app goes to the background as before, and the music plays on. Back still closes menus, Now Playing and pages first.
 
 ### Fixed
-- Every button shows its press on a quick tap now, as a slower tap does: the Settings icon, the Back arrows, the search button, the genre or artist in Now Playing, the tabs, chips, rows and tiles. Settings and the Back arrows show it for a moment before the screen changes; everything else changes straight away. With reduced motion on, the press still shows; only its movement is gone.
 - A pressed **[See all]** no longer hides its own text, and pressed text buttons and **[show]** beside the password have rounded corners like the rest.
 - Search shows each new query's results from the top, not scrolled to where the last list was.
 - The status bar and the navigation bar follow the theme: dark icons on the light themes, light ones on the dark themes, also after turning the phone or switching the phone's dark mode. The screen no longer shifts down just after the app opens, and there's no grey strip at the top or bottom.
@@ -18,6 +17,8 @@
 - **[Play]** on a list starts a moment sooner, and the shuffle and repeat buttons change as you tap them, not when the player answers.
 - Tapping a song in a list responds sooner: autoplay picks the songs that follow once the app is idle, not in the tap.
 - A post with several songs lists them in the post's own order everywhere, as on Cyberspace; Search and **[Play]** on a whole genre had them backwards.
+- Every button shows its press on a quick tap now, as a slower tap does: the Settings icon, the Back arrows, the search button, the genre or artist in Now Playing, chips, rows and tiles; the tab bar stays as it was. Settings and the Back arrows show it for a moment before the screen changes; everything else changes straight away. With reduced motion on, the press still shows; only its movement is gone.
+- Pressing **[Undo]** on a message shows its press inside the message's frame, instead of darkening it to its edge.
 
 ## [1.3.0] - 2026-10-27
 

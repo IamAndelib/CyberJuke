@@ -169,7 +169,7 @@ function pressTimeline(page: Page, testid: string, holdMs: number, scroll = fals
 
 test('a control outside a list shows its press at once, and keeps it about 100 ms after a quick tap', async ({ page }) => {
   await start(page);
-  const seen = await pressTimeline(page, 'tab-genres', 10);
+  const seen = await pressTimeline(page, 'search-fab', 10);
   expect(seen[0].on).toBe(true);
   const off = seen.findIndex((s, i) => i > 2 && !s.on);
   expect(seen[off].t).toBeGreaterThanOrEqual(90);
@@ -227,6 +227,47 @@ test('pressed text buttons keep the rounded corners of the rest of the UI', asyn
   const all = page.getByTestId('artist-albums').getByTestId('see-all');
   await expect(all).toBeVisible();
   expect(await pressedRadius(all)).toBe(radius);
+});
+
+test('the tab bar shows no press, the current tab included: it stays as it always was', async ({ page }) => {
+  await start(page);
+  const look = (testid: string) =>
+    page.getByTestId(testid).evaluate((el) => {
+      const read = () => ['backgroundColor', 'color', 'opacity'].map((k) => getComputedStyle(el)[k as 'color']).join('|');
+      const before = read();
+      el.classList.add('pressed');
+      const pressed = read();
+      el.classList.remove('pressed');
+      return [before, pressed];
+    });
+  for (const testid of ['tab-home', 'tab-genres']) {
+    const [before, pressed] = await look(testid);
+    expect(pressed, testid).toBe(before);
+  }
+});
+
+test("a pressed Undo shows its press inside the toast's frame, not to its edge", async ({ page }) => {
+  await start(page);
+  await page.evaluate(() =>
+    (window as unknown as { __cyberjukeToast: (t: string, ms: number, a: { label: string; run: () => void }) => void }).__cyberjukeToast('Removed', 10_000, { label: 'Undo', run: () => {} }),
+  );
+  const undo = page.getByTestId('toast-action');
+  await expect(undo).toBeVisible();
+  const r = await undo.evaluate((el) => {
+    el.classList.add('pressed');
+    const cs = getComputedStyle(el);
+    const b = el.getBoundingClientRect();
+    const t = el.closest('.toast')!.getBoundingClientRect();
+    // The area the press colour paints: the button, less its border where the background stops there.
+    const inset = cs.backgroundClip === 'border-box' ? 0 : parseFloat(cs.borderTopWidth);
+    return { top: b.top + inset - t.top, right: t.right - (b.right - inset), bottom: t.bottom - (b.bottom - inset), height: b.height, round: parseFloat(cs.borderTopRightRadius) - inset };
+  });
+  expect(r.top).toBeGreaterThanOrEqual(3);
+  expect(r.right).toBeGreaterThanOrEqual(3);
+  expect(r.bottom).toBeGreaterThanOrEqual(3);
+  expect(r.round).toBeGreaterThan(0);
+  // Still a full-size target.
+  expect(r.height).toBeGreaterThanOrEqual(48);
 });
 
 test('Search starts a new query at the top, not where the last list was scrolled to', async ({ page }) => {

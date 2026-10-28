@@ -129,14 +129,14 @@ h3 {
   color: var(--color-bg);
   text-shadow: none;
 }
-:is(.chip, .tab, .segmented button, .seg-grid button, .np-flip, .field-reveal):is(:active, .pressed):not(.on, :disabled) {
+:is(.chip, .segmented button, .seg-grid button, .np-flip, .field-reveal):is(:active, .pressed):not(.on, :disabled) {
   background: var(--color-fg);
   border-color: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
 }
 /* Already inverted (the chosen one), a toggle or a theme: dimmed while pressed. */
-:is(.chip, .tab, .segmented button, .seg-grid button, .toggle, .swatch):is(:active, .pressed):is(.on, .toggle, .swatch) {
+:is(.chip, .segmented button, .seg-grid button, .toggle, .swatch):is(:active, .pressed):is(.on, .toggle, .swatch) {
   opacity: 0.7;
 }
 :is(.mini-open, .lyr-line, .offline-link):is(:active, .pressed) {
