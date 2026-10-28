@@ -70,7 +70,11 @@ In a cloud session, the SessionStart hook (`.claude/hooks/session-start.sh`) ins
 
 - Work on a `claude/*` branch and deliver through a PR (template: `.github/pull_request_template.md`). Never push to `main`, merge, run Release/Preview, or touch signing secrets.
 - **Keep it simple; don't reinvent the wheel.** Before building anything, look for how others already solve it (Media3/Android docs and samples, well-known open-source players such as NewPipe, SimpMusic, InnerTune, established web patterns) and follow the proven approach. Build our own only where theirs falls short, and name the source in the PR.
-- A confirmed bug gets a fix **and** a test that fails without it.
+- **How we build: a reliable, fluid app from a small, clear codebase.** Software made with care, as a craft.
+  - The fewest clear lines: don't write ten where two will do, add no redundancy, and remove what isn't needed.
+  - Fast and fluid where a person can feel it. Don't optimise what no one will notice.
+  - Slow and steady. One change at a time, finished, verified and merged before the next. Research and measure before building. Never run agents in parallel on the same files.
+- A confirmed bug gets a fix **and** a test that fails without it. No failing test, no fix: a hypothesis is not a bug.
 - Every user-visible change gets a line under `## [Unreleased]` in `CHANGELOG.md`, in the existing plain, user-facing tone.
 - Commits:
   - Subject is `Area: what changed`, under ~72 characters. Areas: Player, Data, Stores, UI, Android, Tests, CI, Build, Release, Docs, F-Droid, Repo, or a screen name.
