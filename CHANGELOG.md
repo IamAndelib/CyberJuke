@@ -13,6 +13,8 @@
 
 - The status bar and the navigation bar follow the theme: dark icons on the light themes, light ones on the dark themes, also after turning the phone or switching the phone's dark mode. The screen no longer shifts down just after the app opens, and there's no grey strip at the top or bottom.
 - Opening the app shows the jukebox on black until Home is ready, on every Android version, and then Home in your theme straight away: a light theme no longer flashes black first.
+- Haptic feedback: a short buzz when holding a track opens its menu, a light tick for ♥ and ★, and one as a swipe down on Now Playing goes far enough to close it. It follows your phone's Touch feedback setting. Before, the long press was meant to buzz but never did.
+- Back on Home now shows Android's back-to-home animation as you swipe (Android 13 and newer, where the phone shows it). The app goes to the background as before, and the music plays on. Back still closes menus, Now Playing and pages first.
 
 ## [1.3.0] - 2026-10-27
 

@@ -4,6 +4,7 @@ import type { Track } from '../../data/model';
 import { online } from '../../core/network';
 import { currentId, currentPlaysOffline, isPlaying, player } from '../../player';
 import { isSaved, savedOffline } from '../../stores/savedOffline';
+import { haptic } from '../haptics';
 import { Icon } from '../icons';
 import { menuTrack, nowPlayingOpen } from '../nav';
 import { Art } from './Art';
@@ -31,14 +32,6 @@ function tapRow(track: Track, play: () => void, now = performance.now()): void {
     return;
   }
   play();
-}
-
-function buzz(): void {
-  try {
-    if (typeof navigator.vibrate === 'function') navigator.vibrate(10);
-  } catch {
-    /* no haptics */
-  }
 }
 
 /**
@@ -106,7 +99,7 @@ function longPress(track: Track) {
         timer: setTimeout(() => {
           press = null;
           swallowNextClick();
-          buzz();
+          haptic('longPress');
           menuTrack.value = track;
         }, LONG_PRESS_MS),
       };

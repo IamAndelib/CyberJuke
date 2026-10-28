@@ -23,6 +23,7 @@ import {
 import { block } from '../../stores/block';
 import { toggleLikeWithUndo } from '../../stores/undo';
 import { toast } from '../../stores/toast';
+import { haptic } from '../../ui/haptics';
 import { Icon } from '../../ui/icons';
 import { artistChoice, lyricsOpen, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage } from '../../ui/nav';
 import { openExternal, openPost, youtubeUrl } from '../../ui/links';
@@ -205,7 +206,10 @@ function NpLike({ track }: { track: Track }) {
       class={'icon-btn like' + (fav ? ' on' : '')}
       aria-pressed={fav}
       aria-label={fav ? 'Remove from liked' : 'Like'}
-      onClick={() => toggleLikeWithUndo(track)}
+      onClick={() => {
+        // A tick only when it changed (not for a track that is still loading).
+        if (toggleLikeWithUndo(track) !== fav) haptic('confirm');
+      }}
       data-testid="np-like"
     >
       <Icon name={fav ? 'heart' : 'heartOutline'} size={28} />
@@ -410,6 +414,8 @@ function useSwipeToClose(ref: { current: HTMLDivElement | null }): void {
     let dragging = false;
     let samples: { y: number; t: number }[] = [];
     let dy = 0;
+    /** Dragged past the distance that closes on release (a tick each time it gets there). */
+    let past = false;
     const scroller = () => el.querySelector<HTMLElement>('.np-scroll');
     const reset = () => {
       el.style.transform = '';
@@ -428,6 +434,7 @@ function useSwipeToClose(ref: { current: HTMLDivElement | null }): void {
       start = { x: p.clientX, y: p.clientY };
       samples = [{ y: p.clientY, t: e.timeStamp || performance.now() }];
       dy = 0;
+      past = false;
     };
     const onMove = (e: TouchEvent) => {
       if (!start) return;
@@ -443,6 +450,9 @@ function useSwipeToClose(ref: { current: HTMLDivElement | null }): void {
       }
       e.preventDefault();
       dy = Math.max(0, d);
+      const nowPast = dy > (el.clientHeight || 1) * SWIPE_CLOSE_FRACTION;
+      if (nowPast && !past) haptic('threshold');
+      past = nowPast;
       const t = e.timeStamp || performance.now();
       samples.push({ y: p.clientY, t });
       while (samples.length > 2 && t - samples[0].t > 100) samples.shift();

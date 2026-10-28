@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { box, musicCalls, openNowPlaying, playAndOpen, playerCalls, setLyricsMode, start, touchDrag, touchSwipe, touchTap, waitingForNetwork } from '../helpers';
+import { box, haptics, musicCalls, openNowPlaying, playAndOpen, playerCalls, setLyricsMode, start, touchDrag, touchSwipe, touchTap, waitingForNetwork } from '../helpers';
 
 /** Mini player, Now Playing (controls, swipe, links), the queue, lyrics and Share. */
 
@@ -116,10 +116,11 @@ test('Now Playing: a swipe down closes it, a short drag springs back, the seek b
   await expect(page.getByTestId('np-grab')).toBeVisible();
   const h = page.viewportSize()!.height;
 
-  // Short, slow drag: springs back.
+  // Short, slow drag: springs back, with no tick (it never got far enough to close).
   await touchDrag(page, 200, 200, 260, 600);
   await expect(np).toHaveClass(/open/);
   await expect.poll(() => np.evaluate((el) => (el as HTMLElement).style.transform)).toBe('');
+  expect(await haptics(page)).toEqual([]);
 
   // A drag on the seek bar never moves the sheet.
   const seek = (await page.getByTestId('seek').boundingBox())!;
@@ -134,9 +135,10 @@ test('Now Playing: a swipe down closes it, a short drag springs back, the seek b
   await cdp.detach();
   await expect(np).toHaveClass(/open/);
 
-  // Past 25% of the height: closes.
+  // Past 25% of the height: closes, with one tick as it got there.
   await touchDrag(page, 200, 150, 150 + h * 0.35, 500);
   await expect(np).not.toHaveClass(/open/);
+  expect(await haptics(page)).toEqual(['threshold']);
 
   // A quick flick closes too, even when short: 100px (< 25%) in 60 ms, by the events'
   // own timestamps (a busy machine can't stretch it past the velocity window).

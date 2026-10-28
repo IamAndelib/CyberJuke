@@ -371,6 +371,14 @@ export function useSearchContext(ctx: SearchContext | null): void {
 // ---- Back --------------------------------------------------------------------------
 
 /**
+ * Whether Android back has something to close: what goBack() closes (at a tab's root other
+ * than Home, it goes to Home). Native hands back to the page only while this is true.
+ */
+export const canGoBack = computed(
+  () => confirmRequest.value != null || menuTrack.value != null || artistChoice.value != null || nowPlayingOpen.value || stack.value.length > 0 || tab.value !== 'home',
+);
+
+/**
  * Close the topmost thing: a sheet, then lyrics, then Now Playing, then the page on top
  * of the current tab, then Settings (to Home). With `switchTab` (Android back), a tab's
  * root other than Home goes back to Home. Returns false when there is nothing left to close.
