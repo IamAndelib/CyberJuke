@@ -261,7 +261,7 @@ function JukeboxResults({ q }: { q: string }) {
   const idx = q.trim() ? index.value : null;
   const genreList = genres.value;
   // Recomputed only when the query or the catalog changes (not on every render).
-  const hits = useMemo(() => (idx && q.trim() ? searchTracks(idx, q) : []), [idx, q]);
+  const hits = useMemo(() => (idx ? searchTracks(idx, q) : []), [idx, q]);
   const gHits = useMemo(() => (q.trim() ? searchGenres(genreList, q) : []), [genreList, q]);
   if (!tracks.length) {
     if (status === 'error') {
