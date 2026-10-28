@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { openNowPlaying, start } from '../helpers';
 
@@ -188,6 +188,26 @@ test("a pressed See all keeps its text visible (it inverted to the text's own co
   await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: ['active'] });
   const [fg, bg] = await all.evaluate((el) => [getComputedStyle(el).color, getComputedStyle(el).backgroundColor]);
   expect(fg).not.toBe(bg);
+});
+
+test('pressed text buttons keep the rounded corners of the rest of the UI', async ({ page }) => {
+  await start(page);
+  const radius = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--radius').trim());
+  expect(radius).not.toBe('');
+  const pressedRadius = (l: Locator) =>
+    l.evaluate((el) => {
+      el.classList.add('pressed');
+      return getComputedStyle(el).borderTopLeftRadius;
+    });
+  // [show] beside the password, and a text button (See all).
+  await page.getByTestId('open-settings').click();
+  expect(await pressedRadius(page.getByTestId('signin-reveal'))).toBe(radius);
+  await page.getByTestId('settings-back').click();
+  await page.getByTestId('tab-artists').click();
+  await page.getByTestId('artist-tile').first().click();
+  const all = page.getByTestId('artist-albums').getByTestId('see-all');
+  await expect(all).toBeVisible();
+  expect(await pressedRadius(all)).toBe(radius);
 });
 
 test('Search starts a new query at the top, not where the last list was scrolled to', async ({ page }) => {

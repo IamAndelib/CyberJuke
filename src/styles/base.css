@@ -175,6 +175,7 @@ h3 {
 .link-btn {
   min-height: 44px;
   padding: 0 4px;
+  border-radius: var(--radius);
   font-family: var(--font-display);
   font-size: 14px;
   color: var(--color-fg);
