@@ -1,0 +1,6 @@
+- Every button shows its press on a quick tap, as elsewhere on Android
+- Back on Home shows Android's back-to-home animation; the music plays on
+- The app opens on the jukebox until Home is ready, then straight in your theme; the system bars follow the theme
+- The notification shows the jukebox in the status bar
+- Search, Genres, Artists, genre pages and Play respond sooner
+- A post's songs keep the post's order; Search starts new results at the top
