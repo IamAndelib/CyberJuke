@@ -1,6 +1,8 @@
 package io.github.iamandelib.cyberjuke;
 
 import android.content.Intent;
+import android.content.res.Configuration;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.Log;
@@ -8,6 +10,8 @@ import android.view.ViewGroup;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import androidx.activity.EdgeToEdge;
+import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
 import io.github.iamandelib.cyberjuke.bridge.JukePlayerPlugin;
@@ -38,6 +42,15 @@ public class MainActivity extends BridgeActivity {
     /** An activity was created in this process already (false again after Android stopped it). */
     private static boolean processStarted = false;
 
+    /** When onCreate began (uptimeMillis): the launch splash waits for the page from here. */
+    private long createdAt;
+
+    /** The page has rendered its first screen (JukePlayer.firstScreenShown). Main thread. */
+    private boolean pageRendered = false;
+
+    /** The theme's background (ThemeWindow), on the window and the WebView. */
+    private int background = ThemeWindow.DEFAULT_BACKGROUND;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         // Custom plugins must be registered before super.onCreate() creates the bridge.
@@ -52,18 +65,32 @@ public class MainActivity extends BridgeActivity {
         }
         processStarted = true;
         LaunchOptions.updateFrom(this, launch);
+        // The launch theme's splash (the system's on Android 12+, the starting window before)
+        // then switches to AppTheme.NoActionBar (postSplashScreenTheme); must come before
+        // super.onCreate.
+        SplashScreen splash = SplashScreen.installSplashScreen(this);
+        createdAt = SystemClock.uptimeMillis();
         creating = true;
         try {
             super.onCreate(savedInstanceState);
         } finally {
             creating = false;
         }
+        // Edge to edge on every Android version, as Capacitor's SystemBars expects (it is on
+        // anyway from Android 15): the page draws under transparent bars and pads itself.
+        EdgeToEdge.enable(this);
+        // The splash stays until the page has rendered its first screen (in its theme, behind
+        // the splash), so the app doesn't open on an empty window. Not longer than
+        // ThemeWindow.SPLASH_MAX_MS: a page that never says so still shows.
+        splash.setKeepOnScreenCondition(() -> ThemeWindow.keepSplash(SystemClock.uptimeMillis() - createdAt, pageRendered));
         // No bridge without a working WebView (Capacitor shows its own error then).
         if (getBridge() != null) {
             getBridge().addWebViewListener(new RendererWatch());
             WebView webView = getBridge().getWebView();
             if (webView != null) restrictWebView(webView.getSettings());
         }
+        // The theme's own colour (not black on a light theme) before the page has loaded.
+        applyBackground(ThemeWindow.saved(this));
         // CI only (debuggable builds): ci_music_search / ci_artist / ci_lyrics / ci_artist_page extras log one check each.
         MusicPlugin.maybeRunCiChecks(this, getIntent());
     }
@@ -87,6 +114,29 @@ public class MainActivity extends BridgeActivity {
         super.onNewIntent(intent);
         MusicPlugin.maybeRunCiChecks(this, intent);
         maybeCrashRendererForCi(intent);
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        // Capacitor's SystemBars restyles the bars on every configuration change, and sets the
+        // window's background back to the theme's (black) as it does.
+        applyBackground(background);
+    }
+
+    /** The theme's background on the window and the WebView: what shows before and around the page. */
+    public void applyBackground(int color) {
+        background = color;
+        getWindow().getDecorView().setBackgroundColor(color);
+        // Android 8 and 9: the navigation bar too, or edge to edge leaves it light (ThemeWindow).
+        if (ThemeWindow.paintsNavigationBar(Build.VERSION.SDK_INT)) getWindow().setNavigationBarColor(color);
+        WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+        if (webView != null) webView.setBackgroundColor(color);
+    }
+
+    /** The page has rendered its first screen: the launch splash may go. */
+    public void firstScreenShown() {
+        pageRendered = true;
     }
 
     @Override

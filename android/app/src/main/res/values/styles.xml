@@ -13,10 +13,17 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- Behind the page until it draws: black like the splash, not the light theme's grey. -->
+        <item name="android:windowBackground">@android:color/black</item>
     </style>
 
 
+    <!-- The launch splash (MainActivity keeps it up until the page's first screen): the jukebox
+         on black, on every Android version, then AppTheme.NoActionBar. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <item name="windowSplashScreenBackground">@android:color/black</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>
