@@ -31,7 +31,6 @@ let shownAt = 0;
 let downX = 0;
 let downY = 0;
 let showTimer: ReturnType<typeof setTimeout> | undefined;
-let hideTimer: ReturnType<typeof setTimeout> | undefined;
 
 function show(el: HTMLElement): void {
   clearTimeout(showTimer);
@@ -53,11 +52,8 @@ function lift(now: boolean): void {
   }
   if (showTimer !== undefined) show(el);
   const left = PRESS_MS - (performance.now() - shownAt);
-  const off = () => {
-    if (!waiting.has(el)) el.classList.remove('pressed');
-  };
-  if (left <= 0) off();
-  else hideTimer = setTimeout(off, left);
+  // Its own timer: a tap on another button meanwhile doesn't keep this one down.
+  setTimeout(() => el !== pressed && !waiting.has(el) && el.classList.remove('pressed'), Math.max(0, left));
 }
 
 function down(e: PointerEvent): void {
@@ -65,7 +61,6 @@ function down(e: PointerEvent): void {
   const el = (e.target as Element | null)?.closest?.<HTMLElement>(TARGET);
   if (pressed) lift(true);
   if (!el || (el as HTMLButtonElement).disabled) return;
-  clearTimeout(hideTimer);
   pressed = el;
   downX = e.clientX;
   downY = e.clientY;
