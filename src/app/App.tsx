@@ -198,17 +198,17 @@ const TabPane = memo(function TabPane({ t, active }: { t: Tab; active: boolean }
   );
 });
 
+/** Now Playing's hold on the app's `inert` (ui/inert.ts). */
+const NOW_PLAYING = {};
+/** Longest Now Playing's opening transition takes, if no transitionend comes (now-playing.css). */
+const NP_OPEN_MAX_MS = 450;
+
 /**
  * SM5: the app behind Now Playing becomes inert once the sheet has finished opening, and
  * stops being inert two frames after it starts closing. Either change is a style pass over
  * the whole app: in the sheet's first frame it would hold the start of the slide (a visible
  * hitch); two frames on, the slide is already running on its own layer.
  */
-/** Now Playing's hold on the app's `inert` (ui/inert.ts). */
-const NOW_PLAYING = {};
-/** Longest Now Playing's opening transition takes, if no transitionend comes (now-playing.css). */
-const NP_OPEN_MAX_MS = 450;
-
 function useInertUnderNowPlaying(app: { current: HTMLElement | null }): void {
   useEffect(() => {
     let cancel: (() => void) | null = null;

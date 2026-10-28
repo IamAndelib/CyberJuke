@@ -12,7 +12,6 @@ import { SkeletonRows, TrackRow } from './TrackRow';
 import { OfflineState } from './OfflineGate';
 import { afterPress } from '../press';
 
-export { playFrom };
 
 /**
  * What a row tap plays: `queue()` when given (P2: a feed's whole list, of which the
