@@ -126,6 +126,12 @@ const FAKE_MUSIC = `
     return out;
   };
   let releaseCalls = 0;
+  // holdSongPages: the artist's later song pages wait for the test (no race with the clock).
+  const heldPages = [];
+  window.__cyberjukeReleaseSongPages = () => {
+    opts.holdSongPages = false;
+    for (const go of heldPages.splice(0)) go();
+  };
   const calls = (window.__cyberjukeMusicCalls = []);
   window.__cyberjukePlayerCalls = [];
   window.__cyberjukeShareStub = (p) => { calls.push(['share', p]); return Promise.resolve(); };
@@ -149,7 +155,8 @@ const FAKE_MUSIC = `
         }
         const res = { items };
         if (Number(n) + 1 < pages) res.next = 'tok|top|' + query + '|' + (Number(n) + 1);
-        return new Promise((r) => setTimeout(() => r(res), opts.songPageDelay ?? opts.delay ?? 150));
+        const answer = (r) => setTimeout(() => r(res), opts.songPageDelay ?? opts.delay ?? 150);
+        return new Promise((r) => (opts.holdSongPages ? heldPages.push(() => answer(r)) : answer(r)));
       }
       if (Number(n) >= 6) return fail('UNAVAILABLE', 'unknown or expired paging token');
       const res = { items: page(query, filter, Number(n)) };
@@ -254,6 +261,8 @@ export interface MusicStubOptions {
   topSongPages?: number;
   /** Delay of those later pages, in ms (default `delay`, else 150). */
   songPageDelay?: number;
+  /** Those later pages wait until the test calls `window.__cyberjukeReleaseSongPages()`. */
+  holdSongPages?: boolean;
 }
 
 export async function stubMusic(page: Page, opts: MusicStubOptions = {}): Promise<void> {
