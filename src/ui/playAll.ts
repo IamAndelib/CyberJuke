@@ -26,8 +26,11 @@ export async function playAll(all: Track[], { shuffle, ctx }: { shuffle: boolean
   const tracks = all.length ? playableNow(all) : null;
   if (!tracks?.length) return;
   if (!shuffle) {
-    await player.setShuffle(false);
+    // Both sent now, in this order (native takes its commands in turn): the list doesn't
+    // wait for shuffle's answer.
+    const off = player.setShuffle(false);
     await playFrom(tracks, 0, ctx);
+    await off;
     return;
   }
   await playFrom(tracks, Math.floor(Math.random() * tracks.length), ctx);

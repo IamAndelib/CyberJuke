@@ -99,6 +99,8 @@ export class NativePlayer implements Player {
   private expect: { id: string; until: number } | null = null;
   /** Edits (move, remove, ...) sent and not answered yet: state events from before them are held back. */
   private edits = 0;
+  /** Shuffle or repeat changes shown and not answered yet: state events from before keep them as shown. */
+  private modes = 0;
   /** Some track in the last state resolved to a placeholder. */
   private unresolved = false;
 
@@ -245,8 +247,8 @@ export class NativePlayer implements Player {
       positionMs: st.positionMs,
       durationMs: st.durationMs,
       sampledAt: performance.now(),
-      shuffle: st.shuffle,
-      repeat: st.repeat,
+      shuffle: this.modes ? prev.shuffle : st.shuffle,
+      repeat: this.modes ? prev.repeat : st.repeat,
       upNext,
       context,
       seed,
@@ -330,8 +332,19 @@ export class NativePlayer implements Player {
   }
 
   skipTo = (index: number, expectId?: string) => this.edit(() => JukePlayer.skipToIndex({ index, ...(expectId != null && { expectId }) }));
-  setShuffle = (enabled: boolean) => JukePlayer.setShuffle({ enabled });
-  setRepeat = (mode: RepeatMode) => JukePlayer.setRepeat({ mode });
+  setShuffle = (enabled: boolean) => this.setMode({ shuffle: enabled }, () => JukePlayer.setShuffle({ enabled }));
+  setRepeat = (mode: RepeatMode) => this.setMode({ repeat: mode }, () => JukePlayer.setRepeat({ mode }));
+
+  /** Shown at once, like toggle; native's state is read back once it has answered. */
+  private async setMode(shown: { shuffle: boolean } | { repeat: RepeatMode }, send: () => Promise<void>): Promise<void> {
+    this.s.value = { ...this.s.value, ...shown };
+    this.modes++;
+    try {
+      await send();
+    } finally {
+      if (--this.modes === 0) this.resync();
+    }
+  }
 
   move(from: number, to: number, expectId?: string): Promise<void> {
     return this.edit(

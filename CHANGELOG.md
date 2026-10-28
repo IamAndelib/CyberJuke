@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- **[Play]** on a list starts a moment sooner, and the shuffle and repeat buttons change as you tap them, not when the player answers.
+
 ## [1.3.0] - 2026-10-27
 
 ### The app
