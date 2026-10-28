@@ -199,6 +199,28 @@ describe('autoplay', () => {
     expect(added).toHaveLength(0);
   });
 
+  it("the player's low signal is answered once the app is idle, not on the tap that started the list", async () => {
+    const idle: (() => void)[] = [];
+    vi.stubGlobal('requestIdleCallback', (cb: () => void) => idle.push(cb));
+    try {
+      const seed = track('c0', { artist: 'A0' });
+      const { added, signal: low } = setup({ current: seed, seed, queue: [seed], upNext: [] });
+      low({ left: 0, seedId: 'c0' });
+      await new Promise((r) => setTimeout(r));
+      expect(added).toHaveLength(0);
+      idle.forEach((cb) => cb());
+      await vi.waitFor(() => expect(added).toHaveLength(1));
+      // With the screen off, at once: a hidden page's idle time may be throttled.
+      vi.stubGlobal('document', { visibilityState: 'hidden' });
+      const hidden = setup({ current: seed, seed, queue: [seed], upNext: [] });
+      hidden.signal({ left: 0, seedId: 'c0' });
+      await vi.waitFor(() => expect(hidden.added).toHaveLength(1));
+      expect(idle).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('one refill at a time; a signal meanwhile runs after it', async () => {
     const seed = track('ytm:gseed', { source: 'ytmusic', genre: '' });
     let release: () => void = () => {};
