@@ -27,7 +27,6 @@ import { CatalogError, ChunkedTracks, EmptyState, Tracks } from '../../ui/compon
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
 import { BackButton } from '../../ui/components/BackButton';
-import { afterPress } from '../../ui/press';
 import { OfflineGate } from '../../ui/components/OfflineGate';
 import { CoverRow, GlobalError, LoadMore, MUSIC_ITEM_OPTS, MusicRow, searchLoader } from '../../ui/components/Music';
 import { useFeed } from '../../ui/usePaged';
@@ -425,7 +424,7 @@ function RecentSearches({ onPick }: { onPick: (q: string) => void }) {
               type="button"
               class="icon-btn recent-x"
               aria-label={`Remove “${q}” from recent searches`}
-              onClick={(e) => afterPress(e.currentTarget, () => removeRecentSearch(q))}
+              onClick={() => removeRecentSearch(q)}
               data-testid="recent-search-remove"
             >
               <Icon name="close" size={18} />
@@ -502,12 +501,10 @@ export function Search() {
               class="search-clear"
               aria-label="Clear search"
               onPointerDown={(e) => e.preventDefault()}
-              onClick={(e) =>
-                afterPress(e.currentTarget, () => {
-                  query.value = '';
-                  input.current?.focus();
-                })
-              }
+              onClick={() => {
+                query.value = '';
+                input.current?.focus();
+              }}
               data-testid="search-clear"
             >
               <Icon name="close" size={20} />

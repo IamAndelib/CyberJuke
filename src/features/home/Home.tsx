@@ -14,7 +14,6 @@ import { OfflineGate } from '../../ui/components/OfflineGate';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
 import { openSettings } from '../../ui/nav';
-import { afterPress } from '../../ui/press';
 import { refreshCatalog } from '../../ui/refresh';
 import { NewTracksPill } from './NewTracksPill';
 import { Rail, RailRow, type RailItem } from '../../ui/components/Rail';
@@ -206,13 +205,7 @@ export function Home() {
 function SettingsButton() {
   const update = updateAvailable.value;
   return (
-    <button
-      class="icon-btn settings-btn"
-      aria-label={update ? 'Settings (update available)' : 'Settings'}
-      // Settings replaces Home: its press shows first.
-      onClick={(e) => afterPress(e.currentTarget, openSettings)}
-      data-testid="open-settings"
-    >
+    <button class="icon-btn settings-btn" aria-label={update ? 'Settings (update available)' : 'Settings'} onClick={openSettings} data-testid="open-settings">
       <Icon name="settings" />
       {update && <span class="update-dot" aria-hidden="true" data-testid="settings-update-dot" />}
     </button>

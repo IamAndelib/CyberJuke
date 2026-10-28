@@ -8,15 +8,12 @@
  * - not at all once the finger moves away or anything scrolls.
  * Reduced motion keeps it: it is a change of colour; only its movement goes (CSS).
  *
- * `afterPress` is for a button whose action replaces the screen it is on (Settings, a
- * Back arrow, a tile that opens a page): acting at once would take the press away before
- * it painted. Like Android's View, which posts its click so the pressed state draws
- * first, the action runs once the press has painted a frame, and the screen's exit motion
- * keeps it in sight. A tap or key that comes sooner runs the waiting action first, so it
- * never lands on the screen the next tap opened.
+ * A button that takes its screen away keeps its press in sight as that screen leaves: in
+ * the view transition's snapshot (Back, Settings, tabs), under a new page fading in over
+ * it, or on Now Playing sliding away.
  */
 /** The shortest a press shows (Android shows a tap's for 64 ms; a little longer reads better). */
-export const PRESS_MS = 100;
+const PRESS_MS = 100;
 /** Inside a scroller, a touch waits this long to show its press (Android's TAP_TIMEOUT). */
 const TAP_TIMEOUT_MS = 100;
 /** Further than this and the finger is scrolling, not pressing. */
@@ -52,8 +49,9 @@ function lift(now: boolean): void {
   }
   if (showTimer !== undefined) show(el);
   const left = PRESS_MS - (performance.now() - shownAt);
-  // Its own timer: a tap on another button meanwhile doesn't keep this one down.
-  setTimeout(() => el !== pressed && !waiting.has(el) && el.classList.remove('pressed'), Math.max(0, left));
+  // Counted from a painted frame (the tap's own work, like opening a page, may hold the
+  // thread past PRESS_MS), on its own timer: a tap elsewhere meanwhile doesn't keep it down.
+  requestAnimationFrame(() => setTimeout(() => el !== pressed && el.classList.remove('pressed'), Math.max(0, left)));
 }
 
 function down(e: PointerEvent): void {
@@ -89,49 +87,4 @@ export function installPress(): void {
     opts,
   );
   document.addEventListener('scroll', () => lift(true), opts);
-}
-
-/** Buttons whose action waits on their press (usePressThen): the action lifts it. */
-const waiting = new WeakSet<HTMLElement>();
-/** The usePressThen action waiting on its press, if any. */
-let pending: (() => void) | null = null;
-
-/** Runs the waiting action now, before whatever comes next. */
-function flush(): void {
-  pending?.();
-}
-
-if (typeof document !== 'undefined') {
-  // Capture phase: before the next tap's own handlers (a tab, another Back) see it.
-  document.addEventListener('pointerdown', flush, { capture: true, passive: true });
-  document.addEventListener('keydown', flush, true);
-}
-
-/**
- * Runs `action`, which replaces the screen `el` is on, once `el`'s press has painted a
- * frame; at once when it shows no press (keyboard, TalkBack). For a click handler:
- * `onClick={(e) => afterPress(e.currentTarget, open)}`. A second click while one waits
- * does nothing, and any later tap or key runs the waiting action first.
- */
-export function afterPress(el: HTMLElement | null, action: () => void): void {
-  flush();
-  if (!el || (!el.classList.contains('pressed') && pressed !== el)) return action();
-  if (waiting.has(el)) return;
-  waiting.add(el);
-  if (pressed === el) lift(false);
-  const since = shownAt;
-  let frame = 0;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const run = () => {
-    cancelAnimationFrame(frame);
-    clearTimeout(timer);
-    pending = null;
-    action();
-    waiting.delete(el);
-    // Still pressed as its screen leaves (the exit motion), then eased back as usual.
-    setTimeout(() => pressed !== el && el.classList.remove('pressed'), Math.max(0, PRESS_MS - (performance.now() - since)));
-  };
-  // rAF runs before the next paint; a task queued from it runs after that paint.
-  frame = requestAnimationFrame(() => (timer = setTimeout(run, 0)));
-  pending = run;
 }

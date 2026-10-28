@@ -40,6 +40,8 @@ export async function openSearch(page: Page): Promise<void> {
  * From another tab, Home first (where Settings may still be open); showing already, nothing.
  */
 export async function openSettings(page: Page): Promise<void> {
+  // A screen change still running (view transition) first: until then the old screen shows.
+  await expect(page.locator('html')).not.toHaveAttribute('data-vt');
   const settings = page.getByTestId('screen-settings');
   if (await settings.isVisible()) return;
   const home = page.getByTestId('tab-home');

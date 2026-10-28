@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'preact/hooks';
 import { Icon } from '../../ui/icons';
 import { openSearch, pageSearchContext, tab } from '../../ui/nav';
-import { afterPress } from '../../ui/press';
 
 /** Scrolling this far in one direction hides (down) or shows (up) the button. */
 const FAB_SCROLL_PX = 24;
@@ -60,8 +59,7 @@ export function SearchFab() {
       <button
         class="pixel-btn"
         aria-label={ctx ? `Search in ${ctx.label}` : 'Search the Jukebox'}
-        // The button goes as Search opens: its press shows first.
-        onClick={(e) => afterPress(e.currentTarget, () => openSearch(ctx))}
+        onClick={() => openSearch(ctx)}
         data-testid="search-fab"
       >
         <Icon name="search" size={28} />

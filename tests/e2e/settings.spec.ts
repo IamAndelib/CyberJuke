@@ -431,6 +431,7 @@ test('a click with no press (keyboard, TalkBack) opens Settings at once', async 
   // At once: no press to wait for (a view transition takes a frame to capture the old screen).
   expect(frames).toBeLessThanOrEqual(3);
   await page.keyboard.press('Escape');
+  await expect(page.getByTestId('screen-home')).toBeVisible();
   await page.getByTestId('open-settings').focus();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('screen-settings')).toBeVisible();
