@@ -11,10 +11,11 @@ import { FRESHNESS_LIMIT } from '../../data/firestore';
 import { SMOOTH_SCROLL_MS, scrollAnimating } from '../../ui/clickGuard';
 import { Icon } from '../../ui/icons';
 import { reducedMotion } from '../../core/motion';
+import { MOTION_SHORT4_MS } from '../../core/durations';
 import { plural } from '../../core/text';
 
-/** The fade-out; the pill unmounts after it (or after this long without a transitionend). */
-const PILL_FADE_MS = 200;
+/** The fade-out (home.css .ntp.out); the pill unmounts after it. */
+const PILL_FADE_MS = MOTION_SHORT4_MS;
 
 function newTracksLabel(count: number): string {
   if (count >= FRESHNESS_LIMIT) return `${FRESHNESS_LIMIT}+ new tracks`;

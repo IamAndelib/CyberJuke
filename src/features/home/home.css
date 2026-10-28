@@ -97,7 +97,7 @@
   font-size: 14px;
   text-shadow: none;
   box-shadow: 3px 3px 0 var(--color-border);
-  animation: ntp-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: ntp-in var(--motion-medium1) var(--motion-decelerate);
   position: relative;
 }
 /* 44px hit area */
@@ -120,8 +120,8 @@
   transform: translateY(-8px);
   pointer-events: none;
   transition:
-    opacity 0.2s steps(3),
-    transform 0.2s steps(3);
+    opacity var(--motion-short4) steps(3),
+    transform var(--motion-short4) steps(3);
 }
 @keyframes ntp-in {
   from {

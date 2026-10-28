@@ -28,6 +28,7 @@ import { screenToTop } from '../ui/components/Screen';
 import { SearchFab } from '../features/search/SearchFab';
 import { scrollToTop } from '../ui/scrollToTop';
 import { reducedMotion } from '../core/motion';
+import { MOTION_SHORT4_MS } from '../core/durations';
 import { AlbumPage } from '../features/artists/Album';
 import { ArtistPage } from '../features/artists/Artist';
 import { ArtistGrid } from '../features/artists/Artists';
@@ -47,8 +48,8 @@ const TAB_ITEMS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'radio', label: 'Radio', icon: 'radio' },
 ];
 
-/** SM7: a pushed page slides in over this long; the page under it hides once it has. */
-const PAGE_ENTER_MS = 180;
+/** SM7: a pushed page slides in over this long (--motion-short4); the page under it hides once it has. */
+const PAGE_ENTER_MS = MOTION_SHORT4_MS;
 /** P5: a second tap on the active tab within this long pops to its root. */
 const RETAP_MS = 700;
 /** Scrolled further than this, a re-tap scrolls up first (less: it is at the top). */

@@ -513,7 +513,7 @@
   text-align: start;
   overflow-wrap: anywhere;
   unicode-bidi: plaintext;
-  transition: color 0.2s;
+  transition: color var(--motion-short4) var(--motion-standard);
 }
 .lyr-plain .lyr-line {
   color: var(--color-fg);

@@ -88,7 +88,7 @@
 }
 .page.pushed {
   /* `backwards`: once in, the page has no transform (fixed children stay fixed). */
-  animation: page-in 0.18s cubic-bezier(0.05, 0.7, 0.1, 1) backwards;
+  animation: page-in var(--motion-short4) var(--motion-decelerate) backwards;
 }
 .page[data-kind='search'] {
   animation-name: page-rise;

@@ -198,7 +198,7 @@ export function Screen({
       const b = body.current;
       const p = ptr.current;
       if (!b || !p) return;
-      const t = spring && !reducedMotion() ? `transform ${PULL_SPRING_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity ${PULL_SPRING_MS}ms` : 'none';
+      const t = spring && !reducedMotion() ? `transform ${PULL_SPRING_MS}ms var(--motion-decelerate), opacity ${PULL_SPRING_MS}ms` : 'none';
       b.style.transition = p.style.transition = t;
       b.style.transform = pull.d ? `translateY(${pull.d}px)` : '';
       p.style.transform = `translateY(${pull.d}px)`;
