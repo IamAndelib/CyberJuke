@@ -113,6 +113,21 @@ for (const { name, open, testid, next } of [
   });
 }
 
+test("Android back while Settings' press holds opens Settings first, so back then closes it", async ({ page }) => {
+  await start(page);
+  // Back comes as the document's backbutton event (Capacitor), not a key or a tap.
+  const shown = await page.getByTestId('open-settings').evaluate(async (el) => {
+    const ev = { pointerType: 'touch', isPrimary: true, bubbles: true } as const;
+    el.dispatchEvent(new PointerEvent('pointerdown', ev));
+    el.dispatchEvent(new PointerEvent('pointerup', ev));
+    (el as HTMLElement).click();
+    document.dispatchEvent(new Event('backbutton'));
+    await new Promise((r) => requestAnimationFrame(r));
+    return !!document.querySelector<HTMLElement>('[data-testid="screen-settings"]')?.checkVisibility();
+  });
+  expect(shown).toBe(true);
+});
+
 test('reduced motion keeps the press: it is a change of colour, not motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await start(page);

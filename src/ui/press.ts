@@ -10,9 +10,9 @@
  *
  * `afterPress` is for a button whose action swaps the screen it is on at once (Settings,
  * the Back arrows): acting at once would take the press away before anyone saw it. The
- * action waits until the press has shown for HOLD_MS, counted from a painted frame. A tap
- * or key that comes sooner runs the waiting action first, so it never lands on the
- * screen the next tap opened.
+ * action waits until the press has shown for HOLD_MS, counted from a painted frame. A tap,
+ * key or Android back that comes sooner runs the waiting action first, so it never lands
+ * on the screen the next tap opened.
  */
 /** The shortest a press shows (Android shows a tap's for 64 ms; a little longer reads better). */
 export const PRESS_MS = 100;
@@ -107,6 +107,8 @@ if (typeof document !== 'undefined') {
   // Capture phase: before the next tap's own handlers (a tab, another Back) see it.
   document.addEventListener('pointerdown', flush, { capture: true, passive: true });
   document.addEventListener('keydown', flush, true);
+  // Android back comes as this event (Capacitor): it closes what the waiting action opens.
+  document.addEventListener('backbutton', flush, true);
 }
 
 /**
