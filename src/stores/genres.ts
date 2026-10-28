@@ -22,7 +22,6 @@ export function recordTracks(tracks: Track[]): void {
   if (changed) seenVersion.value++;
 }
 
-
 /** True once the list comes from the full catalog rather than the seen-so-far pages. */
 export const genresComplete = computed(() => catalog.tracks.value.length > 0);
 

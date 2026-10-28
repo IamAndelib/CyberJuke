@@ -385,15 +385,15 @@ function SeekBar() {
 const SWIPE_CLOSE_FRACTION = 0.25;
 const SWIPE_CLOSE_VELOCITY = 0.5; // px/ms
 
+/** A swipe down starts once the finger has moved this far down, more than sideways. */
+const SWIPE_SLOP_PX = 8;
+/** Moved up this far first: the content is being scrolled, not the sheet. */
+const SWIPE_UP_PX = 4;
 /**
  * Let go to close, the sheet carries on from the finger: a fast start that eases out, timed
  * so its first frames move at the finger's speed (the curve starts at about 2.4 × its average
  * speed), at least EXIT_MIN_SPEED, within EXIT_MIN_MS..EXIT_MAX_MS.
  */
-/** A swipe down starts once the finger has moved this far down, more than sideways. */
-const SWIPE_SLOP_PX = 8;
-/** Moved up this far first: the content is being scrolled, not the sheet. */
-const SWIPE_UP_PX = 4;
 const EXIT_EASE = 'cubic-bezier(0.25, 0.6, 0.45, 1)';
 const EXIT_START_SLOPE = 2.4;
 const EXIT_MIN_SPEED = 1.2; // px/ms

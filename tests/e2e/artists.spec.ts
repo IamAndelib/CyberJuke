@@ -242,7 +242,7 @@ test.describe('a bot check', () => {
 });
 
 test.describe('Here on an artist page', () => {
-  test.use({ musicOptions: { topSongPages: 3, songPageDelay: 1200 } });
+  test.use({ musicOptions: { topSongPages: 3, holdSongPages: true } });
   test('finds a top song, then a song only in the full list once it has loaded', async ({ page }) => {
     const artist = await openFirstArtist(page);
     await expect(page.getByTestId('artist-top').getByTestId('track-row')).toHaveCount(5);
@@ -259,6 +259,7 @@ test.describe('Here on an artist page', () => {
 
     await page.getByTestId('search-input').fill('moonlit');
     await expect(page.getByTestId('here-loading')).toHaveText('Searching all songs…');
+    await page.evaluate(() => (window as unknown as { __cyberjukeReleaseSongPages(): void }).__cyberjukeReleaseSongPages());
     await expect(results.getByTestId('track-title')).toHaveText(['Moonlit Rarity'], { timeout: 15_000 });
     await expect(page.getByTestId('here-loading')).toHaveCount(0);
     expect((await musicCalls(page)).filter((c) => c[0] === 'more').map((c) => c[1])).toEqual([`tok|top|${artist}|1`, `tok|top|${artist}|2`]);
