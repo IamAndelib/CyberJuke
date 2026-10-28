@@ -3,6 +3,7 @@ import { currentId, player, playContext, repeatMode, shuffleOn, upNextSections, 
 import { stationPlaying } from '../../player/radio';
 import { toast } from '../../stores/toast';
 import { Icon } from '../../ui/icons';
+import { afterPress } from '../../ui/press';
 import { Art } from '../../ui/components/Art';
 import { plural } from '../../core/text';
 
@@ -66,9 +67,9 @@ export function UpNext() {
     if (!r || !root.current) return;
     if (performance.now() > r.until || focusRow(root.current, r)) refocus.current = null;
   });
-  /** If `e`'s button has focus (the keyboard, or a tap), keep focus on `r` after the change. */
-  const keepFocus = (e: Event, r: Omit<Refocus, 'until'> | null) => {
-    if (document.activeElement === e.currentTarget && r) refocus.current = { ...r, until: performance.now() + REFOCUS_MS };
+  /** If button `b` has focus (the keyboard, or a tap), keep focus on `r` after the change. */
+  const keepFocus = (b: Element, r: Omit<Refocus, 'until'> | null) => {
+    if (document.activeElement === b && r) refocus.current = { ...r, until: performance.now() + REFOCUS_MS };
   };
 
   const remove = (it: UpItem, kind: Kind, beforeId: string | null) => {
@@ -87,11 +88,13 @@ export function UpNext() {
     });
     return true;
   };
-  const move = (e: Event, it: UpItem, kind: Kind, to: UpItem, button: RowButton) => {
-    if (guarded()) return;
-    keepFocus(e, { id: it.track.id, kind, index: to.index, button });
-    void player.move(it.index, to.index, it.track.id);
-  };
+  // The row moves or goes, and a tap on it plays it: each shows its press first (afterPress).
+  const move = (b: HTMLElement, it: UpItem, kind: Kind, to: UpItem, button: RowButton) =>
+    afterPress(b, () => {
+      if (guarded()) return;
+      keepFocus(b, { id: it.track.id, kind, index: to.index, button });
+      void player.move(it.index, to.index, it.track.id);
+    });
 
   const section = (kind: Kind, title: string, items: UpItem[]) =>
     items.length > 0 && (
@@ -111,7 +114,7 @@ export function UpNext() {
           >
             <button
               class="row-main"
-              onClick={() => player.skipTo(it.index, it.track.id)}
+              onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id))}
               aria-label={`Play ${it.track.title}${kind === 'queued' ? ', queued by you' : kind === 'autoplay' ? ', autoplay' : ''}`}
             >
               <div class="row-art">
@@ -130,7 +133,7 @@ export function UpNext() {
                     class="icon-btn"
                     aria-label={`Move ${it.track.title} up`}
                     disabled={k === 0}
-                    onClick={(e) => move(e, it, kind, items[k - 1], 'up')}
+                    onClick={(e) => move(e.currentTarget, it, kind, items[k - 1], 'up')}
                     data-role="up"
                     data-testid="upnext-up"
                   >
@@ -140,7 +143,7 @@ export function UpNext() {
                     class="icon-btn"
                     aria-label={`Move ${it.track.title} down`}
                     disabled={k === items.length - 1}
-                    onClick={(e) => move(e, it, kind, items[k + 1], 'down')}
+                    onClick={(e) => move(e.currentTarget, it, kind, items[k + 1], 'down')}
                     data-role="down"
                     data-testid="upnext-down"
                   >
@@ -152,8 +155,11 @@ export function UpNext() {
                 class="icon-btn"
                 aria-label={`Remove ${it.track.title} from queue`}
                 onClick={(e) => {
+                  const b = e.currentTarget;
                   const near = items[k + 1] ?? items[k - 1];
-                  if (remove(it, kind, items[k + 1]?.track.id ?? null)) keepFocus(e, near ? { id: near.track.id, kind, index: null, button: 'remove', gone: [it.track.id, it.index] } : null);
+                  afterPress(b, () => {
+                    if (remove(it, kind, items[k + 1]?.track.id ?? null)) keepFocus(b, near ? { id: near.track.id, kind, index: null, button: 'remove', gone: [it.track.id, it.index] } : null);
+                  });
                 }}
                 data-role="remove"
                 data-testid="upnext-remove"

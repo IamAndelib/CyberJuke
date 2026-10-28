@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { artistChoice, goBack, menuTrack, nowPlayingOpen, openNowPlayingWhen, openSettings, selectTab, stacks, tab, topEntry } from './nav';
+import { artistChoice, canGoBack, confirmRequest, goBack, lyricsOpen, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage, openNowPlayingWhen, openSettings, popToRoot, selectTab, stacks, tab, topEntry } from './nav';
 import type { Track } from '../data/model';
 
 describe('openNowPlayingWhen (notification tap)', () => {
@@ -70,6 +70,50 @@ describe('Settings (its own screen, opened from Home)', () => {
       expect(goBack(switchTab)).toBe(true);
       expect(tab.value).toBe('home');
       expect(topEntry.value).toBeNull();
+    }
+  });
+});
+
+describe('canGoBack (Android back goes to the page only then)', () => {
+  const reset = () => {
+    confirmRequest.value = null;
+    menuTrack.value = null;
+    artistChoice.value = null;
+    nowPlayingOpen.value = false;
+    lyricsOpen.value = false;
+    for (const t of ['home', 'genres', 'settings'] as const) popToRoot(t);
+    selectTab('home');
+  };
+  afterEach(reset);
+
+  it("is false only at Home's root, where Android back is left to Android", () => {
+    reset();
+    expect(canGoBack.value).toBe(false);
+    expect(goBack()).toBe(false);
+  });
+
+  it('is true exactly while goBack has something to close, and false again once all of it is closed', () => {
+    const states: [string, () => void][] = [
+      ['a confirm sheet', () => (confirmRequest.value = { title: 'Clear?', confirm: 'Clear', run: () => {} })],
+      ['a track menu', () => (menuTrack.value = { id: 'x' } as Track)],
+      ['the artist chooser', () => (artistChoice.value = ['A', 'B'])],
+      ['Now Playing with lyrics', () => ((nowPlayingOpen.value = true), (lyricsOpen.value = true))],
+      ['a page on Home', () => openArtistPage('A')],
+      ['Settings', () => openSettings()],
+      ['another tab', () => selectTab('genres')],
+      ['a page on another tab', () => (selectTab('genres'), openGenrePage('Rock'))],
+    ];
+    for (const [what, open] of states) {
+      reset();
+      open();
+      expect(canGoBack.value, what).toBe(true);
+      let backs = 0;
+      while (canGoBack.value) {
+        expect(goBack(), what).toBe(true);
+        expect(++backs, what).toBeLessThan(5);
+      }
+      expect(goBack(), what).toBe(false);
+      expect(tab.value, what).toBe('home');
     }
   });
 });

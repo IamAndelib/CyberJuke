@@ -7,6 +7,14 @@
     "loggingBehavior": "none",
     "webContentsDebuggingEnabled": false
   },
+  "plugins": {
+    "SystemBars": {
+      "initialViewportFitValueHint": "cover"
+    },
+    "App": {
+      "disableBackButtonHandler": true
+    }
+  },
   "cordova": {
     "accessOrigins": [],
     "preferences": {

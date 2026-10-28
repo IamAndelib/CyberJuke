@@ -53,6 +53,7 @@ import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import io.github.iamandelib.cyberjuke.MainActivity
+import io.github.iamandelib.cyberjuke.R
 import io.github.iamandelib.cyberjuke.findCause
 import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.BlockedException
@@ -576,7 +577,10 @@ class PlaybackService : MediaSessionService() {
             .setCallback(SessionCallback())
             .build()
 
-        setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this).build())
+        // The status bar shows the app's jukebox, not Media3's generic music note.
+        setMediaNotificationProvider(
+            DefaultMediaNotificationProvider.Builder(this).build().apply { setSmallIcon(R.drawable.ic_stat_cyberjuke) },
+        )
         restoreLastSession()
         // The network as it is now (the callback then tells of changes).
         val caps = runCatching { connectivity().let { it.getNetworkCapabilities(it.activeNetwork) } }.getOrNull()

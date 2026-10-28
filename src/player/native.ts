@@ -130,6 +130,12 @@ interface JukePlayerPlugin {
   setNetworkPrefs(o: { ipv4: 'auto' | 'always' | 'off' }): Promise<void>;
   /** Lift the back-off now ("Try now"); playback it stopped resumes. */
   retryNow(): Promise<void>;
+  /**
+   * Whether the page has something for Android back to close (nav.ts canGoBack). While it has,
+   * back comes to the page as the `backbutton` document event; at its root, Android 12+ take
+   * back themselves (predictive back to home), and older Android still send it.
+   */
+  setCanGoBack(o: { canGoBack: boolean }): Promise<void>;
   /** For the Settings diagnostics line. */
   getNetStatus(): Promise<{
     family?: string;
@@ -164,6 +170,13 @@ interface JukePlayerPlugin {
   cachedIds(): Promise<{ ytIds: string[] }>;
   /** Keep a screen area (CSS px relative to the WebView) out of the system back gesture; null clears it. */
   setGestureExclusion(rect: { left: number; top: number; width: number; height: number } | null): Promise<void>;
+  /**
+   * The theme's background, `#rgb` or `#rrggbb` (anything else rejects): kept natively, so the
+   * window and the WebView open in it at the next start, before the page has loaded.
+   */
+  setThemeBackground(o: { color: string }): Promise<void>;
+  /** The page has rendered its first screen: the launch splash goes (natively it waits 1.5 s at most). */
+  firstScreenShown(): Promise<void>;
   /** Native re-sends `tracks` when a `tracks` or `state` listener is added (K4): add `tracks` first. */
   addListener(event: 'state', cb: (s: NativeState) => void): Promise<{ remove: () => Promise<void> }>;
   /**

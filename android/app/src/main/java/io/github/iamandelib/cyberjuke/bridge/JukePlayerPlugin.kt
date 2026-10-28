@@ -10,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import androidx.activity.OnBackPressedCallback
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -25,6 +26,8 @@ import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.google.common.util.concurrent.ListenableFuture
+import io.github.iamandelib.cyberjuke.MainActivity
+import io.github.iamandelib.cyberjuke.ThemeWindow
 import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.Families
 import io.github.iamandelib.cyberjuke.net.Family
@@ -59,8 +62,10 @@ import kotlin.math.roundToInt
  * Capacitor bridge to PlaybackService. Contract (TS side):
  *   setQueue, queueNext, removeItem, moveItem, play, pause, seekTo, skipToNext,
  *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, setCrossfade, setGapless, getState,
+ *   setCanGoBack (Android back then comes as the `backbutton` document event),
  *   getAppInfo, getLaunchOptions, getBlockState, setNetworkPrefs, retryNow, getNetStatus,
- *   setGestureExclusion, addAutoplay, setAutoplay, restore, removeIds, setLikedIds,
+ *   setGestureExclusion, setThemeBackground, firstScreenShown, addAutoplay, setAutoplay, restore,
+ *   removeIds, setLikedIds,
  *   setCacheLimit, setDownloadOnMobileData, clearCache, signedOut, signedIn, cachedIds; events 'state', 'trackError',
  *   'blocked', 'unblocked', 'extractorBroken', 'queueLow', 'tracks', 'openNowPlaying',
  *   'cacheChanged'.
@@ -256,7 +261,20 @@ class JukePlayerPlugin : Plugin() {
         notifyListeners("trackError", data)
     }
 
+    /**
+     * Android back, while [BackPolicy] gives it to the page (setCanGoBack): sent to it as the
+     * `backbutton` document event, as Capacitor's App plugin does (its own handler is off:
+     * App.disableBackButtonHandler, which would intercept back always).
+     */
+    private val pageBack = object : OnBackPressedCallback(BackPolicy.intercept(Build.VERSION.SDK_INT, canGoBack = false)) {
+        override fun handleOnBackPressed() {
+            bridge?.triggerDocumentJSEvent("backbutton")
+        }
+    }
+
     override fun load() {
+        // The activity's (removed with it); main thread, while the bridge is created.
+        activity.onBackPressedDispatcher.addCallback(activity, pageBack)
         NetPrefsStore.load(context)
         AudioCache.init(context, PlayerPrefsStore.cacheMb(context), PlayerPrefsStore.downloadOnMobileData(context))
         AudioCache.addListener(cacheListener)
@@ -1012,6 +1030,20 @@ class JukePlayerPlugin : Plugin() {
     }
 
     /**
+     * `setCanGoBack({ canGoBack })`: whether the page has something for back to close (a sheet,
+     * Now Playing, a page, Settings, a tab other than Home). Turns the back callback on or off
+     * ([BackPolicy]); at the page's root Android 12+ handle back themselves.
+     */
+    @PluginMethod
+    fun setCanGoBack(call: PluginCall) {
+        val canGoBack = call.getBoolean("canGoBack") ?: return call.reject("canGoBack is required")
+        main.post {
+            pageBack.isEnabled = BackPolicy.intercept(Build.VERSION.SDK_INT, canGoBack)
+            call.resolve()
+        }
+    }
+
+    /**
      * `setGestureExclusion({ left, top, width, height } | null)`, in CSS px relative to the
      * WebView: keeps Android's back gesture off that strip (the A-Z fast scroller). The height
      * is clamped to Android's 200dp limit, centred on the given rect. `null` (or no rect)
@@ -1047,6 +1079,31 @@ class JukePlayerPlugin : Plugin() {
                 val b = (centreY + h / 2.0).roundToInt()
                 view.systemGestureExclusionRects = listOf(Rect(l, t, r, b))
             }
+            call.resolve()
+        }
+    }
+
+    /**
+     * `setThemeBackground({ color })`: the theme's background, `#rgb` or `#rrggbb`. Kept for the
+     * next start ([ThemeWindow]: the window and the WebView open in it, before the page has
+     * loaded) and put on them now. Anything else rejects.
+     */
+    @PluginMethod
+    fun setThemeBackground(call: PluginCall) {
+        val color = ThemeWindow.parse(call.getString("color")) ?: return call.reject("color must be #rgb or #rrggbb")
+        ThemeWindow.save(context, color)
+        main.post {
+            (activity as? MainActivity)?.applyBackground(color)
+            call.resolve()
+        }
+    }
+
+    /** `firstScreenShown()`: the page has rendered its first screen; the launch splash may go. */
+    @PluginMethod
+    fun firstScreenShown(call: PluginCall) {
+        // Posted like setThemeBackground: the background sent before it is on before the splash goes.
+        main.post {
+            (activity as? MainActivity)?.firstScreenShown()
             call.resolve()
         }
     }

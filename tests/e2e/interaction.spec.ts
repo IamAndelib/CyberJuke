@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { box, openNowPlaying, openSearch, openSettings, playerCalls, scrollTo, scrollTopOf, seedStorage, start, toastsGone, touchDrag, touchSwipe, touchTap, waitForTracks } from '../helpers';
+import { androidBack, backCalls, box, openNowPlaying, openSearch, openSettings, playAndOpen, playerCalls, scrollTo, scrollTopOf, seedStorage, start, toastsGone, touchDrag, touchSwipe, touchTap, waitForTracks } from '../helpers';
 
 /**
  * Wave 1c interaction: navigation in place (P4, P5, SM7, M10), undo toasts and confirm
@@ -689,4 +689,36 @@ test('a long unbroken word wraps inside a message and inside an Up next heading'
   const label = page.getByTestId('upnext-list-label');
   await expect(label).toContainText(word);
   expect(await inside(label)).toBe(true);
+});
+
+test('Android back closes the topmost thing; native gets back only while there is one, and at the root the app goes to the background', async ({ page }) => {
+  await start(page);
+  // Home's root: back is left to Android (its back-to-home animation, Android 12+).
+  expect(await backCalls(page)).toEqual([false]);
+  await playAndOpen(page);
+  await expect.poll(() => backCalls(page)).toEqual([false, true]);
+  await androidBack(page);
+  await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
+  await expect.poll(() => backCalls(page)).toEqual([false, true, false]);
+
+  await page.getByTestId('open-settings').click();
+  await androidBack(page);
+  await expect(page.getByTestId('screen-home')).toBeVisible();
+  await expect.poll(() => backCalls(page)).toEqual([false, true, false, true, false]);
+
+  // A page on another tab: back pops it, then goes to Home.
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-tile').first().click();
+  await expect(page.getByTestId('screen-genre')).toBeVisible();
+  await androidBack(page);
+  await expect(page.getByTestId('screen-genre')).toHaveCount(0);
+  await expect(page.getByTestId('tab-genres')).toHaveAttribute('aria-current', 'page');
+  await androidBack(page);
+  await expect(page.getByTestId('tab-home')).toHaveAttribute('aria-current', 'page');
+  await expect.poll(() => backCalls(page)).toEqual([false, true, false, true, false, true, false]);
+
+  // A back that still reaches the root (older Android): the app goes to the background, Home stays.
+  await androidBack(page);
+  await expect.poll(() => backCalls(page)).toEqual([false, true, false, true, false, true, false, 'background']);
+  await expect(page.getByTestId('screen-home')).toBeVisible();
 });

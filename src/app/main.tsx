@@ -16,11 +16,10 @@ import '../features/settings/settings.css';
 import '../features/now-playing/now-playing.css';
 // Buttons in the app's chrome act on a tap even while a list is still gliding.
 import '../ui/tapThrough';
+import { installPress } from '../ui/press';
 import { render } from 'preact';
 import { computed, effect } from '@preact/signals';
 import { Capacitor } from '@capacitor/core';
-import { App as CapApp } from '@capacitor/app';
-import { StatusBar, Style } from '@capacitor/status-bar';
 import { installRenderCounter } from '../core/renderCount';
 import { describeError } from '../core/errors';
 import { logError } from '../core/log';
@@ -32,7 +31,7 @@ import { catalog } from '../stores/catalog';
 import { startFreshness } from '../stores/newTracks';
 import { startAccount } from '../stores/account';
 import { auth } from '../data/auth';
-import { goBack, openNowPlayingWhen, openSettings } from '../ui/nav';
+import { openNowPlayingWhen, openSettings } from '../ui/nav';
 import { retryWatchedFeeds } from '../stores/feed';
 import { JukePlayer } from '../player/native';
 import { hasCurrent, setOpenLiked, startPlayerPrefs, startQueuePurge } from '../player';
@@ -43,6 +42,8 @@ import { startBlockEvents } from '../player/blockEvents';
 import { source } from '../data';
 import { App, Overlays } from './App';
 import { BootError } from './BootError';
+import { wireBack } from './back';
+import { firstScreenShown, keepThemeBackground, styleSystemBars } from './windowChrome';
 import { Home } from '../features/home/Home';
 import { Library, openLiked } from '../features/library/Library';
 import { Screen } from '../ui/components/Screen';
@@ -78,9 +79,8 @@ function applyTheme(): void {
     const dark = cs.getPropertyValue('--scheme').trim() !== 'light';
     root.style.colorScheme = dark ? 'dark' : 'light';
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg);
-    if (native) {
-      StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {});
-    }
+    styleSystemBars(dark);
+    keepThemeBackground(bg);
   });
 }
 
@@ -88,16 +88,6 @@ function applyTheme(): void {
 function wireNotificationTap(): void {
   if (!native) return;
   JukePlayer.addListener('openNowPlaying', () => openNowPlayingWhen(hasCurrent)).catch((e) => logError('openNowPlaying', e));
-}
-
-function wireBackButton(): void {
-  if (!native) return;
-  CapApp.addListener('backButton', () => {
-    if (!goBack()) {
-      // Keep music playing: background the app instead of finishing the activity.
-      CapApp.minimizeApp().catch(() => CapApp.exitApp());
-    }
-  }).catch((e) => logError('backButton', e));
 }
 
 /**
@@ -159,6 +149,7 @@ async function boot(): Promise<void> {
   mark('boot');
   // e2e: the boot-failure screen.
   if (TEST_HOOKS && localStorage.getItem('__cyberjukeFailBoot')) throw new Error('Simulated boot failure');
+  installPress();
   installRenderCounter({ App, Overlays, Home, Library, Screen, TrackRow, MiniPlayer, NowPlaying, ArtistGrid, ArtistTiles, ArtistTile, ArtistPage, GenreGrid, GenreTiles, GenreTile, GenreDetail });
   // Read before the first render: the settings and favourites (small keys) and a saved
   // Cyberspace login. Liked and history, files that can be large, are read alongside
@@ -199,7 +190,7 @@ async function boot(): Promise<void> {
     // Still offline, the art would only fail again.
     if (online.peek()) artGen.value++;
   });
-  wireBackButton();
+  wireBack();
   wireNotificationTap();
   startBlockEvents();
   const root = document.getElementById('app')!;
@@ -211,6 +202,7 @@ async function boot(): Promise<void> {
     root,
   );
   mark('render');
+  firstScreenShown();
   startCatalog(firstPage);
   afterFirstPage(firstPage, () => void startUpdates(native ? () => JukePlayer.getAppInfo() : undefined));
   startFreshness();
@@ -222,4 +214,5 @@ boot().catch((e) => {
   logError('boot', e);
   const root = document.getElementById('app');
   if (root) render(<BootError detail={describeError(e)} onRetry={() => location.reload()} />, root);
+  firstScreenShown();
 });

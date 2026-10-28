@@ -301,6 +301,7 @@
   min-width: 64px;
   min-height: 44px;
   padding: 0 6px;
+  border-radius: var(--radius);
   font-family: var(--font-display);
   font-size: 13px;
   color: var(--color-fg-dim);
