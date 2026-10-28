@@ -388,3 +388,48 @@ test('radio groups and the Library tabs are one Tab stop each, worked with the a
   await expect(page.getByTestId('lib-recent')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('lib-recent')).toBeFocused();
 });
+
+// The waiting action runs before a tap that follows it, so it acts on the screen it was tapped on.
+test('a quick Back and then at once a tab: the page is closed, on its own tab', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-grid').getByTestId('genre-tile').first().click();
+  await expect(page.getByTestId('genre-back')).toBeVisible();
+  await page.getByTestId('genre-back').click();
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('tab-genres').click();
+  await expect(page.getByTestId('genre-grid')).toBeVisible();
+  await expect(page.getByTestId('genre-back')).toBeHidden();
+});
+
+test("a quick Back on Settings and then at once Radio: Radio stays, it doesn't jump to Home", async ({ page }) => {
+  await start(page);
+  await openSettings(page);
+  await page.getByTestId('settings-back').click();
+  await page.getByTestId('tab-radio').click();
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('screen-radio')).toBeVisible();
+  await expect(page.getByTestId('tab-radio')).toHaveAttribute('aria-current', 'page');
+});
+
+test('a click with no press (keyboard, TalkBack) opens Settings at once', async ({ page }) => {
+  await start(page);
+  const frames = await page.getByTestId('open-settings').evaluate(async (el) => {
+    (el as HTMLElement).click();
+    let n = 0;
+    await new Promise<void>((r) => {
+      const f = () => {
+        n++;
+        if (document.querySelector('[data-testid="screen-settings"]') || n > 60) r();
+        else requestAnimationFrame(f);
+      };
+      requestAnimationFrame(f);
+    });
+    return n;
+  });
+  expect(frames).toBe(1);
+  await page.keyboard.press('Escape');
+  await page.getByTestId('open-settings').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('screen-settings')).toBeVisible();
+});
