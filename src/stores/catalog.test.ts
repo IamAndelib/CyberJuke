@@ -76,6 +76,13 @@ describe('mergeById', () => {
   it('orders same-timestamp tracks deterministically', () => {
     expect(mergeById([t('x', D(1)), t('y', D(1))], []).map((x) => x.id)).toEqual(['y', 'x']);
   });
+
+  it("keeps a post's songs in the post's own order, as Cyberspace lists them", () => {
+    const post = [t('p-0', D(1)), t('p-1', D(1)), t('p-2', D(1))];
+    expect(mergeById([], [...post].reverse()).map((x) => x.id)).toEqual(['p-0', 'p-1', 'p-2']);
+    // Two posts at the same moment: the later id first, as before.
+    expect(mergeById([], [...post, t('q', D(1))]).map((x) => x.id)).toEqual(['q', 'p-0', 'p-1', 'p-2']);
+  });
 });
 
 describe('createCatalog', () => {

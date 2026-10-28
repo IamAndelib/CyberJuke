@@ -411,6 +411,8 @@ function useSwipeToClose(ref: { current: HTMLDivElement | null }): void {
     let dragging = false;
     let samples: { y: number; t: number }[] = [];
     let dy = 0;
+    /** The sheet's height, read when a touch starts. */
+    let height = 1;
     const scroller = () => el.querySelector<HTMLElement>('.np-scroll');
     const reset = () => {
       el.style.transform = '';
@@ -429,6 +431,8 @@ function useSwipeToClose(ref: { current: HTMLDivElement | null }): void {
       start = { x: p.clientX, y: p.clientY };
       samples = [{ y: p.clientY, t: e.timeStamp || performance.now() }];
       dy = 0;
+      // Read once, before the drag writes styles: reading it per move forced a layout each time.
+      height = el.clientHeight || 1;
     };
     const onMove = (e: TouchEvent) => {
       if (!start) return;
@@ -449,7 +453,7 @@ function useSwipeToClose(ref: { current: HTMLDivElement | null }): void {
       while (samples.length > 2 && t - samples[0].t > 100) samples.shift();
       el.style.transition = 'none';
       el.style.transform = `translateY(${dy}px)`;
-      el.style.opacity = String(1 - Math.min(0.25, (dy / (el.clientHeight || 1)) * 0.4));
+      el.style.opacity = String(1 - Math.min(0.25, (dy / height) * 0.4));
     };
     const onEnd = () => {
       if (!start) return;
@@ -460,8 +464,7 @@ function useSwipeToClose(ref: { current: HTMLDivElement | null }): void {
       const a = samples[0];
       const b = samples[samples.length - 1];
       const v = b && a && b.t > a.t ? (b.y - a.y) / (b.t - a.t) : 0;
-      const h = el.clientHeight || 1;
-      const close = dy > h * SWIPE_CLOSE_FRACTION || v > SWIPE_CLOSE_VELOCITY;
+      const close = dy > height * SWIPE_CLOSE_FRACTION || v > SWIPE_CLOSE_VELOCITY;
       if (!close) return reset();
       if (reducedMotion()) {
         el.style.transition = 'none';
@@ -474,7 +477,7 @@ function useSwipeToClose(ref: { current: HTMLDivElement | null }): void {
       // On from where the finger let go, in one motion, at its speed: the end state is set
       // here (the class change that follows can't send it back up or restart it slowly), and
       // the sheet keeps its layer until it is down.
-      const ms = Math.round(Math.min(EXIT_MAX_MS, Math.max(EXIT_MIN_MS, ((h - dy) / Math.max(v, EXIT_MIN_SPEED)) * EXIT_START_SLOPE)));
+      const ms = Math.round(Math.min(EXIT_MAX_MS, Math.max(EXIT_MIN_MS, ((height - dy) / Math.max(v, EXIT_MIN_SPEED)) * EXIT_START_SLOPE)));
       el.style.willChange = 'transform, opacity';
       el.style.transition = `transform ${ms}ms ${EXIT_EASE}, opacity ${ms}ms linear, visibility 0s linear ${ms}ms`;
       el.style.transform = 'translateY(100%)';

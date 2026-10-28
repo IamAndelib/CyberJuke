@@ -62,11 +62,11 @@ export function Tracks({
 }
 
 /**
- * A long list rendered in chunks of 60 as you scroll; tapping a row plays the whole
+ * A long list rendered in chunks of 60 (or `step`) as you scroll; tapping a row plays the whole
  * list from there. `chunkKey` remembers how many rows were shown (scroll memory).
  */
-export function ChunkedTracks({ tracks, ctx, chunkKey, testid }: { tracks: Track[]; ctx: PlayContext; chunkKey: string; testid?: string }) {
-  const { shown, sentinel, more } = useChunks(tracks.length, chunkKey);
+export function ChunkedTracks({ tracks, ctx, chunkKey, testid, step }: { tracks: Track[]; ctx: PlayContext; chunkKey: string; testid?: string; step?: number }) {
+  const { shown, sentinel, more } = useChunks(tracks.length, chunkKey, step);
   const play = useRowPlayer(tracks, ctx);
   return (
     <div data-testid={testid}>
