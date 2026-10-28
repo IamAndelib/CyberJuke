@@ -182,3 +182,21 @@ test('after the catalog failed, Genres says so with Retry even when some genres 
   await expect(screen.locator('.topbar-sub')).toContainText('genres on the Jukebox');
   await expect(screen.getByTestId('retry')).toHaveCount(0);
 });
+
+test("a genre page shows the songs already on the phone while Cyberspace's page loads", async ({ page, backend }) => {
+  await start(page);
+  await page.getByTestId('tab-genres').click();
+  const tile = page.getByTestId('genre-grid').getByTestId('genre-tile').first();
+  await expect(tile).toBeVisible();
+  // A slow network: the genre's page takes 3 s to come.
+  backend.delay = 3000;
+  const answered = page.waitForResponse((r) => r.url().includes(':runQuery'), { timeout: 10_000 });
+  await tile.click();
+  const rows = page.getByTestId('screen-genre').getByTestId('track-row');
+  await expect(rows.first()).toBeVisible({ timeout: 1500 });
+  const early = await rows.getByTestId('track-title').allTextContents();
+  // Cyberspace's page takes over: the same songs, so nothing moves.
+  await answered;
+  await expect(page.getByTestId('screen-genre').getByTestId('skeleton')).toHaveCount(0);
+  expect((await rows.getByTestId('track-title').allTextContents()).slice(0, early.length)).toEqual(early);
+});

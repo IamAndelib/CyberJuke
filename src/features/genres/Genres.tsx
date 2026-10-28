@@ -1,5 +1,6 @@
 import { computed } from '@preact/signals';
 import { source } from '../../data';
+import { PAGE_SIZE } from '../../data/firestore';
 import { catalog } from '../../stores/catalog';
 import { catalogGenre, genres, genresComplete } from '../../stores/genres';
 import { favoriteGenres, showNsfw } from '../../stores/library';
@@ -15,7 +16,7 @@ import { refreshCatalog } from '../../ui/refresh';
 import { GridSortRail, TileGrid, TileSkeleton } from '../../ui/components/GridSort';
 import type { GenreCount } from '../../data/search';
 import { genresSort, type GridSort } from '../../stores/prefs';
-import { usePaged } from '../../ui/usePaged';
+import { usePaged, type Paged } from '../../ui/usePaged';
 import { feedKey } from '../../stores/feed';
 import { auth } from '../../data/auth';
 import { list as listCtx, withRest } from '../../ui/playAll';
@@ -109,8 +110,11 @@ export function GenreDetail({ genre }: { genre: string }) {
     }
     return p;
   });
-  const has = paged.tracks.length > 0;
   const all = catalogGenre(genre);
+  // While the first page loads, the newest of this genre already on the phone (the local
+  // catalog): rows at once, not a skeleton. Cyberspace's page takes over when it comes.
+  const shown: Paged = paged.status === 'loading' && all.length ? { ...paged, status: 'ready', tracks: all.slice(0, PAGE_SIZE), hasMore: true } : paged;
+  const has = shown.tracks.length > 0;
   // P2: the whole genre (every catalog track in it), of which the pages are the start.
   const full = () => withRest(paged.tracks, catalogGenre(genre));
   const count = all.length >= paged.tracks.length ? all.length : null;
@@ -146,7 +150,7 @@ export function GenreDetail({ genre }: { genre: string }) {
     >
       <OfflineGate>
         <PlayShuffle tracks={full} ctx={ctx} testid="genre" disabled={!has} playTestid="genre-play-all" shuffleTestid="genre-shuffle" />
-        <PagedTracks paged={paged} ctx={ctx} queue={full} hideGenre chunkKey={key} />
+        <PagedTracks paged={shown} ctx={ctx} queue={full} hideGenre chunkKey={key} />
       </OfflineGate>
     </Screen>
   );
