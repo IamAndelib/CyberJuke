@@ -16,6 +16,7 @@ import '../features/settings/settings.css';
 import '../features/now-playing/now-playing.css';
 // Buttons in the app's chrome act on a tap even while a list is still gliding.
 import '../ui/tapThrough';
+import { installPress } from '../ui/press';
 import { render } from 'preact';
 import { computed, effect } from '@preact/signals';
 import { Capacitor } from '@capacitor/core';
@@ -159,6 +160,7 @@ async function boot(): Promise<void> {
   mark('boot');
   // e2e: the boot-failure screen.
   if (TEST_HOOKS && localStorage.getItem('__cyberjukeFailBoot')) throw new Error('Simulated boot failure');
+  installPress();
   installRenderCounter({ App, Overlays, Home, Library, Screen, TrackRow, MiniPlayer, NowPlaying, ArtistGrid, ArtistTiles, ArtistTile, ArtistPage, GenreGrid, GenreTiles, GenreTile, GenreDetail });
   // Read before the first render: the settings and favourites (small keys) and a saved
   // Cyberspace login. Liked and history, files that can be large, are read alongside

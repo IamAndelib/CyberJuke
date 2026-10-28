@@ -77,7 +77,8 @@ test('changing a setting other than the theme leaves the theme alone (no restyle
   await page.evaluate(() => {
     const w = window as unknown as { __themeWrites: number };
     w.__themeWrites = 0;
-    new MutationObserver((rs) => (w.__themeWrites += rs.length)).observe(document.documentElement, { attributes: true });
+    // The theme's attributes (not data-vt, which a screen's view transition sets and clears).
+    new MutationObserver((rs) => (w.__themeWrites += rs.length)).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style', 'class'] });
   });
   await page.getByTestId('check-every-5').click();
   await expect(page.getByTestId('check-every-5')).toHaveAttribute('aria-checked', 'true');
@@ -387,4 +388,51 @@ test('radio groups and the Library tabs are one Tab stop each, worked with the a
   await page.keyboard.press('ArrowRight');
   await expect(page.getByTestId('lib-recent')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('lib-recent')).toBeFocused();
+});
+
+// The waiting action runs before a tap that follows it, so it acts on the screen it was tapped on.
+test('a quick Back and then at once a tab: the page is closed, on its own tab', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-grid').getByTestId('genre-tile').first().click();
+  await expect(page.getByTestId('genre-back')).toBeVisible();
+  await page.getByTestId('genre-back').click();
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('tab-genres').click();
+  await expect(page.getByTestId('genre-grid')).toBeVisible();
+  await expect(page.getByTestId('genre-back')).toBeHidden();
+});
+
+test("a quick Back on Settings and then at once Radio: Radio stays, it doesn't jump to Home", async ({ page }) => {
+  await start(page);
+  await openSettings(page);
+  await page.getByTestId('settings-back').click();
+  await page.getByTestId('tab-radio').click();
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('screen-radio')).toBeVisible();
+  await expect(page.getByTestId('tab-radio')).toHaveAttribute('aria-current', 'page');
+});
+
+test('a click with no press (keyboard, TalkBack) opens Settings at once', async ({ page }) => {
+  await start(page);
+  const frames = await page.getByTestId('open-settings').evaluate(async (el) => {
+    (el as HTMLElement).click();
+    let n = 0;
+    await new Promise<void>((r) => {
+      const f = () => {
+        n++;
+        if (document.querySelector('[data-testid="screen-settings"]') || n > 60) r();
+        else requestAnimationFrame(f);
+      };
+      requestAnimationFrame(f);
+    });
+    return n;
+  });
+  // At once: no press to wait for (a view transition takes a frame to capture the old screen).
+  expect(frames).toBeLessThanOrEqual(3);
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('screen-home')).toBeVisible();
+  await page.getByTestId('open-settings').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('screen-settings')).toBeVisible();
 });

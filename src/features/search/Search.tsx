@@ -13,7 +13,6 @@ import { Icon } from '../../ui/icons';
 import {
   openArtistPage,
   openGenrePage,
-  popPage,
   read,
   searchContext,
   searchMode,
@@ -27,6 +26,7 @@ import { Rail, RailRow, RailSep, type RailItem } from '../../ui/components/Rail'
 import { CatalogError, ChunkedTracks, EmptyState, Tracks } from '../../ui/components/TrackList';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
+import { BackButton } from '../../ui/components/BackButton';
 import { OfflineGate } from '../../ui/components/OfflineGate';
 import { CoverRow, GlobalError, LoadMore, MUSIC_ITEM_OPTS, MusicRow, searchLoader } from '../../ui/components/Music';
 import { useFeed } from '../../ui/usePaged';
@@ -470,9 +470,7 @@ export function Search() {
     <header class="topbar search-bar">
       <div class="search-row">
         <div class="topbar-left">
-          <button class="icon-btn" aria-label="Close search" onClick={popPage} data-testid="search-close">
-            <Icon name="back" />
-          </button>
+          <BackButton testid="search-close" label="Close search" />
         </div>
         <label class="search-field">
           <span class="search-prompt" aria-hidden="true">

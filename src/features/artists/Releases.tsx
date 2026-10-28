@@ -1,8 +1,8 @@
 import { artistKey } from '../../data/artists';
 import { SHELF_LABEL, type Release } from '../../data/ytmusic';
 import { feedKey, feeds } from '../../stores/feed';
-import { Icon } from '../../ui/icons';
-import { popPage, type ReleasesRef } from '../../ui/nav';
+import type { ReleasesRef } from '../../ui/nav';
+import { BackButton } from '../../ui/components/BackButton';
 import { Screen } from '../../ui/components/Screen';
 import { GlobalError, ReleaseGrid, releasesLoader } from '../../ui/components/Music';
 import { EmptyState } from '../../ui/components/TrackList';
@@ -40,9 +40,7 @@ export function ReleasesPage({ release }: { release: ReleasesRef }) {
       subtitle={snap.status === 'ready' && n ? `${artist} · ${n}` : artist}
       scrollKey={`releases:${token}:${kind}`}
       left={
-        <button class="icon-btn" aria-label={`Back to ${artist}`} onClick={popPage} data-testid="releases-back">
-          <Icon name="back" />
-        </button>
+        <BackButton testid="releases-back" label={`Back to ${artist}`} />
       }
     >
       <OfflineGate body={OFFLINE.global}>

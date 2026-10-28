@@ -15,6 +15,7 @@ import { createContext } from 'preact';
 import { useContext, useEffect, useRef } from 'preact/hooks';
 import type { Track } from '../data/model';
 import type { ReleaseKind } from '../data/ytmusic';
+import { settleTransition, withTransition } from './viewTransition';
 
 export type Tab = 'home' | 'radio' | 'genres' | 'artists' | 'library' | 'settings';
 const TABS: readonly Tab[] = ['home', 'genres', 'artists', 'library', 'radio', 'settings'];
@@ -178,6 +179,7 @@ function closeOverlays(): void {
 
 /** Open a page on top of the current tab (closing Now Playing and menus first). */
 function pushPage(page: Page): void {
+  settleTransition();
   closeOverlays();
   const t = tab.value;
   let cur = stacks.value[t];
@@ -199,9 +201,10 @@ function pushPage(page: Page): void {
 
 /** Close the page on top of the current tab. Returns false at the tab's root. */
 export function popPage(): boolean {
-  const cur = stack.value;
-  if (!cur.length) return false;
-  setStack(tab.value, cur.slice(0, -1));
+  settleTransition();
+  if (!stack.value.length) return false;
+  const t = tab.value;
+  withTransition('back', () => setStack(t, stacks.value[t].slice(0, -1)));
   return true;
 }
 
@@ -212,7 +215,9 @@ export function popToRoot(t: Tab = tab.value): void {
 
 /** Switch tab; that tab's pages stay as they were. */
 export function selectTab(t: Tab): void {
-  tab.value = t;
+  settleTransition();
+  if (tab.value === t) return;
+  withTransition('tab', () => (tab.value = t));
 }
 
 /** Artist page on the current tab. */
@@ -232,13 +237,14 @@ export function openAlbumPage(album: AlbumRef): void {
 
 /** Settings, its own screen (Home's top bar button): no tab is highlighted while it shows. */
 export function openSettings(): void {
+  settleTransition();
   closeOverlays();
-  tab.value = 'settings';
+  if (tab.value !== 'settings') withTransition('forward', () => (tab.value = 'settings'));
 }
 
 /** Leave Settings for Home, where it opens from (its Back arrow, Back, Escape). */
 export function closeSettings(): void {
-  tab.value = 'home';
+  withTransition('back', () => (tab.value = 'home'));
 }
 
 /** "See all" grid of one shelf, over the artist page. */
@@ -370,6 +376,7 @@ export function useSearchContext(ctx: SearchContext | null): void {
  * root other than Home goes back to Home. Returns false when there is nothing left to close.
  */
 export function goBack(switchTab = true): boolean {
+  settleTransition();
   if (confirmRequest.value) {
     confirmRequest.value = null;
     return true;
@@ -393,7 +400,7 @@ export function goBack(switchTab = true): boolean {
     return true;
   }
   if (switchTab && tab.value !== 'home') {
-    tab.value = 'home';
+    selectTab('home');
     return true;
   }
   return false;

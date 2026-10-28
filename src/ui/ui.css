@@ -186,8 +186,9 @@
   padding: 8px 0 8px var(--gutter);
   min-height: 72px;
 }
-.row-main:active {
-  background: var(--color-surface);
+.row-main:active,
+.row-main.pressed {
+  background: var(--press);
 }
 .row.is-current .row-title {
   color: var(--color-accent);
@@ -542,7 +543,8 @@
   border-color: var(--color-border);
   box-shadow: none;
 }
-.genre-tile:active {
+.genre-tile:active,
+.genre-tile.pressed {
   transform: translate(3px, 3px);
   box-shadow: 1px 1px 0 var(--color-border);
   background: var(--color-fg);
@@ -586,10 +588,12 @@
 .genre-fav.on {
   color: var(--color-accent);
 }
-.genre-fav:active {
+.genre-fav:active,
+.genre-fav.pressed {
   color: var(--color-fg);
 }
-.genre-cell:has(.genre-tile:active) .genre-fav {
+.genre-cell:has(.genre-tile:active) .genre-fav,
+.genre-cell:has(.genre-tile.pressed) .genre-fav {
   transform: translate(3px, 3px);
   color: var(--color-bg);
   text-shadow: none;
@@ -760,7 +764,8 @@
   border: var(--border-w) solid var(--color-fg);
   box-shadow: 4px 4px 0 var(--color-border);
 }
-.shelf-btn:active .art {
+.shelf-btn:active .art,
+.shelf-btn.pressed .art {
   transform: translate(3px, 3px);
   box-shadow: 1px 1px 0 var(--color-border);
 }
@@ -815,7 +820,8 @@
   overflow-wrap: anywhere;
   text-align: left;
 }
-.np-link:active {
+.np-link:active,
+.np-link.pressed {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
@@ -897,7 +903,8 @@
   padding: 0 18px;
   font-size: 15px;
 }
-.sheet-item:active {
+.sheet-item:active,
+.sheet-item.pressed {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
@@ -952,6 +959,17 @@
 @keyframes toast-in {
   from {
     transform: translateY(8px);
+    opacity: 0;
+  }
+}
+/* Gone with nothing in its place: a short stepped fade (Toasts.tsx). */
+.toast.leaving {
+  pointer-events: none;
+  animation: toast-out var(--motion-short2) steps(2) forwards;
+}
+/* Opacity only: a toast swiped away stays where it flew to. */
+@keyframes toast-out {
+  to {
     opacity: 0;
   }
 }
@@ -1010,7 +1028,8 @@
 .rail-item.on {
   color: var(--color-fg);
 }
-.rail-item:active:not(.on) {
+.rail-item:active:not(.on),
+.rail-item.pressed:not(.on) {
   color: var(--color-fg);
 }
 .rail-item:focus-visible {
@@ -1261,9 +1280,6 @@
   font-size: 13px;
   color: var(--color-fg-dim);
 }
-.see-all:active {
-  color: var(--color-fg);
-}
 .shelf-year {
   margin-top: -4px;
   font-size: 12px;
@@ -1370,7 +1386,8 @@ section[data-kind] > .shelf {
   color: var(--color-accent);
   touch-action: manipulation;
 }
-.block-action:active {
+.block-action:active,
+.block-action.pressed {
   background: var(--color-fg);
   color: var(--color-bg);
 }
@@ -1427,7 +1444,8 @@ section[data-kind] > .shelf {
   text-shadow: none;
   touch-action: manipulation;
 }
-.toast-action:active {
+.toast-action:active,
+.toast-action.pressed {
   background: var(--color-bg);
   color: var(--color-fg);
 }

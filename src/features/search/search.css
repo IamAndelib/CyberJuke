@@ -13,7 +13,7 @@
   height: var(--fab);
   z-index: var(--z-fab);
   transition:
-    transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform var(--motion-short4) var(--motion-decelerate),
     visibility 0s;
 }
 /* Scrolling down tucks the search button away below the screen edge; scrolling up (or
@@ -22,8 +22,8 @@
   transform: translateY(calc(100% + 32px));
   visibility: hidden;
   transition:
-    transform 0.2s cubic-bezier(0.3, 0, 0.8, 0.15),
-    visibility 0s linear 0.2s;
+    transform var(--motion-short4) var(--motion-accelerate),
+    visibility 0s linear var(--motion-short4);
 }
 
 /* ---- Search screen ---------------------------------------------------------------- */
@@ -100,7 +100,8 @@
   height: 100%;
   color: var(--color-fg-dim);
 }
-.search-clear:active {
+.search-clear:active,
+.search-clear.pressed {
   background: var(--color-fg);
   color: var(--color-bg);
 }
@@ -164,7 +165,8 @@
   padding: 0 var(--gutter);
   text-align: left;
 }
-.recent-q:active {
+.recent-q:active,
+.recent-q.pressed {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
@@ -187,7 +189,7 @@
 }
 .global-stale > :not(.progress-line) {
   opacity: 0.45;
-  transition: opacity 0.15s;
+  transition: opacity var(--motion-short3) steps(3);
 }
 .progress-line {
   position: sticky;
@@ -249,7 +251,8 @@
   padding: 0 var(--gutter);
   text-align: left;
 }
-.place-row:active {
+.place-row:active,
+.place-row.pressed {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
@@ -266,7 +269,9 @@
   color: var(--color-accent);
 }
 .place-row:active .place-fav,
-.place-row:active .dim {
+.place-row.pressed .place-fav,
+.place-row:active .dim,
+.place-row.pressed .dim {
   color: inherit;
 }
 .place-go {

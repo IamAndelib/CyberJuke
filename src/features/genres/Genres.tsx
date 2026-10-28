@@ -5,9 +5,8 @@ import { catalogGenre, genres, genresComplete } from '../../stores/genres';
 import { favoriteGenres, showNsfw } from '../../stores/library';
 import { useFavGenre } from '../../ui/useFavs';
 import { toggleFavoriteGenreWithUndo } from '../../stores/undo';
-import { Icon } from '../../ui/icons';
 import { FavSection, FavTile, PageStar } from '../../ui/components/FavTile';
-import { openGenrePage, popPage, useSearchContext, type Place } from '../../ui/nav';
+import { openGenrePage, useSearchContext, type Place } from '../../ui/nav';
 import { ErrorState, PagedTracks, PlayShuffle } from '../../ui/components/TrackList';
 import { Screen } from '../../ui/components/Screen';
 import { OfflineGate, useSeenOnline } from '../../ui/components/OfflineGate';
@@ -20,6 +19,7 @@ import { feedKey } from '../../stores/feed';
 import { auth } from '../../data/auth';
 import { list as listCtx, withRest } from '../../ui/playAll';
 import { plural } from '../../core/text';
+import { BackButton } from '../../ui/components/BackButton';
 
 /** A genre tile ([FavTile]); a star re-renders only this tile. */
 export function GenreTile({ name, inGrid }: { name: string; inGrid?: boolean }) {
@@ -136,9 +136,7 @@ export function GenreDetail({ genre }: { genre: string }) {
             : 'Genre'
       }
       left={
-        <button class="icon-btn" aria-label="Back" onClick={popPage} data-testid="genre-back">
-          <Icon name="back" />
-        </button>
+        <BackButton testid="genre-back" />
       }
       right={<GenreFavButton genre={genre} />}
       onRefresh={paged.refresh}

@@ -14,14 +14,27 @@
   --fab-bottom: calc(12px + 6px);
   --gutter: 16px;
   --dither: repeating-conic-gradient(var(--color-fg-dim) 0 25%, transparent 0 50%);
+  /* A row's press: the text colour over its background, like Material's state layer
+     (themes' --color-surface is too faint for it in some). */
+  --press: var(--color-surface);
 
   /* ---- Motion -------------------------------------------------------------------------- */
-  /* Material's emphasized motion for Now Playing and the sheets: in over 250ms, slowing
-     to a stop; out over 200ms, speeding away. */
-  --ease-in-ms: 250ms;
-  --ease-in: cubic-bezier(0.05, 0.7, 0.1, 1);
-  --ease-out-ms: 200ms;
-  --ease-out: cubic-bezier(0.3, 0, 0.8, 0.15);
+  /* Material 3's motion tokens (md.sys.motion): what comes in slows to a stop
+     (decelerate), what leaves speeds away (accelerate). Small retro states (fades, toasts,
+     the back-to-top button) step instead, with steps(). JS timings that must match these
+     are in core/durations.ts. */
+  --motion-short2: 100ms; /* a tab's fade, a toast leaving */
+  --motion-short3: 150ms; /* a page leaving */
+  --motion-short4: 200ms; /* a page arriving; Now Playing and the sheets leaving */
+  --motion-medium1: 250ms; /* Now Playing and the sheets arriving */
+  --motion-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --motion-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  /* Now Playing and the sheets: in over 250ms, slowing to a stop; out over 200ms. */
+  --ease-in-ms: var(--motion-medium1);
+  --ease-in: var(--motion-decelerate);
+  --ease-out-ms: var(--motion-short4);
+  --ease-out: var(--motion-accelerate);
 
   /* ---- Layers, bottom to top -------------------------------------------------------------
      Inside a component, 0–3 only order its own parts (art texture, a frame over its
@@ -34,4 +47,11 @@
   --z-now-playing: 20;
   --z-sheet: 30;
   --z-toast: 40;
+}
+
+/* WebView 111+: the state layer is the theme's text colour at 14% (Material uses ~10%). */
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  :root {
+    --press: color-mix(in srgb, var(--color-fg) 14%, transparent);
+  }
 }

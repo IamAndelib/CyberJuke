@@ -239,7 +239,7 @@ test('the back-to-top and search buttons show their press, and the search button
   await start(page);
   const screen = page.getByTestId('screen-home');
   const fab = page.getByTestId('search-fab');
-  // A quick press still shows for a moment (released at once, kept ~120 ms). The finger
+  // A quick press still shows for a moment (released at once, kept ~100 ms). The finger
   // drifts past the tap slop, so it shows the press without opening Search (tapThrough).
   const held = await fab.evaluate(async (el) => {
     el.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', isPrimary: true, bubbles: true, clientX: 0 }));
@@ -253,7 +253,7 @@ test('the back-to-top and search buttons show their press, and the search button
     return { on, ms: performance.now() - at };
   });
   expect(held.on).toBe(true);
-  expect(held.ms).toBeGreaterThanOrEqual(100);
+  expect(held.ms).toBeGreaterThanOrEqual(90);
   await expect(page.getByTestId('search')).toHaveCount(0);
 
   // Scrolling down hides it; up brings it back; the top always shows it.
@@ -282,6 +282,7 @@ test('the back-to-top and search buttons show their press, and the search button
   expect(tb.width).toBeCloseTo(48, 1);
   expect(tb.height).toBeCloseTo(48, 1);
 
+  // Reduced motion keeps the press: a change of colour, not motion.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const reduced = await fab.evaluate((el) => {
     el.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', isPrimary: true, bubbles: true, clientX: 0 }));
@@ -289,7 +290,7 @@ test('the back-to-top and search buttons show their press, and the search button
     el.dispatchEvent(new PointerEvent('pointerup', { pointerType: 'touch', isPrimary: true, bubbles: true, clientX: 40 }));
     return on;
   });
-  expect(reduced).toBe(false);
+  expect(reduced).toBe(true);
 });
 
 // ---- Fast scroller ----------------------------------------------------------------------
@@ -513,4 +514,84 @@ test('pull to refresh offline says to connect, then refresh, and keeps the grid'
   await f.end();
   await expect(page.getByTestId('toast')).toHaveText('No carrier. Connect, then refresh.');
   await expect(screen.getByTestId('genre-tile')).toHaveCount(tiles);
+});
+type ShowToast = (text: string, ms?: number) => number;
+
+test('a toast that goes fades out; one replaced by the next goes at once', async ({ page }) => {
+  await start(page);
+  const show = (text: string) => page.evaluate((t) => (window as unknown as { __cyberjukeToast: ShowToast }).__cyberjukeToast(t, 10_000), text);
+  await show('first');
+  await expect(page.getByTestId('toast')).toHaveText('first');
+  await show('second');
+  // Replaced: no fading copy of the first.
+  await expect(page.getByTestId('toast-leaving')).toHaveCount(0);
+  await expect(page.getByTestId('toast')).toHaveText('second');
+  // A touch elsewhere sends it: it fades (aria-hidden), then goes. Watched from inside the
+  // page, since the fade is short.
+  const faded = await page.evaluate(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const seen = () => {
+          const el = document.querySelector('[data-testid="toast-leaving"]');
+          return !!el && el.textContent === 'second' && el.getAttribute('aria-hidden') === 'true';
+        };
+        const mo = new MutationObserver(() => seen() && (mo.disconnect(), resolve(true)));
+        mo.observe(document.body, { subtree: true, childList: true, attributes: true });
+        setTimeout(() => (mo.disconnect(), resolve(seen())), 2000);
+        document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, isPrimary: true }));
+      }),
+  );
+  expect(faded).toBe(true);
+  await expect(page.getByTestId('toast-leaving')).toHaveCount(0);
+  await expect(page.getByTestId('toast')).toHaveCount(0);
+});
+
+// ---- Screens going back, Settings, tabs: View Transitions (ui/viewTransition.ts) --------
+
+/** The view transition kinds <html data-vt> took since the last call. */
+async function watchTransitions(page: Page): Promise<() => Promise<string[]>> {
+  await page.evaluate(() => {
+    const w = window as unknown as { __vt: string[] };
+    w.__vt = [];
+    new MutationObserver(() => {
+      const k = document.documentElement.dataset.vt;
+      if (k) w.__vt.push(k);
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-vt'] });
+  });
+  return () => page.evaluate(() => (window as unknown as { __vt: string[] }).__vt.splice(0));
+}
+
+test('Back, Settings and tabs change screen through a view transition of their kind', async ({ page }) => {
+  await start(page);
+  const kinds = await watchTransitions(page);
+  await page.getByTestId('tab-genres').click();
+  await expect(page.getByTestId('genre-grid')).toBeVisible();
+  expect(await kinds()).toEqual(['tab']);
+  await page.getByTestId('genre-grid').getByTestId('genre-tile').first().click();
+  await expect(page.getByTestId('screen-genre')).toBeVisible();
+  // A page comes in with its own CSS slide: no view transition.
+  expect(await kinds()).toEqual([]);
+  await page.getByTestId('genre-back').click();
+  await expect(page.getByTestId('screen-genre')).toHaveCount(0);
+  expect(await kinds()).toEqual(['back']);
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('open-settings').click();
+  await expect(page.getByTestId('screen-settings')).toBeVisible();
+  await page.getByTestId('settings-back').click();
+  await expect(page.getByTestId('screen-home')).toBeVisible();
+  expect(await kinds()).toEqual(['tab', 'forward', 'back']);
+  // The bars are their own snapshots, so they don't move with the screen.
+  expect(await page.locator('.tabbar').evaluate((el) => getComputedStyle(el).viewTransitionName)).toBe('tabbar');
+  await expect(page.locator('html')).not.toHaveAttribute('data-vt');
+});
+
+test('reduced motion: Back, Settings and tabs change at once, with no view transition', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await start(page);
+  const kinds = await watchTransitions(page);
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('settings-back').click();
+  await page.getByTestId('tab-genres').click();
+  await expect(page.getByTestId('genre-grid')).toBeVisible();
+  expect(await kinds()).toEqual([]);
 });

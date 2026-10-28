@@ -24,10 +24,10 @@ import { RELEASES_URL, REPO_URL } from '../../data/model';
 import { toast } from '../../stores/toast';
 import { app, checkFailed, checkForUpdates, checking, installUnknown, lastCheck, updateAvailable } from '../../stores/updates';
 import { Screen } from '../../ui/components/Screen';
-import { Icon } from '../../ui/icons';
 import { openExternal } from '../../ui/links';
 import { arrowChoice } from '../../ui/arrowChoice';
 import { askConfirm, closeSettings, usePageActive } from '../../ui/nav';
+import { BackButton } from '../../ui/components/BackButton';
 
 function Swatch({ id }: { id: ThemeId }) {
   const on = settings.value.theme === id;
@@ -523,9 +523,7 @@ export function Settings() {
       scrollKey="settings"
       backToTop={false}
       left={
-        <button class="icon-btn" aria-label="Back" onClick={closeSettings} data-testid="settings-back">
-          <Icon name="back" />
-        </button>
+        <BackButton testid="settings-back" onBack={closeSettings} />
       }
     >
       <UpdateBanner />

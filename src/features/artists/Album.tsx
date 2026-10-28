@@ -1,7 +1,6 @@
 import type { Track } from '../../data/model';
 import { music, musicTracks } from '../../data/ytmusic';
-import { Icon } from '../../ui/icons';
-import { openArtistPage, popPage, useSearchContext, type AlbumRef } from '../../ui/nav';
+import { openArtistPage, useSearchContext, type AlbumRef } from '../../ui/nav';
 import { PlayShuffle, Tracks } from '../../ui/components/TrackList';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
@@ -9,6 +8,7 @@ import { OfflineGate } from '../../ui/components/OfflineGate';
 import { Cover, GlobalError, LoadMore, MUSIC_TRACK_OPTS } from '../../ui/components/Music';
 import { useFeed } from '../../ui/usePaged';
 import { list } from '../../ui/playAll';
+import { BackButton } from '../../ui/components/BackButton';
 
 interface AlbumMeta {
   title: string;
@@ -55,9 +55,7 @@ export function AlbumPage({ album }: { album: AlbumRef }) {
       role="dialog"
       label={`${kindLabel}: ${meta.title}`}
       left={
-        <button class="icon-btn" aria-label="Back" onClick={popPage} data-testid="album-back">
-          <Icon name="back" />
-        </button>
+        <BackButton testid="album-back" />
       }
     >
       <div class="album-head">

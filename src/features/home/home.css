@@ -2,7 +2,8 @@
 
 /* ---- Top bar and the shuffle hero -------------------------------------------------- */
 
-.hero:active .hero-title {
+.hero:active .hero-title,
+.hero.pressed .hero-title {
   text-shadow: none;
 }
 .brand {
@@ -17,13 +18,16 @@
   min-height: 96px;
   padding: 16px 16px 16px 18px;
 }
-.hero:active {
+.hero:active,
+.hero.pressed {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
 }
 .hero:active .hero-sub,
-.hero:active .hero-kicker {
+.hero.pressed .hero-sub,
+.hero:active .hero-kicker,
+.hero.pressed .hero-kicker {
   color: inherit;
 }
 .hero-text {
@@ -60,7 +64,8 @@
   color: var(--color-bg);
   text-shadow: none;
 }
-.hero:active .hero-btn {
+.hero:active .hero-btn,
+.hero.pressed .hero-btn {
   background: var(--color-bg);
   color: var(--color-fg);
 }
@@ -92,7 +97,7 @@
   font-size: 14px;
   text-shadow: none;
   box-shadow: 3px 3px 0 var(--color-border);
-  animation: ntp-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: ntp-in var(--motion-medium1) var(--motion-decelerate);
   position: relative;
 }
 /* 44px hit area */
@@ -101,7 +106,8 @@
   position: absolute;
   inset: -4px -2px;
 }
-.ntp:active {
+.ntp:active,
+.ntp.pressed {
   transform: translate(2px, 2px);
   box-shadow: 1px 1px 0 var(--color-border);
 }
@@ -114,8 +120,8 @@
   transform: translateY(-8px);
   pointer-events: none;
   transition:
-    opacity 0.2s steps(3),
-    transform 0.2s steps(3);
+    opacity var(--motion-short4) steps(3),
+    transform var(--motion-short4) steps(3);
 }
 @keyframes ntp-in {
   from {
