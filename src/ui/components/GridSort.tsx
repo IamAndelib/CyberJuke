@@ -30,8 +30,9 @@ function AZHead({ letter }: { letter: string }) {
   );
 }
 
-/** Grid tiles per chunk: about a screen (two to a row) in the first frame, the rest in idle time. */
-const GRID_CHUNK = 24;
+/** Grid tiles: about a screen (two to a row) in the first frame, the rest in idle time, 120 at a time. */
+const GRID_FIRST = 24;
+const GRID_CHUNK = 120;
 
 /** Every genre or artist as tiles, Popular (the list's order) or A–Z, rendered in chunks. */
 export function TileGrid<T>(props: {
@@ -46,7 +47,7 @@ export function TileGrid<T>(props: {
 }) {
   const { list, sort, nameOf, tile, testid, chunkKey } = props;
   const sections = useMemo(() => (sort === 'az' ? groupAZ(list, nameOf) : null), [list, sort, nameOf]);
-  const { shown } = useChunks(list.length, `${chunkKey}:${sort}`, GRID_CHUNK, { fill: true });
+  const { shown } = useChunks(list.length, `${chunkKey}:${sort}`, GRID_CHUNK, { fill: true, first: GRID_FIRST });
   if (sections) {
     return (
       <div data-testid={testid} data-sort="az">

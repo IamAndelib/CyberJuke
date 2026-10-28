@@ -33,14 +33,6 @@ function tapRow(track: Track, play: () => void, now = performance.now()): void {
   play();
 }
 
-function buzz(): void {
-  try {
-    if (typeof navigator.vibrate === 'function') navigator.vibrate(10);
-  } catch {
-    /* no haptics */
-  }
-}
-
 /**
  * The click a browser makes when the finger lifts after a long press goes to whatever
  * is under it by then (the menu that just opened): swallow it, wherever it lands and
@@ -92,7 +84,7 @@ if (typeof document !== 'undefined') {
 }
 
 /**
- * P10: long-press opens the row's ⋯ menu (with a short haptic tick), and the click that
+ * P10: long-press opens the row's ⋯ menu, and the click that
  * ends the press is swallowed. Moving the finger (a scroll) cancels it. No re-renders.
  */
 function longPress(track: Track) {
@@ -106,7 +98,6 @@ function longPress(track: Track) {
         timer: setTimeout(() => {
           press = null;
           swallowNextClick();
-          buzz();
           menuTrack.value = track;
         }, LONG_PRESS_MS),
       };

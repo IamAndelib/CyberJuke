@@ -276,7 +276,7 @@ function JukeboxResults({ q }: { q: string }) {
     );
   }
   // Empty query: the whole Jukebox, newest first.
-  if (!q.trim()) return <ChunkedTracks tracks={tracks} ctx={SEARCH_CTX} chunkKey="search:jukebox:" testid="search-latest" step={FIRST_ROWS} />;
+  if (!q.trim()) return <ChunkedTracks tracks={tracks} ctx={SEARCH_CTX} chunkKey="search:jukebox:" testid="search-latest" first={FIRST_ROWS} />;
 
   if (!hits.length && !gHits.length) {
     return (
