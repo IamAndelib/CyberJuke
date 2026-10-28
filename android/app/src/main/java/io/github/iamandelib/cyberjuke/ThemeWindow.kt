@@ -32,6 +32,15 @@ object ThemeWindow {
         return (0xFF000000L or rgb.toLong(16)).toInt()
     }
 
+    /**
+     * Whether the window paints the navigation bar in the theme's background itself: on Android
+     * 8 and 9 (API 26 to 28) edge to edge leaves it a light scrim (androidx EdgeToEdge: no system
+     * dark mode to say otherwise), under the light buttons a dark theme asks for. Before 26 that
+     * scrim is dark, and dark buttons can't be had; from 29 the bar is transparent over the page.
+     */
+    @JvmStatic
+    fun paintsNavigationBar(sdk: Int): Boolean = sdk in 26..28
+
     /** Keep the splash up: the page hasn't shown its first screen, and it hasn't waited too long. */
     @JvmStatic
     fun keepSplash(waitedMs: Long, firstScreenShown: Boolean): Boolean = !firstScreenShown && waitedMs < SPLASH_MAX_MS

@@ -25,6 +25,12 @@ class ThemeWindowTest {
     }
 
     @Test
+    fun theNavigationBarIsPaintedOnAndroid8And9Only() {
+        for (sdk in 26..28) assertTrue("$sdk", ThemeWindow.paintsNavigationBar(sdk))
+        for (sdk in listOf(24, 25, 29, 30, 34, 35, 36)) assertFalse("$sdk", ThemeWindow.paintsNavigationBar(sdk))
+    }
+
+    @Test
     fun theSplashWaitsForTheFirstScreenButNotForever() {
         assertTrue(ThemeWindow.keepSplash(0, firstScreenShown = false))
         assertTrue(ThemeWindow.keepSplash(ThemeWindow.SPLASH_MAX_MS - 1, firstScreenShown = false))

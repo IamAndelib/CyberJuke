@@ -2,6 +2,7 @@ package io.github.iamandelib.cyberjuke;
 
 import android.content.Intent;
 import android.content.res.Configuration;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.Log;
@@ -127,6 +128,8 @@ public class MainActivity extends BridgeActivity {
     public void applyBackground(int color) {
         background = color;
         getWindow().getDecorView().setBackgroundColor(color);
+        // Android 8 and 9: the navigation bar too, or edge to edge leaves it light (ThemeWindow).
+        if (ThemeWindow.paintsNavigationBar(Build.VERSION.SDK_INT)) getWindow().setNavigationBarColor(color);
         WebView webView = getBridge() != null ? getBridge().getWebView() : null;
         if (webView != null) webView.setBackgroundColor(color);
     }
