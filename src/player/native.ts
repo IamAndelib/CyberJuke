@@ -130,6 +130,12 @@ interface JukePlayerPlugin {
   setNetworkPrefs(o: { ipv4: 'auto' | 'always' | 'off' }): Promise<void>;
   /** Lift the back-off now ("Try now"); playback it stopped resumes. */
   retryNow(): Promise<void>;
+  /**
+   * Whether the page has something for Android back to close (nav.ts canGoBack). While it has,
+   * back comes to the page as the `backbutton` document event; at its root, Android 12+ take
+   * back themselves (predictive back to home), and older Android still send it.
+   */
+  setCanGoBack(o: { canGoBack: boolean }): Promise<void>;
   /** For the Settings diagnostics line. */
   getNetStatus(): Promise<{
     family?: string;

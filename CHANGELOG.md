@@ -4,6 +4,7 @@
 
 ### The app
 - The music notification shows CyberJuke's jukebox in the status bar, instead of a plain music note.
+- Back on Home now shows Android's back-to-home animation as you swipe (Android 13 and newer, where the phone shows it). The app goes to the background as before, and the music plays on. Back still closes menus, Now Playing and pages first.
 
 ### Fixed
 - Every button shows its press on a quick tap now, as a slower tap does: the Settings icon, the Back arrows, the search button, the genre or artist in Now Playing, the tabs, chips, rows and tiles. Settings and the Back arrows show it for a moment before the screen changes; everything else changes straight away. With reduced motion on, the press still shows; only its movement is gone.
