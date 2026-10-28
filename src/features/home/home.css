@@ -3,7 +3,7 @@
 /* ---- Top bar and the shuffle hero -------------------------------------------------- */
 
 .hero:active .hero-title,
-.hero.pressed .hero-title {
+.hero[data-pressed] .hero-title {
   text-shadow: none;
 }
 .brand {
@@ -19,15 +19,15 @@
   padding: 16px 16px 16px 18px;
 }
 .hero:active,
-.hero.pressed {
+.hero[data-pressed] {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
 }
 .hero:active .hero-sub,
-.hero.pressed .hero-sub,
+.hero[data-pressed] .hero-sub,
 .hero:active .hero-kicker,
-.hero.pressed .hero-kicker {
+.hero[data-pressed] .hero-kicker {
   color: inherit;
 }
 .hero-text {
@@ -65,7 +65,7 @@
   text-shadow: none;
 }
 .hero:active .hero-btn,
-.hero.pressed .hero-btn {
+.hero[data-pressed] .hero-btn {
   background: var(--color-bg);
   color: var(--color-fg);
 }
@@ -107,7 +107,7 @@
   inset: -4px -2px;
 }
 .ntp:active,
-.ntp.pressed {
+.ntp[data-pressed] {
   transform: translate(2px, 2px);
   box-shadow: 1px 1px 0 var(--color-border);
 }

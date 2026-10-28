@@ -6,6 +6,7 @@
 - Every button shows its press on a quick tap now, as a slower tap does: the Settings icon, the Back arrows, the search button, the genre or artist in Now Playing, chips, rows and tiles; the tab bar stays as it was. Settings, the Back arrows and buttons that clear themselves away (**[Clear all]**, ✕) show it for a moment first; everything else changes straight away. With reduced motion on, the press still shows; only its movement is gone.
 - A pressed **[See all]** no longer hides its own text, and pressed text buttons and **[show]** beside the password have rounded corners like the rest.
 - Search shows each new query's results from the top, not scrolled to where the last list was.
+- Buttons that change as you tap them (chips, the Liked/Recent switch, shuffle, repeat, ♥, themes, switches) show their press on a quick tap too.
 - Pressing **[Undo]** on a message shows its press inside the message's frame, instead of darkening it to its edge.
 
 ## [1.3.0] - 2026-10-27
