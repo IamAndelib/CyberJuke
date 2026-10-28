@@ -668,7 +668,7 @@
     visibility 0s;
 }
 /* A pixel button (the search button, back-to-top): a solid block over a hard checkered
-   shadow, offset by its --fab-shadow. [data-pressed] (usePress): held long enough to be seen, it
+   shadow, offset by its --fab-shadow. [data-pressed] (ui/press.ts): held long enough to be seen, it
    sinks into the shadow and eases back out. */
 .pixel-btn {
   position: relative;
