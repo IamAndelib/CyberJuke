@@ -238,6 +238,55 @@ for (const { name, open, target } of [
   });
 }
 
+// These are taken away by their own tap (a row that moves or goes, a panel that replaces
+// them, a list that empties): the press shows for a moment first (afterPress).
+const upNextRow = (p: Page, n: number) => p.getByTestId('upnext-row').nth(n);
+for (const { name, open, target } of [
+  { name: "Up next's ↑", open: tagged, target: (p: Page) => upNextRow(p, 1).getByTestId('upnext-up') },
+  { name: "Up next's ↓", open: tagged, target: (p: Page) => upNextRow(p, 1).getByTestId('upnext-down') },
+  { name: "Up next's ✕", open: tagged, target: (p: Page) => upNextRow(p, 1).getByTestId('upnext-remove') },
+  { name: 'an Up next row (plays it)', open: tagged, target: (p: Page) => upNextRow(p, 1).locator('.row-main') },
+  { name: 'the art (opens the lyrics)', open: tagged, target: (p: Page) => p.getByTestId('np-art') },
+  { name: 'a recent search', open: withRecentSearches, target: (p: Page) => p.getByTestId('recent-search').first() },
+  {
+    name: '"Search globally" under no results',
+    open: async (p: Page) => {
+      await start(p);
+      await openSearch(p);
+      await p.getByTestId('search-input').fill('zzqqxx');
+    },
+    target: (p: Page) => p.getByTestId('search-bridge'),
+  },
+  {
+    name: "empty Liked's [Browse the Jukebox]",
+    open: async (p: Page) => {
+      await start(p);
+      await p.getByTestId('tab-library').click();
+    },
+    target: (p: Page) => p.getByRole('button', { name: '[Browse the Jukebox]' }),
+  },
+]) {
+  test(`a quick tap on ${name} paints its press before it goes`, async ({ page }) => {
+    await open(page);
+    await expect(target(page)).toBeVisible();
+    expect(await seenOnQuickTap(target(page))).toBe(true);
+  });
+}
+
+test('a quick tap on Retry loading more paints its press before the spinner takes its place', async ({ page, backend }) => {
+  await start(page);
+  backend.failPages = true;
+  const home = page.getByTestId('screen-home');
+  const retry = home.getByRole('button', { name: 'Retry loading more' });
+  await expect
+    .poll(async () => {
+      await home.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+      return retry.isVisible();
+    })
+    .toBe(true);
+  expect(await seenOnQuickTap(retry)).toBe(true);
+});
+
 test('reduced motion keeps the press: it is a change of colour, not motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await start(page);
