@@ -7,6 +7,11 @@
     "loggingBehavior": "none",
     "webContentsDebuggingEnabled": false
   },
+  "plugins": {
+    "SystemBars": {
+      "initialViewportFitValueHint": "cover"
+    }
+  },
   "cordova": {
     "accessOrigins": [],
     "preferences": {

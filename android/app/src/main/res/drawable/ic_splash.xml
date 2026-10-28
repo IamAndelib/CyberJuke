@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The launch splash's icon: the launcher's pixel-art jukebox (media/brand/make_icon.py), its
+  colours included, in the middle of the 288dp splash icon area. The art (a 24-unit square in
+  48) stays inside the 192dp circle Android 12+ shows of it. A vector, so it stays sharp.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <group
+        android:translateX="12"
+        android:translateY="12">
+        <path
+            android:fillColor="#FFEFE5C0"
+            android:pathData="M8,0h8v1h-8zM6,1h3v1h-3zM15,1h3v1h-3zM5,2h2v1h-2zM9,2h6v1h-6zM17,2h2v1h-2zM4,3h2v1h-2zM7,3h2v1h-2zM15,3h2v1h-2zM18,3h2v1h-2zM3,4h2v1h-2zM6,4h1v1h-1zM17,4h1v1h-1zM19,4h2v1h-2zM3,5h1v1h-1zM5,5h1v1h-1zM18,5h1v1h-1zM20,5h1v1h-1zM2,6h2v1h-2zM5,6h1v1h-1zM18,6h1v1h-1zM20,6h2v1h-2zM2,7h1v1h-1zM4,7h1v1h-1zM19,7h1v1h-1zM21,7h1v1h-1zM2,8h1v1h-1zM4,8h1v1h-1zM19,8h1v1h-1zM21,8h1v1h-1zM2,9h1v1h-1zM4,9h1v1h-1zM19,9h1v1h-1zM21,9h1v1h-1zM2,10h1v1h-1zM4,10h1v1h-1zM19,10h1v1h-1zM21,10h1v1h-1zM2,11h1v1h-1zM4,11h1v1h-1zM19,11h1v1h-1zM21,11h1v1h-1zM2,12h1v1h-1zM4,12h16v1h-16zM21,12h1v1h-1zM2,13h1v1h-1zM21,13h1v1h-1zM2,14h1v1h-1zM4,14h16v1h-16zM21,14h1v1h-1zM2,15h1v1h-1zM4,15h1v1h-1zM6,15h1v1h-1zM8,15h1v1h-1zM10,15h1v1h-1zM12,15h1v1h-1zM14,15h1v1h-1zM16,15h1v1h-1zM18,15h2v1h-2zM21,15h1v1h-1zM2,16h1v1h-1zM4,16h2v1h-2zM7,16h1v1h-1zM9,16h1v1h-1zM11,16h1v1h-1zM13,16h1v1h-1zM15,16h1v1h-1zM17,16h1v1h-1zM19,16h1v1h-1zM21,16h1v1h-1zM2,17h1v1h-1zM4,17h1v1h-1zM6,17h1v1h-1zM8,17h1v1h-1zM10,17h1v1h-1zM12,17h1v1h-1zM14,17h1v1h-1zM16,17h1v1h-1zM18,17h2v1h-2zM21,17h1v1h-1zM2,18h1v1h-1zM4,18h16v1h-16zM21,18h1v1h-1zM2,19h1v1h-1zM21,19h1v1h-1zM2,20h20v1h-20zM2,21h1v1h-1zM21,21h1v1h-1zM2,22h4v1h-4zM18,22h4v1h-4z" />
+        <path
+            android:fillColor="#FFA89984"
+            android:pathData="M10,4h4v1h-4zM9,5h1v1h-1zM14,5h1v1h-1zM8,6h1v1h-1zM15,6h1v1h-1zM8,7h1v1h-1zM15,7h1v1h-1zM8,8h1v1h-1zM15,8h1v1h-1zM8,9h1v1h-1zM15,9h1v1h-1zM9,10h1v1h-1zM14,10h1v1h-1zM10,11h4v1h-4z" />
+        <path
+            android:fillColor="#FFE8A040"
+            android:pathData="M11,6h2v1h-2zM10,7h1v1h-1zM13,7h1v1h-1zM10,8h1v1h-1zM13,8h1v1h-1zM11,9h2v1h-2zM9,19h2v1h-2zM13,19h2v1h-2z" />
+    </group>
+</vector>
