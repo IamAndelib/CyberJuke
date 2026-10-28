@@ -77,7 +77,8 @@ test('changing a setting other than the theme leaves the theme alone (no restyle
   await page.evaluate(() => {
     const w = window as unknown as { __themeWrites: number };
     w.__themeWrites = 0;
-    new MutationObserver((rs) => (w.__themeWrites += rs.length)).observe(document.documentElement, { attributes: true });
+    // The theme's attributes (not data-vt, which a screen's view transition sets and clears).
+    new MutationObserver((rs) => (w.__themeWrites += rs.length)).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style', 'class'] });
   });
   await page.getByTestId('check-every-5').click();
   await expect(page.getByTestId('check-every-5')).toHaveAttribute('aria-checked', 'true');
@@ -427,7 +428,8 @@ test('a click with no press (keyboard, TalkBack) opens Settings at once', async 
     });
     return n;
   });
-  expect(frames).toBe(1);
+  // At once: no press to wait for (a view transition takes a frame to capture the old screen).
+  expect(frames).toBeLessThanOrEqual(3);
   await page.keyboard.press('Escape');
   await page.getByTestId('open-settings').focus();
   await page.keyboard.press('Enter');

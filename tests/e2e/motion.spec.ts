@@ -545,3 +545,53 @@ test('a toast that goes fades out; one replaced by the next goes at once', async
   await expect(page.getByTestId('toast-leaving')).toHaveCount(0);
   await expect(page.getByTestId('toast')).toHaveCount(0);
 });
+
+// ---- Screens going back, Settings, tabs: View Transitions (ui/viewTransition.ts) --------
+
+/** The view transition kinds <html data-vt> took since the last call. */
+async function watchTransitions(page: Page): Promise<() => Promise<string[]>> {
+  await page.evaluate(() => {
+    const w = window as unknown as { __vt: string[] };
+    w.__vt = [];
+    new MutationObserver(() => {
+      const k = document.documentElement.dataset.vt;
+      if (k) w.__vt.push(k);
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-vt'] });
+  });
+  return () => page.evaluate(() => (window as unknown as { __vt: string[] }).__vt.splice(0));
+}
+
+test('Back, Settings and tabs change screen through a view transition of their kind', async ({ page }) => {
+  await start(page);
+  const kinds = await watchTransitions(page);
+  await page.getByTestId('tab-genres').click();
+  await expect(page.getByTestId('genre-grid')).toBeVisible();
+  expect(await kinds()).toEqual(['tab']);
+  await page.getByTestId('genre-grid').getByTestId('genre-tile').first().click();
+  await expect(page.getByTestId('screen-genre')).toBeVisible();
+  // A page comes in with its own CSS slide: no view transition.
+  expect(await kinds()).toEqual([]);
+  await page.getByTestId('genre-back').click();
+  await expect(page.getByTestId('screen-genre')).toHaveCount(0);
+  expect(await kinds()).toEqual(['back']);
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('open-settings').click();
+  await expect(page.getByTestId('screen-settings')).toBeVisible();
+  await page.getByTestId('settings-back').click();
+  await expect(page.getByTestId('screen-home')).toBeVisible();
+  expect(await kinds()).toEqual(['tab', 'forward', 'back']);
+  // The bars are their own snapshots, so they don't move with the screen.
+  expect(await page.locator('.tabbar').evaluate((el) => getComputedStyle(el).viewTransitionName)).toBe('tabbar');
+  await expect(page.locator('html')).not.toHaveAttribute('data-vt');
+});
+
+test('reduced motion: Back, Settings and tabs change at once, with no view transition', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await start(page);
+  const kinds = await watchTransitions(page);
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('settings-back').click();
+  await page.getByTestId('tab-genres').click();
+  await expect(page.getByTestId('genre-grid')).toBeVisible();
+  expect(await kinds()).toEqual([]);
+});

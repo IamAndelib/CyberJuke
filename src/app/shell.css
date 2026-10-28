@@ -105,6 +105,38 @@
     transform: translateY(4%);
   }
 }
+@keyframes page-out {
+  to {
+    opacity: 0;
+    transform: translateX(8%);
+  }
+}
+
+/* ---- Screens going back, Settings, tabs: View Transitions (ui/viewTransition.ts) ----
+   Material 3: back is a shared axis going back (the screen leaves over the one under it),
+   Settings comes in like a page, tabs fade through. The whole screen is one snapshot;
+   the tab bar and the mini player are their own, so they stay put. */
+.tabbar {
+  view-transition-name: tabbar;
+}
+.mini {
+  view-transition-name: mini;
+}
+html[data-vt='back']::view-transition-old(root) {
+  z-index: 1;
+  animation: page-out var(--motion-short3) var(--motion-accelerate) both;
+}
+html[data-vt='forward']::view-transition-new(root) {
+  animation: page-in var(--motion-short4) var(--motion-decelerate) both;
+}
+html[data-vt='back']::view-transition-new(root),
+html[data-vt='forward']::view-transition-old(root) {
+  animation: none;
+}
+html[data-vt='tab']::view-transition-old(root),
+html[data-vt='tab']::view-transition-new(root) {
+  animation-duration: var(--motion-short2);
+}
 @media (prefers-reduced-motion: reduce) {
   .page.pushed {
     animation: none;
