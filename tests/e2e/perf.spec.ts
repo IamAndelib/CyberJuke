@@ -197,3 +197,22 @@ test('a track change re-renders the current rows, not the lists; history renders
   console.info(`3 track changes on Recently played: ${JSON.stringify(recent)}`);
   expect(recent.TrackRow ?? 0).toBeLessThanOrEqual(12);
 });
+
+test('opening Search draws about a screen of the Jukebox in its first frame, not 60 rows', async ({ page }) => {
+  await start(page);
+  await expect(page.getByTestId('track-row').first()).toBeVisible();
+  const rows = await page.getByTestId('search-fab').evaluate(async (el) => {
+    (el as HTMLElement).click();
+    return new Promise<number>((r) => {
+      const f = () => {
+        const list = document.querySelector('[data-testid="search-latest"]');
+        if (list) r(list.querySelectorAll('[data-testid="track-row"]').length);
+        else requestAnimationFrame(f);
+      };
+      requestAnimationFrame(f);
+    });
+  });
+  expect(rows).toBeGreaterThan(0);
+  expect(rows).toBeLessThanOrEqual(15);
+});
+
