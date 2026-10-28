@@ -967,9 +967,9 @@
   pointer-events: none;
   animation: toast-out var(--motion-short2) steps(2) forwards;
 }
+/* Opacity only: a toast swiped away stays where it flew to. */
 @keyframes toast-out {
   to {
-    transform: translateY(4px);
     opacity: 0;
   }
 }

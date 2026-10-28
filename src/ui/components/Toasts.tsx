@@ -13,8 +13,6 @@ const SWIPE_AWAY_FRACTION = 0.35;
 const SWIPE_FLICK_PX_PER_MS = 0.5;
 /** The fly-out (and spring-back), in the app's stepped motion. */
 const SWIPE_ANIM_MS = 150;
-/** Toasts swiped away: they have flown out already, so they don't fade out again. */
-const flown = new Set<number>();
 /** Room between a toast and what's under it. */
 const TOAST_GAP_PX = 18;
 const TOAST_GAP_ABOVE_BUTTON_PX = 12;
@@ -45,8 +43,8 @@ function toastBottom(): string | null {
 
 /**
  * The toast that just went with none in its place, kept while it fades out (ui.css
- * .toast.leaving): a timeout, a tap elsewhere or its own button. Same key: its node, and
- * its button's press, are kept.
+ * .toast.leaving): a timeout, a tap elsewhere, its own button, or a swipe (it fades where
+ * it flew to). Same key: its node, and its button's press, are kept.
  */
 function useLeavingToast(list: Toast[]): Toast | null {
   const prev = useRef(list);
@@ -55,8 +53,7 @@ function useLeavingToast(list: Toast[]): Toast | null {
   if (prev.current !== list) {
     const was = prev.current[0];
     prev.current = list;
-    leaving.current = !list.length && was && !flown.has(was.id) && !reducedMotion() ? was : null;
-    if (was) flown.delete(was.id);
+    leaving.current = !list.length && was && !reducedMotion() ? was : null;
   }
   const going = leaving.current;
   useEffect(() => {
@@ -214,7 +211,6 @@ function ToastItem({ id, text, action, leaving }: { id: number; text: string; ac
         return;
       }
       place(Math.sign(d.dx) * (width + 48), true);
-      flown.add(id);
       setTimeout(() => dismissToast(id), SWIPE_ANIM_MS);
       return;
     }
