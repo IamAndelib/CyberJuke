@@ -27,6 +27,7 @@ import { CatalogError, ChunkedTracks, EmptyState, Tracks } from '../../ui/compon
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
 import { BackButton } from '../../ui/components/BackButton';
+import { afterPress } from '../../ui/press';
 import { OfflineGate } from '../../ui/components/OfflineGate';
 import { CoverRow, GlobalError, LoadMore, MUSIC_ITEM_OPTS, MusicRow, searchLoader } from '../../ui/components/Music';
 import { useFeed } from '../../ui/usePaged';
@@ -402,10 +403,13 @@ function RecentSearches({ onPick }: { onPick: (q: string) => void }) {
         <button
           type="button"
           class="link-btn recent-clear"
-          onClick={() => {
-            const old = clearRecentSearches();
-            toast('Recent searches cleared', undefined, { label: 'Undo', run: () => restoreRecentSearches(old) });
-          }}
+          // These buttons take themselves away: their press shows first (afterPress).
+          onClick={(e) =>
+            afterPress(e.currentTarget, () => {
+              const old = clearRecentSearches();
+              toast('Recent searches cleared', undefined, { label: 'Undo', run: () => restoreRecentSearches(old) });
+            })
+          }
           data-testid="recent-clear"
         >
           [Clear all]
@@ -424,7 +428,7 @@ function RecentSearches({ onPick }: { onPick: (q: string) => void }) {
               type="button"
               class="icon-btn recent-x"
               aria-label={`Remove “${q}” from recent searches`}
-              onClick={() => removeRecentSearch(q)}
+              onClick={(e) => afterPress(e.currentTarget, () => removeRecentSearch(q))}
               data-testid="recent-search-remove"
             >
               <Icon name="close" size={18} />
@@ -501,10 +505,12 @@ export function Search() {
               class="search-clear"
               aria-label="Clear search"
               onPointerDown={(e) => e.preventDefault()}
-              onClick={() => {
-                query.value = '';
-                input.current?.focus();
-              }}
+              onClick={(e) =>
+                afterPress(e.currentTarget, () => {
+                  query.value = '';
+                  input.current?.focus();
+                })
+              }
               data-testid="search-clear"
             >
               <Icon name="close" size={20} />
