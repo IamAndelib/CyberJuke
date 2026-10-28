@@ -34,7 +34,38 @@ function quickTapFrames(page: Page, testid: string, next: string) {
   }, next);
 }
 
-// These replace the screen they are on, which used to go before a quick tap's press painted.
+/**
+ * A quick touch tap on `testid` (up and click a frame after down). Whether its press was
+ * seen: in the frame between down and up, or on the button itself while it is still in
+ * sight (Now Playing sliding away); and how many frames until `next` shows.
+ */
+function quickTap(page: Page, testid: string, next: string) {
+  return page.getByTestId(testid).first().evaluate(async (el, nextId) => {
+    const frame = () => new Promise((r) => requestAnimationFrame(r));
+    const shows = () => !!document.querySelector<HTMLElement>(`[data-testid="${nextId}"]`)?.checkVisibility();
+    const ev = { pointerType: 'touch', isPrimary: true, bubbles: true } as const;
+    el.dispatchEvent(new PointerEvent('pointerdown', ev));
+    await frame();
+    let seen = el.classList.contains('pressed');
+    el.dispatchEvent(new PointerEvent('pointerup', ev));
+    (el as HTMLElement).click();
+    let frames = 0;
+    for (let shown = false; !shown && frames < 180; frames++) {
+      await frame();
+      seen ||= el.isConnected && el.checkVisibility() && el.classList.contains('pressed');
+      shown = shows();
+    }
+    // A few frames more: the button may still be in sight, leaving with the old screen.
+    for (let i = 0; i < 3; i++) {
+      await frame();
+      seen ||= el.isConnected && el.checkVisibility() && el.classList.contains('pressed');
+    }
+    return { seen, frames };
+  }, next);
+}
+
+// These swap the screen they are on at once, which used to go before a quick tap's press
+// painted: the screen now waits until the press has shown for a moment (HOLD_MS).
 for (const { name, open, testid, next } of [
   { name: 'the Settings button', open: async (_page: Page) => undefined, testid: 'open-settings', next: 'screen-settings' },
   { name: "Settings' Back arrow", open: async (page: Page) => page.getByTestId('open-settings').click(), testid: 'settings-back', next: 'screen-home' },
@@ -47,12 +78,9 @@ for (const { name, open, testid, next } of [
     testid: 'genre-back',
     next: 'genre-grid',
   },
-  { name: 'the search button', open: async (_page: Page) => undefined, testid: 'search-fab', next: 'search-input' },
   { name: "Search's close arrow", open: async (page: Page) => page.getByTestId('search-fab').click(), testid: 'search-close', next: 'search-fab' },
-  { name: "Now Playing's genre", open: openNowPlayingOnTagged, testid: 'np-genre', next: 'screen-genre' },
-  { name: "Now Playing's artist", open: openNowPlayingOnTagged, testid: 'np-artist', next: 'screen-artist' },
 ]) {
-  test(`a quick tap on ${name} paints its press, then the screen changes at once`, async ({ page }) => {
+  test(`a quick tap on ${name} shows its press for a moment, then the screen changes`, async ({ page }) => {
     await start(page);
     await open(page);
     await expect(page.getByTestId(testid).first()).toBeVisible();
@@ -60,9 +88,28 @@ for (const { name, open, testid, next } of [
     const before = run.filter((f) => !f.next);
     expect(before.length).toBeGreaterThan(0);
     expect(before.every((f) => f.pressed)).toBe(true);
+    // About HOLD_MS (80 ms) of press, then the change: seen, yet snappy. Counted in frames
+    // past the hold, not ms, so a busy machine's longer frames don't fail it.
     expect(run.at(-1)!.next).toBe(true);
-    // Android's timing: one painted frame, not a hold.
-    expect(before.length).toBeLessThanOrEqual(4);
+    expect(run.at(-1)!.t).toBeGreaterThanOrEqual(70);
+    expect(run.length - 1 - run.findIndex((f) => f.t >= 80)).toBeLessThanOrEqual(2);
+  });
+}
+
+// These change the screen at once: their press shows anyway (from the finger going down,
+// or on the button as Now Playing slides away).
+for (const { name, open, testid, next } of [
+  { name: 'the search button', open: async (_page: Page) => undefined, testid: 'search-fab', next: 'search-input' },
+  { name: "Now Playing's genre", open: openNowPlayingOnTagged, testid: 'np-genre', next: 'screen-genre' },
+  { name: "Now Playing's artist", open: openNowPlayingOnTagged, testid: 'np-artist', next: 'screen-artist' },
+]) {
+  test(`a quick tap on ${name} paints its press, and the screen changes at once`, async ({ page }) => {
+    await start(page);
+    await open(page);
+    await expect(page.getByTestId(testid).first()).toBeVisible();
+    const { seen, frames } = await quickTap(page, testid, next);
+    expect(seen).toBe(true);
+    expect(frames).toBeLessThanOrEqual(4);
   });
 }
 
@@ -105,9 +152,10 @@ test('a control outside a list shows its press at once, and keeps it about 100 m
   await start(page);
   const seen = await pressTimeline(page, 'tab-genres', 10);
   expect(seen[0].on).toBe(true);
-  const off = seen.find((s, i) => i > 2 && !s.on)!;
-  expect(off.t).toBeGreaterThanOrEqual(90);
-  expect(off.t).toBeLessThan(300);
+  const off = seen.findIndex((s, i) => i > 2 && !s.on);
+  expect(seen[off].t).toBeGreaterThanOrEqual(90);
+  // Then it goes within a frame or two (frames, not ms: a busy machine's are longer).
+  expect(off - seen.findIndex((s, i) => i > 2 && s.t >= 100)).toBeLessThanOrEqual(2);
 });
 
 test('in a list, a touch waits the tap timeout before pressing, a quick tap shows as it lifts, and a scroll cancels it', async ({ page }) => {

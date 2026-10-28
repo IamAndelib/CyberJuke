@@ -8,17 +8,18 @@
  * - not at all once the finger moves away or anything scrolls.
  * Reduced motion keeps it: it is a change of colour; only its movement goes (CSS).
  *
- * `afterPress` is for a button whose action replaces the screen it is on (Settings, a
- * Back arrow, a tile that opens a page): acting at once would take the press away before
- * it painted. Like Android's View, which posts its click so the pressed state draws
- * first, the action runs once the press has painted a frame, and the screen's exit motion
- * keeps it in sight. A tap or key that comes sooner runs the waiting action first, so it
- * never lands on the screen the next tap opened.
+ * `afterPress` is for a button whose action swaps the screen it is on at once (Settings,
+ * the Back arrows): acting at once would take the press away before anyone saw it. The
+ * action waits until the press has shown for HOLD_MS, counted from a painted frame. A tap
+ * or key that comes sooner runs the waiting action first, so it never lands on the
+ * screen the next tap opened.
  */
 /** The shortest a press shows (Android shows a tap's for 64 ms; a little longer reads better). */
 export const PRESS_MS = 100;
 /** Inside a scroller, a touch waits this long to show its press (Android's TAP_TIMEOUT). */
 const TAP_TIMEOUT_MS = 100;
+/** How long an afterPress press shows before its screen changes: seen, yet still snappy. */
+const HOLD_MS = 80;
 /** Further than this and the finger is scrolling, not pressing. */
 const SLOP_PX = 10;
 /** What shows a press. */
@@ -52,8 +53,9 @@ function lift(now: boolean): void {
   }
   if (showTimer !== undefined) show(el);
   const left = PRESS_MS - (performance.now() - shownAt);
-  // Its own timer: a tap on another button meanwhile doesn't keep this one down.
-  setTimeout(() => el !== pressed && !waiting.has(el) && el.classList.remove('pressed'), Math.max(0, left));
+  // Counted from a painted frame (the tap's own work, like opening a page, may hold the
+  // thread past PRESS_MS), on its own timer: a tap elsewhere meanwhile doesn't keep it down.
+  requestAnimationFrame(() => setTimeout(() => el !== pressed && !waiting.has(el) && el.classList.remove('pressed'), Math.max(0, left)));
 }
 
 function down(e: PointerEvent): void {
@@ -108,8 +110,8 @@ if (typeof document !== 'undefined') {
 }
 
 /**
- * Runs `action`, which replaces the screen `el` is on, once `el`'s press has painted a
- * frame; at once when it shows no press (keyboard, TalkBack). For a click handler:
+ * Runs `action`, which replaces the screen `el` is on, once `el`'s press has shown for
+ * HOLD_MS; at once when it shows no press (keyboard, TalkBack). For a click handler:
  * `onClick={(e) => afterPress(e.currentTarget, open)}`. A second click while one waits
  * does nothing, and any later tap or key runs the waiting action first.
  */
@@ -128,10 +130,9 @@ export function afterPress(el: HTMLElement | null, action: () => void): void {
     pending = null;
     action();
     waiting.delete(el);
-    // Still pressed as its screen leaves (the exit motion), then eased back as usual.
     setTimeout(() => pressed !== el && el.classList.remove('pressed'), Math.max(0, PRESS_MS - (performance.now() - since)));
   };
   // rAF runs before the next paint; a task queued from it runs after that paint.
-  frame = requestAnimationFrame(() => (timer = setTimeout(run, 0)));
+  frame = requestAnimationFrame(() => (timer = setTimeout(run, Math.max(0, HOLD_MS - (performance.now() - since)))));
   pending = run;
 }
