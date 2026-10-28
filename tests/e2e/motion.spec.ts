@@ -245,9 +245,9 @@ test('the back-to-top and search buttons show their press, and the search button
     el.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', isPrimary: true, bubbles: true, clientX: 0 }));
     el.dispatchEvent(new PointerEvent('pointerup', { pointerType: 'touch', isPrimary: true, bubbles: true, clientX: 40 }));
     const at = performance.now();
-    const on = el.classList.contains('pressed');
+    const on = el.hasAttribute('data-pressed');
     await new Promise<void>((r) => {
-      const check = () => (!el.classList.contains('pressed') ? r() : requestAnimationFrame(check));
+      const check = () => (!el.hasAttribute('data-pressed') ? r() : requestAnimationFrame(check));
       requestAnimationFrame(check);
     });
     return { on, ms: performance.now() - at };
@@ -286,7 +286,7 @@ test('the back-to-top and search buttons show their press, and the search button
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const reduced = await fab.evaluate((el) => {
     el.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', isPrimary: true, bubbles: true, clientX: 0 }));
-    const on = el.classList.contains('pressed');
+    const on = el.hasAttribute('data-pressed');
     el.dispatchEvent(new PointerEvent('pointerup', { pointerType: 'touch', isPrimary: true, bubbles: true, clientX: 40 }));
     return on;
   });

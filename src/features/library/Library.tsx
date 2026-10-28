@@ -13,6 +13,7 @@ import { TrackRow } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
 import { askConfirm, nowPlayingOpen, popToRoot, selectTab, useSearchContext } from '../../ui/nav';
 import { list } from '../../ui/playAll';
+import { afterPress } from '../../ui/press';
 import { plural } from '../../core/text';
 
 const SECTIONS = ['liked', 'recent'] as const;
@@ -100,7 +101,7 @@ export function Library() {
           <EmptyState title="No liked tracks yet">
             Tap <Icon name="heartOutline" size={16} /> in the player, or Like in a track's ⋯ menu, to keep it here.
             <div>
-              <button class="link-btn" onClick={() => selectTab('home')}>
+              <button class="link-btn" onClick={(e) => afterPress(e.currentTarget, () => selectTab('home'))}>
                 [Browse the Jukebox]
               </button>
             </div>

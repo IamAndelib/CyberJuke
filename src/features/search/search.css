@@ -101,7 +101,7 @@
   color: var(--color-fg-dim);
 }
 .search-clear:active,
-.search-clear.pressed {
+.search-clear[data-pressed] {
   background: var(--color-fg);
   color: var(--color-bg);
 }
@@ -166,7 +166,7 @@
   text-align: left;
 }
 .recent-q:active,
-.recent-q.pressed {
+.recent-q[data-pressed] {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
@@ -252,7 +252,7 @@
   text-align: left;
 }
 .place-row:active,
-.place-row.pressed {
+.place-row[data-pressed] {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
@@ -269,9 +269,9 @@
   color: var(--color-accent);
 }
 .place-row:active .place-fav,
-.place-row.pressed .place-fav,
+.place-row[data-pressed] .place-fav,
 .place-row:active .dim,
-.place-row.pressed .dim {
+.place-row[data-pressed] .dim {
   color: inherit;
 }
 .place-go {

@@ -187,7 +187,7 @@
   min-height: 72px;
 }
 .row-main:active,
-.row-main.pressed {
+.row-main[data-pressed] {
   background: var(--press);
 }
 .row.is-current .row-title {
@@ -544,7 +544,7 @@
   box-shadow: none;
 }
 .genre-tile:active,
-.genre-tile.pressed {
+.genre-tile[data-pressed] {
   transform: translate(3px, 3px);
   box-shadow: 1px 1px 0 var(--color-border);
   background: var(--color-fg);
@@ -589,11 +589,11 @@
   color: var(--color-accent);
 }
 .genre-fav:active,
-.genre-fav.pressed {
+.genre-fav[data-pressed] {
   color: var(--color-fg);
 }
 .genre-cell:has(.genre-tile:active) .genre-fav,
-.genre-cell:has(.genre-tile.pressed) .genre-fav {
+.genre-cell:has(.genre-tile[data-pressed]) .genre-fav {
   transform: translate(3px, 3px);
   color: var(--color-bg);
   text-shadow: none;
@@ -668,7 +668,7 @@
     visibility 0s;
 }
 /* A pixel button (the search button, back-to-top): a solid block over a hard checkered
-   shadow, offset by its --fab-shadow. .pressed (usePress): held long enough to be seen, it
+   shadow, offset by its --fab-shadow. [data-pressed] (usePress): held long enough to be seen, it
    sinks into the shadow and eases back out. */
 .pixel-btn {
   position: relative;
@@ -690,7 +690,7 @@
 .pixel-btn:active {
   transform: translate(calc(var(--fab-shadow) / 2), calc(var(--fab-shadow) / 2));
 }
-.pixel-btn.pressed {
+.pixel-btn[data-pressed] {
   transform: translate(calc(var(--fab-shadow) / 2), calc(var(--fab-shadow) / 2)) scale(0.94);
   transition: transform 0.05s ease-out;
 }
@@ -758,7 +758,7 @@
   box-shadow: 4px 4px 0 var(--color-border);
 }
 .shelf-btn:active .art,
-.shelf-btn.pressed .art {
+.shelf-btn[data-pressed] .art {
   transform: translate(3px, 3px);
   box-shadow: 1px 1px 0 var(--color-border);
 }
@@ -814,7 +814,7 @@
   text-align: left;
 }
 .np-link:active,
-.np-link.pressed {
+.np-link[data-pressed] {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
@@ -897,7 +897,7 @@
   font-size: 15px;
 }
 .sheet-item:active,
-.sheet-item.pressed {
+.sheet-item[data-pressed] {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
@@ -1011,7 +1011,7 @@
   color: var(--color-fg);
 }
 .rail-item:active:not(.on),
-.rail-item.pressed:not(.on) {
+.rail-item[data-pressed]:not(.on) {
   color: var(--color-fg);
 }
 .rail-item:focus-visible {
@@ -1369,7 +1369,7 @@ section[data-kind] > .shelf {
   touch-action: manipulation;
 }
 .block-action:active,
-.block-action.pressed {
+.block-action[data-pressed] {
   background: var(--color-fg);
   color: var(--color-bg);
 }
@@ -1431,7 +1431,7 @@ section[data-kind] > .shelf {
   touch-action: manipulation;
 }
 .toast-action:active,
-.toast-action.pressed {
+.toast-action[data-pressed] {
   background-color: var(--color-bg);
   color: var(--color-fg);
 }

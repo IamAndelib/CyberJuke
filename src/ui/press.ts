@@ -1,7 +1,8 @@
 /**
  * Press feedback for every button (U3), the way Android's View shows it. A CSS `:active`
  * press alone often never paints: a quick tap is over before the next frame. One listener
- * on the document gives the button under the finger `.pressed`:
+ * on the document marks the button under the finger `data-pressed`, an attribute Preact
+ * doesn't manage, so a re-render that restyles the button (a toggle turning on) keeps it:
  * - at once, or, inside something that scrolls, after the tap timeout, so the start of a
  *   scroll never flashes the rows under it (a tap quicker than that shows as it lifts);
  * - for at least PRESS_MS once shown, then it eases back;
@@ -9,11 +10,11 @@
  * Reduced motion keeps it: it is a change of colour; only its movement goes (CSS).
  *
  * `afterPress` is for a button whose action swaps the screen it is on at once (Settings,
- * the Back arrows) or takes the button itself away ([Clear all], ✕): acting at once
- * would take the press away before anyone saw it. The action waits until the press has
- * shown for HOLD_MS, counted from a painted frame. A tap, key or Android back that comes
- * sooner runs the waiting action first, so it never lands on the screen the next tap
- * opened.
+ * the Back arrows) or takes the button itself away (in a list: [Clear all], ✕, Up next's
+ * rows and arrows, Retry): acting at once would take the press away before anyone saw it.
+ * The action waits until the press has shown for HOLD_MS, counted from a painted frame. A
+ * tap, key or Android back that comes sooner runs the waiting action first, so it never
+ * lands on the screen the next tap opened.
  */
 /** The shortest a press shows (Android shows a tap's for 64 ms; a little longer reads better). */
 export const PRESS_MS = 100;
@@ -37,7 +38,7 @@ let showTimer: ReturnType<typeof setTimeout> | undefined;
 function show(el: HTMLElement): void {
   clearTimeout(showTimer);
   showTimer = undefined;
-  el.classList.add('pressed');
+  el.setAttribute('data-pressed', '');
   shownAt = performance.now();
 }
 
@@ -49,14 +50,14 @@ function lift(now: boolean): void {
   if (now) {
     clearTimeout(showTimer);
     showTimer = undefined;
-    el.classList.remove('pressed');
+    el.removeAttribute('data-pressed');
     return;
   }
   if (showTimer !== undefined) show(el);
   const left = PRESS_MS - (performance.now() - shownAt);
   // Counted from a painted frame (the tap's own work, like opening a page, may hold the
   // thread past PRESS_MS), on its own timer: a tap elsewhere meanwhile doesn't keep it down.
-  requestAnimationFrame(() => setTimeout(() => el !== pressed && !waiting.has(el) && el.classList.remove('pressed'), Math.max(0, left)));
+  requestAnimationFrame(() => setTimeout(() => el !== pressed && !waiting.has(el) && el.removeAttribute('data-pressed'), Math.max(0, left)));
 }
 
 function down(e: PointerEvent): void {
@@ -120,7 +121,7 @@ if (typeof document !== 'undefined') {
  */
 export function afterPress(el: HTMLElement | null, action: () => void): void {
   flush();
-  if (!el || (!el.classList.contains('pressed') && pressed !== el)) return action();
+  if (!el || (!el.hasAttribute('data-pressed') && pressed !== el)) return action();
   if (waiting.has(el)) return;
   waiting.add(el);
   if (pressed === el) lift(false);
@@ -133,7 +134,7 @@ export function afterPress(el: HTMLElement | null, action: () => void): void {
     pending = null;
     action();
     waiting.delete(el);
-    setTimeout(() => pressed !== el && el.classList.remove('pressed'), Math.max(0, PRESS_MS - (performance.now() - since)));
+    setTimeout(() => pressed !== el && el.removeAttribute('data-pressed'), Math.max(0, PRESS_MS - (performance.now() - since)));
   };
   // rAF runs before the next paint; a task queued from it runs after that paint.
   frame = requestAnimationFrame(() => (timer = setTimeout(run, Math.max(0, HOLD_MS - (performance.now() - since)))));

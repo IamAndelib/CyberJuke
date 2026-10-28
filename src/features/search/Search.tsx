@@ -77,7 +77,7 @@ function useDebounced(value: string, ms: number, scope: string): string {
 function Bridge({ q, to = 'global' }: { q: string; to?: 'jukebox' | 'global' }) {
   return (
     <div class="bridge">
-      <button class="link-btn bridge-btn" onClick={() => (searchMode.value = to)} data-testid={to === 'global' ? 'search-bridge' : 'here-bridge'}>
+      <button class="link-btn bridge-btn" onClick={(e) => afterPress(e.currentTarget, () => (searchMode.value = to))} data-testid={to === 'global' ? 'search-bridge' : 'here-bridge'}>
         {to === 'global' ? 'Search globally' : 'Search the whole Jukebox'} for “{q.trim()}” →
       </button>
     </div>
@@ -422,7 +422,7 @@ function RecentSearches({ onPick }: { onPick: (q: string) => void }) {
       <ul class="recent-list">
         {items.map((q) => (
           <li key={q} class="recent-item">
-            <button type="button" class="recent-q" onClick={() => onPick(q)} data-testid="recent-search">
+            <button type="button" class="recent-q" onClick={(e) => afterPress(e.currentTarget, () => onPick(q))} data-testid="recent-search">
               <span class="search-prompt" aria-hidden="true">
                 &gt;
               </span>

@@ -121,25 +121,25 @@ h3 {
   border-radius: var(--radius);
   flex: none;
 }
-/* .pressed (ui/press.ts) is the press of a quick tap, which :active alone never paints;
+/* [data-pressed] (ui/press.ts) is the press of a quick tap, which :active alone never paints;
    every :active style has it too. Small controls invert; rows take the --press layer. */
 .icon-btn:active:not(:disabled),
-.icon-btn.pressed:not(:disabled) {
+.icon-btn[data-pressed]:not(:disabled) {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
 }
-:is(.chip, .segmented button, .seg-grid button, .np-flip, .field-reveal):is(:active, .pressed):not(.on, :disabled) {
+:is(.chip, .segmented button, .seg-grid button, .np-flip, .field-reveal):is(:active, [data-pressed]):not(.on, :disabled) {
   background: var(--color-fg);
   border-color: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
 }
 /* Already inverted (the chosen one), a toggle or a theme: dimmed while pressed. */
-:is(.chip, .segmented button, .seg-grid button, .toggle, .swatch):is(:active, .pressed):is(.on, .toggle, .swatch) {
+:is(.chip, .segmented button, .seg-grid button, .toggle, .swatch):is(:active, [data-pressed]):is(.on, .toggle, .swatch) {
   opacity: 0.7;
 }
-:is(.mini-open, .lyr-line, .offline-link):is(:active, .pressed) {
+:is(.mini-open, .lyr-line, .offline-link):is(:active, [data-pressed]) {
   background: var(--press);
 }
 .icon-btn.sm {
@@ -167,7 +167,7 @@ h3 {
   text-shadow: none;
 }
 .btn:active:not(:disabled),
-.btn.pressed:not(:disabled) {
+.btn[data-pressed]:not(:disabled) {
   transform: translate(2px, 2px);
   box-shadow: 1px 1px 0 var(--color-border);
 }
@@ -181,7 +181,7 @@ h3 {
   color: var(--color-fg);
 }
 .link-btn:active,
-.link-btn.pressed {
+.link-btn[data-pressed] {
   background: var(--color-fg);
   color: var(--color-bg);
 }

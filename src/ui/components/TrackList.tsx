@@ -10,6 +10,7 @@ import { playAll, playFrom } from '../playAll';
 import type { PlayContext } from '../../player';
 import { SkeletonRows, TrackRow } from './TrackRow';
 import { OfflineState } from './OfflineGate';
+import { afterPress } from '../press';
 
 
 /**
@@ -170,7 +171,7 @@ export function PagedTracks({
       {hasMore && !chunks.more && (
         <div ref={sentinel} class="list-foot">
           {error && !loadingMore ? (
-            <button class="btn" onClick={loadMore}>
+            <button class="btn" onClick={(e) => afterPress(e.currentTarget, loadMore)}>
               <Icon name="refresh" size={18} /> Retry loading more
             </button>
           ) : (

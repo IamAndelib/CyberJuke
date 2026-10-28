@@ -23,7 +23,7 @@
   inset: -12px -6px;
 }
 .np-genre:active,
-.np-genre.pressed {
+.np-genre[data-pressed] {
   background: var(--color-fg);
   color: var(--color-bg);
   border-color: var(--color-fg);
@@ -360,7 +360,7 @@
     0 0 0 5px var(--color-fg);
 }
 .play-btn:active,
-.play-btn.pressed {
+.play-btn[data-pressed] {
   transform: scale(0.94);
 }
 
@@ -389,7 +389,7 @@
   text-overflow: ellipsis;
 }
 .np-post:active,
-.np-post.pressed {
+.np-post[data-pressed] {
   background: var(--press);
 }
 
