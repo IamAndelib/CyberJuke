@@ -1,6 +1,5 @@
 import type { ComponentChildren } from 'preact';
 import { Icon } from '../icons';
-import { afterPress } from '../press';
 
 /** What a tile is: its test ids (`genre-cell`, `artist-fav`…), data attribute and name style. */
 type TileKind = 'genre' | 'artist';
@@ -66,11 +65,8 @@ export function FavTile({
           // A keyboard press (detail 0) keeps its focus; a tap shouldn't scroll the page.
           const keyboard = e.detail === 0 && document.activeElement === star;
           moved = { x: e.clientX, y: e.clientY, t: performance.now() };
-          // In the grid the tile moves (up to Favourites, or back): its press shows first.
-          afterPress(star, () => {
-            onToggle();
-            if (keyboard) refocus(star.closest('.screen'), kind, name);
-          });
+          onToggle();
+          if (keyboard) refocus(star.closest('.screen'), kind, name);
         }}
         data-testid={`${kind}-fav`}
         {...data}

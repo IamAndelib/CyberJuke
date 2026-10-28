@@ -159,14 +159,6 @@ for (const { name, open, testid } of [
     },
     testid: 'search-clear',
   },
-  {
-    name: "a genre tile's ★ (the tile moves up to Favourites)",
-    open: async (page: Page) => {
-      await start(page);
-      await page.getByTestId('tab-genres').click();
-    },
-    testid: 'genre-fav',
-  },
 ]) {
   test(`a quick tap on ${name} paints its press before it goes`, async ({ page }) => {
     await open(page);
