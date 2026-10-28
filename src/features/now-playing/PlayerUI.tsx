@@ -41,6 +41,7 @@ import { UpNext } from './UpNext';
 import { useModal, useSheetContent } from '../../ui/useModal';
 import { useLiked } from '../../ui/useFavs';
 import { shareTrack } from '../../ui/share';
+import { afterPress } from '../../ui/press';
 
 function fmt(ms: number): string {
   if (!isFinite(ms) || ms < 0) ms = 0;
@@ -591,7 +592,7 @@ function NowPlayingContent() {
               {showLyrics ? (
                 <LyricsPanel track={t} />
               ) : (
-                <button class="np-art-btn" onClick={() => (lyricsOpen.value = true)} aria-label="Show lyrics" data-testid="np-art">
+                <button class="np-art-btn" onClick={(e) => afterPress(e.currentTarget, () => (lyricsOpen.value = true))} aria-label="Show lyrics" data-testid="np-art">
                   <Art track={t} size="fill" />
                 </button>
               )}

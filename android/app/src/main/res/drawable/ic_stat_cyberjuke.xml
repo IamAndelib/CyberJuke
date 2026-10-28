@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The music notification's small icon (status bar): the launcher's pixel-art jukebox
+  (media/brand/make_icon.py) as one white silhouette, with the speaker grille filled in.
+  Android draws it as a mask, in the system's colour.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8,0h8v1h-8zM6,1h3v1h-3zM15,1h3v1h-3zM5,2h2v1h-2zM9,2h6v1h-6zM17,2h2v1h-2zM4,3h2v1h-2zM7,3h2v1h-2zM15,3h2v1h-2zM18,3h2v1h-2zM3,4h2v1h-2zM6,4h1v1h-1zM10,4h4v1h-4zM17,4h1v1h-1zM19,4h2v1h-2zM3,5h1v1h-1zM5,5h1v1h-1zM9,5h1v1h-1zM14,5h1v1h-1zM18,5h1v1h-1zM20,5h1v1h-1zM2,6h2v1h-2zM5,6h1v1h-1zM8,6h1v1h-1zM11,6h2v1h-2zM15,6h1v1h-1zM18,6h1v1h-1zM20,6h2v1h-2zM2,7h1v1h-1zM4,7h1v1h-1zM8,7h1v1h-1zM10,7h1v1h-1zM13,7h1v1h-1zM15,7h1v1h-1zM19,7h1v1h-1zM21,7h1v1h-1zM2,8h1v1h-1zM4,8h1v1h-1zM8,8h1v1h-1zM10,8h1v1h-1zM13,8h1v1h-1zM15,8h1v1h-1zM19,8h1v1h-1zM21,8h1v1h-1zM2,9h1v1h-1zM4,9h1v1h-1zM8,9h1v1h-1zM11,9h2v1h-2zM15,9h1v1h-1zM19,9h1v1h-1zM21,9h1v1h-1zM2,10h1v1h-1zM4,10h1v1h-1zM9,10h1v1h-1zM14,10h1v1h-1zM19,10h1v1h-1zM21,10h1v1h-1zM2,11h1v1h-1zM4,11h1v1h-1zM10,11h4v1h-4zM19,11h1v1h-1zM21,11h1v1h-1zM2,12h1v1h-1zM4,12h16v1h-16zM21,12h1v1h-1zM2,13h1v1h-1zM21,13h1v1h-1zM2,14h1v1h-1zM4,14h16v1h-16zM21,14h1v1h-1zM2,15h1v1h-1zM4,15h16v1h-16zM21,15h1v1h-1zM2,16h1v1h-1zM4,16h16v1h-16zM21,16h1v1h-1zM2,17h1v1h-1zM4,17h16v1h-16zM21,17h1v1h-1zM2,18h1v1h-1zM4,18h16v1h-16zM21,18h1v1h-1zM2,19h1v1h-1zM9,19h2v1h-2zM13,19h2v1h-2zM21,19h1v1h-1zM2,20h20v1h-20zM2,21h1v1h-1zM21,21h1v1h-1zM2,22h4v1h-4zM18,22h4v1h-4z" />
+</vector>

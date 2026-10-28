@@ -68,6 +68,11 @@ input:focus-visible {
   outline: 2px dashed var(--color-fg);
   outline-offset: 2px;
 }
+/* Full-width rows: the ring goes inside, where a list's paint containment (content-visibility)
+   and the screen's edge can't clip it. */
+:is(.row-main, .place-row, .sheet-item, .recent-q):focus-visible {
+  outline-offset: -2px;
+}
 
 a {
   color: var(--color-fg);
@@ -116,13 +121,29 @@ h3 {
   border-radius: var(--radius);
   flex: none;
 }
-.icon-btn:active:not(:disabled) {
+/* [data-pressed] (ui/press.ts) is the press of a quick tap, which :active alone never paints;
+   every :active style has it too. Small controls invert; rows take the --press layer. */
+.icon-btn:active:not(:disabled),
+.icon-btn[data-pressed]:not(:disabled) {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
 }
+:is(.chip, .segmented button, .seg-grid button, .np-flip, .field-reveal):is(:active, [data-pressed]):not(.on, :disabled) {
+  background: var(--color-fg);
+  border-color: var(--color-fg);
+  color: var(--color-bg);
+  text-shadow: none;
+}
+/* Already inverted (the chosen one), a toggle or a theme: dimmed while pressed. */
+:is(.chip, .segmented button, .seg-grid button, .toggle, .swatch):is(:active, [data-pressed]):is(.on, .toggle, .swatch) {
+  opacity: 0.7;
+}
+:is(.mini-open, .lyr-line, .offline-link):is(:active, [data-pressed]) {
+  background: var(--press);
+}
 .icon-btn.sm {
-  min-width: 40px;
+  min-width: 44px;
   min-height: 44px;
 }
 
@@ -145,7 +166,8 @@ h3 {
   color: var(--color-bg);
   text-shadow: none;
 }
-.btn:active:not(:disabled) {
+.btn:active:not(:disabled),
+.btn[data-pressed]:not(:disabled) {
   transform: translate(2px, 2px);
   box-shadow: 1px 1px 0 var(--color-border);
 }
@@ -153,11 +175,13 @@ h3 {
 .link-btn {
   min-height: 44px;
   padding: 0 4px;
+  border-radius: var(--radius);
   font-family: var(--font-display);
   font-size: 14px;
   color: var(--color-fg);
 }
-.link-btn:active {
+.link-btn:active,
+.link-btn[data-pressed] {
   background: var(--color-fg);
   color: var(--color-bg);
 }

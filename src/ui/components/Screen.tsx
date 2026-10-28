@@ -5,7 +5,6 @@ import { Icon } from '../icons';
 import { reducedMotion } from '../../core/motion';
 import { PULL_MIN_SPIN_MS, PULL_REFRESH_AT, PULL_REST, PULL_SPRING_MS, pullIntent, rubberBand } from '../pullToRefresh';
 import { scrollToTop } from '../scrollToTop';
-import { usePress } from '../usePress';
 import { FastScroller } from './FastScroller';
 
 /** Back-to-top shows past this many screen-heights. */
@@ -106,7 +105,6 @@ export function Screen({
   const topArmed = useRef(false);
   /** The finger on back-to-top, until it lifts or moves away. */
   const topTap = useRef<{ id: number; x: number; y: number } | null>(null);
-  usePress(topBtn);
 
   const updateTop = () => {
     frame.current = 0;
@@ -137,7 +135,14 @@ export function Screen({
     const el = scroller.current;
     if (!el || !scrollKey) return;
     const target = positions.get(scrollKey);
-    if (target == null) return;
+    // A new key (Search's next query) starts at the top, not where the last one was.
+    if (target == null) {
+      if (el.scrollTop) {
+        el.scrollTop = 0;
+        updateTop();
+      }
+      return;
+    }
     const apply = () => {
       el.scrollTop = target;
       return Math.abs(el.scrollTop - target) <= 1;

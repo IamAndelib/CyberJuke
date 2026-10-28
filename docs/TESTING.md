@@ -7,12 +7,14 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 ## Install
 - [ ] It installs next to the regular CyberJuke (if you have it) and shows as **CyberJuke Preview**, with its icon.
 - [ ] The first start shows Home with tracks within a few seconds.
+- [ ] Opening the app shows the jukebox on black (also on Android 12 and newer: not a plain or white icon), then Home, with no black or empty screen in between. With Settings → Theme **Light**, close the app completely and open it: after the jukebox, Home shows in the light theme at once, with no black flash. The jukebox never stays more than a couple of seconds, even on a slow connection.
 
 ## Playback
 - [ ] A Home track plays. So do a genre track, an artist page track and a **Global** search result.
 - [ ] A **Jukebox MP3** plays (Search "Träume" or "Anniversary Mix", both latex.gg MP3s): its square cover shows in the list, in Now Playing, the notification and on the lock screen; seeking works; it moves on to the next track at its end. Swipe the app away and reopen it: it comes back, paused, where it was.
 - [ ] With the screen off and the app in the background, music keeps playing and moves on to the next track.
 - [ ] Notification and lock screen: play/pause, next and previous work, and they show the title and artwork.
+- [ ] While music plays, the status bar shows the CyberJuke jukebox (a small arched box), not a music note; so does the notification's header.
 - [ ] On a fresh install (Android 13 or newer), the first play asks for no permission, and the notification still shows its controls.
 - [ ] Unplugging headphones or disconnecting Bluetooth pauses playback.
 - [ ] Switch between Wi-Fi and mobile data **during** a song: playback continues, or resumes by itself within a few seconds. No "YouTube is limiting requests" banner.
@@ -88,6 +90,7 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 - [ ] Settings → **Updates**: the automatic check is off on a fresh install and after upgrading from 1.1.x, and nothing asks GitHub until you turn it on or tap **Check now**; **Check now** says "Up to date (x.y.z)" or, when a newer release is out, shows it at the top of Settings with **Download**, and a dot on the Settings button at the top right of Home. Turning the toggle on stays on after a restart. Installed from F-Droid, the card only says updates come through F-Droid.
 - [ ] The ⋯ menu of a liked song says **Unlike**; of any other song, **Like**. After **Next**, the Now Playing ♥ shows the new song's state.
 - [ ] Every theme (Settings → Theme) is readable.
+- [ ] Settings → Theme **Light**, then **Bubblegum**: the clock and icons at the top and the navigation buttons or bar at the bottom are dark and easy to see; on **Dark** and **C64** they are light. Turn the phone sideways and back, and switch the phone's dark mode on and off: they stay that way. Close the app completely and open it: the screen doesn't shift down after it shows, and there's no grey or white strip above or below the app.
 
 ## Account (if you use Cyberspace sign-in)
 - [ ] Sign in: tracks marked **[members]** appear.

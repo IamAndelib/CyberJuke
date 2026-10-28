@@ -8,6 +8,9 @@
     "webContentsDebuggingEnabled": false
   },
   "plugins": {
+    "SystemBars": {
+      "initialViewportFitValueHint": "cover"
+    },
     "App": {
       "disableBackButtonHandler": true
     }

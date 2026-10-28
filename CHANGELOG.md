@@ -4,6 +4,16 @@
 
 ### The app
 - Back on Home now shows Android's back-to-home animation as you swipe (Android 13 and newer, where the phone shows it). The app goes to the background as before, and the music plays on. Back still closes menus, Now Playing and pages first.
+- The music notification shows CyberJuke's jukebox in the status bar, instead of a plain music note.
+
+### Fixed
+- The status bar and the navigation bar follow the theme: dark icons on the light themes, light ones on the dark themes, also after turning the phone or switching the phone's dark mode. The screen no longer shifts down just after the app opens, and there's no grey strip at the top or bottom.
+- Opening the app shows the jukebox on black until Home is ready, on every Android version, and then Home in your theme straight away: a light theme no longer flashes black first.
+- Every button shows its press on a quick tap now, as a slower tap does: the Settings icon, the Back arrows, the search button, the genre or artist in Now Playing, chips, rows and tiles; the tab bar stays as it was. Settings, the Back arrows and buttons that move or clear themselves away (**[Clear all]**, ✕, Up next's arrows and rows, a recent search, Retry) show it for a moment first; everything else changes straight away. With reduced motion on, the press still shows; only its movement is gone.
+- A pressed **[See all]** no longer hides its own text, and pressed text buttons and **[show]** beside the password have rounded corners like the rest.
+- Search shows each new query's results from the top, not scrolled to where the last list was.
+- Buttons that change as you tap them (chips, the Liked/Recent switch, shuffle, repeat, ♥, themes, switches) show their press on a quick tap too.
+- Pressing **[Undo]** on a message shows its press inside the message's frame, instead of darkening it to its edge.
 
 ## [1.3.0] - 2026-10-27
 
