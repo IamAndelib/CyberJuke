@@ -17,7 +17,7 @@
  * lands on the screen the next tap opened.
  */
 /** The shortest a press shows (Android shows a tap's for 64 ms; a little longer reads better). */
-export const PRESS_MS = 100;
+const PRESS_MS = 100;
 /** Inside a scroller, a touch waits this long to show its press (Android's TAP_TIMEOUT). */
 const TAP_TIMEOUT_MS = 100;
 /** How long an afterPress press shows before its screen changes: seen, yet still snappy. */
@@ -95,9 +95,9 @@ export function installPress(): void {
   document.addEventListener('scroll', () => lift(true), opts);
 }
 
-/** Buttons whose action waits on their press (usePressThen): the action lifts it. */
+/** Buttons whose action waits on their press (afterPress): the action lifts it. */
 const waiting = new WeakSet<HTMLElement>();
-/** The usePressThen action waiting on its press, if any. */
+/** The afterPress action waiting on its press, if any. */
 let pending: (() => void) | null = null;
 
 /** Runs the waiting action now, before whatever comes next. */
@@ -116,13 +116,12 @@ if (typeof document !== 'undefined') {
 /**
  * Runs `action`, which replaces the screen `el` is on, once `el`'s press has shown for
  * HOLD_MS; at once when it shows no press (keyboard, TalkBack). For a click handler:
- * `onClick={(e) => afterPress(e.currentTarget, open)}`. A second click while one waits
- * does nothing, and any later tap or key runs the waiting action first.
+ * `onClick={(e) => afterPress(e.currentTarget, open)}`. Any later tap, key or back runs the
+ * waiting action first.
  */
 export function afterPress(el: HTMLElement | null, action: () => void): void {
   flush();
   if (!el || (!el.hasAttribute('data-pressed') && pressed !== el)) return action();
-  if (waiting.has(el)) return;
   waiting.add(el);
   if (pressed === el) lift(false);
   const since = shownAt;
@@ -132,8 +131,8 @@ export function afterPress(el: HTMLElement | null, action: () => void): void {
     cancelAnimationFrame(frame);
     clearTimeout(timer);
     pending = null;
-    action();
     waiting.delete(el);
+    action();
     setTimeout(() => pressed !== el && el.removeAttribute('data-pressed'), Math.max(0, PRESS_MS - (performance.now() - since)));
   };
   // rAF runs before the next paint; a task queued from it runs after that paint.

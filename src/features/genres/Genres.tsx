@@ -111,9 +111,11 @@ export function GenreDetail({ genre }: { genre: string }) {
     return p;
   });
   const all = catalogGenre(genre);
-  // While the first page loads, the newest of this genre already on the phone (the local
-  // catalog): rows at once, not a skeleton. Cyberspace's page takes over when it comes.
-  const shown: Paged = paged.status === 'loading' && all.length ? { ...paged, status: 'ready', tracks: all.slice(0, PAGE_SIZE), hasMore: true } : paged;
+  // While the first page loads, or if it fails, the newest of this genre already on the phone
+  // (the local catalog): rows at once, not a skeleton, and not an error in their place (Retry
+  // goes under them). Cyberspace's page takes over when it comes.
+  const seeded = (paged.status === 'loading' || paged.status === 'error') && all.length > 0;
+  const shown: Paged = seeded ? { ...paged, status: 'ready', tracks: all.slice(0, PAGE_SIZE), hasMore: true, loadMore: paged.status === 'error' ? paged.retry : paged.loadMore } : paged;
   const has = shown.tracks.length > 0;
   // P2: the whole genre (every catalog track in it), of which the pages are the start.
   const full = () => withRest(paged.tracks, catalogGenre(genre));

@@ -22,8 +22,7 @@
   position: absolute;
   inset: -12px -6px;
 }
-.np-genre:active,
-.np-genre[data-pressed] {
+.np-genre:is(:active, [data-pressed]) {
   background: var(--color-fg);
   color: var(--color-bg);
   border-color: var(--color-fg);
@@ -359,8 +358,7 @@
     0 0 0 3px var(--color-bg),
     0 0 0 5px var(--color-fg);
 }
-.play-btn:active,
-.play-btn[data-pressed] {
+.play-btn:is(:active, [data-pressed]) {
   transform: scale(0.94);
 }
 
@@ -388,8 +386,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.np-post:active,
-.np-post[data-pressed] {
+.np-post:is(:active, [data-pressed]) {
   background: var(--press);
 }
 

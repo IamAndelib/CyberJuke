@@ -123,8 +123,7 @@ h3 {
 }
 /* [data-pressed] (ui/press.ts) is the press of a quick tap, which :active alone never paints;
    every :active style has it too. Small controls invert; rows take the --press layer. */
-.icon-btn:active:not(:disabled),
-.icon-btn[data-pressed]:not(:disabled) {
+.icon-btn:is(:active, [data-pressed]):not(:disabled) {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
@@ -166,8 +165,7 @@ h3 {
   color: var(--color-bg);
   text-shadow: none;
 }
-.btn:active:not(:disabled),
-.btn[data-pressed]:not(:disabled) {
+.btn:is(:active, [data-pressed]):not(:disabled) {
   transform: translate(2px, 2px);
   box-shadow: 1px 1px 0 var(--color-border);
 }
@@ -180,8 +178,7 @@ h3 {
   font-size: 14px;
   color: var(--color-fg);
 }
-.link-btn:active,
-.link-btn[data-pressed] {
+.link-btn:is(:active, [data-pressed]) {
   background: var(--color-fg);
   color: var(--color-bg);
 }

@@ -91,7 +91,6 @@ export function Screen({
   const body = useRef<HTMLDivElement>(null);
   const ptr = useRef<HTMLDivElement>(null);
   const ptrLabel = useRef<HTMLSpanElement>(null);
-  const topBtn = useRef<HTMLButtonElement>(null);
   const [showTop, setShowTop] = useState(false);
   const keyRef = useRef(scrollKey);
   const refresh = useRef(onRefresh);
@@ -419,7 +418,6 @@ export function Screen({
         <div class="totop-dock">
           <div class={'totop' + (showTop ? ' on' : '')}>
             <button
-              ref={topBtn}
               class="pixel-btn totop-btn"
               aria-label="Back to top"
               onPointerDown={onTopDown}

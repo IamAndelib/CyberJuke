@@ -20,15 +20,17 @@ interface ChunkOptions {
    * scroller need their full height); otherwise more come only near the bottom.
    */
   fill?: boolean;
+  /** The first chunk, when it should be smaller than `step`: about a screen, drawn sooner. */
+  first?: number;
 }
 
 /**
- * Render a long list in chunks: `step` rows first, then `step` more whenever the
+ * Render a long list in chunks: `step` rows first (or `first`), then `step` more whenever the
  * sentinel (placed after the rows) comes within ~a screen of the viewport, or in idle
  * time with `fill`. `key` remembers how many were shown (null: don't remember).
  */
 export function useChunks(total: number, key: string | null, step = CHUNK, opts: ChunkOptions = {}) {
-  const initial = () => (key != null ? counts.get(key) : undefined) ?? step;
+  const initial = () => (key != null ? counts.get(key) : undefined) ?? opts.first ?? step;
   const [count, setCount] = useState(initial);
   const sentinel = useRef<HTMLDivElement>(null);
   const keyRef = useRef(key);

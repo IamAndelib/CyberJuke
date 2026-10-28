@@ -35,30 +35,31 @@ function quickTapFrames(page: Page, testid: string, next: string) {
 }
 
 /**
- * A quick touch tap on `testid` (up and click a frame after down). Whether its press was
- * seen: in the frame between down and up, or on the button itself while it is still in
- * sight (Now Playing sliding away); and how many frames until `next` shows.
+ * A quick touch tap on `l` (up and click a frame after down). Whether its press was seen: in
+ * the frame between down and up, or on the button itself while it is still in sight (Now
+ * Playing sliding away); and how many frames until `next` shows (6 frames without one).
  */
-function quickTap(page: Page, testid: string, next: string) {
-  return page.getByTestId(testid).first().evaluate(async (el, nextId) => {
+function quickTap(l: Locator, next?: string) {
+  return l.evaluate(async (el, nextId) => {
     const frame = () => new Promise((r) => requestAnimationFrame(r));
-    const shows = () => !!document.querySelector<HTMLElement>(`[data-testid="${nextId}"]`)?.checkVisibility();
+    const on = () => el.isConnected && el.checkVisibility() && el.hasAttribute('data-pressed');
+    const shows = () => (nextId ? !!document.querySelector<HTMLElement>(`[data-testid="${nextId}"]`)?.checkVisibility() : false);
     const ev = { pointerType: 'touch', isPrimary: true, bubbles: true } as const;
     el.dispatchEvent(new PointerEvent('pointerdown', ev));
     await frame();
-    let seen = el.hasAttribute('data-pressed');
+    let seen = on();
     el.dispatchEvent(new PointerEvent('pointerup', ev));
     (el as HTMLElement).click();
     let frames = 0;
-    for (let shown = false; !shown && frames < 180; frames++) {
+    for (let shown = false; !shown && frames < (nextId ? 180 : 6); frames++) {
       await frame();
-      seen ||= el.isConnected && el.checkVisibility() && el.hasAttribute('data-pressed');
+      seen ||= on();
       shown = shows();
     }
     // A few frames more: the button may still be in sight, leaving with the old screen.
     for (let i = 0; i < 3; i++) {
       await frame();
-      seen ||= el.isConnected && el.checkVisibility() && el.hasAttribute('data-pressed');
+      seen ||= on();
     }
     return { seen, frames };
   }, next);
@@ -107,7 +108,7 @@ for (const { name, open, testid, next } of [
     await start(page);
     await open(page);
     await expect(page.getByTestId(testid).first()).toBeVisible();
-    const { seen, frames } = await quickTap(page, testid, next);
+    const { seen, frames } = await quickTap(page.getByTestId(testid).first(), next);
     expect(seen).toBe(true);
     expect(frames).toBeLessThanOrEqual(4);
   });
@@ -144,47 +145,6 @@ async function withRecentSearches(page: Page): Promise<void> {
   await openSearch(page);
   await page.getByTestId('search-input').fill('');
   await expect(page.getByTestId('recent-search')).toHaveCount(2);
-}
-
-// These take themselves off the screen when tapped: the press shows first, for a moment.
-for (const { name, open, testid } of [
-  { name: '[Clear all] in recent searches', open: withRecentSearches, testid: 'recent-clear' },
-  { name: "a recent search's ✕", open: withRecentSearches, testid: 'recent-search-remove' },
-  {
-    name: "the search field's ✕",
-    open: async (page: Page) => {
-      await start(page);
-      await openSearch(page);
-      await page.getByTestId('search-input').fill('neon');
-    },
-    testid: 'search-clear',
-  },
-]) {
-  test(`a quick tap on ${name} paints its press before it goes`, async ({ page }) => {
-    await open(page);
-    await expect(page.getByTestId(testid).first()).toBeVisible();
-    const { seen } = await quickTap(page, testid, 'tab-home');
-    expect(seen).toBe(true);
-  });
-}
-
-/** A quick touch tap on `l`: whether its press showed in a painted frame while it was in sight. */
-function seenOnQuickTap(l: Locator) {
-  return l.evaluate(async (el) => {
-    const frame = () => new Promise((r) => requestAnimationFrame(r));
-    const on = () => el.isConnected && el.checkVisibility() && el.hasAttribute('data-pressed');
-    const ev = { pointerType: 'touch', isPrimary: true, bubbles: true } as const;
-    el.dispatchEvent(new PointerEvent('pointerdown', ev));
-    await frame();
-    let seen = on();
-    el.dispatchEvent(new PointerEvent('pointerup', ev));
-    (el as HTMLElement).click();
-    for (let i = 0; i < 6; i++) {
-      await frame();
-      seen ||= on();
-    }
-    return seen;
-  });
 }
 
 const tagged = async (p: Page) => {
@@ -234,7 +194,7 @@ for (const { name, open, target } of [
   test(`a quick tap on ${name} paints its press though the tap restyles it`, async ({ page }) => {
     await open(page);
     await expect(target(page)).toBeVisible();
-    expect(await seenOnQuickTap(target(page))).toBe(true);
+    expect((await quickTap(target(page))).seen).toBe(true);
   });
 }
 
@@ -248,6 +208,17 @@ for (const { name, open, target } of [
   { name: 'an Up next row (plays it)', open: tagged, target: (p: Page) => upNextRow(p, 1).locator('.row-main') },
   { name: 'the art (opens the lyrics)', open: tagged, target: (p: Page) => p.getByTestId('np-art') },
   { name: 'a recent search', open: withRecentSearches, target: (p: Page) => p.getByTestId('recent-search').first() },
+  { name: '[Clear all] in recent searches', open: withRecentSearches, target: (p: Page) => p.getByTestId('recent-clear') },
+  { name: "a recent search's ✕", open: withRecentSearches, target: (p: Page) => p.getByTestId('recent-search-remove').first() },
+  {
+    name: "the search field's ✕",
+    open: async (p: Page) => {
+      await start(p);
+      await openSearch(p);
+      await p.getByTestId('search-input').fill('neon');
+    },
+    target: (p: Page) => p.getByTestId('search-clear'),
+  },
   {
     name: '"Search globally" under no results',
     open: async (p: Page) => {
@@ -269,7 +240,7 @@ for (const { name, open, target } of [
   test(`a quick tap on ${name} paints its press before it goes`, async ({ page }) => {
     await open(page);
     await expect(target(page)).toBeVisible();
-    expect(await seenOnQuickTap(target(page))).toBe(true);
+    expect((await quickTap(target(page))).seen).toBe(true);
   });
 }
 
@@ -284,7 +255,7 @@ test('a quick tap on Retry loading more paints its press before the spinner take
       return retry.isVisible();
     })
     .toBe(true);
-  expect(await seenOnQuickTap(retry)).toBe(true);
+  expect((await quickTap(retry)).seen).toBe(true);
 });
 
 test('reduced motion keeps the press: it is a change of colour, not motion', async ({ page }) => {
