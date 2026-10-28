@@ -153,3 +153,18 @@ test('Search starts a new query at the top, not where the last list was scrolled
   await expect(page.getByTestId('search-results')).toBeVisible();
   await expect.poll(() => screen.evaluate((el) => el.scrollTop)).toBe(0);
 });
+
+test('a quick tap right after another lets the first one go back up', async ({ page }) => {
+  await start(page);
+  const still = await page.evaluate(async () => {
+    const [a, b] = [document.querySelector('[data-testid="tab-genres"]')!, document.querySelector('[data-testid="tab-artists"]')!];
+    const ev = { pointerType: 'mouse', button: 0, isPrimary: true, bubbles: true } as const;
+    for (const el of [a, b]) {
+      el.dispatchEvent(new PointerEvent('pointerdown', ev));
+      el.dispatchEvent(new PointerEvent('pointerup', ev));
+    }
+    await new Promise((r) => setTimeout(r, 300));
+    return [a, b].filter((el) => el.classList.contains('pressed')).length;
+  });
+  expect(still).toBe(0);
+});
