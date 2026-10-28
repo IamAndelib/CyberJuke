@@ -17,8 +17,8 @@
 - **[Play]** on a list starts a moment sooner, and the shuffle and repeat buttons change as you tap them, not when the player answers.
 - Tapping a song in a list responds sooner: autoplay picks the songs that follow once the app is idle, not in the tap.
 - A post with several songs lists them in the post's own order everywhere, as on Cyberspace; Search and **[Play]** on a whole genre had them backwards.
-- Every button shows its press on a quick tap now, as a slower tap does: the Settings icon, the Back arrows, the search button, the genre or artist in Now Playing, chips, rows and tiles; the tab bar stays as it was. Settings and the Back arrows show it for a moment before the screen changes; everything else changes straight away. With reduced motion on, the press still shows; only its movement is gone.
 - Pressing **[Undo]** on a message shows its press inside the message's frame, instead of darkening it to its edge.
+- Every button shows its press on a quick tap now, as a slower tap does: the Settings icon, the Back arrows, the search button, the genre or artist in Now Playing, chips, rows and tiles; the tab bar stays as it was. Settings, the Back arrows and buttons that clear themselves away (**[Clear all]**, ✕, a tile's ★) show it for a moment first; everything else changes straight away. With reduced motion on, the press still shows; only its movement is gone.
 
 ## [1.3.0] - 2026-10-27
 

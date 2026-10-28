@@ -9,7 +9,8 @@
  * Reduced motion keeps it: it is a change of colour; only its movement goes (CSS).
  *
  * `afterPress` is for a button whose action swaps the screen it is on at once (Settings,
- * the Back arrows): acting at once would take the press away before anyone saw it. The
+ * the Back arrows) or takes the button itself away ([Clear all], ✕, a grid ★): acting at
+ * once would take the press away before anyone saw it. The
  * action waits until the press has shown for HOLD_MS, counted from a painted frame. A tap,
  * key or Android back that comes sooner runs the waiting action first, so it never lands
  * on the screen the next tap opened.

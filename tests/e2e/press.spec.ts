@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { openNowPlaying, start } from '../helpers';
+import { openNowPlaying, openSearch, start } from '../helpers';
 
 // U3: press feedback the way Android's View shows it (ui/press.ts).
 
@@ -131,6 +131,50 @@ test("Android back during Settings' press hold runs it first: nothing opens behi
   });
   expect(later).toBe(after);
 });
+
+/** Two recent searches, and Search open on an empty field. */
+async function withRecentSearches(page: Page): Promise<void> {
+  await start(page);
+  for (const q of ['neon', 'drive']) {
+    await openSearch(page);
+    await page.getByTestId('search-input').fill(q);
+    await page.getByTestId('search-input').press('Enter');
+    await page.getByTestId('search-close').click();
+  }
+  await openSearch(page);
+  await page.getByTestId('search-input').fill('');
+  await expect(page.getByTestId('recent-search')).toHaveCount(2);
+}
+
+// These take themselves off the screen when tapped: the press shows first, for a moment.
+for (const { name, open, testid } of [
+  { name: '[Clear all] in recent searches', open: withRecentSearches, testid: 'recent-clear' },
+  { name: "a recent search's ✕", open: withRecentSearches, testid: 'recent-search-remove' },
+  {
+    name: "the search field's ✕",
+    open: async (page: Page) => {
+      await start(page);
+      await openSearch(page);
+      await page.getByTestId('search-input').fill('neon');
+    },
+    testid: 'search-clear',
+  },
+  {
+    name: "a genre tile's ★ (the tile moves up to Favourites)",
+    open: async (page: Page) => {
+      await start(page);
+      await page.getByTestId('tab-genres').click();
+    },
+    testid: 'genre-fav',
+  },
+]) {
+  test(`a quick tap on ${name} paints its press before it goes`, async ({ page }) => {
+    await open(page);
+    await expect(page.getByTestId(testid).first()).toBeVisible();
+    const { seen } = await quickTap(page, testid, 'tab-home');
+    expect(seen).toBe(true);
+  });
+}
 
 test('reduced motion keeps the press: it is a change of colour, not motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
