@@ -216,3 +216,23 @@ test('opening Search draws about a screen of the Jukebox in its first frame, not
   expect(rows).toBeLessThanOrEqual(15);
 });
 
+
+test('the first visit to Artists draws about a screen of tiles in its first frame, the rest after', async ({ page }) => {
+  await start(page);
+  await expect(page.getByTestId('track-row').first()).toBeVisible();
+  const tiles = await page.getByTestId('tab-artists').evaluate(async (el) => {
+    (el as HTMLElement).click();
+    return new Promise<number>((r) => {
+      const f = () => {
+        const grid = document.querySelector('[data-testid="artist-grid"]');
+        if (grid) r(grid.querySelectorAll('[data-testid="artist-tile"]').length);
+        else requestAnimationFrame(f);
+      };
+      requestAnimationFrame(f);
+    });
+  });
+  expect(tiles).toBeGreaterThan(0);
+  expect(tiles).toBeLessThanOrEqual(24);
+  // The rest follow in idle time.
+  await expect.poll(() => page.getByTestId('artist-grid').getByTestId('artist-tile').count()).toBeGreaterThan(24);
+});

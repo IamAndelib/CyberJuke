@@ -4,6 +4,7 @@
 
 ### Fixed
 - Search opens faster: it draws a screen of the Jukebox first and builds its index after it shows, not in the tap.
+- The first visit to Genres or Artists draws a screen of tiles straight away; the rest follow a moment later.
 - **[Play]** on a list starts a moment sooner, and the shuffle and repeat buttons change as you tap them, not when the player answers.
 
 ## [1.3.0] - 2026-10-27

@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { box, expectStable, isFeedQuery, nextFrame, openNowPlaying, playAndOpen, scrollTo, scrollTopOf, start, waitForTracks } from '../helpers';
 
@@ -485,12 +485,25 @@ test('Now Playing says where the music comes from; under shuffle instead of the 
   await expect(from).toContainText(`Radio · ${seed}`);
 });
 
+/** Tiles in a grid once it's whole (it fills in idle time after its first screen). */
+async function wholeGridCount(page: Page, screen: Locator): Promise<number> {
+  const count = () => screen.getByTestId('genre-tile').count();
+  await expect
+    .poll(async () => {
+      const a = await count();
+      await page.waitForTimeout(300);
+      return a === (await count());
+    })
+    .toBe(true);
+  return count();
+}
+
 test('pull to refresh that fails says so and keeps what was shown', async ({ page, backend }) => {
   await page.goto('/');
   await page.getByTestId('tab-genres').click();
   const screen = page.getByTestId('screen-genres');
   await expect(screen.locator('.topbar-sub')).toContainText('genres on the Jukebox');
-  const tiles = await screen.getByTestId('genre-tile').count();
+  const tiles = await wholeGridCount(page, screen);
   backend.offline = true;
   const f = await finger(page, 200, 320);
   await f.move(0, 400);
@@ -504,7 +517,7 @@ test('pull to refresh offline says to connect, then refresh, and keeps the grid'
   await page.getByTestId('tab-genres').click();
   const screen = page.getByTestId('screen-genres');
   await expect(screen.locator('.topbar-sub')).toContainText('genres on the Jukebox');
-  const tiles = await screen.getByTestId('genre-tile').count();
+  const tiles = await wholeGridCount(page, screen);
   backend.offline = true;
   await page.context().setOffline(true);
   await expect(page.getByTestId('offline-banner')).toBeVisible();
