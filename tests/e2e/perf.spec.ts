@@ -233,6 +233,12 @@ test('the first visit to Artists draws about a screen of tiles in its first fram
   });
   expect(tiles).toBeGreaterThan(0);
   expect(tiles).toBeLessThanOrEqual(24);
-  // The rest follow in idle time.
-  await expect.poll(() => page.getByTestId('artist-grid').getByTestId('artist-tile').count()).toBeGreaterThan(24);
+  // The rest follow in idle time, in full chunks (a screenful only comes first): each idle
+  // pass re-renders every tile so far, so small steps all the way would cost ~5x the renders.
+  const next = await page.getByTestId('artist-grid').evaluate(async (grid) => {
+    const count = () => grid.querySelectorAll('[data-testid="artist-tile"]').length;
+    for (let i = 0; i < 500 && count() <= 24; i++) await new Promise((r) => setTimeout(r, 10));
+    return count();
+  });
+  expect(next).toBeGreaterThanOrEqual(24 + 120);
 });
