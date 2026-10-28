@@ -100,8 +100,7 @@
   height: 100%;
   color: var(--color-fg-dim);
 }
-.search-clear:active,
-.search-clear[data-pressed] {
+.search-clear:is(:active, [data-pressed]) {
   background: var(--color-fg);
   color: var(--color-bg);
 }
@@ -165,8 +164,7 @@
   padding: 0 var(--gutter);
   text-align: left;
 }
-.recent-q:active,
-.recent-q[data-pressed] {
+.recent-q:is(:active, [data-pressed]) {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
@@ -251,8 +249,7 @@
   padding: 0 var(--gutter);
   text-align: left;
 }
-.place-row:active,
-.place-row[data-pressed] {
+.place-row:is(:active, [data-pressed]) {
   background: var(--color-fg);
   color: var(--color-bg);
   text-shadow: none;
@@ -268,10 +265,8 @@
 .place-fav {
   color: var(--color-accent);
 }
-.place-row:active .place-fav,
-.place-row[data-pressed] .place-fav,
-.place-row:active .dim,
-.place-row[data-pressed] .dim {
+.place-row:is(:active, [data-pressed]) .place-fav,
+.place-row:is(:active, [data-pressed]) .dim {
   color: inherit;
 }
 .place-go {
