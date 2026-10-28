@@ -14,6 +14,9 @@
   --fab-bottom: calc(12px + 6px);
   --gutter: 16px;
   --dither: repeating-conic-gradient(var(--color-fg-dim) 0 25%, transparent 0 50%);
+  /* A row's press: the text colour over its background, like Material's state layer
+     (themes' --color-surface is too faint for it in some). */
+  --press: var(--color-surface);
 
   /* ---- Motion -------------------------------------------------------------------------- */
   /* Material's emphasized motion for Now Playing and the sheets: in over 250ms, slowing
@@ -34,4 +37,11 @@
   --z-now-playing: 20;
   --z-sheet: 30;
   --z-toast: 40;
+}
+
+/* WebView 111+: the state layer is the theme's text colour at 14% (Material uses ~10%). */
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  :root {
+    --press: color-mix(in srgb, var(--color-fg) 14%, transparent);
+  }
 }
