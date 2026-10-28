@@ -246,6 +246,30 @@ test('the tab bar shows no press, the current tab included: it stays as it alway
   }
 });
 
+test("a pressed Undo shows its press inside the toast's frame, not to its edge", async ({ page }) => {
+  await start(page);
+  await page.evaluate(() =>
+    (window as unknown as { __cyberjukeToast: (t: string, ms: number, a: { label: string; run: () => void }) => void }).__cyberjukeToast('Removed', 10_000, { label: 'Undo', run: () => {} }),
+  );
+  const undo = page.getByTestId('toast-action');
+  await expect(undo).toBeVisible();
+  const r = await undo.evaluate((el) => {
+    el.classList.add('pressed');
+    const cs = getComputedStyle(el);
+    const b = el.getBoundingClientRect();
+    const t = el.closest('.toast')!.getBoundingClientRect();
+    // The area the press colour paints: the button, less its border where the background stops there.
+    const inset = cs.backgroundClip === 'border-box' ? 0 : parseFloat(cs.borderTopWidth);
+    return { top: b.top + inset - t.top, right: t.right - (b.right - inset), bottom: t.bottom - (b.bottom - inset), height: b.height, round: parseFloat(cs.borderTopRightRadius) - inset };
+  });
+  expect(r.top).toBeGreaterThanOrEqual(3);
+  expect(r.right).toBeGreaterThanOrEqual(3);
+  expect(r.bottom).toBeGreaterThanOrEqual(3);
+  expect(r.round).toBeGreaterThan(0);
+  // Still a full-size target.
+  expect(r.height).toBeGreaterThanOrEqual(48);
+});
+
 test('Search starts a new query at the top, not where the last list was scrolled to', async ({ page }) => {
   await start(page);
   await page.getByTestId('search-fab').click();
