@@ -92,9 +92,6 @@ export const musicCalls = (page: Page) => page.evaluate(() => (window as unknown
 /** Calls the web player made that the native plugin would receive. */
 export const playerCalls = (page: Page) => page.evaluate(() => window.__cyberjukePlayerCalls ?? []);
 
-/** The haptic ticks the page asked for (ui/haptics.ts), in order. */
-export const haptics = (page: Page) => page.evaluate(() => (window as unknown as { __cyberjukeHaptics: string[] }).__cyberjukeHaptics.slice());
-
 /** Android back, as native sends it to the page while its back callback is on (app/back.ts). */
 export const androidBack = (page: Page) => page.evaluate(() => void document.dispatchEvent(new Event('backbutton')));
 /** What the page told native about back (true: it has something to close) and each move to the background, in order. */

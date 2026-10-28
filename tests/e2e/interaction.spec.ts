@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { androidBack, backCalls, box, haptics, openNowPlaying, openSearch, openSettings, playAndOpen, playerCalls, scrollTo, scrollTopOf, seedStorage, start, toastsGone, touchDrag, touchSwipe, touchTap, waitForTracks } from '../helpers';
+import { androidBack, backCalls, box, openNowPlaying, openSearch, openSettings, playAndOpen, playerCalls, scrollTo, scrollTopOf, seedStorage, start, toastsGone, touchDrag, touchSwipe, touchTap, waitForTracks } from '../helpers';
 
 /**
  * Wave 1c interaction: navigation in place (P4, P5, SM7, M10), undo toasts and confirm
@@ -139,31 +139,10 @@ test('a long press on a row opens its menu, and lifting the finger plays nothing
   const pt = [{ x: b.x + 40, y: b.y + b.height / 2, id: 1 }];
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt });
   await expect(page.getByTestId('track-menu')).toBeVisible();
-  // With a haptic tick (Android's long-press feedback).
-  expect(await haptics(page)).toEqual(['longPress']);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await cdp.detach();
   await expect(page.getByTestId('track-menu')).toBeVisible();
   await expect(page.getByTestId('mini-player')).toHaveCount(0);
-});
-
-test('♥ in Now Playing and ★ on a genre or a genre page give a confirm tick, each way', async ({ page }) => {
-  await start(page);
-  await playAndOpen(page);
-  const like = page.getByTestId('np-like');
-  await like.click();
-  await expect(like).toHaveAttribute('aria-pressed', 'true');
-  await like.click();
-  await expect(like).toHaveAttribute('aria-pressed', 'false');
-  expect(await haptics(page)).toEqual(['confirm', 'confirm']);
-  await page.keyboard.press('Escape');
-  await page.getByTestId('tab-genres').click();
-  const star = page.getByTestId('genre-fav').first();
-  await star.click();
-  await expect.poll(() => haptics(page)).toEqual(['confirm', 'confirm', 'confirm']);
-  await page.getByTestId('genre-tile').first().click();
-  await page.getByTestId('genre-page-fav').click();
-  await expect.poll(() => haptics(page)).toEqual(['confirm', 'confirm', 'confirm', 'confirm']);
 });
 
 test('however long the finger stays down, lifting it after a long press does nothing; the next tap works (P10)', async ({ page }) => {

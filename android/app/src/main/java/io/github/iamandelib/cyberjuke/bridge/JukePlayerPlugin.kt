@@ -12,7 +12,6 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.activity.OnBackPressedCallback
 import androidx.core.content.ContextCompat
-import androidx.core.view.ViewCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
@@ -61,7 +60,7 @@ import kotlin.math.roundToInt
  * Capacitor bridge to PlaybackService. Contract (TS side):
  *   setQueue, queueNext, removeItem, moveItem, play, pause, seekTo, skipToNext,
  *   skipToPrevious, skipToIndex, setShuffle, setRepeat, setQuality, setCrossfade, setGapless, getState,
- *   haptic, setCanGoBack (Android back then comes as the `backbutton` document event),
+ *   setCanGoBack (Android back then comes as the `backbutton` document event),
  *   getAppInfo, getLaunchOptions, getBlockState, setNetworkPrefs, retryNow, getNetStatus,
  *   setGestureExclusion, addAutoplay, setAutoplay, restore, removeIds, setLikedIds,
  *   setCacheLimit, setDownloadOnMobileData, clearCache, signedOut, signedIn, cachedIds; events 'state', 'trackError',
@@ -1025,20 +1024,6 @@ class JukePlayerPlugin : Plugin() {
             out.put("lastLimit", l)
         }
         call.resolve(out)
-    }
-
-    /**
-     * `haptic({ kind: 'longPress' | 'confirm' | 'threshold' })`: a haptic tick on the WebView
-     * ([Haptics]). Android's own touch feedback: no permission needed, and off when the system's
-     * Touch feedback setting is. An unknown kind rejects.
-     */
-    @PluginMethod
-    fun haptic(call: PluginCall) {
-        val constant = Haptics.constantFor(call.getString("kind")) ?: return call.reject("kind must be 'longPress', 'confirm' or 'threshold'")
-        main.post {
-            bridge?.webView?.let { ViewCompat.performHapticFeedback(it, constant) }
-            call.resolve()
-        }
     }
 
     /**

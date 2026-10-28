@@ -50,8 +50,6 @@ export interface NativeState {
    */
   bufferedAheadMs?: number;
 }
-/** A haptic tick: holding a row ('longPress'), ♥ or ★ ('confirm'), a swipe that will close on release ('threshold'). */
-export type HapticKind = 'longPress' | 'confirm' | 'threshold';
 /** Why YouTube is refusing requests from this network (Y1). */
 export type BlockReason = 'BOT_CHECK' | 'RATE_LIMIT' | 'STREAM_FORBIDDEN';
 export interface BlockedEvent { until: number /* epoch ms */; reason: BlockReason }
@@ -132,8 +130,6 @@ interface JukePlayerPlugin {
   setNetworkPrefs(o: { ipv4: 'auto' | 'always' | 'off' }): Promise<void>;
   /** Lift the back-off now ("Try now"); playback it stopped resumes. */
   retryNow(): Promise<void>;
-  /** Android's own touch feedback on the WebView (no permission; off with the system's Touch feedback). Any other kind rejects. */
-  haptic(o: { kind: HapticKind }): Promise<void>;
   /**
    * Whether the page has something for Android back to close (nav.ts canGoBack). While it has,
    * back comes to the page as the `backbutton` document event; at its root, Android 12+ take
