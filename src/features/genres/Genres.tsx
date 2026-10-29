@@ -101,8 +101,8 @@ export function GenreDetail({ genre }: { genre: string }) {
   const key = feedKey.genre(auth.state.value.status === 'signedIn', genre, nsfw);
   const paged = usePaged(key, async (c) => {
     const p = await source.byGenre(genre, c);
-    // Some posts only carry the genre on the attachment, which the query can't see:
-    // fall back to the local catalog rather than showing an empty genre. Opened
+    // A genre the query doesn't find (a post with no genre of its own, or a slug other
+    // than genreSlug's): fall back to the local catalog rather than showing it empty. Opened
     // before the catalog has loaded, it waits for it, so the page fills in by itself.
     if (!c && !p.tracks.length) {
       if (!catalog.tracks.value.length) await catalog.refresh();
