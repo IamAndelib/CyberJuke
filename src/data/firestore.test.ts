@@ -45,13 +45,24 @@ describe('buildQuery', () => {
     });
   });
 
-  it('adds the genre filter last', () => {
+  it('adds the genre filter last, as the slug Cyberspace stores on the post', () => {
     const q = buildQuery({ genre: 'dark ambient' }).structuredQuery as any;
     expect(q.where.compositeFilter.filters).toEqual([
       ...BASE_FILTERS,
-      { fieldFilter: { field: { fieldPath: 'audioAttachmentGenre' }, op: 'EQUAL', value: { stringValue: 'dark ambient' } } },
+      { fieldFilter: { field: { fieldPath: 'audioAttachmentGenre' }, op: 'EQUAL', value: { stringValue: 'dark-ambient' } } },
     ]);
     expect(q.orderBy).toHaveLength(2);
+  });
+
+  it.each([
+    ['pop', 'pop'],
+    ['alternative rock', 'alternative-rock'],
+    ['r&b-soul', 'rb-soul'],
+    ['dance&edm', 'danceedm'],
+    ['lo-fi', 'lo-fi'],
+  ])('queries the genre %s as %s', (genre, slug) => {
+    const q = buildQuery({ genre }).structuredQuery as any;
+    expect(q.where.compositeFilter.filters.at(-1).fieldFilter.value).toEqual({ stringValue: slug });
   });
 
   it('never orders or filters on randomKey', () => {
