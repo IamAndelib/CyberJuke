@@ -1,7 +1,7 @@
 /**
  * Opening links outside the app. Only https URLs to known hosts open: a post link
  * comes from someone else's database, so `openPost` accepts Cyberspace posts only,
- * and `openExternal` the few sites the app itself links to (Ko-fi: Settings → About's coffee).
+ * and `openExternal` the few sites the app itself links to (Ko-fi: Settings → Support).
  */
 import { SITE_ORIGIN } from '../data/model';
 

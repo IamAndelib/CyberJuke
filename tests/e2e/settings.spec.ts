@@ -290,7 +290,7 @@ test('Account is the first card and says "members-only shared tracks"', async ({
   await page.goto('/');
   await openSettings(page);
   const settings = page.getByTestId('screen-settings');
-  await expect(settings.locator('.card-title')).toHaveText(['Account', 'Theme', 'Playback & data', 'Updates', 'About', 'Licenses', 'Source code']);
+  await expect(settings.locator('.card-title')).toHaveText(['Account', 'Theme', 'Playback & data', 'Updates', 'About', 'Support', 'Licenses', 'Source code']);
   const account = page.getByTestId('account');
   expect((await account.boundingBox())!.y).toBeLessThan((await page.getByTestId('theme-picker').boundingBox())!.y);
   await expect(account.locator('.signin-lead')).toHaveText('Optional. Signed in, the Jukebox also shows members-only shared tracks, marked [members].');
@@ -311,13 +311,15 @@ test('Source code: the last card links to the repository and its latest release'
   expect(await opened(page)).toEqual(['https://github.com/IamAndelib/CyberJuke', 'https://github.com/IamAndelib/CyberJuke/releases/latest']);
 });
 
-test('About: Buy me a coffee opens the Ko-fi page in the browser', async ({ page }) => {
+test('Support: Buy me a coffee, right after About, opens the Ko-fi page in the browser', async ({ page }) => {
   await recordOpens(page);
   await page.goto('/');
   await openSettings(page);
-  const link = page.getByTestId('about-support').getByRole('link', { name: 'Buy me a coffee' });
-  await link.scrollIntoViewIfNeeded();
-  await link.click();
+  const cards = await page.getByTestId('screen-settings').locator('section.card').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+  expect(cards[cards.indexOf('about') + 1]).toBe('support');
+  const button = page.getByTestId('support').getByRole('button', { name: 'Buy me a coffee' });
+  await button.scrollIntoViewIfNeeded();
+  await button.click();
   expect(await opened(page)).toEqual(['https://ko-fi.com/iamandelib']);
 });
 
