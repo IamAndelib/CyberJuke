@@ -1,6 +1,6 @@
 import { AUTH_USER, AUTH_USER_B, BANNED_POST, expect, MEMBERS_POSTS, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { openSettings, playerCalls, seedStorage, start, toastsGone, waitForTracks } from '../helpers';
+import { expectStable, openSettings, playerCalls, seedStorage, start, toastsGone, waitForTracks } from '../helpers';
 
 /** Optional "Sign in with Cyberspace": members-only posts, errors, token refresh, sign-out. */
 
@@ -133,6 +133,45 @@ test('signing in shows [members] posts in Latest, search and Now Playing; signin
     .toBe(false);
   expect(backend.calls.members).toBe(before);
   await toastsGone(page);
+});
+
+test("signing in or out keeps Home's genre chips while the other catalog loads, without members-only genres after", async ({ page }) => {
+  const chips = () => page.locator('[data-testid="genre-chip"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-genre')));
+  // The catalog (300-row pages) can be held back.
+  let held: Promise<void> | null = null;
+  let release = () => {};
+  await page.route(/firestore\.googleapis\.com\/.*:runQuery/, async (route) => {
+    const q = route.request().method() === 'POST' ? JSON.parse(route.request().postData() ?? '{}').structuredQuery : null;
+    if (q?.limit === 300 && held) await held;
+    return route.fallback();
+  });
+  const hold = () => (held = new Promise<void>((r) => (release = () => ((held = null), r()))));
+  await start(page);
+  await expect.poll(chips).toHaveLength(24);
+  const signedOut = await chips();
+  await signIn(page);
+  await expect(page.getByTestId('signout')).toBeVisible();
+  await page.getByTestId('tab-home').click();
+  await expect.poll(chips).not.toEqual(signedOut); // the members catalog counts its posts too
+  const signedIn = await chips();
+  // Out, with the public catalog held back: the chips are the signed-out ones at once.
+  hold();
+  await openSettings(page);
+  await page.getByTestId('signout').click();
+  await page.getByTestId('confirm-ok').click();
+  await page.getByTestId('tab-home').click();
+  expect(await chips()).toEqual(signedOut);
+  release();
+  await expectStable(chips, 500);
+  expect(await chips()).toEqual(signedOut);
+  // In again, the members catalog held back: the chips stay until it comes.
+  hold();
+  await signIn(page);
+  await expect(page.getByTestId('signout')).toBeVisible();
+  await page.getByTestId('tab-home').click();
+  expect(await chips()).toEqual(signedOut);
+  release();
+  await expect.poll(chips).toEqual(signedIn);
 });
 
 test('members-only likes and plays come back for the account that had them, and only for it', async ({ page }) => {
