@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Settings → Support → Buy me a coffee** opens CyberJuke's Ko-fi page in your browser, for anyone who wants to support its development.
+
 ## [1.3.3] - 2026-10-29
 
 ### Changed

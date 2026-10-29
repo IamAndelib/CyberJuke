@@ -24,6 +24,7 @@ import { RELEASES_URL, REPO_URL } from '../../data/model';
 import { toast } from '../../stores/toast';
 import { app, checkFailed, checkForUpdates, checking, installUnknown, lastCheck, updateAvailable } from '../../stores/updates';
 import { Screen } from '../../ui/components/Screen';
+import { Icon } from '../../ui/icons';
 import { openExternal } from '../../ui/links';
 import { arrowChoice } from '../../ui/arrowChoice';
 import { askConfirm, closeSettings, usePageActive } from '../../ui/nav';
@@ -80,6 +81,9 @@ const CROSSFADE_LABELS: Record<CrossfadeMs, string> = { 0: 'Off', 3000: '3 s', 6
 
 /** Where liked songs are saved again after Clear cache: on Wi-Fi, unless Download using mobile data is on. */
 const savedAgain = (mobileData: boolean) => (mobileData ? 'saved again' : 'saved again on Wi-Fi');
+
+/** The maintainer's Ko-fi page (Support's button; README's Support, the repository's Sponsor button). */
+const KOFI_URL = 'https://ko-fi.com/iamandelib';
 
 /** Where the code and the releases are (opened in the browser; github.com is allowlisted). */
 function A({ href, children }: { href: string; children: string }) {
@@ -662,6 +666,14 @@ export function Settings() {
           <b>Signal Radio:</b> <A href="https://github.com/hyphen8d/signal">SIGNAL by hyphen8d (MIT)</A>, the stations
           Cyberspace's Jukebox plays as Signal Radio, bundled with the app.
         </p>
+      </section>
+
+      <section class="card prose" data-testid="support">
+        <h2 class="card-title">Support</h2>
+        <p>CyberJuke is free, with no ads. If you enjoy it, you can buy me a coffee on Ko-fi.</p>
+        <button class="btn primary support-btn" onClick={() => openExternal(KOFI_URL)} data-testid="support-coffee">
+          <Icon name="coffee" size={20} /> Buy me a coffee
+        </button>
       </section>
 
       <section class="card prose" data-testid="licenses">

@@ -348,3 +348,11 @@
   user-select: text;
   -webkit-user-select: text;
 }
+
+/* Support's Ko-fi button: the card's full width, one line. */
+.support-btn {
+  width: 100%;
+  min-height: 52px;
+  font-size: 16px;
+  white-space: nowrap;
+}

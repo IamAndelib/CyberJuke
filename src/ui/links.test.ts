@@ -22,6 +22,7 @@ describe('links', () => {
   it('outside links: https and known hosts only', () => {
     expect(isExternalUrl('https://cyberspace.online/?signup=1')).toBe(true);
     expect(isExternalUrl('https://github.com/IamAndelib/CyberJuke/releases')).toBe(true);
+    expect(isExternalUrl('https://ko-fi.com/iamandelib')).toBe(true);
     expect(isExternalUrl(youtubeUrl('abcdefghijk'))).toBe(true);
     expect(isExternalUrl('http://github.com/x')).toBe(false);
     expect(isExternalUrl('https://github.com.evil.io/x')).toBe(false);
