@@ -67,7 +67,7 @@ function quickTap(l: Locator, next?: string) {
 
 // These swap the screen they are on at once, which used to go before a quick tap's press
 // painted: the screen now waits until the press has shown for a moment (HOLD_MS).
-for (const { name, open, testid, next } of [
+for (const { name, open, testid, next, music } of [
   { name: 'the Settings button', open: async (_page: Page) => undefined, testid: 'open-settings', next: 'screen-settings' },
   { name: "Settings' Back arrow", open: async (page: Page) => page.getByTestId('open-settings').click(), testid: 'settings-back', next: 'screen-home' },
   {
@@ -92,20 +92,34 @@ for (const { name, open, testid, next } of [
     testid: 'search-genre',
     next: 'screen-genre',
   },
+  {
+    name: "an album on an artist page's Albums shelf",
+    open: async (page: Page) => {
+      await page.getByTestId('tab-artists').click();
+      await page.getByTestId('artist-tile').first().click();
+    },
+    testid: 'album-card',
+    next: 'screen-album',
+    // The artist page falls back to the Jukebox, More by and this shelf.
+    music: { noArtistPage: true },
+  },
 ]) {
-  test(`a quick tap on ${name} shows its press for a moment, then the screen changes`, async ({ page }) => {
-    await start(page);
-    await open(page);
-    await expect(page.getByTestId(testid).first()).toBeVisible();
-    const run = await quickTapFrames(page, testid, next);
-    const before = run.filter((f) => !f.next);
-    expect(before.length).toBeGreaterThan(0);
-    expect(before.every((f) => f.pressed)).toBe(true);
-    // About HOLD_MS (80 ms) of press, then the change: seen, yet snappy. Counted in frames
-    // past the hold, not ms, so a busy machine's longer frames don't fail it.
-    expect(run.at(-1)!.next).toBe(true);
-    expect(run.at(-1)!.t).toBeGreaterThanOrEqual(70);
-    expect(run.length - 1 - run.findIndex((f) => f.t >= 80)).toBeLessThanOrEqual(2);
+  test.describe(() => {
+    if (music) test.use({ musicOptions: music });
+    test(`a quick tap on ${name} shows its press for a moment, then the screen changes`, async ({ page }) => {
+      await start(page);
+      await open(page);
+      await expect(page.getByTestId(testid).first()).toBeVisible();
+      const run = await quickTapFrames(page, testid, next);
+      const before = run.filter((f) => !f.next);
+      expect(before.length).toBeGreaterThan(0);
+      expect(before.every((f) => f.pressed)).toBe(true);
+      // About HOLD_MS (80 ms) of press, then the change: seen, yet snappy. Counted in frames
+      // past the hold, not ms, so a busy machine's longer frames don't fail it.
+      expect(run.at(-1)!.next).toBe(true);
+      expect(run.at(-1)!.t).toBeGreaterThanOrEqual(70);
+      expect(run.length - 1 - run.findIndex((f) => f.t >= 80)).toBeLessThanOrEqual(2);
+    });
   });
 }
 

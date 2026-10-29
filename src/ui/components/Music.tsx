@@ -61,7 +61,7 @@ export function AlbumShelf({ items, fallbackArtist, testid = 'album-shelf' }: { 
     <ul class="shelf" data-testid={testid}>
       {items.map((it) => (
         <li key={it.url} class="shelf-item">
-          <button class="shelf-btn" onClick={() => openAlbumPage(albumRef(it, fallbackArtist))} data-testid="album-card" aria-label={`Open album ${it.title}`}>
+          <button class="shelf-btn" onClick={(e) => afterPress(e.currentTarget, () => openAlbumPage(albumRef(it, fallbackArtist)))} data-testid="album-card" aria-label={`Open album ${it.title}`}>
             <Cover url={it.thumbnailUrl} size="md" />
             <span class="shelf-title">{it.title}</span>
           </button>
