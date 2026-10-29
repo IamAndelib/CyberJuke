@@ -151,8 +151,6 @@ const PageFrame = memo(function PageFrame({ t, entry, top }: { t: Tab; entry: St
       class={'page' + (top ? ' top' : ' covered')}
       inert={top ? undefined : true}
       aria-hidden={top ? undefined : true}
-      data-page={k}
-      data-kind={entry ? entry.page.kind : 'root'}
       onClickCapture={(e) => {
         // M9: the second tap of a double tap on a tile doesn't land on the new page.
         if (entry && isOpeningDoubleTap(entry, e)) {
