@@ -19,9 +19,13 @@ import { dropMembersOnly, returnMembersOnly } from './library';
 import { freshness } from './newTracks';
 import { dropToastActions, toast } from './toast';
 
-/** One genre's tracks from the catalog (NSFW included; the source filters). */
+/**
+ * One genre's tracks from the catalog (NSFW included; the source filters). It waits for a
+ * refresh under way: just after signing in, the public catalog still shows while the
+ * members one loads, and a genre read from it would lack the members-only posts.
+ */
 async function catalogGenreTracks(genre: string): Promise<Track[]> {
-  if (!catalog.all.value.length) await catalog.refresh();
+  await catalog.refresh();
   const all = catalog.all.value;
   const err = catalog.error.value;
   if (!all.length && err) throw new FirestoreError(err.message, 0, err.offline);
