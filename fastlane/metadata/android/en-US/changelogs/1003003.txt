@@ -1,0 +1,5 @@
+- Home's Shuffle follows the genre you pick, and keeps going with more random songs from it
+- Repeat keeps the songs lined up: Repeat all loops them, and Next moves on with Repeat one
+- Signed out, genre chips of more than one word (alternative rock, hip hop…) show their songs
+- Shuffle turned off and on again gives a new order
+- Signing in or out no longer jumbles the genre chips
