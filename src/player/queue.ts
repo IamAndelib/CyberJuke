@@ -18,7 +18,7 @@
  *    tracks stay next, in order (P1);
  *  - autoplay tracks (addAuto) play after the list, in the order added. Shuffle
  *    reorders only the list. Repeat keeps them (it loops them with the list); jumping
- *    to an autoplay track drops the ones after it (the radio continues from it);
+ *    to an autoplay track, repeat off, drops the ones after it (the radio continues from it);
  *  - with repeat off, played autoplay tracks more than KEEP_PLAYED behind the current
  *    one are dropped (a radio can run for hours);
  *  - Undo of a remove (restore) puts the track back in its section, before the track
@@ -214,7 +214,7 @@ export class Queue<T extends Identified> {
   /**
    * Jump to a list index. Tracks still queued stay next (see the rule above). Jumping
    * to an autoplay track drops the autoplay tracks after it: the radio continues
-   * from the new track.
+   * from the new track. Not with repeat on: it adds nothing then, so they stay.
    */
   skipTo(index: number): T | null {
     const e = this.list[index];
@@ -222,7 +222,7 @@ export class Queue<T extends Identified> {
     this.cur = e;
     this.settle();
     this.keepQueuedNext();
-    if (e.auto) this.dropAuto();
+    if (e.auto && this.repeat === 'off') this.dropAuto();
     this.trimPlayed();
     return e.item;
   }
