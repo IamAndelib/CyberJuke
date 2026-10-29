@@ -1,0 +1,4 @@
+- Pages open at once: no more flash of the screen you came from when you open a genre, an artist, an album or Search
+- The tile you tap shows its press before its page opens
+- Song pictures no longer flash as bright squares while they load
+- [Cancel] in menus and questions is just the word: only it shows the press and closes them
