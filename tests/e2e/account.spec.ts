@@ -174,6 +174,29 @@ test("signing in or out keeps Home's genre chips while the other catalog loads, 
   await expect.poll(chips).toEqual(signedIn);
 });
 
+test("signed in, a genre feed opened while the members catalog loads has the members-only posts", async ({ page }) => {
+  let held: Promise<void> | null = null;
+  let release = () => {};
+  await page.route(/firestore\.googleapis\.com\/.*:runQuery/, async (route) => {
+    const q = route.request().method() === 'POST' ? JSON.parse(route.request().postData() ?? '{}').structuredQuery : null;
+    // Only the members catalog (signed-in requests carry a token) is held back.
+    if (q?.limit === 300 && held && route.request().headers()['authorization']) await held;
+    return route.fallback();
+  });
+  await start(page);
+  await waitForTracks(page);
+  held = new Promise<void>((r) => (release = r));
+  await signIn(page);
+  await expect(page.getByTestId('signout')).toBeVisible();
+  await page.getByTestId('tab-home').click();
+  await page.locator(`[data-testid="genre-chip"][data-genre="${MEMBERS_POSTS[0].genre}"]`).click();
+  // Give the feed time to settle on whatever it would show before the members catalog comes.
+  await page.waitForTimeout(500);
+  held = null;
+  release();
+  await expect(homeRow(page, MEMBERS_POSTS[0].title)).toHaveCount(1);
+});
+
 test('members-only likes and plays come back for the account that had them, and only for it', async ({ page }) => {
   const liked = page.getByTestId('liked-list').getByTestId('track-title');
   const recent = page.getByTestId('recent-list').getByTestId('track-title');
