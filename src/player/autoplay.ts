@@ -6,17 +6,30 @@
  *  - a Jukebox seed: similar Jukebox tracks from the cached catalog (data/similar);
  *  - a Global seed: YouTube Music's radio for it (web player only; natively the playback
  *    service runs Global radios itself, so they refill with the screen off);
- *  - a Signal Radio station playing: its next round (player/radio), all its tracks again.
+ *  - a Signal Radio station playing: its next round (player/radio), all its tracks again;
+ *  - Home's Shuffle (its label, shuffleLabel): more random songs from the same pool.
  * Nothing while autoplay is off (the setting, C3), but for a station, or while repeat is on.
  */
 import { whenIdle } from '../core/idle';
 import { audioKey, isGlobal, type Track } from '../data/model';
 import { similarTracks } from '../data/similar';
-import { stationPlaying, stationQueue } from './radio';
+import { shuffle, stationPlaying, stationQueue } from './radio';
 import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, type Player, type QueueLow } from './types';
 
 /** How long a batch just added counts as ahead even before the player's state shows it (native's lags the call). */
 const BATCH_LAG_MS = 5000;
+
+const SHUFFLE = 'Jukebox shuffle';
+
+/** The label Home's Shuffle starts its list with: "Jukebox shuffle", or "Jukebox shuffle · rock" for one genre. */
+export const shuffleLabel = (genre: string | null): string => (genre ? `${SHUFFLE} · ${genre}` : SHUFFLE);
+
+/** The songs a Jukebox shuffle draws from, by its label: the whole catalog or one genre's; null for any other list. */
+function shufflePool(label: string | undefined, catalog: readonly Track[]): readonly Track[] | null {
+  if (label === SHUFFLE) return catalog;
+  const genre = label?.startsWith(`${SHUFFLE} · `) ? label.slice(SHUFFLE.length + 3) : null;
+  return genre ? catalog.filter((t) => t.genre === genre) : null;
+}
 
 export interface AutoplayDeps {
   player: Player;
@@ -108,6 +121,15 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       return;
     }
     starved = null;
+    // A Jukebox shuffle plays on like a station: random songs from its pool not yet queued,
+    // then, once every one is, another round of it (but the song just queued).
+    const pool = shufflePool(s.context?.label, catalog)?.filter((t) => !t.membersOnly || deps.signedIn());
+    if (pool) {
+      const fresh = pool.filter((t) => !inQueue.has(t.id));
+      const from = fresh.length ? fresh : pool.filter((t) => t.id !== s.queue.at(-1)?.id);
+      if (from.length) await add(shuffle(from, deps.rng).slice(0, count), !fresh.length);
+      return;
+    }
     // What played since this seed started steers it (Jukebox tracks only: similarTracks skips Global ones).
     const played = s.index >= 0 ? s.queue.slice(0, s.index + 1) : [];
     const from = played.map((t) => t.id).lastIndexOf(seed.id);

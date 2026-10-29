@@ -85,7 +85,7 @@ export function stationTrack(id: string): Track | null {
 }
 
 /** Fisher-Yates, as cyberspace.online does it. */
-function shuffle<T>(xs: readonly T[], rng: () => number): T[] {
+export function shuffle<T>(xs: readonly T[], rng: () => number = Math.random): T[] {
   const out = [...xs];
   for (let i = out.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));

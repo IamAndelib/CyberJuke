@@ -32,6 +32,7 @@ import { nsfwAutoplayIds, wantsPlay, type PlayContext, type Player, type UpItem,
 import { WebPlayer } from './webPlayer';
 
 export * from './types';
+export { shuffleLabel } from './autoplay';
 
 /** A failed command's toast; during a block the banner says why, so the toast says so too. */
 function commandFailed(message: string): void {

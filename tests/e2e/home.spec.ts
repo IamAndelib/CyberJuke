@@ -149,3 +149,25 @@ test('a song picture still on its way leaves a dark box, not a bright square (da
   }, [...png]);
   expect(lum).toBeLessThan(0.3);
 });
+
+test("Shuffle follows the genre chip: that genre's songs, and more of them after", async ({ page }) => {
+  type Q = { context: { label: string } | null; list: { genre: string }[]; autoplay: { genre: string }[] };
+  const queue = () => page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => Q }).__cyberjukeQueue());
+  await start(page);
+  const hero = page.getByTestId('shuffle-all');
+  await expect(hero).toContainText('Shuffle the Jukebox');
+  await expect(hero).toContainText('Random picks from the whole Jukebox');
+  const chip = page.getByTestId('genre-chip').first();
+  const genre = (await chip.getAttribute('data-genre'))!;
+  await chip.click();
+  await expect(hero).toContainText(`Shuffle ${genre}`);
+  await expect(hero).toContainText(`Random picks from ${genre}`);
+  await hero.click();
+  await expect.poll(async () => (await queue()).autoplay.length, { message: 'more of the genre after the list' }).toBeGreaterThan(0);
+  const q = await queue();
+  expect(q.context?.label).toBe(`Jukebox shuffle · ${genre}`);
+  expect([...q.list, ...q.autoplay].every((t) => t.genre === genre)).toBe(true);
+  // Back to All: the whole Jukebox again.
+  await page.getByTestId('chip-all').click();
+  await expect(hero).toContainText('Shuffle the Jukebox');
+});

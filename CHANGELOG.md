@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- Home's Shuffle follows the genre you picked: with rock selected it reads "Shuffle rock" and plays random rock songs; with All, the whole Jukebox as before. A shuffle now keeps going with more random songs from the same pool, instead of similar ones, while Autoplay is on.
+
 ### Fixed
 - Repeat no longer empties Up next. After you tap a song on Home or in Search, **Repeat all** loops it together with the songs lined up after it, instead of playing the one song over and over, and **Next** moves on with **Repeat one** (from the last song back to the first, too). Autoplay adds no more while repeat is on, as before.
 
