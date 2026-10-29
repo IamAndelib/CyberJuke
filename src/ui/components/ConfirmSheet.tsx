@@ -34,12 +34,21 @@ export function ConfirmSheet() {
             >
               <span class="sheet-text">{r.confirm}</span>
             </button>
-            <button class="sheet-item cancel" onClick={close} data-testid="confirm-cancel">
-              [Cancel]
-            </button>
+            <SheetCancel onClose={close} testid="confirm-cancel" />
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/** A sheet's [Cancel]: only the word is the button (its press, its tap); the strip it sits in isn't. */
+export function SheetCancel({ onClose, testid }: { onClose: () => void; testid?: string }) {
+  return (
+    <div class="sheet-cancel">
+      <button class="link-btn" onClick={onClose} data-testid={testid}>
+        [Cancel]
+      </button>
     </div>
   );
 }

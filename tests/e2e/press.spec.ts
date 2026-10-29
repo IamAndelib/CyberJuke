@@ -80,6 +80,18 @@ for (const { name, open, testid, next } of [
     next: 'genre-grid',
   },
   { name: "Search's close arrow", open: async (page: Page) => page.getByTestId('search-fab').click(), testid: 'search-close', next: 'search-fab' },
+  // Pages open at once: the tile, card or result that opens one waits on its press too.
+  { name: 'a genre tile', open: async (page: Page) => page.getByTestId('tab-genres').click(), testid: 'genre-tile', next: 'screen-genre' },
+  { name: 'an artist tile', open: async (page: Page) => page.getByTestId('tab-artists').click(), testid: 'artist-tile', next: 'screen-artist' },
+  {
+    name: "a genre in Search's results",
+    open: async (page: Page) => {
+      await page.getByTestId('search-fab').click();
+      await page.getByTestId('search-input').fill('electronik');
+    },
+    testid: 'search-genre',
+    next: 'screen-genre',
+  },
 ]) {
   test(`a quick tap on ${name} shows its press for a moment, then the screen changes`, async ({ page }) => {
     await start(page);

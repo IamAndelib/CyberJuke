@@ -110,7 +110,7 @@ function PlaceRow({ place }: { place: Place }) {
       <button
         type="button"
         class="place-row"
-        onClick={() => (place.kind === 'genre' ? openGenrePage(place.name) : openArtistPage(place.name))}
+        onClick={(e) => afterPress(e.currentTarget, () => (place.kind === 'genre' ? openGenrePage(place.name) : openArtistPage(place.name)))}
         data-testid="here-place"
         data-place={place.name}
       >
@@ -297,7 +297,7 @@ function JukeboxResults({ q }: { q: string }) {
           </div>
           <div class="chips wrap" data-testid="search-genres">
             {gHits.map((name) => (
-              <button key={name} class="chip" onClick={() => openGenrePage(name)} data-testid="search-genre" data-genre={name}>
+              <button key={name} class="chip" onClick={(e) => afterPress(e.currentTarget, () => openGenrePage(name))} data-testid="search-genre" data-genre={name}>
                 {name}
               </button>
             ))}

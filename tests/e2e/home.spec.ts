@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { box, isFeedQuery, openSettings, start, toastsGone, waitForTracks } from '../helpers';
+import { box, isFeedQuery, openSettings, seedStorage, start, toastsGone, waitForTracks } from '../helpers';
 
 /** Home: the Latest feed, genre chips, Most saved, the new-tracks pill and the CI autoplay hook. */
 
@@ -129,4 +129,23 @@ test('the new-tracks pill appears when there are newer posts; tapping it refresh
   await expect.poll(() => latestFetches).toBeGreaterThan(before);
   await waitForTracks(page);
   await toastsGone(page);
+});
+
+test('a song picture still on its way leaves a dark box, not a bright square (dark theme)', async ({ page }) => {
+  await seedStorage(page, { 'CapacitorStorage.settings': { theme: 'dark' } });
+  // The pictures never arrive (a slow connection, or a list that just opened).
+  await page.route(/^https:\/\/i\.ytimg\.com\//, () => undefined);
+  await start(page);
+  const png = await page.getByTestId('track-row').first().locator('.art').screenshot();
+  // Mean luminance of the box (0 black, 1 white), decoded in the page (no network, so no CSP).
+  const lum = await page.evaluate(async (bytes) => {
+    const bmp = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
+    const ctx = new OffscreenCanvas(bmp.width, bmp.height).getContext('2d')!;
+    ctx.drawImage(bmp, 0, 0);
+    const d = ctx.getImageData(0, 0, bmp.width, bmp.height).data;
+    let sum = 0;
+    for (let i = 0; i < d.length; i += 4) sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+    return sum / (d.length / 4) / 255;
+  }, [...png]);
+  expect(lum).toBeLessThan(0.3);
 });

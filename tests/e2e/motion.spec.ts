@@ -446,7 +446,7 @@ test('the track menu keeps its content while it slides away', async ({ page }) =
   const menu = page.getByTestId('track-menu');
   await expect(menu.getByTestId('menu-share')).toBeVisible();
   const seen = await menu.evaluate(async (el) => {
-    const cancel = el.querySelector('.sheet-item.cancel') as HTMLElement;
+    const cancel = el.querySelector('.sheet-cancel button') as HTMLElement;
     let ended = false;
     el.addEventListener('transitionend', () => (ended = true));
     cancel.click();
@@ -528,3 +528,62 @@ test('pull to refresh offline says to connect, then refresh, and keeps the grid'
   await expect(page.getByTestId('toast')).toHaveText('No carrier. Connect, then refresh.');
   await expect(screen.getByTestId('genre-tile')).toHaveCount(tiles);
 });
+
+/**
+ * Every frame from a tap until `ms` later: whether anything of a page underneath is on top
+ * anywhere on the screen (hit-tested on a 6×16 grid, every element counted), and whether the
+ * page on top lets one underneath show through.
+ */
+function pageFrames(page: Page, act: (page: Page) => Promise<unknown>, ms = 600) {
+  const run = page.evaluate((ms) => {
+    // Everything hit-testable for the count; a constructed sheet, which the CSP allows.
+    const all = new CSSStyleSheet();
+    all.replaceSync('* { pointer-events: auto !important }');
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, all];
+    return new Promise<{ under: string[]; seeThrough: boolean }[]>((done) => {
+      const frames: { under: string[]; seeThrough: boolean }[] = [];
+      const t0 = performance.now();
+      const tick = (ts: number) => {
+        const pane = document.querySelector('.tab-pane.on')!;
+        const top = pane.querySelector(':scope > .page.top');
+        const under = new Set<string>();
+        for (let i = 0; i < 6; i++)
+          for (let j = 0; j < 16; j++) {
+            const el = document.elementFromPoint(((i + 0.5) * innerWidth) / 6, ((j + 0.5) * innerHeight) / 16);
+            const pg = el?.closest('.page');
+            if (pg && pg.parentElement === pane && pg !== top) under.add(`${el!.tagName.toLowerCase()}.${[...el!.classList].join('.')}`);
+          }
+        const shown = [...pane.querySelectorAll<HTMLElement>(':scope > .page')].filter((p) => p !== top && p.checkVisibility());
+        const seeThrough = !!top && shown.length > 0 && Number(getComputedStyle(top).opacity) < 1;
+        frames.push({ under: [...under], seeThrough });
+        if (ts - t0 < ms) requestAnimationFrame(tick);
+        else {
+          document.adoptedStyleSheets = document.adoptedStyleSheets.filter((s) => s !== all);
+          done(frames);
+        }
+      };
+      requestAnimationFrame(tick);
+    });
+  }, ms);
+  return act(page).then(() => run);
+}
+
+const opensGrid = (tab: string, tile: string) => async (page: Page) => {
+  await page.getByTestId(tab).click();
+  await expect(page.getByTestId(tile).first()).toBeVisible();
+};
+
+for (const { name, open, tap, next } of [
+  { name: 'a genre page', open: opensGrid('tab-genres', 'genre-tile'), tap: 'genre-tile', next: 'screen-genre' },
+  { name: 'an artist page', open: opensGrid('tab-artists', 'artist-tile'), tap: 'artist-tile', next: 'screen-artist' },
+  { name: 'Search', open: async (_page: Page) => undefined, tap: 'search-fab', next: 'search-input' },
+]) {
+  test(`${name} covers the screen it opens over from its first frame: nothing of that one shows through or on top`, async ({ page }) => {
+    await start(page);
+    await open(page);
+    const frames = await pageFrames(page, (p) => p.getByTestId(tap).first().click());
+    await expect(page.getByTestId(next)).toBeVisible();
+    expect(frames.flatMap((f) => f.under)).toEqual([]);
+    expect(frames.filter((f) => f.seeThrough)).toHaveLength(0);
+  });
+}

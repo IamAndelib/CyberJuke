@@ -33,6 +33,7 @@ import { hasAudio } from '../../core/guards';
 import { reducedMotion } from '../../core/motion';
 import { OFFLINE } from '../../core/offlineText';
 import { Art } from '../../ui/components/Art';
+import { SheetCancel } from '../../ui/components/ConfirmSheet';
 import { OfflineLine } from '../../ui/components/OfflineLine';
 import { Marquee } from './Marquee';
 import { MembersTag } from '../../ui/components/TrackRow';
@@ -770,9 +771,7 @@ export function ArtistChooser() {
                 <Icon name="artists" size={20} /> <span class="sheet-text">{n}</span>
               </button>
             ))}
-            <button class="sheet-item cancel" onClick={close}>
-              [Cancel]
-            </button>
+            <SheetCancel onClose={close} />
           </>
         )}
       </div>
@@ -868,9 +867,7 @@ export function TrackMenu() {
                 <Icon name="external" size={20} /> <span class="sheet-text">Open post{t.by ? ` by @${t.by}` : ''}</span>
               </button>
             )}
-            <button class="sheet-item cancel" onClick={close}>
-              [Cancel]
-            </button>
+            <SheetCancel onClose={close} />
           </>
         )}
       </div>

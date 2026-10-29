@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+- Opening a genre, an artist, an album or Search no longer shows bits of the screen you came from (its top bar, the stars, the scrollbar) over the new one or through it: pages open at once, as tabs and Back do, after the tile you tapped shows its press.
+- Song pictures no longer flash as bright squares while they load in the dark themes; the box stays dark until the picture arrives.
+- **[Cancel]** in menus and questions is just the word now: only it shows the press and closes them, not the whole bottom strip.
+
 ## [1.3.1] - 2026-10-28
 
 ### The app

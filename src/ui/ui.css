@@ -324,7 +324,9 @@
   position: relative;
   overflow: hidden;
   aspect-ratio: 1;
-  background: var(--color-surface);
+  /* Opaque: the tint (::after) blends onto the page's colour, so a picture still on its way
+     leaves a dark box in the dark themes, not a square of bare tint. */
+  background: linear-gradient(var(--color-surface), var(--color-surface)), var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   isolation: isolate;
@@ -901,12 +903,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.sheet-item.cancel {
+.sheet-cancel {
+  display: flex;
   justify-content: center;
-  font-family: var(--font-display);
-  color: var(--color-fg-dim);
-  border-top: 1px dashed var(--color-border);
   margin-top: 4px;
+  padding: 4px 0;
+  border-top: 1px dashed var(--color-border);
+}
+.sheet-cancel .link-btn {
+  min-height: 48px;
+  padding: 0 12px;
+}
+.sheet-cancel .link-btn:not(:active, [data-pressed]) {
+  color: var(--color-fg-dim);
 }
 
 /* ---- Toasts ----------------------------------------------------------------------- */

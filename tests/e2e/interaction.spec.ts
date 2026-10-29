@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { androidBack, backCalls, box, openNowPlaying, openSearch, openSettings, playAndOpen, playerCalls, scrollTo, scrollTopOf, seedStorage, start, toastsGone, touchDrag, touchSwipe, touchTap, waitForTracks } from '../helpers';
+import { androidBack, backCalls, box, expectStable, openNowPlaying, openSearch, openSettings, playAndOpen, playerCalls, scrollTo, scrollTopOf, seedStorage, start, toastsGone, touchDrag, touchSwipe, touchTap, waitForTracks } from '../helpers';
 
 /**
  * Wave 1c interaction: navigation in place (P4, P5, SM7, M10), undo toasts and confirm
@@ -722,3 +722,32 @@ test('Android back closes the topmost thing; native gets back only while there i
   await expect.poll(() => backCalls(page)).toEqual([false, true, false, true, false, true, false, 'background']);
   await expect(page.getByTestId('screen-home')).toBeVisible();
 });
+
+for (const { name, open, sheet } of [
+  { name: 'the track menu', open: (page: Page) => page.getByTestId('track-more').first().click(), sheet: 'track-menu' },
+  {
+    name: 'a question (a station’s info)',
+    open: async (page: Page) => {
+      await page.getByTestId('tab-radio').click();
+      await page.getByTestId('station-info').first().click();
+    },
+    sheet: 'confirm-sheet',
+  },
+]) {
+  test(`${name}: only the word [Cancel] cancels and shows the press, not the strip it sits in`, async ({ page }) => {
+    await start(page);
+    await open(page);
+    const s = page.getByTestId(sheet);
+    const cancel = s.getByRole('button', { name: '[Cancel]' });
+    await expect(cancel).toBeVisible();
+    const c = (await cancel.boundingBox())!;
+    const b = (await s.boundingBox())!;
+    expect(c.width).toBeLessThan(b.width / 2);
+    expect(c.height).toBeGreaterThanOrEqual(44);
+    // A tap on the strip beside the word: the sheet stays.
+    await page.mouse.click(b.x + 24, c.y + c.height / 2);
+    expect(await expectStable(() => s.isVisible(), 400)).toBe(true);
+    await cancel.click();
+    await expect(s).toBeHidden();
+  });
+}
