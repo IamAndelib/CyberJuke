@@ -253,8 +253,9 @@ class QueueRulesTest {
         /** User navigation treats repeat-one as off (Player.seekToNext / seekToPrevious). */
         private val navRepeat get() = if (repeat == "one") "off" else repeat
 
+        /** JukePlayerPlugin.skipToNext: Media3's, but with repeat one it wraps at the end, as with repeat all. */
         fun next() {
-            val n = nextIndex(current, navRepeat)
+            val n = nextIndex(current, if (repeat == "one") "all" else repeat)
             if (n >= 0) seekTo(n)
         }
 
