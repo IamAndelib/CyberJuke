@@ -208,7 +208,8 @@ function doc(p: PostSpec): Doc {
       isShadowBanned: bool(!!p.shadow),
       hasAudioAttachment: bool(p.hasAudio !== false),
       createdAt: ts(p.createdAt),
-      audioAttachmentGenre: str(p.genre),
+      // As Cyberspace stores it: the attachment's genre as a slug ('alternative rock' → 'alternative-rock', 'r&b' → 'rb').
+      audioAttachmentGenre: str(p.genre.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')),
       bookmarksCount: int(p.saves ?? 0),
       repliesCount: int(p.replies ?? 0),
       topics: { arrayValue: { values: [str('music')] } },
