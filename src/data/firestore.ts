@@ -87,7 +87,6 @@ function eq(fieldPath: string, value: Record<string, unknown>): Filter {
   return { fieldFilter: { field: { fieldPath }, op: 'EQUAL', value } };
 }
 
-/** Build the runQuery body. Exported for tests: these are the ONLY query shapes we send. */
 /**
  * The genre as Cyberspace stores it on the post (audioAttachmentGenre): the attachment's
  * genre, lowercased, spaces as hyphens, other signs dropped ('alternative rock' →
@@ -95,6 +94,7 @@ function eq(fieldPath: string, value: Record<string, unknown>): Filter {
  */
 const genreSlug = (genre: string): string => genre.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 
+/** Build the runQuery body. Exported for tests: these are the ONLY query shapes we send. */
 export function buildQuery(opts: {
   genre?: string | null;
   cursor?: Cursor | null;

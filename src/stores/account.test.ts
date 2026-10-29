@@ -29,7 +29,8 @@ const calls = vi.hoisted(() => [] as string[]);
 vi.mock('../data/auth', () => ({ auth: fakeAuth }));
 vi.mock('../data', () => ({ source: { invalidateAll: vi.fn() } }));
 vi.mock('../data/lyrics', () => ({ lyrics: { dropMembersOnly: vi.fn(async () => {}) } }));
-vi.mock('./catalog', () => ({ catalog: { reset: vi.fn(async () => {}), refresh: vi.fn(async () => {}), all: { value: [] }, error: { value: null } } }));
+const fakeCatalog = vi.hoisted(() => ({ reset: vi.fn(async () => {}), refresh: vi.fn(async () => {}), settled: vi.fn(async () => {}), all: { value: [] as { genre: string }[] }, error: { value: null } }));
+vi.mock('./catalog', () => ({ catalog: fakeCatalog }));
 vi.mock('./feed', () => ({ feeds: { deletePrefix: vi.fn() }, JUKEBOX_FEED_PREFIXES: [] }));
 vi.mock('./newTracks', () => ({ freshness: { reset: vi.fn() } }));
 vi.mock('./toast', () => ({ toast: vi.fn(), dropToastActions: vi.fn() }));
@@ -107,5 +108,23 @@ describe('startAccount', () => {
     startAccount(Promise.reject(new Error('unreadable')));
     fakeAuth.emit(false, 'signOut');
     await vi.waitFor(() => expect(calls).toEqual(['return:u1', 'drop:u1']));
+  });
+});
+
+describe('genre tracks signed in (source.genreTracks)', () => {
+  it('reads the catalog shown, after a sign-in or out has its own, without starting a refresh', async () => {
+    await import('./account');
+    const { source } = (await import('../data')) as unknown as { source: { genreTracks: (g: string) => Promise<{ genre: string }[]> } };
+    fakeCatalog.refresh.mockClear();
+    fakeCatalog.settled.mockClear();
+    fakeCatalog.all.value = [{ genre: 'rock' }, { genre: 'pop' }];
+    expect(await source.genreTracks('rock')).toEqual([{ genre: 'rock' }]);
+    expect(fakeCatalog.settled).toHaveBeenCalled();
+    // A stale catalog refreshes in its own time: a genre doesn't wait for (or start) a download.
+    expect(fakeCatalog.refresh).not.toHaveBeenCalled();
+    // Nothing to read yet: then it loads it.
+    fakeCatalog.all.value = [];
+    await source.genreTracks('rock');
+    expect(fakeCatalog.refresh).toHaveBeenCalledTimes(1);
   });
 });
