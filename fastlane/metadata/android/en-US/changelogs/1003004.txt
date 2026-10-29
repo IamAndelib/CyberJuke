@@ -1,0 +1,1 @@
+- Settings → Support → Buy me a coffee opens CyberJuke's Ko-fi page in your browser, for anyone who wants to support its development. The app itself sends nothing there.
