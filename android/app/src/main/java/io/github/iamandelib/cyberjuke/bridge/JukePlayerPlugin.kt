@@ -726,8 +726,10 @@ class JukePlayerPlugin : Plugin() {
     @PluginMethod
     fun skipToNext(call: PluginCall) {
         withController(call) { c ->
-            if (c.hasNextMediaItem()) {
-                c.seekToNextMediaItem()
+            // Media3's Next treats repeat one as off; ours wraps then, as the web player does.
+            val wrap = !c.hasNextMediaItem() && c.repeatMode == Player.REPEAT_MODE_ONE && !c.currentTimeline.isEmpty
+            if (c.hasNextMediaItem() || wrap) {
+                if (wrap) c.seekTo(c.currentTimeline.getFirstWindowIndex(c.shuffleModeEnabled), 0L) else c.seekToNextMediaItem()
                 if (c.playbackState == Player.STATE_IDLE && !blocked(c)) c.prepare()
             }
             call.resolve()

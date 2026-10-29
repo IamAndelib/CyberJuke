@@ -238,20 +238,37 @@ test('queued tracks survive a new list, then autoplay follows', async ({ page })
   await expect(page.getByTestId('upnext-queued-label')).toHaveText('Queued by you');
 });
 
-test('repeat turns autoplay off; the Autoplay setting off plays only the list', async ({ page }) => {
+test('repeat keeps the songs lined up: Repeat all and one move on with Next, and Undo works', async ({ page }) => {
   await start(page);
   await visible(page, 'track-play').first().click();
-  await withAutoplay(page);
+  const { autoplay } = await withAutoplay(page);
   await openNowPlaying(page);
-  await page.getByTestId('np-repeat').click();
-  await expect(page.getByTestId('np-repeat')).toHaveAttribute('data-mode', 'all');
-  await expect(page.locator('[data-testid="upnext-row"][data-section="autoplay"]')).toHaveCount(0);
-  await expect.poll(async () => (await queueState(page)).autoplay.length).toBe(0);
-  // Back to off (all -> one -> off): autoplay fills up again.
-  await page.getByTestId('np-repeat').click();
-  await page.getByTestId('np-repeat').click();
-  await expect(page.getByTestId('np-repeat')).toHaveAttribute('data-mode', 'off');
-  await withAutoplay(page);
+  const repeat = page.getByTestId('np-repeat');
+  const autoRows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'all');
+  // Nothing goes, and no more come while repeat is on.
+  await expectStable(async () => (await queueState(page)).autoplay.length, 400);
+  expect((await queueState(page)).autoplay.map((t) => t.id)).toEqual(autoplay.map((t) => t.id));
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).toHaveText(autoplay[0].title);
+
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'one');
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).toHaveText(autoplay[1].title);
+
+  // Undo of a removed autoplay song puts it back, repeat or not.
+  const gone = (await autoRows.first().getAttribute('data-track-id'))!;
+  await autoRows.first().getByTestId('upnext-remove').click();
+  await expect(page.locator(`[data-testid="upnext-row"][data-track-id="${gone}"]`)).toHaveCount(0);
+  await page.getByTestId('toast').filter({ hasText: 'Removed from queue' }).getByTestId('toast-action').click();
+  await expect(autoRows.first()).toHaveAttribute('data-track-id', gone);
+
+  // Back to off: everything still lined up (autoplay tops up again once it runs low).
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'off');
+  expect((await queueState(page)).autoplay.map((t) => t.id)).toEqual(autoplay.slice(2).map((t) => t.id));
 });
 
 test('a track started before the Jukebox catalog has loaded still gets its autoplay once it does', async ({ page }) => {

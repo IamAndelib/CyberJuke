@@ -17,10 +17,10 @@
  *  - a new list (setList) replaces the list and the autoplay tracks, but the queued
  *    tracks stay next, in order (P1);
  *  - autoplay tracks (addAuto) play after the list, in the order added. Shuffle
- *    reorders only the list. Repeat all or one drops the autoplay tracks still to
- *    come, and so does jumping to an autoplay track (the radio continues from it);
- *  - played autoplay tracks more than KEEP_PLAYED behind the current one are dropped
- *    (a radio can run for hours);
+ *    reorders only the list. Repeat keeps them (it loops them with the list); jumping
+ *    to an autoplay track drops the ones after it (the radio continues from it);
+ *  - with repeat off, played autoplay tracks more than KEEP_PLAYED behind the current
+ *    one are dropped (a radio can run for hours);
  *  - Undo of a remove (restore) puts the track back in its section, before the track
  *    that followed it there, never at or before the current track.
  *
@@ -234,10 +234,9 @@ export class Queue<T extends Identified> {
     this.rebuildOrder();
   }
 
-  /** Repeat all or one turns autoplay off: the autoplay tracks still to come go. */
+  /** Repeat keeps what's lined up, autoplay tracks too: autoplay just adds no more meanwhile. */
   setRepeat(mode: RepeatMode): void {
     this.repeat = mode;
-    if (mode !== 'off') this.dropAuto();
   }
 
   // ---- editing -------------------------------------------------------------------
@@ -389,8 +388,9 @@ export class Queue<T extends Identified> {
 
   // ---- internals -----------------------------------------------------------------
 
-  /** Drop played autoplay tracks more than KEEP_PLAYED behind the current one in play order. */
+  /** Drop played autoplay tracks more than KEEP_PLAYED behind the current one in play order (not in a repeat's loop). */
   private trimPlayed(): void {
+    if (this.repeat !== 'off') return;
     const p = this.cur ? this.order.indexOf(this.cur) : -1;
     if (p <= KEEP_PLAYED) return;
     const old = new Set(this.order.slice(0, p - KEEP_PLAYED).filter((e) => e.auto));

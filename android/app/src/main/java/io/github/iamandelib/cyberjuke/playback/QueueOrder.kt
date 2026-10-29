@@ -140,8 +140,8 @@ internal interface QueueHost<T> {
  * - A new list ([setList]) replaces the list and the autoplay tracks; the queued tracks stay
  *   next, in order (P1).
  * - Autoplay tracks ([addAutoplay]) play after the list in the order added; shuffle reorders only
- *   the list. Repeat all/one ([onRepeatModeChanged]) and a jump to an autoplay track ([skipTo])
- *   drop the autoplay tracks still to come.
+ *   the list. Repeat keeps them (it loops them with the list); a jump to an autoplay track
+ *   ([skipTo]) drops the autoplay tracks after it.
  *
  * Pending items are tracked by serial (not mediaId), so the same track queued twice stays two
  * entries. [pending]'s iteration order is their play order. Not thread-safe: call it on the
@@ -447,11 +447,6 @@ internal class NativeQueue<T>(private val host: QueueHost<T>) {
         if (cur !in 0 until host.count || !host.isAutoAt(cur)) return false
         dropUpcomingAuto()
         return true
-    }
-
-    /** Repeat all or one turns autoplay off: the autoplay items still to come go. */
-    fun onRepeatModeChanged(repeating: Boolean) {
-        if (repeating) dropUpcomingAuto()
     }
 
     /** List indices after the current item, in play order (repeat off). */
