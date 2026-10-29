@@ -101,10 +101,12 @@ export interface Catalog {
    */
   restoreSaved(): Promise<void>;
   /**
-   * Sign-in state changed: forget everything (memory and both saved catalogs), drop
-   * the result of any fetch still running, and do a full refresh.
+   * Sign-in state changed: drop both saved catalogs and the members-only posts, drop the
+   * result of any fetch still running, and do a full refresh (the rest shows meanwhile).
    */
   reset(): Promise<void>;
+  /** Settles once the catalog is the current sign-in state's: at once, but while reset's refresh runs. */
+  settled(): Promise<void>;
 }
 
 /** A track's post and its place in it (`<post>-<n>` for a post with several songs, data/model). */
@@ -167,6 +169,8 @@ export function createCatalog(deps: CatalogDeps): Catalog {
   let inflight: Promise<void> | null = null;
   /** Bumped by reset(): a fetch from before it is thrown away. */
   let gen = 0;
+  /** The last reset's removals and full refresh (settled). */
+  let switching: Promise<void> = Promise.resolve();
   const key = deps.storageKey ?? (() => CATALOG_KEY);
 
   /** The track list last saved (or restored): unchanged lists aren't written again. */
@@ -247,7 +251,7 @@ export function createCatalog(deps: CatalogDeps): Catalog {
     restoreSaved() {
       return restore(key());
     },
-    async reset() {
+    reset() {
       gen++;
       inflight = null;
       restored = Promise.resolve();
@@ -257,9 +261,10 @@ export function createCatalog(deps: CatalogDeps): Catalog {
       error.value = null;
       if (!all.value.length) status.value = 'idle';
       const keys = [CATALOG_KEY, CATALOG_MEMBERS_KEY].flatMap((k) => [k, metaKey(k)]);
-      await Promise.all(keys.map((k) => (deps.storage.remove ? deps.storage.remove(k) : deps.storage.set(k, '')).catch(() => {})));
-      await api.refresh();
+      const removed = Promise.all(keys.map((k) => (deps.storage.remove ? deps.storage.remove(k) : deps.storage.set(k, '')).catch(() => {})));
+      return (switching = removed.then(() => api.refresh()));
     },
+    settled: () => switching,
   };
   return api;
 }

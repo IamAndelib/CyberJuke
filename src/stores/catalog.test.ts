@@ -405,6 +405,27 @@ describe('catalog per sign-in state', () => {
     expect(s.cat.all.value.map((x) => x.id)).toEqual(['mem', 'pub']);
   });
 
+  it('settled: waits while a sign-in or out loads its catalog, and only then', async () => {
+    const s = signedSetup(false);
+    await s.cat.refresh();
+    s.tick(2 * 24 * 60 * 60 * 1000); // stale, but settled starts nothing
+    await s.cat.settled();
+    expect(s.source.catalog).toHaveBeenCalledTimes(1);
+    s.setSignedIn(true);
+    s.hold();
+    const into = s.cat.reset();
+    let done = false;
+    void s.cat.settled().then(() => (done = true));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(done).toBe(false);
+    s.release();
+    await into;
+    await Promise.resolve();
+    expect(done).toBe(true);
+    expect(s.cat.all.value.map((x) => x.id)).toEqual(['mem', 'pub']);
+  });
+
   it('a fetch still running when the state changes is thrown away', async () => {
     const s = signedSetup(true);
     s.hold();

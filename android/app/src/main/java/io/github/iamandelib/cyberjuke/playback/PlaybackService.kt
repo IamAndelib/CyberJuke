@@ -1157,7 +1157,7 @@ class PlaybackService : MediaSessionService() {
     /** A tap in Up next: on an autoplay item the radio continues from it. */
     private fun skipTo(p: ExoPlayer, index: Int) {
         resetFailures()
-        if (queue.skipTo(index)) reseed(p.currentMediaItem) else queueChanged()
+        if (queue.skipTo(index, repeating = p.repeatMode != Player.REPEAT_MODE_OFF)) reseed(p.currentMediaItem) else queueChanged()
     }
 
     private fun resetFailures() {
