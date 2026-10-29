@@ -199,11 +199,15 @@ test('offline, lists already shown stay with their rows dimmed; lists opened off
 test('offline, an open genre page and artist page keep their rows, dimmed; a tap says to connect', async ({ page, backend }) => {
   await start(page);
   await page.getByTestId('tab-genres').click();
-  await page.getByTestId('genre-tile').first().click();
+  const tile = page.getByTestId('genre-tile').first();
+  const name = (await tile.getAttribute('data-genre'))!;
+  // The page shows the genre's songs on the phone at once; Cyberspace's page then takes over.
+  const answered = page.waitForResponse((r) => r.url().includes(':runQuery') && (r.request().postData() ?? '').includes(`"${name}"`));
+  await tile.click();
   const genre = page.getByTestId('screen-genre');
   const rows = genre.getByTestId('track-row');
-  await expect(rows.first()).toBeVisible();
-  const count = await rows.count();
+  await answered;
+  const count = await expectStable(() => rows.count(), 300);
   await setOffline(page, backend, true);
   await expect(rows.first()).toHaveClass(/\boff\b/);
   await expect(rows).toHaveCount(count);
