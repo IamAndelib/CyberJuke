@@ -21,7 +21,7 @@ import { Rail, RailRow, type RailItem } from '../../ui/components/Rail';
 import { usePaged } from '../../ui/usePaged';
 import { feedKey } from '../../stores/feed';
 import { auth } from '../../data/auth';
-import { canStartPlayback } from '../../player';
+import { canStartPlayback, shuffleLabel } from '../../player';
 import { list as listCtx, playAll, radio, withRest } from '../../ui/playAll';
 
 /** Selected genre chip on Home (null = All). Survives tab switches. */
@@ -34,20 +34,22 @@ const savedRange = signal<SavedRange>('month');
 const SAVED_MAX = 100;
 const SAVED_CTX = radio('Most saved');
 
-async function shuffleJukebox(): Promise<void> {
-  const all = catalog.tracks.value;
-  const tracks = all.length ? shuffled(all).slice(0, 50) : await source.shuffle(50);
+/** 50 random songs from the whole Jukebox or the chip's genre; autoplay goes on drawing from the same (shuffleLabel). */
+async function shuffleJukebox(genre: string | null): Promise<void> {
+  const all = genre ? catalogGenre(genre) : catalog.tracks.value;
+  const tracks = all.length ? shuffled(all).slice(0, 50) : genre ? shuffled((await source.byGenre(genre)).tracks) : await source.shuffle(50);
   if (!tracks.length) throw new Error('No tracks found');
-  await playAll(tracks, { shuffle: true, ctx: listCtx('Jukebox shuffle') });
+  await playAll(tracks, { shuffle: true, ctx: listCtx(shuffleLabel(genre)) });
 }
 
 function ShuffleHero() {
   const [busy, setBusy] = useState(false);
+  const genre = homeGenre.value;
   const go = async () => {
     if (busy || !canStartPlayback()) return;
     setBusy(true);
     try {
-      await shuffleJukebox();
+      await shuffleJukebox(genre);
     } catch (e) {
       toast(isOffline(e) ? OFFLINE.tap : "Couldn't shuffle right now");
     } finally {
@@ -59,8 +61,8 @@ function ShuffleHero() {
       <button class="hero dos-frame" onClick={go} data-testid="shuffle-all" aria-busy={busy}>
         <span class="hero-text">
           <span class="hero-kicker">Feeling lucky?</span>
-          <span class="hero-title">Shuffle the Jukebox</span>
-          <span class="hero-sub">{busy ? 'Spinning the reels…' : 'Random picks from the whole Jukebox'}</span>
+          <span class="hero-title">{genre ? `Shuffle ${genre}` : 'Shuffle the Jukebox'}</span>
+          <span class="hero-sub">{busy ? 'Spinning the reels…' : `Random picks from ${genre ?? 'the whole Jukebox'}`}</span>
         </span>
         <span class="hero-btn" aria-hidden="true">
           {busy ? <span class="spinner big" /> : <Icon name="shuffle" size={32} />}

@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals';
 import { describe, expect, it, vi } from 'vitest';
 import type { Track } from '../data/model';
-import { createAutoplay, type AutoplayDeps } from './autoplay';
+import { createAutoplay, shuffleLabel, type AutoplayDeps } from './autoplay';
 import { AUTOPLAY_FIRST, AUTOPLAY_MORE, EMPTY_STATE, type Player, type PlayerState, type QueueLow } from './types';
 
 const track = (id: string, p: Partial<Track> = {}): Track => ({
@@ -188,6 +188,33 @@ describe('autoplay', () => {
     const a = setup({ current: seed, seed, index: 0, queue: [seed], context: { label: 'Recently played', mode: 'list' } });
     await a.ap.fill({ left: 0, seedId: seed.id });
     for (const [ids] of a.added) expect(ids.some((id) => id.startsWith('sig:'))).toBe(false);
+  });
+
+  it("Home's genre shuffle goes on with random songs of that genre not yet queued, not similar ones", async () => {
+    const rock = Array.from({ length: 30 }, (_, i) => track(`r${i}`, { genre: 'rock', artist: 'A' }));
+    const house = Array.from({ length: 30 }, (_, i) => track(`h${i}`, { genre: 'house', artist: 'A' }));
+    const seed = rock[0];
+    const queue = rock.slice(0, 10);
+    const { ap, added } = setup({ current: seed, seed, index: 0, queue, context: { label: shuffleLabel('rock'), mode: 'list' } }, { catalog: () => [...rock, ...house] });
+    await ap.fill({ left: 0, seedId: seed.id });
+    expect(added[0][0]).toHaveLength(20);
+    expect(new Set(added[0][0])).toEqual(new Set(rock.slice(10).map((t) => t.id)));
+  });
+
+  it("Home's Jukebox shuffle goes on with random songs from the whole catalog, past the variety rules of similar picks", async () => {
+    // One artist only: similar picks would hold back on playing them all in a row.
+    const cat = Array.from({ length: AUTOPLAY_FIRST + 1 }, (_, i) => track(`a${i}`, { artist: 'A' }));
+    const { ap, added } = setup({ current: cat[0], seed: cat[0], index: 0, queue: [cat[0]], context: { label: shuffleLabel(null), mode: 'list' } }, { catalog: () => cat });
+    await ap.fill({ left: 0, seedId: 'a0' });
+    expect(new Set(added[0][0])).toEqual(new Set(cat.slice(1).map((t) => t.id)));
+  });
+
+  it("once a shuffle's whole pool is queued, another round of it, without the song just queued (and no members-only songs signed out)", async () => {
+    const rock = Array.from({ length: 5 }, (_, i) => track(`r${i}`, { genre: 'rock' }));
+    const members = track('m0', { genre: 'rock', membersOnly: true });
+    const { ap, added } = setup({ current: rock[0], seed: rock[0], index: 0, queue: rock, context: { label: shuffleLabel('rock'), mode: 'list' } }, { catalog: () => [...rock, members] });
+    await ap.fill({ left: 0, seedId: 'r0' });
+    expect([...added[0][0]].sort()).toEqual(['r0', 'r1', 'r2', 'r3']);
   });
 
   it('nothing with repeat on or for an old seed', async () => {

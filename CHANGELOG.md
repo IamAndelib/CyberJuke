@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- Home's Shuffle follows the genre you picked: with rock selected it reads "Shuffle rock" and plays random rock songs; with All, the whole Jukebox as before. A shuffle now keeps going with more random songs from the same pool, instead of similar ones, while Autoplay is on.
+
 ## [1.3.2] - 2026-10-29
 
 ### Fixed
