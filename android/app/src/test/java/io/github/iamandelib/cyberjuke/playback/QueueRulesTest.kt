@@ -7,6 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.util.Random
+import kotlin.random.asKotlinRandom
 
 /**
  * Runs the shared queue rule table (tests/spec/queue-rules.json, also run against the
@@ -114,7 +115,7 @@ class QueueRulesTest {
         var shuffle = false
         var repeat = "off"
         private var order = ArrayList<Int>() // shuffle play order
-        val queue = NativeQueue(this)
+        val queue = NativeQueue(this, rnd.asKotlinRandom())
 
         private val events = ArrayDeque<() -> Unit>()
         private var dispatching = false
