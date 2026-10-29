@@ -17,6 +17,10 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 
 **[Download the latest APK](https://github.com/IamAndelib/CyberJuke/releases/latest)** · Android 7.0 or newer · free and open source (GPL-3.0)
 
+<p align="center">
+  <a href="https://ko-fi.com/iamandelib"><img src="https://storage.ko-fi.com/cdn/kofi2.png?v=6" alt="Buy Me a Coffee at ko-fi.com" height="54"></a>
+</p>
+
 ## Highlights
 
 | | | |
@@ -214,6 +218,10 @@ Maintainers: the publishing steps (signing keys, test builds, releases, F-Droid 
 - Fonts: [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) and [Departure Mono](https://departuremono.com), both under the SIL Open Font License.
 
 See [NOTICE.md](NOTICE.md) for all third-party components and their licenses. Security issues: see [SECURITY.md](SECURITY.md).
+
+## Support
+
+CyberJuke is free, with no ads and nothing to sign up for. If you enjoy it, you can buy me a coffee on [Ko-fi](https://ko-fi.com/iamandelib).
 
 ## License
 
