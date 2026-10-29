@@ -951,7 +951,8 @@ class PlaybackService : MediaSessionService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             queue.onTransition()
-            val trimmed = queue.trimPlayedAuto(QueueCommands.KEEP_PLAYED_AUTO)
+            // Not in a repeat's loop: it would lose its songs lap after lap.
+            val trimmed = if (player?.repeatMode == Player.REPEAT_MODE_OFF) queue.trimPlayedAuto(QueueCommands.KEEP_PLAYED_AUTO) else 0
             if (trimmed > 0) Log.i(TAG, "Trimmed $trimmed played autoplay item(s)")
             queueChanged()
             // A skip makes any pending prefetch for the old "next" stale.
@@ -1017,9 +1018,8 @@ class PlaybackService : MediaSessionService() {
             crossfade?.onListChanged()
         }
 
-        /** Repeat all or one turns autoplay off; back to off, autoplay fills up again. */
+        /** Repeat keeps what's lined up and autoplay adds no more; back to off, it fills up again. */
         override fun onRepeatModeChanged(repeatMode: Int) {
-            queue.onRepeatModeChanged(repeatMode != Player.REPEAT_MODE_OFF)
             lowKey = null
             queueChanged()
         }
@@ -1180,10 +1180,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun restore(item: MediaItem, section: NativeQueue.Section, beforeId: String?) {
-        if (section == NativeQueue.Section.AUTO &&
-            (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || player?.repeatMode != Player.REPEAT_MODE_OFF)
-        ) {
-            Log.i(TAG, "restore: autoplay item dropped (autoplay off or repeat on)")
+        if (section == NativeQueue.Section.AUTO && !Stations.keepsGoing(autoplayEnabled, seedId, context?.first)) {
+            Log.i(TAG, "restore: autoplay item dropped (autoplay off)")
             return
         }
         // During a fade, among the tracks after the one fading in: it takes over first.

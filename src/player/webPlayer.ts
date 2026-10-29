@@ -483,8 +483,8 @@ export class WebPlayer implements Player {
 
   async restore(track: Track, kind: UpNextKind, beforeId: string | null): Promise<void> {
     if (!this.q.current) return this.playList([track], 0);
-    // Autoplay rows don't come back while autoplay is off or repeat is on (they'd be dropped).
-    if (kind === 'autoplay' && (!this.keepsGoing(this.seed?.id) || this.q.repeat !== 'off')) return;
+    // Autoplay rows don't come back while autoplay is off (they'd be dropped).
+    if (kind === 'autoplay' && !this.keepsGoing(this.seed?.id)) return;
     this.q.restore(track, kind, beforeId);
     this.publish();
   }

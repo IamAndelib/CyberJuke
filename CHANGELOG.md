@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Repeat no longer empties Up next. After you tap a song on Home or in Search, **Repeat all** loops it together with the songs lined up after it, instead of playing the one song over and over, and **Next** moves on with **Repeat one** (from the last song back to the first, too). Autoplay adds no more while repeat is on, as before.
+
 ## [1.3.2] - 2026-10-29
 
 ### Fixed
