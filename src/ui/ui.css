@@ -324,7 +324,9 @@
   position: relative;
   overflow: hidden;
   aspect-ratio: 1;
-  background: var(--color-surface);
+  /* Opaque: the tint (::after) blends onto the page's colour, so a picture still on its way
+     leaves a dark box in the dark themes, not a square of bare tint. */
+  background: linear-gradient(var(--color-surface), var(--color-surface)), var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   isolation: isolate;
