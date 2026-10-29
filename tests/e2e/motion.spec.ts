@@ -446,7 +446,7 @@ test('the track menu keeps its content while it slides away', async ({ page }) =
   const menu = page.getByTestId('track-menu');
   await expect(menu.getByTestId('menu-share')).toBeVisible();
   const seen = await menu.evaluate(async (el) => {
-    const cancel = el.querySelector('.sheet-item.cancel') as HTMLElement;
+    const cancel = el.querySelector('.sheet-cancel button') as HTMLElement;
     let ended = false;
     el.addEventListener('transitionend', () => (ended = true));
     cancel.click();

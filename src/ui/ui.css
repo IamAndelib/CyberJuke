@@ -903,12 +903,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.sheet-item.cancel {
+.sheet-cancel {
+  display: flex;
   justify-content: center;
-  font-family: var(--font-display);
-  color: var(--color-fg-dim);
-  border-top: 1px dashed var(--color-border);
   margin-top: 4px;
+  padding: 4px 0;
+  border-top: 1px dashed var(--color-border);
+}
+.sheet-cancel .link-btn {
+  min-height: 48px;
+  padding: 0 12px;
+}
+.sheet-cancel .link-btn:not(:active, [data-pressed]) {
+  color: var(--color-fg-dim);
 }
 
 /* ---- Toasts ----------------------------------------------------------------------- */
