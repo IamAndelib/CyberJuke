@@ -55,7 +55,7 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 - [ ] **Add to queue** two tracks, then start a different list. Your two queued tracks still play next.
 - [ ] In Up next, **Remove** a track, then tap **Undo**. It comes back in the same place.
 - [ ] On Home, pick a genre chip: the Shuffle box reads "Shuffle <genre>". Tap it: only that genre plays, and past the first 50 more of it follow (Autoplay on). With **All**: "Shuffle the Jukebox", from everything.
-- [ ] Turn **Repeat** on: the autoplay section disappears. Turn it off: it comes back.
+- [ ] Tap a song on Home, then turn on **Repeat all**: the autoplay section stays, no more are added, and Next moves through them and back to the first. On **Repeat one**, Next still moves on, from the last song to the first too.
 - [ ] Settings → **Autoplay** off: playback stops when the list ends.
 - [ ] Let autoplay run for an hour or more: it keeps going without repeating the same songs.
 

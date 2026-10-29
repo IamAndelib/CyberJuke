@@ -65,7 +65,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
   /**
    * The last batch added, until the player's state shows it: `queue` is the list the
    * state had when the call returned; once that changes, the batch is in it (or was
-   * dropped: repeat, a new list).
+   * dropped: a new list).
    */
   let batch: { seedId: string; ids: string[]; at: number; queue?: readonly Track[]; round?: boolean } | null = null;
   /**

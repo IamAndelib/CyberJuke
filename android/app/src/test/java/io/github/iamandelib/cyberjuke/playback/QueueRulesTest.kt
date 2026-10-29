@@ -68,10 +68,7 @@ class QueueRulesTest {
                 "remove" -> p.remove(p.ids.indexOf(s.getString("id")))
                 "move" -> p.moveItem(p.ids.indexOf(s.getString("id")), s.getInt("to"))
                 "setShuffle" -> p.toggleShuffle(s.getBoolean("on"))
-                "setRepeat" -> {
-                    p.repeat = s.getString("mode")
-                    p.queue.onRepeatModeChanged(p.repeat != "off")
-                }
+                "setRepeat" -> p.repeat = s.getString("mode")
                 "expect" -> expect(p, s, where)
                 else -> throw IllegalArgumentException("unknown op in $where")
             }
@@ -256,8 +253,9 @@ class QueueRulesTest {
         /** User navigation treats repeat-one as off (Player.seekToNext / seekToPrevious). */
         private val navRepeat get() = if (repeat == "one") "off" else repeat
 
+        /** JukePlayerPlugin.skipToNext: Media3's, but with repeat one it wraps at the end, as with repeat all. */
         fun next() {
-            val n = nextIndex(current, navRepeat)
+            val n = nextIndex(current, if (repeat == "one") "all" else repeat)
             if (n >= 0) seekTo(n)
         }
 
