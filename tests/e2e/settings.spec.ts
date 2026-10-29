@@ -311,6 +311,16 @@ test('Source code: the last card links to the repository and its latest release'
   expect(await opened(page)).toEqual(['https://github.com/IamAndelib/CyberJuke', 'https://github.com/IamAndelib/CyberJuke/releases/latest']);
 });
 
+test('About: Buy me a coffee opens the Ko-fi page in the browser', async ({ page }) => {
+  await recordOpens(page);
+  await page.goto('/');
+  await openSettings(page);
+  const link = page.getByTestId('about-support').getByRole('link', { name: 'Buy me a coffee' });
+  await link.scrollIntoViewIfNeeded();
+  await link.click();
+  expect(await opened(page)).toEqual(['https://ko-fi.com/iamandelib']);
+});
+
 test('Licenses: every bundled library is listed and the full texts open in the app', async ({ page }) => {
   await page.goto('/');
   await openSettings(page);

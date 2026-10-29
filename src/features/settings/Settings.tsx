@@ -81,6 +81,9 @@ const CROSSFADE_LABELS: Record<CrossfadeMs, string> = { 0: 'Off', 3000: '3 s', 6
 /** Where liked songs are saved again after Clear cache: on Wi-Fi, unless Download using mobile data is on. */
 const savedAgain = (mobileData: boolean) => (mobileData ? 'saved again' : 'saved again on Wi-Fi');
 
+/** The maintainer's Ko-fi page (README's Support, the repository's Sponsor button). */
+const KOFI_URL = 'https://ko-fi.com/iamandelib';
+
 /** Where the code and the releases are (opened in the browser; github.com is allowlisted). */
 function A({ href, children }: { href: string; children: string }) {
   return (
@@ -661,6 +664,10 @@ export function Settings() {
         <p data-testid="about-signal">
           <b>Signal Radio:</b> <A href="https://github.com/hyphen8d/signal">SIGNAL by hyphen8d (MIT)</A>, the stations
           Cyberspace's Jukebox plays as Signal Radio, bundled with the app.
+        </p>
+        <p data-testid="about-support">
+          <b>Support:</b> CyberJuke is free, with no ads. <A href={KOFI_URL}>Buy me a coffee</A> on Ko-fi if you
+          enjoy it.
         </p>
       </section>
 

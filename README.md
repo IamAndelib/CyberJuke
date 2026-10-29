@@ -221,7 +221,7 @@ See [NOTICE.md](NOTICE.md) for all third-party components and their licenses. Se
 
 ## Support
 
-CyberJuke is free, with no ads and nothing to sign up for. If you enjoy it, you can buy me a coffee on [Ko-fi](https://ko-fi.com/iamandelib).
+CyberJuke is free, with no ads and nothing to sign up for. If you enjoy it, you can buy me a coffee on [Ko-fi](https://ko-fi.com/iamandelib). **Settings → About → Buy me a coffee** opens the same page in your browser; the app itself sends nothing there.
 
 ## License
 
