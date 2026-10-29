@@ -11,7 +11,9 @@
  *
  * Signed in with Cyberspace the catalog also holds members-only posts, so it is kept
  * under its own key (CATALOG_MEMBERS_KEY). Signing in or out calls `reset`: both
- * saved catalogs are dropped and the next refresh is a full one.
+ * saved catalogs are dropped and the next refresh is a full one. Until it lands, the
+ * catalog shown stays, less its members-only posts, so the chips, Most saved and search
+ * don't empty out or jump about meanwhile.
  *
  * Saved as two parts: the tracks under the key (in the app, the files
  * cyberjuke/catalog-public.json and cyberjuke/catalog-members.json, migrated once
@@ -250,10 +252,10 @@ export function createCatalog(deps: CatalogDeps): Catalog {
       inflight = null;
       restored = Promise.resolve();
       saved = null;
-      all.value = [];
+      all.value = all.value.filter((t) => !t.membersOnly);
       fullAt = checkedAt = 0;
       error.value = null;
-      status.value = 'idle';
+      if (!all.value.length) status.value = 'idle';
       const keys = [CATALOG_KEY, CATALOG_MEMBERS_KEY].flatMap((k) => [k, metaKey(k)]);
       await Promise.all(keys.map((k) => (deps.storage.remove ? deps.storage.remove(k) : deps.storage.set(k, '')).catch(() => {})));
       await api.refresh();

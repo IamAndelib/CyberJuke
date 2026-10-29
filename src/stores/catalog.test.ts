@@ -360,7 +360,7 @@ describe('catalog per sign-in state', () => {
     expect(s.source.catalog).not.toHaveBeenCalled();
   });
 
-  it('reset (sign in or out) clears memory and both saved catalogs, then does a full refresh', async () => {
+  it('reset (sign in or out) clears both saved catalogs, then does a full refresh', async () => {
     const s = signedSetup(false);
     await s.cat.refresh();
     expect(s.cat.all.value.map((x) => x.id)).toEqual(['pub']);
@@ -378,6 +378,31 @@ describe('catalog per sign-in state', () => {
     await s.cat.reset();
     expect(s.storage.data.has(CATALOG_MEMBERS_KEY)).toBe(false);
     expect(s.cat.all.value.map((x) => x.id)).toEqual(['pub']);
+  });
+
+  it("while the new state's catalog comes in, the old one shows on, without its members-only posts", async () => {
+    const s = signedSetup(true);
+    await s.cat.refresh();
+    expect(s.cat.all.value.map((x) => x.id)).toEqual(['mem', 'pub']);
+    // Signing out: the members-only post goes at once; the rest stays while the fetch runs.
+    s.setSignedIn(false);
+    s.hold();
+    const out = s.cat.reset();
+    await Promise.resolve();
+    expect(s.cat.all.value.map((x) => x.id)).toEqual(['pub']);
+    expect(s.cat.status.value).toBe('ready');
+    s.release();
+    await out;
+    expect(s.cat.all.value.map((x) => x.id)).toEqual(['pub']);
+    // Signing in: the public catalog shows until the members one comes.
+    s.setSignedIn(true);
+    s.hold();
+    const into = s.cat.reset();
+    await Promise.resolve();
+    expect(s.cat.all.value.map((x) => x.id)).toEqual(['pub']);
+    s.release();
+    await into;
+    expect(s.cat.all.value.map((x) => x.id)).toEqual(['mem', 'pub']);
   });
 
   it('a fetch still running when the state changes is thrown away', async () => {
