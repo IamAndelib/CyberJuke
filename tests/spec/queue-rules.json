@@ -427,7 +427,7 @@
         { "op": "next" },
         { "op": "next" },
         { "op": "nextAuto" },
-        { "op": "expect", "current": "s2", "upNext": [] },
+        { "op": "expect", "current": "s2" },
         { "op": "nextAuto" },
         { "op": "expect", "current": "a", "upNext": ["b", "s1", "s2"] },
         { "op": "setRepeat", "mode": "one" },
