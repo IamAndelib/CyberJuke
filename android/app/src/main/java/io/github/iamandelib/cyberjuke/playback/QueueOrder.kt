@@ -1,5 +1,7 @@
 package io.github.iamandelib.cyberjuke.playback
 
+import kotlin.random.Random
+
 /**
  * Pure helpers for "Add to queue" (play next, FIFO) and autoplay. No Android or Media3 types,
  * so they are unit-tested on the plain JVM (QueueOrderTest).
@@ -147,7 +149,7 @@ internal interface QueueHost<T> {
  * entries. [pending]'s iteration order is their play order. Not thread-safe: call it on the
  * player's thread.
  */
-internal class NativeQueue<T>(private val host: QueueHost<T>) {
+internal class NativeQueue<T>(private val host: QueueHost<T>, private val random: Random = Random.Default) {
     private val pending = LinkedHashSet<Long>()
     private var nextSerial = 1L
 
@@ -173,8 +175,9 @@ internal class NativeQueue<T>(private val host: QueueHost<T>) {
     }
 
     /**
-     * Toggling shuffle keeps the queued tracks next in both directions. Turned on, the shuffle
-     * starts at the current track, so the whole list is still ahead (as on the web).
+     * Toggling shuffle keeps the queued tracks next in both directions. Turned on, it is a fresh
+     * shuffle (Media3 would keep the last one) that starts at the current track, so the whole
+     * list is still ahead (as on the web).
      */
     fun onShuffleModeChanged(enabled: Boolean) {
         prune()
@@ -259,15 +262,10 @@ internal class NativeQueue<T>(private val host: QueueHost<T>) {
     /** Shuffle on: a shuffle order that starts at the current item (then the usual rules). */
     private fun shuffleFromCurrent() {
         if (!host.shuffleEnabled) return
-        val order = host.shuffleOrder() ?: return
         val cur = host.currentIndex
-        if (order.size != host.count || cur !in 0 until host.count) return
-        val first = IntArray(order.size)
-        first[0] = cur
-        var k = 1
-        for (i in order) if (i != cur) first[k++] = i
-        val desired = QueueOrder.arrange(first, cur, pendingIndices(), autoIndices())
-        if (!desired.contentEquals(order)) host.setShuffleOrder(desired)
+        if (cur !in 0 until host.count) return
+        val first = intArrayOf(cur) + (0 until host.count).filter { it != cur }.shuffled(random)
+        host.setShuffleOrder(QueueOrder.arrange(first, cur, pendingIndices(), autoIndices()))
     }
 
     /** Autoplay: appends [items] after everything else (shuffle never moves them). */

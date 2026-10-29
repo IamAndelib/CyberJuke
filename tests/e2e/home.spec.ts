@@ -35,6 +35,17 @@ test('a genre chip filters the list', async ({ page }) => {
   await expect(page.getByTestId('chip-all')).toHaveAttribute('aria-pressed', 'true');
 });
 
+test('a genre of several words fills its chip too (Cyberspace queries it by its slug)', async ({ page }) => {
+  await start(page);
+  const genre = (await page.locator('[data-testid="genre-chip"][data-genre*=" "]').first().getAttribute('data-genre'))!;
+  // By name: the chips may reorder as the catalog loads.
+  await page.locator(`[data-testid="genre-chip"][data-genre="${genre}"]`).click();
+  await waitForTracks(page);
+  const tags = await page.getByTestId('track-list').locator('.tag').allTextContents();
+  expect(tags.length).toBeGreaterThan(0);
+  for (const t of tags) expect(t.trim()).toBe(genre);
+});
+
 test('?autoplay=latest starts the newest track (CI hook, test builds only)', async ({ page }) => {
   await page.goto('/?autoplay=latest');
   await expect(page.getByTestId('mini-player')).toBeVisible();

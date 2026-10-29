@@ -7,6 +7,8 @@
 
 ### Fixed
 - Signing in or out no longer reshuffles Home's genre chips for a few seconds while the Jukebox reloads: they change once, when the other list of songs has arrived, and members-only posts still go at once on sign-out.
+- Turning shuffle off and on again on the phone shuffles anew, as the web does, instead of bringing back the same order as last time.
+- Signed out, Home's genre chips of more than one word (alternative rock, hip hop, r&b…) show their songs again instead of "Nothing here yet".
 - Repeat no longer empties Up next. After you tap a song on Home or in Search, **Repeat all** loops it together with the songs lined up after it, instead of playing the one song over and over, and **Next** moves on with **Repeat one** (from the last song back to the first, too). Autoplay adds no more while repeat is on, as before.
 
 ## [1.3.2] - 2026-10-29

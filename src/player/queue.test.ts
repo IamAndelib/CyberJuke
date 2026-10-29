@@ -132,6 +132,18 @@ describe('Queue: shuffle', () => {
     expect(q.upNextIndices().map((i) => q.items[i].id)).toEqual(ids(q.upNext()));
   });
 
+  it('turning shuffle on again shuffles afresh (natively too: QueueOpsTest)', () => {
+    const q = new Queue(seeded(5));
+    q.setList(Array.from({ length: 12 }, (_, i) => t(`t${i}`)), 3);
+    q.setShuffle(true);
+    const first = ids(q.upNext());
+    q.setShuffle(false);
+    q.setShuffle(true);
+    const second = ids(q.upNext());
+    expect(second.slice().sort()).toEqual(first.slice().sort());
+    expect(second).not.toEqual(first);
+  });
+
   it('setList while shuffled shuffles with the start track first', () => {
     const q = new Queue(seeded(3));
     q.setShuffle(true);

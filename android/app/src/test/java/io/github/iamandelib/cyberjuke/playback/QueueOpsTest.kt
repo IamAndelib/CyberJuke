@@ -4,6 +4,7 @@ import io.github.iamandelib.cyberjuke.playback.NativeQueue.Section
 import io.github.iamandelib.cyberjuke.playback.QueueRulesTest.FakePlayer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Random
@@ -23,6 +24,20 @@ class QueueOpsTest {
             p.serials[i] in p.queue.pendingSerials -> Section.QUEUED
             p.auto[i] -> Section.AUTO
             else -> Section.LIST
+        }
+    }
+
+    @Test
+    fun turningShuffleOnAgainShufflesAfresh() {
+        for (seed in 0L until 20L) {
+            val p = player((0 until 12).map { "t$it" }, start = 3, seed = seed)
+            p.toggleShuffle(true)
+            val first = p.upNext()
+            p.toggleShuffle(false)
+            p.toggleShuffle(true)
+            val second = p.upNext()
+            assertEquals("seed $seed: same tracks ahead", first.sorted(), second.sorted())
+            assertNotEquals("seed $seed: a new order", first, second)
         }
     }
 

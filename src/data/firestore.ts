@@ -88,6 +88,13 @@ function eq(fieldPath: string, value: Record<string, unknown>): Filter {
 }
 
 /** Build the runQuery body. Exported for tests: these are the ONLY query shapes we send. */
+/**
+ * The genre as Cyberspace stores it on the post (audioAttachmentGenre): the attachment's
+ * genre, lowercased, spaces as hyphens, other signs dropped ('alternative rock' →
+ * 'alternative-rock', 'r&b' → 'rb'). Checked against every public post.
+ */
+const genreSlug = (genre: string): string => genre.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+
 export function buildQuery(opts: {
   genre?: string | null;
   cursor?: Cursor | null;
@@ -110,7 +117,7 @@ export function buildQuery(opts: {
       ];
   if (opts.genre != null) {
     if (opts.members) throw new Error('members queries have no genre filter');
-    filters.push(eq('audioAttachmentGenre', { stringValue: opts.genre }));
+    filters.push(eq('audioAttachmentGenre', { stringValue: genreSlug(opts.genre) }));
   }
   if (opts.since) {
     filters.push({ fieldFilter: { field: { fieldPath: 'createdAt' }, op: 'GREATER_THAN', value: { timestampValue: opts.since } } });
