@@ -1,6 +1,7 @@
 import type { Track } from '../../data/model';
 import { music, musicTracks } from '../../data/ytmusic';
 import { openArtistPage, useSearchContext, type AlbumRef } from '../../ui/nav';
+import { afterPress } from '../../ui/press';
 import { PlayShuffle, Tracks } from '../../ui/components/TrackList';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
@@ -71,7 +72,7 @@ export function AlbumPage({ album }: { album: AlbumRef }) {
           </h2>
           {meta.subtitle && album.kind === 'playlist' && <div class="album-artist dim">{meta.subtitle}</div>}
           {meta.subtitle && album.kind === 'album' && (
-            <button class="np-link album-artist" onClick={() => openArtistPage(meta.subtitle)} data-testid="album-artist">
+            <button class="np-link album-artist" onClick={(e) => afterPress(e.currentTarget, () => openArtistPage(meta.subtitle))} data-testid="album-artist">
               {meta.subtitle}
             </button>
           )}

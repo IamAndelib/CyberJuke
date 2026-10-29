@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { Icon } from '../icons';
+import { afterPress } from '../press';
 
 /** What a tile is: its test ids (`genre-cell`, `artist-fav`…), data attribute and name style. */
 type TileKind = 'genre' | 'artist';
@@ -52,7 +53,7 @@ export function FavTile({
   const data = { [`data-${kind}`]: name };
   return (
     <div class={'genre-cell' + (fav ? ' fav' : '')} data-testid={`${kind}-cell`} {...data}>
-      <button class="genre-tile" onClick={(e) => !tooSoon(e) && onOpen()} data-testid={`${kind}-tile`} {...data}>
+      <button class="genre-tile" onClick={(e) => !tooSoon(e) && afterPress(e.currentTarget, onOpen)} data-testid={`${kind}-tile`} {...data}>
         <span class={`${kind}-name`}>{name}</span>
       </button>
       <button

@@ -31,6 +31,7 @@ import type { FeedLoader, FeedOptions } from '../../stores/feed';
 import { Icon } from '../icons';
 import { OfflineState } from './OfflineGate';
 import { openAlbumPage, openArtistPage, openReleasesPage, type AlbumRef } from '../nav';
+import { afterPress } from '../press';
 
 /** Square cover art (albums, playlists, artists) with the same pixel treatment as track art. */
 export function Cover({ url, size = 'md', round, class: cls }: { url?: string; size?: 'sm' | 'md' | 'lg'; round?: boolean; class?: string }) {
@@ -80,7 +81,7 @@ function ReleaseCard({ release, artist, kind }: { release: Release; artist: stri
   return (
     <button
       class="shelf-btn release-btn"
-      onClick={() => openAlbumPage(releaseRef(release, artist, kind))}
+      onClick={(e) => afterPress(e.currentTarget, () => openAlbumPage(releaseRef(release, artist, kind)))}
       data-testid="release-card"
       data-kind={kind}
       aria-label={`Open ${label.toLowerCase()} ${release.title}${release.year ? `, ${release.year}` : ''}`}
@@ -128,7 +129,7 @@ export function ReleaseShelf({
         {token && channelId && (
           <button
             class="link-btn see-all"
-            onClick={() => openReleasesPage({ artist, channelId, kind, token })}
+            onClick={(e) => afterPress(e.currentTarget, () => openReleasesPage({ artist, channelId, kind, token }))}
             aria-label={`See all ${title.toLowerCase()} by ${artist}`}
             data-testid="see-all"
           >
@@ -168,7 +169,7 @@ export function CoverRow({ items, testid = 'here-releases' }: { items: AlbumRef[
         <li key={r.url} class="shelf-item">
           <button
             class="shelf-btn release-btn"
-            onClick={() => openAlbumPage(r)}
+            onClick={(e) => afterPress(e.currentTarget, () => openAlbumPage(r))}
             aria-label={`Open ${(r.label ?? (r.kind === 'album' ? 'Album' : 'Playlist')).toLowerCase()} ${r.title}`}
             data-testid="here-release"
           >
@@ -194,12 +195,14 @@ export function MusicRow({ item }: { item: MusicItem }) {
     <li class="row" data-testid="music-row" data-kind={item.kind}>
       <button
         class="row-main"
-        onClick={() => {
-          if (!isArtist) return openAlbumPage(albumRef(item));
-          // The channel is known already: the artist page needs no lookup.
-          artistChannels.remember(item.title, itemChannelId(item));
-          openArtistPage(item.title);
-        }}
+        onClick={(e) =>
+          afterPress(e.currentTarget, () => {
+            if (!isArtist) return openAlbumPage(albumRef(item));
+            // The channel is known already: the artist page needs no lookup.
+            artistChannels.remember(item.title, itemChannelId(item));
+            openArtistPage(item.title);
+          })
+        }
         aria-label={`${isArtist ? 'Open artist' : item.kind === 'album' ? 'Open album' : 'Open playlist'} ${item.title}`}
         data-testid="music-open"
       >

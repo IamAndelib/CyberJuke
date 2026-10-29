@@ -1,6 +1,6 @@
 import { effect, useComputed } from '@preact/signals';
 import { memo } from 'preact/compat';
-import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
 import { hasCurrent } from '../player';
 import { BlockBanner } from '../ui/components/BlockBanner';
 import { OfflineLine } from '../ui/components/OfflineLine';
@@ -47,8 +47,6 @@ const TAB_ITEMS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'radio', label: 'Radio', icon: 'radio' },
 ];
 
-/** SM7: a pushed page slides in over this long; the page under it hides once it has. */
-const PAGE_ENTER_MS = 180;
 /** P5: a second tap on the active tab within this long pops to its root. */
 const RETAP_MS = 700;
 /** Scrolled further than this, a re-tap scrolls up first (less: it is at the top). */
@@ -141,32 +139,18 @@ const PageContent = memo(function PageContent({ t, entry }: { t: Tab; entry: Sta
 });
 
 /**
- * One page of a tab: the root or a pushed page. Only the top page shows; a page that
- * gets covered stays mounted (scroll, artwork, loaded lists) and, once the page over
- * it has slid in, is hidden with content-visibility and made inert. Uncovered again,
- * it shows at once, before the page over it goes.
+ * One page of a tab: the root or a pushed page. Only the top page shows (SM7): a page that
+ * gets covered stays mounted (scroll, artwork, loaded lists), hidden with content-visibility
+ * and inert in the same render as the page that covers it, so no frame shows both. Uncovered
+ * again, it shows in the render that takes the page over it away.
  */
 const PageFrame = memo(function PageFrame({ t, entry, top }: { t: Tab; entry: StackEntry | null; top: boolean }) {
-  const ref = useRef<HTMLDivElement>(null);
   const k = pageKey(t, entry);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const cover = (on: boolean) => {
-      el.classList.toggle('covered', on);
-      el.inert = on;
-      if (on) el.setAttribute('aria-hidden', 'true');
-      else el.removeAttribute('aria-hidden');
-    };
-    if (top) return cover(false);
-    if (reducedMotion()) return cover(true);
-    const id = setTimeout(() => cover(true), PAGE_ENTER_MS);
-    return () => clearTimeout(id);
-  }, [top]);
   return (
     <div
-      ref={ref}
-      class={'page' + (top ? ' top' : '') + (entry ? ' pushed' : '')}
+      class={'page' + (top ? ' top' : ' covered')}
+      inert={top ? undefined : true}
+      aria-hidden={top ? undefined : true}
       data-page={k}
       data-kind={entry ? entry.page.kind : 'root'}
       onClickCapture={(e) => {
