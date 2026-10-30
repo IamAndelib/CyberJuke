@@ -51,11 +51,13 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 
 ## Queue and autoplay
 - [ ] Tap a track on Home. **Up next** shows similar songs under "Autoplay · similar to …" (same artist or genre feel).
-- [ ] Play an album from an artist page. It plays in order, then autoplay continues after the last track.
+- [ ] Play an album from an artist page. It plays in order, with no Autoplay section until its last few tracks; then autoplay continues after the last track.
 - [ ] **Add to queue** two tracks, then start a different list. Your two queued tracks still play next.
 - [ ] In Up next, **Remove** a track, then tap **Undo**. It comes back in the same place.
 - [ ] On Home, pick a genre chip: the Shuffle box reads "Shuffle <genre>". Tap it: only that genre plays, and past the first 50 more of it follow (Autoplay on). With **All**: "Shuffle the Jukebox", from everything.
-- [ ] Tap a song on Home, then turn on **Repeat all**: the autoplay section stays, no more are added, and Next moves through them and back to the first. On **Repeat one**, Next still moves on, from the last song to the first too.
+- [ ] Turn on **Repeat all**, then tap a song on Home (and a genre with a single song): Up next fills with its suggestions and ends with "Then repeats from the top."; after the last one the song plays again. No more are added meanwhile.
+- [ ] Play a genre with **Repeat all** on: after its last song the first plays again, with no suggestions in between. Turn repeat off near the end: suggestions appear.
+- [ ] **Repeat one**: the song replays when it ends and Up next says "Repeating this song."; Next moves on. With Autoplay off, at a list's last song Next is greyed out in the app and on the notification alike.
 - [ ] Settings → **Autoplay** off: playback stops when the list ends.
 - [ ] Let autoplay run for an hour or more: it keeps going without repeating the same songs.
 
