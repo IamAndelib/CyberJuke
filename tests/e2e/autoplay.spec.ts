@@ -700,7 +700,32 @@ test('held under "Queued by you", a song offers Remove from queue instead; elsew
   await expect(menu.getByTestId('menu-add-queue')).toHaveCount(0);
   await menu.getByTestId('menu-remove-queue').click();
   await expect(row).toHaveCount(0);
+  // Focus stays in Now Playing (TalkBack keeps its place), not back at the top of the page.
+  await expect.poll(() => page.evaluate(() => { const a = document.activeElement; return a != null && a.closest('.np') != null && a.closest('.sheet') == null; })).toBe(true);
   await page.getByTestId('toast').filter({ hasText: 'Removed from queue' }).getByTestId('toast-action').click();
   await expect(row).toHaveCount(1);
   await expect(row.locator('.row-title')).toHaveText(queuedTitle);
+});
+
+test('a held queued row that starts playing while its menu is open: the menu closes, nothing is removed', async ({ page }) => {
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  await queueRow(page, 2);
+  const queuedTitle = (await visible(page, 'track-title').nth(2).textContent())!.trim();
+  await openNowPlaying(page);
+  const row = page.locator('[data-testid="upnext-row"][data-section="queued"]');
+  await row.scrollIntoViewIfNeeded();
+  const b = (await row.locator('.row-main').boundingBox())!;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x + 40, y: b.y + b.height / 2, id: 1 }] });
+  const menu = page.getByTestId('track-menu');
+  await expect(menu.getByTestId('menu-remove-queue')).toBeVisible();
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+  // The playing song ends: the queued one plays now, and the menu for its old row goes.
+  await page.evaluate(() => (window as unknown as { __cyberjukeYt: { end(): void } }).__cyberjukeYt.end());
+  await expect(page.getByTestId('np-title')).toHaveText(queuedTitle);
+  await expect(menu).toBeHidden();
+  await expect(page.getByTestId('np-title')).toHaveText(queuedTitle);
+  await expect(page.getByTestId('toast').filter({ hasText: 'Removed from queue' })).toHaveCount(0);
 });

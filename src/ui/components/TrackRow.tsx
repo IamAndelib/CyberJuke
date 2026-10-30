@@ -3,10 +3,10 @@ import { memo } from 'preact/compat';
 import { useId } from 'preact/hooks';
 import type { Track } from '../../data/model';
 import { online } from '../../core/network';
-import { currentId, currentPlaysOffline, isPlaying, player } from '../../player';
+import { currentId, currentPlaysOffline, isPlaying, player, type UpItem } from '../../player';
 import { isSaved, savedOffline } from '../../stores/savedOffline';
 import { Icon } from '../icons';
-import { nowPlayingOpen, openMenu, type QueuedRow } from '../nav';
+import { nowPlayingOpen, openMenu } from '../nav';
 import { Art } from './Art';
 
 /** M9: a second tap on the same row this soon is the tail of a double tap. */
@@ -89,7 +89,7 @@ if (typeof document !== 'undefined') {
  * ends the press is swallowed. Moving the finger (a scroll) cancels it. No re-renders.
  * Every list's rows use it (Up next's too).
  */
-export function longPress(track: Track, queued: QueuedRow | null = null) {
+export function longPress(track: Track, queued: UpItem | null = null) {
   return {
     onPointerDown: (e: PointerEvent) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;

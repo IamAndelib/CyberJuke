@@ -19,6 +19,7 @@ import {
   queuePlace,
   repeatMode,
   shuffleOn,
+  upNextSections,
   waitingForNetwork,
 } from '../../player';
 import { block } from '../../stores/block';
@@ -792,8 +793,15 @@ export function TrackMenu() {
   const fav = useLiked(t?.id);
   // A track still being looked up (nothing to play yet) can't be queued, shared or liked.
   const known = hasAudio(t);
-  // Held in Now Playing's "Queued by you": Remove from queue takes Add to queue's place.
-  const queued = menuQueued.value?.item.track === t ? menuQueued.value : null;
+  // Held in Now Playing's "Queued by you": Remove from queue takes Add to queue's place, for
+  // that row as the queue has it now. Gone from there (it started playing, or the queue moved),
+  // the menu closes rather than act on another row.
+  const held = menuQueued.value?.track === t ? menuQueued.value : null;
+  const live = upNextSections.value.queued;
+  const k = held ? live.findIndex((u) => u.index === held.index && u.track.id === held.track.id) : -1;
+  useEffect(() => {
+    if (open && held && k < 0) close();
+  });
   return (
     <div class={'sheet-wrap' + (open ? ' open' : '')} aria-hidden={!open} inert={!open}>
       <div class="scrim" onClick={close} />
@@ -807,11 +815,11 @@ export function TrackMenu() {
                 <div class="row-artist">{t.artist}</div>
               </div>
             </div>
-            {queued ? (
+            {held ? (
               <button
                 class="sheet-item"
                 onClick={() => {
-                  removeWithUndo(queued.item, 'queued', queued.beforeId);
+                  if (k >= 0) removeWithUndo(live[k], 'queued', live[k + 1]?.track.id ?? null);
                   close();
                 }}
                 data-testid="menu-remove-queue"

@@ -84,6 +84,8 @@ const upTo = (n: number) => (n >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : n);
  * anything.
  */
 export function removeWithUndo(it: UpItem, kind: Kind, beforeId: string | null): void {
+  // A row the queue has moved on from (its track playing now, or at another place) stays.
+  if (player.state.peek().queue[it.index]?.id !== it.track.id) return;
   void player.remove(it.index, it.track.id);
   const ctx0 = playContext.peek();
   const cur0 = currentId.peek();
@@ -160,7 +162,7 @@ export function UpNext() {
         >
           <button
             class="row-main"
-            {...longPress(it.track, kind === 'queued' ? { item: it, beforeId: items[k + 1]?.track.id ?? null } : null)}
+            {...longPress(it.track, kind === 'queued' ? it : null)}
             onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id))}
             aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', autoplay' }[kind]}`}
           >

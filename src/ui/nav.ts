@@ -75,16 +75,11 @@ export const lyricsOpen = signal(false);
 /** Track whose ⋯ menu is open. */
 export const menuTrack = signal<Track | null>(null);
 
-/** A "Queued by you" row held in Now Playing's queue, and the queued one after it (Undo goes before it). */
-export interface QueuedRow {
-  item: UpItem;
-  beforeId: string | null;
-}
-/** The queued row the open menu came from, if any: the menu offers Remove from queue for it. */
-export const menuQueued = signal<QueuedRow | null>(null);
+/** The "Queued by you" row the open menu was held on, if any: the menu offers Remove from queue for it. */
+export const menuQueued = signal<UpItem | null>(null);
 
 /** Opens `track`'s menu; `queued` when it was held in Now Playing's "Queued by you". */
-export function openMenu(track: Track, queued: QueuedRow | null = null): void {
+export function openMenu(track: Track, queued: UpItem | null = null): void {
   menuQueued.value = queued;
   menuTrack.value = track;
 }
