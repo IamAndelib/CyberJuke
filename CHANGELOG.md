@@ -17,6 +17,7 @@
 - Up next on the phone lists songs in the order they will play with **Repeat all** on, and says what repeat does: "Then repeats from the top." or "Repeating this song."
 - While the music waits for the carrier to come back, the play/pause button on headphones stops the wait, as the app's own button does, instead of trying to play.
 - With Crossfade on, **Next** during a fade goes to the song fading in and carries on from where it is, instead of starting it again from the beginning.
+- With TalkBack, a song row reads its line of details too (saves, members-only, genre, who posted it), and the song playing is announced as current.
 
 ## [1.3.4] - 2026-10-29
 

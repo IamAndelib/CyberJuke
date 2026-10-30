@@ -1,5 +1,6 @@
 import { useComputed } from '@preact/signals';
 import { memo } from 'preact/compat';
+import { useId } from 'preact/hooks';
 import type { Track } from '../../data/model';
 import { online } from '../../core/network';
 import { currentId, currentPlaysOffline, isPlaying, player } from '../../player';
@@ -156,6 +157,9 @@ export const TrackRow = memo(function TrackRow({
   // a tap says why (the player refuses it). Only the current row follows the player's state.
   const off = !online.value && !(isCurrent ? currentPlaysOffline.value : isSaved(track, savedOffline.value));
   const press = longPress(track);
+  // The label names the row; its meta line (saves, members-only, genre, poster) describes it.
+  const metaId = useId();
+  const hasMeta = showSaves || track.membersOnly || (track.genre && !hideGenre) || track.by;
   return (
     <li class={'row' + (isCurrent ? ' is-current' : '') + (off ? ' off' : '')} data-testid="track-row" data-track-id={track.id}>
       <button
@@ -164,6 +168,8 @@ export const TrackRow = memo(function TrackRow({
         {...press}
         onClick={() => tapRow(track, () => onPlay(index))}
         aria-label={`Play ${track.title} by ${track.artist}`}
+        aria-describedby={hasMeta ? metaId : undefined}
+        aria-current={isCurrent || undefined}
         data-testid="track-play"
         data-index={index}
       >
@@ -178,7 +184,7 @@ export const TrackRow = memo(function TrackRow({
             {track.title}
           </div>
           <div class="row-artist">{track.artist}</div>
-          <div class="row-meta">
+          <div class="row-meta" id={metaId}>
             {showSaves && (
               <span class="saves" data-testid="track-saves" data-saves={track.saves ?? 0} aria-label={`${track.saves ?? 0} saves`}>
                 <Icon name="bookmark" size={12} />

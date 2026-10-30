@@ -751,3 +751,17 @@ for (const { name, open, sheet } of [
     await expect(s).toBeHidden();
   });
 }
+
+test('a row names its song and describes its meta line, and the current one says so', async ({ page }) => {
+  await start(page);
+  const row = page.locator('[data-testid="track-row"]:visible').filter({ has: page.locator('.row-meta .by') }).first();
+  const play = row.getByTestId('track-play');
+  const title = (await row.getByTestId('track-title').textContent())!;
+  await expect(play).toHaveAccessibleName(new RegExp(`^Play ${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} by `));
+  // The genre and the poster are read too, not hidden behind the label.
+  const by = (await row.locator('.row-meta .by').textContent())!;
+  await expect(play).toHaveAccessibleDescription(new RegExp(by.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  await expect(play).not.toHaveAttribute('aria-current');
+  await play.click();
+  await expect(play).toHaveAttribute('aria-current', 'true');
+});
