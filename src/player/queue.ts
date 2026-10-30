@@ -19,7 +19,8 @@
  *  - autoplay tracks (addAuto) play after the list, in the order added. Shuffle
  *    reorders only the list. Repeat all loops what you started: a list's autoplay tracks
  *    still to come go (they come back once repeat is off), but a single song's are its
- *    radio, the loop itself, and stay. Repeat one leaves them. Jumping to an autoplay
+ *    radio, the loop itself, and stay. Repeat one leaves them: it replays the track when
+ *    it ends, and a skip moves on as with repeat off (none at the end, as Media3's). Jumping to an autoplay
  *    track drops the ones after it (the radio continues from it), but with repeat all;
  *  - but with repeat all, played autoplay tracks more than KEEP_PLAYED behind the
  *    current one are dropped (a radio can run for hours);
@@ -166,8 +167,8 @@ export class Queue<T extends Identified> {
 
   /**
    * Advance. `auto` is true when the current track ended by itself (repeat-one then
-   * replays it); a user "next" always moves on. Returns the new current track, or
-   * null when playback should stop (end of queue with repeat off).
+   * replays it); a user "next" moves on, as Media3's: at the end of the queue only with
+   * repeat all, to its start. Returns the new current track, or null when there is none.
    */
   next(auto = false): T | null {
     if (!this.cur) return null;
@@ -179,7 +180,7 @@ export class Queue<T extends Identified> {
       this.trimPlayed();
       return this.cur.item;
     }
-    if (this.repeat === 'all' || (this.repeat === 'one' && !auto)) {
+    if (this.repeat === 'all') {
       this.cur = this.order[0];
       this.settle();
       return this.cur.item;

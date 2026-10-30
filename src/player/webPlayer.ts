@@ -364,13 +364,14 @@ export class WebPlayer implements Player {
 
   private advance(auto: boolean, afterError = false): void {
     const before = this.q.current;
-    const n = this.q.next(auto);
+    // A broken track is skipped, repeat one or not (native's seekToNextMediaItem).
+    const n = this.q.next(auto && !afterError);
     if (!n) {
       this.publish({ isPlaying: false, isBuffering: false });
       return;
     }
     if (afterError && n === before) {
-      // Repeat-one on a broken track: stop instead of looping on the error.
+      // Repeat all round a single broken track: stop instead of looping on the error.
       this.publish({ isPlaying: false, isBuffering: false });
       return;
     }

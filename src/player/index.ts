@@ -127,7 +127,7 @@ export const durationMs = computed(() => state.value.durationMs);
 /** Where the current track is in the list: "3 of 50", or "Single track". */
 export const queuePlace = computed(() => (state.value.queue.length > 1 ? `${state.value.index + 1} of ${state.value.queue.length}` : 'Single track'));
 /** "Next" does something: a track after this one, or repeat wraps around. */
-export const canSkipNext = computed(() => state.value.upNext.length > 0 || state.value.repeat !== 'off');
+export const canSkipNext = computed(() => state.value.upNext.length > 0 || state.value.repeat === 'all');
 
 /** The context the current list was started with (C2); null before the first. Changes only with the list. */
 export const playContext = computed<PlayContext | null>(() => state.value.context);

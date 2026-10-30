@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { expectStable, musicCalls, openNowPlaying, openSearch, start } from '../helpers';
+import { expectStable, musicCalls, openNowPlaying, openSearch, openSettings, start } from '../helpers';
 import { genreFamilies } from '../../src/data/similar';
 import { artistKey, splitArtists } from '../../src/data/artists';
 import { words } from '../../src/data/text';
@@ -312,6 +312,34 @@ test('with repeat on, a song you tap still gets its suggestions; a list you star
   await expect(page.locator('[data-testid="upnext-row"][data-section="list"]')).toHaveCount(0);
   expect((await expectStable(() => queueState(page), 1500)).autoplay).toEqual([]);
   await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).toHaveText(first);
+});
+
+test("Repeat one at a list's end: Next is off, as on the notification; Repeat all goes round", async ({ page }) => {
+  await start(page);
+  await openSettings(page);
+  await page.getByTestId('autoplay-toggle').click();
+  await expect(page.getByTestId('autoplay-toggle')).toHaveAttribute('aria-checked', 'false');
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-tile').nth(5).click();
+  await visible(page, 'genre-play-all').click();
+  await openNowPlaying(page);
+  const first = (await page.getByTestId('np-title').textContent())!.trim();
+  await page.locator('[data-testid="upnext-row"][data-section="list"] .row-main').last().click();
+  await expect(page.locator('[data-testid="upnext-row"]')).toHaveCount(0);
+  const repeat = page.getByTestId('np-repeat');
+  const next = page.getByTestId('np-next');
+  await expect(next).toBeDisabled();
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'all');
+  await expect(next).toBeEnabled();
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'one');
+  await expect(next).toBeDisabled();
+  await repeat.click();
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'all');
+  await next.click();
   await expect(page.getByTestId('np-title')).toHaveText(first);
 });
 

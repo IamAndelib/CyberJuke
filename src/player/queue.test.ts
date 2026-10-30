@@ -64,14 +64,15 @@ describe('Queue: next / prev', () => {
     expect(q.next()?.id).toBe('a');
   });
 
-  it('repeat one replays on auto-advance but skips on manual next', () => {
+  it('repeat one replays on auto-advance but skips on manual next, but past the end (Media3)', () => {
     const q = new Queue();
     q.setList(abc(), 1);
     q.setRepeat('one');
     expect(q.next(true)?.id).toBe('b');
     expect(q.next()?.id).toBe('c');
     q.skipTo(4);
-    expect(q.next()?.id).toBe('a');
+    expect(q.next()).toBeNull();
+    expect(q.current?.id).toBe('e');
   });
 
   it('prev restarts when more than 3 s in', () => {

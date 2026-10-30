@@ -1,6 +1,6 @@
 {
   "about": "The queue rules, shared by the web Queue (src/player/queue.ts) and the native queue (NativeQueue, run by QueueRulesTest). Every case starts from `list` with `start` current (list index), shuffle and repeat as given, then runs `steps` in order. Ids are track ids; ids are unique within a case. Ops: setList {ids, start} (a new list: replaces the list and the autoplay tracks, keeps the queued ones); queueNext {ids}; addAuto {ids} (autoplay appends these); skipTo {id} (the list index of that id); next (a user skip); nextAuto (the track ended by itself); prev {positionMs} (go back: moves when positionMs <= 3000, else restarts the current track); remove {id}; move {id, to} (list index); setShuffle {on}; setRepeat {mode}; restore {id, kind, beforeId} (Undo of a remove: puts id back as a queued, list or autoplay track, right before the first track after the current one, in play order, that is beforeId and in that same section; with no such track, or beforeId null, at the end of that section: queued after the queued run, list after the list tracks ahead (before autoplay), autoplay at the very end. In list order it goes right before the track that follows it in play order, or at the end. Never at or before the current track); removeIds {ids} (every item with one of these ids goes; if the current one goes, the next one in play order that stays becomes current, or nothing plays). An expect step checks: current (id); upNext (the whole play order after the current track); upNextStartsWith (its first ids, for shuffled cases); queued (how many leading upNext tracks are 'Queued by you'); list (list order); and Up next's three sections: queuedIds (queued by you), listIds (the rest of the list, in play order), listSet (the same ids in any order, for shuffled cases), autoplayIds (autoplay, in play order).",
-  "rule": "Queued tracks play right after the current track, first in first out, shuffle or not, until each one plays or is removed. A manual jump (skipTo, or prev moving back) keeps the still-queued tracks next: they move to just after the new current track, in the order they were going to play. Jumping to a queued track plays it; the others stay next. A new list replaces the list and the autoplay tracks, but the queued tracks stay next, in order. Autoplay tracks play after the list in the order added; shuffle reorders only the list, afresh each time it is turned on. Repeat all loops what you started: a list's autoplay tracks still to come go when it is turned on, but a single song's are its radio, the loop itself, and stay. Repeat one replays the current track when it ends and leaves Up next as it is; a user skip moves on (from the last track to the first). Jumping to an autoplay track drops the autoplay tracks after it (the radio continues from it), but with repeat all.",
+  "rule": "Queued tracks play right after the current track, first in first out, shuffle or not, until each one plays or is removed. A manual jump (skipTo, or prev moving back) keeps the still-queued tracks next: they move to just after the new current track, in the order they were going to play. Jumping to a queued track plays it; the others stay next. A new list replaces the list and the autoplay tracks, but the queued tracks stay next, in order. Autoplay tracks play after the list in the order added; shuffle reorders only the list, afresh each time it is turned on. Repeat all loops what you started: a list's autoplay tracks still to come go when it is turned on, but a single song's are its radio, the loop itself, and stay. Repeat one replays the current track when it ends and leaves Up next as it is; a user skip moves on, as with repeat off (Media3's: none at the end). Jumping to an autoplay track drops the autoplay tracks after it (the radio continues from it), but with repeat all.",
   "cases": [
     {
       "name": "queued tracks play next, first in first out",
@@ -509,7 +509,7 @@
       ]
     },
     {
-      "name": "repeat one: a user skip at the end of the list goes to the first track",
+      "name": "repeat one: a user skip at the end of the list stays (as Media3's Next, off there); Previous goes back",
       "list": ["a", "b", "c"],
       "start": 2,
       "repeat": "one",
@@ -517,7 +517,9 @@
         { "op": "nextAuto" },
         { "op": "expect", "current": "c", "upNext": [] },
         { "op": "next" },
-        { "op": "expect", "current": "a", "upNext": ["b", "c"] }
+        { "op": "expect", "current": "c", "upNext": [] },
+        { "op": "prev", "positionMs": 0 },
+        { "op": "expect", "current": "b", "upNext": ["c"] }
       ]
     },
     {
