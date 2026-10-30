@@ -197,7 +197,12 @@ export function Home() {
         else await paged.refresh();
       }}
     >
-      <NewTracksPill />
+      <NewTracksPill
+        toLatest={() => {
+          homeSort.value = 'latest';
+          homeGenre.value = null;
+        }}
+      />
       <ShuffleHero />
       <GenreChips />
       <SortRail />

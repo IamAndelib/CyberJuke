@@ -21,6 +21,7 @@
 - With TalkBack or a keyboard, a question that can't be taken back (Clear history, Sign out, Clear cache) starts on **[Cancel]**, and a Radio station's info on **Tune in**.
 - A Global playlist or a genre page with one song says "1 track", not "1 tracks".
 - With **Show NSFW tracks** off, Liked and Recently played hide NSFW songs too, as the rest of the Jukebox does. They're kept, and come back when you turn it on.
+- Tapping "↑ N new tracks" on Home while on **Most saved** or a genre chip switches to **Latest** and **All**, where the new songs are, instead of seeming to do nothing.
 
 ## [1.3.4] - 2026-10-29
 
