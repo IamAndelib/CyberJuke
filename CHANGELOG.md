@@ -10,6 +10,8 @@
 - Songs you remove from Up next don't come back as suggestions later in the session.
 - With Autoplay off, tapping a song on Home, in Search or in Global plays that list on from the song instead of stopping after it, and an empty Up next says "Autoplay is off."
 - Offline, autoplay lines up only songs saved on the phone, and Up next dims songs that can't play, as other lists do.
+- Home's **Shuffle** plays its random songs without leaving the Shuffle button on, so the next album you play isn't shuffled too.
+- "Shuffled · turn shuffle off to reorder" shows only when there is something to reorder.
 - Up next on the phone lists songs in the order they will play with **Repeat all** on, and says what repeat does: "Then repeats from the top." or "Repeating this song."
 
 ## [1.3.4] - 2026-10-29

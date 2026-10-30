@@ -185,7 +185,7 @@ export function UpNext() {
     <section ref={root} class="upnext" data-testid="up-next">
       <div class="section-head">
         <h3 class="section-title">Up next</h3>
-        <span class="dim small">{shuffle ? 'Shuffled · turn shuffle off to reorder' : plural(total, 'track')}</span>
+        <span class="dim small">{shuffle && sec.list.length ? 'Shuffled · turn shuffle off to reorder' : plural(total, 'track')}</span>
       </div>
       {repeat === 'one' && (
         <div class="dim small upnext-empty" data-testid="upnext-repeat">
