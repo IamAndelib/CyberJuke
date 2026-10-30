@@ -88,6 +88,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             }
             if ('queued' in s) expect(q.queuedCount).toBe(s.queued);
             if ('list' in s) expect(ids(q.items)).toEqual(s.list);
+            if ('played' in s) expect(q.previousIndices().map((i) => q.items[i].id)).toEqual(s.played);
             const sec = q.sections();
             const sIds = (xs: { item: { id: string } }[]) => xs.map((x) => x.item.id);
             if ('queuedIds' in s) expect(sIds(sec.queued)).toEqual(s.queuedIds);

@@ -357,6 +357,25 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         }
     }
 
+    /**
+     * Undo of removing a played item: back among the played, right before the played item
+     * [beforeId] (play order), else right before the current one; a list item again.
+     */
+    fun restorePlayed(item: T, beforeId: String?) {
+        prune()
+        val cur = host.currentIndex
+        if (cur !in 0 until host.count) return host.insertTagged(null, listOf(item), listOf(0L))
+        val at = beforeId?.let { id -> played().firstOrNull { host.idAt(it) == id } } ?: cur
+        host.insertTagged(at, listOf(item), listOf(0L))
+        if (!host.shuffleEnabled) return
+        // Inserted at a random place in the shuffle order (Media3's): right before what follows it.
+        val order = host.shuffleOrder()?.toMutableList() ?: return
+        if (order.size != host.count) return
+        order.remove(at)
+        order.add(order.indexOf(at + 1), at)
+        host.setShuffleOrder(QueueOrder.arrange(order.toIntArray(), host.currentIndex, pendingIndices(), autoIndices()))
+    }
+
     /** Shuffle on: the list index only matters later; the shuffle order decides when it plays. */
     private fun restoreShuffledListItem(item: T, anchor: Int?) {
         val at = (0 until host.count).firstOrNull { host.isAutoAt(it) } ?: host.count

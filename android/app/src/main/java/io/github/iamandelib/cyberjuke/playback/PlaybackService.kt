@@ -1227,6 +1227,12 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    private fun restorePlayed(item: MediaItem, beforeId: String?) {
+        crossfade?.settle()
+        queue.restorePlayed(item, beforeId)
+        queueChanged()
+    }
+
     private fun restore(item: MediaItem, section: NativeQueue.Section, beforeId: String?) {
         if (section == NativeQueue.Section.AUTO && !Stations.keepsGoing(autoplayEnabled, seedId, context?.first)) {
             Log.i(TAG, "restore: autoplay item dropped (autoplay off)")
@@ -1849,8 +1855,13 @@ class PlaybackService : MediaSessionService() {
                     }
                     QueueCommands.ACTION_RESTORE -> {
                         val item = tracks()?.singleOrNull() ?: return bad
-                        val section = NativeQueue.Section.of(args.getString(QueueCommands.ARG_KIND)) ?: return bad
-                        restore(item, section, BridgeLimits.checkString(args.getString(QueueCommands.ARG_BEFORE), "beforeId"))
+                        val kind = args.getString(QueueCommands.ARG_KIND)
+                        val before = BridgeLimits.checkString(args.getString(QueueCommands.ARG_BEFORE), "beforeId")
+                        if (kind == QueueCommands.KIND_PLAYED) {
+                            restorePlayed(item, before)
+                        } else {
+                            restore(item, NativeQueue.Section.of(kind) ?: return bad, before)
+                        }
                     }
                 }
             } catch (e: TooLargeException) {
