@@ -30,7 +30,7 @@
 - "Shuffled · turn shuffle off to reorder" shows only when there is something to reorder.
 - Now Playing says what plays: "Playing from Home · Latest" for a tapped song, "Autoplay · similar to …" while a suggestion plays (and "More random picks from …" after Home's Shuffle, "More from CIPHER" on a station's later rounds), and "3 of 12" counts only the list you started, not the suggestions after it.
 - Up next says "50+ tracks" when more are lined up than it shows, and "Added to queue · plays next" drops "plays next" when other songs are queued first or Repeat one is on.
-- Up next on the phone lists songs in the order they will play with **Repeat all** on, and says what repeat does: "Then repeats from the top." or "Repeating this song."
+- Up next on the phone lists songs in the order they will play with **Repeat all** on, and says what repeat does, right under its heading: "Repeating the queue." or "Repeating this song."
 - While the music waits for the carrier to come back, the play/pause button on headphones stops the wait, as the app's own button does, instead of trying to play.
 - With Crossfade on, **Next** during a fade goes to the song fading in and carries on from where it is, instead of starting it again from the beginning.
 - With TalkBack, a song row reads its line of details too (saves, members-only, genre, who posted it), and the song playing is announced as current.
