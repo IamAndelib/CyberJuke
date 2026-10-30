@@ -143,7 +143,7 @@ internal object YtMusic {
         NetBlock.check(Surface.MUSIC)
         YtCompat.ensureInit()
         val json = InnerTube.post("next", Radio.payload(videoId, continuation))
-            ?: throw ContentNotAvailableException("radio $videoId not found")
+            ?: throw ContentNotAvailableException("radio not found")
         return Radio.parse(json, videoId)
     }
 
@@ -173,7 +173,7 @@ internal object YtMusic {
         var failure: Throwable? = null
         try {
             val json = InnerTube.post("browse", JSONObject().put("browseId", channelId))
-                ?: throw ContentNotAvailableException("artist page $channelId not found")
+                ?: throw ContentNotAvailableException("artist page not found")
             parsed = ArtistPage.parseArtist(json, channelId)
         } catch (t: Throwable) {
             failure = t
@@ -188,7 +188,7 @@ internal object YtMusic {
             null
         }
         if (p == null && tab?.second.isNullOrEmpty()) {
-            throw failure ?: ContentNotAvailableException("artist $channelId has no releases")
+            throw failure ?: ContentNotAvailableException("artist has no releases")
         }
         val releases = tab?.second ?: emptyList()
         if (p != null) return artistOf(p, releases, if (releases.isEmpty()) "innertube" else "innertube+releases-tab")
@@ -210,7 +210,7 @@ internal object YtMusic {
         val payload = JSONObject().put("browseId", more.browseId)
         more.params?.let { payload.put("params", it) }
         val json = InnerTube.post("browse", payload)
-            ?: throw ContentNotAvailableException("releases ${more.browseId} not found")
+            ?: throw ContentNotAvailableException("releases not found")
         return ArtistPage.parseReleases(json, more.shelf)
     }
 
@@ -264,9 +264,9 @@ internal object YtMusic {
     private fun albumPlaylistId(browseId: String): String {
         synchronized(albumIds) { albumIds[browseId] }?.let { return it }
         val json = InnerTube.post("browse", JSONObject().put("browseId", browseId))
-            ?: throw ContentNotAvailableException("album $browseId not found")
+            ?: throw ContentNotAvailableException("album not found")
         val id = ArtistPage.albumPlaylistIdOf(json)
-            ?: throw ContentNotAvailableException("album $browseId has no playlist")
+            ?: throw ContentNotAvailableException("album has no playlist")
         synchronized(albumIds) { albumIds[browseId] = id }
         return id
     }
