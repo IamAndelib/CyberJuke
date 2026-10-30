@@ -7,7 +7,7 @@
 import { computed, signal } from '@preact/signals';
 import { audioIdOf, isAudioId } from '../core/guards';
 import type { Track } from '../data/model';
-import { liked } from './library';
+import { likedShown } from './library';
 
 /** Audio ids of the liked songs saved whole on the phone. */
 export const savedOffline = signal<ReadonlySet<string>>(new Set());
@@ -20,10 +20,10 @@ export function setSavedOffline(audioIds: readonly unknown[]): void {
   savedOffline.value = next;
 }
 
-/** The liked songs that play offline, in Liked's order. */
+/** The liked songs that play offline, in Liked's order (those Liked shows: hidden NSFW songs aren't offered). */
 export const savedLiked = computed<Track[]>(() => {
   const saved = savedOffline.value;
-  return saved.size ? liked.value.filter((t) => isSaved(t, saved)) : [];
+  return saved.size ? likedShown.value.filter((t) => isSaved(t, saved)) : [];
 });
 
 /** Some liked song plays offline (the offline banner and toast point to Liked then). */

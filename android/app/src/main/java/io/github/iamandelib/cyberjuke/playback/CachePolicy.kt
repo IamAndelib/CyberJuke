@@ -428,26 +428,51 @@ internal enum class SaveFailure {
 
 /**
  * Whether a liked save's writer was refused for good (not again this service's life), from the
- * HTTP status it got ([httpCode], null for none). A video's link refused at all: expired or a
- * block. A Jukebox MP3 ([mp3]) only on a 4xx that says the file is gone or private, as playback
- * never retries one ([JukeLoadErrorPolicy]). latex.gg failing (a 5xx), timing out (408), rate
- * limiting (429) or refusing a range (416, from a length it never sent) is a strike instead,
- * tried again later and given up on after [SaveStrikes.MAX]. Pure (CachePolicyTest).
+ * HTTP status it got ([httpCode], null for none): a 4xx that says the song is gone or private.
+ * The server failing (a 5xx), timing out (408), rate limiting (429) or refusing a range (416,
+ * from a length it never sent) is a strike instead, tried again later and given up on after
+ * [SaveStrikes.MAX]. So is a video's link refused (403, 410: expired, or from another network
+ * address, as playback re-resolves it, [TrackErrorPolicy]), whose next try then extracts afresh
+ * ([staleLink]); a Jukebox MP3's ([mp3]) 403 is a private file. Pure (CachePolicyTest).
  */
 internal object SaveRefusal {
     /** Playback's "not now" statuses ([LoadRetry.TRANSIENT_HTTP]), and a range asked from a length never sent. */
     private val TRANSIENT_4XX = LoadRetry.TRANSIENT_HTTP + 416
 
+    /** A video link's "not this link any more". */
+    private val STALE_LINK = setOf(403, 410)
+
     fun refused(httpCode: Int?, mp3: Boolean): Boolean =
-        httpCode != null && (!mp3 || (httpCode in 400..499 && httpCode !in TRANSIENT_4XX))
+        httpCode != null && httpCode in 400..499 && httpCode !in TRANSIENT_4XX && !staleLink(httpCode, mp3)
+
+    /** A video's link was refused: the next try needs a fresh one. */
+    fun staleLink(httpCode: Int?, mp3: Boolean): Boolean = !mp3 && httpCode != null && httpCode in STALE_LINK
+}
+
+/**
+ * Opening a cache folder: [open], and when that fails because what's there is [damaged] (its
+ * index can't be read), [wipe] it and open once more, so a damaged cache starts empty (liked
+ * songs are saved again on Wi-Fi) instead of staying off until the app's data is cleared. Any
+ * other failure (the folder in use) is never wiped. Pure (CachePolicyTest).
+ */
+internal object CacheStart {
+    fun <T> openOrWipe(open: () -> T, wipe: () -> Unit, damaged: (Exception) -> Boolean): T =
+        try {
+            open()
+        } catch (e: Exception) {
+            if (!damaged(e)) throw e
+            wipe()
+            open()
+        }
 }
 
 /**
  * Saves that stopped (not cancelled) per song, and when each may be tried again: after the n-th
  * stop the song waits [FIRST_WAIT_MS] doubled each time (30 s, 1, 2, 4 min), the [MAX]th stop
- * gives up on it for the service's life. Media3's DownloadManager retries a download five times
+ * gives up on it until a new network. Media3's DownloadManager retries a download five times
  * (DEFAULT_MIN_RETRY_COUNT) before it fails; the doubling is [LoadRetry.delayMs]'s shape, drawn
- * out, since a save is never urgent. Main thread; pure (CachePolicyTest).
+ * out, since a save is never urgent. A new network starts every song afresh ([clear]). Main
+ * thread; pure (CachePolicyTest).
  */
 internal class SaveStrikes {
     private val counts = HashMap<String, Int>()
@@ -455,12 +480,16 @@ internal class SaveStrikes {
     /** When each waiting song's retry is due; only entries not yet due are kept. */
     private val dueAt = HashMap<String, Long>()
 
+    /** Given up on after [MAX] stops, until [clear]. */
+    private val givenUp = HashSet<String>()
+
     /** Counts a stop at [now]; true when [audioId] is to be given up on now, else it waits its turn. */
     fun stopped(audioId: String, now: Long): Boolean {
         val n = (counts[audioId] ?: 0) + 1
         counts[audioId] = n
         if (n >= MAX) {
             dueAt.remove(audioId)
+            givenUp.add(audioId)
             return true
         }
         dueAt[audioId] = now + waitMs(n)
@@ -472,6 +501,19 @@ internal class SaveStrikes {
         counts.remove(audioId)
         dueAt.remove(audioId)
     }
+
+    /**
+     * A new network: the stops so far may have been the old one's (a Wi-Fi drop mid-save stops
+     * it before Android says the network is gone), so every song starts afresh.
+     */
+    fun clear() {
+        counts.clear()
+        dueAt.clear()
+        givenUp.clear()
+    }
+
+    /** The songs given up on (until [clear]). */
+    fun givenUp(): Set<String> = givenUp
 
     /** The songs waiting for their retry at [now] (not to be saved yet). */
     fun waiting(now: Long): Set<String> {

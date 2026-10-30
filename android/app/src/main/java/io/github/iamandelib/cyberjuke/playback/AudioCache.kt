@@ -211,19 +211,22 @@ internal object AudioCache {
                 likedKnown = liked.isNotEmpty()
             }
             ledger.limit = limitMb * MB
-            val c = SimpleCache(File(ctx.noBackupFilesDir, DIR), JukeCacheEvictor(), db)
+            val dir = File(ctx.noBackupFilesDir, DIR)
             // Failed to start (its folder or index unreadable), it would fail every read and
-            // write: none instead, and playback streams.
-            try {
-                c.checkInitialization()
+            // write: wiped and started once more, empty (CacheStart); failing again, none, and
+            // playback streams.
+            val c = try {
+                CacheStart.openOrWipe(
+                    open = { start(dir, db) },
+                    wipe = {
+                        Log.w(TAG, "Listening cache damaged: starting it empty")
+                        SimpleCache.delete(dir, db)
+                    },
+                    damaged = { it is Cache.CacheException },
+                )
             } catch (e: Cache.CacheException) {
                 startFailed = true
                 Log.w(TAG, "Listening cache failed to start: ${(e.cause ?: e).javaClass.simpleName}")
-                try {
-                    c.release()
-                } finally {
-                    forgetFailedStart(c)
-                }
                 return null
             }
             cache = c
@@ -236,6 +239,22 @@ internal object AudioCache {
             Log.w(TAG, "No listening cache: ${e.javaClass.simpleName}")
             null
         }
+    }
+
+    /** A cache over [dir], its index read; a [Cache.CacheException] when that fails (released then). */
+    private fun start(dir: File, db: StandaloneDatabaseProvider): SimpleCache {
+        val c = SimpleCache(dir, JukeCacheEvictor(), db)
+        try {
+            c.checkInitialization()
+        } catch (e: Cache.CacheException) {
+            try {
+                c.release()
+            } finally {
+                forgetFailedStart(c)
+            }
+            throw e
+        }
+        return c
     }
 
     /**

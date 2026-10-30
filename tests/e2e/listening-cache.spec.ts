@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { bufferedAhead, openNowPlaying, openSettings, playAndOpen, playerCalls, seedStorage, setOffline, start } from '../helpers';
+import { bufferedAhead, openNowPlaying, openSettings, playAndOpen, playerCalls, recordToasts, seedStorage, setOffline, start, toastsSeen } from '../helpers';
 
 /**
  * The listening cache (native): liked songs saved on the phone play offline, from any list,
@@ -120,6 +120,23 @@ test('offline with liked songs saved, the banner and the refusal toast open Like
   await page.getByTestId('shuffle-all').click();
   await expect(page.getByTestId('toast')).toHaveText(TAP);
   await expect(page.getByTestId('toast-action')).toHaveCount(0);
+});
+
+test('with nothing playing, Add to queue says "Playing" when it starts the song; offline, unsaved, only why it was refused', async ({ page, backend }) => {
+  await start(page);
+  await setOffline(page, backend, true);
+  await recordToasts(page);
+  await page.getByTestId('track-more').first().click();
+  await page.getByTestId('menu-add-queue').click();
+  await expect(page.getByTestId('toast')).toHaveText(TAP);
+  expect(await toastsSeen(page)).toEqual([TAP]);
+  expect(await queues(page)).toEqual([]);
+  // Online, the same tap starts it and says so.
+  await setOffline(page, backend, false);
+  await page.getByTestId('track-more').first().click();
+  await page.getByTestId('menu-add-queue').click();
+  await expect(page.getByTestId('toast')).toHaveText('Playing');
+  await expect(page.getByTestId('mini-player')).toBeVisible();
 });
 
 test('offline, the track the app reopened on is dimmed and asks to connect unless saved; with audio loaded it plays', async ({ page, backend }) => {

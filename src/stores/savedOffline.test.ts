@@ -1,7 +1,7 @@
 import { effect } from '@preact/signals';
 import { describe, expect, it } from 'vitest';
 import type { Track } from '../data/model';
-import { liked } from './library';
+import { liked, settings } from './library';
 import { hasSavedLiked, isSaved, savedLiked, savedOffline, savedQueue, savedTracks, setSavedOffline } from './savedOffline';
 
 const t = (id: string): Track => ({ id, ytId: id.padEnd(11, '0') }) as Track;
@@ -57,6 +57,19 @@ describe('savedOffline', () => {
     setSavedOffline([b.ytId]);
     liked.value = [a];
     expect(hasSavedLiked.value).toBe(false);
+    liked.value = [];
+    setSavedOffline([]);
+  });
+
+  it('counts only the liked songs Liked shows: a saved NSFW song hidden by Settings doesn\u2019t make Liked playable', () => {
+    const hidden = { ...a, nsfw: true };
+    liked.value = [hidden];
+    setSavedOffline([hidden.ytId]);
+    expect(settings.peek().showNsfw).toBe(false);
+    expect(hasSavedLiked.value).toBe(false);
+    settings.value = { ...settings.peek(), showNsfw: true };
+    expect(savedLiked.value).toEqual([hidden]);
+    settings.value = { ...settings.peek(), showNsfw: false };
     liked.value = [];
     setSavedOffline([]);
   });

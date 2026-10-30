@@ -4,9 +4,14 @@
 
 ### Fixed
 - Liked songs saved on the phone keep their art offline: in Liked and every list, in Now Playing, and on the lock screen and in the notification. Their covers are saved with them, and go when you unlike them.
-
-### Fixed
+- Liked songs keep saving after the Wi-Fi drops mid-download, or YouTube's link for one expires: they're tried again instead of being skipped until the app restarts, and a server error is no longer taken as the song being unavailable.
+- If the listening cache's files on the phone are ever damaged, it starts again empty, instead of staying off (with no liked songs offline) until the app's data is cleared.
 - Offline, **Next**, the end of a song, the notification and headphones go to the next liked song saved on the phone, skipping the ones that aren't, instead of saying "No carrier" or stopping; with **Repeat all** it goes round. **Previous** checks the song it really goes back to.
+- The automatic update check waits while the phone is offline, and checks once it's back, instead of failing and waiting an hour.
+- Signing out while offline no longer leaves the Jukebox empty the next time the app opens.
+- Offline, a liked NSFW song hidden by Settings no longer makes the offline bar and Home point to Liked when nothing else there plays.
+- Offline with nothing playing, **Add to queue** on a song that isn't saved says why it can't play, instead of "Playing".
+- Right after the app opens, liked songs saved on the phone no longer show as not saved, dimmed offline, when one finished saving just then.
 
 ## [1.3.5] - 2026-10-30
 

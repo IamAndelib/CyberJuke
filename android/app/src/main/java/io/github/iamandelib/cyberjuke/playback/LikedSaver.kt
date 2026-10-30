@@ -58,7 +58,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
     /** Fresh ones already tried once: their retries wait for the gap. */
     private val tried = HashSet<String>()
 
-    /** Couldn't be saved this service's life (unavailable, refused, stopped [SaveStrikes.MAX] times). */
+    /** Couldn't be saved this service's life (unavailable, refused); stopped too often is [strikes]'. */
     private val failed = HashSet<String>()
 
     /** Saves that stopped: each waits longer before its next try, then is given up on. */
@@ -110,6 +110,8 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
     /** The default network: [validated] (online) and [unmetered] (Wi-Fi). Only a change counts. */
     fun onNetwork(validated: Boolean, unmetered: Boolean) {
         if (validated == online && unmetered == this.unmetered) return
+        // Back online, or onto another kind of network: the stops so far start afresh.
+        if (validated) strikes.clear()
         online = validated
         this.unmetered = unmetered
         check()
@@ -204,7 +206,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             saved = AudioCache.savedLiked,
             fresh = fresh,
             tried = tried,
-            skip = host.stillLoading() + failed + strikes.waiting(now),
+            skip = host.stillLoading() + failed + strikes.givenUp() + strikes.waiting(now),
             online = online,
             unmetered = unmetered,
             mobileDataAllowed = AudioCache.downloadOnMobileData,
@@ -262,7 +264,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             // can't be saved isn't tried forever, nor hammered while the connection is bad.
             SaveOutcome.STOPPED -> {
                 Log.i(TAG, "Liked save stopped")
-                if (strikes.stopped(j.audioId, SystemClock.elapsedRealtime())) failed.add(j.audioId)
+                strikes.stopped(j.audioId, SystemClock.elapsedRealtime())
             }
             SaveOutcome.CANCELLED -> Unit
         }
@@ -312,11 +314,11 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             @Throws(IOException::class)
             fun mp3Writer(audioId: String, progress: Progress): Writer?
 
-            /**
-             * [e], from a writer, is a refusal (an expired link, a block; for an [mp3], the file
-             * gone or private, [SaveRefusal]): not again this service's life.
-             */
-            fun refused(e: IOException, mp3: Boolean): Boolean
+            /** The HTTP status [e], from a writer, carries; null for none ([SaveRefusal] reads it). */
+            fun httpCode(e: IOException): Int?
+
+            /** [ytId]'s link was refused: the next extraction gets a fresh one ([StreamResolver.reResolve]). */
+            fun forgetLink(ytId: String)
         }
 
         /**
@@ -374,8 +376,9 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
                 override fun cancel() = w.cancel()
             }
 
-            override fun refused(e: IOException, mp3: Boolean) =
-                SaveRefusal.refused(e.findCause<HttpDataSource.InvalidResponseCodeException>()?.responseCode, mp3)
+            override fun httpCode(e: IOException) = e.findCause<HttpDataSource.InvalidResponseCodeException>()?.responseCode
+
+            override fun forgetLink(ytId: String) = StreamResolver.reResolve(ytId)
         }
 
         @Volatile
@@ -453,9 +456,11 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
                 // is whole now ([SaveOutcome.afterWrite]).
                 sizeOutcome() ?: SaveOutcome.afterWrite(deps.isWhole(audioId))
             } catch (e: IOException) {
+                val code = deps.httpCode(e)
+                if (SaveRefusal.staleLink(code, mp3)) deps.forgetLink(audioId)
                 sizeOutcome() ?: when {
                     cancelled || quiet() -> SaveOutcome.CANCELLED
-                    deps.refused(e, mp3) -> SaveOutcome.FAILED
+                    SaveRefusal.refused(code, mp3) -> SaveOutcome.FAILED
                     else -> SaveOutcome.STOPPED
                 }
             } finally {
