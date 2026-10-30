@@ -17,7 +17,7 @@
  *  - a new list (setList) replaces the list and the autoplay tracks, but the queued
  *    tracks stay next, in order (P1);
  *  - autoplay tracks (addAuto) play after the list, in the order added. Shuffle
- *    reorders only the list. Repeat all loops what you started: a list's autoplay tracks
+ *    reorders only the list, and turned on, only what's ahead of the current track. Repeat all loops what you started: a list's autoplay tracks
  *    still to come go (they come back once repeat is off), but a single song's are its
  *    radio, the loop itself, and stay. Repeat one leaves them: it replays the track when
  *    it ends, and a skip moves on as with repeat off (none at the end, as Media3's). Jumping to an
@@ -230,7 +230,7 @@ export class Queue<T extends Identified> {
 
   setShuffle(on: boolean): void {
     this.shuffle = on;
-    this.rebuildOrder();
+    this.rebuildOrder(true);
   }
 
   /** Repeat all loops what you started: a list's autoplay tracks to come go; a single song's are its radio and stay. */
@@ -420,7 +420,11 @@ export class Queue<T extends Identified> {
     return { key: this.nextKey++, item };
   }
 
-  private rebuildOrder(): void {
+  /**
+   * [keepPlayed] (shuffle turned on): what played before the current track stays where it was
+   * and only what's ahead is mixed (Spotify, YouTube Music); a new list has the rest all ahead.
+   */
+  private rebuildOrder(keepPlayed = false): void {
     if (!this.shuffle) {
       this.order = this.list.slice();
       return;
@@ -428,19 +432,21 @@ export class Queue<T extends Identified> {
     // Queued tracks keep playing next, in the order they were added; autoplay tracks
     // stay last, in their order. Only the list is shuffled.
     const cur = this.cur;
+    const played = keepPlayed && cur ? this.order.slice(0, this.order.indexOf(cur)).filter((e) => !this.queued.has(e)) : [];
+    const done = new Set(played);
     const queued = this.list.filter((e) => e !== cur && this.queued.has(e));
-    const autos = this.list.filter((e) => e.auto && !this.queued.has(e));
-    const rest = this.list.filter((e) => e !== cur && !e.auto && !this.queued.has(e));
+    const autos = this.list.filter((e) => e.auto && !this.queued.has(e) && !done.has(e));
+    const rest = this.list.filter((e) => e !== cur && !e.auto && !this.queued.has(e) && !done.has(e));
     for (let i = rest.length - 1; i > 0; i--) {
       const j = Math.floor(this.rand() * (i + 1));
       [rest[i], rest[j]] = [rest[j], rest[i]];
     }
     if (!cur) this.order = [...queued, ...rest, ...autos];
-    else if (!cur.auto) this.order = [cur, ...queued, ...rest, ...autos];
+    else if (!cur.auto) this.order = [...played, cur, ...queued, ...rest, ...autos];
     else {
       // Playing autoplay: the list is behind; what's ahead keeps its order.
       const k = autos.indexOf(cur);
-      this.order = [...rest, ...autos.slice(0, k + 1), ...queued, ...autos.slice(k + 1)];
+      this.order = [...played, ...rest, ...autos.slice(0, k + 1), ...queued, ...autos.slice(k + 1)];
     }
   }
 }

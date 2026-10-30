@@ -111,12 +111,26 @@ describe('Queue: next / prev', () => {
 });
 
 describe('Queue: shuffle', () => {
-  it('keeps the current track first and plays every track once', () => {
+  it('turned on, mixes only what comes after the current track; what is before it stays', () => {
     const q = new Queue(seeded());
     q.setList(abc(), 2);
     q.setShuffle(true);
     expect(q.current?.id).toBe('c');
     expect(q.index).toBe(2);
+    const played = ['c'];
+    let n;
+    while ((n = q.next())) played.push(n.id);
+    expect(played.slice(1).sort()).toEqual(['d', 'e']);
+    // Repeat all comes back to the top: a and b, where they were, then the mix.
+    q.setRepeat('all');
+    expect(q.next()?.id).toBe('a');
+    expect(q.next()?.id).toBe('b');
+  });
+
+  it('a new list started with shuffle on has every other track ahead', () => {
+    const q = new Queue(seeded());
+    q.setShuffle(true);
+    q.setList(abc(), 2);
     const played = ['c'];
     let n;
     while ((n = q.next())) played.push(n.id);
