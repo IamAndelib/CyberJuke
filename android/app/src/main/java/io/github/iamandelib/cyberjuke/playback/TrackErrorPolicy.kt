@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.playback
 
+import android.view.KeyEvent
 import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.FailureKind
 
@@ -203,6 +204,17 @@ internal object BackOffHold {
     /** Playing again: a pending resume is spent (an outage's, or one an MP3 played through a back-off). */
     fun playingSpendsResume(waitingForNetwork: Boolean, blocked: Boolean, currentIsMp3: Boolean): Boolean =
         waitingForNetwork || (blocked && currentIsMp3)
+
+    /**
+     * A media key that calls a pending resume off: pause and stop, and a headset's play/pause
+     * while an outage waits, since the app shows Pause then (a play/pause key would play now).
+     * The notification shows Play then, so its button still plays.
+     */
+    fun keyStopsWait(keyCode: Int, waitingForNetwork: Boolean, fromNotification: Boolean): Boolean = when (keyCode) {
+        KeyEvent.KEYCODE_MEDIA_PAUSE, KeyEvent.KEYCODE_MEDIA_STOP -> true
+        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> waitingForNetwork && !fromNotification
+        else -> false
+    }
 }
 
 /**

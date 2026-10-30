@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.playback
 
+import android.view.KeyEvent
 import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.playback.TrackErrorPolicy.Action
@@ -151,6 +152,22 @@ class TrackErrorPolicyTest {
         assertEquals(false, BackOffHold.playingSpendsResume(waitingForNetwork = false, blocked = true, currentIsMp3 = false))
         assertEquals(true, BackOffHold.playingSpendsResume(waitingForNetwork = true, blocked = false, currentIsMp3 = false))
         assertEquals(false, BackOffHold.playingSpendsResume(waitingForNetwork = false, blocked = false, currentIsMp3 = true))
+    }
+
+    @Test
+    fun aHeadsetPlayPauseWhileWaitingForTheNetworkCallsTheResumeOff() {
+        // The app shows Pause while an outage waits: a headset's one button pauses too.
+        assertEquals(true, BackOffHold.keyStopsWait(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, waitingForNetwork = true, fromNotification = false))
+        assertEquals(true, BackOffHold.keyStopsWait(KeyEvent.KEYCODE_HEADSETHOOK, waitingForNetwork = true, fromNotification = false))
+        // The notification shows Play then: its button plays.
+        assertEquals(false, BackOffHold.keyStopsWait(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, waitingForNetwork = true, fromNotification = true))
+        // A back-off's wait shows Play in the app too.
+        assertEquals(false, BackOffHold.keyStopsWait(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, waitingForNetwork = false, fromNotification = false))
+        // Pause and stop always call it off; play and next don't.
+        assertEquals(true, BackOffHold.keyStopsWait(KeyEvent.KEYCODE_MEDIA_PAUSE, waitingForNetwork = false, fromNotification = true))
+        assertEquals(true, BackOffHold.keyStopsWait(KeyEvent.KEYCODE_MEDIA_STOP, waitingForNetwork = false, fromNotification = false))
+        assertEquals(false, BackOffHold.keyStopsWait(KeyEvent.KEYCODE_MEDIA_PLAY, waitingForNetwork = true, fromNotification = false))
+        assertEquals(false, BackOffHold.keyStopsWait(KeyEvent.KEYCODE_MEDIA_NEXT, waitingForNetwork = true, fromNotification = false))
     }
 
     @Test

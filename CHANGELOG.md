@@ -15,6 +15,7 @@
 - Now Playing says what plays: "Playing from Home · Latest" for a tapped song, "Autoplay · similar to …" while a suggestion plays (and "More random picks from …" after Home's Shuffle, "More from CIPHER" on a station's later rounds), and "3 of 12" counts only the list you started, not the suggestions after it.
 - Up next says "50+ tracks" when more are lined up than it shows, and "Added to queue · plays next" drops "plays next" when other songs are queued first or Repeat one is on.
 - Up next on the phone lists songs in the order they will play with **Repeat all** on, and says what repeat does: "Then repeats from the top." or "Repeating this song."
+- While the music waits for the carrier to come back, the play/pause button on headphones stops the wait, as the app's own button does, instead of trying to play.
 
 ## [1.3.4] - 2026-10-29
 

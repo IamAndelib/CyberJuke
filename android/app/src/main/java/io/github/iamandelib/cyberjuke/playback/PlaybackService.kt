@@ -1664,7 +1664,9 @@ class PlaybackService : MediaSessionService() {
         /**
          * A pause or stop key while already paused changes nothing in the player, so nothing
          * else hears it: a resume waiting for a back-off to end is cancelled here (the user
-         * wants it quiet). The key is then handled as usual.
+         * wants it quiet), and the key is then handled as usual. A headset's play/pause while
+         * an outage waits is the app's Pause ([BackOffHold.keyStopsWait]): it calls the resume
+         * off and goes no further, since Media3 would play.
          */
         override fun onMediaButtonEvent(
             session: MediaSession,
@@ -1679,14 +1681,14 @@ class PlaybackService : MediaSessionService() {
             } catch (e: Exception) {
                 null
             }
-            val stop = key?.keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE || key?.keyCode == KeyEvent.KEYCODE_MEDIA_STOP
-            if (key?.action == KeyEvent.ACTION_DOWN && stop && NetBlock.resumePending()) {
-                Log.i(TAG, "Pause key while a resume was pending: cancelled")
-                NetBlock.cancelResume()
-                releaseResumeWakeLock()
-                stopOutageRetry()
-            }
-            return false
+            if (key == null || key.action != KeyEvent.ACTION_DOWN || !NetBlock.resumePending()) return false
+            val fromNotification = session.isMediaNotificationController(controllerInfo)
+            if (!BackOffHold.keyStopsWait(key.keyCode, NetBlock.waitingForNetwork(), fromNotification)) return false
+            Log.i(TAG, "Pause key while a resume was pending: cancelled")
+            NetBlock.cancelResume()
+            releaseResumeWakeLock()
+            stopOutageRetry()
+            return key.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || key.keyCode == KeyEvent.KEYCODE_HEADSETHOOK
         }
 
         /**
