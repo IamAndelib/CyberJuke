@@ -2,49 +2,48 @@
 
 ## [Unreleased]
 
+## [1.3.5] - 2026-10-30
+
 ### Added
 - Press and hold a song in Now Playing's queue for its menu (Add to queue, Share, Like, More by…), as in every list.
 - The notification and the lock screen have **Shuffle** and **Repeat** buttons, showing the mode they're in; Repeat steps through off, all and one, as in the app.
+- Searching the Jukebox also finds artists: those whose name matches show first, and a tap opens their page.
 
 ### Changed
-- Tapping a song further down the queue plays it now and keeps the songs you jumped over in Up next, instead of skipping past them.
+- Now Playing's **Queue** shows the whole list, top to bottom as it plays: the songs you've heard fold away under **[+] Played** (not the ones before the song you tapped, nor ones shuffle moved behind), the playing one is marked as on Home, then what's up next. A tap on any of them plays from there, and with **Repeat all** the top it repeats from is right there. With shuffle on it reads **Queue · Shuffled**; with repeat on it says "Repeating the queue." or "Repeating this song." under its heading, and lists the songs in the order they will play.
+- Songs already played can be moved and removed (with **Undo**) like the ones to come, for **Repeat all**'s next lap; ↓ on the last one takes it past the playing song, so it plays next again.
+- Tapping a song further down the queue plays it now and keeps the songs you jumped over in Up next, instead of skipping past them; tapping a suggestion keeps the ones after it too.
+- Turning shuffle on mixes every song you haven't heard yet, also the ones before the song you started on and a radio's suggestions (after tapping a song on Home, say); new suggestions join in at random, and turning it off puts everything back in order. The ones already played stay behind, and **Repeat all** comes back to them first.
+- Repeat works like the music apps you know. A song you tap with repeat on gets its suggestions in Up next instead of playing on its own forever, also from an artist or genre page with a single song, and **Repeat all** loops it with them. **Repeat all** on an album, a genre or any other list loops just that list. **Repeat one** replays the song when it ends, and **Next** moves on as usual; at the very end of a list it is off, as on the notification.
+- Suggestions follow a list when it nears its end, instead of being lined up the moment it starts, so an album plays as itself first and a Signal Radio round reads "1 of 50", not "1 of 100".
+- Up next's ↑ ↓ ✕ buttons sit side by side, so song titles get more room.
 - A page you open (an artist, a genre, an album, Settings) starts at the top; **Back** and the tabs still return you where you were.
 - Settings come in smaller groups: Playback, Content, Storage and Network instead of one long "Playback & data".
 - An artist page shows their 5 newest Jukebox songs, with **[Show all]** for the rest, so their top songs and albums are close by. Play and Shuffle still play them all.
-- Up next's ↑ ↓ ✕ buttons sit side by side, so song titles get more room.
-- Now Playing's **Queue** shows the whole list, top to bottom as it plays: the songs you've heard fold away under **[+] Played** (not the ones before the song you tapped, nor ones shuffle moved behind), the playing one is marked as on Home, then what's up next. A tap on any of them plays from there, and with **Repeat all** the top it repeats from is right there.
-- Songs already played can be moved and removed (with **Undo**) like the ones to come, for **Repeat all**'s next lap; ↓ on the last one takes it past the playing song, so it plays next again.
-- Turning shuffle on mixes every song you haven't heard yet, also the ones before the song you started on; the ones already played stay behind, and **Repeat all** comes back to them first.
+- Global search's filters (songs, albums, artists, playlists) have a row of their own under the search bar, so all four fit on a narrow phone.
+- Other apps can use only the controls CyberJuke's notification shows (play, pause, seek, skip, shuffle and repeat).
 
 ### Fixed
-- Shuffle mixes a radio's suggestions too: after tapping a song on Home, turning shuffle on mixes Up next, new suggestions join in at random, and turning it off puts them back in order.
 - Tapping a song in Up next plays it, also when the music was paused, instead of waiting for you to press play.
 - With animations turned off on the phone, a long song title, artist or "Playing from" line in Now Playing wraps to a second line instead of being cut off with "…".
-- Repeat works like the music apps you know. A song you tap with repeat on gets its suggestions in Up next instead of playing on its own forever, also from an artist or genre page with a single song, and **Repeat all** loops it with them. **Repeat all** on an album, a genre or any other list loops just that list. **Repeat one** replays the song when it ends, and **Next** moves on as usual; at the very end of a list it is off, as on the notification.
-- Suggestions follow a list when it nears its end, instead of being lined up the moment it starts, so an album plays as itself first and a Signal Radio round reads "1 of 50", not "1 of 100".
 - Autoplay keeps going for hours after you swipe the app away, and picks up again when you reopen it. Before, Jukebox songs, Signal Radio and Home's Shuffle could stop after the songs already lined up.
-- Tapping a suggestion in Up next plays it and keeps the ones after it, instead of replacing them all.
 - Songs you remove from Up next don't come back as suggestions later in the session.
 - With Autoplay off, tapping a song on Home, in Search or in Global plays that list on from the song instead of stopping after it, and an empty Up next says "Autoplay is off."
 - Offline, autoplay lines up only songs saved on the phone, and Up next dims songs that can't play, as other lists do.
 - Home's **Shuffle** plays its random songs without leaving the Shuffle button on, so the next album you play isn't shuffled too.
-- With shuffle on the queue reads **Queue · Shuffled**, and still says how many songs are up next.
 - Now Playing says what plays: "Playing from Home · Latest" for a tapped song, "Autoplay · similar to …" while a suggestion plays (and "More random picks from …" after Home's Shuffle, "More from CIPHER" on a station's later rounds), and "3 of 12" counts only the list you started, not the suggestions after it.
-- Up next says "50+ tracks" when more are lined up than it shows, and "Added to queue · plays next" drops "plays next" when other songs are queued first or Repeat one is on.
-- Up next on the phone lists songs in the order they will play with **Repeat all** on, and says what repeat does, right under its heading: "Repeating the queue." or "Repeating this song."
+- Up next says "50+ up next" when more are lined up than it shows, and "Added to queue · plays next" drops "plays next" when other songs are queued first or Repeat one is on.
 - While the music waits for the carrier to come back, the play/pause button on headphones stops the wait, as the app's own button does, instead of trying to play.
 - With Crossfade on, **Next** during a fade goes to the song fading in and carries on from where it is, instead of starting it again from the beginning.
-- With TalkBack, a song row reads its line of details too (saves, members-only, genre, who posted it), and the song playing is announced as current.
+- With TalkBack, a song row reads its line of details too (saves, members-only, genre, who posted it), and the song playing is announced as current. Removing the only song you queued keeps TalkBack's place in the queue.
 - With TalkBack or a keyboard, a question that can't be taken back (Clear history, Sign out, Clear cache) starts on **[Cancel]**, and a Radio station's info on **Tune in**.
 - A Global playlist or a genre page with one song says "1 track", not "1 tracks".
 - With **Show NSFW tracks** off, Liked and Recently played hide NSFW songs too, as the rest of the Jukebox does. They're kept, and come back when you turn it on.
-- Tapping "↑ N new tracks" on Home while on **Most saved** or a genre chip switches to **Latest** and **All**, where the new songs are, instead of seeming to do nothing.
+- Tapping "↑ N new tracks" on Home while on **Most saved** or a genre chip switches to **Latest** and **All**, where the new songs are, and goes to its top, instead of seeming to do nothing.
 - Pulling down on an artist page reloads the artist's top songs and albums too, so a page that couldn't load them gets another try.
 - An album or playlist from Global says "Connect to the internet to search Global." offline, and "Couldn't load this album." when it fails, instead of messages about the Jukebox and Global search; TalkBack reads it as a page, not a dialog.
 - Recently played counts one way: **[Clear]** asks to "Clear 12 tracks", as the tab counts them, instead of counting every play, and the toast says "Listening history cleared".
 - Liked songs go by one name: Library's empty list says "No liked songs yet", and with TalkBack the heart in Now Playing is "Like", pressed when the song is liked.
-- Global search's filters (songs, albums, artists, playlists) have a row of their own under the search bar, so all four fit on a narrow phone.
-- Searching the Jukebox also finds artists: those whose name matches show first, and a tap opens their page.
 
 ## [1.3.4] - 2026-10-29
 
