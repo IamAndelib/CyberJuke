@@ -638,11 +638,12 @@ button.lyr-line {
   list-style: none;
 }
 .upnext-fold .link-btn {
-  display: flex;
+  /* Only as wide as its words (as [Cancel]): the rest of the row neither taps nor shows a press. */
+  display: inline-flex;
   align-items: center;
-  width: 100%;
   min-height: 48px;
-  padding: 0 var(--gutter);
+  padding: 0 12px;
+  margin-left: calc(var(--gutter) - 12px);
 }
 .upnext-fold .link-btn::before {
   content: '[+]';
