@@ -1,8 +1,8 @@
 /**
- * Autoplay (AP4): keeps 20-25 similar tracks ahead of the end of the list.
+ * Autoplay (AP4): when a list is about to end, more follows it, 20-25 tracks at a time.
  *
- * The player says when it runs low (5 autoplay tracks or fewer to go: native's `queueLow`
- * event, the web player inline) and this adds more once the app is idle, one refill at a time:
+ * The player says when it runs low (5 tracks or fewer to go, whatever they are, as InnerTune's
+ * and Metrolist's "load more" do: native's `queueLow` event, the web player inline) and this adds more once the app is idle, one refill at a time:
  *  - a Jukebox seed: similar Jukebox tracks from the cached catalog (data/similar);
  *  - a Global seed: YouTube Music's radio for it (web player only; natively the playback
  *    service runs Global radios itself, so they refill with the screen off);
@@ -86,7 +86,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     if (batch && (batch.seedId !== seed.id || now() - batch.at > BATCH_LAG_MS || (batch.queue && batch.queue !== s.queue) || (!batch.round && batch.ids.some((id) => inQueue.has(id))))) batch = null;
     const lagging = batch?.ids ?? [];
     for (const id of lagging) inQueue.add(id);
-    const left = Math.max(e.left, s.upNext.filter((u) => u.auto).length) + lagging.length;
+    const left = Math.max(e.left, s.upNext.length) + lagging.length;
     if (left > AUTOPLAY_LOW) return;
     const count = left <= 0 ? AUTOPLAY_FIRST : AUTOPLAY_MORE;
     const add = async (tracks: Track[], round = false) => {

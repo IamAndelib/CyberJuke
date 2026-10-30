@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { box, isFeedQuery, openSettings, seedStorage, start, toastsGone, waitForTracks } from '../helpers';
+import { box, isFeedQuery, openNowPlaying, openSettings, seedStorage, start, toastsGone, waitForTracks } from '../helpers';
 
 /** Home: the Latest feed, genre chips, Most saved, the new-tracks pill and the CI autoplay hook. */
 
@@ -174,10 +174,15 @@ test("Shuffle follows the genre chip: that genre's songs, and more of them after
   await expect(hero).toContainText(`Shuffle ${genre}`);
   await expect(hero).toContainText(`Random picks from ${genre}`);
   await hero.click();
+  await expect.poll(async () => (await queue()).list.length).toBeGreaterThan(0);
+  expect((await queue()).context?.label).toBe(`Jukebox shuffle · ${genre}`);
+  // Near the end of the list: more of the genre after it.
+  await openNowPlaying(page);
+  await page.locator('[data-testid="upnext-row"][data-section="list"] .row-main').last().click();
   await expect.poll(async () => (await queue()).autoplay.length, { message: 'more of the genre after the list' }).toBeGreaterThan(0);
   const q = await queue();
-  expect(q.context?.label).toBe(`Jukebox shuffle · ${genre}`);
   expect([...q.list, ...q.autoplay].every((t) => t.genre === genre)).toBe(true);
+  await page.getByTestId('np-close').click();
   // Back to All: the whole Jukebox again.
   await page.getByTestId('chip-all').click();
   await expect(hero).toContainText('Shuffle the Jukebox');

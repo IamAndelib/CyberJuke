@@ -202,14 +202,14 @@ export class WebPlayer implements Player {
     return this.autoplayOn || !!stationPlaying(this.context, seedId);
   }
 
-  /** AP4, inline: with 5 autoplay tracks or fewer to go, ask for more (once per state). */
+  /** AP4, inline: with 5 tracks or fewer to go, ask for more (once per state). */
   private checkLow(): void {
     const seed = this.seed;
     if (!seed || !this.keepsGoing(seed.id) || this.q.repeat !== 'off' || !this.q.current) {
       this.lowKey = null;
       return;
     }
-    const left = this.q.autoAhead;
+    const left = this.q.ahead;
     if (left > AUTOPLAY_LOW) {
       this.lowKey = null;
       return;

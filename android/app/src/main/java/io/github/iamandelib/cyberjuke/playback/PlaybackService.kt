@@ -1121,7 +1121,7 @@ class PlaybackService : MediaSessionService() {
             return
         }
         queue.addAutoplay(items)
-        Log.i(TAG, "addAutoplay: ${items.size} item(s), ${queue.autoAhead()} ahead")
+        Log.i(TAG, "addAutoplay: ${items.size} item(s), ${queue.ahead()} ahead")
         queueChanged()
     }
 
@@ -1246,7 +1246,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     /**
-     * AP4: with 5 autoplay items or fewer to go, get more. A Global radio is refilled here;
+     * AP4: with 5 items or fewer to go (any kind, as InnerTune's "load more"), get more. A Global radio is refilled here;
      * Jukebox picks come from the web side (`queueLow`). Nothing with autoplay off or repeat on.
      */
     private fun checkLow() {
@@ -1258,7 +1258,7 @@ class PlaybackService : MediaSessionService() {
             QueueInfo.clearLow()
             return
         }
-        val left = queue.autoAhead()
+        val left = queue.ahead()
         if (left > QueueCommands.LOW) {
             lowKey = null
             QueueInfo.clearLow()

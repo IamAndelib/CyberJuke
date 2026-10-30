@@ -113,12 +113,9 @@ export class Queue<T extends Identified> {
     return this.list[index]?.auto === true;
   }
 
-  /** Autoplay tracks still to come (after the current one in play order). */
-  get autoAhead(): number {
-    const p = this.cur ? this.order.indexOf(this.cur) : -1;
-    let n = 0;
-    for (let k = p + 1; k < this.order.length; k++) if (this.order[k].auto) n++;
-    return n;
+  /** Tracks still to come (after the current one in play order). */
+  get ahead(): number {
+    return this.order.length - 1 - (this.cur ? this.order.indexOf(this.cur) : -1);
   }
 
   /**

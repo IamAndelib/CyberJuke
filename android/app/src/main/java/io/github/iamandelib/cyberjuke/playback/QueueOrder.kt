@@ -424,8 +424,8 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         return gone.size
     }
 
-    /** Autoplay items still to come (after the current one in play order). */
-    fun autoAhead(): Int = upcoming().count { host.isAutoAt(it) }
+    /** Items still to come (after the current one in play order). */
+    fun ahead(): Int = upcoming().size
 
     /** Removes the autoplay items still to come; returns how many went. */
     fun dropUpcomingAuto(): Int {

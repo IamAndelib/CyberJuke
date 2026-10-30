@@ -51,9 +51,9 @@ export interface QueueLow {
   seedId: string | null;
 }
 
-/** Autoplay tracks left when more are added (AP4). */
+/** Tracks left (any kind) when autoplay adds more (AP4). */
 export const AUTOPLAY_LOW = 5;
-/** Autoplay tracks added at the start of a list or radio, and on each refill. */
+/** Autoplay tracks added after a list or a single song, and on each refill. */
 export const AUTOPLAY_FIRST = 25;
 export const AUTOPLAY_MORE = 20;
 

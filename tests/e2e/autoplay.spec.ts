@@ -153,12 +153,12 @@ test('Album Play plays the album, then continues into autoplay at the end', asyn
   await album.getByTestId('album-play').click();
   await expect(page.getByTestId('mini-title')).toHaveText(titles[0]);
 
-  const q = await withAutoplay(page, 5);
-  expect(q.context?.mode).toBe('list');
-  expect(q.list.map((t) => t.title)).toEqual(titles.slice(1));
-  // Global leads to Global: the first track's radio.
-  expect(q.autoplay.every((t) => t.source === 'ytmusic' && /^Radio \d+$/.test(t.title))).toBe(true);
-  expect((await musicCalls(page)).filter((c) => c[0] === 'radio')).toHaveLength(1);
+  // The album first: nothing more is asked for until it nears its end.
+  const start = await expectStable(() => queueState(page), 1500);
+  expect(start.context?.mode).toBe('list');
+  expect(start.list.map((t) => t.title)).toEqual(titles.slice(1));
+  expect(start.autoplay).toEqual([]);
+  expect((await musicCalls(page)).filter((c) => c[0] === 'radio')).toHaveLength(0);
 
   await openNowPlaying(page);
   await expect(page.getByTestId('upnext-list-label')).toContainText('Next from:');
@@ -177,6 +177,10 @@ test('Album Play plays the album, then continues into autoplay at the end', asyn
   await lastRow.locator('.row-main').click();
   await expect(page.getByTestId('np-title')).toHaveText(titles[7]);
   await expect(page.locator('[data-testid="upnext-row"][data-section="list"]')).toHaveCount(0);
+  // At its end: Global leads to Global, the first track's radio.
+  const q = await withAutoplay(page, 5);
+  expect(q.autoplay.every((t) => t.source === 'ytmusic' && /^Radio \d+$/.test(t.title))).toBe(true);
+  expect((await musicCalls(page)).filter((c) => c[0] === 'radio')).toHaveLength(1);
   await page.getByTestId('np-next').click();
   await expect(page.getByTestId('np-title')).toHaveText(q.autoplay[0].title);
 });

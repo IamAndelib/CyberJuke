@@ -98,7 +98,7 @@ internal object QueueCommands {
     /** Track ids of Global (YouTube Music) tracks: `ytm:<ytId>`, as on the web side. */
     const val GLOBAL_PREFIX = "ytm:"
 
-    /** Autoplay items left when the queue is "low" and gets more (AP4). */
+    /** Items left (any kind) when the queue is "low" and autoplay adds more (AP4). */
     const val LOW = 5
 }
 

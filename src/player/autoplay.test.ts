@@ -64,6 +64,19 @@ describe('autoplay', () => {
     expect(added[1][0]).toHaveLength(AUTOPLAY_MORE);
   });
 
+  it('a list gets more only near its end: with more than 5 tracks of it to go, nothing yet', async () => {
+    const list = Array.from({ length: 8 }, (_, i) => track(`c${i}`, { artist: `A${i}` }));
+    const at = (i: number) => ({ current: list[i], seed: list[0], index: i, queue: list, upNext: list.slice(i + 1).map((t, k) => ({ track: t, index: i + 1 + k })) });
+    const { ap, added, s } = setup(at(0));
+    await ap.fill({ left: 0, seedId: 'c0' });
+    expect(added).toHaveLength(0);
+    // 5 to go: more follows the list.
+    s.value = { ...s.value, ...at(2) };
+    await ap.fill({ left: 5, seedId: 'c0' });
+    expect(added[0][0]).toHaveLength(AUTOPLAY_MORE);
+    expect(added[0][0].some((id) => list.some((t) => t.id === id))).toBe(false);
+  });
+
   it('a signal that came before the catalog loaded is answered once it has (the player asks only once)', async () => {
     const seed = track('c0', { artist: 'A0' });
     let cat: Track[] = [];
@@ -161,9 +174,11 @@ describe('autoplay', () => {
     const round = stationTracks(st);
     const seed = round[0];
     const last = round.at(-1)!;
-    const a = setup({ current: seed, seed, index: 0, queue: [...round], upNext: round.slice(1).map((t, i) => ({ track: t, index: i + 1 })), context: { label: stationLabel(st), mode: 'list' } });
+    // Near the end of the round (3 to go), the next one comes.
+    const at = round.length - 4;
+    const a = setup({ current: round[at], seed, index: at, queue: [...round], upNext: round.slice(at + 1).map((t, i) => ({ track: t, index: at + 1 + i })), context: { label: stationLabel(st), mode: 'list' } });
     (a.player as { kind: string }).kind = 'native';
-    await a.ap.fill({ left: 0, seedId: seed.id });
+    await a.ap.fill({ left: 3, seedId: seed.id });
     expect(a.added).toHaveLength(1);
     const [ids, seedId] = a.added[0];
     expect(seedId).toBe(seed.id);
@@ -171,7 +186,7 @@ describe('autoplay', () => {
     expect(ids[0]).not.toBe(last.id);
     expect(a.radio).not.toHaveBeenCalled();
     // Asked again before the state shows the round (native lags the call): nothing more.
-    await a.ap.fill({ left: 0, seedId: seed.id });
+    await a.ap.fill({ left: 3, seedId: seed.id });
     expect(a.added).toHaveLength(1);
     // The state shows it, and it has run low: the round after that.
     const next = ids.map((id) => round.find((t) => t.id === id)!);
