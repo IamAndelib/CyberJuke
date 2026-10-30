@@ -138,7 +138,9 @@ export function GenreDetail({ genre }: { genre: string }) {
         count != null && count > 0
           ? plural(count, 'track')
           : has
-            ? `${paged.tracks.length}${paged.hasMore ? '+' : ''} tracks`
+            ? paged.hasMore
+              ? `${paged.tracks.length}+ tracks`
+              : plural(paged.tracks.length, 'track')
             : 'Genre'
       }
       left={

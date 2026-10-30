@@ -142,6 +142,30 @@ test('the new-tracks pill appears when there are newer posts; tapping it refresh
   await toastsGone(page);
 });
 
+test('the new-tracks pill on Most saved or a genre chip shows Latest from every genre, where the new posts are', async ({ page }) => {
+  const future = Date.now() + 3600_000;
+  await page.route(/firestore\.googleapis\.com\/.*:runQuery/, async (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fallback();
+    const q = JSON.parse(route.request().postData() ?? '{}').structuredQuery;
+    if (q.select?.fields?.[0]?.fieldPath === 'createdAt' && q.limit === 25) {
+      const rows = [{ document: { name: 'projects/p/databases/(default)/documents/posts/new0', fields: { createdAt: { timestampValue: new Date(future).toISOString() }, isNSFW: { booleanValue: false } } }, readTime: new Date().toISOString() }];
+      return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(rows) });
+    }
+    return route.fallback();
+  });
+  await start(page);
+  await page.getByTestId('genre-chip').first().click();
+  await page.getByTestId('sort-saved').click();
+  await page.evaluate(() => (window as unknown as { __cyberjukeFreshness: { check(): Promise<void> } }).__cyberjukeFreshness.check());
+  const pill = page.getByTestId('new-tracks-pill');
+  await expect(pill).toHaveText(/1 new track/);
+  await pill.click();
+  await expect(pill).toHaveCount(0);
+  await expect(page.getByTestId('sort-latest')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('chip-all')).toHaveAttribute('aria-pressed', 'true');
+  await waitForTracks(page);
+});
+
 test('a song picture still on its way leaves a dark box, not a bright square (dark theme)', async ({ page }) => {
   await seedStorage(page, { 'CapacitorStorage.settings': { theme: 'dark' } });
   // The pictures never arrive (a slow connection, or a list that just opened).

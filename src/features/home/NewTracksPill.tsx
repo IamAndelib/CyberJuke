@@ -3,7 +3,8 @@
  * newer than the feed; tapping it scrolls to the top, and once the scroll has ended
  * (`scrollend`, or a timeout where that never comes) reloads the Latest list and fades
  * out. The list never changes under a moving scroll, and the feed never changes on its
- * own. Self-contained: mount it as the first child of Home.
+ * own. Mount it as the first child of Home; [toLatest] first shows the list the new posts
+ * land in (Latest, every genre), as X's "new posts" pill does.
  */
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { freshness, refreshLatest } from '../../stores/newTracks';
@@ -35,7 +36,7 @@ function scrollEnded(el: Element, moving: boolean, ms: number): Promise<void> {
   });
 }
 
-export function NewTracksPill() {
+export function NewTracksPill({ toLatest }: { toLatest: () => void }) {
   const p = freshness.pending.value;
   const ref = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
@@ -44,6 +45,7 @@ export function NewTracksPill() {
   const go = async () => {
     if (busy || !p) return;
     setBusy(true);
+    toLatest();
     const screen = ref.current?.closest('.screen');
     try {
       if (screen) {

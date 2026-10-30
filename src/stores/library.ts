@@ -134,6 +134,13 @@ export const recent = computed<Track[]>(() => uniqueTracks(history.value));
 export const settings = signal<Settings>({ ...DEFAULT_SETTINGS });
 /** The NSFW setting alone: a theme change doesn't touch what depends on it (the catalog, the search index). */
 export const showNsfw = computed(() => settings.value.showNsfw);
+/**
+ * What Library shows with the NSFW setting applied, as the catalog does: Liked and the history
+ * keep every track, so turning the setting back on brings them back.
+ */
+export const likedShown = computed(() => (showNsfw.value ? liked.value : liked.value.filter((t) => !t.nsfw)));
+export const historyShown = computed(() => (showNsfw.value ? history.value : history.value.filter((e) => !e.track.nsfw)));
+export const recentShown = computed(() => (showNsfw.value ? recent.value : recent.value.filter((t) => !t.nsfw)));
 /** Favorite genres, in the order they were added. */
 export const favoriteGenres = signal<string[]>([]);
 /** Favorite artists (display names), in the order they were added. Matched by artistKey. */

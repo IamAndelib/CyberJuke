@@ -27,6 +27,7 @@ import type { Track } from '../../data/model';
 import type { LoadError } from '../../core/errors';
 import { online } from '../../core/network';
 import { OFFLINE } from '../../core/offlineText';
+import { plural } from '../../core/text';
 import type { FeedLoader, FeedOptions } from '../../stores/feed';
 import { Icon } from '../icons';
 import { OfflineState } from './OfflineGate';
@@ -190,7 +191,7 @@ export function MusicRow({ item }: { item: MusicItem }) {
   const isArtist = item.kind === 'artist';
   const sub = isArtist
     ? 'Artist'
-    : [item.kind === 'album' ? 'Album' : 'Playlist', item.subtitle, item.itemCount ? `${item.itemCount} tracks` : ''].filter(Boolean).join(' · ');
+    : [item.kind === 'album' ? 'Album' : 'Playlist', item.subtitle, item.itemCount ? plural(item.itemCount, 'track') : ''].filter(Boolean).join(' · ');
   return (
     <li class="row" data-testid="music-row" data-kind={item.kind}>
       <button

@@ -405,7 +405,13 @@ test('with Autoplay off, a Home tap plays the feed on from that song instead of 
   expect(q.autoplay).toEqual([]);
   // A single song with nothing after it says why.
   await page.getByTestId('tab-genres').click();
-  await page.getByTestId('genre-tile').last().click();
+  // The last tile of the Popular grid is a one-song genre once the grid is whole (it fills in
+  // idle time): every genre the header counts.
+  const genres = page.getByTestId('genre-grid');
+  await expect(page.getByTestId('screen-genres').locator('.topbar-sub')).toHaveText(/^\d+ genres on the Jukebox$/);
+  const n = Number((await page.getByTestId('screen-genres').locator('.topbar-sub').textContent())!.split(' ')[0]);
+  await expect(genres.getByTestId('genre-tile')).toHaveCount(n);
+  await genres.getByTestId('genre-tile').last().click();
   await expect(visible(page, 'track-row')).toHaveCount(1);
   await visible(page, 'track-play').first().click();
   await openNowPlaying(page);

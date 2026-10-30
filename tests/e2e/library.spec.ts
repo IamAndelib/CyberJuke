@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { openSearch, seedStorage, start, waitForTracks } from '../helpers';
+import { openSearch, openSettings, seedStorage, start, waitForTracks } from '../helpers';
 
 /** Library: Liked, Recently played by day, and the one-time move of history into a file. */
 
@@ -95,6 +95,29 @@ test('history saved by older versions moves into a file once, grouped by day; ne
   await page.getByTestId('tab-library').click();
   await page.getByTestId('lib-recent').click();
   await expect(page.getByTestId('history-day').first().getByTestId('track-title').first()).toHaveText(title);
+});
+
+test('with NSFW hidden, Liked and Recently played hide NSFW tracks too, and show them again once it is on', async ({ page }) => {
+  const nsfw = { ...tr('n1', 'Seed NSFW'), nsfw: true };
+  await seedStorage(page, {
+    'CapacitorStorage.liked': [tr('s1', 'Seed Liked'), nsfw],
+    'CapacitorStorage.history': [{ track: nsfw, playedAt: Date.now() - 1000 }, { track: tr('s2', 'Seed Played'), playedAt: Date.now() - 2000 }],
+  });
+  await page.goto('/');
+  await page.getByTestId('tab-library').click();
+  const titles = (list: string) => page.getByTestId(list).getByTestId('track-title');
+  await expect(titles('liked-list')).toHaveText(['Seed Liked']);
+  await expect(page.getByTestId('lib-liked').locator('.count')).toHaveText('1');
+  await page.getByTestId('lib-recent').click();
+  await expect(titles('recent-list')).toHaveText(['Seed Played']);
+  await expect(page.getByTestId('lib-recent').locator('.count')).toHaveText('1');
+  // Kept, not dropped: on again, they're back.
+  await openSettings(page);
+  await page.getByTestId('nsfw-toggle').click();
+  await page.getByTestId('tab-library').click();
+  await expect(titles('recent-list')).toHaveText(['Seed NSFW', 'Seed Played']);
+  await page.getByTestId('lib-liked').click();
+  await expect(titles('liked-list')).toHaveCount(2);
 });
 
 test('old untimed history is kept on upgrade', async ({ page }) => {
