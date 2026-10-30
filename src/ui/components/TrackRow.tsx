@@ -87,8 +87,9 @@ if (typeof document !== 'undefined') {
 /**
  * P10: long-press opens the row's ⋯ menu, and the click that
  * ends the press is swallowed. Moving the finger (a scroll) cancels it. No re-renders.
+ * Every list's rows use it (Up next's too).
  */
-function longPress(track: Track) {
+export function longPress(track: Track) {
   return {
     onPointerDown: (e: PointerEvent) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;

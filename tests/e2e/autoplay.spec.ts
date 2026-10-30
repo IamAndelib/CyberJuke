@@ -532,6 +532,28 @@ test('the queue shows the whole list: what played folds under [+] Played, the pl
   await expect(page.getByTestId('upnext-played-fold')).toHaveAttribute('aria-expanded', 'false');
 });
 
+test('a long press on a queue row opens its menu, as in every list, and plays nothing', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-tile').nth(5).click();
+  await visible(page, 'genre-play-all').click();
+  await openNowPlaying(page);
+  const playing = (await page.getByTestId('np-title').textContent())!.trim();
+  const row = page.locator('[data-testid="upnext-row"][data-section="list"]').nth(1);
+  await row.scrollIntoViewIfNeeded();
+  const title = (await row.locator('.row-title').textContent())!.trim();
+  const b = (await row.locator('.row-main').boundingBox())!;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x + 40, y: b.y + b.height / 2, id: 1 }] });
+  const menu = page.getByTestId('track-menu');
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('.sheet-head .row-title')).toHaveText(title);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+  await expect(menu).toBeVisible();
+  await expect(page.getByTestId('np-title')).toHaveText(playing);
+});
+
 test("played songs get ↑ ↓ ✕: moves stay among them, the last one's ↓ plays it next, ✕ offers Undo", async ({ page }) => {
   await start(page);
   await page.getByTestId('tab-genres').click();
