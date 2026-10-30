@@ -110,14 +110,21 @@ class SessionPolicyTest {
     }
 
     @Test
-    fun theNotificationAndPlatformSessionHaveNoTimeline() {
-        // Media3 gives the platform session the notification controller's commands: without
-        // the timeline it publishes no queue (current item and transport only).
-        assertTrue(Player.COMMAND_GET_TIMELINE in SessionPolicy.NOTIFICATION_HIDDEN_COMMANDS)
+    fun theNotificationGetsOnlyWhatItShows() {
+        // Media3 gives the platform session the notification controller's commands, and any app
+        // can make that controller send one: the controls it shows, never the queue or edits.
+        val n = SessionPolicy.NOTIFICATION_COMMANDS
         for (c in listOf(
             Player.COMMAND_PLAY_PAUSE, Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_PREVIOUS,
-            Player.COMMAND_GET_CURRENT_MEDIA_ITEM, Player.COMMAND_GET_METADATA,
-        )) assertFalse("$c", c in SessionPolicy.NOTIFICATION_HIDDEN_COMMANDS)
+            Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM, Player.COMMAND_GET_CURRENT_MEDIA_ITEM,
+            Player.COMMAND_GET_METADATA, Player.COMMAND_SET_SHUFFLE_MODE, Player.COMMAND_SET_REPEAT_MODE,
+        )) assertTrue("$c", c in n)
+        for (c in listOf(
+            Player.COMMAND_GET_TIMELINE, Player.COMMAND_SET_MEDIA_ITEM, Player.COMMAND_CHANGE_MEDIA_ITEMS,
+            Player.COMMAND_SEEK_TO_MEDIA_ITEM, Player.COMMAND_SET_SPEED_AND_PITCH, Player.COMMAND_SET_VOLUME,
+            Player.COMMAND_SET_DEVICE_VOLUME_WITH_FLAGS, Player.COMMAND_ADJUST_DEVICE_VOLUME_WITH_FLAGS,
+            Player.COMMAND_SET_TRACK_SELECTION_PARAMETERS, Player.COMMAND_SET_PLAYLIST_METADATA,
+        )) assertFalse("$c", c in n)
     }
 
     @Test
