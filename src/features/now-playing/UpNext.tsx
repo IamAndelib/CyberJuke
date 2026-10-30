@@ -9,7 +9,7 @@ import { toast } from '../../stores/toast';
 import { Icon } from '../../ui/icons';
 import { afterPress } from '../../ui/press';
 import { Art } from '../../ui/components/Art';
-import { Bars } from '../../ui/components/TrackRow';
+import { Bars, longPress } from '../../ui/components/TrackRow';
 import { UP_NEXT_MAX } from '../../core/guards';
 import { plural } from '../../core/text';
 
@@ -151,6 +151,7 @@ export function UpNext() {
         >
           <button
             class="row-main"
+            {...longPress(it.track)}
             onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id))}
             aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', autoplay' }[kind]}`}
           >
@@ -249,7 +250,7 @@ export function UpNext() {
               Now playing
             </li>
             <li class="row is-current" data-testid="upnext-current" data-track-id={current.id} data-section="current">
-              <div class="row-main" aria-current="true">
+              <div class="row-main" aria-current="true" {...longPress(current)}>
                 <RowBody track={current} playing={isPlaying.value} />
               </div>
             </li>

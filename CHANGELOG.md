@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Press and hold a song in Now Playing's queue for its menu (Add to queue, Share, Like, More by…), as in every list.
 - The notification and the lock screen have **Shuffle** and **Repeat** buttons, showing the mode they're in; Repeat steps through off, all and one, as in the app.
 
 ### Changed
