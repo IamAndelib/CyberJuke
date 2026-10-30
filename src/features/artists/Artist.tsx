@@ -107,7 +107,16 @@ export function ArtistPage({ name: raw }: { name: string }) {
               <Tracks tracks={allJukebox ? jukebox : jukebox.slice(0, JUKEBOX_FIRST)} ctx={ctx} queue={() => jukebox} />
               {!allJukebox && jukebox.length > JUKEBOX_FIRST && (
                 <div class="list-foot">
-                  <button class="link-btn" onClick={() => setAllJukebox(true)} data-testid="artist-jukebox-all">
+                  <button
+                    class="link-btn"
+                    onClick={(e) => {
+                      // The button goes: focus (TalkBack, a keyboard) moves on to the first track it shows.
+                      const list = e.currentTarget.closest('section');
+                      setAllJukebox(true);
+                      requestAnimationFrame(() => list?.querySelectorAll<HTMLElement>('[data-testid="track-play"]')[JUKEBOX_FIRST]?.focus());
+                    }}
+                    data-testid="artist-jukebox-all"
+                  >
                     [Show all {jukebox.length}]
                   </button>
                 </div>

@@ -105,6 +105,23 @@ describe('NativePlayer: Up next rows (K1)', () => {
     expect(p.state.peek().previous).toEqual([]);
   });
 
+  it('a played row moved or removed shows at once, as the rows ahead do', async () => {
+    const p = new NativePlayer();
+    emit('state', state({ index: 2, trackId: 'C', queueIds: ['A', 'B', 'C', 'D'], upNextIds: ['D'], upNextKinds: 'l', upNextIndex: [3], prevIndex: [0, 1] }));
+    const played = () => p.state.peek().previous.map((u) => [u.track.id, u.index]);
+    fake.plugin.moveItem.mockImplementationOnce(() => new Promise<void>(() => {}));
+    void p.move(1, 0, 'B');
+    expect(played()).toEqual([
+      ['B', 0],
+      ['A', 1],
+    ]);
+    const p2 = new NativePlayer();
+    emit('state', state({ index: 2, trackId: 'C', queueIds: ['A', 'B', 'C', 'D'], upNextIds: ['D'], upNextKinds: 'l', upNextIndex: [3], prevIndex: [0, 1] }));
+    fake.plugin.removeItem.mockImplementationOnce(() => new Promise<void>(() => {}));
+    void p2.remove(0, 'A');
+    expect(p2.state.peek().previous.map((u) => [u.track.id, u.index])).toEqual([['B', 0]]);
+  });
+
   it('without indices (an older native), looks after the current track first, then from the top', () => {
     const p = new NativePlayer();
     emit('state', state({ index: 2, trackId: 'C', queueIds: ['A', 'B', 'C', 'A', 'D'], upNextIds: ['A', 'D'], upNextKinds: 'ql' }));

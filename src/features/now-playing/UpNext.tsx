@@ -189,8 +189,13 @@ export function UpNext() {
               onClick={(e) => {
                 const b = e.currentTarget;
                 const near = items[k + 1] ?? items[k - 1];
+                // The only row of its part: the next row with buttons, else the one before.
+                const rows = [...(root.current?.querySelectorAll<HTMLElement>('li[data-section]:not([data-section="current"])') ?? [])];
+                const at = rows.indexOf(b.closest('li')!);
+                const other = rows[at + 1] ?? rows[at - 1];
+                const to = near ? { id: near.track.id, kind } : other && { id: other.dataset.trackId!, kind: other.dataset.section as Kind };
                 afterPress(b, () => {
-                  if (remove(it, kind, items[k + 1]?.track.id ?? null)) keepFocus(b, near ? { id: near.track.id, kind, index: null, button: 'remove', gone: [it.track.id, it.index] } : null);
+                  if (remove(it, kind, items[k + 1]?.track.id ?? null)) keepFocus(b, to ? { ...to, index: null, button: 'remove', gone: [it.track.id, it.index] } : null);
                 });
               }}
               data-role="remove"
@@ -245,7 +250,8 @@ export function UpNext() {
             </button>
           </li>
         )}
-        {open && rows('played', played, shuffle || !current ? undefined : { track: current, index: sec.queued.at(-1)?.index ?? player.state.value.index })}
+        {/* peek: the index only matters with the rows, which change with it (not every tick). */}
+        {open && rows('played', played, shuffle || !current ? undefined : { track: current, index: sec.queued.at(-1)?.index ?? player.state.peek().index })}
         {current && (
           <>
             <li class="upnext-label" data-testid="upnext-current-label" aria-hidden="true">
