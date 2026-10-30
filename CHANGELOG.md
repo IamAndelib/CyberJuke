@@ -11,6 +11,7 @@
 - An artist page shows their 5 newest Jukebox songs, with **[Show all]** for the rest, so their top songs and albums are close by. Play and Shuffle still play them all.
 - Up next's ↑ ↓ ✕ buttons sit side by side, so song titles get more room.
 - Now Playing's **Queue** shows the whole list, top to bottom as it plays: the songs already played fold away under **[+] Played**, the playing one is marked as on Home, then what's up next. A tap on any of them plays from there, and with **Repeat all** the top it repeats from is right there.
+- Songs already played can be moved and removed (with **Undo**) like the ones to come, for **Repeat all**'s next lap; ↓ on the last one takes it past the playing song, so it plays next again.
 - Turning shuffle on mixes only the songs still to come: the ones before the playing song stay where they were, and **Repeat all** comes back to them first.
 
 ### Fixed

@@ -531,3 +531,42 @@ test('the queue shows the whole list: what played folds under [+] Played, the pl
   await next.click();
   await expect(page.getByTestId('upnext-played-fold')).toHaveAttribute('aria-expanded', 'false');
 });
+
+test("played songs get ↑ ↓ ✕: moves stay among them, the last one's ↓ plays it next, ✕ offers Undo", async ({ page }) => {
+  await start(page);
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-tile').nth(5).click();
+  await visible(page, 'genre-play-all').click();
+  await openNowPlaying(page);
+  const t = [(await page.getByTestId('np-title').textContent())!.trim()];
+  for (let k = 0; k < 3; k++) {
+    await page.getByTestId('np-next').click();
+    await expect(page.getByTestId('np-title')).not.toHaveText(t[k]);
+    t.push((await page.getByTestId('np-title').textContent())!.trim());
+  }
+  await page.getByTestId('upnext-played-fold').click();
+  const played = page.getByTestId('upnext-played');
+  const titles = played.locator('.row-title');
+  await expect(titles).toHaveText(t.slice(0, 3));
+  // Moves stay among the played: the first can't go up.
+  await expect(played.first().getByTestId('upnext-up')).toBeDisabled();
+  await expect(page.getByRole('button', { name: `Play ${t[1]}, played` })).toBeVisible();
+  await page.getByRole('button', { name: `Move ${t[0]} down` }).click();
+  await expect(titles).toHaveText([t[1], t[0], t[2]]);
+  // ✕ offers Undo, which puts it back where it was.
+  await page.waitForTimeout(350); // past the double-tap guard
+  await page.getByRole('button', { name: `Remove ${t[0]} from queue` }).click();
+  await expect(titles).toHaveText([t[1], t[2]]);
+  await page.getByTestId('toast').filter({ hasText: 'Removed from queue' }).getByRole('button', { name: 'Undo' }).click();
+  await expect(titles).toHaveText([t[1], t[0], t[2]]);
+  // The last one's ↓ takes it past the playing song: it plays next.
+  await page.getByRole('button', { name: `Move ${t[2]} down` }).click();
+  await expect(titles).toHaveText([t[1], t[0]]);
+  await expect(page.locator('[data-testid="upnext-row"][data-section="list"] .row-title').first()).toHaveText(t[2]);
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).toHaveText(t[2]);
+  // With shuffle on, no arrows here either; ✕ stays.
+  await page.getByTestId('np-shuffle').click();
+  await expect(played.first().getByTestId('upnext-remove')).toBeVisible();
+  await expect(played.getByTestId('upnext-up')).toHaveCount(0);
+});

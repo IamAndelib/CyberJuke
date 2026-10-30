@@ -83,8 +83,9 @@ const offClass = (t: Track) => (!online.value && !isSaved(t, savedOffline.value)
  * comes first, folded under "[+] Played · N" (a tap on one plays from there), then the playing
  * track, marked as in every list, then three
  * sections (AP1): queued by you, the rest of the list ("Next from: <source>"), then autoplay
- * ("Autoplay · similar to <seed>"). Up and Down move a queued or list track within its section;
- * Remove (every row ahead) offers Undo.
+ * ("Autoplay · similar to <seed>"). Up and Down move a track within its section, and the last
+ * played one's Down past the playing track, to hear it again; Remove (every row but the playing
+ * one) offers Undo.
  */
 export function UpNext() {
   const sec = upNextSections.value;
@@ -130,74 +131,84 @@ export function UpNext() {
       void player.move(it.index, to.index, it.track.id);
     });
 
+  /**
+   * A section's rows. Played ones too, whose last ↓ moves it past the playing track (`past`:
+   * the row it then follows), to play next after anything queued by you: to hear it again.
+   */
+  const rows = (kind: Kind, items: UpItem[], past?: UpItem) =>
+    items.map((it, k) => {
+      const down = items[k + 1] ?? past;
+      return (
+        <li
+          key={`${it.track.id}:${it.index}`}
+          // Offline, a row that can't play is dimmed, as in every list (TrackRow).
+          class={'row' + (kind === 'list' ? '' : ` ${kind}`) + offClass(it.track)}
+          data-testid={kind === 'played' ? 'upnext-played' : 'upnext-row'}
+          data-track-id={it.track.id}
+          data-index={it.index}
+          data-section={kind}
+          data-queued={kind === 'queued' ? 'true' : undefined}
+        >
+          <button
+            class="row-main"
+            onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id))}
+            aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', autoplay' }[kind]}`}
+          >
+            <RowBody track={it.track} />
+          </button>
+          <div class="upnext-actions">
+            {/* Reorder within each section (with shuffle on the order is random, so no arrows). */}
+            {!shuffle ? (
+              <>
+                <button
+                  class="icon-btn"
+                  aria-label={`Move ${it.track.title} up`}
+                  disabled={k === 0}
+                  onClick={(e) => move(e.currentTarget, it, kind, items[k - 1], 'up')}
+                  data-role="up"
+                  data-testid="upnext-up"
+                >
+                  <Icon name="up" size={20} />
+                </button>
+                <button
+                  class="icon-btn"
+                  aria-label={`Move ${it.track.title} down`}
+                  disabled={!down}
+                  onClick={(e) => down && move(e.currentTarget, it, down === past ? 'list' : kind, down, 'down')}
+                  data-role="down"
+                  data-testid="upnext-down"
+                >
+                  <Icon name="down" size={20} />
+                </button>
+              </>
+            ) : null}
+            <button
+              class="icon-btn"
+              aria-label={`Remove ${it.track.title} from queue`}
+              onClick={(e) => {
+                const b = e.currentTarget;
+                const near = items[k + 1] ?? items[k - 1];
+                afterPress(b, () => {
+                  if (remove(it, kind, items[k + 1]?.track.id ?? null)) keepFocus(b, near ? { id: near.track.id, kind, index: null, button: 'remove', gone: [it.track.id, it.index] } : null);
+                });
+              }}
+              data-role="remove"
+              data-testid="upnext-remove"
+            >
+              <Icon name="close" size={20} />
+            </button>
+          </div>
+        </li>
+      );
+    });
+
   const section = (kind: Kind, title: string, items: UpItem[]) =>
     items.length > 0 && (
       <>
         <li class={'upnext-label' + (kind === 'autoplay' ? ' auto' : '')} data-testid={`upnext-${kind}-label`} aria-hidden="true">
           {title}
         </li>
-        {items.map((it, k) => (
-          <li
-            key={`${it.track.id}:${it.index}`}
-            // Offline, a row that can't play is dimmed, as in every list (TrackRow).
-            class={'row' + (kind === 'queued' ? ' queued' : '') + (kind === 'autoplay' ? ' autoplay' : '') + offClass(it.track)}
-            data-testid="upnext-row"
-            data-track-id={it.track.id}
-            data-index={it.index}
-            data-section={kind}
-            data-queued={kind === 'queued' ? 'true' : undefined}
-          >
-            <button
-              class="row-main"
-              onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id))}
-              aria-label={`Play ${it.track.title}${kind === 'queued' ? ', queued by you' : kind === 'autoplay' ? ', autoplay' : ''}`}
-            >
-              <RowBody track={it.track} />
-            </button>
-            <div class="upnext-actions">
-              {/* Reorder within each section (with shuffle on the order is random, so no arrows). */}
-              {!shuffle ? (
-                <>
-                  <button
-                    class="icon-btn"
-                    aria-label={`Move ${it.track.title} up`}
-                    disabled={k === 0}
-                    onClick={(e) => move(e.currentTarget, it, kind, items[k - 1], 'up')}
-                    data-role="up"
-                    data-testid="upnext-up"
-                  >
-                    <Icon name="up" size={20} />
-                  </button>
-                  <button
-                    class="icon-btn"
-                    aria-label={`Move ${it.track.title} down`}
-                    disabled={k === items.length - 1}
-                    onClick={(e) => move(e.currentTarget, it, kind, items[k + 1], 'down')}
-                    data-role="down"
-                    data-testid="upnext-down"
-                  >
-                    <Icon name="down" size={20} />
-                  </button>
-                </>
-              ) : null}
-              <button
-                class="icon-btn"
-                aria-label={`Remove ${it.track.title} from queue`}
-                onClick={(e) => {
-                  const b = e.currentTarget;
-                  const near = items[k + 1] ?? items[k - 1];
-                  afterPress(b, () => {
-                    if (remove(it, kind, items[k + 1]?.track.id ?? null)) keepFocus(b, near ? { id: near.track.id, kind, index: null, button: 'remove', gone: [it.track.id, it.index] } : null);
-                  });
-                }}
-                data-role="remove"
-                data-testid="upnext-remove"
-              >
-                <Icon name="close" size={20} />
-              </button>
-            </div>
-          </li>
-        ))}
+        {rows(kind, items)}
       </>
     );
 
@@ -231,14 +242,7 @@ export function UpNext() {
             </button>
           </li>
         )}
-        {open &&
-          played.map((it) => (
-            <li key={`p:${it.track.id}:${it.index}`} class={'row played' + offClass(it.track)} data-testid="upnext-played" data-track-id={it.track.id} data-index={it.index} data-section="played">
-              <button class="row-main" onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id))} aria-label={`Play ${it.track.title}, played`}>
-                <RowBody track={it.track} />
-              </button>
-            </li>
-          ))}
+        {open && rows('played', played, shuffle || !current ? undefined : { track: current, index: sec.queued.at(-1)?.index ?? player.state.value.index })}
         {current && (
           <>
             <li class="upnext-label" data-testid="upnext-current-label" aria-hidden="true">

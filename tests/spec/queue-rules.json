@@ -762,6 +762,24 @@
         { "op": "restore", "id": "a", "kind": "played", "beforeId": "Q" },
         { "op": "expect", "current": "R", "played": ["a", "Q"], "listSet": ["b", "c", "d"] }
       ]
+    },
+    {
+      "name": "a played track moved past the current one plays next, after the queued ones",
+      "list": ["a", "b", "c", "d"],
+      "start": 0,
+      "steps": [
+        { "op": "nextAuto" },
+        { "op": "nextAuto" },
+        { "op": "move", "id": "a", "to": 2 },
+        { "op": "expect", "current": "c", "played": ["b"], "upNext": ["a", "d"], "list": ["b", "c", "a", "d"] },
+        { "op": "queueNext", "ids": ["Q"] },
+        { "op": "move", "id": "b", "to": 2 },
+        { "op": "expect", "current": "c", "played": [], "upNext": ["Q", "b", "a", "d"], "queuedIds": ["Q"], "listIds": ["b", "a", "d"] },
+        { "op": "setRepeat", "mode": "all" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "expect", "current": "b", "played": ["c", "Q"] }
+      ]
     }
   ]
 }
