@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { expectStable, musicCalls, openNowPlaying, openSearch, openSettings, start } from '../helpers';
+import { expectStable, musicCalls, openNowPlaying, openSearch, openSettings, setVisibility, start } from '../helpers';
 import { genreFamilies } from '../../src/data/similar';
 import { artistKey, splitArtists } from '../../src/data/artists';
 import { words } from '../../src/data/text';
@@ -343,6 +343,23 @@ test("Repeat one at a list's end: Next is off, as on the notification; Repeat al
   await expect(repeat).toHaveAttribute('data-mode', 'all');
   await next.click();
   await expect(page.getByTestId('np-title')).toHaveText(first);
+});
+
+test('going to the background, a reserve is lined up: playback goes on if Android closes the screen', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-tile').nth(5).click();
+  await expect(visible(page, 'track-row').nth(3)).toBeVisible();
+  await visible(page, 'genre-play-all').click();
+  await expect.poll(async () => (await queueState(page)).list.length).toBeGreaterThan(6);
+  // Far from its end: nothing yet.
+  const { list } = await expectStable(() => queueState(page), 1000);
+  expect((await queueState(page)).autoplay).toEqual([]);
+  // In the background: enough for 50 ahead.
+  await setVisibility(page, 'hidden');
+  const q = await withAutoplay(page, 50 - list.length);
+  expect(list.length + q.autoplay.length).toBe(50);
+  await setVisibility(page, 'visible');
 });
 
 test('a track started before the Jukebox catalog has loaded still gets its autoplay once it does', async ({ page }) => {

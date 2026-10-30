@@ -215,9 +215,10 @@ function startAutoplay(): Autoplay {
     log: logError,
   });
   const a = autoplay;
-  // A list started before the catalog loaded gets its autoplay once it has.
+  // A list started before the catalog loaded, or before the player's state came (a reloaded
+  // page), gets its autoplay once both have.
   effect(() => {
-    if (catalog.tracks.value.length) untracked(() => a.catalogReady());
+    if (catalog.tracks.value.length && currentId.value) untracked(() => a.ready());
   });
   return autoplay;
 }

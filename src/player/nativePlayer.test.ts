@@ -409,3 +409,14 @@ describe('NativePlayer: starting a list', () => {
     expect(long.postUrl).toBe('');
   });
 });
+
+describe('NativePlayer: running low', () => {
+  it('a listener added after the signal (autoplay starts late on a reloaded page) still hears it', async () => {
+    const p = new NativePlayer();
+    emit('queueLow', { left: 2, seedId: 'A' });
+    const heard: unknown[] = [];
+    p.onQueueLow((e) => heard.push(e));
+    await flush();
+    expect(heard).toEqual([{ left: 2, seedId: 'A' }]);
+  });
+});

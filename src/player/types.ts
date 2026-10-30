@@ -2,6 +2,7 @@ import type { ReadonlySignal } from '@preact/signals';
 import type { Track } from '../data/model';
 import type { CrossfadeMs, Ipv4Mode, Quality } from '../stores/library';
 import type { RepeatMode } from './native';
+import { UP_NEXT_MAX } from '../core/guards';
 
 export type { RepeatMode };
 
@@ -56,6 +57,11 @@ export const AUTOPLAY_LOW = 5;
 /** Autoplay tracks added after a list or a single song, and on each refill. */
 export const AUTOPLAY_FIRST = 25;
 export const AUTOPLAY_MORE = 20;
+/**
+ * Tracks kept ahead once the app goes to the background (about three hours): Jukebox picks come
+ * from the page, which Android may close meanwhile (the app swiped away, its renderer killed).
+ */
+export const AUTOPLAY_RESERVE = UP_NEXT_MAX;
 
 /**
  * Autoplay may add to a queue of `count` tracks: but with repeat all, which loops what you
