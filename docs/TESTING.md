@@ -16,6 +16,7 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] Notification and lock screen: play/pause, next and previous work, and they show the title and artwork.
 - [ ] While music plays, the status bar shows the CyberJuke jukebox (a small arched box), not a music note; so does the notification's header.
 - [ ] On a fresh install (Android 13 or newer), the first play asks for no permission, and the notification still shows its controls.
+- [ ] The notification (expanded) and the lock screen show **Shuffle** and **Repeat** beside the usual buttons. Tap Shuffle: it lights up, and Now Playing's shuffle is on too. Tap Repeat three times: all, one, off, the icon changing each time, and Now Playing follows. Change them in the app: the notification follows.
 - [ ] Unplugging headphones or disconnecting Bluetooth pauses playback.
 - [ ] Switch between Wi-Fi and mobile data **during** a song: playback continues, or resumes by itself within a few seconds. No "YouTube is limiting requests" banner.
 - [ ] Turn on airplane mode during a song until it stops, then off again: it carries on by itself.

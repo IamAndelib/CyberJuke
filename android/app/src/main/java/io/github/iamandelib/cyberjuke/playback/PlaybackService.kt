@@ -44,6 +44,7 @@ import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.mp3.Mp3Extractor
+import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -584,11 +585,35 @@ class PlaybackService : MediaSessionService() {
             DefaultMediaNotificationProvider.Builder(this).build().apply { setSmallIcon(R.drawable.ic_stat_cyberjuke) },
         )
         restoreLastSession()
+        updateModeButtons()
         // The network as it is now (the callback then tells of changes).
         val caps = runCatching { connectivity().let { it.getNetworkCapabilities(it.activeNetwork) } }.getOrNull()
         AudioCache.online = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) ?: isNetworkValidated()
         caps?.let { likedSaver.onNetwork(AudioCache.online, it.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) }
         Log.i(TAG, "PlaybackService created")
+    }
+
+    /**
+     * The notification's and lock screen's Shuffle and Repeat ([ModeButtons]), showing the modes as
+     * they are: set again whenever one changes, whoever changed it. Player commands the
+     * notification may already send (SessionPolicy), so a press takes the same path as the app's.
+     */
+    private fun updateModeButtons() {
+        val p = player ?: return
+        val shuffle = p.shuffleModeEnabled
+        val repeat = p.repeatMode
+        mediaSession?.setMediaButtonPreferences(
+            listOf(
+                CommandButton.Builder(ModeButtons.shuffleIcon(shuffle))
+                    .setDisplayName(ModeButtons.shuffleLabel(shuffle))
+                    .setPlayerCommand(Player.COMMAND_SET_SHUFFLE_MODE)
+                    .build(),
+                CommandButton.Builder(ModeButtons.repeatIcon(repeat))
+                    .setDisplayName(ModeButtons.repeatLabel(repeat))
+                    .setPlayerCommand(Player.COMMAND_SET_REPEAT_MODE, ModeButtons.nextRepeat(repeat))
+                    .build(),
+            ),
+        )
     }
 
     /** A player the service's way, not yet its own ([adopt]), with the load control only it may use. */
@@ -1035,6 +1060,7 @@ class PlaybackService : MediaSessionService() {
             queueChanged()
             schedulePrefetch()
             crossfade?.onListChanged()
+            updateModeButtons()
         }
 
         /** Repeat all loops what you started ([NativeQueue.onRepeatModeChanged]); off again, autoplay fills up. */
@@ -1042,6 +1068,7 @@ class PlaybackService : MediaSessionService() {
             queue.onRepeatModeChanged(repeatMode == Player.REPEAT_MODE_ALL)
             lowKey = null
             queueChanged()
+            updateModeButtons()
         }
     }
 
