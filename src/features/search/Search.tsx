@@ -5,6 +5,7 @@ import { MAX_RESULTS, buildIndex, searchGenres, searchTitles, searchTracks } fro
 import { musicTracks, type MusicFilter, type MusicItem } from '../../data/ytmusic';
 import { catalog } from '../../stores/catalog';
 import { genres } from '../../stores/genres';
+import { artistIndex } from '../../stores/artists';
 import { addRecentSearch, clearRecentSearches, loadRecentSearches, recentSearches, removeRecentSearch, restoreRecentSearches } from '../../stores/searches';
 import { toast } from '../../stores/toast';
 import { useFavArtist, useFavGenre } from '../../ui/useFavs';
@@ -264,6 +265,8 @@ function JukeboxResults({ q }: { q: string }) {
   // Recomputed only when the query or the catalog changes (not on every render).
   const hits = useMemo(() => (idx ? searchTracks(idx, q) : []), [idx, q]);
   const gHits = useMemo(() => (q.trim() ? searchGenres(genreList, q) : []), [genreList, q]);
+  const artistList = q.trim() ? artistIndex.value.artists : null;
+  const aHits = useMemo(() => (artistList ? searchTitles(artistList, (a) => a.name, q) : []), [artistList, q]);
   if (!tracks.length) {
     if (status === 'error') {
       return <CatalogError />;
@@ -278,7 +281,7 @@ function JukeboxResults({ q }: { q: string }) {
   // Empty query: the whole Jukebox, newest first.
   if (!q.trim()) return <ChunkedTracks tracks={tracks} ctx={SEARCH_CTX} chunkKey="search:jukebox:" testid="search-latest" first={FIRST_ROWS} />;
 
-  if (!hits.length && !gHits.length) {
+  if (!hits.length && !gHits.length && !aHits.length) {
     return (
       <>
         <EmptyState title="No matches" testid="search-empty">
@@ -290,6 +293,20 @@ function JukeboxResults({ q }: { q: string }) {
   }
   return (
     <div data-testid="search-results">
+      {aHits.length > 0 && (
+        <>
+          <div class="section-head">
+            <h2 class="section-title">Artists</h2>
+          </div>
+          <div class="chips wrap" data-testid="search-artists">
+            {aHits.map((a) => (
+              <button key={a.key} class="chip" onClick={(e) => afterPress(e.currentTarget, () => openArtistPage(a.name))} data-testid="search-artist">
+                {a.name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
       {gHits.length > 0 && (
         <>
           <div class="section-head">

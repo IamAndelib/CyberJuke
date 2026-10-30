@@ -27,6 +27,7 @@
 - Recently played counts one way: **[Clear]** asks to "Clear 12 tracks", as the tab counts them, instead of counting every play, and the toast says "Listening history cleared".
 - Liked songs go by one name: Library's empty list says "No liked songs yet", and with TalkBack the heart in Now Playing is "Like", pressed when the song is liked.
 - Global search's filters (songs, albums, artists, playlists) have a row of their own under the search bar, so all four fit on a narrow phone.
+- Searching the Jukebox also finds artists: those whose name matches show first, and a tap opens their page.
 
 ## [1.3.4] - 2026-10-29
 

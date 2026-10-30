@@ -400,3 +400,16 @@ test("Global's filters all fit on a 360 px phone, on a row of their own", async 
     expect(b.x + b.width, f).toBeLessThanOrEqual(360);
   }
 });
+
+test('Jukebox search offers the artists whose name matches, and one opens their page', async ({ page }) => {
+  await start(page);
+  // An artist with a name of two words or more, typed in part.
+  const artist = (await page.locator('[data-testid="track-row"]:visible .row-artist').filter({ hasText: /^\S+ \S+/ }).first().textContent())!.split(',')[0].trim();
+  const word = artist.split(' ').find((w) => w.length > 3) ?? artist;
+  await openSearch(page);
+  await page.getByTestId('search-input').fill(word.toLowerCase());
+  const found = page.getByTestId('search-artists').getByTestId('search-artist');
+  await expect(found.filter({ hasText: artist }).first()).toBeVisible();
+  await found.filter({ hasText: artist }).first().click();
+  await expect(page.getByTestId('screen-artist').locator('.topbar-title')).toHaveText(artist);
+});
