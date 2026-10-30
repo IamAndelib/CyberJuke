@@ -20,10 +20,11 @@ class QueueOrderTest {
     }
 
     @Test
-    fun arrangeKeepsAutoplayLastInTheOrderItHas() {
-        // list 0..7: 5, 6, 7 are autoplay (mixed by shuffle too); 3 is queued; current 1
+    fun arrangeKeepsAutoplayAfterTheListAheadInTheOrderItHas() {
+        // list 0..7: 5, 6, 7 are autoplay (mixed by shuffle too); 3 is queued; current 1, after
+        // 6 and 2, which played: they stay
         val order = intArrayOf(6, 2, 1, 7, 0, 4, 5, 3)
-        assertArrayEquals(intArrayOf(2, 1, 3, 0, 4, 6, 7, 5), QueueOrder.arrange(order, 1, listOf(3), listOf(7, 5, 6)))
+        assertArrayEquals(intArrayOf(6, 2, 1, 3, 0, 4, 7, 5), QueueOrder.arrange(order, 1, listOf(3), listOf(7, 5, 6)))
         // idempotent
         val once = QueueOrder.arrange(order, 1, listOf(3), listOf(5, 6, 7))
         assertArrayEquals(once, QueueOrder.arrange(once, 1, listOf(3), listOf(5, 6, 7)))
@@ -31,9 +32,10 @@ class QueueOrderTest {
 
     @Test
     fun arrangeWhilePlayingAutoplay() {
-        // current 5 is autoplay: only autoplay (and the queued 2) is ahead of it; 6 played before it
-        val order = intArrayOf(6, 0, 5, 1, 7, 2)
-        assertArrayEquals(intArrayOf(0, 1, 6, 5, 2, 7), QueueOrder.arrange(order, 5, listOf(2), listOf(5, 6, 7)))
+        // current 5 is autoplay; 6 and 0 played before it. The list item 1 still ahead stays
+        // ahead, after the queued 2 and before autoplay 7
+        val order = intArrayOf(6, 0, 5, 7, 1, 2)
+        assertArrayEquals(intArrayOf(6, 0, 5, 2, 1, 7), QueueOrder.arrange(order, 5, listOf(2), listOf(5, 6, 7)))
     }
 
     @Test
