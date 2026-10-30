@@ -16,6 +16,7 @@
 - Up next says "50+ tracks" when more are lined up than it shows, and "Added to queue · plays next" drops "plays next" when other songs are queued first or Repeat one is on.
 - Up next on the phone lists songs in the order they will play with **Repeat all** on, and says what repeat does: "Then repeats from the top." or "Repeating this song."
 - While the music waits for the carrier to come back, the play/pause button on headphones stops the wait, as the app's own button does, instead of trying to play.
+- With Crossfade on, **Next** during a fade goes to the song fading in and carries on from where it is, instead of starting it again from the beginning.
 
 ## [1.3.4] - 2026-10-29
 

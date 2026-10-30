@@ -360,11 +360,20 @@ internal class Crossfader(private val host: Host, settingMs: Int) {
      * "Add to queue" doesn't take the place of the track already fading in). Not while a call
      * holds the main player back: only it would play on after the call (the incoming one never
      * asked for the audio focus), so the edit stops the fade as any other would ([onListChanged]).
+     * True if it took over.
      */
-    fun settle() {
-        if (busy || phase != Phase.CROSSING || host.mainHeldBack) return
+    fun settle(): Boolean {
+        if (busy || phase != Phase.CROSSING || host.mainHeldBack) return false
         handOver()
+        return true
     }
+
+    /**
+     * A user's Next: while crossing, the track fading in takes over where it is ([settle]) instead
+     * of starting again from its start. Not on Repeat one, which fades into the same track: Next
+     * moves on. True if it took over (that was the skip).
+     */
+    fun takeNext(repeatOne: Boolean): Boolean = !repeatOne && settle()
 
     /** The playing player (the incoming one while crossing) plays: a ramp that waited goes on. */
     fun onPlaying() {

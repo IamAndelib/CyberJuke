@@ -23,6 +23,7 @@ import android.view.KeyEvent
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
@@ -573,7 +574,7 @@ class PlaybackService : MediaSessionService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
-        mediaSession = MediaSession.Builder(this, exo)
+        mediaSession = MediaSession.Builder(this, SessionPlayer(exo))
             .setSessionActivity(sessionActivity)
             .setCallback(SessionCallback())
             .build()
@@ -659,7 +660,24 @@ class PlaybackService : MediaSessionService() {
         next.addAnalyticsListener(loadListener)
         player = next
         oneAhead = built.loadControl
-        mediaSession?.player = next
+        mediaSession?.player = SessionPlayer(next)
+    }
+
+    /**
+     * The session's view of [player] (Media3's ForwardingPlayer, for every controller: the app,
+     * the notification, headphones). A Next during a crossfade goes to the track fading in, where
+     * it is (Crossfader.takeNext), instead of that track starting again from its start.
+     */
+    private inner class SessionPlayer(p: ExoPlayer) : ForwardingPlayer(p) {
+        override fun seekToNext() {
+            if (!takeNext()) super.seekToNext()
+        }
+
+        override fun seekToNextMediaItem() {
+            if (!takeNext()) super.seekToNextMediaItem()
+        }
+
+        private fun takeNext() = crossfade?.takeNext(repeatOne = repeatMode == Player.REPEAT_MODE_ONE) == true
     }
 
     /**
