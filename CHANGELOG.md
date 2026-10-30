@@ -6,6 +6,7 @@
 - The notification and the lock screen have **Shuffle** and **Repeat** buttons, showing the mode they're in; Repeat steps through off, all and one, as in the app.
 
 ### Changed
+- A page you open (an artist, a genre, an album, Settings) starts at the top; **Back** and the tabs still return you where you were.
 - Settings come in smaller groups: Playback, Content, Storage and Network instead of one long "Playback & data".
 - An artist page shows their 5 newest Jukebox songs, with **[Show all]** for the rest, so their top songs and albums are close by. Play and Shuffle still play them all.
 - Up next's ↑ ↓ ✕ buttons sit side by side, so song titles get more room.

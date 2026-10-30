@@ -1,6 +1,6 @@
 import { expect, test } from '../fixtures';
 import type { Locator, Page } from '@playwright/test';
-import { musicCalls, openSearch, scrollTo, scrollTopOf, setOffline, start, touchDrag } from '../helpers';
+import { expectStable, musicCalls, openSearch, scrollTo, scrollTopOf, setOffline, start, touchDrag } from '../helpers';
 
 /** The Artists tab and artist pages: Jukebox tracks, the artist's own page, fallbacks, Here search. */
 
@@ -180,7 +180,7 @@ test.describe('without the artist page', () => {
     await expect.poll(asked).toBeGreaterThan(before);
   });
 
-  test('the page falls back to the Jukebox, More by and Albums; an album opens and plays; scroll is remembered', async ({ page }) => {
+  test('the page falls back to the Jukebox, More by and Albums; an album opens and plays; Back keeps the scroll, a new open starts at the top', async ({ page }) => {
     const artist = await openFirstArtist(page);
     await expect(page.getByTestId('screen-artist').locator('.topbar-title')).toHaveText(artist);
     const jukebox = page.getByTestId('artist-jukebox');
@@ -218,9 +218,11 @@ test.describe('without the artist page', () => {
     expect(ay).toBeGreaterThan(400);
     await page.getByTestId('artist-back').click();
     await expect(page.getByTestId('artist-grid')).toBeVisible();
+    // Opened again (a new open, not Back), it starts at the top.
     await page.getByTestId('artist-grid').getByTestId('artist-tile').first().click();
-    await expect.poll(() => scrollTopOf(page, 'screen-artist')).toBeGreaterThan(ay - 10);
-    expect(Math.abs((await scrollTopOf(page, 'screen-artist')) - ay)).toBeLessThanOrEqual(10);
+    await expect(page.getByTestId('artist-more').getByTestId('track-row').first()).toBeVisible();
+    await expectStable(() => scrollTopOf(page, 'screen-artist'), 500);
+    expect(await scrollTopOf(page, 'screen-artist')).toBe(0);
   });
 
   test('"More by Queen" lists only Queen-channel items: no Ivy Queen, no Queen Butterfly', async ({ page }) => {
