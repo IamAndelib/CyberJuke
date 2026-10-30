@@ -22,7 +22,6 @@ import {
   unlike,
 } from './library';
 import { toast } from './toast';
-import { plural } from '../core/text';
 
 const UNDO = 'Undo';
 
@@ -71,7 +70,7 @@ export const toggleFavoriteArtistWithUndo = (name: string): boolean => toggleFav
 export function clearHistoryWithUndo(): void {
   const old = clearRecent();
   if (!old.length) return;
-  toast(`Cleared ${plural(old.length, 'play')}`, undefined, {
+  toast('Listening history cleared', undefined, {
     label: UNDO,
     run: () => restoreHistory(old),
     ...(old.some((e) => e.track.membersOnly) && { membersOnly: true }),

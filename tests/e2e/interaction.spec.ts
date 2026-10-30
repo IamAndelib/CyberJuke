@@ -277,6 +277,8 @@ test('after swiping a toast away, the next tap on the heart works the first time
     // One finger tap, straight after: it likes the song.
     await touchTap(page, heart);
     await expect(heart, `after a ${how} swipe`).toHaveAttribute('aria-pressed', 'true');
+    // A toggle keeps its name; pressed says it's liked (WAI-ARIA's button pattern).
+    await expect(heart).toHaveAccessibleName('Like');
     await heart.click();
     await expect(heart).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByTestId('toast')).toHaveCount(1);
@@ -343,7 +345,7 @@ test('Clear history asks first, away from Play; Undo brings the plays back (M3, 
   await clear.click();
   const sheet = page.getByTestId('confirm-sheet');
   await expect(sheet).toBeVisible();
-  await expect(page.getByTestId('confirm-ok')).toHaveText('Clear 2 plays');
+  await expect(page.getByTestId('confirm-ok')).toHaveText('Clear 2 tracks');
   // A warning: focus starts on the safe choice, so Enter or a stray tap doesn't clear anything.
   await expect(sheet).toHaveAttribute('role', 'alertdialog');
   await expect(page.getByTestId('confirm-cancel')).toBeFocused();
@@ -356,7 +358,7 @@ test('Clear history asks first, away from Play; Undo brings the plays back (M3, 
   // Clear has gone with the plays: focus stays on the page, not lost to the document.
   await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-testid="screen-library"]'))).toBe(true);
   const toast = page.getByTestId('toast').last();
-  await expect(toast).toContainText('Cleared 2 plays');
+  await expect(toast).toContainText('Listening history cleared');
   await toast.getByTestId('toast-action').click();
   await expect(page.getByTestId('recent-list').getByTestId('track-row')).toHaveCount(2);
 });

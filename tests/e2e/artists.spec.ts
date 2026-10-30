@@ -146,6 +146,28 @@ test.describe('an expired See all token', () => {
   });
 });
 
+test('an album page is a page, not a dialog, and says what failed in its own words', async ({ page, backend }) => {
+  await openFirstArtist(page);
+  const card = page.getByTestId('artist-albums').getByTestId('release-card').first();
+  await expect(card).toBeVisible();
+  // Offline: the album needs Global, as Releases says.
+  await setOffline(page, backend, true);
+  await card.click();
+  const album = page.getByTestId('screen-album');
+  await expect(album).toBeVisible();
+  await expect(album).not.toHaveAttribute('role', 'dialog');
+  await expect(album.getByTestId('offline')).toContainText('Connect to the internet to search Global.');
+});
+
+test.describe('an album that can\'t be read', () => {
+  test.use({ musicOptions: { noAlbum: true } });
+  test('says so, not that Global search is down', async ({ page }) => {
+    await openFirstArtist(page);
+    await page.getByTestId('artist-albums').getByTestId('release-card').first().click();
+    await expect(page.getByTestId('screen-album').getByTestId('global-error')).toContainText("Couldn't load this album.");
+  });
+});
+
 test.describe('without the artist page', () => {
   test.use({ musicOptions: { noArtistPage: true } });
 

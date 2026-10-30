@@ -26,7 +26,7 @@ function hash(s: string): number {
  * only by its title ("Live at the Roxy"), EPs, singles (one "Live Forever", which
  * stays a single), with years and `more` tokens; artistReleases() gives the full
  * lists behind them. Options: noArtistPage (artistPage rejects, so the page falls
- * back to search), shelves (only these kinds), evictToken (the first artistReleases
+ * back to search), noAlbum (an album or playlist can't be read), shelves (only these kinds), evictToken (the first artistReleases
  * call rejects UNAVAILABLE, like an evicted token), topSongPages (the songs playlist
  * gets that many pages: after the first, more() gives 10 "<Name> Rarity <k>" songs a
  * page, the last page ending with "Moonlit Rarity"; songPageDelay slows those pages).
@@ -175,6 +175,7 @@ const FAKE_MUSIC = `
         if ((opts.topSongPages || 1) > 1) res.next = 'tok|top|' + name + '|1';
         return wait(res);
       }
+      if (opts.noAlbum) return fail('UNAVAILABLE', 'album could not be read');
       const title = ALBUMS[hash(url) % ALBUMS.length];
       const items = [];
       for (let i = 0; i < 8; i++) items.push(song(SONGS[(hash(url) + i) % SONGS.length], opts.albumArtist || 'Album Artist', url + i));
@@ -253,6 +254,8 @@ export interface MusicStubOptions {
   delay?: number;
   /** artistPage() rejects: the artist page falls back to channel-filtered search. */
   noArtistPage?: boolean;
+  /** playlist() rejects UNAVAILABLE for albums and playlists (not the top songs one). */
+  noAlbum?: boolean;
   /** Only these release kinds on the artist page. */
   shelves?: ('album' | 'live' | 'ep' | 'single')[];
   /** The first artistReleases() call rejects UNAVAILABLE (an evicted "See all" token). */

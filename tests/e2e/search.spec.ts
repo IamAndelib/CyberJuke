@@ -386,3 +386,30 @@ test('Jukebox search finds music, not the people who posted it', async ({ page }
   await page.getByTestId('search-input').fill('neon');
   await expect(page.getByTestId('search-results').getByTestId('track-row').first()).toBeVisible();
 });
+
+test("Global's filters all fit on a 360 px phone, on a row of their own", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await start(page);
+  await openSearch(page);
+  await page.getByTestId('search-input').fill('qzxv nebulon');
+  await page.getByTestId('search-bridge').click();
+  await expect(page.getByTestId('global-results')).toBeVisible();
+  for (const f of ['songs', 'albums', 'artists', 'playlists']) {
+    const b = (await page.getByTestId(`filter-${f}`).boundingBox())!;
+    expect(b.x, f).toBeGreaterThanOrEqual(0);
+    expect(b.x + b.width, f).toBeLessThanOrEqual(360);
+  }
+});
+
+test('Jukebox search offers the artists whose name matches, and one opens their page', async ({ page }) => {
+  await start(page);
+  // An artist with a name of two words or more, typed in part.
+  const artist = (await page.locator('[data-testid="track-row"]:visible .row-artist').filter({ hasText: /^\S+ \S+/ }).first().textContent())!.split(',')[0].trim();
+  const word = artist.split(' ').find((w) => w.length > 3) ?? artist;
+  await openSearch(page);
+  await page.getByTestId('search-input').fill(word.toLowerCase());
+  const found = page.getByTestId('search-artists').getByTestId('search-artist');
+  await expect(found.filter({ hasText: artist }).first()).toBeVisible();
+  await found.filter({ hasText: artist }).first().click();
+  await expect(page.getByTestId('screen-artist').locator('.topbar-title')).toHaveText(artist);
+});

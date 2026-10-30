@@ -4,7 +4,7 @@ import { confirmRequest } from '../nav';
 
 /**
  * M3: a confirm sheet (same look as the track menu) for actions that can't easily be
- * taken back: the confirming button names what happens ("Clear 12 plays"). Focus starts on
+ * taken back: the confirming button names what happens ("Clear 12 tracks"). Focus starts on
  * [Cancel], the safe choice (WAI-ARIA's alert dialog), except for information ([ConfirmRequest.info]).
  */
 export function ConfirmSheet() {

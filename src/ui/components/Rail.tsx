@@ -132,8 +132,3 @@ export function RailRow({ children, ruled, class: cls, testid }: { children: Com
     </div>
   );
 }
-
-/** Thin dotted divider between two rails in one row. */
-export function RailSep() {
-  return <span class="rail-sep" aria-hidden="true" />;
-}

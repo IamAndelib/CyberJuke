@@ -136,6 +136,12 @@
   z-index: 1;
 }
 
+/* Global's filters: a row of their own at the top of the results. */
+.search-filters {
+  margin-top: 4px;
+  padding: 0 calc(var(--gutter) - 10px);
+}
+
 .here-loading {
   display: flex;
   align-items: center;

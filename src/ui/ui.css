@@ -1058,16 +1058,6 @@
   background-size: 4px 4px;
 }
 
-/* ┊ between two rails in one row. */
-.rail-sep {
-  flex: none;
-  align-self: center;
-  width: 2px;
-  height: 18px;
-  margin: 0 6px;
-  background: linear-gradient(var(--color-border) 50%, transparent 0) 0 0 / 2px 4px;
-}
-
 /* ---- Top bar right slot: POPULAR | A–Z on the header rule -------------------------- */
 
 .topbar-right:has(> .rail-slot) {

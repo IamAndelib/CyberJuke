@@ -207,7 +207,7 @@ function NpLike({ track }: { track: Track }) {
     <button
       class={'icon-btn like' + (fav ? ' on' : '')}
       aria-pressed={fav}
-      aria-label={fav ? 'Remove from liked' : 'Like'}
+      aria-label="Like"
       onClick={() => toggleLikeWithUndo(track)}
       data-testid="np-like"
     >
