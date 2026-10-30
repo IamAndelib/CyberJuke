@@ -288,10 +288,12 @@ test('with repeat on, a song you tap still gets its suggestions; a list you star
   await visible(page, 'track-play').nth(2).click();
   const q = await withAutoplay(page);
   expect(q.seed?.title).toBe(title);
-  // Repeat one goes on as repeat off does.
   await openNowPlaying(page);
+  await expect(page.getByTestId('upnext-repeat')).toHaveText('Then repeats from the top.');
+  // Repeat one goes on as repeat off does.
   await repeat.click();
   await expect(repeat).toHaveAttribute('data-mode', 'one');
+  await expect(page.getByTestId('upnext-repeat')).toHaveText('Repeating this song.');
   await page.getByTestId('np-close').click();
   await visible(page, 'track-play').nth(3).click();
   await expect.poll(async () => (await queueState(page)).seed?.id).not.toBe(q.seed?.id);

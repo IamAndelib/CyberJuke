@@ -151,7 +151,8 @@ function sectionsOf(upNext: UpNextItem[], seed: UpNextSections['seed']): UpNextS
   const out: UpNextSections = { queued: [], list: [], autoplay: [], seed };
   for (const u of upNext) {
     const item: UpItem = { track: u.track, index: u.index };
-    (u.queued ? out.queued : u.auto ? out.autoplay : out.list).push(item);
+    // In play order: from the first autoplay row on, all is autoplay (Queue.sections).
+    (u.queued ? out.queued : u.auto || out.autoplay.length ? out.autoplay : out.list).push(item);
   }
   return out;
 }

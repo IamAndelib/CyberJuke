@@ -96,11 +96,12 @@ class QueueRulesTest {
             assertEquals("queued in $where", s.getInt("queued"), queued)
         }
         if (s.has("list")) assertEquals("list in $where", strings(s.getJSONArray("list")), p.ids.toList())
-        // Up next's sections: the leading queued run, then list and autoplay by tag.
+        // Up next's sections (the page's sectionsOf): the leading queued run, the list, then from
+        // the first autoplay row on, autoplay.
         val lead = up.takeWhile { p.serials[p.ids.indexOf(it)] in p.queue.pendingSerials }
         val after = up.drop(lead.size)
-        val autos = after.filter { p.auto[p.ids.indexOf(it)] }
-        val list = after.filter { !p.auto[p.ids.indexOf(it)] }
+        val list = after.takeWhile { !p.auto[p.ids.indexOf(it)] }
+        val autos = after.drop(list.size)
         if (s.has("queuedIds")) assertEquals("queuedIds in $where", strings(s.getJSONArray("queuedIds")), lead)
         if (s.has("listIds")) assertEquals("listIds in $where", strings(s.getJSONArray("listIds")), list)
         if (s.has("listSet")) assertEquals("listSet in $where", strings(s.getJSONArray("listSet")).sorted(), list.sorted())
@@ -297,14 +298,14 @@ class QueueRulesTest {
             emit({ queue.onShuffleModeChanged(on) })
         }
 
-        /** Same walk as JukePlayerPlugin.buildState (repeat-one shown as off). */
+        /** Same walk as StateEncoder (to the end of the play order, whatever the repeat mode). */
         fun upNext(): List<String> {
             val out = ArrayList<String>()
             if (current < 0) return out
-            var i = nextIndex(current, navRepeat)
+            var i = nextIndex(current, "off")
             while (i >= 0 && i != current && out.size < 50) {
                 out.add(ids[i])
-                i = nextIndex(i, navRepeat)
+                i = nextIndex(i, "off")
             }
             return out
         }

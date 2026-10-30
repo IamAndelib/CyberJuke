@@ -464,6 +464,28 @@
       ]
     },
     {
+      "name": "Up next keeps play order in a radio's loop: a queued track played among autoplay ones comes round with them",
+      "list": ["a"],
+      "start": 0,
+      "repeat": "all",
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
+        { "op": "next" },
+        { "op": "queueNext", "ids": ["Q"] },
+        { "op": "next" },
+        { "op": "nextAuto" },
+        { "op": "nextAuto" },
+        { "op": "nextAuto" },
+        {
+          "op": "expect",
+          "current": "a",
+          "upNext": ["s1", "Q", "s2", "s3"],
+          "listIds": [],
+          "autoplayIds": ["s1", "Q", "s2", "s3"]
+        }
+      ]
+    },
+    {
       "name": "repeat one leaves the autoplay tracks: the track replays when it ends, a user skip moves on",
       "list": ["a", "b"],
       "start": 1,

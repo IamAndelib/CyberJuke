@@ -123,7 +123,8 @@ export class Queue<T extends Identified> {
 
   /**
    * Up next (at most `max` tracks) as its three sections: the leading run of queued
-   * tracks, then the list, then autoplay.
+   * tracks, then the list, then autoplay, in play order: from the first autoplay track on,
+   * all is autoplay (a played track in repeat all's loop of a radio, say).
    */
   sections(max = UP_NEXT_MAX): QueueSections<T> {
     const out: QueueSections<T> = { queued: [], list: [], autoplay: [] };
@@ -136,7 +137,7 @@ export class Queue<T extends Identified> {
         continue;
       }
       leading = false;
-      (e.auto ? out.autoplay : out.list).push(it);
+      (e.auto || out.autoplay.length ? out.autoplay : out.list).push(it);
     }
     return out;
   }
