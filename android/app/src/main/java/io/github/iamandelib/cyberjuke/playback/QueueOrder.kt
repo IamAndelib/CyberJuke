@@ -318,15 +318,17 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     /**
      * Shuffle on: Media3 puts inserted items at random places in the shuffle order, maybe behind
      * the current one. Each of [added] goes right before [anchor] if given, else at a random place
-     * among the autoplay items still to come.
+     * among the autoplay items still to come. One of them already playing stays where it is (a
+     * batch after the end: the player went on to it while it was being added).
      */
     private fun placeAhead(added: List<Int>, anchor: Int?) {
-        if (!host.shuffleEnabled || added.isEmpty()) return
+        val moving = added.filter { it != host.currentIndex }
+        if (!host.shuffleEnabled || moving.isEmpty()) return
         val order = host.shuffleOrder()?.toMutableList() ?: return
         if (order.size != host.count) return
-        order.removeAll(added.toSet())
+        order.removeAll(moving.toSet())
         val cur = order.indexOf(host.currentIndex)
-        for (i in added) {
+        for (i in moving) {
             val at = anchor?.let { order.indexOf(it) }?.takeIf { it > cur } ?: run {
                 var start = cur + 1
                 for (k in cur + 1 until order.size) if (!host.isAutoAt(order[k])) start = k + 1
@@ -395,9 +397,10 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
                 if (host.shuffleEnabled) enforceShuffleOrder() else enforceLinearOrder()
             }
             Section.AUTO -> {
-                // The list index is the place in list order; with shuffle on, right before the anchor.
+                // The list index is the place in list order; with shuffle on, right before the
+                // anchor, else at the very end.
                 host.insertAuto(anchor, listOf(item))
-                placeAhead(listOf(anchor ?: (host.count - 1)), anchor?.let { it + 1 })
+                if (anchor != null) placeAhead(listOf(anchor), anchor + 1) else placeLast(host.count - 1)
                 enforceShuffleOrder()
             }
             Section.LIST -> if (!host.shuffleEnabled) {
@@ -538,6 +541,15 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         return cur in 0 until host.count && host.isAutoAt(cur)
     }
 
+    /** Shuffle on: [index] plays last. */
+    private fun placeLast(index: Int) {
+        if (!host.shuffleEnabled) return
+        val order = host.shuffleOrder()?.toMutableList() ?: return
+        if (order.size != host.count || !order.remove(index)) return
+        order.add(index)
+        host.setShuffleOrder(order.toIntArray())
+    }
+
     /**
      * Moves [index] to play right after the current item; returns where it is now. Shuffled, the
      * order stays so until the jump lands ([jumping]): arranged for the current item, an autoplay
@@ -600,6 +612,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
 
     /** Drops entries that have played (now current) or are no longer in the playlist. */
     fun prune() {
+        if (heard.isNotEmpty()) heard.retainAll((0 until host.count).map { host.uidAt(it) }.toSet())
         if (pending.isEmpty()) return
         val present = HashSet<Long>()
         for (i in 0 until host.count) present.add(host.serialAt(i))
