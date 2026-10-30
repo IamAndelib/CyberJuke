@@ -103,6 +103,12 @@ export class Queue<T extends Identified> {
     return this.order.slice(p + 1, p + 1 + max).map((e) => this.list.indexOf(e));
   }
 
+  /** List indices of the tracks before the current one in play order, oldest first, at most `max`. */
+  previousIndices(max = UP_NEXT_MAX): number[] {
+    const p = this.cur ? this.order.indexOf(this.cur) : 0;
+    return this.order.slice(Math.max(0, p - max), p).map((e) => this.list.indexOf(e));
+  }
+
   /** How many of the first upNext() items were queued by the user ("Queued by you"). */
   get queuedCount(): number {
     const p = this.cur ? this.order.indexOf(this.cur) : -1;

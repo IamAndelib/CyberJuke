@@ -205,8 +205,8 @@ export class NativePlayer implements Player {
     const prev = this.s.value;
     // Position ticks change nothing below: keep the same arrays and objects, so the
     // computeds built on them (upNextSections, playContext) don't change either.
-    const from = `${st.index}|${st.queueIds.join(',')}|${st.upNextIds.join(',')}|${st.upNextKinds}|${st.seedId}`;
-    let { queue, upNext, seed } = prev;
+    const from = `${st.index}|${st.queueIds.join(',')}|${st.upNextIds.join(',')}|${st.upNextKinds}|${st.seedId}|${st.prevIndex?.join(',')}`;
+    let { queue, upNext, previous, seed } = prev;
     if (from !== this.builtFrom) {
       this.builtFrom = from;
       queue = st.queueIds.map((id) => this.resolve(id));
@@ -236,6 +236,7 @@ export class NativePlayer implements Player {
         const kind = st.upNextKinds[k];
         upNext.push({ track: queue[i], index: i, ...(kind === 'q' && { queued: true }), ...(kind === 'a' && { auto: true }) });
       });
+      previous = (st.prevIndex ?? []).map((i) => ({ track: queue[i], index: i }));
       seed = st.seedId ? (prev.seed?.id === st.seedId ? prev.seed : this.resolve(st.seedId)) : null;
     }
     const index = st.index >= 0 && st.index < queue.length ? st.index : -1;
@@ -253,6 +254,7 @@ export class NativePlayer implements Player {
       shuffle: this.modes ? prev.shuffle : st.shuffle,
       repeat: this.modes ? prev.repeat : st.repeat,
       upNext,
+      previous,
       context,
       seed,
       currentAuto: st.currentAuto === true,
@@ -294,6 +296,7 @@ export class NativePlayer implements Player {
       durationMs: 0,
       sampledAt: performance.now(),
       upNext: queue.slice(i + 1, i + 51).map((track, k) => ({ track, index: i + 1 + k, ...(k < queued.length && { queued: true }) })),
+      previous: queue.slice(Math.max(0, i - 50), i).map((track, k) => ({ track, index: Math.max(0, i - 50) + k })),
       context,
       seed: tracks[i],
       currentAuto: false,

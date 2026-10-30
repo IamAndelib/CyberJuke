@@ -190,6 +190,7 @@ export class WebPlayer implements Player {
       upNext: upIdx.map((i, k) =>
         k < queued ? { track: items[i], index: i, queued: true } : this.q.isAuto(i) ? { track: items[i], index: i, auto: true } : { track: items[i], index: i },
       ),
+      previous: this.q.previousIndices().map((i) => ({ track: items[i], index: i })),
       context: this.context,
       seed: this.seed,
       currentAuto: index >= 0 && this.q.isAuto(index),

@@ -473,3 +473,38 @@ test('a track started before the Jukebox catalog has loaded still gets its autop
   const q = await withAutoplay(page);
   expect(q.autoplay.length).toBeGreaterThanOrEqual(20);
 });
+
+test('Up next shows the whole list: what played above, the playing track marked in place, a tap on a played one plays it', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-tile').nth(5).click();
+  await visible(page, 'genre-play-all').click();
+  await openNowPlaying(page);
+  const titles = [(await page.getByTestId('np-title').textContent())!.trim()];
+  const next = page.getByTestId('np-next');
+  for (let k = 0; k < 2; k++) {
+    await next.click();
+    await expect(page.getByTestId('np-title')).not.toHaveText(titles[k]);
+    titles.push((await page.getByTestId('np-title').textContent())!.trim());
+  }
+  // The two played, in the order they played, then the playing one, marked as in every list.
+  await expect(page.getByTestId('upnext-played').locator('.row-title')).toHaveText(titles.slice(0, 2));
+  const cur = page.getByTestId('upnext-current');
+  await expect(cur.locator('.row-title')).toHaveText(titles[2]);
+  await expect(cur.locator('[aria-current="true"]')).toHaveCount(1);
+  await expect(cur.locator('.row-art-badge')).toBeVisible();
+  // Then what's ahead, as before.
+  expect(await page.locator('[data-testid="upnext-row"][data-section="list"]').count()).toBeGreaterThan(0);
+  // A played one plays again from there: what was after it is ahead again.
+  await page.getByTestId('upnext-played').first().locator('.row-main').click();
+  await expect(page.getByTestId('np-title')).toHaveText(titles[0]);
+  await expect(page.getByTestId('upnext-played')).toHaveCount(0);
+  await expect(page.locator('[data-testid="upnext-row"][data-section="list"] .row-title').first()).toHaveText(titles[1]);
+  // At the last song with Repeat all, the top it repeats from is there: the list's first song.
+  await page.locator('[data-testid="upnext-row"][data-section="list"] .row-main').last().click();
+  await expect(page.locator('[data-testid="upnext-row"][data-section="list"]')).toHaveCount(0);
+  const repeat = page.getByTestId('np-repeat');
+  while ((await repeat.getAttribute('data-mode')) !== 'all') await repeat.click();
+  await expect(page.getByTestId('upnext-played').first().locator('.row-title')).toHaveText(titles[0]);
+  await expect(page.getByTestId('up-next')).toContainText('Queue repeats from the top.');
+});
