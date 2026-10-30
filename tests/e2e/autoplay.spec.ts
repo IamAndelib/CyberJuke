@@ -434,6 +434,21 @@ test("offline, Up next's rows that can't play are dimmed, as in every list", asy
   await expect(rows.first()).not.toHaveClass(/\boff\b/);
 });
 
+test('a song from Home: shuffle mixes its suggestions, and off puts them back in order', async ({ page }) => {
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  await withAutoplay(page);
+  await openNowPlaying(page);
+  const titles = page.locator('[data-testid="upnext-row"][data-section="autoplay"] .row-title');
+  const before = (await titles.allTextContents()).map((t) => t.trim());
+  expect(before.length).toBeGreaterThan(5);
+  await page.getByTestId('np-shuffle').click();
+  await expect.poll(async () => (await titles.allTextContents()).map((t) => t.trim())).not.toEqual(before);
+  expect((await titles.allTextContents()).map((t) => t.trim()).sort()).toEqual(before.slice().sort());
+  await page.getByTestId('np-shuffle').click();
+  await expect.poll(async () => (await titles.allTextContents()).map((t) => t.trim())).toEqual(before);
+});
+
 test('with shuffle on, the queue reads "Queue · Shuffled" and still says how many are next', async ({ page }) => {
   await start(page);
   await visible(page, 'track-play').first().click();

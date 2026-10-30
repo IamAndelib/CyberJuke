@@ -95,6 +95,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             if ('listIds' in s) expect(sIds(sec.list)).toEqual(s.listIds);
             if ('listSet' in s) expect(sIds(sec.list).sort()).toEqual((s.listSet as string[]).slice().sort());
             if ('autoplayIds' in s) expect(sIds(sec.autoplay)).toEqual(s.autoplayIds);
+            if ('autoplaySet' in s) expect(sIds(sec.autoplay).sort()).toEqual((s.autoplaySet as string[]).slice().sort());
             break;
           }
           default:

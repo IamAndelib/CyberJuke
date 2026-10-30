@@ -111,6 +111,7 @@ class QueueRulesTest {
         if (s.has("listIds")) assertEquals("listIds in $where", strings(s.getJSONArray("listIds")), list)
         if (s.has("listSet")) assertEquals("listSet in $where", strings(s.getJSONArray("listSet")).sorted(), list.sorted())
         if (s.has("autoplayIds")) assertEquals("autoplayIds in $where", strings(s.getJSONArray("autoplayIds")), autos)
+        if (s.has("autoplaySet")) assertEquals("autoplaySet in $where", strings(s.getJSONArray("autoplaySet")).sorted(), autos.sorted())
     }
 
     private fun strings(a: JSONArray) = (0 until a.length()).map { a.getString(it) }
