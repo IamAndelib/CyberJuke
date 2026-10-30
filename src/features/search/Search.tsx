@@ -22,7 +22,7 @@ import {
   type SearchContext,
   type SearchMode,
 } from '../../ui/nav';
-import { Rail, RailRow, RailSep, type RailItem } from '../../ui/components/Rail';
+import { Rail, RailRow, type RailItem } from '../../ui/components/Rail';
 import { CatalogError, ChunkedTracks, EmptyState, Tracks } from '../../ui/components/TrackList';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
@@ -533,21 +533,6 @@ export function Search() {
           testid="search-modes"
           keepFocus
         />
-        {mode === 'global' && (
-          <>
-            <RailSep />
-            <Rail
-              items={FILTERS}
-              value={globalFilter.value}
-              onChange={(f) => (globalFilter.value = f)}
-              kind="radio"
-              variant="filter"
-              label="Global search filter"
-              testid="global-filters"
-              keepFocus
-            />
-          </>
-        )}
       </RailRow>
     </header>
   );
@@ -560,6 +545,21 @@ export function Search() {
         : `search:jukebox:${debounced.trim()}`;
   return (
     <Screen class="search" role="dialog" label="Search" testid="search" bar={bar} scrollKey={key}>
+      {mode === 'global' && (
+        // Its own row under the header: beside the scope rail it ran off a narrow phone.
+        <RailRow class="search-filters">
+          <Rail
+            items={FILTERS}
+            value={globalFilter.value}
+            onChange={(f) => (globalFilter.value = f)}
+            kind="radio"
+            variant="filter"
+            label="Global search filter"
+            testid="global-filters"
+            keepFocus
+          />
+        </RailRow>
+      )}
       {!q.trim() && <RecentSearches onPick={pick} />}
       <div
         // A tap on a result means the query found something: remember it (P9).

@@ -386,3 +386,17 @@ test('Jukebox search finds music, not the people who posted it', async ({ page }
   await page.getByTestId('search-input').fill('neon');
   await expect(page.getByTestId('search-results').getByTestId('track-row').first()).toBeVisible();
 });
+
+test("Global's filters all fit on a 360 px phone, on a row of their own", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await start(page);
+  await openSearch(page);
+  await page.getByTestId('search-input').fill('qzxv nebulon');
+  await page.getByTestId('search-bridge').click();
+  await expect(page.getByTestId('global-results')).toBeVisible();
+  for (const f of ['songs', 'albums', 'artists', 'playlists']) {
+    const b = (await page.getByTestId(`filter-${f}`).boundingBox())!;
+    expect(b.x, f).toBeGreaterThanOrEqual(0);
+    expect(b.x + b.width, f).toBeLessThanOrEqual(360);
+  }
+});
