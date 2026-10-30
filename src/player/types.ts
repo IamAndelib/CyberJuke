@@ -57,6 +57,13 @@ export const AUTOPLAY_LOW = 5;
 export const AUTOPLAY_FIRST = 25;
 export const AUTOPLAY_MORE = 20;
 
+/**
+ * Autoplay may add to a queue of `count` tracks: but with repeat all, which loops what you
+ * started; then only a single song gets its first batch, its radio, for repeat to loop
+ * (QueueCommands.mayAutoplay, the same rule).
+ */
+export const mayAutoplay = (repeat: RepeatMode, count: number): boolean => repeat !== 'all' || count === 1;
+
 export interface PlayerState {
   /** Full queue in list order. */
   queue: Track[];

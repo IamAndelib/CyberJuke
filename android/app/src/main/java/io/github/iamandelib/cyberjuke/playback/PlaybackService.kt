@@ -201,7 +201,8 @@ class PlaybackService : MediaSessionService() {
             }
 
             override fun addRadioItems(items: List<MediaItem>): Boolean {
-                if (!autoplayEnabled || player?.repeatMode != Player.REPEAT_MODE_OFF) return false
+                val p = player ?: return false
+                if (!autoplayEnabled || !QueueCommands.mayAutoplay(p.repeatMode, p.mediaItemCount)) return false
                 queue.addAutoplay(items)
                 queueChanged()
                 return true
@@ -951,8 +952,8 @@ class PlaybackService : MediaSessionService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             queue.onTransition()
-            // Not in a repeat's loop: it would lose its songs lap after lap.
-            val trimmed = if (player?.repeatMode == Player.REPEAT_MODE_OFF) queue.trimPlayedAuto(QueueCommands.KEEP_PLAYED_AUTO) else 0
+            // Not in repeat all's loop: it would lose its songs lap after lap.
+            val trimmed = if (player?.repeatMode != Player.REPEAT_MODE_ALL) queue.trimPlayedAuto(QueueCommands.KEEP_PLAYED_AUTO) else 0
             if (trimmed > 0) Log.i(TAG, "Trimmed $trimmed played autoplay item(s)")
             queueChanged()
             // A skip makes any pending prefetch for the old "next" stale.
@@ -1018,8 +1019,9 @@ class PlaybackService : MediaSessionService() {
             crossfade?.onListChanged()
         }
 
-        /** Repeat keeps what's lined up and autoplay adds no more; back to off, it fills up again. */
+        /** Repeat all loops what you started ([NativeQueue.onRepeatModeChanged]); off again, autoplay fills up. */
         override fun onRepeatModeChanged(repeatMode: Int) {
+            queue.onRepeatModeChanged(repeatMode == Player.REPEAT_MODE_ALL)
             lowKey = null
             queueChanged()
         }
@@ -1116,7 +1118,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun addAutoplay(items: List<MediaItem>, forSeed: String?) {
-        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || forSeed != seedId || player?.repeatMode != Player.REPEAT_MODE_OFF) {
+        val p = player ?: return
+        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || forSeed != seedId || !QueueCommands.mayAutoplay(p.repeatMode, p.mediaItemCount)) {
             Log.i(TAG, "addAutoplay: ${items.size} item(s) dropped (stale or autoplay off)")
             return
         }
@@ -1157,7 +1160,7 @@ class PlaybackService : MediaSessionService() {
     /** A tap in Up next: on an autoplay item the radio continues from it. */
     private fun skipTo(p: ExoPlayer, index: Int) {
         resetFailures()
-        if (queue.skipTo(index, repeating = p.repeatMode != Player.REPEAT_MODE_OFF)) reseed(p.currentMediaItem) else queueChanged()
+        if (queue.skipTo(index, repeatAll = p.repeatMode == Player.REPEAT_MODE_ALL)) reseed(p.currentMediaItem) else queueChanged()
     }
 
     private fun resetFailures() {
@@ -1247,13 +1250,14 @@ class PlaybackService : MediaSessionService() {
 
     /**
      * AP4: with 5 items or fewer to go (any kind, as InnerTune's "load more"), get more. A Global radio is refilled here;
-     * Jukebox picks come from the web side (`queueLow`). Nothing with autoplay off or repeat on.
+     * Jukebox picks come from the web side (`queueLow`). Nothing with autoplay off, or with repeat
+     * all but for a single song ([QueueCommands.mayAutoplay]).
      */
     private fun checkLow() {
         val p = player ?: return
         // Nothing loading (a restored session before its first Play): no requests for more yet.
         val idle = p.playbackState == Player.STATE_IDLE && !p.playWhenReady
-        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || p.repeatMode != Player.REPEAT_MODE_OFF || p.mediaItemCount == 0 || seedId == null || idle) {
+        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || !QueueCommands.mayAutoplay(p.repeatMode, p.mediaItemCount) || p.mediaItemCount == 0 || seedId == null || idle) {
             lowKey = null
             QueueInfo.clearLow()
             return

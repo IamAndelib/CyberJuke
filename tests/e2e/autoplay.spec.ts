@@ -275,6 +275,46 @@ test('repeat keeps the songs lined up: Repeat all and one move on with Next, and
   expect((await queueState(page)).autoplay.map((t) => t.id)).toEqual(autoplay.slice(2).map((t) => t.id));
 });
 
+test('with repeat on, a song you tap still gets its suggestions; a list you start loops by itself', async ({ page }) => {
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  await openNowPlaying(page);
+  const repeat = page.getByTestId('np-repeat');
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'all');
+  await page.getByTestId('np-close').click();
+  // A Home song with Repeat all: its suggestions, the loop.
+  const title = (await visible(page, 'track-title').nth(2).textContent())!.trim();
+  await visible(page, 'track-play').nth(2).click();
+  const q = await withAutoplay(page);
+  expect(q.seed?.title).toBe(title);
+  // Repeat one goes on as repeat off does.
+  await openNowPlaying(page);
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'one');
+  await page.getByTestId('np-close').click();
+  await visible(page, 'track-play').nth(3).click();
+  await expect.poll(async () => (await queueState(page)).seed?.id).not.toBe(q.seed?.id);
+  await withAutoplay(page);
+
+  // A genre's Play with Repeat all: the genre loops, no suggestions after it.
+  await openNowPlaying(page);
+  await repeat.click();
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'all');
+  await page.getByTestId('np-close').click();
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-tile').nth(5).click();
+  await visible(page, 'genre-play-all').click();
+  await openNowPlaying(page);
+  const first = (await page.getByTestId('np-title').textContent())!.trim();
+  await page.locator('[data-testid="upnext-row"][data-section="list"] .row-main').last().click();
+  await expect(page.locator('[data-testid="upnext-row"][data-section="list"]')).toHaveCount(0);
+  expect((await expectStable(() => queueState(page), 1500)).autoplay).toEqual([]);
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).toHaveText(first);
+});
+
 test('a track started before the Jukebox catalog has loaded still gets its autoplay once it does', async ({ page }) => {
   // The catalog (300-row pages) waits until let through; the Home feed loads as usual.
   let release: () => void = () => {};

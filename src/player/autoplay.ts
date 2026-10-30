@@ -8,13 +8,14 @@
  *    service runs Global radios itself, so they refill with the screen off);
  *  - a Signal Radio station playing: its next round (player/radio), all its tracks again;
  *  - Home's Shuffle (its label, shuffleLabel): more random songs from the same pool.
- * Nothing while autoplay is off (the setting, C3), but for a station, or while repeat is on.
+ * Nothing while autoplay is off (the setting, C3), but for a station, or with repeat all
+ * but for a single song (mayAutoplay).
  */
 import { whenIdle } from '../core/idle';
 import { audioKey, isGlobal, type Track } from '../data/model';
 import { similarTracks } from '../data/similar';
 import { shuffle, stationPlaying, stationQueue } from './radio';
-import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, type Player, type QueueLow } from './types';
+import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, mayAutoplay, type Player, type QueueLow } from './types';
 
 /** How long a batch just added counts as ahead even before the player's state shows it (native's lags the call). */
 const BATCH_LAG_MS = 5000;
@@ -77,7 +78,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
   async function run(e: QueueLow): Promise<void> {
     const s = player.state.peek();
     const seed = s.seed ?? s.current;
-    if (!seed || !s.current || s.repeat !== 'off') return;
+    if (!seed || !s.current || !mayAutoplay(s.repeat, s.queue.length)) return;
     if (e.seedId && e.seedId !== seed.id) return; // a signal for an older seed
     const inQueue = new Set(s.queue.flatMap((t) => [t.id, audioKey(t)]));
     // The signal may be older than the last refill (one that came in during it): count

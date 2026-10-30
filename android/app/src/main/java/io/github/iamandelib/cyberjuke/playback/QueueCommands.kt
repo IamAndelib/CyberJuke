@@ -1,6 +1,7 @@
 package io.github.iamandelib.cyberjuke.playback
 
 import android.os.Bundle
+import androidx.media3.common.Player
 import androidx.media3.session.SessionCommand
 import java.util.concurrent.CopyOnWriteArraySet
 
@@ -100,6 +101,13 @@ internal object QueueCommands {
 
     /** Items left (any kind) when the queue is "low" and autoplay adds more (AP4). */
     const val LOW = 5
+
+    /**
+     * Autoplay may add to a list of [count] items: but with repeat all, which loops what you
+     * started; then only a single song gets its first batch, its radio, for repeat to loop (web
+     * player/types.ts mayAutoplay, the same rule).
+     */
+    fun mayAutoplay(repeatMode: Int, count: Int): Boolean = repeatMode != Player.REPEAT_MODE_ALL || count == 1
 }
 
 /**

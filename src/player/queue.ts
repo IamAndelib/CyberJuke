@@ -17,10 +17,12 @@
  *  - a new list (setList) replaces the list and the autoplay tracks, but the queued
  *    tracks stay next, in order (P1);
  *  - autoplay tracks (addAuto) play after the list, in the order added. Shuffle
- *    reorders only the list. Repeat keeps them (it loops them with the list); jumping
- *    to an autoplay track, repeat off, drops the ones after it (the radio continues from it);
- *  - with repeat off, played autoplay tracks more than KEEP_PLAYED behind the current
- *    one are dropped (a radio can run for hours);
+ *    reorders only the list. Repeat all loops what you started: a list's autoplay tracks
+ *    still to come go (they come back once repeat is off), but a single song's are its
+ *    radio, the loop itself, and stay. Repeat one leaves them. Jumping to an autoplay
+ *    track drops the ones after it (the radio continues from it), but with repeat all;
+ *  - but with repeat all, played autoplay tracks more than KEEP_PLAYED behind the
+ *    current one are dropped (a radio can run for hours);
  *  - Undo of a remove (restore) puts the track back in its section, before the track
  *    that followed it there, never at or before the current track.
  *
@@ -211,7 +213,7 @@ export class Queue<T extends Identified> {
   /**
    * Jump to a list index. Tracks still queued stay next (see the rule above). Jumping
    * to an autoplay track drops the autoplay tracks after it: the radio continues
-   * from the new track. Not with repeat on: it adds nothing then, so they stay.
+   * from the new track. Not with repeat all: they are its loop then, so they stay.
    */
   skipTo(index: number): T | null {
     const e = this.list[index];
@@ -219,7 +221,7 @@ export class Queue<T extends Identified> {
     this.cur = e;
     this.settle();
     this.keepQueuedNext();
-    if (e.auto && this.repeat === 'off') this.dropAuto();
+    if (e.auto && this.repeat !== 'all') this.dropAuto();
     this.trimPlayed();
     return e.item;
   }
@@ -231,9 +233,10 @@ export class Queue<T extends Identified> {
     this.rebuildOrder();
   }
 
-  /** Repeat keeps what's lined up, autoplay tracks too: autoplay just adds no more meanwhile. */
+  /** Repeat all loops what you started: a list's autoplay tracks to come go; a single song's are its radio and stay. */
   setRepeat(mode: RepeatMode): void {
     this.repeat = mode;
+    if (mode === 'all' && this.list.filter((e) => !e.auto).length > 1) this.dropAuto();
   }
 
   // ---- editing -------------------------------------------------------------------
@@ -385,9 +388,9 @@ export class Queue<T extends Identified> {
 
   // ---- internals -----------------------------------------------------------------
 
-  /** Drop played autoplay tracks more than KEEP_PLAYED behind the current one in play order (not in a repeat's loop). */
+  /** Drop played autoplay tracks more than KEEP_PLAYED behind the current one in play order (not in repeat all's loop). */
   private trimPlayed(): void {
-    if (this.repeat !== 'off') return;
+    if (this.repeat === 'all') return;
     const p = this.cur ? this.order.indexOf(this.cur) : -1;
     if (p <= KEEP_PLAYED) return;
     const old = new Set(this.order.slice(0, p - KEEP_PLAYED).filter((e) => e.auto));

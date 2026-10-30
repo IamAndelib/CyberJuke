@@ -62,14 +62,17 @@ class QueueRulesTest {
                     if (s.isNull("beforeId")) null else s.getString("beforeId"),
                 )
                 "removeIds" -> p.queue.removeIds(strings(s.getJSONArray("ids")).toSet())
-                "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")), repeating = p.repeat != "off")
+                "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")), repeatAll = p.repeat == "all")
                 "next" -> p.next()
                 "nextAuto" -> p.nextAuto()
                 "prev" -> p.prev(s.optLong("positionMs", 0L))
                 "remove" -> p.remove(p.ids.indexOf(s.getString("id")))
                 "move" -> p.moveItem(p.ids.indexOf(s.getString("id")), s.getInt("to"))
                 "setShuffle" -> p.toggleShuffle(s.getBoolean("on"))
-                "setRepeat" -> p.repeat = s.getString("mode")
+                "setRepeat" -> {
+                    p.repeat = s.getString("mode")
+                    p.queue.onRepeatModeChanged(p.repeat == "all")
+                }
                 "expect" -> expect(p, s, where)
                 else -> throw IllegalArgumentException("unknown op in $where")
             }
