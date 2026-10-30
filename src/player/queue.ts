@@ -13,7 +13,8 @@
  *    or not, until each one plays or is removed;
  *  - a manual jump (skipTo, or prev moving back) to a track that isn't one of them
  *    keeps them next: they move to just after the new current track, in the order
- *    they were going to play. Jumping to one of them plays it; the others stay next;
+ *    they were going to play. Jumping to one of them plays it; the others stay next.
+ *    A jump ahead keeps what it jumps over in Up next: the track moves next, then plays;
  *  - a new list (setList) replaces the list and the autoplay tracks, but the queued
  *    tracks stay next, in order (P1);
  *  - autoplay tracks (addAuto) play after the list, in the order added. Shuffle
@@ -231,12 +232,23 @@ export class Queue<T extends Identified> {
   }
 
   /**
-   * Jump to a list index. Tracks still queued stay next (see the rule above); so do the
-   * autoplay tracks after an autoplay track jumped to.
+   * Jump to a list index. A track further ahead plays now and what it jumps over stays in Up
+   * next (YouTube Music): it moves to right after the current one first. Tracks still queued
+   * stay next (see the rule above); so do the autoplay tracks after an autoplay track jumped to.
    */
   skipTo(index: number): T | null {
     const e = this.list[index];
     if (!e) return null;
+    const p = this.cur ? this.order.indexOf(this.cur) : -1;
+    // With shuffle on autoplay stays after the list: an autoplay track is jumped to where it is.
+    if (p >= 0 && this.order.indexOf(e) > p + 1 && !(this.shuffle && e.auto)) {
+      const at = (arr: Entry<T>[]) => {
+        arr.splice(arr.indexOf(e), 1);
+        arr.splice(arr.indexOf(this.cur!) + 1, 0, e);
+      };
+      at(this.order);
+      if (!this.shuffle) at(this.list);
+    }
     this.cur = e;
     this.settle();
     this.keepQueuedNext();

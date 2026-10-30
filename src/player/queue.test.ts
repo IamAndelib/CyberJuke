@@ -83,7 +83,7 @@ describe('Queue: next / prev', () => {
     q.setList(abc(), 4);
     q.setRepeat('all');
     expect(q.next(true)?.id).toBe('a');
-    q.skipTo(4);
+    expect(q.prev(0)).toBe('moved');
     expect(q.next()?.id).toBe('a');
   });
 
@@ -93,7 +93,8 @@ describe('Queue: next / prev', () => {
     q.setRepeat('one');
     expect(q.next(true)?.id).toBe('b');
     expect(q.next()?.id).toBe('c');
-    q.skipTo(4);
+    q.next();
+    q.next();
     expect(q.next()).toBeNull();
     expect(q.current?.id).toBe('e');
   });
@@ -441,7 +442,8 @@ describe('Queue: editing', () => {
     const q = new Queue();
     q.setList([t('a'), t('b')], 0);
     q.add([t('a')]);
-    q.skipTo(2);
+    q.next();
+    q.next();
     expect(q.index).toBe(2);
     q.remove(0);
     expect(q.index).toBe(1);

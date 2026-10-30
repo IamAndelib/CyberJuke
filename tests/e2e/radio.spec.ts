@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { OFFLINE } from '../../src/core/offlineText';
-import { clockStart, expectStable, FAKE_TRACK_MS, openNowPlaying, openSearch, openSettings, playOn, seedStorage, setOffline, SETTINGS_KEY, start } from '../helpers';
+import { clockStart, expectStable, FAKE_TRACK_MS, openNowPlaying, openSearch, openSettings, playOn, seedStorage, setOffline, SETTINGS_KEY, start, toListEnd } from '../helpers';
 
 /** Signal Radio: the Radio tab, tuning in, a station that plays on, and its tracks kept. */
 
@@ -141,7 +141,7 @@ test('a station plays on with Autoplay off too: it is the station, not autoplay'
   // Near the end of the round its next one (32 more) follows, as with Autoplay on.
   await openNowPlaying(page);
   await expect.poll(() => place(page)).toEqual({ at: 1, of: 32 });
-  await page.locator('[data-testid="upnext-row"][data-section="list"] .row-main').last().click();
+  await toListEnd(page);
   await expect.poll(() => place(page)).toEqual({ at: 32, of: 32 });
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from SLOW ORBIT');
   // Turning Autoplay off while a station plays leaves its rounds alone.

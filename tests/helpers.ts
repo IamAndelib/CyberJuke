@@ -24,6 +24,20 @@ export const requestsFor = (backend: { queries: { limit?: number; where?: unknow
   backend.queries.filter((q) => isFeedQuery(q) && JSON.stringify(q.where).includes(`"${genre}"`)).length;
 
 /** Load the app and wait for Home's first page. */
+/**
+ * Next until nothing of the list is left ahead in Up next: its last song plays. (A tap on a row
+ * further down plays it but keeps what it jumps over, so it doesn't get there.)
+ */
+export async function toListEnd(page: Page): Promise<void> {
+  const rows = page.locator('[data-testid="upnext-row"][data-section="list"]');
+  const title = page.getByTestId('np-title');
+  while ((await rows.count()) > 0) {
+    const t = (await title.textContent())!;
+    await page.getByTestId('np-next').click();
+    await expect(title).not.toHaveText(t);
+  }
+}
+
 export async function start(page: Page, path = '/'): Promise<void> {
   await page.goto(path);
   await waitForTracks(page);
