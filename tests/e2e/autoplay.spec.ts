@@ -108,7 +108,7 @@ test('Up next: autoplay rows reorder like the others (not with shuffle), and Rem
   expect((await queueState(page)).autoplay.slice(0, 2).map((t) => t.id)).toEqual([second, first]);
   await page.waitForTimeout(350); // past the double-tap guard
   const rb = await row.getByTestId('upnext-remove').boundingBox();
-  expect(rb!.width).toBeCloseTo(48, 1);
+  expect(rb!.width).toBeCloseTo(44, 1);
   expect(rb!.height).toBeCloseTo(48, 1);
 
   const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
@@ -162,15 +162,15 @@ test('Album Play plays the album, then continues into autoplay at the end', asyn
 
   await openNowPlaying(page);
   await expect(page.getByTestId('upnext-list-label')).toContainText('Next from:');
-  // List rows can be reordered: 48px Up, Down and Remove, 8px apart.
+  // List rows can be reordered: Up, Down and Remove, 44x48 and side by side, so the title gets the room.
   const listRow = page.locator('[data-testid="upnext-row"][data-section="list"]').nth(1);
   const [up, down, remove] = await Promise.all(['upnext-up', 'upnext-down', 'upnext-remove'].map((id) => listRow.getByTestId(id).boundingBox()));
   for (const b of [up, down, remove]) {
-    expect(b!.width).toBeCloseTo(48, 1);
+    expect(b!.width).toBeCloseTo(44, 1);
     expect(b!.height).toBeCloseTo(48, 1);
   }
-  expect(Math.round(down!.x - (up!.x + up!.width))).toBe(8);
-  expect(Math.round(remove!.x - (down!.x + down!.width))).toBe(8);
+  expect(Math.round(down!.x - (up!.x + up!.width))).toBe(0);
+  expect(Math.round(remove!.x - (down!.x + down!.width))).toBe(0);
   // Jump to the album's last track; Next then plays the first autoplay track.
   const lastRow = page.locator('[data-testid="upnext-row"][data-section="list"]').last();
   await expect(lastRow.locator('.row-title')).toHaveText(titles[7]);

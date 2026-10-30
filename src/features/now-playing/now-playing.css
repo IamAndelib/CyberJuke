@@ -605,17 +605,16 @@ button.lyr-line {
   font-size: 12px;
 }
 
-/* M2: Up, Down and Remove are 48x48 with 8px between them. */
+/* M2: Up, Down and Remove are 44x48 side by side, so the title gets the room (44px is still a comfortable target). */
 .upnext-actions {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 8px;
 }
 .upnext-actions .icon-btn {
-  width: 48px;
+  width: 44px;
   height: 48px;
-  min-width: 48px;
+  min-width: 44px;
   min-height: 48px;
 }
 

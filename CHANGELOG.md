@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- Up next's ↑ ↓ ✕ buttons sit side by side, so song titles get more room.
+
 ### Fixed
 - Repeat works like the music apps you know. A song you tap with repeat on gets its suggestions in Up next instead of playing on its own forever, also from an artist or genre page with a single song, and **Repeat all** loops it with them. **Repeat all** on an album, a genre or any other list loops just that list. **Repeat one** replays the song when it ends, and **Next** moves on as usual; at the very end of a list it is off, as on the notification.
 - Suggestions follow a list when it nears its end, instead of being lined up the moment it starts, so an album plays as itself first and a Signal Radio round reads "1 of 50", not "1 of 100".
