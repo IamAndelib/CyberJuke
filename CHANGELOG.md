@@ -24,6 +24,7 @@
 - Tapping "↑ N new tracks" on Home while on **Most saved** or a genre chip switches to **Latest** and **All**, where the new songs are, instead of seeming to do nothing.
 - Pulling down on an artist page reloads the artist's top songs and albums too, so a page that couldn't load them gets another try.
 - An album or playlist from Global says "Connect to the internet to search Global." offline, and "Couldn't load this album." when it fails, instead of messages about the Jukebox and Global search; TalkBack reads it as a page, not a dialog.
+- Recently played counts one way: **[Clear]** asks to "Clear 12 tracks", as the tab counts them, instead of counting every play, and the toast says "Listening history cleared".
 
 ## [1.3.4] - 2026-10-29
 

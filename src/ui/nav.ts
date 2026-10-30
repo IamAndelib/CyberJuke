@@ -80,7 +80,7 @@ export const artistChoice = signal<string[] | null>(null);
 export interface ConfirmRequest {
   title: string;
   body?: string;
-  /** The confirming button's label, e.g. "Clear 12 plays". */
+  /** The confirming button's label, e.g. "Clear 12 tracks". */
   confirm: string;
   run: () => void | Promise<void>;
   /** Information with an action (a station's info), not a warning: a plain dialog, its action first. */

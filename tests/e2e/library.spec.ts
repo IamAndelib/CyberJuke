@@ -76,6 +76,10 @@ test('history saved by older versions moves into a file once, grouped by day; ne
   expect(texts[2]).toMatch(/^(mon|tue|wed|thu|fri|sat|sun) \d{1,2} [a-z]{3}/i);
   await expect(page.getByTestId('history-day').nth(1).getByTestId('track-row')).toHaveCount(2);
   await expect(page.getByTestId('lib-recent').locator('.count')).toHaveText('3');
+  // Clear counts what the tab counts (tracks), not the 4 plays behind them.
+  await page.getByTestId('lib-clear').click();
+  await expect(page.getByTestId('confirm-ok')).toHaveText('Clear 3 tracks');
+  await page.getByTestId('confirm-cancel').click();
 
   // Migrated: the old key is gone; the file holds each track once.
   await expect.poll(() => page.evaluate(() => localStorage.getItem('CapacitorStorage.history'))).toBeNull();

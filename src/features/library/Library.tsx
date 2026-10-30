@@ -1,7 +1,7 @@
 import { signal, type ReadonlySignal } from '@preact/signals';
 import { useCallback, useMemo, useRef } from 'preact/hooks';
 import type { Track } from '../../data/model';
-import { history, historyShown, likedShown, recentShown } from '../../stores/library';
+import { historyShown, likedShown, recentShown } from '../../stores/library';
 import { dayKey, groupByDay } from '../../stores/history';
 import { useChunks } from '../../ui/useChunks';
 import { arrowChoice } from '../../ui/arrowChoice';
@@ -30,13 +30,12 @@ export function openLiked(): void {
   selectTab('library');
 }
 
-/** M3: clearing history asks first, and can still be undone from the toast. */
+/** M3: clearing history asks first, and can still be undone from the toast. It counts what the tab counts. */
 function confirmClear(): void {
-  const n = history.value.length;
   askConfirm({
     title: 'Clear listening history?',
     body: 'Everything under Recently played goes.',
-    confirm: `Clear ${plural(n, 'play')}`,
+    confirm: `Clear ${plural(recentShown.peek().length, 'track')}`,
     run: clearHistoryWithUndo,
   });
 }
