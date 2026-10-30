@@ -389,10 +389,10 @@ describe('Queue: editing', () => {
     q.addAuto([t('s1'), t('s2'), t('s3')]);
     q.remove(3); // s2
     q.restore(t('s2'), 'autoplay', 's3');
-    expect(q.sections().autoplay.map((x) => x.item.id)).toEqual(['s1', 's2', 's3']);
+    expect(q.upNextItems().filter((x) => x.auto).map((x) => x.item.id)).toEqual(['s1', 's2', 's3']);
     q.remove(4); // s3
     q.restore(t('s3'), 'autoplay', null);
-    expect(q.sections().autoplay.map((x) => x.item.id)).toEqual(['s1', 's2', 's3']);
+    expect(q.upNextItems().filter((x) => x.auto).map((x) => x.item.id)).toEqual(['s1', 's2', 's3']);
   });
 
   it('removeIds drops every copy; the current one moves on to the next that stays', () => {

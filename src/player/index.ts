@@ -29,7 +29,7 @@ import { NativePlayer } from './nativePlayer';
 import { offlineGuard, playsOffline, type OfflineRefusal } from './offlineGuard';
 import { stationPlaying } from './radio';
 import { safePlayer } from './safePlayer';
-import { nsfwAutoplayIds, wantsPlay, type PlayContext, type Player, type UpItem, type UpNextItem, type UpNextSections } from './types';
+import { nsfwAutoplayIds, sectionsOf, wantsPlay, type PlayContext, type Player, type UpItem, type UpNextSections } from './types';
 import { WebPlayer } from './webPlayer';
 
 export * from './types';
@@ -192,15 +192,6 @@ export const autoplayLabel = computed(() => {
   return seed?.title ? `Autoplay · similar to ${seed.title}` : 'Autoplay';
 });
 
-function sectionsOf(upNext: UpNextItem[], seed: UpNextSections['seed']): UpNextSections {
-  const out: UpNextSections = { queued: [], list: [], autoplay: [], seed };
-  for (const u of upNext) {
-    const item: UpItem = { track: u.track, index: u.index };
-    // In play order: from the first autoplay row on, all is autoplay (Queue.sections).
-    (u.queued ? out.queued : u.auto || out.autoplay.length ? out.autoplay : out.list).push(item);
-  }
-  return out;
-}
 
 function sameItems(a: UpItem[], b: UpItem[]): boolean {
   return a.length === b.length && a.every((x, i) => x.track === b[i].track && x.index === b[i].index);

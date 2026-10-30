@@ -24,6 +24,7 @@ import { errorMessage, isOffline } from '../core/errors';
 import { parseRunQueryRows } from '../core/guards';
 import { mark } from '../core/marks';
 import { online } from '../core/network';
+import { shuffled } from '../core/shuffle';
 import type { Cursor, Page, TrackSource } from './source';
 
 export const PROJECT = 'cyberspace-cyberspace';
@@ -431,13 +432,4 @@ export class FirestoreSource implements TrackSource {
     }
     return rows;
   }
-}
-
-export function shuffled<T>(arr: T[], rand: () => number = Math.random): T[] {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
 }

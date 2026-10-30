@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import rules from '../../tests/spec/queue-rules.json';
 import { Queue } from './queue';
 import type { RepeatMode } from './native';
-import type { UpNextKind as Section } from './types';
+import type { Track } from '../data/model';
+import { sectionsOf, type UpItem, type UpNextKind as Section } from './types';
 
 type Step = { op: string; [k: string]: unknown };
 interface Case {
@@ -89,8 +90,9 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             if ('queued' in s) expect(q.queuedCount).toBe(s.queued);
             if ('list' in s) expect(ids(q.items)).toEqual(s.list);
             if ('played' in s) expect(q.previousIndices().map((i) => q.items[i].id)).toEqual(s.played);
-            const sec = q.sections();
-            const sIds = (xs: { item: { id: string } }[]) => xs.map((x) => x.item.id);
+            // Sections as the app builds them from what the player publishes.
+            const sec = sectionsOf(q.upNextItems().map(({ item, ...u }) => ({ track: item as Track, ...u })), null);
+            const sIds = (xs: UpItem[]) => xs.map((x) => x.track.id);
             if ('queuedIds' in s) expect(sIds(sec.queued)).toEqual(s.queuedIds);
             if ('listIds' in s) expect(sIds(sec.list)).toEqual(s.listIds);
             if ('listSet' in s) expect(sIds(sec.list).sort()).toEqual((s.listSet as string[]).slice().sort());

@@ -18,9 +18,8 @@ import { stubLatex } from './latex';
 import { stubYouTube } from './youtube';
 
 export { expect };
-export { ATTACHMENT_ONLY_GENRE, AUTH_USER, AUTH_USER_B, BANNED_POST, MEMBERS_POSTS, MP3_POSTS, coverUrl, mp3Url } from './data';
+export { ATTACHMENT_ONLY_GENRE, AUTH_USER, AUTH_USER_B, BANNED_POST, MEMBERS_POSTS, MP3_POSTS, coverUrl } from './data';
 export { FAKE_MP3_SECONDS } from './latex';
-export type { Backend } from './backend';
 
 interface Options {
   backendOptions: BackendOptions;

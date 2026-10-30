@@ -46,6 +46,16 @@ export interface UpNextSections {
   seed: Track | null;
 }
 
+/** Up next's three sections, in play order: from the first autoplay row on, all is autoplay. */
+export function sectionsOf(upNext: UpNextItem[], seed: UpNextSections['seed']): UpNextSections {
+  const out: UpNextSections = { queued: [], list: [], autoplay: [], seed };
+  for (const u of upNext) {
+    const item: UpItem = { track: u.track, index: u.index };
+    (u.queued ? out.queued : u.auto || out.autoplay.length ? out.autoplay : out.list).push(item);
+  }
+  return out;
+}
+
 /** Autoplay is running low: `left` tracks to go after the current one. */
 export interface QueueLow {
   left: number;

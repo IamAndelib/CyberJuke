@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals';
 import { useMemo, useState } from 'preact/hooks';
-import { shuffled, source } from '../../data';
+import { source } from '../../data';
+import { shuffled } from '../../core/shuffle';
 import { isOffline } from '../../core/errors';
 import { OFFLINE } from '../../core/offlineText';
 import { catalog, mostSaved, type SavedRange } from '../../stores/catalog';
@@ -34,14 +35,17 @@ const savedRange = signal<SavedRange>('month');
 const SAVED_MAX = 100;
 const SAVED_CTX = radio('Most saved');
 
+/** How many random songs Shuffle starts with. */
+const SHUFFLE_SIZE = 50;
+
 /**
- * 50 random songs from the whole Jukebox or the chip's genre; autoplay goes on drawing from the
- * same (shuffleLabel). Already random, they play in that order: the Shuffle button stays off, so
- * the next album you play isn't shuffled too.
+ * SHUFFLE_SIZE random songs from the whole Jukebox or the chip's genre; autoplay goes on drawing
+ * from the same (shuffleLabel). Already random, they play in that order: the Shuffle button stays
+ * off, so the next album you play isn't shuffled too.
  */
 async function shuffleJukebox(genre: string | null): Promise<void> {
   const all = genre ? catalogGenre(genre) : catalog.tracks.value;
-  const tracks = all.length ? shuffled(all).slice(0, 50) : genre ? shuffled((await source.byGenre(genre)).tracks) : await source.shuffle(50);
+  const tracks = all.length ? shuffled(all).slice(0, SHUFFLE_SIZE) : genre ? shuffled((await source.byGenre(genre)).tracks) : await source.shuffle(SHUFFLE_SIZE);
   if (!tracks.length) throw new Error('No tracks found');
   await playAll(tracks, { shuffle: false, ctx: listCtx(shuffleLabel(genre)) });
 }

@@ -1,7 +1,7 @@
 /**
  * Pixel-art icons drawn as 12x12 ASCII bitmaps and turned into one SVG path each,
  * so they stay crisp and match Cyberspace's bitmap look. Colour = currentColor.
- * A few icons are smooth vectors on the same 12x12 grid (see V).
+ * Play is a smooth vector on the same 12x12 grid (see V).
  */
 
 const B = {
