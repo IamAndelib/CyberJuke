@@ -176,6 +176,10 @@ test("Shuffle follows the genre chip: that genre's songs, and more of them after
   await hero.click();
   await expect.poll(async () => (await queue()).list.length).toBeGreaterThan(0);
   expect((await queue()).context?.label).toBe(`Jukebox shuffle · ${genre}`);
+  // Already random: played in that order, and the Shuffle button stays off for the next list.
+  await openNowPlaying(page);
+  await expect(page.getByTestId('np-shuffle')).toHaveAttribute('aria-pressed', 'false');
+  await page.getByTestId('np-close').click();
   // Near the end of the list: more of the genre after it.
   await openNowPlaying(page);
   await page.locator('[data-testid="upnext-row"][data-section="list"] .row-main').last().click();

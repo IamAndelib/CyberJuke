@@ -422,6 +422,18 @@ test("offline, Up next's rows that can't play are dimmed, as in every list", asy
   await expect(rows.first()).not.toHaveClass(/\boff\b/);
 });
 
+test('with shuffle on, a song with only suggestions after it says how many, not "Shuffled"', async ({ page }) => {
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  await withAutoplay(page);
+  await openNowPlaying(page);
+  await page.getByTestId('np-shuffle').click();
+  await expect(page.getByTestId('np-shuffle')).toHaveAttribute('aria-pressed', 'true');
+  const head = page.getByTestId('up-next').locator('.section-head');
+  await expect(head).toContainText(/\d+ tracks/);
+  await expect(head).not.toContainText('Shuffled');
+});
+
 test('a track started before the Jukebox catalog has loaded still gets its autoplay once it does', async ({ page }) => {
   // The catalog (300-row pages) waits until let through; the Home feed loads as usual.
   let release: () => void = () => {};
