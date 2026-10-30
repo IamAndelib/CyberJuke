@@ -467,18 +467,23 @@ class CachePolicyTest {
     }
 
     @Test
-    fun aJukeboxMp3IsRefusedForGoodOnlyWhenTheFileIsGone() {
-        // A video's link refused at all: expired, or a block.
-        assertTrue(SaveRefusal.refused(403, mp3 = false))
-        assertTrue(SaveRefusal.refused(503, mp3 = false))
-        // An MP3: a 4xx is the file's (gone, private); latex.gg failing is tried again later.
+    fun aSaveIsRefusedForGoodOnlyWhenTheSongIsGone() {
+        // A 4xx that says the song is gone or private: given up on.
+        assertTrue(SaveRefusal.refused(404, mp3 = false))
         assertTrue(SaveRefusal.refused(404, mp3 = true))
         assertTrue(SaveRefusal.refused(403, mp3 = true))
-        assertFalse(SaveRefusal.refused(503, mp3 = true))
-        // A timeout, a rate limit or a refused range passes: a strike, not the end.
-        for (code in listOf(408, 416, 429)) {
+        // A video's link refused (expired, or a new network address): a strike, and a fresh link next time.
+        for (code in listOf(403, 410)) {
+            assertFalse("$code", SaveRefusal.refused(code, mp3 = false))
+            assertTrue("$code", SaveRefusal.staleLink(code, mp3 = false))
+            assertFalse("$code", SaveRefusal.staleLink(code, mp3 = true))
+        }
+        assertFalse(SaveRefusal.staleLink(404, mp3 = false))
+        assertFalse(SaveRefusal.staleLink(null, mp3 = false))
+        // The server failing, a timeout, a rate limit or a refused range passes: a strike, not the end.
+        for (code in listOf(500, 503, 408, 416, 429)) {
             assertFalse("$code", SaveRefusal.refused(code, mp3 = true))
-            assertTrue("$code", SaveRefusal.refused(code, mp3 = false))
+            assertFalse("$code", SaveRefusal.refused(code, mp3 = false))
         }
         // No status (the connection broke): never a refusal.
         assertFalse(SaveRefusal.refused(null, mp3 = false))
@@ -517,6 +522,41 @@ class CachePolicyTest {
         assertEquals(b, CacheKeys.pickKey(listOf(b, a), keepKey = null, rungItag = 251, wantedBps = 0))
         assertEquals(b, CacheKeys.pickKey(listOf(CacheKeys.of("dQw4w9WgXcQ", 140, 2_000_000L), b), keepKey = null, rungItag = 251, wantedBps = 160_000))
         assertNull(CacheKeys.pickKey(emptyList(), keepKey = null, rungItag = null, wantedBps = 0))
+    }
+
+    @Test
+    fun aDamagedCacheIsWipedAndOpenedOnceMore() {
+        class Damaged : Exception()
+        val wipes = ArrayList<Int>()
+        // Opens: nothing wiped.
+        assertEquals("cache", CacheStart.openOrWipe({ "cache" }, { wipes.add(0) }) { it is Damaged })
+        assertTrue(wipes.isEmpty())
+        // Its index unreadable: wiped, then it opens empty.
+        var tries = 0
+        assertEquals("fresh", CacheStart.openOrWipe({ if (tries++ == 0) throw Damaged() else "fresh" }, { wipes.add(1) }) { it is Damaged })
+        assertEquals(listOf(1), wipes)
+        // Unreadable again after the wipe: it stays off (the caller streams), wiped once.
+        val e = runCatching { CacheStart.openOrWipe<String>({ throw Damaged() }, { wipes.add(2) }) { it is Damaged } }.exceptionOrNull()
+        assertTrue(e is Damaged)
+        assertEquals(listOf(1, 2), wipes)
+        // Anything else (the folder in use by another instance): never wiped.
+        assertTrue(runCatching { CacheStart.openOrWipe<String>({ throw IllegalStateException() }, { wipes.add(3) }) { it is Damaged } }.isFailure)
+        assertEquals(listOf(1, 2), wipes)
+    }
+
+    @Test
+    fun aNewNetworkForgivesTheStopsSoFar() {
+        val s = SaveStrikes()
+        val now = 1_000_000L
+        repeat(SaveStrikes.MAX - 1) { assertFalse(s.stopped("a0000000000", now)) }
+        assertTrue(s.stopped("a0000000000", now))
+        assertEquals(setOf("a0000000000"), s.givenUp())
+        // The stops came from a connection that has gone: a new one starts afresh.
+        s.clear()
+        assertTrue(s.givenUp().isEmpty())
+        assertTrue(s.waiting(now).isEmpty())
+        assertFalse(s.stopped("a0000000000", now))
+        assertEquals(setOf("a0000000000"), s.waiting(now + SaveStrikes.FIRST_WAIT_MS - 1))
     }
 
     @Test
