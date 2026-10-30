@@ -344,6 +344,9 @@ test('Clear history asks first, away from Play; Undo brings the plays back (M3, 
   const sheet = page.getByTestId('confirm-sheet');
   await expect(sheet).toBeVisible();
   await expect(page.getByTestId('confirm-ok')).toHaveText('Clear 2 plays');
+  // A warning: focus starts on the safe choice, so Enter or a stray tap doesn't clear anything.
+  await expect(sheet).toHaveAttribute('role', 'alertdialog');
+  await expect(page.getByTestId('confirm-cancel')).toBeFocused();
   await page.getByTestId('confirm-cancel').click();
   await expect(sheet).toBeHidden();
   await expect(page.getByTestId('recent-list').getByTestId('track-row')).toHaveCount(2);

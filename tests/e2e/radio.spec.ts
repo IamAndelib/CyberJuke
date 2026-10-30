@@ -88,6 +88,9 @@ test('the Radio tab lists both bands; tuning in plays the station and Now Playin
   await expect(sheet).toContainText('THE CRYPT · 1031.0');
   await expect(sheet).toContainText('32 tracks');
   await expect(sheet).toContainText(station('the-crypt').desc);
+  // Information, not a warning: a plain dialog, with Tune in focused first.
+  await expect(sheet).toHaveAttribute('role', 'dialog');
+  await expect(page.getByTestId('confirm-ok')).toBeFocused();
   await page.getByTestId('confirm-ok').click();
   // Another station: its own tracks, and the mark moves.
   await expect(page.locator('[data-testid="station"][data-station="the-crypt"]')).toHaveAttribute('aria-current', 'true');

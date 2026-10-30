@@ -41,6 +41,7 @@ function showInfo(s: Station): void {
     body: `${plural(s.tracks.length, 'track')} · ${s.desc}`,
     confirm: onAir.peek() === s ? 'Open Now Playing' : `Tune in to ${s.callsign}`,
     run: () => tuneIn(s),
+    info: true,
   });
 }
 

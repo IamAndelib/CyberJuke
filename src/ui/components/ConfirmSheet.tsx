@@ -4,7 +4,8 @@ import { confirmRequest } from '../nav';
 
 /**
  * M3: a confirm sheet (same look as the track menu) for actions that can't easily be
- * taken back: the confirming button names what happens ("Clear 12 plays").
+ * taken back: the confirming button names what happens ("Clear 12 plays"). Focus starts on
+ * [Cancel], the safe choice (WAI-ARIA's alert dialog), except for information ([ConfirmRequest.info]).
  */
 export function ConfirmSheet() {
   const req = confirmRequest.value;
@@ -15,7 +16,7 @@ export function ConfirmSheet() {
   return (
     <div class={'sheet-wrap' + (req ? ' open' : '')} aria-hidden={!req} inert={!req}>
       <div class="scrim" onClick={close} />
-      <div class="sheet confirm-sheet" ref={sheet} role="alertdialog" aria-modal="true" aria-label={r?.title ?? 'Confirm'} data-testid="confirm-sheet">
+      <div class="sheet confirm-sheet" ref={sheet} role={r?.info ? 'dialog' : 'alertdialog'} aria-modal="true" aria-label={r?.title ?? 'Confirm'} data-testid="confirm-sheet">
         {r && (
           <>
             <div class="sheet-head confirm-head">
@@ -34,7 +35,7 @@ export function ConfirmSheet() {
             >
               <span class="sheet-text">{r.confirm}</span>
             </button>
-            <SheetCancel onClose={close} testid="confirm-cancel" />
+            <SheetCancel onClose={close} testid="confirm-cancel" first={!r.info} />
           </>
         )}
       </div>
@@ -42,11 +43,14 @@ export function ConfirmSheet() {
   );
 }
 
-/** A sheet's [Cancel]: only the word is the button (its press, its tap); the strip it sits in isn't. */
-export function SheetCancel({ onClose, testid }: { onClose: () => void; testid?: string }) {
+/**
+ * A sheet's [Cancel]: only the word is the button (its press, its tap); the strip it sits in isn't.
+ * [first]: focus starts on it when the sheet opens (useModal).
+ */
+export function SheetCancel({ onClose, testid, first }: { onClose: () => void; testid?: string; first?: boolean }) {
   return (
     <div class="sheet-cancel">
-      <button class="link-btn" onClick={onClose} data-testid={testid}>
+      <button class="link-btn" onClick={onClose} data-testid={testid} data-autofocus={first || undefined}>
         [Cancel]
       </button>
     </div>
