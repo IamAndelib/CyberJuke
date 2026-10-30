@@ -504,7 +504,7 @@ class CachePolicyTest {
 
     @Test
     fun coversAreFetchedOnTheNetworksASaveMayUse() {
-        val f = Facts(liked)
+        val f = Facts(liked, saved = emptySet())
         assertTrue(LikedSaverPolicy.mayDownload(f))
         assertFalse(LikedSaverPolicy.mayDownload(f.copy(online = false)))
         assertFalse(LikedSaverPolicy.mayDownload(f.copy(playbackNeedsNetwork = true)))
