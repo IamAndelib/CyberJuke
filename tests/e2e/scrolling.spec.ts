@@ -35,21 +35,22 @@ test('Genres remembers the grid position across a genre page, and each genre lis
   await expect(page.getByTestId('genre-grid')).toBeVisible();
   await expect.poll(() => scrollTopOf(page, 'screen-genres')).toBeGreaterThan(y - 10);
 
-  // A long genre list: scroll it, leave, reopen, and it's where you were.
+  // A long genre list: scroll it, leave, open it again, and it starts at the top (a new open, as in
+  // Spotify and YouTube Music; Back and tabs keep their place, above).
   await scrollTo(page, 'screen-genres', 0);
   const top = (await page.getByTestId('genre-grid').getByTestId('genre-tile').first().getAttribute('data-genre'))!;
   await tile(top).click();
   await waitForTracks(page);
   await scrollTo(page, 'screen-genre', 900);
-  const listY = await scrollTopOf(page, 'screen-genre');
-  expect(listY).toBeGreaterThan(800);
+  expect(await scrollTopOf(page, 'screen-genre')).toBeGreaterThan(800);
   await page.getByTestId('genre-back').click();
   await expect(page.getByTestId('genre-grid')).toBeVisible();
   expect(await scrollTopOf(page, 'screen-genres')).toBeLessThanOrEqual(10);
   await tile(top).click();
   await expect(page.getByTestId('screen-genre')).toBeVisible();
-  await expect.poll(() => scrollTopOf(page, 'screen-genre')).toBeGreaterThan(listY - 10);
-  expect(Math.abs((await scrollTopOf(page, 'screen-genre')) - listY)).toBeLessThanOrEqual(10);
+  await waitForTracks(page);
+  await expectStable(() => scrollTopOf(page, 'screen-genre'), 500);
+  expect(await scrollTopOf(page, 'screen-genre')).toBe(0);
 });
 
 test('Home keeps its loaded pages and scroll position across tab switches', async ({ page, backend }) => {

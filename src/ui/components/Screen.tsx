@@ -27,9 +27,6 @@ export function screenToTop(el: Element): boolean {
   return e.defaultPrevented;
 }
 
-/** scrollTop per scrollKey, for the whole app session. */
-const positions = new Map<string, number>();
-
 const PTR_LABEL = { pull: '[ pull to refresh ]', release: '[ release to refresh ]', busy: '[ refreshing… ]' } as const;
 
 /**
@@ -93,6 +90,10 @@ export function Screen({
   const ptrLabel = useRef<HTMLSpanElement>(null);
   const [showTop, setShowTop] = useState(false);
   const keyRef = useRef(scrollKey);
+  // scrollTop per scrollKey, for as long as this screen is mounted: its own keys come back where
+  // they were (Home's Latest and Most saved, Library's sections; Back and tabs keep the screen),
+  // and a new open of a page starts at the top (Spotify, YouTube Music).
+  const positions = useRef(new Map<string, number>()).current;
   const refresh = useRef(onRefresh);
   refresh.current = onRefresh;
   /** Target of a restore still waiting for content; saving is paused meanwhile. */

@@ -290,7 +290,13 @@ test('Account is the first card and says "members-only shared tracks"', async ({
   await page.goto('/');
   await openSettings(page);
   const settings = page.getByTestId('screen-settings');
-  await expect(settings.locator('.card-title')).toHaveText(['Account', 'Theme', 'Playback & data', 'Updates', 'About', 'Support', 'Licenses', 'Source code']);
+  // Small groups, each about one thing.
+  await expect(settings.locator('.card-title')).toHaveText(['Account', 'Theme', 'Playback', 'Content', 'Storage', 'Network', 'Updates', 'About', 'Support', 'Licenses', 'Source code']);
+  const card = (title: string) => settings.locator('section.card').filter({ has: page.locator('.card-title', { hasText: new RegExp(`^${title}$`) }) });
+  await expect(card('Playback').locator('.setting-name')).toHaveText(['Audio quality', 'Autoplay', 'Gapless playback', 'Crossfade']);
+  await expect(card('Content').locator('.setting-name')).toHaveText(['Show NSFW tracks', 'Check for new tracks']);
+  await expect(card('Storage').locator('.setting-name')).toHaveText(['Listening cache', 'Download using mobile data']);
+  await expect(card('Network').locator('.setting-name')).toHaveText(['IPv4']);
   const account = page.getByTestId('account');
   expect((await account.boundingBox())!.y).toBeLessThan((await page.getByTestId('theme-picker').boundingBox())!.y);
   await expect(account.locator('.signin-lead')).toHaveText('Optional. Signed in, the Jukebox also shows members-only shared tracks, marked [members].');

@@ -56,6 +56,20 @@
   content: attr(data-text);
   padding-left: var(--marquee-gap);
 }
+/* Animations off, the marquee stays still: Now Playing's title, artist and source wrap to two
+   lines instead of hiding the rest behind "…". The mini player stays one line. */
+@media (prefers-reduced-motion: reduce) {
+  :is(.np-title, .np-artist, .np-from) .marquee {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
 /* ---- Mini player ------------------------------------------------------------------ */
 
 .mini {

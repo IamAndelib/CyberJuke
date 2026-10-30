@@ -6,11 +6,15 @@
 - The notification and the lock screen have **Shuffle** and **Repeat** buttons, showing the mode they're in; Repeat steps through off, all and one, as in the app.
 
 ### Changed
+- A page you open (an artist, a genre, an album, Settings) starts at the top; **Back** and the tabs still return you where you were.
+- Settings come in smaller groups: Playback, Content, Storage and Network instead of one long "Playback & data".
+- An artist page shows their 5 newest Jukebox songs, with **[Show all]** for the rest, so their top songs and albums are close by. Play and Shuffle still play them all.
 - Up next's ↑ ↓ ✕ buttons sit side by side, so song titles get more room.
 - Up next shows the whole list: the songs already played stay above, dimmed, the playing one is marked as on Home, and a tap on any of them plays from there. With **Repeat all**, the top it repeats from is right there.
 - Turning shuffle on mixes only the songs still to come: the ones before the playing song stay where they were, and **Repeat all** comes back to them first.
 
 ### Fixed
+- With animations turned off on the phone, a long song title, artist or "Playing from" line in Now Playing wraps to a second line instead of being cut off with "…".
 - Repeat works like the music apps you know. A song you tap with repeat on gets its suggestions in Up next instead of playing on its own forever, also from an artist or genre page with a single song, and **Repeat all** loops it with them. **Repeat all** on an album, a genre or any other list loops just that list. **Repeat one** replays the song when it ends, and **Next** moves on as usual; at the very end of a list it is off, as on the notification.
 - Suggestions follow a list when it nears its end, instead of being lined up the moment it starts, so an album plays as itself first and a Signal Radio round reads "1 of 50", not "1 of 100".
 - Autoplay keeps going for hours after you swipe the app away, and picks up again when you reopen it. Before, Jukebox songs, Signal Radio and Home's Shuffle could stop after the songs already lined up.
