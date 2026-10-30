@@ -53,11 +53,13 @@ class QueueOpsTest {
             val after = p.upNext()
             assertEquals("seed $seed: $after", after.indexOf(anchor) - 1, after.indexOf("z"))
             assertEquals("seed $seed", Section.LIST, section(p, "z"))
-            assertEquals("seed $seed: autoplay stays last", listOf("s1", "s2"), after.takeLast(2))
+            // Autoplay stays last, mixed too with shuffle on.
+            assertEquals("seed $seed: autoplay stays last", setOf("s1", "s2"), after.takeLast(2).toSet())
             // Without an anchor: after the list, before autoplay.
             p.queue.restore("y", Section.LIST, null)
             val last = p.upNext()
-            assertEquals("seed $seed: $last", listOf("y", "s1", "s2"), last.takeLast(3))
+            assertEquals("seed $seed: $last", "y", last[last.size - 3])
+            assertEquals("seed $seed: $last", setOf("s1", "s2"), last.takeLast(2).toSet())
         }
     }
 
