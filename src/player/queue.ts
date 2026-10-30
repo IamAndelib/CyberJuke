@@ -17,20 +17,22 @@
  *    A jump ahead keeps what it jumps over in Up next: the track moves next, then plays;
  *  - a new list (setList) replaces the list and the autoplay tracks, but the queued
  *    tracks stay next, in order (P1);
- *  - autoplay tracks (addAuto) play after the list, in the order added. Shuffle
- *    reorders only the list, and turned on, only what's ahead of the current track. Repeat all loops what you started: a list's autoplay tracks
- *    still to come go (they come back once repeat is off), but a single song's are its
- *    radio, the loop itself, and stay. Repeat one leaves them: it replays the track when
- *    it ends, and a skip moves on as with repeat off (none at the end, as Media3's). Jumping to an
- *    autoplay track keeps the ones after it (Spotify, YouTube Music): more follow it once they run low;
- *  - but with repeat all, played autoplay tracks more than KEEP_PLAYED behind the
- *    current one are dropped (a radio can run for hours);
+ *  - autoplay tracks (addAuto) play after the list, in the order added. Repeat all loops
+ *    what you started: a list's autoplay tracks still to come go (they come back once
+ *    repeat is off), but a single song's are its radio, the loop itself, and stay. Repeat
+ *    one leaves them: it replays the track when it ends, and a skip moves on as with repeat
+ *    off (none at the end, as Media3's). Jumping to an autoplay track keeps the ones after
+ *    it (Spotify, YouTube Music): more follow it once they run low;
+ *  - played autoplay tracks more than KEEP_PLAYED behind the current one are dropped (a
+ *    radio can run for hours), except with repeat all, which loops them;
  *  - Undo of a remove (restore) puts the track back in its section, before the track
  *    that followed it there, never at or before the current track; a played track goes
  *    back among the played, before the one that followed it, else right before the current;
  *  - "played" is what was heard: the tracks of this list that have been current (a list
- *    started mid-way hasn't played the ones before it). Shuffle turned on mixes all the
- *    list tracks not heard yet; the heard ones stay behind.
+ *    started mid-way hasn't played the ones before it). Shuffle turned on mixes every track
+ *    not heard yet, the list's ahead of the autoplay ones, and new autoplay tracks join in at
+ *    random places; the heard ones stay behind, in the order they played. Off puts the list
+ *    order back.
  *
  * Up next is three sections, in play order: queued by you, the rest of the list,
  * autoplay (see sections()).
@@ -240,10 +242,7 @@ export class Queue<T extends Identified> {
     const e = this.list[index];
     if (!e) return null;
     const p = this.cur ? this.order.indexOf(this.cur) : -1;
-    // With shuffle on autoplay stays after the list: with list tracks still ahead, an autoplay
-    // track is jumped to where it is.
-    const listAhead = () => this.order.slice(p + 1).some((x) => !x.auto && !this.queued.has(x));
-    if (p >= 0 && this.order.indexOf(e) > p + 1 && !(this.shuffle && e.auto && listAhead())) {
+    if (p >= 0 && this.order.indexOf(e) > p + 1) {
       const at = (arr: Entry<T>[]) => {
         arr.splice(arr.indexOf(e), 1);
         arr.splice(arr.indexOf(this.cur!) + 1, 0, e);
@@ -329,8 +328,9 @@ export class Queue<T extends Identified> {
   }
 
   /**
-   * Autoplay: append tracks after everything else, in list and play order (shuffle
-   * never moves them). With nothing playing, the first one becomes current.
+   * Autoplay: append tracks after everything else, in list and play order (with shuffle on,
+   * at random places among the autoplay tracks still to come). With nothing playing, the
+   * first one becomes current.
    */
   addAuto(items: T[]): void {
     if (!items.length) return;
@@ -473,31 +473,28 @@ export class Queue<T extends Identified> {
   }
 
   /**
-   * [keepPlayed] (shuffle turned on): the list tracks heard stay behind the current one, in
-   * their order, and all the others are mixed ahead (Spotify, YouTube Music), also the ones
-   * before where the list started; a new list has the rest all ahead.
+   * Shuffle on. [keepPlayed] (turned on): the tracks heard stay behind the current one, in the
+   * order they played, and all the others are mixed ahead (Spotify, YouTube Music), also the
+   * ones before where the list started; a new list has the rest all ahead. Queued tracks play
+   * next, in the order added; then the list, mixed; then the autoplay tracks, mixed too
+   * (YouTube Music's radio shuffles).
    */
   private rebuildOrder(keepPlayed = false): void {
     if (!this.shuffle) {
       this.order = this.list.slice();
       return;
     }
-    // Queued tracks keep playing next, in the order they were added; then the list, mixed;
-    // then the autoplay tracks still to come, mixed too (YouTube Music's radio shuffles).
     const cur = this.cur;
-    const played = keepPlayed && cur ? this.order.filter((e) => e !== cur && this.heard.has(e) && !e.auto && !this.queued.has(e)) : [];
-    const done = new Set(played);
+    const played = keepPlayed && cur ? this.order.filter((e) => e !== cur && this.heard.has(e) && !this.queued.has(e)) : [];
+    const ahead = this.list.filter((e) => e !== cur && !this.queued.has(e) && !played.includes(e));
     const queued = this.list.filter((e) => e !== cur && this.queued.has(e));
-    const autos = this.list.filter((e) => e.auto && e !== cur && !this.queued.has(e));
-    const rest = this.mix(this.list.filter((e) => e !== cur && !e.auto && !this.queued.has(e) && !done.has(e)));
-    if (!cur) this.order = [...queued, ...rest, ...this.mix(autos)];
-    else if (!cur.auto) this.order = [...played, cur, ...queued, ...rest, ...this.mix(autos)];
-    else {
-      // Playing autoplay: the list is behind, and the autoplay tracks heard; the others are mixed ahead.
-      const heard = autos.filter((e) => keepPlayed && this.heard.has(e));
-      const ahead = autos.filter((e) => !heard.includes(e));
-      this.order = [...played, ...rest, ...heard, cur, ...queued, ...this.mix(ahead)];
-    }
+    this.order = [
+      ...played,
+      ...(cur ? [cur] : []),
+      ...queued,
+      ...this.mix(ahead.filter((e) => !e.auto)),
+      ...this.mix(ahead.filter((e) => e.auto)),
+    ];
   }
 
   /** Fisher–Yates, in place. */

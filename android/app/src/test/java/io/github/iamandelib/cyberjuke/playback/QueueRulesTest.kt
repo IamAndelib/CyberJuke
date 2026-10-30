@@ -144,7 +144,16 @@ class QueueRulesTest {
             }
         }
 
-        private val timelineChanged: () -> Unit = { queue.onPlaylistChanged() }
+        /** The list played to its end (PlaybackService: ENDED). */
+        var ended = false
+
+        /** After the queue saw a timeline change (PlaybackService.onTimelineChanged's own work). */
+        var onTimeline: (() -> Unit)? = null
+
+        private val timelineChanged: () -> Unit = {
+            queue.onPlaylistChanged()
+            onTimeline?.invoke()
+        }
         private val transition: () -> Unit = { queue.onTransition() }
 
         // ---- QueueHost ----
@@ -245,6 +254,7 @@ class QueueRulesTest {
             require(index in ids.indices)
             if (index == current) return
             current = index
+            ended = false
             emit(transition)
         }
 
@@ -285,7 +295,10 @@ class QueueRulesTest {
                 return
             }
             val n = nextIndex(current, repeat)
-            if (n < 0) return // ended
+            if (n < 0) {
+                ended = true
+                return
+            }
             current = n
             emit(transition)
         }

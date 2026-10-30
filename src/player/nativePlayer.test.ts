@@ -403,6 +403,7 @@ describe('NativePlayer: starting a list', () => {
     expect(call.tracks.map((t: { id: string }) => t.id)).toEqual(['A', 'B', 'D', 'E']);
     expect(call.startIndex).toBe(2);
     expect(p.state.value.current?.id).toBe('D');
+    expect(p.state.value.previous).toEqual([]); // started mid-way: A and B weren't heard
     // Nothing playable from there on: nothing starts.
     await p.playList([tr('A'), tr('bad', { ytId: 'nope' })], 1, { label: 'Liked', mode: 'list' });
     expect(fake.plugin.setQueue).toHaveBeenCalledTimes(1);

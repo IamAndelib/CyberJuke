@@ -100,7 +100,11 @@ interface JukePlayerPlugin {
   play(): Promise<void>; pause(): Promise<void>;
   seekTo(o: { positionMs: number }): Promise<void>;
   skipToNext(): Promise<void>; skipToPrevious(): Promise<void>;
-  /** A tap in Up next: queued tracks stay next; on an autoplay track the radio continues from it. */
+  /**
+   * A tap in Up next: it plays, also when paused (the caller sends play). A track further ahead
+   * moves next first, so what it jumps over stays; queued tracks stay next; on an autoplay
+   * track the radio continues from it.
+   */
   skipToIndex(o: { index: number; expectId?: string }): Promise<void>;
   setShuffle(o: { enabled: boolean }): Promise<void>;
   setRepeat(o: { mode: RepeatMode }): Promise<void>;

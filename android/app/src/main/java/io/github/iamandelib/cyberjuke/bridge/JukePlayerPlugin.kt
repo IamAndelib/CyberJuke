@@ -97,7 +97,7 @@ import kotlin.math.roundToInt
  *   goes, the next one that stays plays, or playback pauses when none is left.
  * - Size caps (K6): more than 2000 tracks or ids, or a string over 2000 characters, rejects
  *   with code TOO_LARGE.
- * - queueLow { left, seedId }: autoplay has `left` (<= 5) Jukebox tracks to go: the web side
+ * - queueLow { left, seedId }: `left` (<= 5) tracks are still to go: the web side
  *   computes more and sends them with addAutoplay({ tracks, seedId }).
  * - tracks { tracks: NativeTrack[] }: the Global tracks in the queue (the web side can't look
  *   them up anywhere: radio items the service added itself, and after a WebView reload also the
@@ -522,7 +522,8 @@ class JukePlayerPlugin : Plugin() {
 
     /**
      * `addAutoplay({ tracks, seedId })`: Jukebox autoplay picks (after a `queueLow`) for the seed
-     * they were computed for; dropped if the seed changed meanwhile, autoplay is off or repeat on.
+     * they were computed for; dropped if the seed changed meanwhile or autoplay may not add now
+     * (off, or repeat all on a list: Stations.mayAutoplay).
      */
     @PluginMethod
     fun addAutoplay(call: PluginCall) {
