@@ -1,6 +1,6 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { expectStable, musicCalls, openNowPlaying, openSearch, openSettings, setOffline, setVisibility, start, toListEnd } from '../helpers';
+import { expectStable, fakeYt, musicCalls, openNowPlaying, openSearch, openSettings, setOffline, setVisibility, start, toListEnd } from '../helpers';
 import { genreFamilies } from '../../src/data/similar';
 import { artistKey, splitArtists } from '../../src/data/artists';
 import { words } from '../../src/data/text';
@@ -663,4 +663,68 @@ test("played songs get ↑ ↓ ✕: moves stay among them, the last one's ↓ pl
   await page.getByTestId('np-shuffle').click();
   await expect(played.first().getByTestId('upnext-remove')).toBeVisible();
   await expect(played.getByTestId('upnext-up')).toHaveCount(0);
+});
+
+test('held under "Queued by you", a song offers Remove from queue instead; elsewhere Add to queue; Undo puts it back', async ({ page }) => {
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  await queueRow(page, 2);
+  const queuedTitle = (await visible(page, 'track-title').nth(2).textContent())!.trim();
+  const menu = page.getByTestId('track-menu');
+  // On Home the same song's menu still adds (a row there is no place in the queue).
+  await visible(page, 'track-more').nth(2).click();
+  await expect(menu.getByTestId('menu-add-queue')).toBeVisible();
+  await expect(menu.getByTestId('menu-remove-queue')).toHaveCount(0);
+  await page.locator('.sheet-cancel button').click();
+  await expect(menu).toBeHidden();
+  await openNowPlaying(page);
+  const cdp = await page.context().newCDPSession(page);
+  const hold = async (row: Locator) => {
+    await row.scrollIntoViewIfNeeded();
+    const b = (await row.locator('.row-main').boundingBox())!;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x + 40, y: b.y + b.height / 2, id: 1 }] });
+    await expect(menu).toBeVisible();
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  };
+  // A suggestion in the queue: Add to queue.
+  await hold(page.locator('[data-testid="upnext-row"][data-section="autoplay"]').first());
+  await expect(menu.getByTestId('menu-add-queue')).toBeVisible();
+  await expect(menu.getByTestId('menu-remove-queue')).toHaveCount(0);
+  await page.locator('.sheet-cancel button').click();
+  await expect(menu).toBeHidden();
+  // The queued row: Remove from queue, in Add to queue's place.
+  const row = page.locator('[data-testid="upnext-row"][data-section="queued"]');
+  await expect(row.locator('.row-title')).toHaveText(queuedTitle);
+  await hold(row);
+  await cdp.detach();
+  await expect(menu.getByTestId('menu-add-queue')).toHaveCount(0);
+  await menu.getByTestId('menu-remove-queue').click();
+  await expect(row).toHaveCount(0);
+  // Focus stays in Now Playing (TalkBack keeps its place), not back at the top of the page.
+  await expect.poll(() => page.evaluate(() => { const a = document.activeElement; return a != null && a.closest('.np') != null && a.closest('.sheet') == null; })).toBe(true);
+  await page.getByTestId('toast').filter({ hasText: 'Removed from queue' }).getByTestId('toast-action').click();
+  await expect(row).toHaveCount(1);
+  await expect(row.locator('.row-title')).toHaveText(queuedTitle);
+});
+
+test('a held queued row that starts playing while its menu is open: the menu closes, nothing is removed', async ({ page }) => {
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  await queueRow(page, 2);
+  const queuedTitle = (await visible(page, 'track-title').nth(2).textContent())!.trim();
+  await openNowPlaying(page);
+  const row = page.locator('[data-testid="upnext-row"][data-section="queued"]');
+  await row.scrollIntoViewIfNeeded();
+  const b = (await row.locator('.row-main').boundingBox())!;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x + 40, y: b.y + b.height / 2, id: 1 }] });
+  const menu = page.getByTestId('track-menu');
+  await expect(menu.getByTestId('menu-remove-queue')).toBeVisible();
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+  // The playing song ends: the queued one plays now, and the menu for its old row goes.
+  await fakeYt(page, 'end');
+  await expect(page.getByTestId('np-title')).toHaveText(queuedTitle);
+  await expect(menu).toBeHidden();
+  await expect(page.getByTestId('toast').filter({ hasText: 'Removed from queue' })).toHaveCount(0);
 });

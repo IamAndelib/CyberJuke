@@ -7,6 +7,7 @@
 ### Added
 - Press and hold a song in Now Playing's queue for its menu (Add to queue, Share, Like, More by…), as in every list.
 - The notification and the lock screen have **Shuffle** and **Repeat** buttons, showing the mode they're in; Repeat steps through off, all and one, as in the app.
+- Press and hold a song under "Queued by you" in Now Playing's queue: its menu offers **Remove from queue** in place of **Add to queue**, with **Undo**.
 - Searching the Jukebox also finds artists: those whose name matches show first, and a tap opens their page.
 
 ### Changed

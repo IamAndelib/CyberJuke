@@ -78,6 +78,25 @@ function RowBody({ track, playing }: { track: Track; playing?: boolean }) {
 /** A count Up next shows: "50+" when it may hold more than it shows. */
 const upTo = (n: number) => (n >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : n);
 
+/**
+ * Removes a queue row, with Undo: back next to the row that followed it, `beforeId` (K3). The
+ * Undo goes once a new list or another track starts, when "back where it was" no longer means
+ * anything.
+ */
+export function removeWithUndo(it: UpItem, kind: Kind, beforeId: string | null): void {
+  // A row the queue has moved on from (its track playing now, or at another place) stays.
+  if (player.state.peek().queue[it.index]?.id !== it.track.id) return;
+  void player.remove(it.index, it.track.id);
+  const ctx0 = playContext.peek();
+  const cur0 = currentId.peek();
+  toast('Removed from queue', undefined, {
+    label: 'Undo',
+    run: () => void player.restore(it.track, kind, beforeId),
+    stale: () => playContext.value !== ctx0 || currentId.value !== cur0,
+    ...(it.track.membersOnly && { membersOnly: true }),
+  });
+}
+
 /** Offline, a row that can't play is dimmed, as in every list (TrackRow). */
 const offClass = (t: Track) => (!online.value && !isSaved(t, savedOffline.value) ? ' off' : '');
 
@@ -113,17 +132,7 @@ export function UpNext() {
   const remove = (it: UpItem, kind: Kind, beforeId: string | null) => {
     if (guarded()) return false;
     guardUntil.current = performance.now() + REMOVE_GUARD_MS;
-    void player.remove(it.index, it.track.id);
-    // Undo goes back next to the row that followed it (K3); it goes once a new list or
-    // another track starts, when "back where it was" no longer means anything.
-    const ctx0 = playContext.peek();
-    const cur0 = currentId.peek();
-    toast('Removed from queue', undefined, {
-      label: 'Undo',
-      run: () => void player.restore(it.track, kind, beforeId),
-      stale: () => playContext.value !== ctx0 || currentId.value !== cur0,
-      ...(it.track.membersOnly && { membersOnly: true }),
-    });
+    removeWithUndo(it, kind, beforeId);
     return true;
   };
   // The row moves or goes, and a tap on it plays it: each shows its press first (afterPress).
@@ -153,7 +162,7 @@ export function UpNext() {
         >
           <button
             class="row-main"
-            {...longPress(it.track)}
+            {...longPress(it.track, kind === 'queued' ? it : null)}
             onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id))}
             aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', autoplay' }[kind]}`}
           >
