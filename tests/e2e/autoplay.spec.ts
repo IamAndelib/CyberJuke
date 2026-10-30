@@ -365,7 +365,7 @@ test('going to the background, a reserve is lined up: playback goes on if Androi
   expect(list.length + q.autoplay.length).toBe(50);
   // Up next shows 50 at most: it says there may be more.
   await openNowPlaying(page);
-  await expect(page.getByTestId('up-next').locator('.section-head')).toContainText('50+ tracks');
+  await expect(page.getByTestId('up-next').locator('.section-head')).toContainText('50+ up next');
   await setVisibility(page, 'visible');
 });
 
@@ -439,7 +439,7 @@ test('with shuffle on, a song with only suggestions after it says how many, not 
   await page.getByTestId('np-shuffle').click();
   await expect(page.getByTestId('np-shuffle')).toHaveAttribute('aria-pressed', 'true');
   const head = page.getByTestId('up-next').locator('.section-head');
-  await expect(head).toContainText(/\d+ tracks/);
+  await expect(head).toContainText(/\d+ up next/);
   await expect(head).not.toContainText('Shuffled');
 });
 
@@ -474,7 +474,7 @@ test('a track started before the Jukebox catalog has loaded still gets its autop
   expect(q.autoplay.length).toBeGreaterThanOrEqual(20);
 });
 
-test('Up next shows the whole list: what played above, the playing track marked in place, a tap on a played one plays it', async ({ page }) => {
+test('the queue shows the whole list: what played folds under [+] Played, the playing track is marked in place, a tap on a played one plays it', async ({ page }) => {
   await start(page);
   await page.getByTestId('tab-genres').click();
   await page.getByTestId('genre-tile').nth(5).click();
@@ -487,18 +487,33 @@ test('Up next shows the whole list: what played above, the playing track marked 
     await expect(page.getByTestId('np-title')).not.toHaveText(titles[k]);
     titles.push((await page.getByTestId('np-title').textContent())!.trim());
   }
-  // The two played, in the order they played, then the playing one, marked as in every list.
-  await expect(page.getByTestId('upnext-played').locator('.row-title')).toHaveText(titles.slice(0, 2));
+  // Folded: the playing track comes right after it, with nothing played on show.
+  const fold = page.getByRole('button', { name: 'Played, 2 tracks' });
+  await expect(fold).toHaveAttribute('aria-expanded', 'false');
+  await expect(fold).toHaveText('Played · 2');
+  await expect(page.getByTestId('upnext-played')).toHaveCount(0);
+  await expect(page.locator('[data-testid="up-next"] ol > li').nth(1)).toHaveAttribute('data-testid', 'upnext-current-label');
+  await expect(page.getByTestId('up-next').locator('.section-head')).toContainText(/^Queue\d+ up next$/);
+  // Open: the two played, in the order they played, at full contrast, then the playing one.
+  await fold.click();
+  await expect(fold).toHaveAttribute('aria-expanded', 'true');
+  const played = page.getByTestId('upnext-played');
+  await expect(played.locator('.row-title')).toHaveText(titles.slice(0, 2));
+  await expect(played.first().locator('.row-main')).toHaveCSS('opacity', '1');
   const cur = page.getByTestId('upnext-current');
   await expect(cur.locator('.row-title')).toHaveText(titles[2]);
   await expect(cur.locator('[aria-current="true"]')).toHaveCount(1);
   await expect(cur.locator('.row-art-badge')).toBeVisible();
-  // Then what's ahead, as before.
   expect(await page.locator('[data-testid="upnext-row"][data-section="list"]').count()).toBeGreaterThan(0);
+  // It stays open for this list, also after closing Now Playing.
+  await page.getByTestId('np-close').click();
+  await openNowPlaying(page);
+  await expect(page.getByTestId('upnext-played')).toHaveCount(2);
   // A played one plays again from there: what was after it is ahead again.
   await page.getByTestId('upnext-played').first().locator('.row-main').click();
   await expect(page.getByTestId('np-title')).toHaveText(titles[0]);
   await expect(page.getByTestId('upnext-played')).toHaveCount(0);
+  await expect(page.getByTestId('upnext-played-fold')).toHaveCount(0);
   await expect(page.locator('[data-testid="upnext-row"][data-section="list"] .row-title').first()).toHaveText(titles[1]);
   // At the last song with Repeat all, the top it repeats from is there: the list's first song.
   await page.locator('[data-testid="upnext-row"][data-section="list"] .row-main').last().click();
@@ -507,4 +522,12 @@ test('Up next shows the whole list: what played above, the playing track marked 
   while ((await repeat.getAttribute('data-mode')) !== 'all') await repeat.click();
   await expect(page.getByTestId('upnext-played').first().locator('.row-title')).toHaveText(titles[0]);
   await expect(page.getByTestId('up-next')).toContainText('Queue repeats from the top.');
+  // A new list starts folded.
+  await page.getByTestId('np-close').click();
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-tile').nth(6).click();
+  await visible(page, 'genre-play-all').click();
+  await openNowPlaying(page);
+  await next.click();
+  await expect(page.getByTestId('upnext-played-fold')).toHaveAttribute('aria-expanded', 'false');
 });

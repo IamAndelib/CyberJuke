@@ -1,5 +1,6 @@
+import { signal } from '@preact/signals';
 import { useLayoutEffect, useRef } from 'preact/hooks';
-import { autoplayLabel, currentId, currentTrack, isPlaying, player, playContext, previousTracks, repeatMode, shuffleOn, upNextSections, type UpItem, type UpNextKind } from '../../player';
+import { autoplayLabel, currentId, currentTrack, isPlaying, player, playContext, previousTracks, repeatMode, shuffleOn, upNextSections, type PlayContext, type UpItem, type UpNextKind } from '../../player';
 import type { Track } from '../../data/model';
 import { online } from '../../core/network';
 import { settings } from '../../stores/library';
@@ -13,6 +14,12 @@ import { UP_NEXT_MAX } from '../../core/guards';
 import { plural } from '../../core/text';
 
 type Kind = UpNextKind;
+
+/**
+ * "[+] Played": open for the list it was opened on (across closing Now Playing and track
+ * changes), folded again when a new list starts. Folded by default, as history is elsewhere.
+ */
+const playedOpenFor = signal<PlayContext | null | undefined>(undefined);
 
 /** After a removal the rows shift up: taps on the buttons column are ignored this long (M2). */
 const REMOVE_GUARD_MS = 300;
@@ -72,8 +79,9 @@ function RowBody({ track, playing }: { track: Track; playing?: boolean }) {
 const offClass = (t: Track) => (!online.value && !isSaved(t, savedOffline.value) ? ' off' : '');
 
 /**
- * Now Playing → Up next: the whole list, as in YouTube Music's queue. What played comes first
- * (dimmed; a tap plays from there), then the playing track, marked as in every list, then three
+ * Now Playing → Queue: the whole list, top to bottom as it plays (Spotify's Queue). What played
+ * comes first, folded under "[+] Played · N" (a tap on one plays from there), then the playing
+ * track, marked as in every list, then three
  * sections (AP1): queued by you, the rest of the list ("Next from: <source>"), then autoplay
  * ("Autoplay · similar to <seed>"). Up and Down move a queued or list track within its section;
  * Remove (every row ahead) offers Undo.
@@ -196,11 +204,13 @@ export function UpNext() {
   const from = ctx?.label ? `Next from: ${ctx.label}` : 'Next from the list';
   const repeat = repeatMode.value;
   const current = currentTrack.value;
+  const played = previousTracks.value;
+  const open = playedOpenFor.value === ctx;
   return (
     <section ref={root} class="upnext" data-testid="up-next">
       <div class="section-head">
-        <h3 class="section-title">Up next</h3>
-        <span class="dim small">{shuffle && sec.list.length ? 'Shuffled · turn shuffle off to reorder' : total >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+ tracks` : plural(total, 'track')}</span>
+        <h3 class="section-title">Queue</h3>
+        {shuffle && sec.list.length ? <span class="dim small">Shuffled · turn shuffle off to reorder</span> : total > 0 && <span class="dim small">{total >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : total} up next</span>}
       </div>
       {repeat === 'one' && (
         <div class="dim small upnext-empty" data-testid="upnext-repeat">
@@ -208,13 +218,27 @@ export function UpNext() {
         </div>
       )}
       <ol class="list compact">
-        {previousTracks.value.map((it) => (
-          <li key={`p:${it.track.id}:${it.index}`} class={'row played' + offClass(it.track)} data-testid="upnext-played" data-track-id={it.track.id} data-index={it.index} data-section="played">
-            <button class="row-main" onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id))} aria-label={`Play ${it.track.title}, played`}>
-              <RowBody track={it.track} />
+        {played.length > 0 && (
+          <li class="upnext-fold">
+            <button
+              class="link-btn"
+              aria-expanded={open}
+              aria-label={`Played, ${played.length >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+ tracks` : plural(played.length, 'track')}`}
+              onClick={(e) => afterPress(e.currentTarget, () => (playedOpenFor.value = open ? undefined : ctx))}
+              data-testid="upnext-played-fold"
+            >
+              Played · {played.length >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : played.length}
             </button>
           </li>
-        ))}
+        )}
+        {open &&
+          played.map((it) => (
+            <li key={`p:${it.track.id}:${it.index}`} class={'row played' + offClass(it.track)} data-testid="upnext-played" data-track-id={it.track.id} data-index={it.index} data-section="played">
+              <button class="row-main" onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id))} aria-label={`Play ${it.track.title}, played`}>
+                <RowBody track={it.track} />
+              </button>
+            </li>
+          ))}
         {current && (
           <>
             <li class="upnext-label" data-testid="upnext-current-label" aria-hidden="true">
