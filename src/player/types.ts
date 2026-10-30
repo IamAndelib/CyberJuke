@@ -91,6 +91,8 @@ export interface PlayerState {
   context: PlayContext | null;
   /** The track autoplay follows: the started track, or the autoplay track tapped. */
   seed: Track | null;
+  /** The current track was added by autoplay (a station's next round too). */
+  currentAuto: boolean;
   /** The connection dropped and playback paused; it resumes by itself once it's back (native only). */
   waitingForNetwork: boolean;
   /**
@@ -114,6 +116,7 @@ export const EMPTY_STATE: PlayerState = {
   upNext: [],
   context: null,
   seed: null,
+  currentAuto: false,
   waitingForNetwork: false,
   bufferedAheadMs: 0,
 };

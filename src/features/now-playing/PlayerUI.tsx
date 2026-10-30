@@ -1,7 +1,9 @@
 import { effect } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import {
+  autoplayLabel,
   canSkipNext,
+  currentAuto,
   currentId,
   currentTrack,
   durationMs,
@@ -17,7 +19,6 @@ import {
   queuePlace,
   repeatMode,
   shuffleOn,
-  upNextSections,
   waitingForNetwork,
 } from '../../player';
 import { block } from '../../stores/block';
@@ -704,16 +705,17 @@ function NpControls() {
 }
 
 /**
- * Under "Now playing": where the music comes from (P8), "Playing from Home · Latest",
- * or "Radio · <seed>" for a radio. Without shuffle the position ("3 of 50") comes
- * first; under shuffle the position means little, so only the source shows.
+ * Under "Now playing": where the music comes from (P8), "Playing from Home · Latest", or
+ * for an autoplay track what autoplay plays ("Autoplay · similar to …", as Up next calls it).
+ * A list's position ("3 of 50") comes first; not for a single song's radio, an autoplay
+ * track or under shuffle, where it means little.
  */
 function NpFrom() {
   const ctx = playContext.value;
-  const seed = upNextSections.value.seed;
-  const from = !ctx?.label ? '' : ctx.mode === 'radio' ? `Radio · ${seed?.title || ctx.label}` : `Playing from ${ctx.label}`;
+  const auto = currentAuto.value;
+  const from = !ctx?.label ? '' : auto ? autoplayLabel.value : `Playing from ${ctx.label}`;
   const pos = queuePlace.value;
-  const text = shuffleOn.value && from ? from : from ? `${pos} · ${from}` : pos;
+  const text = from && (shuffleOn.value || auto || ctx?.mode === 'radio') ? from : from ? `${pos} · ${from}` : pos;
   return (
     <span class="np-from" data-testid="np-from">
       <Marquee text={text} />
@@ -806,9 +808,10 @@ export function TrackMenu() {
             <button
               class="sheet-item"
               onClick={() => {
-                const playing = !!player.state.value.current;
+                const s = player.state.value;
                 void player.addToQueue([t]);
-                toast(playing ? 'Added to queue · plays next' : 'Playing');
+                // "plays next" only when it will: not after other queued songs, nor while Repeat one holds the current one.
+                toast(!s.current ? 'Playing' : s.repeat === 'one' || s.upNext.some((u) => u.queued) ? 'Added to queue' : 'Added to queue · plays next');
                 close();
               }}
               disabled={!known}

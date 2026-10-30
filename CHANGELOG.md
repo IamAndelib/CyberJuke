@@ -12,6 +12,8 @@
 - Offline, autoplay lines up only songs saved on the phone, and Up next dims songs that can't play, as other lists do.
 - Home's **Shuffle** plays its random songs without leaving the Shuffle button on, so the next album you play isn't shuffled too.
 - "Shuffled · turn shuffle off to reorder" shows only when there is something to reorder.
+- Now Playing says what plays: "Playing from Home · Latest" for a tapped song, "Autoplay · similar to …" while a suggestion plays (and "More random picks from …" after Home's Shuffle, "More from CIPHER" on a station's later rounds), and "3 of 12" counts only the list you started, not the suggestions after it.
+- Up next says "50+ tracks" when more are lined up than it shows, and "Added to queue · plays next" drops "plays next" when other songs are queued first or Repeat one is on.
 - Up next on the phone lists songs in the order they will play with **Repeat all** on, and says what repeat does: "Then repeats from the top." or "Repeating this song."
 
 ## [1.3.4] - 2026-10-29

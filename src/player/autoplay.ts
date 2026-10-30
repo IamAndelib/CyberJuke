@@ -25,11 +25,16 @@ const SHUFFLE = 'Jukebox shuffle';
 /** The label Home's Shuffle starts its list with: "Jukebox shuffle", or "Jukebox shuffle · rock" for one genre. */
 export const shuffleLabel = (genre: string | null): string => (genre ? `${SHUFFLE} · ${genre}` : SHUFFLE);
 
-/** The songs a Jukebox shuffle draws from, by its label: the whole catalog or one genre's; null for any other list. */
+/** A Jukebox shuffle's genre, by its label: null for the whole Jukebox, undefined for any other list. */
+export function shuffleGenre(label: string | undefined): string | null | undefined {
+  if (label === SHUFFLE) return null;
+  return label?.startsWith(`${SHUFFLE} · `) ? label.slice(SHUFFLE.length + 3) : undefined;
+}
+
+/** The songs a Jukebox shuffle draws from: the whole catalog or one genre's; null for any other list. */
 function shufflePool(label: string | undefined, catalog: readonly Track[]): readonly Track[] | null {
-  if (label === SHUFFLE) return catalog;
-  const genre = label?.startsWith(`${SHUFFLE} · `) ? label.slice(SHUFFLE.length + 3) : null;
-  return genre ? catalog.filter((t) => t.genre === genre) : null;
+  const genre = shuffleGenre(label);
+  return genre === undefined ? null : genre === null ? catalog : catalog.filter((t) => t.genre === genre);
 }
 
 export interface AutoplayDeps {

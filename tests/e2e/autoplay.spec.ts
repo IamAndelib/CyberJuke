@@ -363,6 +363,9 @@ test('going to the background, a reserve is lined up: playback goes on if Androi
   await setVisibility(page, 'hidden');
   const q = await withAutoplay(page, 50 - list.length);
   expect(list.length + q.autoplay.length).toBe(50);
+  // Up next shows 50 at most: it says there may be more.
+  await openNowPlaying(page);
+  await expect(page.getByTestId('up-next').locator('.section-head')).toContainText('50+ tracks');
   await setVisibility(page, 'visible');
 });
 
@@ -432,6 +435,18 @@ test('with shuffle on, a song with only suggestions after it says how many, not 
   const head = page.getByTestId('up-next').locator('.section-head');
   await expect(head).toContainText(/\d+ tracks/);
   await expect(head).not.toContainText('Shuffled');
+});
+
+test('"Added to queue · plays next" only when it does', async ({ page }) => {
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  await expect(page.getByTestId('mini-player')).toBeVisible();
+  const added = () => page.getByTestId('toast').last();
+  await queueRow(page, 2);
+  await expect(added()).toHaveText('Added to queue · plays next');
+  // A second one plays after the first.
+  await queueRow(page, 3);
+  await expect(added()).toHaveText('Added to queue');
 });
 
 test('a track started before the Jukebox catalog has loaded still gets its autoplay once it does', async ({ page }) => {

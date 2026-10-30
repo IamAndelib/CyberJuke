@@ -420,3 +420,13 @@ describe('NativePlayer: running low', () => {
     expect(heard).toEqual([{ left: 2, seedId: 'A' }]);
   });
 });
+
+describe('NativePlayer: the current track from autoplay', () => {
+  it('follows native, and is false from an older native that does not say', () => {
+    const p = new NativePlayer();
+    emit('state', state({ index: 1, trackId: 'B', queueIds: ['A', 'B'], upNextIds: [], upNextKinds: '', upNextIndex: [], currentAuto: true }));
+    expect(p.state.value.currentAuto).toBe(true);
+    emit('state', state({ index: 1, trackId: 'B', queueIds: ['A', 'B'], upNextIds: [], upNextKinds: '', upNextIndex: [] }));
+    expect(p.state.value.currentAuto).toBe(false);
+  });
+});

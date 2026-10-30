@@ -108,9 +108,11 @@ test('a station plays on past its rounds, and its tracks are kept like any other
   await expect.poll(() => place(page)).toEqual({ at: 1, of: 32 });
   // Past both of them but the last few: another round comes.
   await playOn(page, 60 * (FAKE_TRACK_MS + 200));
-  await expect.poll(() => place(page)).toEqual({ at: 61, of: 96 });
+  // On the station's later rounds, Now Playing says so, as Up next does.
+  await expect(page.getByTestId('np-from')).toHaveText('More from THE CRYPT');
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from THE CRYPT');
   const q = await queueState(page);
+  expect(q.autoplay).toHaveLength(96 - 61);
   expect(q.context?.label).toBe('Signal Radio · THE CRYPT');
   expect([...q.list, ...q.autoplay].every((t) => t.id.startsWith('sig:the-crypt:'))).toBe(true);
   const now = q.current!.title;
@@ -137,7 +139,7 @@ test('a station plays on with Autoplay off too: it is the station, not autoplay'
   await openNowPlaying(page);
   await expect.poll(() => place(page)).toEqual({ at: 1, of: 32 });
   await page.locator('[data-testid="upnext-row"][data-section="list"] .row-main').last().click();
-  await expect.poll(() => place(page)).toEqual({ at: 32, of: 64 });
+  await expect.poll(() => place(page)).toEqual({ at: 32, of: 32 });
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from SLOW ORBIT');
   // Turning Autoplay off while a station plays leaves its rounds alone.
   await page.getByTestId('np-close').click();
@@ -148,7 +150,7 @@ test('a station plays on with Autoplay off too: it is the station, not autoplay'
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await openNowPlaying(page);
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from SLOW ORBIT');
-  expect(await place(page)).toEqual({ at: 32, of: 64 });
+  expect(await place(page)).toEqual({ at: 32, of: 32 });
 });
 
 test("a station's track played from another list is just a track there: with Autoplay off it stops at the end", async ({ page }) => {
