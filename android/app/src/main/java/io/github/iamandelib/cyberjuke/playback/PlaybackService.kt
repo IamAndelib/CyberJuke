@@ -84,6 +84,8 @@ class PlaybackService : MediaSessionService() {
     private var consecutiveFailures = 0
     /** Outage pauses in a row with nothing played between ([TrackErrorPolicy.Facts.outagePauses]). */
     private var outagePauses = 0
+    /** Offline skips past songs that couldn't load, with nothing played between (at most one per item). */
+    private var offlineSkips = 0
 
     /** mediaIds already re-resolved once after an HTTP 403/410 (expired stream URL). */
     private val expiredRetried = HashSet<String>()
@@ -691,18 +693,24 @@ class PlaybackService : MediaSessionService() {
     /**
      * The session's view of [player] (Media3's ForwardingPlayer, for every controller: the app,
      * the notification, headphones). A Next during a crossfade goes to the track fading in, where
-     * it is (Crossfader.takeNext), instead of that track starting again from its start.
+     * it is (Crossfader.takeNext), instead of that track starting again from its start. Offline,
+     * Next goes to the next saved song ([offlineNext]).
      */
     private inner class SessionPlayer(p: ExoPlayer) : ForwardingPlayer(p) {
         override fun seekToNext() {
-            if (!takeNext()) super.seekToNext()
+            if (!takeNext() && !nextSaved()) super.seekToNext()
         }
 
         override fun seekToNextMediaItem() {
-            if (!takeNext()) super.seekToNextMediaItem()
+            if (!takeNext() && !nextSaved()) super.seekToNextMediaItem()
         }
 
         private fun takeNext() = crossfade?.takeNext(repeatOne = repeatMode == Player.REPEAT_MODE_ONE) == true
+
+        private fun nextSaved(): Boolean {
+            seekToDefaultPosition(offlineNext() ?: return false)
+            return true
+        }
     }
 
     /**
@@ -935,6 +943,7 @@ class PlaybackService : MediaSessionService() {
             if (playbackState == Player.STATE_READY) {
                 consecutiveFailures = 0
                 outagePauses = 0
+                offlineSkips = 0
                 lastReadyId = player?.currentMediaItem?.mediaId
                 player?.currentMediaItem?.mediaId?.let { expiredRetried.remove(it) }
                 // No NetBlock.success() here: READY from a cached URL or buffered bytes proves
@@ -1021,6 +1030,13 @@ class PlaybackService : MediaSessionService() {
             // Moved on gaplessly, already playing: no READY comes for this one.
             if (player?.playbackState == Player.STATE_READY) lastReadyId = mediaItem?.mediaId
             failureSpot.clear()
+            // Offline, a song ending moves on to the next saved one, past those that aren't (OfflineNext).
+            val p = player
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && p != null && !AudioCache.online &&
+                JukeUris.audioIdOf(mediaItem) !in AudioCache.savedLiked
+            ) {
+                p.offlineNext()?.let { p.seekToDefaultPosition(it) }
+            }
             StreamResolver.releaseFormats()
             governQuality(mediaItem)
             schedulePrefetch()
@@ -1544,6 +1560,16 @@ class PlaybackService : MediaSessionService() {
                 reResolveAndRetry(p, index, item, trackId, ytId)
             }
             is TrackErrorPolicy.Action.Pause -> {
+                // Offline, the song can't load: the next saved one plays instead (OfflineNext),
+                // at most once round the list before a song gets going.
+                val saved = if (action.network && index == p.currentMediaItemIndex && offlineSkips < p.mediaItemCount) p.offlineNext() else null
+                if (saved != null) {
+                    offlineSkips++
+                    p.seekToDefaultPosition(saved)
+                    p.prepare()
+                    PlayerBus.emitTrackError(trackId, message, true, network = true)
+                    return
+                }
                 Log.i(TAG, "TRACK_ERROR $trackId (yt=$ytId), pausing: $message")
                 if (action.freshLink) ytId?.let { StreamResolver.reResolve(it) }
                 if (action.resume) {

@@ -5,7 +5,8 @@
  * it was), and `refuse` says why:
  *  - a list, from wherever it was started, plays its saved songs, from the tapped one; when that
  *    one isn't saved, 'unsaved' for a liked song, 'offline' for anything else;
- *  - Next, Previous and a tap in Up next only onto a saved song ('offline');
+ *  - Next while a saved song is ahead (native goes to it, past the unsaved ones: OfflineNext.kt),
+ *    Previous and a tap in Up next only onto a saved song ('unsaved' for a liked one);
  *  - with nothing loaded, Add to queue and Undo start a list (the players do), so the list rule;
  *  - resuming the current track (Play, or the play/pause button while paused) only when it plays
  *    offline ([playsOffline]): saved, or with audio loaded ahead (native plays from its buffer
@@ -15,7 +16,16 @@
  */
 import type { Track } from '../data/model';
 import { isSaved, savedQueue } from '../stores/savedOffline';
-import { wantsPlay, type Player, type PlayerState } from './types';
+import { livePosition, wantsPlay, type Player, type PlayerState } from './types';
+
+/** Previous in the first 3 s goes to the song before, later it starts this one again (Media3's default). */
+const PREV_RESTARTS_MS = 3000;
+
+/** Offline, Next has somewhere to go: a saved song ahead (with Repeat all, anywhere in the list but here). */
+function savedAhead(s: Pick<PlayerState, 'upNext' | 'queue' | 'index' | 'repeat'>, saved: ReadonlySet<string>): boolean {
+  if (s.upNext.some((u) => isSaved(u.track, saved))) return true;
+  return s.repeat === 'all' && s.queue.some((t, i) => i !== s.index && isSaved(t, saved));
+}
 
 /**
  * Offline, the current track plays: it is saved on the phone, has audio loaded past where it is,
@@ -43,21 +53,26 @@ export function offlineGuard(p: Player, o: OfflinePolicy): Player {
     o.refuse(why);
     return done;
   };
+  /** Why `t` doesn't play offline: a liked song isn't saved yet, anything else needs a connection. */
+  const why = (t: Track | null | undefined): OfflineRefusal => (t && o.liked(t) ? 'unsaved' : 'offline');
   /** Online, or `t` saved: run it; else refused. */
-  const onto = (t: Track | null | undefined, run: () => Promise<void>) => (o.online() || isSaved(t, o.saved()) ? run() : refused('offline'));
-  const current = () => p.state.peek().current;
+  const onto = (t: Track | null | undefined, run: () => Promise<void>) => (o.online() || isSaved(t, o.saved()) ? run() : refused(why(t)));
+  /** The song Previous lands on: the one before in its first seconds, else this one from its start. */
+  const behind = () => {
+    const s = p.state.peek();
+    return livePosition(s) < PREV_RESTARTS_MS && s.previous.length ? s.previous[s.previous.length - 1].track : s.current;
+  };
   /** Online, or the current track plays offline: run it; else refused as its row would be. */
   const resume = (run: () => Promise<void>) => {
     const s = p.state.peek();
     if (o.online() || playsOffline(s, o.saved())) return run();
-    return refused(s.current && o.liked(s.current) ? 'unsaved' : 'offline');
+    return refused(why(s.current));
   };
   const playList: Player['playList'] = (tracks, start, ctx) => {
     if (o.online()) return p.playList(tracks, start, ctx);
     const q = savedQueue(tracks, start, o.saved());
     if (q) return p.playList(q.tracks, q.start, ctx);
-    const tapped = tracks[start];
-    return refused(tapped && o.liked(tapped) ? 'unsaved' : 'offline');
+    return refused(why(tracks[start]));
   };
   const empty = () => p.state.peek().index < 0;
   return {
@@ -68,8 +83,11 @@ export function offlineGuard(p: Player, o: OfflinePolicy): Player {
     playList,
     addToQueue: (tracks) => (empty() ? playList(tracks, 0) : p.addToQueue(tracks)),
     restore: (track, kind, beforeId) => (empty() ? playList([track], 0) : p.restore(track, kind, beforeId)),
-    next: () => onto(p.state.peek().upNext[0]?.track, () => p.next()),
-    prev: () => onto(current(), () => p.prev()),
+    next: () => {
+      const s = p.state.peek();
+      return o.online() || savedAhead(s, o.saved()) ? p.next() : refused(why(s.upNext[0]?.track));
+    },
+    prev: () => onto(behind(), () => p.prev()),
     skipTo: (index, expectId) => onto(p.state.peek().queue[index], () => p.skipTo(index, expectId)),
   };
 }

@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Offline, **Next**, the end of a song, the notification and headphones go to the next liked song saved on the phone, skipping the ones that aren't, instead of saying "No carrier" or stopping; with **Repeat all** it goes round. **Previous** checks the song it really goes back to.
+
 ## [1.3.5] - 2026-10-30
 
 ### Added

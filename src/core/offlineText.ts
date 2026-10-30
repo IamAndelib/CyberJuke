@@ -32,5 +32,8 @@ export const OFFLINE = {
   lyrics: "No carrier. Lyrics load when you're back online.",
 } as const;
 
+/** Offline, a song that couldn't load was passed over for the next saved one. */
+export const skippedOffline = (title: string): string => `No carrier. Skipped "${title}": not saved on the phone.`;
+
 /** The connection dropped mid-track; the player picks up by itself once it's back. */
 export const signalLost = (title: string): string => `Signal lost. "${title}" picks up when you're back.`;

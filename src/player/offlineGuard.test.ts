@@ -220,11 +220,59 @@ describe('offlineGuard', () => {
     await p.skipTo(2, c.id);
     expect(inner.prev).toHaveBeenCalledTimes(1);
     expect(inner.skipTo).toHaveBeenCalledWith(2, c.id);
-    // The next one (b) isn't saved, nor is b in Up next.
-    await p.next();
+    // b isn't saved: a tap on it is refused.
     await p.skipTo(1, b.id);
-    expect(inner.next).not.toHaveBeenCalled();
     expect(inner.skipTo).toHaveBeenCalledTimes(1);
-    expect(refused).toHaveBeenCalledTimes(2);
+    expect(refused).toHaveBeenCalledTimes(1);
+  });
+
+  it('offline, Next goes on when a saved song is anywhere ahead: native skips the unsaved ones', async () => {
+    const [a, b, c] = ['a', 'b', 'c'].map(t);
+    const { inner, p, refused, offline } = setup({ queue: [a, b, c], index: 0, current: a, upNext: [{ track: b, index: 1 }, { track: c, index: 2 }] }, [c.ytId]);
+    offline();
+    await p.next();
+    expect(inner.next).toHaveBeenCalledTimes(1);
+    expect(refused).not.toHaveBeenCalled();
+  });
+
+  it('offline with Repeat all, Next at the last song goes round to a saved one before it', async () => {
+    const [a, b, c] = ['a', 'b', 'c'].map(t);
+    const { inner, p, refused, offline } = setup({ queue: [a, b, c], index: 2, current: c, repeat: 'all', upNext: [] }, [a.ytId]);
+    offline();
+    await p.next();
+    expect(inner.next).toHaveBeenCalledTimes(1);
+    expect(refused).not.toHaveBeenCalled();
+  });
+
+  it('offline with no saved song ahead, Next is refused: "unsaved" when the next one is liked', async () => {
+    const [a, b, c] = ['a', 'b', 'c'].map(t);
+    const state: Partial<PlayerState> = { queue: [a, b, c], index: 0, current: a, upNext: [{ track: b, index: 1 }, { track: c, index: 2 }] };
+    const { inner, p, refused, offline } = setup(state, [a.ytId], [b.id]);
+    offline();
+    await p.next();
+    expect(inner.next).not.toHaveBeenCalled();
+    expect(refused).toHaveBeenCalledWith('unsaved');
+    const other = setup(state, [a.ytId]);
+    other.offline();
+    await other.p.next();
+    expect(other.refused).toHaveBeenCalledWith('offline');
+  });
+
+  it('offline, Previous checks the song it lands on: the one before in the first 3 s, else this one again', async () => {
+    const [a, b] = ['a', 'b'].map(t);
+    const state: Partial<PlayerState> = { queue: [a, b], index: 1, current: b, previous: [{ track: a, index: 0 }], upNext: [] };
+    const early = setup({ ...state, positionMs: 1000 }, [b.ytId]);
+    early.offline();
+    await early.p.prev();
+    expect(early.inner.prev).not.toHaveBeenCalled();
+    expect(early.refused).toHaveBeenCalledWith('offline');
+    const late = setup({ ...state, positionMs: 5000 }, [b.ytId]);
+    late.offline();
+    await late.p.prev();
+    expect(late.inner.prev).toHaveBeenCalledTimes(1);
+    const back = setup({ ...state, positionMs: 1000 }, [a.ytId]);
+    back.offline();
+    await back.p.prev();
+    expect(back.inner.prev).toHaveBeenCalledTimes(1);
   });
 });
