@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals';
 import { useMemo, useState } from 'preact/hooks';
-import { shuffled, source } from '../../data';
+import { source } from '../../data';
+import { shuffled } from '../../core/shuffle';
 import { isOffline } from '../../core/errors';
 import { OFFLINE } from '../../core/offlineText';
 import { catalog, mostSaved, type SavedRange } from '../../stores/catalog';

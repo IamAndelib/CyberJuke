@@ -12,9 +12,10 @@
  * C3), but for a station, or with repeat all but for a single song (mayAutoplay).
  */
 import { whenIdle } from '../core/idle';
+import { shuffled } from '../core/shuffle';
 import { audioKey, isGlobal, type Track } from '../data/model';
 import { similarTracks } from '../data/similar';
-import { shuffle, stationPlaying, stationQueue } from './radio';
+import { stationPlaying, stationQueue } from './radio';
 import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, AUTOPLAY_RESERVE, mayAutoplay, type Player, type QueueLow } from './types';
 
 /** How long a batch just added counts as ahead even before the player's state shows it (native's lags the call). */
@@ -145,7 +146,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     if (pool) {
       const fresh = pool.filter((t) => !inQueue.has(t.id));
       const from = fresh.length ? fresh : pool.filter((t) => t.id !== s.queue.at(-1)?.id);
-      if (from.length) await add(shuffle(from, deps.rng).slice(0, count), !fresh.length);
+      if (from.length) await add(shuffled(from, deps.rng).slice(0, count), !fresh.length);
       return;
     }
     // What played since this seed started steers it (Jukebox tracks only: similarTracks skips Global ones).

@@ -15,7 +15,6 @@ import {
   REQUEST_TIMEOUT_MS,
   RETRY_DELAY_MS,
   RUN_QUERY_URL,
-  shuffled,
 } from './firestore';
 import { tracksFromRows, type FsRunQueryRow } from './model';
 import { online } from '../core/network';
@@ -279,13 +278,6 @@ describe('FirestoreSource', () => {
     expect(q.where.compositeFilter.filters.at(-1)).toEqual({
       fieldFilter: { field: { fieldPath: 'createdAt' }, op: 'GREATER_THAN', value: { timestampValue: '2026-10-01T00:00:00.000Z' } },
     });
-  });
-
-  it('shuffled() is a permutation', () => {
-    const a = [1, 2, 3, 4, 5, 6, 7, 8];
-    const s = shuffled(a);
-    expect(s.slice().sort()).toEqual(a);
-    expect(a).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
   });
 });
 

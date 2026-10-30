@@ -38,6 +38,7 @@
  * autoplay (see sections()).
  */
 import { UP_NEXT_MAX } from '../core/guards';
+import { shuffled } from '../core/shuffle';
 import type { RepeatMode } from './native';
 import type { UpNextKind as Section } from './types';
 
@@ -492,19 +493,11 @@ export class Queue<T extends Identified> {
       ...played,
       ...(cur ? [cur] : []),
       ...queued,
-      ...this.mix(ahead.filter((e) => !e.auto)),
-      ...this.mix(ahead.filter((e) => e.auto)),
+      ...shuffled(ahead.filter((e) => !e.auto), this.rand),
+      ...shuffled(ahead.filter((e) => e.auto), this.rand),
     ];
   }
 
-  /** Fisher–Yates, in place. */
-  private mix<E>(a: E[]): E[] {
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(this.rand() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  }
 }
 
 function clamp(n: number, lo: number, hi: number): number {

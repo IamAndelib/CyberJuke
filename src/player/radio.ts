@@ -10,6 +10,7 @@
  */
 import data from '../data/radio/stations.json';
 import { artworkUrl, makeTrack, type Track } from '../data/model';
+import { shuffled } from '../core/shuffle';
 
 export type Band = 'ym' | 'zm';
 
@@ -84,22 +85,12 @@ export function stationTrack(id: string): Track | null {
   return s ? (stationTracks(s).find((t) => t.id === id) ?? null) : null;
 }
 
-/** Fisher-Yates, as cyberspace.online does it. */
-export function shuffle<T>(xs: readonly T[], rng: () => number = Math.random): T[] {
-  const out = [...xs];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
-
 /**
  * One round of a station: all its tracks, shuffled. After `lastYtId` (the last track queued),
  * the round doesn't start with that same track: it goes to the end instead.
  */
 export function stationQueue(s: Station, lastYtId?: string | null, rng: () => number = Math.random): Track[] {
-  const round = shuffle(stationTracks(s), rng);
+  const round = shuffled(stationTracks(s), rng);
   if (lastYtId && round.length > 1 && round[0].ytId === lastYtId) round.push(round.shift()!);
   return round;
 }
