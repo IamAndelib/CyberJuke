@@ -690,6 +690,9 @@ internal object LikedSaverPolicy {
     /** Wi-Fi, or any network with Download using mobile data on. */
     private fun networkAllows(f: Facts) = f.unmetered || f.mobileDataAllowed
 
+    /** Something small (a saved song's cover) may be fetched now: online, on a network a save may use, playback not needing it. */
+    fun mayDownload(f: Facts): Boolean = f.online && !f.playbackNeedsNetwork && networkAllows(f)
+
     /**
      * When to ask again (the one postDelayed): at the end of the gap, if only the gap holds back
      * a save that could start; or when the earliest retry after a stop is due ([Facts.retryInMs]);

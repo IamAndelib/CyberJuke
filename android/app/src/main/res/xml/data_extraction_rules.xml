@@ -16,7 +16,7 @@
   - database/exoplayer_internal.db: the listening cache's index (which videos' audio is kept,
     liked and members-only ones among them). The audio itself, its liked list and its
     members-only tags are in no_backup/ (audio/, audio-liked, audio-members), which Android
-    never backs up.
+    never backs up, as are the saved liked songs' covers (no_backup/art/).
   The cache directory (lyrics) is never backed up by Android.
 
   disableIfNoEncryptionCapabilities: what is left (settings, recent searches) goes to the cloud

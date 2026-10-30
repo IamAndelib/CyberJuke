@@ -9,6 +9,7 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.cache.CacheWriter
 import io.github.iamandelib.cyberjuke.findCause
+import io.github.iamandelib.cyberjuke.net.Http
 import io.github.iamandelib.cyberjuke.net.NetBlock
 import java.io.IOException
 
@@ -68,12 +69,22 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
 
     private var job: SaveJob? = null
 
+    /** Covers ([ArtStore]): one fetch at a time; [artDone] until the saved or liked songs change. */
+    private var artBusy = false
+    private var artDone = false
+
+    /** Songs whose covers couldn't be fetched this service's life: not tried again. */
+    private val artFailed = HashSet<String>()
+
     private val recheck = Runnable { check() }
 
     /** The cache's saved set changed, or it was cleared (any thread). */
     val cacheListener = object : AudioCache.Listener {
         override fun onSavedChanged() {
-            handler.post { check() }
+            handler.post {
+                artDone = false
+                check()
+            }
         }
 
         override fun onCleared() {
@@ -91,6 +102,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             val liked = AudioCache.liked.toSet()
             fresh.retainAll(liked)
             tried.retainAll(liked)
+            artDone = false
             check()
         }
     }
@@ -120,9 +132,44 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         if (audioId == null) {
             // Held back by the gap alone: one re-check when it ends (no other event may come).
             LikedSaverPolicy.recheckInMs(f)?.let { handler.postDelayed(recheck, it) }
+            fetchArt(f)
             return
         }
         start(audioId, audioId in fresh)
+    }
+
+    /**
+     * Nothing to save now: the covers of saved songs that have none on the phone yet are fetched,
+     * one song at a time, on the networks a save may use, and those of songs no longer liked go.
+     * On [Background], as the files are there (a few small images; not a save, so no gap).
+     */
+    private fun fetchArt(f: LikedSaverPolicy.Facts) {
+        val files = ArtStore.files ?: return
+        if (artBusy || artDone || !LikedSaverPolicy.mayDownload(f)) return
+        artBusy = true
+        val saved = f.saved.toList()
+        val liked = f.liked.toHashSet()
+        val skip = HashSet(artFailed)
+        Background.run("Liked art") {
+            var next: String? = null
+            var ok = true
+            try {
+                // Only with the liked list known: an empty one (not read yet) would take every cover.
+                if (liked.isNotEmpty()) files.keepOnly(liked)
+                next = saved.firstOrNull { it !in skip && files.missing(it).isNotEmpty() }
+                next?.let { id -> ok = files.missing(id).all { files.fetch(it, Http.client) } }
+            } catch (e: IOException) {
+                ok = false
+                Log.w(TAG, "Liked art failed: ${e.javaClass.simpleName}")
+            } finally {
+                val id = next
+                handler.post {
+                    artBusy = false
+                    if (id == null) artDone = true else if (!ok) artFailed.add(id)
+                    check()
+                }
+            }
+        }
     }
 
     /** Playback needs the network (or the prefetch thread): the running save stops at once. */
