@@ -221,8 +221,10 @@ export function UpNext() {
   return (
     <section ref={root} class="upnext" data-testid="up-next">
       <div class="section-head">
-        <h3 class="section-title">Queue</h3>
-        {shuffle && sec.list.length ? <span class="dim small">Shuffled · turn shuffle off to reorder</span> : total > 0 && <span class="dim small">{total >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : total} up next</span>}
+        <h3 class="section-title" data-testid="upnext-title">
+          Queue{shuffle && <span class="dim"> · Shuffled</span>}
+        </h3>
+        {total > 0 && <span class="dim small">{total >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : total} up next</span>}
       </div>
       {repeat !== 'off' && (
         <div class="dim small upnext-empty" data-testid="upnext-repeat">
