@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Liked songs keep saving after the Wi-Fi drops mid-download, or YouTube's link for one expires: they're tried again instead of being skipped until the app restarts, and a server error is no longer taken as the song being unavailable.
+
+### Fixed
 - Offline, **Next**, the end of a song, the notification and headphones go to the next liked song saved on the phone, skipping the ones that aren't, instead of saying "No carrier" or stopping; with **Repeat all** it goes round. **Previous** checks the song it really goes back to.
 - The automatic update check waits while the phone is offline, and checks once it's back, instead of failing and waiting an hour.
 - Signing out while offline no longer leaves the Jukebox empty the next time the app opens.

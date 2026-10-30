@@ -98,7 +98,13 @@ class SaveJobTest {
             }
         }
 
-        override fun refused(e: IOException, mp3: Boolean) = SaveRefusal.refused((e as? Http)?.code, mp3)
+        val forgotten = ArrayList<String>()
+
+        override fun httpCode(e: IOException) = (e as? Http)?.code
+
+        override fun forgetLink(ytId: String) {
+            forgotten.add(ytId)
+        }
 
         fun run(audioId: String = id): SaveOutcome {
             val j = SaveJob(audioId, this)
@@ -173,8 +179,18 @@ class SaveJobTest {
     fun theWriteDecidesTheRest() {
         // Written, but a span playback had locked was read past: not whole yet, a strike.
         assertEquals(SaveOutcome.STOPPED, World(wholeAfterWrite = false).run())
-        // Refused (an expired link, a block): given up.
-        assertEquals(SaveOutcome.FAILED, World(write = { throw Http(403) }).run())
+        // Gone: given up.
+        assertEquals(SaveOutcome.FAILED, World(write = { throw Http(404) }).run())
+        // The link refused (expired, or a new address): a strike, and the next try extracts afresh.
+        for (code in listOf(403, 410)) {
+            val stale = World(write = { throw Http(code) })
+            assertEquals("$code", SaveOutcome.STOPPED, stale.run())
+            assertEquals("$code", listOf(id), stale.forgotten)
+        }
+        // YouTube failing: a strike, the link kept.
+        val failing = World(write = { throw Http(503) })
+        assertEquals(SaveOutcome.STOPPED, failing.run())
+        assertTrue(failing.forgotten.isEmpty())
         // The connection broke: a strike.
         assertEquals(SaveOutcome.STOPPED, World(write = { throw IOException("reset") }).run())
         // The request couldn't even be built (no link): a strike.
@@ -247,10 +263,10 @@ class SaveJobTest {
         assertEquals(SaveOutcome.STOPPED, World(write = { throw IOException("reset") }).run(audioId = mp3Id))
         // Refused: given up.
         assertEquals(SaveOutcome.FAILED, World(write = { throw Http(403) }).run(audioId = mp3Id))
-        // latex.gg failing or rate limiting: tried again later, where a video's link would be done.
+        // latex.gg failing or rate limiting: tried again later, as for a video.
         for (code in listOf(503, 429)) {
             assertEquals("$code", SaveOutcome.STOPPED, World(write = { throw Http(code) }).run(audioId = mp3Id))
-            assertEquals("$code", SaveOutcome.FAILED, World(write = { throw Http(code) }).run())
+            assertEquals("$code", SaveOutcome.STOPPED, World(write = { throw Http(code) }).run())
         }
         // Cancelled mid-way: the writer is told.
         val w = World(write = { j ->
