@@ -81,7 +81,9 @@ export function ArtistPage({ name: raw }: { name: string }) {
         <BackButton testid="artist-back" />
       }
       right={<ArtistFavButton name={name} />}
-      onRefresh={refreshCatalog}
+      // Both halves of the page: the Jukebox's tracks and the artist's own page (a fallback
+      // showing after it failed gets another try).
+      onRefresh={() => Promise.all([refreshCatalog(), page.feed.refresh()]).then(() => {})}
     >
       <OfflineGate>
         <section data-testid="artist-jukebox">

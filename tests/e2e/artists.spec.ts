@@ -1,6 +1,6 @@
 import { expect, test } from '../fixtures';
 import type { Locator, Page } from '@playwright/test';
-import { musicCalls, openSearch, scrollTo, scrollTopOf, setOffline, start } from '../helpers';
+import { musicCalls, openSearch, scrollTo, scrollTopOf, setOffline, start, touchDrag } from '../helpers';
 
 /** The Artists tab and artist pages: Jukebox tracks, the artist's own page, fallbacks, Here search. */
 
@@ -148,6 +148,15 @@ test.describe('an expired See all token', () => {
 
 test.describe('without the artist page', () => {
   test.use({ musicOptions: { noArtistPage: true } });
+
+  test('pull to refresh asks for the artist page again, not only the Jukebox', async ({ page }) => {
+    await openFirstArtist(page);
+    await expect(page.getByTestId('artist-more')).toBeVisible();
+    const asked = async () => (await musicCalls(page)).filter((c) => c[0] === 'artistPage').length;
+    const before = await asked();
+    await touchDrag(page, 200, 220, 620, 400);
+    await expect.poll(asked).toBeGreaterThan(before);
+  });
 
   test('the page falls back to the Jukebox, More by and Albums; an album opens and plays; scroll is remembered', async ({ page }) => {
     const artist = await openFirstArtist(page);
