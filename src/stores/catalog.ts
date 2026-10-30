@@ -10,8 +10,9 @@
  * The cache holds NSFW tracks too; `tracks` applies the setting so toggling it is instant.
  *
  * Signed in with Cyberspace the catalog also holds members-only posts, so it is kept
- * under its own key (CATALOG_MEMBERS_KEY). Signing in or out calls `reset`: both
- * saved catalogs are dropped and the next refresh is a full one. Until it lands, the
+ * under its own key (CATALOG_MEMBERS_KEY). Signing in or out calls `reset`: the saved
+ * members-only catalog is dropped (the public one stays: it opens offline) and the next
+ * refresh is a full one. Until it lands, the
  * catalog shown stays, less its members-only posts, so the chips, Most saved and search
  * don't empty out or jump about meanwhile.
  *
@@ -101,7 +102,7 @@ export interface Catalog {
    */
   restoreSaved(): Promise<void>;
   /**
-   * Sign-in state changed: drop both saved catalogs and the members-only posts, drop the
+   * Sign-in state changed: drop the saved members-only catalog and the members-only posts, drop the
    * result of any fetch still running, and do a full refresh (the rest shows meanwhile).
    */
   reset(): Promise<void>;
@@ -260,7 +261,9 @@ export function createCatalog(deps: CatalogDeps): Catalog {
       fullAt = checkedAt = 0;
       error.value = null;
       if (!all.value.length) status.value = 'idle';
-      const keys = [CATALOG_KEY, CATALOG_MEMBERS_KEY].flatMap((k) => [k, metaKey(k)]);
+      // Only the members-only catalog goes: the public one never holds a members-only post, and
+      // kept, it still opens offline after signing out offline.
+      const keys = [CATALOG_MEMBERS_KEY, metaKey(CATALOG_MEMBERS_KEY)];
       const removed = Promise.all(keys.map((k) => (deps.storage.remove ? deps.storage.remove(k) : deps.storage.set(k, '')).catch(() => {})));
       return (switching = removed.then(() => api.refresh()));
     },

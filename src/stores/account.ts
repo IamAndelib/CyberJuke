@@ -1,6 +1,6 @@
 /**
  * The Cyberspace login (../data/auth) wired to the app's data: signing in or out drops
- * the source cache, the Jukebox feeds, the new-tracks baseline and both saved catalogs,
+ * the source cache, the Jukebox feeds, the new-tracks baseline and the saved members-only catalog,
  * then fetches the whole catalog again for the new state. Signing out (and starting
  * signed out) also drops members-only tracks from Liked, history and the lyrics cache;
  * each account's members-only likes and plays come back when it signs in again. While
