@@ -75,6 +75,9 @@ function RowBody({ track, playing }: { track: Track; playing?: boolean }) {
   );
 }
 
+/** A count Up next shows: "50+" when it may hold more than it shows. */
+const upTo = (n: number) => (n >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : n);
+
 /** Offline, a row that can't play is dimmed, as in every list (TrackRow). */
 const offClass = (t: Track) => (!online.value && !isSaved(t, savedOffline.value) ? ' off' : '');
 
@@ -141,7 +144,6 @@ export function UpNext() {
       return (
         <li
           key={`${it.track.id}:${it.index}`}
-          // Offline, a row that can't play is dimmed, as in every list (TrackRow).
           class={'row' + (kind === 'list' ? '' : ` ${kind}`) + offClass(it.track)}
           data-testid={kind === 'played' ? 'upnext-played' : 'upnext-row'}
           data-track-id={it.track.id}
@@ -224,7 +226,7 @@ export function UpNext() {
         <h3 class="section-title" data-testid="upnext-title">
           Queue{shuffle && <span class="dim"> · Shuffled</span>}
         </h3>
-        {total > 0 && <span class="dim small">{total >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : total} up next</span>}
+        {total > 0 && <span class="dim small">{upTo(total)} up next</span>}
       </div>
       {repeat !== 'off' && (
         <div class="dim small upnext-empty" data-testid="upnext-repeat">
@@ -241,7 +243,7 @@ export function UpNext() {
               onClick={(e) => afterPress(e.currentTarget, () => (playedOpenFor.value = open ? undefined : ctx))}
               data-testid="upnext-played-fold"
             >
-              Played · {played.length >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : played.length}
+              Played · {upTo(played.length)}
             </button>
           </li>
         )}
