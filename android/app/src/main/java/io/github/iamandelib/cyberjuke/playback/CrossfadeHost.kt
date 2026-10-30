@@ -14,9 +14,15 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.PlayerMessage
 import io.github.iamandelib.cyberjuke.net.NetBlock
 
-/** The item a crossfade goes into: this one again on Repeat one (as Metrolist), else the next; C.INDEX_UNSET when none. */
-internal fun crossfadeTarget(p: Player): Int =
-    if (p.repeatMode == Player.REPEAT_MODE_ONE) p.currentMediaItemIndex else p.nextMediaItemIndex
+/**
+ * The item a crossfade goes into: this one again on Repeat one (as Metrolist), else the next
+ * (offline, the next saved one: [offlineNext]); C.INDEX_UNSET when none.
+ */
+internal fun crossfadeTarget(p: Player): Int = when {
+    p.repeatMode == Player.REPEAT_MODE_ONE -> p.currentMediaItemIndex
+    AudioCache.online -> p.nextMediaItemIndex
+    else -> p.offlineNext() ?: C.INDEX_UNSET
+}
 
 /** The length of [p]'s item [index] once it is prepared, else (or with no such item) -1. [window] is reused. */
 internal fun durationOf(p: Player, index: Int, window: Timeline.Window): Long {

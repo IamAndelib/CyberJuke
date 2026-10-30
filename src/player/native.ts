@@ -99,7 +99,14 @@ interface JukePlayerPlugin {
   moveItem(o: { from: number; to: number; expectId?: string }): Promise<void>;
   play(): Promise<void>; pause(): Promise<void>;
   seekTo(o: { positionMs: number }): Promise<void>;
-  skipToNext(): Promise<void>; skipToPrevious(): Promise<void>;
+  /**
+   * Offline (the network callback, not the page's), Next, a song ending, the notification and
+   * headphones go to the next song in `cachedIds` in play order (Repeat all wrapping), past the
+   * ones not there; with none ahead, the player's own Next. trackError then has skipped and
+   * kind 'network' for a song that couldn't load and was passed over.
+   */
+  skipToNext(): Promise<void>;
+  skipToPrevious(): Promise<void>;
   /**
    * A tap in Up next: it plays, also when paused (the caller sends play). A track further ahead
    * moves next first, so what it jumps over stays; queued tracks stay next; on an autoplay
