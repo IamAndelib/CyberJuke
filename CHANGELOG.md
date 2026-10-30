@@ -17,6 +17,7 @@
 - Turning shuffle on mixes every song you haven't heard yet, also the ones before the song you started on; the ones already played stay behind, and **Repeat all** comes back to them first.
 
 ### Fixed
+- Shuffle mixes a radio's suggestions too: after tapping a song on Home, turning shuffle on mixes Up next, new suggestions join in at random, and turning it off puts them back in order.
 - Tapping a song in Up next plays it, also when the music was paused, instead of waiting for you to press play.
 - With animations turned off on the phone, a long song title, artist or "Playing from" line in Now Playing wraps to a second line instead of being cut off with "…".
 - Repeat works like the music apps you know. A song you tap with repeat on gets its suggestions in Up next instead of playing on its own forever, also from an artist or genre page with a single song, and **Repeat all** loops it with them. **Repeat all** on an album, a genre or any other list loops just that list. **Repeat one** replays the song when it ends, and **Next** moves on as usual; at the very end of a list it is off, as on the notification.

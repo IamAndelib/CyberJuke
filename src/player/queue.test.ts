@@ -167,6 +167,19 @@ describe('Queue: shuffle', () => {
     expect(before).not.toContain('b');
   });
 
+  it('a radio (one song, then suggestions) shuffles its suggestions; off puts them back in order', () => {
+    const q = new Queue(seeded());
+    const ids = Array.from({ length: 10 }, (_, i) => `s${i}`);
+    q.setList([t('a')], 0);
+    q.addAuto(ids.map(t));
+    q.setShuffle(true);
+    const mixed = q.upNext().map((x) => x.id);
+    expect(mixed.slice().sort()).toEqual(ids.slice().sort());
+    expect(mixed).not.toEqual(ids);
+    q.setShuffle(false);
+    expect(q.upNext().map((x) => x.id)).toEqual(ids);
+  });
+
   it('a new list started with shuffle on has every other track ahead', () => {
     const q = new Queue(seeded());
     q.setShuffle(true);
