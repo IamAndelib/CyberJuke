@@ -218,6 +218,16 @@ class LastSessionTest {
     }
 
     @Test
+    fun aShuffledFileFromBeforeHeardMarksWhatPlayedInItsOrder() {
+        // Play order 3, 0, 4 (current), 1, 2: 3 and 0 played; 1 and 2 are still to come.
+        val s = LastSession.of((0 until 5).map { entry(it) }, 4, 0L, 0L, true, intArrayOf(3, 0, 4, 1, 2), 0, null, null)!!
+        val old = JSONObject(s.encode())
+        val tracks = old.getJSONArray("tracks")
+        for (i in 0 until tracks.length()) tracks.getJSONObject(i).remove("h")
+        assertEquals(listOf(true, false, false, true, true), LastSession.decode(old.toString())!!.entries.map { it.heard })
+    }
+
+    @Test
     fun withoutShuffleTheQueuedOnesStayRightAfterTheCurrentTrack() {
         val p = QueueRulesTest.FakePlayer(java.util.Random(1))
         val ids = listOf("a", "b", "q1", "c", "s1")
