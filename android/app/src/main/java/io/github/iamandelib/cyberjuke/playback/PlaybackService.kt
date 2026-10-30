@@ -1248,6 +1248,7 @@ class PlaybackService : MediaSessionService() {
     private fun queueChanged() {
         updateLoadAhead()
         QueueInfo.pendingSerials = queue.pendingSerials.toSet()
+        QueueInfo.heardUids = queue.heardUids.toSet()
         QueueInfo.context = context
         QueueInfo.seedId = seedId
         handler.removeCallbacks(lowCheck)
@@ -1345,7 +1346,7 @@ class PlaybackService : MediaSessionService() {
         }
         p.repeatMode = s.repeat
         p.shuffleModeEnabled = s.shuffle
-        queue.restoreSession(items, s.entries.map { it.section }, s.index, s.positionMs, s.order)
+        queue.restoreSession(items, s.entries.map { it.section }, s.index, s.positionMs, s.order, s.entries.map { it.heard })
         context = s.context
         radio.reseedFromId(s.seedId)
         seedId = s.seedId
@@ -1384,6 +1385,7 @@ class PlaybackService : MediaSessionService() {
         val n = p.mediaItemCount
         if (n == 0) return null
         val pending = queue.pendingSerials
+        val heard = queue.heardUids
         val entries = ArrayList<LastSession.Entry>(n)
         for (i in 0 until n) {
             val item = p.getMediaItemAt(i)
@@ -1404,6 +1406,7 @@ class PlaybackService : MediaSessionService() {
                     postUrl = extra?.postUrl,
                     membersOnly = extra?.membersOnly == true,
                     album = item.mediaMetadata.albumTitle?.toString(),
+                    heard = (extras?.getLong(QueueCommands.EXTRA_UID, 0L) ?: 0L).let { it != 0L && it in heard },
                     section = when {
                         serial != 0L && serial in pending -> NativeQueue.Section.QUEUED
                         extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) == true -> NativeQueue.Section.AUTO

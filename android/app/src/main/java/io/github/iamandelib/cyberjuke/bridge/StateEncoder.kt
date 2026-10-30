@@ -57,11 +57,13 @@ internal object StateEncoder {
                 )
                 i = timeline.getNextWindowIndex(i, repeat, shuffle)
             }
-            // The tracks before it in play order, nearest first, then sent oldest first: Up next
-            // shows them above the current one.
+            // The heard tracks before it in play order ("Played"), nearest first, then sent oldest
+            // first: the queue shows them above the current one.
+            val heard = QueueInfo.heardUids
             var j = timeline.getPreviousWindowIndex(index, repeat, shuffle)
             while (j != C.INDEX_UNSET && j != index && previous.size < MAX_UP_NEXT && j < count) {
-                previous.add(j)
+                val uid = c.getMediaItemAt(j).mediaMetadata.extras?.getLong(QueueCommands.EXTRA_UID, 0L) ?: 0L
+                if (uid != 0L && uid in heard) previous.add(j)
                 j = timeline.getPreviousWindowIndex(j, repeat, shuffle)
             }
         }

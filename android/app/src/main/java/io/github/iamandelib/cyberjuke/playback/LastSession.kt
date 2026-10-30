@@ -53,6 +53,8 @@ internal data class LastSession(
         val album: String? = null,
         /** A Jukebox MP3's latex.gg link ([SessionPolicy.isValidMp3Url]); then [ytId] is "". */
         val mp3: String? = null,
+        /** Heard in this list ("Played"): the current one always is. */
+        val heard: Boolean = false,
     ) {
         /** The NativeTrack JSON that [JukeTracks.toMediaItem] takes. */
         fun toNativeTrack(): JSONObject = JSONObject().apply {
@@ -80,7 +82,7 @@ internal data class LastSession(
                         NativeQueue.Section.AUTO -> "a"
                         NativeQueue.Section.LIST -> "l"
                     },
-                ),
+                ).put("h", e.heard),
             )
         }
         return JSONObject().apply {
@@ -198,6 +200,8 @@ internal data class LastSession(
             if (o.optInt("v") != VERSION) return null
             val arr = o.getJSONArray("tracks")
             if (arr.length() == 0 || arr.length() > MAX_ENTRIES) return null
+            // Saved before "heard" was (no "h"): what was before the current one, as Played showed then.
+            val legacy = (0 until arr.length()).none { arr.getJSONObject(it).has("h") }
             val entries = (0 until arr.length()).map { i ->
                 val t = arr.getJSONObject(i)
                 val ytId = t.str("ytId")
@@ -222,16 +226,18 @@ internal data class LastSession(
                     },
                     membersOnly = t.optBoolean("membersOnly", false),
                     album = t.str("album"),
+                    heard = t.optBoolean("h", false),
                 )
             }
             val index = o.getInt("index")
             if (index !in entries.indices) return null
+            val heard = if (legacy) entries.mapIndexed { i, e -> e.copy(heard = i <= index) } else entries
             val order = o.optJSONArray("order")?.let { a -> IntArray(a.length()) { a.getInt(it) } }
                 ?.takeIf { QueueOrder.isPermutation(it, entries.size) }
             val label = o.str("label")
             val mode = o.str("mode")
             LastSession(
-                entries = entries,
+                entries = heard,
                 index = index,
                 positionMs = o.optLong("positionMs", 0L).coerceAtLeast(0L),
                 durationMs = o.optLong("durationMs", 0L).coerceAtLeast(0L),
