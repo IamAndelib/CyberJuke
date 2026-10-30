@@ -51,6 +51,7 @@ import { whenIdle } from '../core/idle';
 import { TrackRow } from '../ui/components/TrackRow';
 import { artGen } from '../ui/components/Art';
 import { MiniPlayer, NowPlaying } from '../features/now-playing/PlayerUI';
+import { UpNext } from '../features/now-playing/UpNext';
 import { ArtistGrid, ArtistTile, ArtistTiles } from '../features/artists/Artists';
 import { ArtistPage } from '../features/artists/Artist';
 import { GenreDetail, GenreGrid, GenreTile, GenreTiles } from '../features/genres/Genres';
@@ -150,7 +151,7 @@ async function boot(): Promise<void> {
   // e2e: the boot-failure screen.
   if (TEST_HOOKS && localStorage.getItem('__cyberjukeFailBoot')) throw new Error('Simulated boot failure');
   installPress();
-  installRenderCounter({ App, Overlays, Home, Library, Screen, TrackRow, MiniPlayer, NowPlaying, ArtistGrid, ArtistTiles, ArtistTile, ArtistPage, GenreGrid, GenreTiles, GenreTile, GenreDetail });
+  installRenderCounter({ App, Overlays, Home, Library, Screen, TrackRow, MiniPlayer, NowPlaying, UpNext, ArtistGrid, ArtistTiles, ArtistTile, ArtistPage, GenreGrid, GenreTiles, GenreTile, GenreDetail });
   // Read before the first render: the settings and favourites (small keys) and a saved
   // Cyberspace login. Liked and history, files that can be large, are read alongside
   // and may arrive just after it.

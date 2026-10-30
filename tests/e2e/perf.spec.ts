@@ -69,6 +69,26 @@ test('playback with Now Playing open re-renders the clock, not the sheet', async
   expect(total / secs, 'component renders per second').toBeLessThan(5);
 });
 
+/** With Played open too, the clock ticking leaves the queue alone (it read the player's state). */
+test('playback with Played open re-renders the clock, not the queue', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('track-play').first().click();
+  await page.getByTestId('mini-open').click();
+  await page.getByTestId('np-next').click();
+  await page.getByTestId('upnext-played-fold').click();
+  await expect(page.getByTestId('upnext-played')).toHaveCount(1);
+  const time = page.getByTestId('time-pos');
+  const t1 = await time.textContent();
+  await expect(time).not.toHaveText(t1!);
+  await page.evaluate(() => (window as unknown as { __cyberjukeRenders: Renders }).__cyberjukeRenders.reset());
+  for (let i = 0; i < 3; i++) {
+    const t = await time.textContent();
+    await expect(time).not.toHaveText(t!);
+  }
+  const counts = await page.evaluate(() => ({ ...(window as unknown as { __cyberjukeRenders: Renders }).__cyberjukeRenders.counts }));
+  expect(counts.UpNext ?? 0).toBe(0);
+});
+
 /**
  * A star tap re-renders the star (and its tile), never the grid or page around it. Before
  * this was fixed, the favourites were read at the top of the grids and pages: one tap

@@ -245,7 +245,8 @@ export function UpNext() {
             </button>
           </li>
         )}
-        {open && rows('played', played, shuffle || !current ? undefined : { track: current, index: sec.queued.at(-1)?.index ?? player.state.value.index })}
+        {/* peek: the index only matters with the rows, which change with it (not every tick). */}
+        {open && rows('played', played, shuffle || !current ? undefined : { track: current, index: sec.queued.at(-1)?.index ?? player.state.peek().index })}
         {current && (
           <>
             <li class="upnext-label" data-testid="upnext-current-label" aria-hidden="true">
