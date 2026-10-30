@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { expectStable, musicCalls, openNowPlaying, openSearch, openSettings, setOffline, setVisibility, start } from '../helpers';
+import { expectStable, musicCalls, openNowPlaying, openSearch, openSettings, setOffline, setVisibility, start, toListEnd } from '../helpers';
 import { genreFamilies } from '../../src/data/similar';
 import { artistKey, splitArtists } from '../../src/data/artists';
 import { words } from '../../src/data/text';
@@ -174,7 +174,7 @@ test('Album Play plays the album, then continues into autoplay at the end', asyn
   // Jump to the album's last track; Next then plays the first autoplay track.
   const lastRow = page.locator('[data-testid="upnext-row"][data-section="list"]').last();
   await expect(lastRow.locator('.row-title')).toHaveText(titles[7]);
-  await lastRow.locator('.row-main').click();
+  await toListEnd(page);
   await expect(page.getByTestId('np-title')).toHaveText(titles[7]);
   await expect(page.locator('[data-testid="upnext-row"][data-section="list"]')).toHaveCount(0);
   // At its end: Global leads to Global, the first track's radio.
@@ -204,7 +204,8 @@ test('a Global result starts a Global radio; tapping an autoplay track continues
   const seedYt = q.seed!.id.replace(/^ytm:/, '');
   expect((await musicCalls(page)).filter((c) => c[0] === 'radio')).toEqual([['radio', seedYt, null]]);
 
-  // A tapped autoplay track plays; the ones after it stay, and the radio goes on from it.
+  // A tapped autoplay track plays; the ones it jumped over and the ones after it stay, and the
+  // radio goes on from it.
   await openNowPlaying(page);
   const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
   const pick = q.autoplay[3];
@@ -213,13 +214,15 @@ test('a Global result starts a Global radio; tapping an autoplay track continues
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveText(`Autoplay · similar to ${pick.title}`);
   const after = await queueState(page);
   expect(after.seed?.id).toBe(pick.id);
-  expect(after.autoplay.map((t) => t.id)).toEqual(q.autoplay.slice(4).map((t) => t.id));
+  expect(after.autoplay.map((t) => t.id)).toEqual([...q.autoplay.slice(0, 3), ...q.autoplay.slice(4)].map((t) => t.id));
   // Near their end, more follow from it.
-  const last = q.autoplay.at(-1)!;
-  await rows.last().locator('.row-main').click();
-  await expect(page.getByTestId('np-title')).toHaveText(last.title);
-  await expect.poll(async () => (await musicCalls(page)).filter((c) => c[0] === 'radio').map((c) => c[1])).toEqual([seedYt, last.id.replace(/^ytm:/, '')]);
-  expect((await withAutoplay(page)).seed?.id).toBe(last.id);
+  const radios = async () => (await musicCalls(page)).filter((c) => c[0] === 'radio').map((c) => c[1]);
+  while ((await radios()).length < 2) {
+    const t = (await page.getByTestId('np-title').textContent())!;
+    await page.getByTestId('np-next').click();
+    await expect(page.getByTestId('np-title')).not.toHaveText(t);
+  }
+  expect((await radios()).slice(0, 2)).toEqual([seedYt, pick.id.replace(/^ytm:/, '')]);
 });
 
 test('queued tracks survive a new list, then autoplay follows', async ({ page }) => {
@@ -314,7 +317,7 @@ test('with repeat on, a song you tap still gets its suggestions; a list you star
   await visible(page, 'genre-play-all').click();
   await openNowPlaying(page);
   const first = (await page.getByTestId('np-title').textContent())!.trim();
-  await page.locator('[data-testid="upnext-row"][data-section="list"] .row-main').last().click();
+  await toListEnd(page);
   await expect(page.locator('[data-testid="upnext-row"][data-section="list"]')).toHaveCount(0);
   expect((await expectStable(() => queueState(page), 1500)).autoplay).toEqual([]);
   await page.getByTestId('np-next').click();
@@ -331,7 +334,7 @@ test("Repeat one at a list's end: Next is off, as on the notification; Repeat al
   await visible(page, 'genre-play-all').click();
   await openNowPlaying(page);
   const first = (await page.getByTestId('np-title').textContent())!.trim();
-  await page.locator('[data-testid="upnext-row"][data-section="list"] .row-main').last().click();
+  await toListEnd(page);
   await expect(page.locator('[data-testid="upnext-row"]')).toHaveCount(0);
   const repeat = page.getByTestId('np-repeat');
   const next = page.getByTestId('np-next');
@@ -516,7 +519,7 @@ test('the queue shows the whole list: what played folds under [+] Played, the pl
   await expect(page.getByTestId('upnext-played-fold')).toHaveCount(0);
   await expect(page.locator('[data-testid="upnext-row"][data-section="list"] .row-title').first()).toHaveText(titles[1]);
   // At the last song with Repeat all, the top it repeats from is there: the list's first song.
-  await page.locator('[data-testid="upnext-row"][data-section="list"] .row-main').last().click();
+  await toListEnd(page);
   await expect(page.locator('[data-testid="upnext-row"][data-section="list"]')).toHaveCount(0);
   const repeat = page.getByTestId('np-repeat');
   while ((await repeat.getAttribute('data-mode')) !== 'all') await repeat.click();
@@ -559,6 +562,23 @@ test('Played is only what was heard: not the songs before the one tapped, nor wh
     expect(titles.length).toBeLessThanOrEqual(2);
     for (const t of titles) expect(heard).toContain(t.trim());
   }
+});
+
+test('a tap further down the queue plays that song now; the ones it jumped over stay next', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-tile').nth(5).click();
+  await visible(page, 'genre-play-all').click();
+  await openNowPlaying(page);
+  const rows = page.locator('[data-testid="upnext-row"][data-section="list"] .row-title');
+  const ahead = (await rows.allTextContents()).map((t) => t.trim());
+  await page.locator('[data-testid="upnext-row"][data-section="list"] .row-main').nth(2).click();
+  await expect(page.getByTestId('np-title')).toHaveText(ahead[2]);
+  await expect(rows.first()).toHaveText(ahead[0]);
+  await expect(rows.nth(1)).toHaveText(ahead[1]);
+  await expect(rows.nth(2)).toHaveText(ahead[3]);
+  // Nothing was heard but the first song and this one.
+  await expect(page.getByTestId('upnext-played-fold')).toHaveText('Played · 1');
 });
 
 test('a long press on a queue row opens its menu, as in every list, and plays nothing', async ({ page }) => {

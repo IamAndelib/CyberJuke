@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { box, isFeedQuery, openNowPlaying, openSettings, seedStorage, start, toastsGone, waitForTracks } from '../helpers';
+import { box, isFeedQuery, openNowPlaying, openSettings, seedStorage, start, toastsGone, toListEnd, waitForTracks } from '../helpers';
 
 /** Home: the Latest feed, genre chips, Most saved, the new-tracks pill and the CI autoplay hook. */
 
@@ -206,7 +206,7 @@ test("Shuffle follows the genre chip: that genre's songs, and more of them after
   await page.getByTestId('np-close').click();
   // Near the end of the list: more of the genre after it.
   await openNowPlaying(page);
-  await page.locator('[data-testid="upnext-row"][data-section="list"] .row-main').last().click();
+  await toListEnd(page);
   await expect.poll(async () => (await queue()).autoplay.length, { message: 'more of the genre after the list' }).toBeGreaterThan(0);
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveText(`More random picks from ${genre}`);
   const q = await queue();

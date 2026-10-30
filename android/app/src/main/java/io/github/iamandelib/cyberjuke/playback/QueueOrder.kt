@@ -494,14 +494,31 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     }
 
     /**
-     * A user jump to [index]. Returns true when it is an autoplay item: more follow from it, after
-     * the autoplay items still after it, which stay (Spotify, YouTube Music).
+     * A user jump to [index]. An item further ahead plays now and what it jumps over stays next
+     * (YouTube Music): it moves to right after the current one first (with shuffle on, an autoplay
+     * item stays after the list and is jumped to where it is). Returns true when it is an autoplay
+     * item: more follow from it, after the autoplay items still after it, which stay.
      */
     fun skipTo(index: Int): Boolean {
         if (index !in 0 until host.count) return false
-        host.seekTo(index)
+        val ahead = upcoming().indexOf(index) > 0 && !(host.shuffleEnabled && host.isAutoAt(index))
+        host.seekTo(if (ahead) bringNext(index) else index)
         val cur = host.currentIndex
         return cur in 0 until host.count && host.isAutoAt(cur)
+    }
+
+    /** Moves [index] to play right after the current item; returns where it is now. */
+    private fun bringNext(index: Int): Int {
+        val cur = host.currentIndex
+        if (!host.shuffleEnabled) {
+            host.moveItem(index, cur + 1)
+            return cur + 1
+        }
+        val order = host.shuffleOrder()?.toMutableList() ?: return index
+        order.remove(index)
+        order.add(order.indexOf(cur) + 1, index)
+        host.setShuffleOrder(order.toIntArray())
+        return index
     }
 
     /** List indices after the current item, in play order (repeat off). */

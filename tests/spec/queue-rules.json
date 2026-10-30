@@ -1,5 +1,5 @@
 {
-  "about": "The queue rules, shared by the web Queue (src/player/queue.ts) and the native queue (NativeQueue, run by QueueRulesTest). Every case starts from `list` with `start` current (list index), shuffle and repeat as given, then runs `steps` in order. Ids are track ids; ids are unique within a case. Ops: setList {ids, start} (a new list: replaces the list and the autoplay tracks, keeps the queued ones); queueNext {ids}; addAuto {ids} (autoplay appends these); skipTo {id} (the list index of that id); next (a user skip); nextAuto (the track ended by itself); prev {positionMs} (go back: moves when positionMs <= 3000, else restarts the current track); remove {id}; move {id, to} (list index); setShuffle {on}; setRepeat {mode}; restore {id, kind, beforeId} (Undo of a remove: kind played puts id back among the played, right before the played track beforeId, else right before the current track, as a list track; otherwise it puts id back as a queued, list or autoplay track, right before the first track after the current one, in play order, that is beforeId and in that same section; with no such track, or beforeId null, at the end of that section: queued after the queued run, list after the list tracks ahead (before autoplay), autoplay at the very end. In list order it goes right before the track that follows it in play order, or at the end. Never at or before the current track); removeIds {ids} (every item with one of these ids goes; if the current one goes, the next one in play order that stays becomes current, or nothing plays). An expect step checks: current (id); played (the play order before the current track, oldest first); upNext (the whole play order after the current track); upNextStartsWith (its first ids, for shuffled cases); queued (how many leading upNext tracks are 'Queued by you'); list (list order); and Up next's three sections: queuedIds (queued by you), listIds (the rest of the list, in play order), listSet (the same ids in any order, for shuffled cases), autoplayIds (autoplay, in play order).",
+  "about": "The queue rules, shared by the web Queue (src/player/queue.ts) and the native queue (NativeQueue, run by QueueRulesTest). Every case starts from `list` with `start` current (list index), shuffle and repeat as given, then runs `steps` in order. Ids are track ids; ids are unique within a case. Ops: setList {ids, start} (a new list: replaces the list and the autoplay tracks, keeps the queued ones); queueNext {ids}; addAuto {ids} (autoplay appends these); skipTo {id} (a tap: the list index of that id; a track further ahead moves to right after the current one first, so what it jumps over stays next); next (a user skip); nextAuto (the track ended by itself); prev {positionMs} (go back: moves when positionMs <= 3000, else restarts the current track); remove {id}; move {id, to} (list index); setShuffle {on}; setRepeat {mode}; restore {id, kind, beforeId} (Undo of a remove: kind played puts id back among the played, right before the played track beforeId, else right before the current track, as a list track; otherwise it puts id back as a queued, list or autoplay track, right before the first track after the current one, in play order, that is beforeId and in that same section; with no such track, or beforeId null, at the end of that section: queued after the queued run, list after the list tracks ahead (before autoplay), autoplay at the very end. In list order it goes right before the track that follows it in play order, or at the end. Never at or before the current track); removeIds {ids} (every item with one of these ids goes; if the current one goes, the next one in play order that stays becomes current, or nothing plays). An expect step checks: current (id); played (the play order before the current track, oldest first); upNext (the whole play order after the current track); upNextStartsWith (its first ids, for shuffled cases); queued (how many leading upNext tracks are 'Queued by you'); list (list order); and Up next's three sections: queuedIds (queued by you), listIds (the rest of the list, in play order), listSet (the same ids in any order, for shuffled cases), autoplayIds (autoplay, in play order).",
   "rule": "Played is what was heard: the tracks of this list that have been current, never the ones before where a list started or a shuffle put them. Queued tracks play right after the current track, first in first out, shuffle or not, until each one plays or is removed. A manual jump (skipTo, or prev moving back) keeps the still-queued tracks next: they move to just after the new current track, in the order they were going to play. Jumping to a queued track plays it; the others stay next. A new list replaces the list and the autoplay tracks, but the queued tracks stay next, in order. Autoplay tracks play after the list in the order added; shuffle reorders only the list, afresh each time it is turned on. Repeat all loops what you started: a list's autoplay tracks still to come go when it is turned on, but a single song's are its radio, the loop itself, and stay. Repeat one replays the current track when it ends and leaves Up next as it is; a user skip moves on, as with repeat off (Media3's: none at the end). Jumping to an autoplay track keeps the autoplay tracks after it; more follow them.",
   "cases": [
     {
@@ -33,23 +33,17 @@
       ]
     },
     {
-      "name": "a manual skip past queued tracks keeps them next",
-      "list": ["a", "b", "c", "d", "e"],
+      "name": "a manual skip past queued tracks keeps them next, then what it jumped over",
+      "list": ["a",  "b",  "c",  "d",  "e"],
       "start": 0,
       "steps": [
         { "op": "queueNext", "ids": ["X", "Y"] },
         { "op": "skipTo", "id": "d" },
-        {
-          "op": "expect",
-          "current": "d",
-          "upNext": ["X", "Y", "e"],
-          "queued": 2,
-          "list": ["a", "b", "c", "d", "X", "Y", "e"]
-        },
+        { "op": "expect", "current": "d", "upNext": ["X", "Y", "b", "c", "e"], "queued": 2, "list": ["a", "d", "X", "Y", "b", "c", "e"] },
         { "op": "next" },
-        { "op": "expect", "current": "X", "upNext": ["Y", "e"], "queued": 1 },
+        { "op": "expect", "current": "X", "upNext": ["Y", "b", "c", "e"], "queued": 1 },
         { "op": "next" },
-        { "op": "expect", "current": "Y", "upNext": ["e"], "queued": 0 }
+        { "op": "expect", "current": "Y", "upNext": ["b", "c", "e"], "queued": 0 }
       ]
     },
     {
@@ -171,19 +165,14 @@
     },
     {
       "name": "a removed queued track is forgotten; the rest stay next",
-      "list": ["a", "b", "c", "d", "e"],
+      "list": ["a",  "b",  "c",  "d",  "e"],
       "start": 0,
       "steps": [
         { "op": "queueNext", "ids": ["X", "Y"] },
         { "op": "remove", "id": "X" },
-        {
-          "op": "expect",
-          "current": "a",
-          "upNext": ["Y", "b", "c", "d", "e"],
-          "queued": 1
-        },
+        { "op": "expect", "current": "a", "upNext": ["Y", "b", "c", "d", "e"], "queued": 1 },
         { "op": "skipTo", "id": "d" },
-        { "op": "expect", "current": "d", "upNext": ["Y", "e"], "queued": 1 }
+        { "op": "expect", "current": "d", "upNext": ["Y", "b", "c", "e"], "queued": 1 }
       ]
     },
     {
@@ -219,24 +208,14 @@
     },
     {
       "name": "a queued track moved by hand keeps its new place on a skip",
-      "list": ["a", "b", "c", "d"],
+      "list": ["a",  "b",  "c",  "d"],
       "start": 0,
       "steps": [
         { "op": "queueNext", "ids": ["X", "Y"] },
         { "op": "move", "id": "Y", "to": 1 },
-        {
-          "op": "expect",
-          "current": "a",
-          "upNext": ["Y", "X", "b", "c", "d"],
-          "queued": 2
-        },
+        { "op": "expect", "current": "a", "upNext": ["Y", "X", "b", "c", "d"], "queued": 2 },
         { "op": "skipTo", "id": "c" },
-        {
-          "op": "expect",
-          "current": "c",
-          "upNext": ["Y", "X", "d"],
-          "queued": 2
-        }
+        { "op": "expect", "current": "c", "upNext": ["Y", "X", "b", "d"], "queued": 2 }
       ]
     },
     {
@@ -416,23 +395,9 @@
         { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
         { "op": "next" },
         { "op": "queueNext", "ids": ["X"] },
-        {
-          "op": "expect",
-          "current": "s1",
-          "upNext": ["X", "s2", "s3"],
-          "queued": 1,
-          "queuedIds": ["X"],
-          "listIds": [],
-          "autoplayIds": ["s2", "s3"]
-        },
+        { "op": "expect", "current": "s1", "upNext": ["X", "s2", "s3"], "queued": 1, "queuedIds": ["X"], "listIds": [], "autoplayIds": ["s2", "s3"] },
         { "op": "skipTo", "id": "s3" },
-        {
-          "op": "expect",
-          "current": "s3",
-          "upNext": ["X"],
-          "queuedIds": ["X"],
-          "autoplayIds": []
-        }
+        { "op": "expect", "current": "s3", "upNext": ["X", "s2"], "queuedIds": ["X"], "autoplayIds": ["s2"] }
       ]
     },
     {
@@ -553,28 +518,16 @@
       ]
     },
     {
-      "name": "tapping an autoplay track plays it; the ones after it stay, and more follow them",
-      "list": ["a", "b"],
+      "name": "tapping an autoplay track plays it; what it jumped over stays, and more follow",
+      "list": ["a",  "b"],
       "start": 0,
       "steps": [
         { "op": "queueNext", "ids": ["X"] },
         { "op": "addAuto", "ids": ["s1", "s2", "s3", "s4"] },
         { "op": "skipTo", "id": "s2" },
-        {
-          "op": "expect",
-          "current": "s2",
-          "upNext": ["X", "s3", "s4"],
-          "queuedIds": ["X"],
-          "listIds": [],
-          "autoplayIds": ["s3", "s4"]
-        },
+        { "op": "expect", "current": "s2", "upNext": ["X", "b", "s1", "s3", "s4"], "queuedIds": ["X"], "listIds": ["b"], "autoplayIds": ["s1", "s3", "s4"] },
         { "op": "addAuto", "ids": ["t1", "t2"] },
-        {
-          "op": "expect",
-          "current": "s2",
-          "upNext": ["X", "s3", "s4", "t1", "t2"],
-          "autoplayIds": ["s3", "s4", "t1", "t2"]
-        }
+        { "op": "expect", "current": "s2", "upNext": ["X", "b", "s1", "s3", "s4", "t1", "t2"], "autoplayIds": ["s1", "s3", "s4", "t1", "t2"] }
       ]
     },
     {
