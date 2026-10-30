@@ -91,8 +91,8 @@ import kotlin.math.roundToInt
  * - skipToIndex, removeItem and moveItem take an optional `expectId` (K2: the id the caller
  *   sees at `index` / `from`); if the item there has another id the call rejects with code
  *   STALE_INDEX and nothing changes. Checked in the service, on the player itself.
- * - restore({ track, kind: 'queued' | 'list' | 'autoplay', beforeId }) (K3): Undo of a
- *   removal, see [io.github.iamandelib.cyberjuke.playback.NativeQueue.restore].
+ * - restore({ track, kind: 'played' | 'queued' | 'list' | 'autoplay', beforeId }) (K3): Undo of a
+ *   removal, see [io.github.iamandelib.cyberjuke.playback.NativeQueue.restore] and restorePlayed.
  * - removeIds({ ids }) (K5): removes every item with one of these ids; if the current one
  *   goes, the next one that stays plays, or playback pauses when none is left.
  * - Size caps (K6): more than 2000 tracks or ids, or a string over 2000 characters, rejects
@@ -637,10 +637,11 @@ class JukePlayerPlugin : Plugin() {
     }
 
     /**
-     * `restore({ track, kind: 'queued' | 'list' | 'autoplay', beforeId: string | null })`: Undo
-     * of a removal (K3). The track goes back into its section of Up next, right before the
+     * `restore({ track, kind: 'played' | 'queued' | 'list' | 'autoplay', beforeId: string | null })`:
+     * Undo of a removal (K3). The track goes back into its section of Up next, right before the
      * first entry after the current track with id `beforeId` in that section, else at the end
-     * of that section; never at or before the current track.
+     * of that section; never at or before the current track. 'played' goes back before the
+     * played entry `beforeId`, else right before the current track.
      */
     @PluginMethod
     fun restore(call: PluginCall) {
@@ -648,7 +649,9 @@ class JukePlayerPlugin : Plugin() {
         val arr = JSONArray().put(track)
         parseTracksOrReject(call, arr) ?: return
         val kind = call.getString("kind")
-        if (NativeQueue.Section.of(kind) == null) return call.reject("kind must be 'queued', 'list' or 'autoplay'")
+        if (kind != QueueCommands.KIND_PLAYED && NativeQueue.Section.of(kind) == null) {
+            return call.reject("kind must be 'played', 'queued', 'list' or 'autoplay'")
+        }
         val beforeId = stringArg(call, call.getString("beforeId"), "beforeId") ?: return
         val args = Bundle().apply {
             putString(QueueCommands.ARG_TRACKS, arr.toString())

@@ -87,8 +87,11 @@ interface JukePlayerPlugin {
   setAutoplay(o: { enabled: boolean }): Promise<void>;
   /** Insert after the current track + tracks already user-queued; respects shuffle; upNextIds reflects it. */
   queueNext(o: { tracks: NativeTrack[] }): Promise<void>;
-  /** K3: Undo of a remove, back in its section before `beforeId` (else at the section's end), never at or before the current track. */
-  restore(o: { track: NativeTrack; kind: 'queued' | 'list' | 'autoplay'; beforeId: string | null }): Promise<void>;
+  /**
+   * K3: Undo of a remove, back in its section before `beforeId` (else at the section's end), never at or
+   * before the current track; 'played' goes back before the played track `beforeId`, else right before the current one.
+   */
+  restore(o: { track: NativeTrack; kind: 'played' | 'queued' | 'list' | 'autoplay'; beforeId: string | null }): Promise<void>;
   /** K5: remove every item with one of these ids (at most BRIDGE_MAX_ITEMS); the current one skips to the next that stays, or stops. */
   removeIds(o: { ids: string[] }): Promise<void>;
   removeItem(o: { index: number; expectId?: string }): Promise<void>;

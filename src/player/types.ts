@@ -6,8 +6,8 @@ import { UP_NEXT_MAX } from '../core/guards';
 
 export type { RepeatMode };
 
-/** Up next's sections, which is also what Undo of a remove puts a track back into. */
-export type UpNextKind = 'queued' | 'list' | 'autoplay';
+/** The queue's sections (what played, then Up next's three), which is also what Undo of a remove puts a track back into. */
+export type UpNextKind = 'played' | 'queued' | 'list' | 'autoplay';
 
 export interface UpNextItem {
   track: Track;

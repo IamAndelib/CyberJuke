@@ -61,6 +61,9 @@ internal object QueueCommands {
     const val ARG_EXPECT = "expectId"
     const val ARG_IDS = "ids"
     const val ARG_KIND = "kind"
+
+    /** [ARG_KIND] for a played item (NativeQueue.restorePlayed); the others are NativeQueue.Section's. */
+    const val KIND_PLAYED = "played"
     const val ARG_BEFORE = "beforeId"
     const val ARG_MS = "ms"
 

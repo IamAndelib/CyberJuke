@@ -56,11 +56,15 @@ class QueueRulesTest {
                 "setList" -> p.queue.setList(strings(s.getJSONArray("ids")), s.optInt("start", 0))
                 "queueNext" -> p.queue.queueNext(strings(s.getJSONArray("ids")))
                 "addAuto" -> p.queue.addAutoplay(strings(s.getJSONArray("ids")))
-                "restore" -> p.queue.restore(
-                    s.getString("id"),
-                    NativeQueue.Section.of(s.getString("kind")) ?: throw IllegalArgumentException("kind in $where"),
-                    if (s.isNull("beforeId")) null else s.getString("beforeId"),
-                )
+                "restore" -> {
+                    val before = if (s.isNull("beforeId")) null else s.getString("beforeId")
+                    val kind = s.getString("kind")
+                    if (kind == QueueCommands.KIND_PLAYED) {
+                        p.queue.restorePlayed(s.getString("id"), before)
+                    } else {
+                        p.queue.restore(s.getString("id"), NativeQueue.Section.of(kind) ?: throw IllegalArgumentException("kind in $where"), before)
+                    }
+                }
                 "removeIds" -> p.queue.removeIds(strings(s.getJSONArray("ids")).toSet())
                 "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")))
                 "next" -> p.next()
@@ -96,6 +100,7 @@ class QueueRulesTest {
             assertEquals("queued in $where", s.getInt("queued"), queued)
         }
         if (s.has("list")) assertEquals("list in $where", strings(s.getJSONArray("list")), p.ids.toList())
+        if (s.has("played")) assertEquals("played in $where", strings(s.getJSONArray("played")), p.played())
         // Up next's sections (the page's sectionsOf): the leading queued run, the list, then from
         // the first autoplay row on, autoplay.
         val lead = up.takeWhile { p.serials[p.ids.indexOf(it)] in p.queue.pendingSerials }
@@ -296,6 +301,13 @@ class QueueRulesTest {
             if (on == shuffle) return
             shuffle = on
             emit({ queue.onShuffleModeChanged(on) })
+        }
+
+        /** What played, oldest first: StateEncoder's walk back from the current item (repeat off). */
+        fun played(): List<String> {
+            if (current < 0) return emptyList()
+            val seq = playOrder()
+            return seq.subList(0, seq.indexOf(current)).map { ids[it] }
         }
 
         /** Same walk as StateEncoder (to the end of the play order, whatever the repeat mode). */

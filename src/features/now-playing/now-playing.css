@@ -632,9 +632,24 @@ button.lyr-line {
   min-height: 48px;
 }
 
-/* What played, above the playing track: dimmed (it can still be tapped to play from there). */
-.upnext .row.played .row-main {
-  opacity: 0.55;
+/* "[+] Played · N": what played folds away above the playing track, as a bracketed text button
+   ([Show all]) with Settings' [+]/[-] disclosure. Open, its rows are full contrast like the rest. */
+.upnext-fold {
+  list-style: none;
+}
+.upnext-fold .link-btn {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--gutter);
+}
+.upnext-fold .link-btn::before {
+  content: '[+]';
+  margin-right: 8px;
+}
+.upnext-fold .link-btn[aria-expanded='true']::before {
+  content: '[-]';
 }
 
 /* Autoplay, under "Autoplay · similar to <seed>": the artwork a little dimmed. Not the text,

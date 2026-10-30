@@ -25,7 +25,8 @@
  *  - but with repeat all, played autoplay tracks more than KEEP_PLAYED behind the
  *    current one are dropped (a radio can run for hours);
  *  - Undo of a remove (restore) puts the track back in its section, before the track
- *    that followed it there, never at or before the current track.
+ *    that followed it there, never at or before the current track; a played track goes
+ *    back among the played, before the one that followed it, else right before the current.
  *
  * Up next is three sections, in play order: queued by you, the rest of the list,
  * autoplay (see sections()).
@@ -327,7 +328,8 @@ export class Queue<T extends Identified> {
    * Undo of a remove: put `item` back in its section of Up next, right before the
    * first track after the current one that is `beforeId` and in that section; else
    * at the end of that section. Never at or before the current track; a queued track
-   * never after list tracks. With nothing playing, it is added (and plays).
+   * never after list tracks. A played one goes back before the played track `beforeId`,
+   * else right before the current one. With nothing playing, it is added (and plays).
    */
   restore(item: T, kind: Section, beforeId: string | null): void {
     if (!this.cur) {
@@ -338,8 +340,10 @@ export class Queue<T extends Identified> {
     }
     const of = (e: Entry<T>): Section => (this.queued.has(e) ? 'queued' : e.auto ? 'autoplay' : 'list');
     const p = this.order.indexOf(this.cur);
+    const played = kind === 'played';
     let at = -1;
-    if (beforeId != null) at = this.order.findIndex((e, k) => k > p && e.item.id === beforeId && of(e) === kind);
+    if (beforeId != null) at = this.order.findIndex((e, k) => (played ? k < p : k > p && of(e) === kind) && e.item.id === beforeId);
+    if (at < 0 && played) at = p;
     if (at < 0) {
       // The end of the section: after its last track ahead, else where it would start.
       at = p + 1 + this.queuedCount;

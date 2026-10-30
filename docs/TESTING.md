@@ -56,6 +56,7 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 - [ ] Play an album from an artist page. It plays in order, with no Autoplay section until its last few tracks; then autoplay continues after the last track.
 - [ ] **Add to queue** two tracks, then start a different list. Your two queued tracks still play next.
 - [ ] In Up next, **Remove** a track, then tap **Undo**. It comes back in the same place.
+- [ ] Play an album and skip three songs. Now Playing's Queue shows **[+] Played · 3** above the playing song; tap it to open. Move a played song with ↑ ↓, remove one and tap **Undo** (it comes back in the same place), then ↓ on the last played song: it plays next. With **Repeat all**, the next lap plays the played songs in their new order. With **Shuffle** on, played songs show only ✕.
 - [ ] On Home, pick a genre chip: the Shuffle box reads "Shuffle <genre>". Tap it: only that genre plays, and past the first 50 more of it follow (Autoplay on). With **All**: "Shuffle the Jukebox", from everything.
 - [ ] Turn on **Repeat all**, then tap a song on Home (and a genre with a single song): Up next fills with its suggestions and ends with "Then repeats from the top."; after the last one the song plays again. No more are added meanwhile.
 - [ ] Play a genre with **Repeat all** on: after its last song the first plays again, with no suggestions in between. Turn repeat off near the end: suggestions appear.
