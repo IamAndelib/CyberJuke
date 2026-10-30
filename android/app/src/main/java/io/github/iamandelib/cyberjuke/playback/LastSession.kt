@@ -231,9 +231,16 @@ internal data class LastSession(
             }
             val index = o.getInt("index")
             if (index !in entries.indices) return null
-            val heard = if (legacy) entries.mapIndexed { i, e -> e.copy(heard = i <= index) } else entries
             val order = o.optJSONArray("order")?.let { a -> IntArray(a.length()) { a.getInt(it) } }
                 ?.takeIf { QueueOrder.isPermutation(it, entries.size) }
+            val shuffle = o.optBoolean("shuffle", false)
+            val heard = if (!legacy) {
+                entries
+            } else {
+                // In play order: shuffled, the order up to the current one.
+                val upTo = if (shuffle && order != null) order.take(order.indexOf(index) + 1).toSet() else (0..index).toSet()
+                entries.mapIndexed { i, e -> e.copy(heard = i in upTo) }
+            }
             val label = o.str("label")
             val mode = o.str("mode")
             LastSession(
@@ -241,7 +248,7 @@ internal data class LastSession(
                 index = index,
                 positionMs = o.optLong("positionMs", 0L).coerceAtLeast(0L),
                 durationMs = o.optLong("durationMs", 0L).coerceAtLeast(0L),
-                shuffle = o.optBoolean("shuffle", false),
+                shuffle = shuffle,
                 order = order,
                 repeat = o.optInt("repeat", 0).takeIf { it in 0..2 } ?: 0,
                 context = if (label != null && (mode == "radio" || mode == "list")) label to mode else null,

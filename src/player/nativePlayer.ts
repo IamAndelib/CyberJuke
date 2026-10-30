@@ -7,7 +7,7 @@ import { UNKNOWN_ARTIST, UNTITLED, artworkUrl, isCoverUrl, makeTrack, type Track
 import { history, knownTrack, liked, IPV4_MODES, type CrossfadeMs, type Ipv4Mode, type Quality } from '../stores/library';
 import { catalog } from '../stores/catalog';
 import { toast } from '../stores/toast';
-import { YT_ID_RE, hasAudio, isMp3Url, parseNativeState } from '../core/guards';
+import { UP_NEXT_MAX, YT_ID_RE, hasAudio, isMp3Url, parseNativeState } from '../core/guards';
 import { logError } from '../core/log';
 import { trackErrorText } from './errorText';
 import { stationTrack } from './radio';
@@ -295,8 +295,9 @@ export class NativePlayer implements Player {
       positionMs: 0,
       durationMs: 0,
       sampledAt: performance.now(),
-      upNext: queue.slice(i + 1, i + 51).map((track, k) => ({ track, index: i + 1 + k, ...(k < queued.length && { queued: true }) })),
-      previous: queue.slice(Math.max(0, i - 50), i).map((track, k) => ({ track, index: Math.max(0, i - 50) + k })),
+      upNext: queue.slice(i + 1, i + 1 + UP_NEXT_MAX).map((track, k) => ({ track, index: i + 1 + k, ...(k < queued.length && { queued: true }) })),
+      // A new list has played nothing yet (what comes before the start isn't "Played").
+      previous: [],
       context,
       seed: tracks[i],
       currentAuto: false,

@@ -64,6 +64,41 @@ class QueueOpsTest {
     }
 
     @Test
+    fun shuffledAutoplayRestoreWithoutAnAnchorGoesLast() {
+        for (seed in 0L until 20L) {
+            val p = player(listOf("a", "b"), shuffle = true, seed = seed)
+            p.queue.addAutoplay(listOf("s1", "s2", "s3", "s4", "s5"))
+            p.queue.restore("z", Section.AUTO, null)
+            assertEquals("seed $seed: ${p.upNext()}", "z", p.upNext().last())
+        }
+    }
+
+    @Test
+    fun aBatchAfterTheEndKeepsThePlayingOneAndTheOthersAhead() {
+        // PlaybackService goes on to a batch added after the end while it is being added.
+        for (seed in 0L until 40L) {
+            val p = player(listOf("a", "b", "c"), shuffle = true, seed = seed)
+            repeat(3) { p.nextAuto() }
+            assertTrue(p.ended)
+            p.onTimeline = { if (p.ended) p.next() }
+            p.queue.addAutoplay(listOf("s1", "s2", "s3", "s4"))
+            val cur = p.ids[p.current]
+            assertTrue("seed $seed: $cur", cur.startsWith("s"))
+            assertEquals("seed $seed: ${p.upNext()}", setOf("s1", "s2", "s3", "s4") - cur, p.upNext().toSet())
+        }
+    }
+
+    @Test
+    fun whatWasHeardIsForgottenOnceItIsGone() {
+        val p = player(listOf("a", "b", "c", "d"))
+        p.next()
+        p.next()
+        assertEquals(3, p.queue.heardUids.size)
+        p.remove(0)
+        assertEquals(2, p.queue.heardUids.size)
+    }
+
+    @Test
     fun shuffledQueuedRestoreStaysInTheQueuedRun() {
         for (seed in 0L until 20L) {
             val p = player(listOf("a", "b", "c", "d"), shuffle = true, seed = seed)
