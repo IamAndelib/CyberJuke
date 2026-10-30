@@ -60,7 +60,7 @@ internal object SessionPolicy {
         /** Auto, Automotive, trusted system controllers: player commands, no queue commands. */
         FULL,
 
-        /** The media notification (and so the platform session): FULL minus the timeline. */
+        /** The media notification (and so the platform session): only [NOTIFICATION_COMMANDS]. */
         NOTIFICATION,
 
         /** Everyone else: [TRANSPORT_COMMANDS], no session commands. */
