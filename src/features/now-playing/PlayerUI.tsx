@@ -797,7 +797,7 @@ export function TrackMenu() {
   // that row as the queue has it now. Gone from there (it started playing, or the queue moved),
   // the menu closes rather than act on another row.
   const held = menuQueued.value?.track === t ? menuQueued.value : null;
-  const live = upNextSections.value.queued;
+  const live = held ? upNextSections.value.queued : [];
   const k = held ? live.findIndex((u) => u.index === held.index && u.track.id === held.track.id) : -1;
   useEffect(() => {
     if (open && held && k < 0) close();

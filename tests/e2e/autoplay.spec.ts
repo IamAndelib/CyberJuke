@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { expectStable, musicCalls, openNowPlaying, openSearch, openSettings, setOffline, setVisibility, start, toListEnd } from '../helpers';
+import { expectStable, fakeYt, musicCalls, openNowPlaying, openSearch, openSettings, setOffline, setVisibility, start, toListEnd } from '../helpers';
 import { genreFamilies } from '../../src/data/similar';
 import { artistKey, splitArtists } from '../../src/data/artists';
 import { words } from '../../src/data/text';
@@ -723,9 +723,8 @@ test('a held queued row that starts playing while its menu is open: the menu clo
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await cdp.detach();
   // The playing song ends: the queued one plays now, and the menu for its old row goes.
-  await page.evaluate(() => (window as unknown as { __cyberjukeYt: { end(): void } }).__cyberjukeYt.end());
+  await fakeYt(page, 'end');
   await expect(page.getByTestId('np-title')).toHaveText(queuedTitle);
   await expect(menu).toBeHidden();
-  await expect(page.getByTestId('np-title')).toHaveText(queuedTitle);
   await expect(page.getByTestId('toast').filter({ hasText: 'Removed from queue' })).toHaveCount(0);
 });
