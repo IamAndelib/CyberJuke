@@ -434,7 +434,7 @@ test("offline, Up next's rows that can't play are dimmed, as in every list", asy
   await expect(rows.first()).not.toHaveClass(/\boff\b/);
 });
 
-test('with shuffle on, a song with only suggestions after it says how many, not "Shuffled"', async ({ page }) => {
+test('with shuffle on, the queue reads "Queue · Shuffled" and still says how many are next', async ({ page }) => {
   await start(page);
   await visible(page, 'track-play').first().click();
   await withAutoplay(page);
@@ -443,7 +443,9 @@ test('with shuffle on, a song with only suggestions after it says how many, not 
   await expect(page.getByTestId('np-shuffle')).toHaveAttribute('aria-pressed', 'true');
   const head = page.getByTestId('up-next').locator('.section-head');
   await expect(head).toContainText(/\d+ up next/);
-  await expect(head).not.toContainText('Shuffled');
+  await expect(page.getByTestId('upnext-title')).toHaveText('Queue · Shuffled');
+  await page.getByTestId('np-shuffle').click();
+  await expect(page.getByTestId('upnext-title')).toHaveText('Queue');
 });
 
 test('"Added to queue · plays next" only when it does', async ({ page }) => {
