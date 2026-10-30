@@ -8,6 +8,7 @@
 - Signing out while offline no longer leaves the Jukebox empty the next time the app opens.
 - Offline, a liked NSFW song hidden by Settings no longer makes the offline bar and Home point to Liked when nothing else there plays.
 - Offline with nothing playing, **Add to queue** on a song that isn't saved says why it can't play, instead of "Playing".
+- Right after the app opens, liked songs saved on the phone no longer show as not saved, dimmed offline, when one finished saving just then.
 
 ## [1.3.5] - 2026-10-30
 
