@@ -34,6 +34,7 @@ test('like from the track menu adds it to Library, and it survives a reload', as
   await expect(like).toHaveText('Unlike');
   await like.click();
   await expect(page.getByTestId('liked-list').getByTestId('track-title')).toHaveCount(0);
+  await expect(page.getByTestId('liked-list')).toContainText('No liked songs yet');
 });
 
 const tr = (id: string, title: string) => ({

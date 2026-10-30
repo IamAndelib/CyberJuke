@@ -97,7 +97,7 @@ export function Library() {
         {tracks.length ? (
           sel === 'liked' ? <Tracks tracks={tracks} ctx={LIKED_CTX} /> : <HistoryDays />
         ) : sel === 'liked' ? (
-          <EmptyState title="No liked tracks yet">
+          <EmptyState title="No liked songs yet">
             Tap <Icon name="heartOutline" size={16} /> in the player, or Like in a track's ⋯ menu, to keep it here.
             <div>
               <button class="link-btn" onClick={(e) => afterPress(e.currentTarget, () => selectTab('home'))}>

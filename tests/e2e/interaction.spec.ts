@@ -277,6 +277,8 @@ test('after swiping a toast away, the next tap on the heart works the first time
     // One finger tap, straight after: it likes the song.
     await touchTap(page, heart);
     await expect(heart, `after a ${how} swipe`).toHaveAttribute('aria-pressed', 'true');
+    // A toggle keeps its name; pressed says it's liked (WAI-ARIA's button pattern).
+    await expect(heart).toHaveAccessibleName('Like');
     await heart.click();
     await expect(heart).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByTestId('toast')).toHaveCount(1);
