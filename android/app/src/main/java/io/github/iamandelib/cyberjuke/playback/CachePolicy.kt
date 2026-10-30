@@ -450,6 +450,23 @@ internal object SaveRefusal {
 }
 
 /**
+ * Opening a cache folder: [open], and when that fails because what's there is [damaged] (its
+ * index can't be read), [wipe] it and open once more, so a damaged cache starts empty (liked
+ * songs are saved again on Wi-Fi) instead of staying off until the app's data is cleared. Any
+ * other failure (the folder in use) is never wiped. Pure (CachePolicyTest).
+ */
+internal object CacheStart {
+    fun <T> openOrWipe(open: () -> T, wipe: () -> Unit, damaged: (Exception) -> Boolean): T =
+        try {
+            open()
+        } catch (e: Exception) {
+            if (!damaged(e)) throw e
+            wipe()
+            open()
+        }
+}
+
+/**
  * Saves that stopped (not cancelled) per song, and when each may be tried again: after the n-th
  * stop the song waits [FIRST_WAIT_MS] doubled each time (30 s, 1, 2, 4 min), the [MAX]th stop
  * gives up on it until a new network. Media3's DownloadManager retries a download five times

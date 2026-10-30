@@ -525,6 +525,26 @@ class CachePolicyTest {
     }
 
     @Test
+    fun aDamagedCacheIsWipedAndOpenedOnceMore() {
+        class Damaged : Exception()
+        val wipes = ArrayList<Int>()
+        // Opens: nothing wiped.
+        assertEquals("cache", CacheStart.openOrWipe({ "cache" }, { wipes.add(0) }) { it is Damaged })
+        assertTrue(wipes.isEmpty())
+        // Its index unreadable: wiped, then it opens empty.
+        var tries = 0
+        assertEquals("fresh", CacheStart.openOrWipe({ if (tries++ == 0) throw Damaged() else "fresh" }, { wipes.add(1) }) { it is Damaged })
+        assertEquals(listOf(1), wipes)
+        // Unreadable again after the wipe: it stays off (the caller streams), wiped once.
+        val e = runCatching { CacheStart.openOrWipe<String>({ throw Damaged() }, { wipes.add(2) }) { it is Damaged } }.exceptionOrNull()
+        assertTrue(e is Damaged)
+        assertEquals(listOf(1, 2), wipes)
+        // Anything else (the folder in use by another instance): never wiped.
+        assertTrue(runCatching { CacheStart.openOrWipe<String>({ throw IllegalStateException() }, { wipes.add(3) }) { it is Damaged } }.isFailure)
+        assertEquals(listOf(1, 2), wipes)
+    }
+
+    @Test
     fun aNewNetworkForgivesTheStopsSoFar() {
         val s = SaveStrikes()
         val now = 1_000_000L
