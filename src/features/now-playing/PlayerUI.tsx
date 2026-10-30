@@ -19,6 +19,7 @@ import {
   queuePlace,
   repeatMode,
   shuffleOn,
+  upNextSections,
   waitingForNetwork,
 } from '../../player';
 import { block } from '../../stores/block';
@@ -39,7 +40,7 @@ import { OfflineLine } from '../../ui/components/OfflineLine';
 import { Marquee } from './Marquee';
 import { MembersTag } from '../../ui/components/TrackRow';
 import { LyricsPanel } from './Lyrics';
-import { UpNext } from './UpNext';
+import { UpNext, removeWithUndo } from './UpNext';
 import { useModal, useSheetContent } from '../../ui/useModal';
 import { useLiked } from '../../ui/useFavs';
 import { shareTrack } from '../../ui/share';
@@ -792,6 +793,9 @@ export function TrackMenu() {
   const fav = useLiked(t?.id);
   // A track still being looked up (nothing to play yet) can't be queued, shared or liked.
   const known = hasAudio(t);
+  // Queued by you (wherever the menu opened): Remove from queue takes Add to queue's place.
+  const queued = upNextSections.value.queued;
+  const q = t ? queued.findIndex((u) => u.track.id === t.id) : -1;
   return (
     <div class={'sheet-wrap' + (open ? ' open' : '')} aria-hidden={!open} inert={!open}>
       <div class="scrim" onClick={close} />
@@ -805,20 +809,33 @@ export function TrackMenu() {
                 <div class="row-artist">{t.artist}</div>
               </div>
             </div>
-            <button
-              class="sheet-item"
-              onClick={() => {
-                const s = player.state.value;
-                void player.addToQueue([t]);
-                // "plays next" only when it will: not after other queued songs, nor while Repeat one holds the current one.
-                toast(!s.current ? 'Playing' : s.repeat === 'one' || s.upNext.some((u) => u.queued) ? 'Added to queue' : 'Added to queue · plays next');
-                close();
-              }}
-              disabled={!known}
-              data-testid="menu-add-queue"
-            >
-              <Icon name="playNext" size={20} /> Add to queue
-            </button>
+            {q >= 0 ? (
+              <button
+                class="sheet-item"
+                onClick={() => {
+                  removeWithUndo(queued[q], 'queued', queued[q + 1]?.track.id ?? null);
+                  close();
+                }}
+                data-testid="menu-remove-queue"
+              >
+                <Icon name="close" size={20} /> Remove from queue
+              </button>
+            ) : (
+              <button
+                class="sheet-item"
+                onClick={() => {
+                  const s = player.state.value;
+                  void player.addToQueue([t]);
+                  // "plays next" only when it will: not after other queued songs, nor while Repeat one holds the current one.
+                  toast(!s.current ? 'Playing' : s.repeat === 'one' || s.upNext.some((u) => u.queued) ? 'Added to queue' : 'Added to queue · plays next');
+                  close();
+                }}
+                disabled={!known}
+                data-testid="menu-add-queue"
+              >
+                <Icon name="playNext" size={20} /> Add to queue
+              </button>
+            )}
             <button
               class="sheet-item"
               onClick={() => {
