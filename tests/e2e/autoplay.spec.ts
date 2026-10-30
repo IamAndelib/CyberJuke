@@ -296,7 +296,7 @@ test('with repeat on, a song you tap still gets its suggestions; a list you star
   const q = await withAutoplay(page);
   expect(q.seed?.title).toBe(title);
   await openNowPlaying(page);
-  await expect(page.getByTestId('upnext-repeat')).toHaveText('Then repeats from the top.');
+  await expect(page.getByTestId('upnext-repeat')).toHaveText('Repeating the queue.');
   // Repeat one goes on as repeat off does.
   await repeat.click();
   await expect(repeat).toHaveAttribute('data-mode', 'one');
@@ -449,7 +449,7 @@ test('a song from Home: shuffle mixes its suggestions, and off puts them back in
   await expect.poll(async () => (await titles.allTextContents()).map((t) => t.trim())).toEqual(before);
 });
 
-test('with shuffle on, a song with only suggestions after it says how many, not "Shuffled"', async ({ page }) => {
+test('with shuffle on, the queue reads "Queue · Shuffled" and still says how many are next', async ({ page }) => {
   await start(page);
   await visible(page, 'track-play').first().click();
   await withAutoplay(page);
@@ -458,7 +458,9 @@ test('with shuffle on, a song with only suggestions after it says how many, not 
   await expect(page.getByTestId('np-shuffle')).toHaveAttribute('aria-pressed', 'true');
   const head = page.getByTestId('up-next').locator('.section-head');
   await expect(head).toContainText(/\d+ up next/);
-  await expect(head).not.toContainText('Shuffled');
+  await expect(page.getByTestId('upnext-title')).toHaveText('Queue · Shuffled');
+  await page.getByTestId('np-shuffle').click();
+  await expect(page.getByTestId('upnext-title')).toHaveText('Queue');
 });
 
 test('"Added to queue · plays next" only when it does', async ({ page }) => {
@@ -512,6 +514,12 @@ test('the queue shows the whole list: what played folds under [+] Played, the pl
   await expect(page.getByTestId('upnext-played')).toHaveCount(0);
   await expect(page.locator('[data-testid="up-next"] ol > li').nth(1)).toHaveAttribute('data-testid', 'upnext-current-label');
   await expect(page.getByTestId('up-next').locator('.section-head')).toContainText(/^Queue\d+ up next$/);
+  // Only the words are the button: a tap on the row's empty side does nothing.
+  const b = (await fold.boundingBox())!;
+  const row = (await page.locator('.upnext-fold').boundingBox())!;
+  expect(b.width).toBeLessThan(row.width / 2);
+  await page.mouse.click(row.x + row.width - 20, row.y + row.height / 2);
+  await expect(fold).toHaveAttribute('aria-expanded', 'false');
   // Open: the two played, in the order they played, at full contrast, then the playing one.
   await fold.click();
   await expect(fold).toHaveAttribute('aria-expanded', 'true');
@@ -539,7 +547,7 @@ test('the queue shows the whole list: what played folds under [+] Played, the pl
   const repeat = page.getByTestId('np-repeat');
   while ((await repeat.getAttribute('data-mode')) !== 'all') await repeat.click();
   await expect(page.getByTestId('upnext-played').first().locator('.row-title')).toHaveText(titles[0]);
-  await expect(page.getByTestId('up-next')).toContainText('Queue repeats from the top.');
+  await expect(page.getByTestId('upnext-repeat')).toHaveText('Repeating the queue.');
   // A new list starts folded.
   await page.getByTestId('np-close').click();
   await page.getByTestId('tab-genres').click();
