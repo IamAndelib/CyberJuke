@@ -42,6 +42,8 @@ export interface AutoplayDeps {
   signedIn: () => boolean;
   /** YouTube is backing us off (Y1): no Global requests. */
   blocked: () => boolean;
+  /** Track ids removed from Up next this session: never picked again. */
+  removed?: () => ReadonlySet<string>;
   /** One page of a song's radio (Music.radio). */
   radio: (ytId: string, next?: string) => Promise<{ tracks: Track[]; next?: string }>;
   rng?: () => number;
@@ -85,7 +87,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     }
     if (!mayAutoplay(s.repeat, s.queue.length)) return;
     if (e.seedId && e.seedId !== seed.id) return; // a signal for an older seed
-    const inQueue = new Set(s.queue.flatMap((t) => [t.id, audioKey(t)]));
+    const inQueue = new Set([...s.queue.flatMap((t) => [t.id, audioKey(t)]), ...(deps.removed?.() ?? [])]);
     // The signal may be older than the last refill (one that came in during it): count
     // again. A batch the state doesn't show yet is ahead too, and not picked again. (A
     // station's round holds tracks already in the queue: its ids say nothing about that.)

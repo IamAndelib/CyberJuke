@@ -366,6 +366,27 @@ test('going to the background, a reserve is lined up: playback goes on if Androi
   await setVisibility(page, 'visible');
 });
 
+test("songs removed from Up next don't come back in later suggestions", async ({ page }) => {
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  await withAutoplay(page);
+  await openNowPlaying(page);
+  const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
+  const gone: string[] = [];
+  // Remove them as they come: the refills that follow bring none of them back.
+  for (let i = 0; i < 30; i++) {
+    gone.push((await rows.first().getAttribute('data-track-id'))!);
+    // A click on the button itself: the "Removed" toast's Undo may lie over the row by now.
+    await rows.first().getByTestId('upnext-remove').dispatchEvent('click');
+    await expect(page.locator(`[data-testid="upnext-row"][data-track-id="${gone[i]}"]`)).toHaveCount(0);
+    await expect(rows.first()).toBeVisible();
+    // Past Up next's guard against a double tap removing two rows (REMOVE_GUARD_MS).
+    await page.waitForTimeout(320);
+  }
+  const after = await queueState(page);
+  expect(after.autoplay.filter((t) => gone.includes(t.id))).toEqual([]);
+});
+
 test('a track started before the Jukebox catalog has loaded still gets its autoplay once it does', async ({ page }) => {
   // The catalog (300-row pages) waits until let through; the Home feed loads as usual.
   let release: () => void = () => {};
