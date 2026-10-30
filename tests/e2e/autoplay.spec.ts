@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { expectStable, musicCalls, openNowPlaying, openSearch, openSettings, setVisibility, start } from '../helpers';
+import { expectStable, musicCalls, openNowPlaying, openSearch, openSettings, setOffline, setVisibility, start } from '../helpers';
 import { genreFamilies } from '../../src/data/similar';
 import { artistKey, splitArtists } from '../../src/data/artists';
 import { words } from '../../src/data/text';
@@ -407,6 +407,19 @@ test('with Autoplay off, a Home tap plays the feed on from that song instead of 
   await visible(page, 'track-play').first().click();
   await openNowPlaying(page);
   await expect(page.getByTestId('up-next')).toContainText('Autoplay is off.');
+});
+
+test("offline, Up next's rows that can't play are dimmed, as in every list", async ({ page, backend }) => {
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  await withAutoplay(page);
+  await openNowPlaying(page);
+  const rows = page.locator('[data-testid="upnext-row"]');
+  await expect(rows.first()).not.toHaveClass(/\boff\b/);
+  await setOffline(page, backend, true);
+  await expect(rows.first()).toHaveClass(/\boff\b/);
+  await setOffline(page, backend, false);
+  await expect(rows.first()).not.toHaveClass(/\boff\b/);
 });
 
 test('a track started before the Jukebox catalog has loaded still gets its autoplay once it does', async ({ page }) => {

@@ -23,7 +23,7 @@ import { online } from '../core/network';
 import { OFFLINE } from '../core/offlineText';
 import { exposeForTests } from '../core/testHooks';
 import type { Track } from '../data/model';
-import { hasSavedLiked, savedOffline, savedTracks } from '../stores/savedOffline';
+import { hasSavedLiked, isSaved, savedOffline, savedTracks } from '../stores/savedOffline';
 import { createAutoplay, type Autoplay } from './autoplay';
 import { NativePlayer } from './nativePlayer';
 import { offlineGuard, playsOffline, type OfflineRefusal } from './offlineGuard';
@@ -228,6 +228,7 @@ function startAutoplay(): Autoplay {
     signedIn: () => auth.signedIn(),
     blocked: () => block.blocked.peek() != null,
     removed: () => removed,
+    playable: (t) => online.peek() || isSaved(t, savedOffline.peek()),
     radio: (ytId, next) => music.radio(ytId, next).then((page) => ({ tracks: musicTracks(page.items), next: page.next })),
     log: logError,
   });

@@ -8,8 +8,8 @@
  *    service runs Global radios itself, so they refill with the screen off);
  *  - a Signal Radio station playing: its next round (player/radio), all its tracks again;
  *  - Home's Shuffle (its label, shuffleLabel): more random songs from the same pool.
- * Nothing while autoplay is off (the setting, C3), but for a station, or with repeat all
- * but for a single song (mayAutoplay).
+ * Offline, only songs saved on the phone (playable). Nothing while autoplay is off (the setting,
+ * C3), but for a station, or with repeat all but for a single song (mayAutoplay).
  */
 import { whenIdle } from '../core/idle';
 import { audioKey, isGlobal, type Track } from '../data/model';
@@ -44,6 +44,8 @@ export interface AutoplayDeps {
   blocked: () => boolean;
   /** Track ids removed from Up next this session: never picked again. */
   removed?: () => ReadonlySet<string>;
+  /** Whether a track can play now (offline: only saved ones); only those are picked. */
+  playable?: (t: Track) => boolean;
   /** One page of a song's radio (Music.radio). */
   radio: (ytId: string, next?: string) => Promise<{ tracks: Track[]; next?: string }>;
   rng?: () => number;
@@ -106,9 +108,11 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
 
     // A station plays on: its next round, which doesn't start with the last track queued. (A
     // station's track in another list, Liked say, gets similar picks like any other.)
+    const playable = deps.playable ?? (() => true);
     const station = stationPlaying(s.context, seed.id);
     if (station) {
-      await add(stationQueue(station, s.queue.at(-1)?.ytId, deps.rng), true);
+      const round = stationQueue(station, s.queue.at(-1)?.ytId, deps.rng).filter(playable);
+      if (round.length) await add(round, true);
       return;
     }
 
@@ -116,7 +120,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       if (player.kind === 'native' || deps.blocked()) return;
       const from = radio?.seedId === seed.id ? radio : { seedId: seed.id, ytId: seed.ytId };
       const page = await deps.radio(from.ytId, from.next);
-      const tracks = page.tracks.filter((t) => !inQueue.has(t.ytId) && !inQueue.has(t.id));
+      const tracks = page.tracks.filter((t) => !inQueue.has(t.ytId) && !inQueue.has(t.id) && playable(t));
       // At the end of a radio, the next one starts from its last song.
       radio = page.next ? { ...from, next: page.next } : { seedId: seed.id, ytId: tracks.at(-1)?.ytId ?? from.ytId };
       if (tracks.length) await add(tracks);
@@ -129,9 +133,10 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       return;
     }
     starved = null;
+    const usable = catalog.filter(playable);
     // A Jukebox shuffle plays on like a station: random songs from its pool not yet queued,
     // then, once every one is, another round of it (but the song just queued).
-    const pool = shufflePool(s.context?.label, catalog)?.filter((t) => !t.membersOnly || deps.signedIn());
+    const pool = shufflePool(s.context?.label, usable)?.filter((t) => !t.membersOnly || deps.signedIn());
     if (pool) {
       const fresh = pool.filter((t) => !inQueue.has(t.id));
       const from = fresh.length ? fresh : pool.filter((t) => t.id !== s.queue.at(-1)?.id);
@@ -141,7 +146,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     // What played since this seed started steers it (Jukebox tracks only: similarTracks skips Global ones).
     const played = s.index >= 0 ? s.queue.slice(0, s.index + 1) : [];
     const from = played.map((t) => t.id).lastIndexOf(seed.id);
-    const picks = similarTracks(catalog, {
+    const picks = similarTracks(usable, {
       seed,
       played: from < 0 ? [] : played.slice(from + 1).reverse(),
       recent: deps.history(),
