@@ -204,18 +204,22 @@ test('a Global result starts a Global radio; tapping an autoplay track continues
   const seedYt = q.seed!.id.replace(/^ytm:/, '');
   expect((await musicCalls(page)).filter((c) => c[0] === 'radio')).toEqual([['radio', seedYt, null]]);
 
-  // Near the end of the radio, Up next refills from the same radio's next page.
+  // A tapped autoplay track plays; the ones after it stay, and the radio goes on from it.
   await openNowPlaying(page);
   const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
   const pick = q.autoplay[3];
   await rows.nth(3).locator('.row-main').click();
   await expect(page.getByTestId('np-title')).toHaveText(pick.title);
-  // The old radio after it went; a new one follows the tapped track.
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveText(`Autoplay · similar to ${pick.title}`);
-  await expect.poll(async () => (await musicCalls(page)).filter((c) => c[0] === 'radio').map((c) => c[1])).toEqual([seedYt, pick.id.replace(/^ytm:/, '')]);
-  const after = await withAutoplay(page);
+  const after = await queueState(page);
   expect(after.seed?.id).toBe(pick.id);
-  expect(after.autoplay.some((t) => q.autoplay.slice(4).some((o) => o.id === t.id))).toBe(false);
+  expect(after.autoplay.map((t) => t.id)).toEqual(q.autoplay.slice(4).map((t) => t.id));
+  // Near their end, more follow from it.
+  const last = q.autoplay.at(-1)!;
+  await rows.last().locator('.row-main').click();
+  await expect(page.getByTestId('np-title')).toHaveText(last.title);
+  await expect.poll(async () => (await musicCalls(page)).filter((c) => c[0] === 'radio').map((c) => c[1])).toEqual([seedYt, last.id.replace(/^ytm:/, '')]);
+  expect((await withAutoplay(page)).seed?.id).toBe(last.id);
 });
 
 test('queued tracks survive a new list, then autoplay follows', async ({ page }) => {
