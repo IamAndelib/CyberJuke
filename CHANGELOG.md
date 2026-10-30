@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- The notification and the lock screen have **Shuffle** and **Repeat** buttons, showing the mode they're in; Repeat steps through off, all and one, as in the app.
+
 ### Changed
 - Up next's ↑ ↓ ✕ buttons sit side by side, so song titles get more room.
 - Up next shows the whole list: the songs already played stay above, dimmed, the playing one is marked as on Home, and a tap on any of them plays from there. With **Repeat all**, the top it repeats from is right there.
