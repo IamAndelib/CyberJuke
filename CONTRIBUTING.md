@@ -21,6 +21,7 @@ npm run dev          # the web UI in a browser (playback needs the app: the CSP 
 npm run check        # typecheck + ESLint + unit tests: run before every commit
 npm run lint -- --fix   # fixes what ESLint can fix by itself
 npm run e2e          # Playwright e2e tests on a phone-sized Chromium
+npm run e2e:live     # only the @live e2e tests, against the real Cyberspace backend
 npm run screenshots  # renders every screen into test-results/screenshots/ (not committed)
 npm run media        # regenerates the README and store images in media/ and fastlane/
 npm run sync         # build the web app and copy it into android/

@@ -62,7 +62,9 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 - [ ] Play a genre with **Repeat all** on: after its last song the first plays again, with no suggestions in between. Turn repeat off near the end: suggestions appear.
 - [ ] **Repeat one**: the song replays when it ends and Up next says "Repeating this song."; Next moves on. With Autoplay off, at a list's last song Next is greyed out in the app and on the notification alike.
 - [ ] Settings → **Autoplay** off: playback stops when the list ends. A tap on a Home song plays Home's list on from it; a genre with one song says "Autoplay is off." in Up next.
-- [ ] In Up next, tap the 4th suggestion: it plays and the 5th is next. Remove a few suggestions: they don't come back later.
+- [ ] In Up next, tap the 4th suggestion: it plays, and the three it jumped over come next, then the 5th. Remove a few suggestions: they don't come back later.
+- [ ] Tap a song on Home and wait for its suggestions, then turn on **Shuffle**: the heading reads **Queue · Shuffled** and the suggestions are mixed; turn it off: they're back in their order. Start an album at track 3, tap a suggestion, then turn Shuffle on: the album's tracks still to come stay in Up next, mixed, before the suggestions; nothing you heard comes back.
+- [ ] Press and hold a song in Now Playing's queue (Played, the playing one, Up next): the same menu as on Home opens.
 - [ ] Offline in Liked: only saved songs follow, and Up next dims any that can't play.
 - [ ] Let autoplay run for an hour or more: it keeps going without repeating the same songs.
 

@@ -66,16 +66,16 @@ On your phone, uninstall the old **CyberJuke** preview. It was signed with a key
 
 When something gets fixed, a new preview is built with **Actions → Preview → Run workflow**, or I start it. It installs over the old one and keeps your data.
 
-## 6. Release v1.0.0
+## 6. Release a version
 
 When the preview has passed testing:
 
-1. Tell me, and I'll move the CHANGELOG's "Unreleased" notes into a new version section (done for 1.0.0).
-2. On GitHub go to **Actions → Release → Run workflow**, type `1.0.0`, then **Run**.
+1. Tell me, and I'll move the CHANGELOG's "Unreleased" notes into a new version section, with its store notes.
+2. On GitHub go to **Actions → Release → Run workflow**, type the version (for example `1.3.5`), then **Run**.
 3. If you added yourself as a required reviewer (step 2, optional), the run pauses at **Sign**: open it, click **Review deployments**, tick `release` and **Approve**. Otherwise it simply carries on.
-4. A few minutes later, **Releases** shows **CyberJuke v1.0.0** with `CyberJuke-1.0.0.apk`. That's the real app, signed with your release key.
+4. A few minutes later, **Releases** shows **CyberJuke v1.3.5** with `CyberJuke-1.3.5.apk`. That's the real app, signed with your release key.
 
-Later versions work the same way: add a CHANGELOG section, then run Release with the new number (for example `1.0.1`).
+After each release, the F-Droid recipe moves to the new tag: see [`docs/fdroid/README.md`](fdroid/README.md).
 
 ## 7. Submit to F-Droid
 

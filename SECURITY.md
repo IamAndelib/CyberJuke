@@ -12,7 +12,7 @@ You should get a first answer within a week. Once a fix is released, the advisor
 Things that are in scope, for example:
 
 - Leaking the Cyberspace login token or other stored data (to other apps, logs, backups or the network).
-- Other apps controlling CyberJuke beyond play/pause, seek, skip, shuffle and repeat through its media session or notification, or reading more than the track that is playing (the queue, your library). Like every music app, CyberJuke lets any app see the current track and use the controls its notification shows: watches, widgets and Bluetooth devices need them.
+- Other apps controlling CyberJuke beyond play/pause, stop, seek, skip, shuffle and repeat through its media session or notification, or reading more than the track that is playing (the queue, your library). Like every music app, CyberJuke lets any app see the current track and use the controls its notification shows: watches, widgets and Bluetooth devices need them.
 - Loading or running content from anywhere other than CyberJuke's own bundle (WebView, links, intents).
 - Problems in how releases are built, signed or published.
 

@@ -11,7 +11,7 @@
 
 **The [Cyberspace](https://beta.cyberspace.online) Jukebox as a music-streaming app for Android.**
 
-The Cyberspace Jukebox is where people on Cyberspace share the music they love, posted alongside what they write. It's a great way to find music you'd never have come across. CyberJuke turns it into a proper music app. It keeps Cyberspace's retro look and adds a music app's playback: a mini player, a Now Playing screen, an Up Next queue, autoplay of similar songs, and playback that continues with the screen off.
+The Cyberspace Jukebox is where people on Cyberspace share the music they love, posted alongside what they write. It's a great way to find music you'd never have come across. CyberJuke turns it into a proper music app. It keeps Cyberspace's retro look and adds a music app's playback: a mini player, a Now Playing screen with its queue, autoplay of similar songs, and playback that continues with the screen off.
 
 > **Unofficial.** CyberJuke is a fan-made app. It is not made, endorsed or supported by Cyberspace or its creator.
 
@@ -25,7 +25,7 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 
 | | | |
 |:-:|:-:|:-:|
-| <img src="media/screenshots/home.png" width="230" alt="Home"><br>**Home**: the latest Jukebox posts, genre filters and Shuffle | <img src="media/screenshots/now-playing.png" width="230" alt="Now Playing"><br>**Now Playing**: big artwork, seek, shuffle, repeat, like | <img src="media/screenshots/up-next.png" width="230" alt="Up next"><br>**Up next**: your queue first, then autoplay of similar songs |
+| <img src="media/screenshots/home.png" width="230" alt="Home"><br>**Home**: the latest Jukebox posts, genre filters and Shuffle | <img src="media/screenshots/now-playing.png" width="230" alt="Now Playing"><br>**Now Playing**: big artwork, seek, shuffle, repeat, like | <img src="media/screenshots/up-next.png" width="230" alt="Queue"><br>**Queue**: what played, the playing song, your queue, then autoplay |
 | <img src="media/screenshots/lyrics.png" width="230" alt="Lyrics"><br>**Synced lyrics**: tap the artwork, in any language | <img src="media/screenshots/artist.png" width="230" alt="Artist page"><br>**Artist pages**: what people shared, then the discography | <img src="media/screenshots/genre.png" width="230" alt="Genre page"><br>**Genres**: every genre, with Play and Shuffle |
 | <img src="media/screenshots/search.png" width="230" alt="Search"><br>**Search**: the whole Jukebox, typo-tolerant, or Global | <img src="media/screenshots/here-search.png" width="230" alt="Here search on the Genres tab"><br>**Here**: search just the page you're on | <img src="media/screenshots/library.png" width="230" alt="Library"><br>**Library**: liked tracks and recently played |
 | <img src="media/screenshots/radio.png" width="230" alt="Signal Radio"><br>**Signal Radio**: hyphen8d's curated stations, played on and on | | |
@@ -37,19 +37,19 @@ The Cyberspace Jukebox is where people on Cyberspace share the music they love, 
 - **Shuffle the Jukebox**: one tap for a random mix from the whole Jukebox, or from the genre picked on Home, that keeps going with more random picks for as long as you listen (with Autoplay on).
 - **Signal Radio**: the Radio tab holds the curated stations Cyberspace's Jukebox plays as Signal Radio since its 4.0 update: hyphen8d's SIGNAL, in two bands. A station plays all its tracks in a shuffle, then another, for as long as you listen.
 - **Autoplay**: when a list ends, similar songs keep playing. A Jukebox song leads to Jukebox songs picked by artist, genre and what the same people share; a Global song leads to that song's radio. Tracks you add with "Add to queue" always stay next.
-- **Search** every track on the Jukebox by title, artist or genre, with typo tolerance and recent searches. **Here** searches only the page you're on: a genre, an artist, an album, your library, every Signal Radio station's tracks, or the Genres and Artists lists themselves.
-- **Genres** and **Artists**: browse everything shared on the Jukebox, A–Z or by popularity, and ★ your favourites to pin them to the top. An artist page puts what Cyberspace people shared first, then the artist's top songs, albums, live albums, EPs and singles from the artist's own page.
+- **Search** every track on the Jukebox by title, artist or genre, with typo tolerance and recent searches; artists whose name matches show first. **Here** searches only the page you're on: a genre, an artist, an album, your library, every Signal Radio station's tracks, or the Genres and Artists lists themselves.
+- **Genres** and **Artists**: browse everything shared on the Jukebox, A–Z or by popularity, and ★ your favourites to pin them to the top. An artist page puts what Cyberspace people shared first (the 5 newest, then [Show all]), then the artist's top songs, albums, live albums, EPs and singles from the artist's own page.
 - **Global search** (optional): a separate Global mode for any song, album, artist or playlist beyond the Jukebox. Global tracks play, like and queue like any other, but never show up on Home, Genres, Most saved or Shuffle.
 - **Sign in with Cyberspace** (optional): the Jukebox also shows the members-only shared tracks, marked `[members]`. See [Signing in](#signing-in).
 - **Library**: liked tracks and recently played, stored on your phone.
-- **Background playback**: the notification, lock screen and headset buttons all work, and the queue keeps going with the screen off. Tapping the notification opens Now Playing.
+- **Background playback**: the notification, lock screen and headset buttons all work (the notification has Shuffle and Repeat too), and the queue keeps going with the screen off. Tapping the notification opens Now Playing.
 - **Listening cache**: the music you play and the next track are kept on the phone (128, 256 or 512 MB, in Settings), so a sudden drop in the signal doesn't stop the music, and liked songs are saved so they play offline. Liked songs are downloaded on Wi-Fi only (a network Android doesn't mark as metered: a phone's hotspot, and some VPNs, count as mobile data), unless you turn on **Download using mobile data**; what you play is kept as it streams on any network, which costs no extra data. CyberJuke is made for online listening: offline, only the liked songs already saved play, and a paused song resumes from what it has loaded.
 - **Audio quality**: **Auto** (the default) plays the best quality the connection keeps up with, stepping down after stalls and back up once it's calm, only between tracks; **High** and **Low** stay put.
 - **Crossfade** (optional): the end of a track blends into the next, over 3, 6 or 10 seconds (Settings → Crossfade).
 - **Gapless playback** (on by default): the next track is readied while this one plays, so they follow without a pause. Off, it loads only when this one ends, so a skip costs little data.
 - **Picks up where you left off**: the app opens on what you last played, paused at the same spot, even after Android stopped it.
 - **Update notices** (off until you turn them on): Settings → Updates checks for a new release once a day (or when you tap Check now) and shows it in Settings with a download link. Installs from F-Droid update through F-Droid instead.
-- **Now Playing**: seek, shuffle, repeat, like, synced lyrics, share, "Playing from …", and an Up Next queue you can reorder.
+- **Now Playing**: seek, shuffle, repeat, like, synced lyrics, share, "Playing from …", and the whole queue: what played (folded under [+] Played), the playing song and what's next, each one movable, removable and a tap away.
 - **"Posted by @user"** opens the original post on Cyberspace, so you can see what the poster wrote and reply.
 - **Undo** for unlike, unfavourite, removing from Up next and clearing history or recent searches. Any message at the bottom can be swiped away, left or right.
 - **NSFW** posts are hidden unless you turn them on.
@@ -133,7 +133,7 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 | latex.gg | A request for the MP3 file of a Jukebox track that is one (latex.gg receives your IP address and the file requested) | Playing or prefetching such a track (the next track is prepared while the current one plays), and saving a liked one for offline (as liked songs are: on Wi-Fi, or on any network with **Download using mobile data** on) |
 | YouTube and Google image servers (`i.ytimg.com`, `*.googleusercontent.com`, `*.ggpht.com`) | Artwork requests | Lists, artist pages and Now Playing |
 | Cyberspace's image server (`bunker.cyberspace.online`) | Requests for the covers of Jukebox MP3s | Lists, Now Playing, and the notification and lock screen while one plays |
-| LRCLIB | Artist, title and duration of the current track | Lyrics panel open |
+| LRCLIB | Artist, title, album (when known) and duration of the current track | Lyrics panel open |
 | GitHub (`api.github.com`) | A request for the latest CyberJuke release (nothing about you or your library) | At most once a day when the app opens or comes back (an hour after a failed check), or **Check now**; only once you turn it on in Settings → Updates (off by default); never for F-Droid installs |
 
 The Signal Radio stations come with the app (`src/data/radio/stations.json`), so tuning in fetches no station list: a station track goes only to YouTube, by its video ID, like any other track.

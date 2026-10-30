@@ -1746,10 +1746,10 @@ class PlaybackService : MediaSessionService() {
         }
 
         /**
-         * S1: full access for our own app, the media notification, Android Auto/Automotive and
-         * trusted system controllers; transport commands only for everyone else (see
-         * [SessionPolicy]). Only the JukePlayer plugin's controller gets the private queue
-         * commands, and the media notification gets no timeline (no platform queue).
+         * S1: full access for our own app, Android Auto/Automotive and trusted system controllers;
+         * the media notification gets only what it shows (SessionPolicy.NOTIFICATION_COMMANDS: no
+         * timeline, so no platform queue); transport commands only for everyone else (see
+         * [SessionPolicy]). Only the JukePlayer plugin's controller gets the private queue commands.
          */
         override fun onConnectAsync(
             session: MediaSession,
