@@ -543,16 +543,7 @@ export function Settings() {
       </section>
 
       <section class="card">
-        <h2 class="card-title">Playback &amp; data</h2>
-        <div class="setting">
-          <div class="setting-text">
-            <div class="setting-name">Show NSFW tracks</div>
-            <div class="setting-desc" id="nsfw-desc">
-              Hidden by default.
-            </div>
-          </div>
-          <Toggle on={s.showNsfw} onChange={(v) => updateSettings({ showNsfw: v })} label="Show NSFW tracks" describedBy="nsfw-desc" testid="nsfw-toggle" />
-        </div>
+        <h2 class="card-title">Playback</h2>
         <div class="setting stack">
           <div class="setting-text">
             <div class="setting-name">Audio quality</div>
@@ -583,6 +574,43 @@ export function Settings() {
             ))}
           </div>
         </div>
+        <div class="setting">
+          <div class="setting-text">
+            <div class="setting-name">Autoplay</div>
+            <div class="setting-desc" id="autoplay-desc">
+              Plays similar songs when your list ends.
+            </div>
+          </div>
+          <Toggle on={s.autoplay} onChange={(v) => updateSettings({ autoplay: v })} label="Autoplay" describedBy="autoplay-desc" testid="autoplay-toggle" />
+        </div>
+        <div class="setting">
+          <div class="setting-text">
+            <div class="setting-name">Gapless playback</div>
+            <div class="setting-desc" id="gapless-desc">
+              Tracks follow each other without a pause.
+            </div>
+          </div>
+          <Toggle on={s.gapless} onChange={(v) => updateSettings({ gapless: v })} label="Gapless playback" describedBy="gapless-desc" testid="gapless-toggle" />
+        </div>
+        <CrossfadeSetting />
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Content</h2>
+        <div class="setting">
+          <div class="setting-text">
+            <div class="setting-name">Show NSFW tracks</div>
+            <div class="setting-desc" id="nsfw-desc">
+              Hidden by default.
+            </div>
+          </div>
+          <Toggle on={s.showNsfw} onChange={(v) => updateSettings({ showNsfw: v })} label="Show NSFW tracks" describedBy="nsfw-desc" testid="nsfw-toggle" />
+        </div>
+        <CheckEverySetting />
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Storage</h2>
         <ListeningCacheSetting />
         <div class="setting">
           <div class="setting-text">
@@ -593,6 +621,10 @@ export function Settings() {
           </div>
           <Toggle on={s.downloadOnMobileData} onChange={(v) => updateSettings({ downloadOnMobileData: v })} label="Download using mobile data" describedBy="mobile-data-desc" testid="mobile-data-toggle" />
         </div>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Network</h2>
         <div class="setting stack">
           <div class="setting-text">
             <div class="setting-name">IPv4</div>
@@ -616,26 +648,6 @@ export function Settings() {
           </div>
         </div>
         <NetStatusLine />
-        <div class="setting">
-          <div class="setting-text">
-            <div class="setting-name">Autoplay</div>
-            <div class="setting-desc" id="autoplay-desc">
-              Plays similar songs when your list ends.
-            </div>
-          </div>
-          <Toggle on={s.autoplay} onChange={(v) => updateSettings({ autoplay: v })} label="Autoplay" describedBy="autoplay-desc" testid="autoplay-toggle" />
-        </div>
-        <div class="setting">
-          <div class="setting-text">
-            <div class="setting-name">Gapless playback</div>
-            <div class="setting-desc" id="gapless-desc">
-              Tracks follow each other without a pause.
-            </div>
-          </div>
-          <Toggle on={s.gapless} onChange={(v) => updateSettings({ gapless: v })} label="Gapless playback" describedBy="gapless-desc" testid="gapless-toggle" />
-        </div>
-        <CrossfadeSetting />
-        <CheckEverySetting />
       </section>
 
       <Updates />
