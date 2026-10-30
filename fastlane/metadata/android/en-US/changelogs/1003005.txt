@@ -1,0 +1,8 @@
+- Now Playing's queue shows the whole list: what you heard folds under [+] Played
+- A tap in the queue plays that song and keeps the ones it jumps over
+- Shuffle mixes what you haven't heard, a radio's suggestions too
+- Repeat all loops what you started; Repeat one replays the song
+- Shuffle and Repeat on the notification
+- Autoplay keeps going after you swipe the app away
+- Search finds artists; artist pages show 5 newest songs first
+- Many smaller fixes
