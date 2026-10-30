@@ -497,6 +497,12 @@ test('the queue shows the whole list: what played folds under [+] Played, the pl
   await expect(page.getByTestId('upnext-played')).toHaveCount(0);
   await expect(page.locator('[data-testid="up-next"] ol > li').nth(1)).toHaveAttribute('data-testid', 'upnext-current-label');
   await expect(page.getByTestId('up-next').locator('.section-head')).toContainText(/^Queue\d+ up next$/);
+  // Only the words are the button: a tap on the row's empty side does nothing.
+  const b = (await fold.boundingBox())!;
+  const row = (await page.locator('.upnext-fold').boundingBox())!;
+  expect(b.width).toBeLessThan(row.width / 2);
+  await page.mouse.click(row.x + row.width - 20, row.y + row.height / 2);
+  await expect(fold).toHaveAttribute('aria-expanded', 'false');
   // Open: the two played, in the order they played, at full contrast, then the playing one.
   await fold.click();
   await expect(fold).toHaveAttribute('aria-expanded', 'true');
