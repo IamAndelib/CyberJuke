@@ -145,8 +145,14 @@ export function startListeningCache(): void {
     exposeForTests('__cyberjukeCache', { saved: (audioIds: string[]) => setSavedOffline(audioIds) });
     return;
   }
-  JukePlayer.addListener('cacheChanged', (e) => setSavedOffline(Array.isArray(e?.ytIds) ? e.ytIds : [])).catch(fail('cache.listen'));
+  // Each report is the whole set. The first answer can be read before a change and arrive
+  // after its `cacheChanged`: then it is older, and dropped (a later change sends the set again).
+  let changed = false;
+  JukePlayer.addListener('cacheChanged', (e) => {
+    changed = true;
+    setSavedOffline(Array.isArray(e?.ytIds) ? e.ytIds : []);
+  }).catch(fail('cache.listen'));
   JukePlayer.cachedIds()
-    .then((r) => setSavedOffline(Array.isArray(r?.ytIds) ? r.ytIds : []))
+    .then((r) => changed || setSavedOffline(Array.isArray(r?.ytIds) ? r.ytIds : []))
     .catch(fail('cache.cachedIds'));
 }

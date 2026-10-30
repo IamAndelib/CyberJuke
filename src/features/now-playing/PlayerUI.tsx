@@ -831,9 +831,11 @@ export function TrackMenu() {
                 class="sheet-item"
                 onClick={() => {
                   const s = player.state.value;
-                  void player.addToQueue([t]);
+                  const added = player.addToQueue([t]);
                   // "plays next" only when it will: not after other queued songs, nor while Repeat one holds the current one.
-                  toast(!s.current ? 'Playing' : s.repeat === 'one' || s.upNext.some((u) => u.queued) ? 'Added to queue' : 'Added to queue · plays next');
+                  if (s.current) toast(s.repeat === 'one' || s.upNext.some((u) => u.queued) ? 'Added to queue' : 'Added to queue · plays next');
+                  // With nothing playing it starts it, unless that was refused (offline: the refusal says why).
+                  else void added.then(() => player.state.peek().current && toast('Playing'));
                   close();
                 }}
                 disabled={!known}

@@ -7,6 +7,8 @@ vi.mock('@capacitor/core', async (orig) => ({ ...(await orig<object>()), Capacit
 /** The fake JukePlayer plugin: the cache calls it got (name, argument), and the listeners added. */
 const fake = vi.hoisted(() => {
   const listeners = new Map<string, (e: unknown) => void>();
+  let answerIds: (r: { ytIds: string[] }) => void = () => {};
+  const idsAsked = new Promise<{ ytIds: string[] }>((r) => (answerIds = r));
   const calls: [string, any][] = [];
   const cmd = (name: string) => (o?: unknown) => {
     calls.push([name, o]);
@@ -15,6 +17,7 @@ const fake = vi.hoisted(() => {
   return {
     listeners,
     calls,
+    answerIds: (ytIds: string[]) => answerIds({ ytIds }),
     of: (name: string) => calls.filter(([n]) => n === name).map(([, o]) => o),
     names: () => calls.map(([n]) => n),
     plugin: {
@@ -28,7 +31,7 @@ const fake = vi.hoisted(() => {
       clearCache: cmd('clearCache'),
       signedOut: cmd('signedOut'),
       signedIn: cmd('signedIn'),
-      cachedIds: () => Promise.resolve({ ytIds: ['aaaaaaaaaaa'] }),
+      cachedIds: () => idsAsked,
     },
   };
 });
@@ -51,11 +54,16 @@ afterAll(() => {
 });
 
 describe('the listening cache wiring', () => {
-  it('at start sends Liked (newest first) and the size, and asks what is saved', async () => {
+  it('at start sends Liked (newest first) and the size, and asks what is saved: a change reported before the answer wins', async () => {
     expect(fake.of('setLikedIds')).toEqual([{ ytIds: ['bxxxxxxxxxx', 'axxxxxxxxxx'], membersOnly: [] }]);
     expect(fake.of('setCacheLimit')).toEqual([{ mb: 256 }]);
     expect(fake.of('setDownloadOnMobileData')).toEqual([{ enabled: false }]);
-    await vi.waitFor(() => expect([...savedOffline.value]).toEqual(['aaaaaaaaaaa']));
+    // The answer, read before the change, comes in after it: it is older, and is dropped.
+    fake.listeners.get('cacheChanged')!({ ytIds: ['aaaaaaaaaaa', 'bxxxxxxxxxx'] });
+    fake.answerIds(['aaaaaaaaaaa']);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect([...savedOffline.value]).toEqual(['aaaaaaaaaaa', 'bxxxxxxxxxx']);
   });
 
   it('sends a burst of likes once, a moment after the last', () => {
