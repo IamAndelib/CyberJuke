@@ -5,6 +5,7 @@
 ### Fixed
 - Repeat works like the music apps you know. A song you tap with repeat on gets its suggestions in Up next instead of playing on its own forever, also from an artist or genre page with a single song, and **Repeat all** loops it with them. **Repeat all** on an album, a genre or any other list loops just that list. **Repeat one** replays the song when it ends, and **Next** moves on as usual; at the very end of a list it is off, as on the notification.
 - Suggestions follow a list when it nears its end, instead of being lined up the moment it starts, so an album plays as itself first and a Signal Radio round reads "1 of 50", not "1 of 100".
+- Autoplay keeps going for hours after you swipe the app away, and picks up again when you reopen it. Before, Jukebox songs, Signal Radio and Home's Shuffle could stop after the songs already lined up.
 - Up next on the phone lists songs in the order they will play with **Repeat all** on, and says what repeat does: "Then repeats from the top." or "Repeating this song."
 
 ## [1.3.4] - 2026-10-29

@@ -15,7 +15,7 @@ import { whenIdle } from '../core/idle';
 import { audioKey, isGlobal, type Track } from '../data/model';
 import { similarTracks } from '../data/similar';
 import { shuffle, stationPlaying, stationQueue } from './radio';
-import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, mayAutoplay, type Player, type QueueLow } from './types';
+import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, AUTOPLAY_RESERVE, mayAutoplay, type Player, type QueueLow } from './types';
 
 /** How long a batch just added counts as ahead even before the player's state shows it (native's lags the call). */
 const BATCH_LAG_MS = 5000;
@@ -50,10 +50,10 @@ export interface AutoplayDeps {
 }
 
 export interface Autoplay {
-  /** Add more after a low signal (also what the player's onQueueLow calls). */
-  fill(e: QueueLow): Promise<void>;
-  /** The catalog has loaded: answer a signal that came before it (the player won't send it again). */
-  catalogReady(): void;
+  /** Add more after a low signal (also what the player's onQueueLow calls): with `want` tracks or fewer left. */
+  fill(e: QueueLow, want?: number): Promise<void>;
+  /** The catalog has loaded and the player has its state: answer a signal that came before (the player won't send it again). */
+  ready(): void;
   stop(): void;
 }
 
@@ -70,15 +70,20 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
    */
   let batch: { seedId: string; ids: string[]; at: number; queue?: readonly Track[]; round?: boolean } | null = null;
   /**
-   * A Jukebox signal that came while the catalog was still loading (first launch, sign-in,
-   * a reloaded WebView): nothing to pick from yet, so it waits for `catalogReady`.
+   * A signal that came before the player's state or, for a Jukebox seed, while the catalog
+   * was still loading (first launch, sign-in, a reloaded WebView, which native hands the
+   * signal it missed): nothing to pick from yet, so it waits for `ready`.
    */
   let starved: QueueLow | null = null;
 
-  async function run(e: QueueLow): Promise<void> {
+  async function run(e: QueueLow, want: number): Promise<void> {
     const s = player.state.peek();
     const seed = s.seed ?? s.current;
-    if (!seed || !s.current || !mayAutoplay(s.repeat, s.queue.length)) return;
+    if (!seed || !s.current) {
+      starved = e;
+      return;
+    }
+    if (!mayAutoplay(s.repeat, s.queue.length)) return;
     if (e.seedId && e.seedId !== seed.id) return; // a signal for an older seed
     const inQueue = new Set(s.queue.flatMap((t) => [t.id, audioKey(t)]));
     // The signal may be older than the last refill (one that came in during it): count
@@ -88,8 +93,8 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     const lagging = batch?.ids ?? [];
     for (const id of lagging) inQueue.add(id);
     const left = Math.max(e.left, s.upNext.length) + lagging.length;
-    if (left > AUTOPLAY_LOW) return;
-    const count = left <= 0 ? AUTOPLAY_FIRST : AUTOPLAY_MORE;
+    if (left > want) return;
+    const count = Math.max(left <= 0 ? AUTOPLAY_FIRST : AUTOPLAY_MORE, want - left);
     const add = async (tracks: Track[], round = false) => {
       const b: NonNullable<typeof batch> = { seedId: seed.id, ids: tracks.map((t) => t.id), at: now(), ...(round && { round }) };
       batch = b;
@@ -149,27 +154,28 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
   }
 
   /** A signal that came in during a refill: handled right after it (the latest only). */
-  let again: QueueLow | null = null;
+  let again: [QueueLow, number] | null = null;
 
-  function fill(e: QueueLow): Promise<void> {
+  /** Add more if `want` tracks or fewer are left (AUTOPLAY_LOW, or the background's AUTOPLAY_RESERVE). */
+  function fill(e: QueueLow, want = AUTOPLAY_LOW): Promise<void> {
     // One refill at a time.
     if (inflight) {
-      again = e;
+      again = [e, want];
       return inflight;
     }
-    const p = run(e)
+    const p = run(e, want)
       .catch((err) => deps.log?.('autoplay', err))
       .finally(() => {
         if (inflight === p) inflight = null;
         const next = again;
         again = null;
-        if (next) void fill(next);
+        if (next) void fill(...next);
       });
     inflight = p;
     return p;
   }
 
-  function catalogReady(): void {
+  function ready(): void {
     const e = starved;
     starved = null;
     if (e) void fill(e);
@@ -180,17 +186,41 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
   // A newer signal replaces one still waiting (the latest only, as in fill). With the
   // screen off there is no frame to keep, and a hidden page's idle time may be throttled.
   let idle = () => {};
+  const hidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
   const off = player.onQueueLow((e) => {
     idle();
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') void fill(e);
+    if (hidden()) void fill(e);
     else idle = whenIdle(() => void fill(e), 1000, 50);
   });
+  // Going to the background: a reserve ahead. Only this page picks Jukebox tracks, and it may
+  // be gone before the list runs low (the app swiped away, its renderer killed by Android);
+  // native plays on through what is queued. (Global radios refill natively, stations too.)
+  // Not for a page that is unloading (a reload): pagehide comes just before its visibilitychange.
+  let leaving = false;
+  const left = (e: Event) => (leaving = e.type === 'pagehide');
+  const reserve = () => {
+    if (leaving) return;
+    const s = player.state.peek();
+    const seed = s.seed ?? s.current;
+    // (Up next holds at most UP_NEXT_MAX = AUTOPLAY_RESERVE: a full one may have more behind it.)
+    if (hidden() && seed && s.upNext.length < AUTOPLAY_RESERVE) void fill({ left: s.upNext.length, seedId: seed.id }, AUTOPLAY_RESERVE);
+  };
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', reserve);
+    globalThis.addEventListener?.('pagehide', left);
+    globalThis.addEventListener?.('pageshow', left);
+  }
   return {
     fill,
-    catalogReady,
+    ready,
     stop: () => {
       idle();
       off();
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', reserve);
+        globalThis.removeEventListener?.('pagehide', left);
+        globalThis.removeEventListener?.('pageshow', left);
+      }
     },
   };
 }

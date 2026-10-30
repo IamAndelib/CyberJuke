@@ -91,6 +91,8 @@ export class NativePlayer implements Player {
   /** Up next as last built, and what it was built from: reused while nothing changed (ticks). */
   private builtFrom = '';
   private lowListeners = new Set<(e: QueueLow) => void>();
+  /** The last "running low" from native. */
+  private lastLow: QueueLow | null = null;
   /**
    * After playList: the track native should report next. Events still describing the
    * old queue (sent before setQueue landed) are ignored until then, so the optimistic
@@ -134,6 +136,7 @@ export class NativePlayer implements Player {
     }).catch(fail);
     JukePlayer.addListener('queueLow', (e) => {
       const ev: QueueLow = { left: Math.max(0, Number(e?.left) || 0), seedId: typeof e?.seedId === 'string' ? e.seedId : null };
+      this.lastLow = ev;
       for (const cb of this.lowListeners) cb(ev);
     }).catch(fail);
     // Liked, history or the catalog loading can name tracks shown as "Unknown track".
@@ -427,8 +430,14 @@ export class NativePlayer implements Player {
 
   setAutoplay = (enabled: boolean) => JukePlayer.setAutoplay({ enabled });
 
+  /**
+   * A listener added after the last signal (autoplay starts once the settings are read, and
+   * native repeats a signal the page missed as soon as this one listens) hears it too.
+   */
   onQueueLow(cb: (e: QueueLow) => void): () => void {
     this.lowListeners.add(cb);
+    const last = this.lastLow;
+    if (last) queueMicrotask(() => this.lowListeners.has(cb) && cb(last));
     return () => this.lowListeners.delete(cb);
   }
 

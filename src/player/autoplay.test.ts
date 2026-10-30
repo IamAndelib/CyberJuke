@@ -2,7 +2,7 @@ import { signal } from '@preact/signals';
 import { describe, expect, it, vi } from 'vitest';
 import type { Track } from '../data/model';
 import { createAutoplay, shuffleLabel, type AutoplayDeps } from './autoplay';
-import { AUTOPLAY_FIRST, AUTOPLAY_MORE, EMPTY_STATE, type Player, type PlayerState, type QueueLow } from './types';
+import { AUTOPLAY_FIRST, AUTOPLAY_MORE, AUTOPLAY_RESERVE, EMPTY_STATE, type Player, type PlayerState, type QueueLow } from './types';
 
 const track = (id: string, p: Partial<Track> = {}): Track => ({
   id,
@@ -64,6 +64,35 @@ describe('autoplay', () => {
     expect(added[1][0]).toHaveLength(AUTOPLAY_MORE);
   });
 
+  it("a signal that came before the player's state (a reloaded page) is answered once it is there", async () => {
+    const { ap, added, s } = setup({});
+    await ap.fill({ left: 0, seedId: 'c0' });
+    expect(added).toHaveLength(0);
+    const seed = track('c0', { artist: 'A0' });
+    s.value = { ...s.value, current: seed, seed, queue: [seed] };
+    ap.ready();
+    await vi.waitFor(() => expect(added).toHaveLength(1));
+    expect(added[0][0]).toHaveLength(AUTOPLAY_FIRST);
+  });
+
+  it('going to the background, it lines up a reserve: the page may be gone when the list runs low', async () => {
+    const doc = Object.assign(new EventTarget(), { visibilityState: 'visible' });
+    vi.stubGlobal('document', doc);
+    try {
+      const list = Array.from({ length: 12 }, (_, i) => track(`c${i}`, { artist: `A${i}` }));
+      const { added } = setup({ current: list[0], seed: list[0], index: 0, queue: list, upNext: list.slice(1).map((t, k) => ({ track: t, index: k + 1 })) });
+      doc.dispatchEvent(new Event('visibilitychange'));
+      expect(added).toHaveLength(0);
+      doc.visibilityState = 'hidden';
+      doc.dispatchEvent(new Event('visibilitychange'));
+      await vi.waitFor(() => expect(added).toHaveLength(1));
+      // 11 of the list to go: 39 more, for 50 ahead.
+      expect(added[0][0]).toHaveLength(AUTOPLAY_RESERVE - 11);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('a list gets more only near its end: with more than 5 tracks of it to go, nothing yet', async () => {
     const list = Array.from({ length: 8 }, (_, i) => track(`c${i}`, { artist: `A${i}` }));
     const at = (i: number) => ({ current: list[i], seed: list[0], index: i, queue: list, upNext: list.slice(i + 1).map((t, k) => ({ track: t, index: i + 1 + k })) });
@@ -85,11 +114,11 @@ describe('autoplay', () => {
     await ap.fill({ left: 0, seedId: 'c0' });
     expect(added).toHaveLength(0);
     cat = full;
-    ap.catalogReady();
+    ap.ready();
     await vi.waitFor(() => expect(added).toHaveLength(1));
     expect(added[0][0]).toHaveLength(AUTOPLAY_FIRST);
     // Answered once: another ready signal adds nothing more.
-    ap.catalogReady();
+    ap.ready();
     await Promise.resolve();
     expect(added).toHaveLength(1);
   });
@@ -263,7 +292,7 @@ describe('autoplay', () => {
       idle.forEach((cb) => cb());
       await vi.waitFor(() => expect(added).toHaveLength(1));
       // With the screen off, at once: a hidden page's idle time may be throttled.
-      vi.stubGlobal('document', { visibilityState: 'hidden' });
+      vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'hidden' }));
       const hidden = setup({ current: seed, seed, queue: [seed], upNext: [] });
       hidden.signal({ left: 0, seedId: 'c0' });
       await vi.waitFor(() => expect(hidden.added).toHaveLength(1));

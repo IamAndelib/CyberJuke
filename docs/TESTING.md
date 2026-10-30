@@ -19,7 +19,7 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] Unplugging headphones or disconnecting Bluetooth pauses playback.
 - [ ] Switch between Wi-Fi and mobile data **during** a song: playback continues, or resumes by itself within a few seconds. No "YouTube is limiting requests" banner.
 - [ ] Turn on airplane mode during a song until it stops, then off again: it carries on by itself.
-- [ ] Start a Jukebox track, swipe the app away, and let it play past the list: autoplay keeps going. Reopen the app: Up next shows the autoplay tracks.
+- [ ] Start a Jukebox track (and once a genre's Play), swipe the app away, and press Next on the notification 30 times or so: it keeps going (about 50 songs are lined up as the app leaves the screen). Reopen the app near the end of them: Up next fills up again.
 - [ ] Settings → Audio quality shows **Auto** (on an updated install that had High, too; Low stays Low). **Auto**, **High** and **Low** each play, and the line under the name says what the choice does.
 - [ ] With **Auto** on a slow connection (mobile data with weak signal, or a throttled Wi-Fi): once playback has stalled twice within a few minutes, the next tracks sound lighter, one step at a time, never mid-track. Back on a fast connection, it climbs back over several tracks (5 calm minutes per step). On a connection that can't keep the higher quality, the stalls after each try come further and further apart (at most one every 40 minutes or so).
 - [ ] Settings → **Crossfade** is **Off** on a fresh or updated install: tracks follow each other as before.
