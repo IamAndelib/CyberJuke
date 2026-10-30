@@ -58,7 +58,9 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 - [ ] Turn on **Repeat all**, then tap a song on Home (and a genre with a single song): Up next fills with its suggestions and ends with "Then repeats from the top."; after the last one the song plays again. No more are added meanwhile.
 - [ ] Play a genre with **Repeat all** on: after its last song the first plays again, with no suggestions in between. Turn repeat off near the end: suggestions appear.
 - [ ] **Repeat one**: the song replays when it ends and Up next says "Repeating this song."; Next moves on. With Autoplay off, at a list's last song Next is greyed out in the app and on the notification alike.
-- [ ] Settings → **Autoplay** off: playback stops when the list ends.
+- [ ] Settings → **Autoplay** off: playback stops when the list ends. A tap on a Home song plays Home's list on from it; a genre with one song says "Autoplay is off." in Up next.
+- [ ] In Up next, tap the 4th suggestion: it plays and the 5th is next. Remove a few suggestions: they don't come back later.
+- [ ] Offline in Liked: only saved songs follow, and Up next dims any that can't play.
 - [ ] Let autoplay run for an hour or more: it keeps going without repeating the same songs.
 
 ## Signal Radio

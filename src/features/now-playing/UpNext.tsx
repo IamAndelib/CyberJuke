@@ -1,6 +1,9 @@
 import { useLayoutEffect, useRef } from 'preact/hooks';
 import { currentId, player, playContext, repeatMode, shuffleOn, upNextSections, type UpItem, type UpNextKind } from '../../player';
 import { stationPlaying } from '../../player/radio';
+import { online } from '../../core/network';
+import { settings } from '../../stores/library';
+import { isSaved, savedOffline } from '../../stores/savedOffline';
 import { toast } from '../../stores/toast';
 import { Icon } from '../../ui/icons';
 import { afterPress } from '../../ui/press';
@@ -105,7 +108,8 @@ export function UpNext() {
         {items.map((it, k) => (
           <li
             key={`${it.track.id}:${it.index}`}
-            class={'row' + (kind === 'queued' ? ' queued' : '') + (kind === 'autoplay' ? ' autoplay' : '')}
+            // Offline, a row that can't play is dimmed, as in every list (TrackRow).
+            class={'row' + (kind === 'queued' ? ' queued' : '') + (kind === 'autoplay' ? ' autoplay' : '') + (!online.value && !isSaved(it.track, savedOffline.value) ? ' off' : '')}
             data-testid="upnext-row"
             data-track-id={it.track.id}
             data-index={it.index}
@@ -189,7 +193,7 @@ export function UpNext() {
         </div>
       )}
       {total === 0 ? (
-        <div class="dim small upnext-empty">{repeat === 'all' ? 'Queue repeats from the top.' : 'Nothing queued. ⋯ → Add to queue plays a track next.'}</div>
+        <div class="dim small upnext-empty">{repeat === 'all' ? 'Queue repeats from the top.' : `${settings.value.autoplay ? 'Nothing queued.' : 'Autoplay is off.'} ⋯ → Add to queue plays a track next.`}</div>
       ) : (
         <>
           <ol class="list compact">

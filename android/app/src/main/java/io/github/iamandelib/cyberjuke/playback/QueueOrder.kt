@@ -443,16 +443,14 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     }
 
     /**
-     * A user jump to [index]. Jumping to an autoplay item drops the autoplay items after it (the
-     * radio continues from it), but with [repeatAll] (they are its loop); returns true then.
+     * A user jump to [index]. Returns true when it is an autoplay item: more follow from it, after
+     * the autoplay items still after it, which stay (Spotify, YouTube Music).
      */
-    fun skipTo(index: Int, repeatAll: Boolean = false): Boolean {
+    fun skipTo(index: Int): Boolean {
         if (index !in 0 until host.count) return false
         host.seekTo(index)
         val cur = host.currentIndex
-        if (cur !in 0 until host.count || !host.isAutoAt(cur)) return false
-        if (!repeatAll) dropUpcomingAuto()
-        return true
+        return cur in 0 until host.count && host.isAutoAt(cur)
     }
 
     /** List indices after the current item, in play order (repeat off). */

@@ -2,19 +2,21 @@
  * Every way the UI starts a list goes through here, with a play context (C2) saying
  * where it came from and how it continues:
  *  - 'radio' for feeds and results (Home, Most saved, Search, Global): the tapped track,
- *    then similar ones;
+ *    then similar ones; with Autoplay off, the feed from the tapped track on instead (as
+ *    Spotify plays a playlist), or it would stop after one song;
  *  - 'list' for lists (Album, Liked, History, a genre, an artist, Play/Shuffle): the
  *    list in order, then similar ones.
  */
 import type { Track } from '../data/model';
 import { playableNow, player, type PlayContext } from '../player';
+import { settings } from '../stores/library';
 
 export const radio = (label: string): PlayContext => ({ label, mode: 'radio' });
 export const list = (label: string): PlayContext => ({ label, mode: 'list' });
 
 /** Start `tracks` at `i`. */
 export function playFrom(tracks: Track[], i: number, ctx: PlayContext): Promise<void> {
-  return player.playList(tracks, i, ctx);
+  return player.playList(tracks, i, ctx.mode === 'radio' && !settings.peek().autoplay ? list(ctx.label) : ctx);
 }
 
 /**

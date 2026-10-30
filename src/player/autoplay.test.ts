@@ -93,6 +93,23 @@ describe('autoplay', () => {
     }
   });
 
+  it('never picks a track removed from Up next this session', async () => {
+    const seed = track('c0', { artist: 'A0' });
+    const removed = new Set(Array.from({ length: 40 }, (_, i) => `c${i + 1}`));
+    const { ap, added } = setup({ current: seed, seed, queue: [seed], upNext: [] }, { removed: () => removed });
+    await ap.fill({ left: 0, seedId: 'c0' });
+    expect(added[0][0].length).toBeGreaterThan(0);
+    expect(added[0][0].some((id) => removed.has(id))).toBe(false);
+  });
+
+  it('offline, picks only songs saved on the phone', async () => {
+    const seed = track('c0', { artist: 'A0' });
+    const saved = new Set(['c3', 'c7', 'c12']);
+    const { ap, added } = setup({ current: seed, seed, queue: [seed], upNext: [] }, { playable: (t) => saved.has(t.id) });
+    await ap.fill({ left: 0, seedId: 'c0' });
+    expect([...added[0][0]].sort()).toEqual(['c12', 'c3', 'c7']);
+  });
+
   it('a list gets more only near its end: with more than 5 tracks of it to go, nothing yet', async () => {
     const list = Array.from({ length: 8 }, (_, i) => track(`c${i}`, { artist: `A${i}` }));
     const at = (i: number) => ({ current: list[i], seed: list[0], index: i, queue: list, upNext: list.slice(i + 1).map((t, k) => ({ track: t, index: i + 1 + k })) });

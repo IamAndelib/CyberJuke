@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { expectStable, musicCalls, openNowPlaying, openSearch, openSettings, setVisibility, start } from '../helpers';
+import { expectStable, musicCalls, openNowPlaying, openSearch, openSettings, setOffline, setVisibility, start } from '../helpers';
 import { genreFamilies } from '../../src/data/similar';
 import { artistKey, splitArtists } from '../../src/data/artists';
 import { words } from '../../src/data/text';
@@ -204,18 +204,22 @@ test('a Global result starts a Global radio; tapping an autoplay track continues
   const seedYt = q.seed!.id.replace(/^ytm:/, '');
   expect((await musicCalls(page)).filter((c) => c[0] === 'radio')).toEqual([['radio', seedYt, null]]);
 
-  // Near the end of the radio, Up next refills from the same radio's next page.
+  // A tapped autoplay track plays; the ones after it stay, and the radio goes on from it.
   await openNowPlaying(page);
   const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
   const pick = q.autoplay[3];
   await rows.nth(3).locator('.row-main').click();
   await expect(page.getByTestId('np-title')).toHaveText(pick.title);
-  // The old radio after it went; a new one follows the tapped track.
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveText(`Autoplay · similar to ${pick.title}`);
-  await expect.poll(async () => (await musicCalls(page)).filter((c) => c[0] === 'radio').map((c) => c[1])).toEqual([seedYt, pick.id.replace(/^ytm:/, '')]);
-  const after = await withAutoplay(page);
+  const after = await queueState(page);
   expect(after.seed?.id).toBe(pick.id);
-  expect(after.autoplay.some((t) => q.autoplay.slice(4).some((o) => o.id === t.id))).toBe(false);
+  expect(after.autoplay.map((t) => t.id)).toEqual(q.autoplay.slice(4).map((t) => t.id));
+  // Near their end, more follow from it.
+  const last = q.autoplay.at(-1)!;
+  await rows.last().locator('.row-main').click();
+  await expect(page.getByTestId('np-title')).toHaveText(last.title);
+  await expect.poll(async () => (await musicCalls(page)).filter((c) => c[0] === 'radio').map((c) => c[1])).toEqual([seedYt, last.id.replace(/^ytm:/, '')]);
+  expect((await withAutoplay(page)).seed?.id).toBe(last.id);
 });
 
 test('queued tracks survive a new list, then autoplay follows', async ({ page }) => {
@@ -360,6 +364,62 @@ test('going to the background, a reserve is lined up: playback goes on if Androi
   const q = await withAutoplay(page, 50 - list.length);
   expect(list.length + q.autoplay.length).toBe(50);
   await setVisibility(page, 'visible');
+});
+
+test("songs removed from Up next don't come back in later suggestions", async ({ page }) => {
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  await withAutoplay(page);
+  await openNowPlaying(page);
+  const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
+  const gone: string[] = [];
+  // Remove them as they come: the refills that follow bring none of them back.
+  for (let i = 0; i < 30; i++) {
+    gone.push((await rows.first().getAttribute('data-track-id'))!);
+    // A click on the button itself: the "Removed" toast's Undo may lie over the row by now.
+    await rows.first().getByTestId('upnext-remove').dispatchEvent('click');
+    await expect(page.locator(`[data-testid="upnext-row"][data-track-id="${gone[i]}"]`)).toHaveCount(0);
+    await expect(rows.first()).toBeVisible();
+    // Past Up next's guard against a double tap removing two rows (REMOVE_GUARD_MS).
+    await page.waitForTimeout(320);
+  }
+  const after = await queueState(page);
+  expect(after.autoplay.filter((t) => gone.includes(t.id))).toEqual([]);
+});
+
+test('with Autoplay off, a Home tap plays the feed on from that song instead of stopping after it', async ({ page }) => {
+  await start(page);
+  await openSettings(page);
+  await page.getByTestId('autoplay-toggle').click();
+  await expect(page.getByTestId('autoplay-toggle')).toHaveAttribute('aria-checked', 'false');
+  await page.getByTestId('tab-home').click();
+  const titles = (await visible(page, 'track-title').allTextContents()).map((t) => t.trim());
+  await visible(page, 'track-play').nth(2).click();
+  await expect(page.getByTestId('mini-title')).toHaveText(titles[2]);
+  const q = await queueState(page);
+  expect(q.context?.mode).toBe('list');
+  expect(q.list.slice(0, 3).map((t) => t.title)).toEqual(titles.slice(3, 6));
+  expect(q.autoplay).toEqual([]);
+  // A single song with nothing after it says why.
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-tile').last().click();
+  await expect(visible(page, 'track-row')).toHaveCount(1);
+  await visible(page, 'track-play').first().click();
+  await openNowPlaying(page);
+  await expect(page.getByTestId('up-next')).toContainText('Autoplay is off.');
+});
+
+test("offline, Up next's rows that can't play are dimmed, as in every list", async ({ page, backend }) => {
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  await withAutoplay(page);
+  await openNowPlaying(page);
+  const rows = page.locator('[data-testid="upnext-row"]');
+  await expect(rows.first()).not.toHaveClass(/\boff\b/);
+  await setOffline(page, backend, true);
+  await expect(rows.first()).toHaveClass(/\boff\b/);
+  await setOffline(page, backend, false);
+  await expect(rows.first()).not.toHaveClass(/\boff\b/);
 });
 
 test('a track started before the Jukebox catalog has loaded still gets its autoplay once it does', async ({ page }) => {

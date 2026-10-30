@@ -62,7 +62,7 @@ class QueueRulesTest {
                     if (s.isNull("beforeId")) null else s.getString("beforeId"),
                 )
                 "removeIds" -> p.queue.removeIds(strings(s.getJSONArray("ids")).toSet())
-                "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")), repeatAll = p.repeat == "all")
+                "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")))
                 "next" -> p.next()
                 "nextAuto" -> p.nextAuto()
                 "prev" -> p.prev(s.optLong("positionMs", 0L))

@@ -20,8 +20,8 @@
  *    reorders only the list. Repeat all loops what you started: a list's autoplay tracks
  *    still to come go (they come back once repeat is off), but a single song's are its
  *    radio, the loop itself, and stay. Repeat one leaves them: it replays the track when
- *    it ends, and a skip moves on as with repeat off (none at the end, as Media3's). Jumping to an autoplay
- *    track drops the ones after it (the radio continues from it), but with repeat all;
+ *    it ends, and a skip moves on as with repeat off (none at the end, as Media3's). Jumping to an
+ *    autoplay track keeps the ones after it (Spotify, YouTube Music): more follow it once they run low;
  *  - but with repeat all, played autoplay tracks more than KEEP_PLAYED behind the
  *    current one are dropped (a radio can run for hours);
  *  - Undo of a remove (restore) puts the track back in its section, before the track
@@ -213,9 +213,8 @@ export class Queue<T extends Identified> {
   }
 
   /**
-   * Jump to a list index. Tracks still queued stay next (see the rule above). Jumping
-   * to an autoplay track drops the autoplay tracks after it: the radio continues
-   * from the new track. Not with repeat all: they are its loop then, so they stay.
+   * Jump to a list index. Tracks still queued stay next (see the rule above); so do the
+   * autoplay tracks after an autoplay track jumped to.
    */
   skipTo(index: number): T | null {
     const e = this.list[index];
@@ -223,7 +222,6 @@ export class Queue<T extends Identified> {
     this.cur = e;
     this.settle();
     this.keepQueuedNext();
-    if (e.auto && this.repeat !== 'all') this.dropAuto();
     this.trimPlayed();
     return e.item;
   }

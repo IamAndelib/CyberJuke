@@ -23,7 +23,7 @@ import { online } from '../core/network';
 import { OFFLINE } from '../core/offlineText';
 import { exposeForTests } from '../core/testHooks';
 import type { Track } from '../data/model';
-import { hasSavedLiked, savedOffline, savedTracks } from '../stores/savedOffline';
+import { hasSavedLiked, isSaved, savedOffline, savedTracks } from '../stores/savedOffline';
 import { createAutoplay, type Autoplay } from './autoplay';
 import { NativePlayer } from './nativePlayer';
 import { offlineGuard, playsOffline, type OfflineRefusal } from './offlineGuard';
@@ -86,12 +86,28 @@ export function playableNow(tracks: Track[]): Track[] | null {
   return null;
 }
 
-export const player: Player = offlineGuard(safePlayer(Capacitor.isNativePlatform() ? new NativePlayer() : new WebPlayer(), commandFailed), {
+const guarded = offlineGuard(safePlayer(Capacitor.isNativePlatform() ? new NativePlayer() : new WebPlayer(), commandFailed), {
   online: () => online.peek(),
   saved: () => savedOffline.peek(),
   liked: (t) => likedIds.peek().has(t.id),
   refuse: refuseOffline,
 });
+
+/** Tracks removed from Up next this session: autoplay doesn't pick them again (Spotify, YouTube Music). Undo puts one back. */
+const removed = new Set<string>();
+
+export const player: Player = {
+  ...guarded,
+  remove: (index, expectId) => {
+    const t = guarded.state.peek().queue[index];
+    if (t && (expectId == null || t.id === expectId)) removed.add(t.id);
+    return guarded.remove(index, expectId);
+  },
+  restore: (track, kind, beforeId) => {
+    removed.delete(track.id);
+    return guarded.restore(track, kind, beforeId);
+  },
+};
 
 const state = player.state;
 
@@ -211,6 +227,8 @@ function startAutoplay(): Autoplay {
     showNsfw: () => showNsfw.peek(),
     signedIn: () => auth.signedIn(),
     blocked: () => block.blocked.peek() != null,
+    removed: () => removed,
+    playable: (t) => online.peek() || isSaved(t, savedOffline.peek()),
     radio: (ytId, next) => music.radio(ytId, next).then((page) => ({ tracks: musicTracks(page.items), next: page.next })),
     log: logError,
   });
