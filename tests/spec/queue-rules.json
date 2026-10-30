@@ -390,6 +390,25 @@
       ]
     },
     {
+      "name": "shuffle turned on mid-list mixes only what's ahead; what played stays first",
+      "list": ["a", "b", "c", "d", "e", "f"],
+      "start": 0,
+      "steps": [
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "setShuffle", "on": true },
+        { "op": "expect", "current": "c", "listSet": ["d", "e", "f"] },
+        { "op": "setRepeat", "mode": "all" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "expect", "current": "a" },
+        { "op": "next" },
+        { "op": "expect", "current": "b" }
+      ]
+    },
+    {
       "name": "queued while autoplay plays: next, before the rest of autoplay",
       "list": ["a"],
       "start": 0,

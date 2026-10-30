@@ -176,12 +176,13 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
 
     /**
      * Toggling shuffle keeps the queued tracks next in both directions. Turned on, it is a fresh
-     * shuffle (Media3 would keep the last one) that starts at the current track, so the whole
-     * list is still ahead (as on the web).
+     * shuffle (Media3 would keep the last one) of what comes after the current track only: what
+     * is before it (list order, as shuffle was off) stays where it was (as on the web; Spotify,
+     * YouTube Music).
      */
     fun onShuffleModeChanged(enabled: Boolean) {
         prune()
-        if (enabled) shuffleFromCurrent() else enforceLinearOrder()
+        if (enabled) shuffleFromCurrent(keepBefore = true) else enforceLinearOrder()
     }
 
     /**
@@ -259,12 +260,20 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         if (host.shuffleEnabled) enforceShuffleOrder() else enforceLinearOrder()
     }
 
-    /** Shuffle on: a shuffle order that starts at the current item (then the usual rules). */
-    private fun shuffleFromCurrent() {
+    /**
+     * Shuffle on: a shuffle order from the current item (then the usual rules). [keepBefore]: the
+     * items before it in list order stay first, in order, and only those after it are mixed; a new
+     * list has all the others ahead.
+     */
+    private fun shuffleFromCurrent(keepBefore: Boolean = false) {
         if (!host.shuffleEnabled) return
         val cur = host.currentIndex
         if (cur !in 0 until host.count) return
-        val first = intArrayOf(cur) + (0 until host.count).filter { it != cur }.shuffled(random)
+        val queued = pendingIndices().toHashSet()
+        val before = if (keepBefore) (0 until cur).filter { it !in queued } else emptyList()
+        val kept = before.toHashSet()
+        val ahead = (0 until host.count).filter { it != cur && it !in kept }.shuffled(random)
+        val first = (before + cur + ahead).toIntArray()
         host.setShuffleOrder(QueueOrder.arrange(first, cur, pendingIndices(), autoIndices()))
     }
 
