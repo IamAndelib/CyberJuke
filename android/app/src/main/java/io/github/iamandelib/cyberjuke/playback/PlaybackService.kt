@@ -1768,8 +1768,8 @@ class PlaybackService : MediaSessionService() {
                 )
                 SessionPolicy.Grant.FULL -> Unit
                 SessionPolicy.Grant.NOTIFICATION -> {
-                    val commands = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
-                    SessionPolicy.NOTIFICATION_HIDDEN_COMMANDS.forEach { commands.remove(it) }
+                    val commands = Player.Commands.Builder()
+                    SessionPolicy.NOTIFICATION_COMMANDS.forEach { commands.add(it) }
                     builder.setAvailablePlayerCommands(commands.build())
                     builder.setAvailableSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS)
                 }
