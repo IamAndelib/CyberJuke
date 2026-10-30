@@ -104,7 +104,7 @@ internal interface QueueHost<T> {
     /** The item's own id, unique in the playlist and kept through moves; 0 if it has none. */
     fun uidAt(index: Int): Long
 
-    /** The shuffle play order (every index exactly once), or null if unavailable. */
+    /** The shuffle play order (every index exactly once, so its size is [count]), or null if unavailable. */
     fun shuffleOrder(): IntArray?
     fun setShuffleOrder(order: IntArray)
     fun moveItem(from: Int, to: Int)
@@ -325,7 +325,6 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         val moving = added.filter { it != host.currentIndex }
         if (!host.shuffleEnabled || moving.isEmpty()) return
         val order = host.shuffleOrder()?.toMutableList() ?: return
-        if (order.size != host.count) return
         order.removeAll(moving.toSet())
         val cur = order.indexOf(host.currentIndex)
         for (i in moving) {
@@ -428,7 +427,6 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         if (!host.shuffleEnabled) return
         // Inserted at a random place in the shuffle order (Media3's): right before what follows it.
         val order = host.shuffleOrder()?.toMutableList() ?: return
-        if (order.size != host.count) return
         order.remove(at)
         order.add(order.indexOf(at + 1), at)
         host.setShuffleOrder(QueueOrder.arrange(order.toIntArray(), host.currentIndex, pendingIndices(), autoIndices()))
@@ -439,7 +437,6 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         val at = (0 until host.count).firstOrNull { host.isAutoAt(it) } ?: host.count
         host.insertTagged(at, listOf(item), listOf(0L))
         val order = host.shuffleOrder() ?: return
-        if (order.size != host.count) return
         val anchorNow = anchor?.let { if (it >= at) it + 1 else it }
         val rest = order.filter { it != at }.toMutableList()
         val cur = host.currentIndex
@@ -545,7 +542,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     private fun placeLast(index: Int) {
         if (!host.shuffleEnabled) return
         val order = host.shuffleOrder()?.toMutableList() ?: return
-        if (order.size != host.count || !order.remove(index)) return
+        if (!order.remove(index)) return
         order.add(index)
         host.setShuffleOrder(order.toIntArray())
     }
@@ -576,7 +573,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         if (n == 0) return emptyList()
         if (host.shuffleEnabled) {
             val order = host.shuffleOrder()
-            if (order != null && order.size == n) {
+            if (order != null) {
                 val p = order.indexOf(cur)
                 return order.toList().subList(p + 1, n)
             }
@@ -591,7 +588,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         if (n == 0 || cur !in 0 until n) return emptyList()
         if (host.shuffleEnabled) {
             val order = host.shuffleOrder()
-            if (order != null && order.size == n) return order.toList().subList(0, order.indexOf(cur)).filter(::isHeard)
+            if (order != null) return order.toList().subList(0, order.indexOf(cur)).filter(::isHeard)
         }
         return (0 until cur).filter(::isHeard)
     }
@@ -639,7 +636,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         val autos = autoIndices()
         if (pending.isEmpty() && autos.isEmpty()) return
         val order = host.shuffleOrder() ?: return
-        if (order.size != host.count || order.isEmpty()) return
+        if (order.isEmpty()) return
         val desired = QueueOrder.arrange(order, host.currentIndex, pendingIndices(), autos)
         if (!desired.contentEquals(order)) host.setShuffleOrder(desired)
     }
