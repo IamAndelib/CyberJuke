@@ -78,6 +78,9 @@ export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [
     return typeof i === 'number' && Number.isInteger(i) && i >= 0 && i < queueIds.length && queueIds[i] === id ? i : -1;
   });
   const ctx = isObj(x.context) ? x.context : null;
+  const prevIndex = (Array.isArray(x.prevIndex) ? x.prevIndex : [])
+    .filter((i): i is number => typeof i === 'number' && Number.isInteger(i) && i >= 0 && i < queueIds.length && i !== index)
+    .slice(-UP_NEXT_MAX);
   return {
     isPlaying: x.isPlaying === true,
     isBuffering: x.isBuffering === true,
@@ -92,6 +95,7 @@ export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [
     // One of q/l/a per upNext entry; anything missing or unknown is the list.
     upNextKinds: upNextIds.map((_, i) => (kinds[i] === 'q' || kinds[i] === 'a' ? kinds[i] : 'l')).join(''),
     upNextIndex,
+    prevIndex,
     context: ctx ? { label: isStr(ctx.label) ? ctx.label : '', mode: ctx.mode === 'radio' ? 'radio' : 'list' } : null,
     seedId: isStr(x.seedId) && x.seedId ? x.seedId : null,
     currentAuto: x.currentAuto === true,

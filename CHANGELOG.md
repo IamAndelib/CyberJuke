@@ -4,6 +4,7 @@
 
 ### Changed
 - Up next's ↑ ↓ ✕ buttons sit side by side, so song titles get more room.
+- Up next shows the whole list: the songs already played stay above, dimmed, the playing one is marked as on Home, and a tap on any of them plays from there. With **Repeat all**, the top it repeats from is right there.
 - Turning shuffle on mixes only the songs still to come: the ones before the playing song stay where they were, and **Repeat all** comes back to them first.
 
 ### Fixed

@@ -94,6 +94,17 @@ describe('NativePlayer: Up next rows (K1)', () => {
     expect(fake.plugin.removeItem).toHaveBeenCalledWith({ index: 3, expectId: 'A' });
   });
 
+  it('the played tracks come by list index, oldest first; an older native sends none', () => {
+    const p = new NativePlayer();
+    emit('state', state({ index: 2, trackId: 'C', queueIds: ['A', 'B', 'C', 'D'], upNextIds: ['D'], upNextKinds: 'l', upNextIndex: [3], prevIndex: [1, 0] }));
+    expect(p.state.peek().previous.map((u) => [u.track.id, u.index])).toEqual([
+      ['B', 1],
+      ['A', 0],
+    ]);
+    emit('state', state({ index: 2, trackId: 'C', queueIds: ['A', 'B', 'C', 'D'], upNextIds: ['D'], upNextKinds: 'l', upNextIndex: [3] }));
+    expect(p.state.peek().previous).toEqual([]);
+  });
+
   it('without indices (an older native), looks after the current track first, then from the top', () => {
     const p = new NativePlayer();
     emit('state', state({ index: 2, trackId: 'C', queueIds: ['A', 'B', 'C', 'A', 'D'], upNextIds: ['A', 'D'], upNextKinds: 'ql' }));

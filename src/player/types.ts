@@ -87,6 +87,8 @@ export interface PlayerState {
   repeat: RepeatMode;
   /** Next tracks in actual play order (respects shuffle). */
   upNext: UpNextItem[];
+  /** The tracks before the current one in play order, oldest first (at most UP_NEXT_MAX): Up next shows them above it. */
+  previous: UpNextItem[];
   /** The context of the current list (same object until it changes); null before the first. */
   context: PlayContext | null;
   /** The track autoplay follows: the started track, or the autoplay track tapped. */
@@ -114,6 +116,7 @@ export const EMPTY_STATE: PlayerState = {
   shuffle: false,
   repeat: 'off',
   upNext: [],
+  previous: [],
   context: null,
   seed: null,
   currentAuto: false,

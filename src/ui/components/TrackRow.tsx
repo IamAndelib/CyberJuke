@@ -110,7 +110,8 @@ function longPress(track: Track) {
   };
 }
 
-function Bars() {
+/** The playing track's visualiser (on its art, in lists and Up next). */
+export function Bars() {
   return (
     <span class="bars" aria-hidden="true">
       <i />

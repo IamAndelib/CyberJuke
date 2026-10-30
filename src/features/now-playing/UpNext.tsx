@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'preact/hooks';
-import { autoplayLabel, currentId, player, playContext, repeatMode, shuffleOn, upNextSections, type UpItem, type UpNextKind } from '../../player';
+import { autoplayLabel, currentId, currentTrack, isPlaying, player, playContext, previousTracks, repeatMode, shuffleOn, upNextSections, type UpItem, type UpNextKind } from '../../player';
+import type { Track } from '../../data/model';
 import { online } from '../../core/network';
 import { settings } from '../../stores/library';
 import { isSaved, savedOffline } from '../../stores/savedOffline';
@@ -7,6 +8,7 @@ import { toast } from '../../stores/toast';
 import { Icon } from '../../ui/icons';
 import { afterPress } from '../../ui/press';
 import { Art } from '../../ui/components/Art';
+import { Bars } from '../../ui/components/TrackRow';
 import { UP_NEXT_MAX } from '../../core/guards';
 import { plural } from '../../core/text';
 
@@ -50,10 +52,31 @@ function focusRow(root: HTMLElement, r: Refocus): boolean {
   return false;
 }
 
+/** A row's art and text; the playing track's art carries the visualiser (or ⏸), as in every list. */
+function RowBody({ track, playing }: { track: Track; playing?: boolean }) {
+  return (
+    <>
+      <div class="row-art">
+        <Art track={track} size="sm" />
+        {playing != null && <div class="row-art-badge">{playing ? <Bars /> : <Icon name="pause" size={18} />}</div>}
+      </div>
+      <div class="row-text">
+        <div class="row-title">{track.title}</div>
+        <div class="row-artist">{track.artist}</div>
+      </div>
+    </>
+  );
+}
+
+/** Offline, a row that can't play is dimmed, as in every list (TrackRow). */
+const offClass = (t: Track) => (!online.value && !isSaved(t, savedOffline.value) ? ' off' : '');
+
 /**
- * Now Playing → Up next, in three sections (AP1): queued by you, the rest of the list
- * ("Next from: <source>"), then autoplay ("Autoplay · similar to <seed>"). Up and Down
- * move a queued or list track within its section; Remove (every row) offers Undo.
+ * Now Playing → Up next: the whole list, as in YouTube Music's queue. What played comes first
+ * (dimmed; a tap plays from there), then the playing track, marked as in every list, then three
+ * sections (AP1): queued by you, the rest of the list ("Next from: <source>"), then autoplay
+ * ("Autoplay · similar to <seed>"). Up and Down move a queued or list track within its section;
+ * Remove (every row ahead) offers Undo.
  */
 export function UpNext() {
   const sec = upNextSections.value;
@@ -109,7 +132,7 @@ export function UpNext() {
           <li
             key={`${it.track.id}:${it.index}`}
             // Offline, a row that can't play is dimmed, as in every list (TrackRow).
-            class={'row' + (kind === 'queued' ? ' queued' : '') + (kind === 'autoplay' ? ' autoplay' : '') + (!online.value && !isSaved(it.track, savedOffline.value) ? ' off' : '')}
+            class={'row' + (kind === 'queued' ? ' queued' : '') + (kind === 'autoplay' ? ' autoplay' : '') + offClass(it.track)}
             data-testid="upnext-row"
             data-track-id={it.track.id}
             data-index={it.index}
@@ -121,13 +144,7 @@ export function UpNext() {
               onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id))}
               aria-label={`Play ${it.track.title}${kind === 'queued' ? ', queued by you' : kind === 'autoplay' ? ', autoplay' : ''}`}
             >
-              <div class="row-art">
-                <Art track={it.track} size="sm" />
-              </div>
-              <div class="row-text">
-                <div class="row-title">{it.track.title}</div>
-                <div class="row-artist">{it.track.artist}</div>
-              </div>
+              <RowBody track={it.track} />
             </button>
             <div class="upnext-actions">
               {/* Reorder within each section (with shuffle on the order is random, so no arrows). */}
@@ -178,6 +195,7 @@ export function UpNext() {
 
   const from = ctx?.label ? `Next from: ${ctx.label}` : 'Next from the list';
   const repeat = repeatMode.value;
+  const current = currentTrack.value;
   return (
     <section ref={root} class="upnext" data-testid="up-next">
       <div class="section-head">
@@ -189,21 +207,38 @@ export function UpNext() {
           Repeating this song.
         </div>
       )}
+      <ol class="list compact">
+        {previousTracks.value.map((it) => (
+          <li key={`p:${it.track.id}:${it.index}`} class={'row played' + offClass(it.track)} data-testid="upnext-played" data-track-id={it.track.id} data-index={it.index} data-section="played">
+            <button class="row-main" onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id))} aria-label={`Play ${it.track.title}, played`}>
+              <RowBody track={it.track} />
+            </button>
+          </li>
+        ))}
+        {current && (
+          <>
+            <li class="upnext-label" data-testid="upnext-current-label" aria-hidden="true">
+              Now playing
+            </li>
+            <li class="row is-current" data-testid="upnext-current" data-track-id={current.id} data-section="current">
+              <div class="row-main" aria-current="true">
+                <RowBody track={current} playing={isPlaying.value} />
+              </div>
+            </li>
+          </>
+        )}
+        {section('queued', 'Queued by you', sec.queued)}
+        {section('list', from, sec.list)}
+        {section('autoplay', autoplayLabel.value, sec.autoplay)}
+      </ol>
       {total === 0 ? (
         <div class="dim small upnext-empty">{repeat === 'all' ? 'Queue repeats from the top.' : `${settings.value.autoplay ? 'Nothing queued.' : 'Autoplay is off.'} ⋯ → Add to queue plays a track next.`}</div>
       ) : (
-        <>
-          <ol class="list compact">
-            {section('queued', 'Queued by you', sec.queued)}
-            {section('list', from, sec.list)}
-            {section('autoplay', autoplayLabel.value, sec.autoplay)}
-          </ol>
-          {repeat === 'all' && (
-            <div class="dim small upnext-empty" data-testid="upnext-repeat">
-              Then repeats from the top.
-            </div>
-          )}
-        </>
+        repeat === 'all' && (
+          <div class="dim small upnext-empty" data-testid="upnext-repeat">
+            Then repeats from the top.
+          </div>
+        )
       )}
     </section>
   );

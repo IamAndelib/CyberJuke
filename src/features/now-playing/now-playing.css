@@ -618,6 +618,11 @@ button.lyr-line {
   min-height: 48px;
 }
 
+/* What played, above the playing track: dimmed (it can still be tapped to play from there). */
+.upnext .row.played .row-main {
+  opacity: 0.55;
+}
+
 /* Autoplay, under "Autoplay · similar to <seed>": the artwork a little dimmed. Not the text,
    which keeps its theme's contrast (themes.test.ts). */
 .upnext .row.autoplay .row-art {

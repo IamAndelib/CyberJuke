@@ -170,6 +170,14 @@ export const upNextSections = computed<UpNextSections>(() => {
   return (lastSections = next);
 });
 
+let lastPrevious: UpItem[] = [];
+
+/** The tracks before the current one in play order, oldest first (Up next shows them above it). The same array until they change. */
+export const previousTracks = computed<UpItem[]>(() => {
+  const next = state.value.previous.map((u) => ({ track: u.track, index: u.index }));
+  return sameItems(lastPrevious, next) ? lastPrevious : (lastPrevious = next);
+});
+
 /**
  * What autoplay's tracks are, for Up next's heading and Now Playing while one plays: a station's
  * next rounds, a Jukebox shuffle's more random picks, or songs similar to the seed.
@@ -209,7 +217,7 @@ exposeForTests('__cyberjukeQueue', () => {
   const t = (x: { id: string; title: string; artist: string; genre: string; by: string; source?: string } | null) =>
     x && { id: x.id, title: x.title, artist: x.artist, genre: x.genre, by: x.by, source: x.source ?? 'jukebox' };
   const items = (xs: UpItem[]) => xs.map((u) => t(u.track));
-  return { context: s.context, current: t(s.current), seed: t(sec.seed), queued: items(sec.queued), list: items(sec.list), autoplay: items(sec.autoplay) };
+  return { context: s.context, current: t(s.current), seed: t(sec.seed), previous: items(s.previous), queued: items(sec.queued), list: items(sec.list), autoplay: items(sec.autoplay) };
 });
 
 interface PositionSample {

@@ -34,6 +34,7 @@ internal object StateEncoder {
         val upNext = ArrayList<String>()
         val upNextIndex = JSArray()
         val kinds = StringBuilder()
+        val previous = ArrayList<Int>()
         val pending = QueueInfo.pendingSerials
         val timeline = c.currentTimeline
         if (index >= 0 && !timeline.isEmpty && index < timeline.windowCount) {
@@ -55,6 +56,13 @@ internal object StateEncoder {
                     },
                 )
                 i = timeline.getNextWindowIndex(i, repeat, shuffle)
+            }
+            // The tracks before it in play order, nearest first, then sent oldest first: Up next
+            // shows them above the current one.
+            var j = timeline.getPreviousWindowIndex(index, repeat, shuffle)
+            while (j != C.INDEX_UNSET && j != index && previous.size < MAX_UP_NEXT && j < count) {
+                previous.add(j)
+                j = timeline.getPreviousWindowIndex(j, repeat, shuffle)
             }
         }
 
@@ -89,6 +97,7 @@ internal object StateEncoder {
         state.put("upNextIds", JSArray(upNext))
         state.put("upNextKinds", kinds.toString())
         state.put("upNextIndex", upNextIndex)
+        state.put("prevIndex", JSArray().apply { previous.asReversed().forEach { put(it) } })
         val ctx = QueueInfo.context
         if (ctx != null && count > 0) {
             val o = JSObject()

@@ -30,6 +30,7 @@ describe('parseNativeState', () => {
       upNextIds: ['a', 'c'],
       upNextKinds: 'qa',
       upNextIndex: [0, 2],
+      prevIndex: [2],
       context: { label: 'Liked', mode: 'list' },
       seedId: 'b',
       currentAuto: true,
@@ -62,6 +63,8 @@ describe('parseNativeState', () => {
     const st = parseNativeState({ index: 2, queueIds: ['A', 'B', 'C', 'A', 'D'], upNextIds: ['A', 'D', 'B'], upNextIndex: [3, 9, 0.5] });
     expect(st?.upNextIndex).toEqual([3, -1, -1]);
     expect(parseNativeState({ index: 0, queueIds: ['A', 'B'], upNextIds: ['B'], upNextIndex: [0] })?.upNextIndex).toEqual([-1]);
+    // The played tracks' list indices: in range, never the current one; the last 50 at most.
+    expect(parseNativeState({ index: 1, queueIds: ['A', 'B', 'C'], prevIndex: [0, 1, 7, -1, 'x', 2] })?.prevIndex).toEqual([0, 2]);
     // An older native sends none.
     expect(parseNativeState({ index: 0, queueIds: ['A', 'B'], upNextIds: ['B'] })?.upNextIndex).toEqual([-1]);
   });
@@ -87,6 +90,7 @@ describe('parseNativeState', () => {
       upNextIds: [],
       upNextKinds: '',
       upNextIndex: [],
+      prevIndex: [],
       context: null,
       seedId: null,
       currentAuto: false,

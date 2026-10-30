@@ -46,6 +46,29 @@ describe('Queue: play from list', () => {
   });
 });
 
+describe('Queue: previous (Up next shows them above the current track)', () => {
+  it('lists what came before in play order, oldest first, and follows a jump back', () => {
+    const q = new Queue(seeded());
+    q.setList(abc(), 0);
+    q.next();
+    q.next();
+    expect(q.previousIndices().map((i) => q.items[i].id)).toEqual(['a', 'b']);
+    q.skipTo(0);
+    expect(q.previousIndices()).toEqual([]);
+  });
+
+  it('with shuffle turned on, keeps them, as they played', () => {
+    const q = new Queue(seeded(3));
+    q.setList(abc(), 0);
+    q.next();
+    q.setShuffle(true);
+    expect(q.previousIndices().map((i) => q.items[i].id)).toEqual(['a']);
+    const n = q.next()!.id;
+    expect(q.previousIndices().map((i) => q.items[i].id)).toEqual(['a', 'b']);
+    expect(['c', 'd', 'e']).toContain(n);
+  });
+});
+
 describe('Queue: next / prev', () => {
   it('advances and stops at the end with repeat off', () => {
     const q = new Queue();
