@@ -296,7 +296,7 @@ test('with repeat on, a song you tap still gets its suggestions; a list you star
   const q = await withAutoplay(page);
   expect(q.seed?.title).toBe(title);
   await openNowPlaying(page);
-  await expect(page.getByTestId('upnext-repeat')).toHaveText('Then repeats from the top.');
+  await expect(page.getByTestId('upnext-repeat')).toHaveText('Repeating the queue.');
   // Repeat one goes on as repeat off does.
   await repeat.click();
   await expect(repeat).toHaveAttribute('data-mode', 'one');
@@ -524,7 +524,7 @@ test('the queue shows the whole list: what played folds under [+] Played, the pl
   const repeat = page.getByTestId('np-repeat');
   while ((await repeat.getAttribute('data-mode')) !== 'all') await repeat.click();
   await expect(page.getByTestId('upnext-played').first().locator('.row-title')).toHaveText(titles[0]);
-  await expect(page.getByTestId('up-next')).toContainText('Queue repeats from the top.');
+  await expect(page.getByTestId('upnext-repeat')).toHaveText('Repeating the queue.');
   // A new list starts folded.
   await page.getByTestId('np-close').click();
   await page.getByTestId('tab-genres').click();

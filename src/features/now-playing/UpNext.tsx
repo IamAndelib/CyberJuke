@@ -224,9 +224,9 @@ export function UpNext() {
         <h3 class="section-title">Queue</h3>
         {shuffle && sec.list.length ? <span class="dim small">Shuffled · turn shuffle off to reorder</span> : total > 0 && <span class="dim small">{total >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : total} up next</span>}
       </div>
-      {repeat === 'one' && (
+      {repeat !== 'off' && (
         <div class="dim small upnext-empty" data-testid="upnext-repeat">
-          Repeating this song.
+          {repeat === 'one' ? 'Repeating this song.' : 'Repeating the queue.'}
         </div>
       )}
       <ol class="list compact">
@@ -260,14 +260,8 @@ export function UpNext() {
         {section('list', from, sec.list)}
         {section('autoplay', autoplayLabel.value, sec.autoplay)}
       </ol>
-      {total === 0 ? (
-        <div class="dim small upnext-empty">{repeat === 'all' ? 'Queue repeats from the top.' : `${settings.value.autoplay ? 'Nothing queued.' : 'Autoplay is off.'} ⋯ → Add to queue plays a track next.`}</div>
-      ) : (
-        repeat === 'all' && (
-          <div class="dim small upnext-empty" data-testid="upnext-repeat">
-            Then repeats from the top.
-          </div>
-        )
+      {total === 0 && repeat !== 'all' && (
+        <div class="dim small upnext-empty">{`${settings.value.autoplay ? 'Nothing queued.' : 'Autoplay is off.'} ⋯ → Add to queue plays a track next.`}</div>
       )}
     </section>
   );
