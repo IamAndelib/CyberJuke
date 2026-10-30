@@ -14,6 +14,7 @@ import { computed, effect, signal, untracked, useComputed, type ReadonlySignal }
 import { createContext } from 'preact';
 import { useContext, useEffect, useRef } from 'preact/hooks';
 import type { Track } from '../data/model';
+import type { UpItem } from '../player';
 import type { ReleaseKind } from '../data/ytmusic';
 
 export type Tab = 'home' | 'radio' | 'genres' | 'artists' | 'library' | 'settings';
@@ -73,6 +74,15 @@ export const nowPlayingOpen = signal(false);
 export const lyricsOpen = signal(false);
 /** Track whose ⋯ menu is open. */
 export const menuTrack = signal<Track | null>(null);
+
+/** The "Queued by you" row the open menu was held on, if any: the menu offers Remove from queue for it. */
+export const menuQueued = signal<UpItem | null>(null);
+
+/** Opens `track`'s menu; `queued` when it was held in Now Playing's "Queued by you". */
+export function openMenu(track: Track, queued: UpItem | null = null): void {
+  menuQueued.value = queued;
+  menuTrack.value = track;
+}
 /** Artist chooser (a track credits several artists), opened from Now Playing. */
 export const artistChoice = signal<string[] | null>(null);
 
