@@ -382,30 +382,31 @@ export class NativePlayer implements Player {
     const queue = s.queue.slice();
     queue.splice(to, 0, ...queue.splice(from, 1));
     const map = (j: number) => (j === from ? to : from < to ? (j > from && j <= to ? j - 1 : j) : j >= to && j < from ? j + 1 : j);
-    const upNext = s.upNext.slice();
-    const kf = upNext.findIndex((u) => u.index === from);
-    const kt = upNext.findIndex((u) => u.index === to);
-    if (kf >= 0 && kt >= 0) upNext.splice(kt, 0, ...upNext.splice(kf, 1));
-    this.show(queue, map(s.index), upNext.map((u) => ({ ...u, index: map(u.index) })));
+    // A move within Up next or within Played (one past the playing track waits for native).
+    const moved = (rows: UpNextItem[]) => {
+      const out = rows.slice();
+      const kf = out.findIndex((u) => u.index === from);
+      const kt = out.findIndex((u) => u.index === to);
+      if (kf >= 0 && kt >= 0) out.splice(kt, 0, ...out.splice(kf, 1));
+      return out.map((u) => ({ ...u, index: map(u.index) }));
+    };
+    this.show(queue, map(s.index), moved(s.upNext), moved(s.previous));
   }
 
-  /** A remove of an Up next row, shown now. */
+  /** A remove of an Up next or Played row, shown now. */
   private showRemoved(index: number, expectId?: string): void {
     const s = this.s.value;
     if (index < 0 || index >= s.queue.length || index === s.index) return;
     if (expectId != null && s.queue[index].id !== expectId) return;
     const queue = s.queue.filter((_, j) => j !== index);
     const map = (j: number) => (j > index ? j - 1 : j);
-    this.show(
-      queue,
-      map(s.index),
-      s.upNext.filter((u) => u.index !== index).map((u) => ({ ...u, index: map(u.index) })),
-    );
+    const kept = (rows: UpNextItem[]) => rows.filter((u) => u.index !== index).map((u) => ({ ...u, index: map(u.index) }));
+    this.show(queue, map(s.index), kept(s.upNext), kept(s.previous));
   }
 
-  private show(queue: Track[], index: number, upNext: UpNextItem[]): void {
+  private show(queue: Track[], index: number, upNext: UpNextItem[], previous: UpNextItem[]): void {
     this.builtFrom = '';
-    this.s.value = { ...this.s.value, queue, index, current: queue[index] ?? null, upNext };
+    this.s.value = { ...this.s.value, queue, index, current: queue[index] ?? null, upNext, previous };
   }
 
   async removeIds(ids: string[]): Promise<void> {
