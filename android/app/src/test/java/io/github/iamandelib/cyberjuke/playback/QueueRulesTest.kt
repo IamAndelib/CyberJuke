@@ -120,6 +120,8 @@ class QueueRulesTest {
         val ids = ArrayList<String>()
         val serials = ArrayList<Long>()
         val auto = ArrayList<Boolean>()
+        val uids = ArrayList<Long>()
+        private var nextUid = 1L
         var current = -1
         var shuffle = false
         var repeat = "off"
@@ -149,6 +151,8 @@ class QueueRulesTest {
         override val currentIndex get() = current
         override val shuffleEnabled get() = shuffle
         override fun serialAt(index: Int) = serials[index]
+        override fun uidAt(index: Int) = uids[index]
+        private fun newUids(n: Int) = List(n) { nextUid++ }
         override fun shuffleOrder(): IntArray = order.toIntArray()
 
         override fun setShuffleOrder(order: IntArray) {
@@ -160,6 +164,7 @@ class QueueRulesTest {
             ids.add(to, ids.removeAt(from))
             serials.add(to, serials.removeAt(from))
             auto.add(to, auto.removeAt(from))
+            uids.add(to, uids.removeAt(from))
             current = when {
                 current == from -> to
                 current in (from + 1)..to -> current - 1
@@ -176,6 +181,7 @@ class QueueRulesTest {
             ids.addAll(pos, items)
             this.serials.addAll(pos, serials)
             auto.addAll(pos, items.map { false })
+            uids.addAll(pos, newUids(items.size))
             orderInsert(pos, items.size)
             if (current < 0) {
                 current = 0
@@ -194,6 +200,8 @@ class QueueRulesTest {
             ids.clear()
             this.serials.clear()
             this.auto.clear()
+            uids.clear()
+            uids.addAll(newUids(items.size))
             ids.addAll(items)
             this.serials.addAll(serials)
             items.indices.forEach { this.auto.add(auto.getOrElse(it) { false }) }
@@ -207,6 +215,7 @@ class QueueRulesTest {
             ids.addAll(pos, items)
             serials.addAll(pos, items.map { 0L })
             auto.addAll(pos, items.map { true })
+            uids.addAll(pos, newUids(items.size))
             orderInsert(pos, items.size)
             if (current < 0) {
                 current = 0
@@ -290,6 +299,7 @@ class QueueRulesTest {
             ids.removeAt(index)
             serials.removeAt(index)
             auto.removeAt(index)
+            uids.removeAt(index)
             orderRemove(index)
             val changed = index == current
             if (index < current) current--
@@ -303,11 +313,11 @@ class QueueRulesTest {
             emit({ queue.onShuffleModeChanged(on) })
         }
 
-        /** What played, oldest first: StateEncoder's walk back from the current item (repeat off). */
+        /** What played, oldest first: StateEncoder's walk back from the current item (repeat off), heard ones only. */
         fun played(): List<String> {
             if (current < 0) return emptyList()
             val seq = playOrder()
-            return seq.subList(0, seq.indexOf(current)).map { ids[it] }
+            return seq.subList(0, seq.indexOf(current)).filter { uids[it] in queue.heardUids }.map { ids[it] }
         }
 
         /** Same walk as StateEncoder (to the end of the play order, whatever the repeat mode). */

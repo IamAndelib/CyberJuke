@@ -532,6 +532,35 @@ test('the queue shows the whole list: what played folds under [+] Played, the pl
   await expect(page.getByTestId('upnext-played-fold')).toHaveAttribute('aria-expanded', 'false');
 });
 
+test('Played is only what was heard: not the songs before the one tapped, nor what shuffle off puts behind', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-tile').nth(5).click();
+  // The 4th song of the genre: the three before it weren't heard.
+  await visible(page, 'track-play').nth(3).click();
+  await openNowPlaying(page);
+  const heard = [(await page.getByTestId('np-title').textContent())!.trim()];
+  await expect(page.getByTestId('upnext-played-fold')).toHaveCount(0);
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).not.toHaveText(heard[0]);
+  heard.push((await page.getByTestId('np-title').textContent())!.trim());
+  await expect(page.getByTestId('upnext-played-fold')).toHaveText('Played · 1');
+  // Shuffle on, one more, shuffle off: list order again, and still only what was heard.
+  await page.getByTestId('np-shuffle').click();
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).not.toHaveText(heard[1]);
+  heard.push((await page.getByTestId('np-title').textContent())!.trim());
+  await page.getByTestId('np-shuffle').click();
+  await expect(page.getByTestId('np-shuffle')).toHaveAttribute('aria-pressed', 'false');
+  const fold = page.getByTestId('upnext-played-fold');
+  if ((await fold.count()) > 0) {
+    await fold.click();
+    const titles = await page.getByTestId('upnext-played').locator('.row-title').allTextContents();
+    expect(titles.length).toBeLessThanOrEqual(2);
+    for (const t of titles) expect(heard).toContain(t.trim());
+  }
+});
+
 test("played songs get ↑ ↓ ✕: moves stay among them, the last one's ↓ plays it next, ✕ offers Undo", async ({ page }) => {
   await start(page);
   await page.getByTestId('tab-genres').click();

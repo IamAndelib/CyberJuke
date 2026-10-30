@@ -103,6 +103,9 @@ internal interface QueueHost<T> {
     /** The "Add to queue" serial of the item at [index], 0 if it was not user-queued. */
     fun serialAt(index: Int): Long
 
+    /** The item's own id, unique in the playlist and kept through moves; 0 if it has none. */
+    fun uidAt(index: Int): Long
+
     /** The shuffle play order (every index exactly once), or null if unavailable. */
     fun shuffleOrder(): IntArray?
     fun setShuffleOrder(order: IntArray)
@@ -156,8 +159,21 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     /** Serials still waiting to play, in play order. */
     val pendingSerials: Set<Long> get() = pending
 
+    /** The uids of the items of this list that have been current: heard, what "Played" shows. */
+    private val heard = HashSet<Long>()
+    val heardUids: Set<Long> get() = heard
+
+    private fun isHeard(index: Int): Boolean = host.uidAt(index).let { it != 0L && it in heard }
+
+    /** The current item is heard. */
+    private fun hearCurrent() {
+        val cur = host.currentIndex
+        if (cur in 0 until host.count) host.uidAt(cur).takeIf { it != 0L }?.let { heard.add(it) }
+    }
+
     /** The current item changed (any reason): keep the pending ones right after it. */
     fun onTransition() {
+        hearCurrent()
         prune()
         if (host.shuffleEnabled) enforceShuffleOrder() else enforceLinearOrder()
     }
@@ -226,6 +242,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
             return
         }
         val s = start.coerceIn(0, items.size - 1)
+        heard.clear()
         val list = ArrayList<T>(items.size + kept.size)
         val serials = ArrayList<Long>(items.size + kept.size)
         list.addAll(items.subList(0, s + 1))
@@ -235,17 +252,20 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         list.addAll(items.subList(s + 1, items.size))
         repeat(items.size - s - 1) { serials.add(0L) }
         host.setItems(list, serials, s, positionMs)
+        hearCurrent()
         shuffleFromCurrent()
     }
 
     /**
      * A saved session put back (LastSession): [sections] says what each item was, [start] is
      * current at [positionMs], and the shuffle play [order] it had comes back when it still fits
-     * (shuffle on). The queued items stay next, in the order they were going to play.
+     * (shuffle on). The queued items stay next, in the order they were going to play; the
+     * [heard] ones (one flag per item, or none) are heard again.
      */
-    fun restoreSession(items: List<T>, sections: List<Section>, start: Int, positionMs: Long, order: IntArray?) {
+    fun restoreSession(items: List<T>, sections: List<Section>, start: Int, positionMs: Long, order: IntArray?, heard: List<Boolean> = emptyList()) {
         require(sections.size == items.size) { "one section per item" }
         pending.clear()
+        this.heard.clear()
         if (items.isEmpty()) {
             host.setItems(emptyList(), emptyList(), 0, 0L)
             return
@@ -253,6 +273,8 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         val s = start.coerceIn(0, items.size - 1)
         val serials = sections.mapIndexed { i, sec -> if (sec == Section.QUEUED && i != s) nextSerial++ else 0L }
         host.setItems(items, serials, s, positionMs, sections.map { it == Section.AUTO })
+        for (i in items.indices) if (heard.getOrElse(i) { false }) host.uidAt(i).takeIf { it != 0L }?.let { this.heard.add(it) }
+        hearCurrent()
         if (host.shuffleEnabled && order != null && QueueOrder.isPermutation(order, items.size)) {
             host.setShuffleOrder(order)
         }
@@ -262,15 +284,15 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
 
     /**
      * Shuffle on: a shuffle order from the current item (then the usual rules). [keepBefore]: the
-     * items before it in list order stay first, in order, and only those after it are mixed; a new
-     * list has all the others ahead.
+     * list items heard stay first, in order, and all the others are mixed ahead, also the ones
+     * before where the list started; a new list has all the others ahead.
      */
     private fun shuffleFromCurrent(keepBefore: Boolean = false) {
         if (!host.shuffleEnabled) return
         val cur = host.currentIndex
         if (cur !in 0 until host.count) return
         val queued = pendingIndices().toHashSet()
-        val before = if (keepBefore) (0 until cur).filter { it !in queued } else emptyList()
+        val before = if (keepBefore) (0 until host.count).filter { it != cur && it !in queued && !host.isAutoAt(it) && isHeard(it) } else emptyList()
         val kept = before.toHashSet()
         val ahead = (0 until host.count).filter { it != cur && it !in kept }.shuffled(random)
         val first = (before + cur + ahead).toIntArray()
@@ -367,6 +389,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         if (cur !in 0 until host.count) return host.insertTagged(null, listOf(item), listOf(0L))
         val at = beforeId?.let { id -> played().firstOrNull { host.idAt(it) == id } } ?: cur
         host.insertTagged(at, listOf(item), listOf(0L))
+        host.uidAt(at).takeIf { it != 0L }?.let { heard.add(it) }
         if (!host.shuffleEnabled) return
         // Inserted at a random place in the shuffle order (Media3's): right before what follows it.
         val order = host.shuffleOrder()?.toMutableList() ?: return
@@ -496,16 +519,16 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         return ((cur + 1) until n).toList()
     }
 
-    /** List indices before the current item, in play order (oldest first). */
+    /** List indices before the current item in play order that were heard (oldest first). */
     private fun played(): List<Int> {
         val n = host.count
         val cur = host.currentIndex
         if (n == 0 || cur !in 0 until n) return emptyList()
         if (host.shuffleEnabled) {
             val order = host.shuffleOrder()
-            if (order != null && order.size == n) return order.toList().subList(0, order.indexOf(cur))
+            if (order != null && order.size == n) return order.toList().subList(0, order.indexOf(cur)).filter(::isHeard)
         }
-        return (0 until cur).toList()
+        return (0 until cur).filter(::isHeard)
     }
 
     private fun autoIndices(): List<Int> = (0 until host.count).filter { host.isAutoAt(it) }

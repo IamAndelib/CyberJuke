@@ -199,6 +199,25 @@ class LastSessionTest {
     }
 
     @Test
+    fun whatWasHeardComesBackAsPlayed() {
+        // Started at c: a and b were never heard; c and d were, and e plays.
+        val s = LastSession.of(
+            (0 until 5).map { entry(it).copy(heard = it in 2..4) },
+            4, 0L, 0L, false, null, 0, null, null,
+        )!!
+        val back = LastSession.decode(s.encode())!!
+        assertEquals(listOf(false, false, true, true, true), back.entries.map { it.heard })
+        val p = QueueRulesTest.FakePlayer(java.util.Random(1))
+        p.queue.restoreSession(back.entries.map { it.id }, back.entries.map { it.section }, back.index, 0L, null, back.entries.map { it.heard })
+        assertEquals(listOf("t2", "t3"), p.played())
+        // A file from before "heard": what was before the current one, as Played showed then.
+        val old = JSONObject(s.encode())
+        val tracks = old.getJSONArray("tracks")
+        for (i in 0 until tracks.length()) tracks.getJSONObject(i).remove("h")
+        assertEquals(listOf(true, true, true, true, true), LastSession.decode(old.toString())!!.entries.map { it.heard })
+    }
+
+    @Test
     fun withoutShuffleTheQueuedOnesStayRightAfterTheCurrentTrack() {
         val p = QueueRulesTest.FakePlayer(java.util.Random(1))
         val ids = listOf("a", "b", "q1", "c", "s1")

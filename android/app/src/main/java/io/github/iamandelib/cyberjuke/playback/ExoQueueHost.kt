@@ -16,6 +16,7 @@ import java.util.Random
 @OptIn(UnstableApi::class)
 internal class ExoQueueHost(private val player: () -> ExoPlayer) : QueueHost<MediaItem> {
     private val shuffleSeeds = Random()
+    private var nextUid = 1L
 
     private val p: ExoPlayer get() = player()
 
@@ -25,6 +26,9 @@ internal class ExoQueueHost(private val player: () -> ExoPlayer) : QueueHost<Med
 
     override fun serialAt(index: Int): Long =
         p.getMediaItemAt(index).mediaMetadata.extras?.getLong(QueueCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L
+
+    override fun uidAt(index: Int): Long =
+        p.getMediaItemAt(index).mediaMetadata.extras?.getLong(QueueCommands.EXTRA_UID, 0L) ?: 0L
 
     override fun shuffleOrder(): IntArray? {
         val n = p.mediaItemCount
@@ -64,10 +68,9 @@ internal class ExoQueueHost(private val player: () -> ExoPlayer) : QueueHost<Med
             return
         }
         val tagged = items.mapIndexed { k, item ->
-            when {
-                serials[k] != 0L -> tag(item) { putLong(QueueCommands.EXTRA_QUEUE_SERIAL, serials[k]) }
-                auto.getOrElse(k) { false } -> tag(item) { putBoolean(QueueCommands.EXTRA_AUTOPLAY, true) }
-                else -> item
+            tag(item) {
+                if (serials[k] != 0L) putLong(QueueCommands.EXTRA_QUEUE_SERIAL, serials[k])
+                if (auto.getOrElse(k) { false }) putBoolean(QueueCommands.EXTRA_AUTOPLAY, true)
             }
         }
         p.setMediaItems(tagged, start, positionMs.coerceAtLeast(0L))
@@ -82,8 +85,10 @@ internal class ExoQueueHost(private val player: () -> ExoPlayer) : QueueHost<Med
 
     override fun seekTo(index: Int) = p.seekTo(index, 0L)
 
+    /** [item] with [edit] applied to its extras, and a new uid ([QueueCommands.EXTRA_UID]): every item goes in through here. */
     private inline fun tag(item: MediaItem, edit: Bundle.() -> Unit): MediaItem {
         val extras = Bundle(item.mediaMetadata.extras ?: Bundle.EMPTY).apply(edit)
+        extras.putLong(QueueCommands.EXTRA_UID, nextUid++)
         return item.buildUpon()
             .setMediaMetadata(item.mediaMetadata.buildUpon().setExtras(extras).build())
             .build()

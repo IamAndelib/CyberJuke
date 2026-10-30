@@ -98,6 +98,9 @@ internal object QueueCommands {
     /** MediaMetadata extra (Boolean) marking an item added by autoplay. */
     const val EXTRA_AUTOPLAY = "cyberjukeAutoplay"
 
+    /** MediaMetadata extra (Long): the item's own id in the playlist, set as it goes in ([QueueHost.uidAt]). */
+    const val EXTRA_UID = "cyberjukeUid"
+
     /** Track ids of Global (YouTube Music) tracks: `ytm:<ytId>`, as on the web side. */
     const val GLOBAL_PREFIX = "ytm:"
 
@@ -113,6 +116,10 @@ internal object QueueInfo {
     /** "Add to queue" serials still waiting to play (see [NativeQueue.pendingSerials]). */
     @Volatile
     var pendingSerials: Set<Long> = emptySet()
+
+    /** The uids ([QueueCommands.EXTRA_UID]) of the items heard in this list (see [NativeQueue.heardUids]). */
+    @Volatile
+    var heardUids: Set<Long> = emptySet()
 
     /** The play context of the current list (C2); null before the first list. */
     @Volatile

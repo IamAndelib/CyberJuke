@@ -134,20 +134,36 @@ describe('Queue: next / prev', () => {
 });
 
 describe('Queue: shuffle', () => {
-  it('turned on, mixes only what comes after the current track; what is before it stays', () => {
+  it('turned on, mixes every track not heard yet, also those before where the list started; the heard ones stay behind', () => {
     const q = new Queue(seeded());
     q.setList(abc(), 2);
+    q.next();
     q.setShuffle(true);
-    expect(q.current?.id).toBe('c');
-    expect(q.index).toBe(2);
-    const played = ['c'];
+    expect(q.current?.id).toBe('d');
+    expect(q.previousIndices().map((i) => q.items[i].id)).toEqual(['c']);
+    const played = [];
     let n;
     while ((n = q.next())) played.push(n.id);
-    expect(played.slice(1).sort()).toEqual(['d', 'e']);
-    // Repeat all comes back to the top: a and b, where they were, then the mix.
+    expect(played.sort()).toEqual(['a', 'b', 'e']);
+    // Repeat all comes back to what was heard first, then the mix.
     q.setRepeat('all');
-    expect(q.next()?.id).toBe('a');
-    expect(q.next()?.id).toBe('b');
+    expect(q.next()?.id).toBe('c');
+    expect(q.next()?.id).toBe('d');
+  });
+
+  it('a list started mid-way has played nothing; what is heard is played, also after shuffle goes off', () => {
+    const q = new Queue(seeded());
+    q.setList(abc(), 2);
+    expect(q.previousIndices()).toEqual([]);
+    q.setShuffle(true);
+    q.next();
+    const second = q.current!.id;
+    q.setShuffle(false);
+    // List order again: only c and the one after it were heard.
+    const before = q.previousIndices().map((i) => q.items[i].id);
+    expect(before.every((id) => id === 'c' || id === second)).toBe(true);
+    expect(before).not.toContain('a');
+    expect(before).not.toContain('b');
   });
 
   it('a new list started with shuffle on has every other track ahead', () => {
