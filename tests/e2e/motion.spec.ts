@@ -599,3 +599,20 @@ for (const { name, open, tap, next } of [
     expect(frames.filter((f) => f.seeThrough)).toHaveLength(0);
   });
 }
+
+test("with animations off, a long title in Now Playing wraps to a second line instead of hiding behind '…'", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await start(page);
+  await playAndOpen(page);
+  // A title far longer than the screen (the marquee would scroll it; with animations off it can't).
+  const long = 'A Very Long Song Title That Runs Well Past The Edge Of A Phone';
+  const title = page.getByTestId('np-title').locator('.marquee');
+  await title.evaluate((el, t) => {
+    el.querySelector('.marquee-text')!.textContent = t;
+  }, long);
+  const m = await title.evaluate((el) => ({ h: el.getBoundingClientRect().height, lh: parseFloat(getComputedStyle(el).lineHeight), over: el.scrollWidth > el.clientWidth + 1 }));
+  expect(m.h).toBeGreaterThan(m.lh * 1.5);
+  expect(m.over).toBe(false);
+  // The mini player stays one line.
+  expect(await page.getByTestId('mini-title').evaluate((el) => getComputedStyle(el).whiteSpace)).toBe('nowrap');
+});
