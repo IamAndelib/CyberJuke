@@ -176,20 +176,33 @@ export function UpNext() {
   const seedTitle = sec.seed?.title;
   // A station's next rounds aren't autoplay (they come with it off too): the station going on.
   const station = stationPlaying(ctx, sec.seed?.id);
+  const repeat = repeatMode.value;
   return (
     <section ref={root} class="upnext" data-testid="up-next">
       <div class="section-head">
         <h3 class="section-title">Up next</h3>
         <span class="dim small">{shuffle ? 'Shuffled · turn shuffle off to reorder' : plural(total, 'track')}</span>
       </div>
+      {repeat === 'one' && (
+        <div class="dim small upnext-empty" data-testid="upnext-repeat">
+          Repeating this song.
+        </div>
+      )}
       {total === 0 ? (
-        <div class="dim small upnext-empty">{repeatMode.value === 'all' ? 'Queue repeats from the top.' : 'Nothing queued. ⋯ → Add to queue plays a track next.'}</div>
+        <div class="dim small upnext-empty">{repeat === 'all' ? 'Queue repeats from the top.' : 'Nothing queued. ⋯ → Add to queue plays a track next.'}</div>
       ) : (
-        <ol class="list compact">
-          {section('queued', 'Queued by you', sec.queued)}
-          {section('list', from, sec.list)}
-          {section('autoplay', station ? `More from ${station.callsign}` : seedTitle ? `Autoplay · similar to ${seedTitle}` : 'Autoplay', sec.autoplay)}
-        </ol>
+        <>
+          <ol class="list compact">
+            {section('queued', 'Queued by you', sec.queued)}
+            {section('list', from, sec.list)}
+            {section('autoplay', station ? `More from ${station.callsign}` : seedTitle ? `Autoplay · similar to ${seedTitle}` : 'Autoplay', sec.autoplay)}
+          </ol>
+          {repeat === 'all' && (
+            <div class="dim small upnext-empty" data-testid="upnext-repeat">
+              Then repeats from the top.
+            </div>
+          )}
+        </>
       )}
     </section>
   );

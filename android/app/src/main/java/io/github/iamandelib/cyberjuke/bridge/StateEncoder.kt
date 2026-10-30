@@ -37,8 +37,9 @@ internal object StateEncoder {
         val pending = QueueInfo.pendingSerials
         val timeline = c.currentTimeline
         if (index >= 0 && !timeline.isEmpty && index < timeline.windowCount) {
-            // Repeat-one is treated as off so the list shows what follows this track.
-            val repeat = if (c.repeatMode == Player.REPEAT_MODE_ONE) Player.REPEAT_MODE_OFF else c.repeatMode
+            // To the end of the play order, whatever the repeat mode, as the web Queue's upNext:
+            // repeat all's wrap would show the start again, out of its sections' order.
+            val repeat = Player.REPEAT_MODE_OFF
             val shuffle = c.shuffleModeEnabled
             var i = timeline.getNextWindowIndex(index, repeat, shuffle)
             while (i != C.INDEX_UNSET && i != index && upNext.size < MAX_UP_NEXT && i < count) {

@@ -66,12 +66,11 @@ test('the Radio tab lists both bands; tuning in plays the station and Now Playin
   await expect(cipher.getByTestId('station-on')).toBeVisible();
   await expect(screen.locator('[aria-current]')).toHaveCount(1);
 
-  // The round is the list (all 50 tracks, once each), the next round autoplay.
+  // The round is the list (all 50 tracks, once each); the next round comes near its end.
   const q = await queueState(page);
   expect(q.context).toEqual({ label: 'Signal Radio · CIPHER', mode: 'list' });
   expect(q.current?.source).toBe('signal');
   expect(q.current?.id).toMatch(/^sig:cipher:[A-Za-z0-9_-]{11}$/);
-  await expect.poll(async () => (await queueState(page)).autoplay.length).toBeGreaterThan(0);
 
   await openNowPlaying(page);
   await expect(page.getByTestId('np-from')).toContainText('Signal Radio · CIPHER');
@@ -79,7 +78,7 @@ test('the Radio tab lists both bands; tuning in plays the station and Now Playin
   // No post to open, no genre page for a callsign.
   await expect(page.getByTestId('np-post')).toHaveCount(0);
   await expect(page.getByTestId('np-genre')).toHaveCount(0);
-  await expect.poll(() => place(page)).toEqual({ at: 1, of: 100 });
+  await expect.poll(() => place(page)).toEqual({ at: 1, of: 50 });
   await expect(page.getByTestId('upnext-list-label')).toHaveText('Next from: Signal Radio · CIPHER');
   await page.getByTestId('np-close').click();
 
@@ -105,8 +104,8 @@ test('a station plays on past its rounds, and its tracks are kept like any other
   await openRadio(page);
   await tune(page, 'the-crypt');
   await openNowPlaying(page);
-  // The first round, and the next one queued behind it.
-  await expect.poll(() => place(page)).toEqual({ at: 1, of: 64 });
+  // The first round; the next comes near its end.
+  await expect.poll(() => place(page)).toEqual({ at: 1, of: 32 });
   // Past both of them but the last few: another round comes.
   await playOn(page, 60 * (FAKE_TRACK_MS + 200));
   await expect.poll(() => place(page)).toEqual({ at: 61, of: 96 });
@@ -134,9 +133,11 @@ test('a station plays on with Autoplay off too: it is the station, not autoplay'
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await openRadio(page);
   await tune(page, 'slow-orbit');
-  // Its next round (32 more) follows the first, as with Autoplay on.
+  // Near the end of the round its next one (32 more) follows, as with Autoplay on.
   await openNowPlaying(page);
-  await expect.poll(() => place(page)).toEqual({ at: 1, of: 64 });
+  await expect.poll(() => place(page)).toEqual({ at: 1, of: 32 });
+  await page.locator('[data-testid="upnext-row"][data-section="list"] .row-main').last().click();
+  await expect.poll(() => place(page)).toEqual({ at: 32, of: 64 });
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from SLOW ORBIT');
   // Turning Autoplay off while a station plays leaves its rounds alone.
   await page.getByTestId('np-close').click();
@@ -147,7 +148,7 @@ test('a station plays on with Autoplay off too: it is the station, not autoplay'
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await openNowPlaying(page);
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from SLOW ORBIT');
-  expect(await place(page)).toEqual({ at: 1, of: 64 });
+  expect(await place(page)).toEqual({ at: 32, of: 64 });
 });
 
 test("a station's track played from another list is just a track there: with Autoplay off it stops at the end", async ({ page }) => {

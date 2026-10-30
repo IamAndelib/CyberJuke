@@ -51,11 +51,18 @@ export interface QueueLow {
   seedId: string | null;
 }
 
-/** Autoplay tracks left when more are added (AP4). */
+/** Tracks left (any kind) when autoplay adds more (AP4). */
 export const AUTOPLAY_LOW = 5;
-/** Autoplay tracks added at the start of a list or radio, and on each refill. */
+/** Autoplay tracks added after a list or a single song, and on each refill. */
 export const AUTOPLAY_FIRST = 25;
 export const AUTOPLAY_MORE = 20;
+
+/**
+ * Autoplay may add to a queue of `count` tracks: but with repeat all, which loops what you
+ * started; then only a single song gets its first batch, its radio, for repeat to loop
+ * (Stations.mayAutoplay, the same rule).
+ */
+export const mayAutoplay = (repeat: RepeatMode, count: number): boolean => repeat !== 'all' || count === 1;
 
 export interface PlayerState {
   /** Full queue in list order. */

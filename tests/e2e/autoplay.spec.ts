@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { expectStable, musicCalls, openNowPlaying, openSearch, start } from '../helpers';
+import { expectStable, musicCalls, openNowPlaying, openSearch, openSettings, start } from '../helpers';
 import { genreFamilies } from '../../src/data/similar';
 import { artistKey, splitArtists } from '../../src/data/artists';
 import { words } from '../../src/data/text';
@@ -153,12 +153,12 @@ test('Album Play plays the album, then continues into autoplay at the end', asyn
   await album.getByTestId('album-play').click();
   await expect(page.getByTestId('mini-title')).toHaveText(titles[0]);
 
-  const q = await withAutoplay(page, 5);
-  expect(q.context?.mode).toBe('list');
-  expect(q.list.map((t) => t.title)).toEqual(titles.slice(1));
-  // Global leads to Global: the first track's radio.
-  expect(q.autoplay.every((t) => t.source === 'ytmusic' && /^Radio \d+$/.test(t.title))).toBe(true);
-  expect((await musicCalls(page)).filter((c) => c[0] === 'radio')).toHaveLength(1);
+  // The album first: nothing more is asked for until it nears its end.
+  const start = await expectStable(() => queueState(page), 1500);
+  expect(start.context?.mode).toBe('list');
+  expect(start.list.map((t) => t.title)).toEqual(titles.slice(1));
+  expect(start.autoplay).toEqual([]);
+  expect((await musicCalls(page)).filter((c) => c[0] === 'radio')).toHaveLength(0);
 
   await openNowPlaying(page);
   await expect(page.getByTestId('upnext-list-label')).toContainText('Next from:');
@@ -177,6 +177,10 @@ test('Album Play plays the album, then continues into autoplay at the end', asyn
   await lastRow.locator('.row-main').click();
   await expect(page.getByTestId('np-title')).toHaveText(titles[7]);
   await expect(page.locator('[data-testid="upnext-row"][data-section="list"]')).toHaveCount(0);
+  // At its end: Global leads to Global, the first track's radio.
+  const q = await withAutoplay(page, 5);
+  expect(q.autoplay.every((t) => t.source === 'ytmusic' && /^Radio \d+$/.test(t.title))).toBe(true);
+  expect((await musicCalls(page)).filter((c) => c[0] === 'radio')).toHaveLength(1);
   await page.getByTestId('np-next').click();
   await expect(page.getByTestId('np-title')).toHaveText(q.autoplay[0].title);
 });
@@ -269,6 +273,76 @@ test('repeat keeps the songs lined up: Repeat all and one move on with Next, and
   await repeat.click();
   await expect(repeat).toHaveAttribute('data-mode', 'off');
   expect((await queueState(page)).autoplay.map((t) => t.id)).toEqual(autoplay.slice(2).map((t) => t.id));
+});
+
+test('with repeat on, a song you tap still gets its suggestions; a list you start loops by itself', async ({ page }) => {
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  await openNowPlaying(page);
+  const repeat = page.getByTestId('np-repeat');
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'all');
+  await page.getByTestId('np-close').click();
+  // A Home song with Repeat all: its suggestions, the loop.
+  const title = (await visible(page, 'track-title').nth(2).textContent())!.trim();
+  await visible(page, 'track-play').nth(2).click();
+  const q = await withAutoplay(page);
+  expect(q.seed?.title).toBe(title);
+  await openNowPlaying(page);
+  await expect(page.getByTestId('upnext-repeat')).toHaveText('Then repeats from the top.');
+  // Repeat one goes on as repeat off does.
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'one');
+  await expect(page.getByTestId('upnext-repeat')).toHaveText('Repeating this song.');
+  await page.getByTestId('np-close').click();
+  await visible(page, 'track-play').nth(3).click();
+  await expect.poll(async () => (await queueState(page)).seed?.id).not.toBe(q.seed?.id);
+  await withAutoplay(page);
+
+  // A genre's Play with Repeat all: the genre loops, no suggestions after it.
+  await openNowPlaying(page);
+  await repeat.click();
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'all');
+  await page.getByTestId('np-close').click();
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-tile').nth(5).click();
+  await visible(page, 'genre-play-all').click();
+  await openNowPlaying(page);
+  const first = (await page.getByTestId('np-title').textContent())!.trim();
+  await page.locator('[data-testid="upnext-row"][data-section="list"] .row-main').last().click();
+  await expect(page.locator('[data-testid="upnext-row"][data-section="list"]')).toHaveCount(0);
+  expect((await expectStable(() => queueState(page), 1500)).autoplay).toEqual([]);
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).toHaveText(first);
+});
+
+test("Repeat one at a list's end: Next is off, as on the notification; Repeat all goes round", async ({ page }) => {
+  await start(page);
+  await openSettings(page);
+  await page.getByTestId('autoplay-toggle').click();
+  await expect(page.getByTestId('autoplay-toggle')).toHaveAttribute('aria-checked', 'false');
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-tile').nth(5).click();
+  await visible(page, 'genre-play-all').click();
+  await openNowPlaying(page);
+  const first = (await page.getByTestId('np-title').textContent())!.trim();
+  await page.locator('[data-testid="upnext-row"][data-section="list"] .row-main').last().click();
+  await expect(page.locator('[data-testid="upnext-row"]')).toHaveCount(0);
+  const repeat = page.getByTestId('np-repeat');
+  const next = page.getByTestId('np-next');
+  await expect(next).toBeDisabled();
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'all');
+  await expect(next).toBeEnabled();
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'one');
+  await expect(next).toBeDisabled();
+  await repeat.click();
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'all');
+  await next.click();
+  await expect(page.getByTestId('np-title')).toHaveText(first);
 });
 
 test('a track started before the Jukebox catalog has loaded still gets its autoplay once it does', async ({ page }) => {

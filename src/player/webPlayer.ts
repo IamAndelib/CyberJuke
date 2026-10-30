@@ -13,7 +13,7 @@ import { Queue } from './queue';
 import { stationPlaying } from './radio';
 import type { RepeatMode } from './native';
 import type { CrossfadeMs, Ipv4Mode, Quality } from '../stores/library';
-import { AUTOPLAY_LOW, EMPTY_STATE, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
+import { AUTOPLAY_LOW, EMPTY_STATE, mayAutoplay, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
 
 /* Minimal typings for the parts of the IFrame API we use. */
 interface YTPlayer {
@@ -202,14 +202,14 @@ export class WebPlayer implements Player {
     return this.autoplayOn || !!stationPlaying(this.context, seedId);
   }
 
-  /** AP4, inline: with 5 autoplay tracks or fewer to go, ask for more (once per state). */
+  /** AP4, inline: with 5 tracks or fewer to go, ask for more (once per state). */
   private checkLow(): void {
     const seed = this.seed;
-    if (!seed || !this.keepsGoing(seed.id) || this.q.repeat !== 'off' || !this.q.current) {
+    if (!seed || !this.keepsGoing(seed.id) || !mayAutoplay(this.q.repeat, this.q.length) || !this.q.current) {
       this.lowKey = null;
       return;
     }
-    const left = this.q.autoAhead;
+    const left = this.q.ahead;
     if (left > AUTOPLAY_LOW) {
       this.lowKey = null;
       return;
@@ -364,13 +364,14 @@ export class WebPlayer implements Player {
 
   private advance(auto: boolean, afterError = false): void {
     const before = this.q.current;
-    const n = this.q.next(auto);
+    // A broken track is skipped, repeat one or not (native's seekToNextMediaItem).
+    const n = this.q.next(auto && !afterError);
     if (!n) {
       this.publish({ isPlaying: false, isBuffering: false });
       return;
     }
     if (afterError && n === before) {
-      // Repeat-one on a broken track: stop instead of looping on the error.
+      // Repeat all round a single broken track: stop instead of looping on the error.
       this.publish({ isPlaying: false, isBuffering: false });
       return;
     }
@@ -490,7 +491,7 @@ export class WebPlayer implements Player {
   }
 
   async addAutoplay(tracks: Track[], seedId: string): Promise<void> {
-    if (!tracks.length || !this.keepsGoing(seedId) || this.q.repeat !== 'off' || this.seed?.id !== seedId) return;
+    if (!tracks.length || !this.keepsGoing(seedId) || !mayAutoplay(this.q.repeat, this.q.length) || this.seed?.id !== seedId) return;
     const wasEmpty = !this.q.current;
     this.q.addAuto(tracks);
     this.publish();

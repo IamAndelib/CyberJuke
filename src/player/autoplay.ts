@@ -1,20 +1,21 @@
 /**
- * Autoplay (AP4): keeps 20-25 similar tracks ahead of the end of the list.
+ * Autoplay (AP4): when a list is about to end, more follows it, 20-25 tracks at a time.
  *
- * The player says when it runs low (5 autoplay tracks or fewer to go: native's `queueLow`
- * event, the web player inline) and this adds more once the app is idle, one refill at a time:
+ * The player says when it runs low (5 tracks or fewer to go, whatever they are, as InnerTune's
+ * and Metrolist's "load more" do: native's `queueLow` event, the web player inline) and this adds more once the app is idle, one refill at a time:
  *  - a Jukebox seed: similar Jukebox tracks from the cached catalog (data/similar);
  *  - a Global seed: YouTube Music's radio for it (web player only; natively the playback
  *    service runs Global radios itself, so they refill with the screen off);
  *  - a Signal Radio station playing: its next round (player/radio), all its tracks again;
  *  - Home's Shuffle (its label, shuffleLabel): more random songs from the same pool.
- * Nothing while autoplay is off (the setting, C3), but for a station, or while repeat is on.
+ * Nothing while autoplay is off (the setting, C3), but for a station, or with repeat all
+ * but for a single song (mayAutoplay).
  */
 import { whenIdle } from '../core/idle';
 import { audioKey, isGlobal, type Track } from '../data/model';
 import { similarTracks } from '../data/similar';
 import { shuffle, stationPlaying, stationQueue } from './radio';
-import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, type Player, type QueueLow } from './types';
+import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, mayAutoplay, type Player, type QueueLow } from './types';
 
 /** How long a batch just added counts as ahead even before the player's state shows it (native's lags the call). */
 const BATCH_LAG_MS = 5000;
@@ -77,7 +78,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
   async function run(e: QueueLow): Promise<void> {
     const s = player.state.peek();
     const seed = s.seed ?? s.current;
-    if (!seed || !s.current || s.repeat !== 'off') return;
+    if (!seed || !s.current || !mayAutoplay(s.repeat, s.queue.length)) return;
     if (e.seedId && e.seedId !== seed.id) return; // a signal for an older seed
     const inQueue = new Set(s.queue.flatMap((t) => [t.id, audioKey(t)]));
     // The signal may be older than the last refill (one that came in during it): count
@@ -86,7 +87,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     if (batch && (batch.seedId !== seed.id || now() - batch.at > BATCH_LAG_MS || (batch.queue && batch.queue !== s.queue) || (!batch.round && batch.ids.some((id) => inQueue.has(id))))) batch = null;
     const lagging = batch?.ids ?? [];
     for (const id of lagging) inQueue.add(id);
-    const left = Math.max(e.left, s.upNext.filter((u) => u.auto).length) + lagging.length;
+    const left = Math.max(e.left, s.upNext.length) + lagging.length;
     if (left > AUTOPLAY_LOW) return;
     const count = left <= 0 ? AUTOPLAY_FIRST : AUTOPLAY_MORE;
     const add = async (tracks: Track[], round = false) => {

@@ -424,8 +424,8 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         return gone.size
     }
 
-    /** Autoplay items still to come (after the current one in play order). */
-    fun autoAhead(): Int = upcoming().count { host.isAutoAt(it) }
+    /** Items still to come (after the current one in play order). */
+    fun ahead(): Int = upcoming().size
 
     /** Removes the autoplay items still to come; returns how many went. */
     fun dropUpcomingAuto(): Int {
@@ -435,15 +435,23 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     }
 
     /**
-     * A user jump to [index]. Jumping to an autoplay item drops the autoplay items after it (the
-     * radio continues from it), but while [repeating] (it adds nothing then); returns true then.
+     * Repeat all loops what you started: a list's autoplay items still to come go (they come back
+     * once repeat is off); a single song's are its radio, the loop itself, and stay.
      */
-    fun skipTo(index: Int, repeating: Boolean = false): Boolean {
+    fun onRepeatModeChanged(repeatAll: Boolean) {
+        if (repeatAll && (0 until host.count).count { !host.isAutoAt(it) } > 1) dropUpcomingAuto()
+    }
+
+    /**
+     * A user jump to [index]. Jumping to an autoplay item drops the autoplay items after it (the
+     * radio continues from it), but with [repeatAll] (they are its loop); returns true then.
+     */
+    fun skipTo(index: Int, repeatAll: Boolean = false): Boolean {
         if (index !in 0 until host.count) return false
         host.seekTo(index)
         val cur = host.currentIndex
         if (cur !in 0 until host.count || !host.isAutoAt(cur)) return false
-        if (!repeating) dropUpcomingAuto()
+        if (!repeatAll) dropUpcomingAuto()
         return true
     }
 

@@ -62,14 +62,17 @@ class QueueRulesTest {
                     if (s.isNull("beforeId")) null else s.getString("beforeId"),
                 )
                 "removeIds" -> p.queue.removeIds(strings(s.getJSONArray("ids")).toSet())
-                "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")), repeating = p.repeat != "off")
+                "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")), repeatAll = p.repeat == "all")
                 "next" -> p.next()
                 "nextAuto" -> p.nextAuto()
                 "prev" -> p.prev(s.optLong("positionMs", 0L))
                 "remove" -> p.remove(p.ids.indexOf(s.getString("id")))
                 "move" -> p.moveItem(p.ids.indexOf(s.getString("id")), s.getInt("to"))
                 "setShuffle" -> p.toggleShuffle(s.getBoolean("on"))
-                "setRepeat" -> p.repeat = s.getString("mode")
+                "setRepeat" -> {
+                    p.repeat = s.getString("mode")
+                    p.queue.onRepeatModeChanged(p.repeat == "all")
+                }
                 "expect" -> expect(p, s, where)
                 else -> throw IllegalArgumentException("unknown op in $where")
             }
@@ -93,11 +96,12 @@ class QueueRulesTest {
             assertEquals("queued in $where", s.getInt("queued"), queued)
         }
         if (s.has("list")) assertEquals("list in $where", strings(s.getJSONArray("list")), p.ids.toList())
-        // Up next's sections: the leading queued run, then list and autoplay by tag.
+        // Up next's sections (the page's sectionsOf): the leading queued run, the list, then from
+        // the first autoplay row on, autoplay.
         val lead = up.takeWhile { p.serials[p.ids.indexOf(it)] in p.queue.pendingSerials }
         val after = up.drop(lead.size)
-        val autos = after.filter { p.auto[p.ids.indexOf(it)] }
-        val list = after.filter { !p.auto[p.ids.indexOf(it)] }
+        val list = after.takeWhile { !p.auto[p.ids.indexOf(it)] }
+        val autos = after.drop(list.size)
         if (s.has("queuedIds")) assertEquals("queuedIds in $where", strings(s.getJSONArray("queuedIds")), lead)
         if (s.has("listIds")) assertEquals("listIds in $where", strings(s.getJSONArray("listIds")), list)
         if (s.has("listSet")) assertEquals("listSet in $where", strings(s.getJSONArray("listSet")).sorted(), list.sorted())
@@ -254,9 +258,9 @@ class QueueRulesTest {
         /** User navigation treats repeat-one as off (Player.seekToNext / seekToPrevious). */
         private val navRepeat get() = if (repeat == "one") "off" else repeat
 
-        /** JukePlayerPlugin.skipToNext: Media3's, but with repeat one it wraps at the end, as with repeat all. */
+        /** JukePlayerPlugin.skipToNext: Media3's (repeat one as off). */
         fun next() {
-            val n = nextIndex(current, if (repeat == "one") "all" else repeat)
+            val n = nextIndex(current, navRepeat)
             if (n >= 0) seekTo(n)
         }
 
@@ -294,14 +298,14 @@ class QueueRulesTest {
             emit({ queue.onShuffleModeChanged(on) })
         }
 
-        /** Same walk as JukePlayerPlugin.buildState (repeat-one shown as off). */
+        /** Same walk as StateEncoder (to the end of the play order, whatever the repeat mode). */
         fun upNext(): List<String> {
             val out = ArrayList<String>()
             if (current < 0) return out
-            var i = nextIndex(current, navRepeat)
+            var i = nextIndex(current, "off")
             while (i >= 0 && i != current && out.size < 50) {
                 out.add(ids[i])
-                i = nextIndex(i, navRepeat)
+                i = nextIndex(i, "off")
             }
             return out
         }
