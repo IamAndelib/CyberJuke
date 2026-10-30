@@ -154,6 +154,10 @@ test('the new-tracks pill on Most saved or a genre chip shows Latest from every 
     return route.fallback();
   });
   await start(page);
+  // Latest was left scrolled down: the pill still lands at its top, where the new posts are.
+  const home = page.getByTestId('screen-home');
+  await home.evaluate((el) => el.scrollTo(0, 900));
+  await expect.poll(() => home.evaluate((el) => el.scrollTop)).toBeGreaterThan(500);
   await page.getByTestId('genre-chip').first().click();
   await page.getByTestId('sort-saved').click();
   await page.evaluate(() => (window as unknown as { __cyberjukeFreshness: { check(): Promise<void> } }).__cyberjukeFreshness.check());
@@ -164,6 +168,7 @@ test('the new-tracks pill on Most saved or a genre chip shows Latest from every 
   await expect(page.getByTestId('sort-latest')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('chip-all')).toHaveAttribute('aria-pressed', 'true');
   await waitForTracks(page);
+  await expect.poll(() => home.evaluate((el) => el.scrollTop)).toBeLessThan(5);
 });
 
 test('a song picture still on its way leaves a dark box, not a bright square (dark theme)', async ({ page }) => {

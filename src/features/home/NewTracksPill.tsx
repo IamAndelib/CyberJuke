@@ -48,6 +48,8 @@ export function NewTracksPill({ toLatest }: { toLatest: () => void }) {
     toLatest();
     const screen = ref.current?.closest('.screen');
     try {
+      // Latest's own scroll position comes back as it renders: scroll up after that.
+      await new Promise(requestAnimationFrame);
       if (screen) {
         const moving = screen.scrollTop > 0 && !reducedMotion();
         screen.scrollTo({ top: 0, behavior: moving ? 'smooth' : 'auto' });

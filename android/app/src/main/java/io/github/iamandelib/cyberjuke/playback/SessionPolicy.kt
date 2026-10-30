@@ -25,10 +25,12 @@ import java.security.MessageDigest
  *   controller, which proves itself with a random per-process token in its connection hints
  *   ([ControllerKey]). The media notification controller has our package and uid too, and any
  *   app can make it send a custom command (Media3's CUSTOM_NOTIFICATION_ACTION intent).
- * - The media notification controller gets no timeline: Media3 configures the platform
- *   session (lock screen, system media controls, every notification listener) with its
- *   commands, so with the timeline it would publish the whole queue. The platform session
- *   keeps the current item, its metadata and the transport controls; it has no queue.
+ * - The media notification controller gets only what the notification shows
+ *   ([NOTIFICATION_COMMANDS]): Media3 configures the platform session (lock screen, system media
+ *   controls, every notification listener) with its commands, and any app can make it send one
+ *   (CUSTOM_NOTIFICATION_ACTION naming a player command). So no timeline (it would publish the
+ *   whole queue) and no item, speed or volume changes: the current item, its metadata, the
+ *   transport controls, Shuffle and Repeat.
  */
 internal object SessionPolicy {
     enum class Access { FULL, TRANSPORT }
@@ -100,8 +102,6 @@ internal object SessionPolicy {
     fun mayUseQueueCommands(c: Controller, ownPackage: String, processToken: String): Boolean =
         grant(c, ownPackage, processToken) == Grant.PLUGIN
 
-    /** Player commands the [Grant.NOTIFICATION] controller (and the platform session) lacks. */
-    val NOTIFICATION_HIDDEN_COMMANDS: Set<Int> = setOf(Player.COMMAND_GET_TIMELINE)
 
     /** Constant-time comparison; an empty or missing token never matches. */
     fun tokenMatches(presented: String?, expected: String): Boolean {
@@ -126,6 +126,14 @@ internal object SessionPolicy {
         Player.COMMAND_GET_METADATA,
         Player.COMMAND_GET_AUDIO_ATTRIBUTES,
         Player.COMMAND_RELEASE,
+    )
+
+    /** Player commands the [Grant.NOTIFICATION] controller (and so the platform session) gets. */
+    val NOTIFICATION_COMMANDS: Set<Int> = TRANSPORT_COMMANDS + setOf(
+        Player.COMMAND_SET_SHUFFLE_MODE,
+        Player.COMMAND_SET_REPEAT_MODE,
+        Player.COMMAND_GET_VOLUME,
+        Player.COMMAND_GET_DEVICE_VOLUME,
     )
 
     // ---- media items coming in from a controller (onAddMediaItems / onSetMediaItems) ----------

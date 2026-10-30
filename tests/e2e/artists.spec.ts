@@ -377,7 +377,10 @@ test("an artist page shows the Jukebox's 5 newest first, and all of them a tap a
   await expect(jukebox.getByTestId('track-row')).toHaveCount(5);
   const all = jukebox.getByTestId('artist-jukebox-all');
   await expect(all).toHaveText(`[Show all ${n}]`);
-  await all.click();
+  await all.focus();
+  await page.keyboard.press('Enter');
   await expect(jukebox.getByTestId('track-row')).toHaveCount(n);
   await expect(all).toHaveCount(0);
+  // Focus moves on to the first track shown, not off the page.
+  await expect(jukebox.getByTestId('track-play').nth(5)).toBeFocused();
 });

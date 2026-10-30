@@ -13,7 +13,7 @@ Install **CyberJuke Preview** from <https://github.com/IamAndelib/CyberJuke/rele
 - [ ] A Home track plays. So do a genre track, an artist page track and a **Global** search result.
 - [ ] A **Jukebox MP3** plays (Search "Träume" or "Anniversary Mix", both latex.gg MP3s): its square cover shows in the list, in Now Playing, the notification and on the lock screen; seeking works; it moves on to the next track at its end. Swipe the app away and reopen it: it comes back, paused, where it was.
 - [ ] With the screen off and the app in the background, music keeps playing and moves on to the next track.
-- [ ] Notification and lock screen: play/pause, next and previous work, and they show the title and artwork.
+- [ ] Notification and lock screen: play/pause, next and previous work, the seek bar moves and seeks, and they show the title and artwork. Check once on Android 13 or newer and once on Android 12 or older.
 - [ ] While music plays, the status bar shows the CyberJuke jukebox (a small arched box), not a music note; so does the notification's header.
 - [ ] On a fresh install (Android 13 or newer), the first play asks for no permission, and the notification still shows its controls.
 - [ ] The notification (expanded) and the lock screen show **Shuffle** and **Repeat** beside the usual buttons. Tap Shuffle: it lights up, and Now Playing's shuffle is on too. Tap Repeat three times: all, one, off, the icon changing each time, and Now Playing follows. Change them in the app: the notification follows.

@@ -75,6 +75,9 @@ function RowBody({ track, playing }: { track: Track; playing?: boolean }) {
   );
 }
 
+/** A count Up next shows: "50+" when it may hold more than it shows. */
+const upTo = (n: number) => (n >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : n);
+
 /** Offline, a row that can't play is dimmed, as in every list (TrackRow). */
 const offClass = (t: Track) => (!online.value && !isSaved(t, savedOffline.value) ? ' off' : '');
 
@@ -141,7 +144,6 @@ export function UpNext() {
       return (
         <li
           key={`${it.track.id}:${it.index}`}
-          // Offline, a row that can't play is dimmed, as in every list (TrackRow).
           class={'row' + (kind === 'list' ? '' : ` ${kind}`) + offClass(it.track)}
           data-testid={kind === 'played' ? 'upnext-played' : 'upnext-row'}
           data-track-id={it.track.id}
@@ -189,8 +191,13 @@ export function UpNext() {
               onClick={(e) => {
                 const b = e.currentTarget;
                 const near = items[k + 1] ?? items[k - 1];
+                // The only row of its part: the next row with buttons, else the one before.
+                const rows = [...(root.current?.querySelectorAll<HTMLElement>('li[data-section]:not([data-section="current"])') ?? [])];
+                const at = rows.indexOf(b.closest('li')!);
+                const other = rows[at + 1] ?? rows[at - 1];
+                const to = near ? { id: near.track.id, kind } : other && { id: other.dataset.trackId!, kind: other.dataset.section as Kind };
                 afterPress(b, () => {
-                  if (remove(it, kind, items[k + 1]?.track.id ?? null)) keepFocus(b, near ? { id: near.track.id, kind, index: null, button: 'remove', gone: [it.track.id, it.index] } : null);
+                  if (remove(it, kind, items[k + 1]?.track.id ?? null)) keepFocus(b, to ? { ...to, index: null, button: 'remove', gone: [it.track.id, it.index] } : null);
                 });
               }}
               data-role="remove"
@@ -224,7 +231,7 @@ export function UpNext() {
         <h3 class="section-title" data-testid="upnext-title">
           Queue{shuffle && <span class="dim"> · Shuffled</span>}
         </h3>
-        {total > 0 && <span class="dim small">{total >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : total} up next</span>}
+        {total > 0 && <span class="dim small">{upTo(total)} up next</span>}
       </div>
       {repeat !== 'off' && (
         <div class="dim small upnext-empty" data-testid="upnext-repeat">
@@ -241,11 +248,12 @@ export function UpNext() {
               onClick={(e) => afterPress(e.currentTarget, () => (playedOpenFor.value = open ? undefined : ctx))}
               data-testid="upnext-played-fold"
             >
-              Played · {played.length >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : played.length}
+              Played · {upTo(played.length)}
             </button>
           </li>
         )}
-        {open && rows('played', played, shuffle || !current ? undefined : { track: current, index: sec.queued.at(-1)?.index ?? player.state.value.index })}
+        {/* peek: the index only matters with the rows, which change with it (not every tick). */}
+        {open && rows('played', played, shuffle || !current ? undefined : { track: current, index: sec.queued.at(-1)?.index ?? player.state.peek().index })}
         {current && (
           <>
             <li class="upnext-label" data-testid="upnext-current-label" aria-hidden="true">

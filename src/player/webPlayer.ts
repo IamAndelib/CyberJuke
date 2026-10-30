@@ -177,9 +177,7 @@ export class WebPlayer implements Player {
   private publish(patch: Partial<PlayerState> = {}): void {
     const prev = this.s.value;
     const index = this.q.index;
-    const upIdx = this.q.upNextIndices();
     const items = this.q.items;
-    const queued = this.q.queuedCount;
     this.s.value = {
       ...prev,
       queue: items,
@@ -187,9 +185,7 @@ export class WebPlayer implements Player {
       current: this.q.current,
       shuffle: this.q.shuffle,
       repeat: this.q.repeat,
-      upNext: upIdx.map((i, k) =>
-        k < queued ? { track: items[i], index: i, queued: true } : this.q.isAuto(i) ? { track: items[i], index: i, auto: true } : { track: items[i], index: i },
-      ),
+      upNext: this.q.upNextItems().map(({ item, ...u }) => ({ track: item, ...u })),
       previous: this.q.previousIndices().map((i) => ({ track: items[i], index: i })),
       context: this.context,
       seed: this.seed,

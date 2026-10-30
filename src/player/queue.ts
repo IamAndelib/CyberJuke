@@ -35,9 +35,10 @@
  *    order back.
  *
  * Up next is three sections, in play order: queued by you, the rest of the list,
- * autoplay (see sections()).
+ * autoplay (sectionsOf in ./types).
  */
 import { UP_NEXT_MAX } from '../core/guards';
+import { shuffled } from '../core/shuffle';
 import type { RepeatMode } from './native';
 import type { UpNextKind as Section } from './types';
 
@@ -50,13 +51,6 @@ interface Entry<T> {
   item: T;
   /** Added by autoplay (addAuto). */
   auto?: boolean;
-}
-
-/** Up next split into its three sections, each in play order, with list indices. */
-interface QueueSections<T> {
-  queued: { item: T; index: number }[];
-  list: { item: T; index: number }[];
-  autoplay: { item: T; index: number }[];
 }
 
 const RESTART_THRESHOLD_MS = 3000;
@@ -141,24 +135,14 @@ export class Queue<T extends Identified> {
   }
 
   /**
-   * Up next (at most `max` tracks) as its three sections: the leading run of queued
-   * tracks, then the list, then autoplay, in play order: from the first autoplay track on,
-   * all is autoplay (a played track in repeat all's loop of a radio, say).
+   * Up next (at most `max` tracks), in play order, as the player publishes it: each with its
+   * list index, `queued` for the leading run queued by the user, `auto` for autoplay.
    */
-  sections(max = UP_NEXT_MAX): QueueSections<T> {
-    const out: QueueSections<T> = { queued: [], list: [], autoplay: [] };
-    const p = this.cur ? this.order.indexOf(this.cur) : -1;
-    let leading = true;
-    for (const e of this.order.slice(p + 1, p + 1 + max)) {
-      const it = { item: e.item, index: this.list.indexOf(e) };
-      if (leading && this.queued.has(e)) {
-        out.queued.push(it);
-        continue;
-      }
-      leading = false;
-      (e.auto || out.autoplay.length ? out.autoplay : out.list).push(it);
-    }
-    return out;
+  upNextItems(max = UP_NEXT_MAX): { item: T; index: number; queued?: true; auto?: true }[] {
+    const n = this.queuedCount;
+    return this.upNextIndices(max).map((index, k) =>
+      k < n ? { item: this.list[index].item, index, queued: true } : this.list[index].auto ? { item: this.list[index].item, index, auto: true } : { item: this.list[index].item, index },
+    );
   }
 
   // ---- loading -------------------------------------------------------------------
@@ -492,19 +476,11 @@ export class Queue<T extends Identified> {
       ...played,
       ...(cur ? [cur] : []),
       ...queued,
-      ...this.mix(ahead.filter((e) => !e.auto)),
-      ...this.mix(ahead.filter((e) => e.auto)),
+      ...shuffled(ahead.filter((e) => !e.auto), this.rand),
+      ...shuffled(ahead.filter((e) => e.auto), this.rand),
     ];
   }
 
-  /** Fisher–Yates, in place. */
-  private mix<E>(a: E[]): E[] {
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(this.rand() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  }
 }
 
 function clamp(n: number, lo: number, hi: number): number {

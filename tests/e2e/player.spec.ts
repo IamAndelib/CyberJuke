@@ -616,6 +616,25 @@ test('Up next from the keyboard: focus follows a moved row, and goes to the next
   await expect.poll(focused).toBe(`upnext-remove:${after}`);
 });
 
+test('Up next from the keyboard: removing the only row of its part moves focus to the next row', async ({ page }) => {
+  await start(page);
+  await page.getByTestId('track-play').first().click();
+  await openNowPlaying(page);
+  await page.getByTestId('np-next').click();
+  await page.getByTestId('upnext-played-fold').click();
+  const played = page.getByTestId('upnext-played');
+  await expect(played).toHaveCount(1);
+  const next = (await page.getByTestId('upnext-row').first().getAttribute('data-track-id'))!;
+  await played.getByTestId('upnext-remove').focus();
+  await page.keyboard.press('Enter');
+  await expect(played).toHaveCount(0);
+  // The fold went with it: focus goes on past the playing song, not off the page.
+  await expect.poll(() => page.evaluate(() => {
+    const a = document.activeElement as HTMLElement | null;
+    return `${a?.dataset.testid}:${a?.closest('li')?.getAttribute('data-track-id')}`;
+  })).toBe(`upnext-remove:${next}`);
+});
+
 test('in Now Playing an Undo message sits at the bottom, and Up next scrolls clear of it', async ({ page }) => {
   await start(page);
   await page.getByTestId('track-play').first().click();

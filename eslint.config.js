@@ -54,7 +54,7 @@ function layerRules() {
     layer(['src/data/index.ts'], ['app', 'features', 'ui', 'player']),
     layer(ts('stores'), ['app', 'features', 'ui', 'player']),
     // The block state uses the native plugin's event types.
-    layer(['src/stores/block.ts'], ['app', 'features', 'ui']),
+    layer(['src/stores/block.ts'], ['app', 'features', 'ui', 'player'], { allowTypeImports: true }),
     layer(ts('player'), ['app', 'features', 'ui']),
     layer(ts('ui'), ['app', 'features']),
     layer(ts('features'), ['app'], {
@@ -123,7 +123,7 @@ export default tseslint.config(
   ...layerRules(),
   {
     // Test doubles and fixtures may use `any` freely.
-    files: ['tests/**/*.ts', 'src/**/*.test.ts', 'src/**/__fixtures__/**'],
+    files: ['tests/**/*.ts', 'src/**/*.test.ts'],
     rules: { '@typescript-eslint/no-explicit-any': 'off' },
   },
 );
