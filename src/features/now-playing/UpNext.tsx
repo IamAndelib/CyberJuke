@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef } from 'preact/hooks';
-import { currentId, player, playContext, repeatMode, shuffleOn, upNextSections, type UpItem, type UpNextKind } from '../../player';
-import { stationPlaying } from '../../player/radio';
+import { autoplayLabel, currentId, player, playContext, repeatMode, shuffleOn, upNextSections, type UpItem, type UpNextKind } from '../../player';
 import { online } from '../../core/network';
 import { settings } from '../../stores/library';
 import { isSaved, savedOffline } from '../../stores/savedOffline';
@@ -8,6 +7,7 @@ import { toast } from '../../stores/toast';
 import { Icon } from '../../ui/icons';
 import { afterPress } from '../../ui/press';
 import { Art } from '../../ui/components/Art';
+import { UP_NEXT_MAX } from '../../core/guards';
 import { plural } from '../../core/text';
 
 type Kind = UpNextKind;
@@ -177,15 +177,12 @@ export function UpNext() {
     );
 
   const from = ctx?.label ? `Next from: ${ctx.label}` : 'Next from the list';
-  const seedTitle = sec.seed?.title;
-  // A station's next rounds aren't autoplay (they come with it off too): the station going on.
-  const station = stationPlaying(ctx, sec.seed?.id);
   const repeat = repeatMode.value;
   return (
     <section ref={root} class="upnext" data-testid="up-next">
       <div class="section-head">
         <h3 class="section-title">Up next</h3>
-        <span class="dim small">{shuffle && sec.list.length ? 'Shuffled · turn shuffle off to reorder' : plural(total, 'track')}</span>
+        <span class="dim small">{shuffle && sec.list.length ? 'Shuffled · turn shuffle off to reorder' : total >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+ tracks` : plural(total, 'track')}</span>
       </div>
       {repeat === 'one' && (
         <div class="dim small upnext-empty" data-testid="upnext-repeat">
@@ -199,7 +196,7 @@ export function UpNext() {
           <ol class="list compact">
             {section('queued', 'Queued by you', sec.queued)}
             {section('list', from, sec.list)}
-            {section('autoplay', station ? `More from ${station.callsign}` : seedTitle ? `Autoplay · similar to ${seedTitle}` : 'Autoplay', sec.autoplay)}
+            {section('autoplay', autoplayLabel.value, sec.autoplay)}
           </ol>
           {repeat === 'all' && (
             <div class="dim small upnext-empty" data-testid="upnext-repeat">

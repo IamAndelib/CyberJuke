@@ -255,6 +255,7 @@ export class NativePlayer implements Player {
       upNext,
       context,
       seed,
+      currentAuto: st.currentAuto === true,
       waitingForNetwork: st.waitingForNetwork === true,
       bufferedAheadMs: st.bufferedAheadMs ?? 0,
     };
@@ -295,6 +296,7 @@ export class NativePlayer implements Player {
       upNext: queue.slice(i + 1, i + 51).map((track, k) => ({ track, index: i + 1 + k, ...(k < queued.length && { queued: true }) })),
       context,
       seed: tracks[i],
+      currentAuto: false,
       waitingForNetwork: false,
       bufferedAheadMs: 0,
     };

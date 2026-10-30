@@ -32,6 +32,7 @@ describe('parseNativeState', () => {
       upNextIndex: [0, 2],
       context: { label: 'Liked', mode: 'list' },
       seedId: 'b',
+      currentAuto: true,
       waitingForNetwork: true,
       bufferedAheadMs: 4000,
     };
@@ -88,6 +89,7 @@ describe('parseNativeState', () => {
       upNextIndex: [],
       context: null,
       seedId: null,
+      currentAuto: false,
       waitingForNetwork: false,
       bufferedAheadMs: 0,
     });

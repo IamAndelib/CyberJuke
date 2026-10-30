@@ -24,9 +24,10 @@ import { OFFLINE } from '../core/offlineText';
 import { exposeForTests } from '../core/testHooks';
 import type { Track } from '../data/model';
 import { hasSavedLiked, isSaved, savedOffline, savedTracks } from '../stores/savedOffline';
-import { createAutoplay, type Autoplay } from './autoplay';
+import { createAutoplay, shuffleGenre, type Autoplay } from './autoplay';
 import { NativePlayer } from './nativePlayer';
 import { offlineGuard, playsOffline, type OfflineRefusal } from './offlineGuard';
+import { stationPlaying } from './radio';
 import { safePlayer } from './safePlayer';
 import { nsfwAutoplayIds, wantsPlay, type PlayContext, type Player, type UpItem, type UpNextItem, type UpNextSections } from './types';
 import { WebPlayer } from './webPlayer';
@@ -114,6 +115,8 @@ const state = player.state;
 /** The current track (same object until the track changes). */
 export const currentTrack = computed(() => state.value.current);
 export const currentId = computed(() => state.value.current?.id ?? null);
+/** The current track came from autoplay. */
+export const currentAuto = computed(() => state.value.currentAuto);
 export const hasCurrent = computed(() => state.value.current != null);
 export const isPlaying = computed(() => state.value.isPlaying);
 export const isBuffering = computed(() => state.value.isBuffering);
@@ -140,8 +143,12 @@ export const shuffleOn = computed(() => state.value.shuffle);
 export const repeatMode = computed(() => state.value.repeat);
 /** The current track's length (0 until known). */
 export const durationMs = computed(() => state.value.durationMs);
-/** Where the current track is in the list: "3 of 50", or "Single track". */
-export const queuePlace = computed(() => (state.value.queue.length > 1 ? `${state.value.index + 1} of ${state.value.queue.length}` : 'Single track'));
+/** Where the current track is in the list you started (autoplay's tracks after it not counted): "3 of 50", or "Single track". */
+export const queuePlace = computed(() => {
+  const s = state.value;
+  const n = s.queue.length - s.upNext.filter((u) => u.auto).length;
+  return n > 1 ? `${s.index + 1} of ${n}` : 'Single track';
+});
 /** "Next" does something: a track after this one, or repeat wraps around. */
 export const canSkipNext = computed(() => state.value.upNext.length > 0 || state.value.repeat === 'all');
 
@@ -161,6 +168,20 @@ export const upNextSections = computed<UpNextSections>(() => {
   const next = sectionsOf(s.upNext, s.seed);
   if (sameSections(lastSections, next)) return lastSections;
   return (lastSections = next);
+});
+
+/**
+ * What autoplay's tracks are, for Up next's heading and Now Playing while one plays: a station's
+ * next rounds, a Jukebox shuffle's more random picks, or songs similar to the seed.
+ */
+export const autoplayLabel = computed(() => {
+  const ctx = playContext.value;
+  const seed = upNextSections.value.seed;
+  const station = stationPlaying(ctx, seed?.id);
+  if (station) return `More from ${station.callsign}`;
+  const genre = shuffleGenre(ctx?.label);
+  if (genre !== undefined) return `More random picks from ${genre ?? 'the Jukebox'}`;
+  return seed?.title ? `Autoplay · similar to ${seed.title}` : 'Autoplay';
 });
 
 function sectionsOf(upNext: UpNextItem[], seed: UpNextSections['seed']): UpNextSections {

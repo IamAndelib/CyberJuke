@@ -472,18 +472,30 @@ test('the track menu keeps its content while it slides away', async ({ page }) =
   await expect(menu.locator('.sheet-item')).toHaveCount(0);
 });
 
-test('Now Playing says where the music comes from; under shuffle instead of the position', async ({ page }) => {
+test('Now Playing says where the music comes from; a list its position too, but under shuffle', async ({ page }) => {
   await start(page);
   await playAndOpen(page, 0);
   const from = page.getByTestId('np-from');
-  // Home's Latest feed starts a radio from the tapped track.
+  // A Home tap: the feed it came from, no position (the rest is autoplay's).
+  await expect(from).toHaveText('Playing from Home · Latest');
+  // An autoplay song: what autoplay plays, as Up next calls it.
   const seed = (await page.getByTestId('np-title').textContent())!.trim();
-  await expect(from).toContainText(`Radio · ${seed}`);
+  await expect(page.locator('[data-testid="upnext-row"][data-section="autoplay"]').first()).toBeVisible();
+  await page.getByTestId('np-next').click();
+  await expect(from).toHaveText(`Autoplay · similar to ${seed}`);
+  await page.getByTestId('np-close').click();
+  // A genre's Play: the list, and where in it.
+  await page.getByTestId('tab-genres').click();
+  const genre = (await page.getByTestId('genre-tile').nth(5).getAttribute('data-genre'))!;
+  await page.getByTestId('genre-tile').nth(5).click();
+  await expect(page.locator('[data-testid="track-row"]:visible').nth(1)).toBeVisible();
+  await page.locator('[data-testid="genre-play-all"]:visible').click();
+  await openNowPlaying(page);
+  await expect(from).toHaveText(new RegExp(`^1 of \\d+ · Playing from ${genre}$`));
   await page.getByTestId('np-shuffle').click();
-  await expect(from).toHaveText(`Radio · ${seed}`);
+  await expect(from).toHaveText(`Playing from ${genre}`);
   await page.getByTestId('np-shuffle').click();
-  await expect(from).not.toHaveText(`Radio · ${seed}`);
-  await expect(from).toContainText(`Radio · ${seed}`);
+  await expect(from).toHaveText(new RegExp(` · Playing from ${genre}$`));
 });
 
 /** Tiles in a grid once it's whole (it fills in idle time after its first screen). */

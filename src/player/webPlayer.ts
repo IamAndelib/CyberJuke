@@ -192,6 +192,7 @@ export class WebPlayer implements Player {
       ),
       context: this.context,
       seed: this.seed,
+      currentAuto: index >= 0 && this.q.isAuto(index),
       ...patch,
     };
     this.checkLow();

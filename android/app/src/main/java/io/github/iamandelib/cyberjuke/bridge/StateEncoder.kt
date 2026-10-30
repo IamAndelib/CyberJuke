@@ -99,6 +99,7 @@ internal object StateEncoder {
             state.put("context", JSONObject.NULL)
         }
         state.put("seedId", (if (count > 0) QueueInfo.seedId else null) ?: JSONObject.NULL)
+        state.put("currentAuto", index >= 0 && c.currentMediaItem?.mediaMetadata?.extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) == true)
         // The music waits for the carrier: an outage paused it (it resumes by itself once the
         // network is back), or it stalled with the network gone (WaitingRule).
         state.put(

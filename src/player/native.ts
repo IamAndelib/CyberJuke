@@ -39,6 +39,8 @@ export interface NativeState {
   context: { label: string; mode: 'radio' | 'list' } | null;
   /** The track autoplay follows (the started track, or the autoplay track tapped). */
   seedId: string | null;
+  /** The current track was added by autoplay. Absent from older natives: false. */
+  currentAuto?: boolean;
   /**
    * The connection dropped and playback paused; it resumes by itself once the network is back
    * (within a few minutes). Sent again whenever it changes. Absent from older natives: false.
