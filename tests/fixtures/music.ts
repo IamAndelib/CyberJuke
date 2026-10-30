@@ -93,7 +93,7 @@ const FAKE_MUSIC = `
     }
     return n ? [] : ['Best of ' + q, q + ' Radio', 'Chill ' + q + ' Mix', q + ' Essentials'].map((p, i) => ({ kind: 'playlist', title: p,
       subtitle: ['Night Owl', 'Curated', 'Mixtapes'][i % 3], url: 'https://music.youtube.com/playlist?list=PL' + ytId(p),
-      thumbnailUrl: thumb(p), ...(i === 0 ? { itemCount: 42 } : {}) }));
+      thumbnailUrl: thumb(p), ...(i < 2 ? { itemCount: [42, 1][i] } : {}) }));
   };
   const LYRIC_MODES = ['greek', 'english', 'spanish', 'japanese', 'arabic', 'plain', 'none', 'instrumental'];
   const LYRICS = {

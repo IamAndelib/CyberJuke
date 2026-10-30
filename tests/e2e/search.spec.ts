@@ -128,6 +128,9 @@ test('Search opens on Jukebox; Global shows every filter; the bridge appears for
     const kinds = await page.getByTestId('music-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-kind')));
     expect(new Set(kinds)).toEqual(new Set([f === 'albums' ? 'album' : f === 'artists' ? 'artist' : 'playlist']));
   }
+  // Counts read right, one track too.
+  await expect(page.getByTestId('music-row').nth(0)).toContainText('42 tracks');
+  await expect(page.getByTestId('music-row').nth(1)).toContainText(/· 1 track$/);
   await page.getByTestId('music-open').first().click();
   await expect(page.getByTestId('screen-album').getByTestId('track-row').first()).toBeVisible();
   await page.keyboard.press('Escape');

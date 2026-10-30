@@ -19,6 +19,7 @@
 - With Crossfade on, **Next** during a fade goes to the song fading in and carries on from where it is, instead of starting it again from the beginning.
 - With TalkBack, a song row reads its line of details too (saves, members-only, genre, who posted it), and the song playing is announced as current.
 - With TalkBack or a keyboard, a question that can't be taken back (Clear history, Sign out, Clear cache) starts on **[Cancel]**, and a Radio station's info on **Tune in**.
+- A Global playlist or a genre page with one song says "1 track", not "1 tracks".
 
 ## [1.3.4] - 2026-10-29
 
