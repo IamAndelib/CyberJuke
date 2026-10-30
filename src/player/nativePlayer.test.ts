@@ -351,6 +351,17 @@ describe('NativePlayer: edits (K2)', () => {
     await expect(p.move(2, 1, 'C')).rejects.toThrow('service gone');
   });
 
+  it('a tap on a row plays it, even when paused, as the web player does; a stale one plays nothing', async () => {
+    const p = new NativePlayer();
+    list(p);
+    await p.skipTo(2, 'C');
+    expect(fake.plugin.play).toHaveBeenCalledTimes(1);
+    expect(fake.plugin.skipToIndex.mock.invocationCallOrder[0]).toBeLessThan(fake.plugin.play.mock.invocationCallOrder[0]);
+    fake.plugin.skipToIndex.mockRejectedValueOnce(Object.assign(new Error('STALE_INDEX'), { code: 'STALE_INDEX' }));
+    await p.skipTo(2, 'C');
+    expect(fake.plugin.play).toHaveBeenCalledTimes(1);
+  });
+
   it('restore sends the track, its section and the track it goes before (K3)', async () => {
     const p = new NativePlayer();
     list(p);
