@@ -387,6 +387,28 @@ test("songs removed from Up next don't come back in later suggestions", async ({
   expect(after.autoplay.filter((t) => gone.includes(t.id))).toEqual([]);
 });
 
+test('with Autoplay off, a Home tap plays the feed on from that song instead of stopping after it', async ({ page }) => {
+  await start(page);
+  await openSettings(page);
+  await page.getByTestId('autoplay-toggle').click();
+  await expect(page.getByTestId('autoplay-toggle')).toHaveAttribute('aria-checked', 'false');
+  await page.getByTestId('tab-home').click();
+  const titles = (await visible(page, 'track-title').allTextContents()).map((t) => t.trim());
+  await visible(page, 'track-play').nth(2).click();
+  await expect(page.getByTestId('mini-title')).toHaveText(titles[2]);
+  const q = await queueState(page);
+  expect(q.context?.mode).toBe('list');
+  expect(q.list.slice(0, 3).map((t) => t.title)).toEqual(titles.slice(3, 6));
+  expect(q.autoplay).toEqual([]);
+  // A single song with nothing after it says why.
+  await page.getByTestId('tab-genres').click();
+  await page.getByTestId('genre-tile').last().click();
+  await expect(visible(page, 'track-row')).toHaveCount(1);
+  await visible(page, 'track-play').first().click();
+  await openNowPlaying(page);
+  await expect(page.getByTestId('up-next')).toContainText('Autoplay is off.');
+});
+
 test('a track started before the Jukebox catalog has loaded still gets its autoplay once it does', async ({ page }) => {
   // The catalog (300-row pages) waits until let through; the Home feed loads as usual.
   let release: () => void = () => {};
