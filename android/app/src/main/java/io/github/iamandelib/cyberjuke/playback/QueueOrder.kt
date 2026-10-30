@@ -156,9 +156,6 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     private val pending = LinkedHashSet<Long>()
     private var nextSerial = 1L
 
-    /** A jump is moving an item next ([bringNext]): the shuffle order waits for it. */
-    private var jumping = false
-
     /** Serials still waiting to play, in play order. */
     val pendingSerials: Set<Long> get() = pending
 
@@ -429,7 +426,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         val order = host.shuffleOrder()?.toMutableList() ?: return
         order.remove(at)
         order.add(order.indexOf(at + 1), at)
-        host.setShuffleOrder(QueueOrder.arrange(order.toIntArray(), host.currentIndex, pendingIndices(), autoIndices()))
+        host.setShuffleOrder(QueueOrder.placeNext(order.toIntArray(), host.currentIndex, pendingIndices()))
     }
 
     /** Shuffle on: the list index only matters later; the shuffle order decides when it plays. */
@@ -460,7 +457,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
             }
         }
         rest.add(pos, at)
-        val desired = QueueOrder.arrange(rest.toIntArray(), cur, pendingIndices(), autoIndices())
+        val desired = QueueOrder.placeNext(rest.toIntArray(), cur, pendingIndices())
         if (!desired.contentEquals(order)) host.setShuffleOrder(desired)
     }
 
@@ -533,7 +530,6 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     fun skipTo(index: Int): Boolean {
         if (index !in 0 until host.count) return false
         host.seekTo(if (upcoming().indexOf(index) > 0) bringNext(index) else index)
-        jumping = false
         val cur = host.currentIndex
         return cur in 0 until host.count && host.isAutoAt(cur)
     }
@@ -547,11 +543,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         host.setShuffleOrder(order.toIntArray())
     }
 
-    /**
-     * Moves [index] to play right after the current item; returns where it is now. Shuffled, the
-     * order stays so until the jump lands ([jumping]): arranged for the current item, an autoplay
-     * item would go back after the list.
-     */
+    /** Moves [index] to play right after the current item; returns where it is now. */
     private fun bringNext(index: Int): Int {
         val cur = host.currentIndex
         if (!host.shuffleEnabled) {
@@ -561,7 +553,6 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         val order = host.shuffleOrder()?.toMutableList() ?: return index
         order.remove(index)
         order.add(order.indexOf(cur) + 1, index)
-        jumping = true
         host.setShuffleOrder(order.toIntArray())
         return index
     }
@@ -630,14 +621,15 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         pending.addAll(sorted)
     }
 
-    /** Shuffle on: a shuffle order with the pending items right after the current one ([QueueOrder.arrange]). */
+    /**
+     * Shuffle on: the pending items right after the current one; the rest keeps its order (the
+     * list before autoplay is set when shuffle is turned on, [shuffleFromCurrent], and by where
+     * each insert goes). As on the web: a jump back leaves what is ahead as it was.
+     */
     private fun enforceShuffleOrder() {
-        if (!host.shuffleEnabled || jumping) return
-        val autos = autoIndices()
-        if (pending.isEmpty() && autos.isEmpty()) return
+        if (!host.shuffleEnabled || pending.isEmpty()) return
         val order = host.shuffleOrder() ?: return
-        if (order.isEmpty()) return
-        val desired = QueueOrder.arrange(order, host.currentIndex, pendingIndices(), autos)
+        val desired = QueueOrder.placeNext(order, host.currentIndex, pendingIndices())
         if (!desired.contentEquals(order)) host.setShuffleOrder(desired)
     }
 
