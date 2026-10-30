@@ -2,8 +2,8 @@
  * Updates: is a newer stable release out? Asks GitHub for the latest release (the one the
  * README's download link points to) and compares it with this install.
  * - Automatic (Settings → Updates, off until turned on): at most once a day, when the app opens or
- *   comes back to the foreground (after a failed check, not again for an hour). "Check now"
- *   any time.
+ *   comes back to the foreground (after a failed check, not again for an hour); offline it
+ *   waits, and checks on reconnecting. "Check now" any time.
  * - Installed through F-Droid (or another F-Droid client): F-Droid brings the updates, so
  *   the app never asks GitHub. Until the app knows how it was installed, it doesn't ask
  *   either (nor if it can't tell).
@@ -15,6 +15,7 @@ import { Capacitor } from '@capacitor/core';
 import { RELEASES_URL } from '../data/model';
 import { kv, readJson } from '../core/storage';
 import { logError } from '../core/log';
+import { online, onReconnect } from '../core/network';
 import { settings } from './library';
 
 const LATEST_API = 'https://api.github.com/repos/IamAndelib/CyberJuke/releases/latest';
@@ -69,9 +70,10 @@ export function isFdroidInstaller(installer: string | null | undefined): boolean
 
 /**
  * An automatic check is due: never checked, or the last one is a day old; but not within
- * an hour of a failed attempt (`failedAt`).
+ * an hour of a failed attempt (`failedAt`), nor while offline.
  */
-export function autoCheckDue(checkedAt: number, now = Date.now(), failedAt = 0): boolean {
+export function autoCheckDue(checkedAt: number, now = Date.now(), failedAt = 0, online = true): boolean {
+  if (!online) return false;
   if (failedAt && now >= failedAt && now - failedAt < RETRY_AFTER_FAILURE_MS) return false;
   return !checkedAt || now - checkedAt >= AUTO_CHECK_MS || now < checkedAt;
 }
@@ -137,7 +139,7 @@ export async function checkForUpdates(): Promise<void> {
 /** Automatic check, if it's on and due (the real app only; the browser build is for tests). */
 function maybeAutoCheck(): void {
   if (!Capacitor.isNativePlatform() || !settings.peek().checkUpdates) return;
-  if (autoCheckDue(lastCheck.peek().checkedAt, Date.now(), failedAt)) void checkForUpdates();
+  if (autoCheckDue(lastCheck.peek().checkedAt, Date.now(), failedAt, online.peek())) void checkForUpdates();
 }
 
 let started = false;
@@ -172,6 +174,7 @@ export async function startUpdates(appInfo?: AppInfo): Promise<void> {
     lastCheck.value = { checkedAt: saved.checkedAt, latest };
   }
   maybeAutoCheck();
+  onReconnect(maybeAutoCheck);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') maybeAutoCheck();
   });
