@@ -682,6 +682,33 @@ class CrossfadeTest {
     }
 
     @Test
+    fun aNextMidFadeGoesToTheIncomingTrackWhereItIs() {
+        // While crossing, the track fading in takes over (no skip, so it doesn't start again).
+        val (h, c) = fading()
+        assertTrue(c.takeNext(repeatOne = false))
+        assertEquals(1, h.handOvers)
+        assertEquals("n1", h.item)
+        h.run(4_000L)
+        assertOver(h, c)
+        // Outside a fade, Next is a plain skip.
+        assertFalse(c.takeNext(repeatOne = false))
+        assertEquals(1, h.handOvers)
+    }
+
+    @Test
+    fun aNextMidFadeIsAPlainSkipOnRepeatOneOrDuringACall() {
+        // Repeat one fades into the same track: Next moves on.
+        val (h, c) = fading()
+        assertFalse(c.takeNext(repeatOne = true))
+        assertEquals(0, h.handOvers)
+        // A call holding the fade: only the main player would play on after it.
+        c.onPlayWanted(false)
+        h.mainHeldBack = true
+        assertFalse(c.takeNext(repeatOne = false))
+        assertEquals(0, h.handOvers)
+    }
+
+    @Test
     fun anEditDuringACallThatHoldsAFadeDoesNotHandOver() {
         // Only the main player plays on after the call (it has the audio focus): it keeps the session.
         val (h, c) = fading()
