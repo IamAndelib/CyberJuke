@@ -83,6 +83,8 @@ export interface ConfirmRequest {
   /** The confirming button's label, e.g. "Clear 12 plays". */
   confirm: string;
   run: () => void | Promise<void>;
+  /** Information with an action (a station's info), not a warning: a plain dialog, its action first. */
+  info?: boolean;
 }
 export const confirmRequest = signal<ConfirmRequest | null>(null);
 

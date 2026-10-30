@@ -7,9 +7,10 @@ const BEHIND = '.app, .np';
 /**
  * A sheet that is modal for real while [open]:
  * - what's behind it is inert (no taps, no focus, no scrolling it from under the sheet);
- * - focus moves to its first control, and back to whatever had it when it closes (or, if
- *   that has gone, to the first control on its page), as soon as that is no longer inert
- *   (the app behind Now Playing stops being inert a moment after the sheet starts closing);
+ * - focus moves to its first control (or the one marked `data-autofocus`), and back to whatever
+ *   had it when it closes (or, if that has gone, to the first control on its page), as soon as
+ *   that is no longer inert (the app behind Now Playing stops being inert a moment after the
+ *   sheet starts closing);
  * - it only takes pan gestures itself when its content is taller than it (`scrolls`), so
  *   a drag on a short sheet can't hand the scroll to the page behind (Android WebView).
  */
@@ -31,7 +32,7 @@ export function useModal(open: boolean, sheet: { current: HTMLElement | null }, 
     const frame = requestAnimationFrame(() => {
       if (!el) return;
       if (el.classList.contains('sheet')) el.classList.toggle('scrolls', el.scrollHeight > el.clientHeight + 1);
-      el.querySelector<HTMLElement>('button:not([disabled]), [href]')?.focus({ preventScroll: true });
+      (el.querySelector<HTMLElement>('[data-autofocus]') ?? el.querySelector<HTMLElement>('button:not([disabled]), [href]'))?.focus({ preventScroll: true });
     });
     return () => {
       cancelAnimationFrame(frame);

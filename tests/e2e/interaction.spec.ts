@@ -344,6 +344,9 @@ test('Clear history asks first, away from Play; Undo brings the plays back (M3, 
   const sheet = page.getByTestId('confirm-sheet');
   await expect(sheet).toBeVisible();
   await expect(page.getByTestId('confirm-ok')).toHaveText('Clear 2 plays');
+  // A warning: focus starts on the safe choice, so Enter or a stray tap doesn't clear anything.
+  await expect(sheet).toHaveAttribute('role', 'alertdialog');
+  await expect(page.getByTestId('confirm-cancel')).toBeFocused();
   await page.getByTestId('confirm-cancel').click();
   await expect(sheet).toBeHidden();
   await expect(page.getByTestId('recent-list').getByTestId('track-row')).toHaveCount(2);
@@ -751,3 +754,17 @@ for (const { name, open, sheet } of [
     await expect(s).toBeHidden();
   });
 }
+
+test('a row names its song and describes its meta line, and the current one says so', async ({ page }) => {
+  await start(page);
+  const row = page.locator('[data-testid="track-row"]:visible').filter({ has: page.locator('.row-meta .by') }).first();
+  const play = row.getByTestId('track-play');
+  const title = (await row.getByTestId('track-title').textContent())!;
+  await expect(play).toHaveAccessibleName(new RegExp(`^Play ${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} by `));
+  // The genre and the poster are read too, not hidden behind the label.
+  const by = (await row.locator('.row-meta .by').textContent())!;
+  await expect(play).toHaveAccessibleDescription(new RegExp(by.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  await expect(play).not.toHaveAttribute('aria-current');
+  await play.click();
+  await expect(play).toHaveAttribute('aria-current', 'true');
+});
