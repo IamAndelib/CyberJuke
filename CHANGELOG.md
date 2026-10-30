@@ -4,6 +4,9 @@
 
 ### Fixed
 - Offline, **Next**, the end of a song, the notification and headphones go to the next liked song saved on the phone, skipping the ones that aren't, instead of saying "No carrier" or stopping; with **Repeat all** it goes round. **Previous** checks the song it really goes back to.
+- The automatic update check waits while the phone is offline, and checks once it's back, instead of failing and waiting an hour.
+- Signing out while offline no longer leaves the Jukebox empty the next time the app opens.
+- Offline, a liked NSFW song hidden by Settings no longer makes the offline bar and Home point to Liked when nothing else there plays.
 
 ## [1.3.5] - 2026-10-30
 

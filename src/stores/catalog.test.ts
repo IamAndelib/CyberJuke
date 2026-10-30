@@ -360,24 +360,39 @@ describe('catalog per sign-in state', () => {
     expect(s.source.catalog).not.toHaveBeenCalled();
   });
 
-  it('reset (sign in or out) clears both saved catalogs, then does a full refresh', async () => {
+  it('reset (sign in or out) clears the members-only catalog, then does a full refresh', async () => {
     const s = signedSetup(false);
     await s.cat.refresh();
     expect(s.cat.all.value.map((x) => x.id)).toEqual(['pub']);
     s.setSignedIn(true);
     await s.cat.reset();
-    expect(s.storage.remove).toHaveBeenCalledWith(CATALOG_KEY);
+    expect(s.storage.remove).not.toHaveBeenCalledWith(CATALOG_KEY);
     expect(s.storage.remove).toHaveBeenCalledWith(CATALOG_MEMBERS_KEY);
     expect(s.source.catalog).toHaveBeenCalledTimes(2);
     expect(s.source.catalog.mock.calls[1][0]).toBeUndefined(); // full, not incremental
     expect(s.cat.all.value.map((x) => x.id)).toEqual(['mem', 'pub']);
-    expect(s.storage.data.has(CATALOG_KEY)).toBe(false);
+    // The public catalog never holds a members-only post.
+    expect(JSON.parse(s.storage.data.get(CATALOG_KEY)!).tracks.map((x: Track) => x.id)).toEqual(['pub']);
     expect(JSON.parse(s.storage.data.get(CATALOG_MEMBERS_KEY)!).tracks).toHaveLength(2);
     // Signing out drops the members-only posts from the phone.
     s.setSignedIn(false);
     await s.cat.reset();
     expect(s.storage.data.has(CATALOG_MEMBERS_KEY)).toBe(false);
     expect(s.cat.all.value.map((x) => x.id)).toEqual(['pub']);
+  });
+
+  it('signing out offline keeps the public Jukebox list on the phone for the next start', async () => {
+    const s = signedSetup(false);
+    await s.cat.refresh();
+    s.setSignedIn(true);
+    await s.cat.reset();
+    s.setSignedIn(false);
+    s.source.catalog.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await s.cat.reset();
+    const next = signedSetup(false, Object.fromEntries(s.storage.data));
+    await next.cat.restoreSaved();
+    expect(next.cat.all.value.map((x) => x.id)).toEqual(['pub']);
+    expect(next.storage.data.has(CATALOG_MEMBERS_KEY)).toBe(false);
   });
 
   it("while the new state's catalog comes in, the old one shows on, without its members-only posts", async () => {

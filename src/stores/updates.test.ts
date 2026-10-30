@@ -43,6 +43,12 @@ describe('automatic checks', () => {
     expect(autoCheckDue(0, now, now - RETRY_AFTER_FAILURE_MS)).toBe(true);
     expect(autoCheckDue(now - AUTO_CHECK_MS, now, now - 60_000)).toBe(false);
   });
+
+  it('wait while offline: the check runs on reconnecting instead, and isn\u2019t a failure', () => {
+    const now = 1_800_000_000_000;
+    expect(autoCheckDue(0, now, 0, false)).toBe(false);
+    expect(autoCheckDue(0, now, 0, true)).toBe(true);
+  });
 });
 
 describe("GitHub's latest release", () => {
