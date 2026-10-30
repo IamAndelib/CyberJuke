@@ -27,13 +27,13 @@ class QueueInfoTest {
 
     @Test
     fun repeatAllLoopsWhatYouStartedButASingleSongGetsItsRadio() {
-        assertEquals(true, QueueCommands.mayAutoplay(Player.REPEAT_MODE_OFF, 30))
+        assertEquals(true, Stations.mayAutoplay(Player.REPEAT_MODE_OFF, 30))
         // Repeat one only replays the track when it ends: autoplay goes on as with repeat off.
-        assertEquals(true, QueueCommands.mayAutoplay(Player.REPEAT_MODE_ONE, 30))
+        assertEquals(true, Stations.mayAutoplay(Player.REPEAT_MODE_ONE, 30))
         // A single song started with repeat all: its first batch, for repeat to loop.
-        assertEquals(true, QueueCommands.mayAutoplay(Player.REPEAT_MODE_ALL, 1))
+        assertEquals(true, Stations.mayAutoplay(Player.REPEAT_MODE_ALL, 1))
         // More lined up (a list, or the song and its batch): repeat all loops those.
-        assertEquals(false, QueueCommands.mayAutoplay(Player.REPEAT_MODE_ALL, 2))
+        assertEquals(false, Stations.mayAutoplay(Player.REPEAT_MODE_ALL, 2))
     }
 
     @Test

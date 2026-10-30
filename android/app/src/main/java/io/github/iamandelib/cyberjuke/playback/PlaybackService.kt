@@ -202,7 +202,7 @@ class PlaybackService : MediaSessionService() {
 
             override fun addRadioItems(items: List<MediaItem>): Boolean {
                 val p = player ?: return false
-                if (!autoplayEnabled || !QueueCommands.mayAutoplay(p.repeatMode, p.mediaItemCount)) return false
+                if (!autoplayEnabled || !Stations.mayAutoplay(p.repeatMode, p.mediaItemCount)) return false
                 queue.addAutoplay(items)
                 queueChanged()
                 return true
@@ -1119,7 +1119,7 @@ class PlaybackService : MediaSessionService() {
 
     private fun addAutoplay(items: List<MediaItem>, forSeed: String?) {
         val p = player ?: return
-        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || forSeed != seedId || !QueueCommands.mayAutoplay(p.repeatMode, p.mediaItemCount)) {
+        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || forSeed != seedId || !Stations.mayAutoplay(p.repeatMode, p.mediaItemCount)) {
             Log.i(TAG, "addAutoplay: ${items.size} item(s) dropped (stale or autoplay off)")
             return
         }
@@ -1251,13 +1251,13 @@ class PlaybackService : MediaSessionService() {
     /**
      * AP4: with 5 items or fewer to go (any kind, as InnerTune's "load more"), get more. A Global radio is refilled here;
      * Jukebox picks come from the web side (`queueLow`). Nothing with autoplay off, or with repeat
-     * all but for a single song ([QueueCommands.mayAutoplay]).
+     * all but for a single song ([Stations.mayAutoplay]).
      */
     private fun checkLow() {
         val p = player ?: return
         // Nothing loading (a restored session before its first Play): no requests for more yet.
         val idle = p.playbackState == Player.STATE_IDLE && !p.playWhenReady
-        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || !QueueCommands.mayAutoplay(p.repeatMode, p.mediaItemCount) || p.mediaItemCount == 0 || seedId == null || idle) {
+        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || !Stations.mayAutoplay(p.repeatMode, p.mediaItemCount) || p.mediaItemCount == 0 || seedId == null || idle) {
             lowKey = null
             QueueInfo.clearLow()
             return
