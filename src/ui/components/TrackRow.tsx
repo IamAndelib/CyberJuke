@@ -6,7 +6,7 @@ import { online } from '../../core/network';
 import { currentId, currentPlaysOffline, isPlaying, player } from '../../player';
 import { isSaved, savedOffline } from '../../stores/savedOffline';
 import { Icon } from '../icons';
-import { menuTrack, nowPlayingOpen } from '../nav';
+import { nowPlayingOpen, openMenu, type QueuedRow } from '../nav';
 import { Art } from './Art';
 
 /** M9: a second tap on the same row this soon is the tail of a double tap. */
@@ -89,7 +89,7 @@ if (typeof document !== 'undefined') {
  * ends the press is swallowed. Moving the finger (a scroll) cancels it. No re-renders.
  * Every list's rows use it (Up next's too).
  */
-export function longPress(track: Track) {
+export function longPress(track: Track, queued: QueuedRow | null = null) {
   return {
     onPointerDown: (e: PointerEvent) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -100,7 +100,7 @@ export function longPress(track: Track) {
         timer: setTimeout(() => {
           press = null;
           swallowNextClick();
-          menuTrack.value = track;
+          openMenu(track, queued);
         }, LONG_PRESS_MS),
       };
     },
@@ -204,7 +204,7 @@ export const TrackRow = memo(function TrackRow({
         aria-label={`More options for ${track.title}`}
         aria-haspopup="dialog"
         data-testid="track-more"
-        onClick={() => (menuTrack.value = track)}
+        onClick={() => openMenu(track)}
       >
         <Icon name="more" />
       </button>

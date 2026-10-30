@@ -160,7 +160,7 @@ export function UpNext() {
         >
           <button
             class="row-main"
-            {...longPress(it.track)}
+            {...longPress(it.track, kind === 'queued' ? { item: it, beforeId: items[k + 1]?.track.id ?? null } : null)}
             onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id))}
             aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', autoplay' }[kind]}`}
           >

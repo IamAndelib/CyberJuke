@@ -5,7 +5,7 @@
 ### Added
 - Press and hold a song in Now Playing's queue for its menu (Add to queue, Share, Like, More by…), as in every list.
 - The notification and the lock screen have **Shuffle** and **Repeat** buttons, showing the mode they're in; Repeat steps through off, all and one, as in the app.
-- A song you've queued offers **Remove from queue** in its menu (on Home, in any list, and in Now Playing's queue) in place of **Add to queue**, with **Undo**.
+- Press and hold a song under "Queued by you" in Now Playing's queue: its menu offers **Remove from queue** in place of **Add to queue**, with **Undo**.
 
 ### Changed
 - Tapping a song further down the queue plays it now and keeps the songs you jumped over in Up next, instead of skipping past them.

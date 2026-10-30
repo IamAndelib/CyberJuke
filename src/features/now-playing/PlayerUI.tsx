@@ -19,14 +19,13 @@ import {
   queuePlace,
   repeatMode,
   shuffleOn,
-  upNextSections,
   waitingForNetwork,
 } from '../../player';
 import { block } from '../../stores/block';
 import { toggleLikeWithUndo } from '../../stores/undo';
 import { toast } from '../../stores/toast';
 import { Icon } from '../../ui/icons';
-import { artistChoice, lyricsOpen, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage } from '../../ui/nav';
+import { artistChoice, lyricsOpen, menuQueued, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage, openMenu } from '../../ui/nav';
 import { openExternal, openPost, youtubeUrl } from '../../ui/links';
 import { positionNow, useTickValue } from '../../ui/useTick';
 import { splitArtists } from '../../data/artists';
@@ -588,7 +587,7 @@ function NowPlayingContent() {
               <NpFrom />
               <NpOffline />
             </div>
-            <button class="icon-btn" onClick={() => (menuTrack.value = t)} aria-label="More options" data-testid="np-more">
+            <button class="icon-btn" onClick={() => openMenu(t)} aria-label="More options" data-testid="np-more">
               <Icon name="more" />
             </button>
           </header>
@@ -793,9 +792,8 @@ export function TrackMenu() {
   const fav = useLiked(t?.id);
   // A track still being looked up (nothing to play yet) can't be queued, shared or liked.
   const known = hasAudio(t);
-  // Queued by you (wherever the menu opened): Remove from queue takes Add to queue's place.
-  const queued = upNextSections.value.queued;
-  const q = t ? queued.findIndex((u) => u.track.id === t.id) : -1;
+  // Held in Now Playing's "Queued by you": Remove from queue takes Add to queue's place.
+  const queued = menuQueued.value?.item.track === t ? menuQueued.value : null;
   return (
     <div class={'sheet-wrap' + (open ? ' open' : '')} aria-hidden={!open} inert={!open}>
       <div class="scrim" onClick={close} />
@@ -809,11 +807,11 @@ export function TrackMenu() {
                 <div class="row-artist">{t.artist}</div>
               </div>
             </div>
-            {q >= 0 ? (
+            {queued ? (
               <button
                 class="sheet-item"
                 onClick={() => {
-                  removeWithUndo(queued[q], 'queued', queued[q + 1]?.track.id ?? null);
+                  removeWithUndo(queued.item, 'queued', queued.beforeId);
                   close();
                 }}
                 data-testid="menu-remove-queue"

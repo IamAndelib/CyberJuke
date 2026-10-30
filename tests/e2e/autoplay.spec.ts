@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { expectStable, musicCalls, openNowPlaying, openSearch, openSettings, setOffline, setVisibility, start, toListEnd } from '../helpers';
 import { genreFamilies } from '../../src/data/similar';
@@ -665,36 +665,39 @@ test("played songs get ↑ ↓ ✕: moves stay among them, the last one's ↓ pl
   await expect(played.getByTestId('upnext-up')).toHaveCount(0);
 });
 
-test("a song queued by you: its menu offers Remove from queue instead, from Home and from the queue; Undo puts it back", async ({ page }) => {
+test('held under "Queued by you", a song offers Remove from queue instead; elsewhere Add to queue; Undo puts it back', async ({ page }) => {
   await start(page);
   await visible(page, 'track-play').first().click();
   await queueRow(page, 2);
   const queuedTitle = (await visible(page, 'track-title').nth(2).textContent())!.trim();
-  // From Home: the same song's menu now removes it.
-  await visible(page, 'track-more').nth(2).click();
   const menu = page.getByTestId('track-menu');
-  await expect(menu.getByTestId('menu-remove-queue')).toBeVisible();
-  await expect(menu.getByTestId('menu-add-queue')).toHaveCount(0);
-  // Another song's menu still adds.
-  await page.locator('.sheet-cancel button').click();
-  await expect(menu).toBeHidden();
-  await visible(page, 'track-more').nth(3).click();
+  // On Home the same song's menu still adds (a row there is no place in the queue).
+  await visible(page, 'track-more').nth(2).click();
   await expect(menu.getByTestId('menu-add-queue')).toBeVisible();
   await expect(menu.getByTestId('menu-remove-queue')).toHaveCount(0);
   await page.locator('.sheet-cancel button').click();
   await expect(menu).toBeHidden();
-  // From the queue: hold the queued row.
   await openNowPlaying(page);
-  const row = page.locator('[data-testid="upnext-row"][data-section="queued"]');
-  await expect(row).toHaveCount(1);
-  await expect(row.locator('.row-title')).toHaveText(queuedTitle);
-  await row.scrollIntoViewIfNeeded();
-  const b = (await row.locator('.row-main').boundingBox())!;
   const cdp = await page.context().newCDPSession(page);
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x + 40, y: b.y + b.height / 2, id: 1 }] });
-  await expect(menu).toBeVisible();
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  const hold = async (row: Locator) => {
+    await row.scrollIntoViewIfNeeded();
+    const b = (await row.locator('.row-main').boundingBox())!;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x + 40, y: b.y + b.height / 2, id: 1 }] });
+    await expect(menu).toBeVisible();
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  };
+  // A suggestion in the queue: Add to queue.
+  await hold(page.locator('[data-testid="upnext-row"][data-section="autoplay"]').first());
+  await expect(menu.getByTestId('menu-add-queue')).toBeVisible();
+  await expect(menu.getByTestId('menu-remove-queue')).toHaveCount(0);
+  await page.locator('.sheet-cancel button').click();
+  await expect(menu).toBeHidden();
+  // The queued row: Remove from queue, in Add to queue's place.
+  const row = page.locator('[data-testid="upnext-row"][data-section="queued"]');
+  await expect(row.locator('.row-title')).toHaveText(queuedTitle);
+  await hold(row);
   await cdp.detach();
+  await expect(menu.getByTestId('menu-add-queue')).toHaveCount(0);
   await menu.getByTestId('menu-remove-queue').click();
   await expect(row).toHaveCount(0);
   await page.getByTestId('toast').filter({ hasText: 'Removed from queue' }).getByTestId('toast-action').click();
