@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals';
-import { useEffect, useMemo, useRef } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { artistKey } from '../../data/artists';
 import type { Track } from '../../data/model';
 import { mergeTracks } from '../../data/search';
@@ -50,6 +50,9 @@ function ShelfSkeleton() {
   );
 }
 
+/** The Jukebox's tracks an artist page shows before [Show all]. */
+const JUKEBOX_FIRST = 5;
+
 /** Section test ids per shelf. */
 const SHELF_TESTID: Record<ReleaseKind, string> = { album: 'artist-albums', live: 'artist-live', ep: 'artist-eps', single: 'artist-singles' };
 
@@ -65,6 +68,8 @@ export function ArtistPage({ name: raw }: { name: string }) {
   const catalogReady = catalog.tracks.value.length > 0;
   const catalogFailed = !catalogReady && catalog.status.value === 'error';
   const ctx = listCtx(name);
+  // The newest few, then all of them a tap away, so Top songs and the albums aren't buried (Spotify's "Popular").
+  const [allJukebox, setAllJukebox] = useState(false);
 
   const page = useFeed(feedKey.artistPage(key), artistPageLoader(name), MUSIC_TRACK_OPTS);
   useArtistHere(name, page.feed);
@@ -99,7 +104,14 @@ export function ArtistPage({ name: raw }: { name: string }) {
           ) : jukebox.length ? (
             <>
               <PlayShuffle tracks={jukebox} ctx={ctx} testid="artist-jukebox" />
-              <Tracks tracks={jukebox} ctx={ctx} />
+              <Tracks tracks={allJukebox ? jukebox : jukebox.slice(0, JUKEBOX_FIRST)} ctx={ctx} queue={() => jukebox} />
+              {!allJukebox && jukebox.length > JUKEBOX_FIRST && (
+                <div class="list-foot">
+                  <button class="link-btn" onClick={() => setAllJukebox(true)} data-testid="artist-jukebox-all">
+                    [Show all {jukebox.length}]
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             <p class="section-note dim">Nothing by {name} has been shared on the Jukebox yet.</p>

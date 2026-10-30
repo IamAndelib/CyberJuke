@@ -366,3 +366,16 @@ test('★ on an artist page: adds the artist to Favourites, and unstarring remov
   await page.getByTestId('tab-artists').click();
   await expect(page.getByTestId('fav-artists')).toHaveCount(0);
 });
+
+test("an artist page shows the Jukebox's 5 newest first, and all of them a tap away", async ({ page }) => {
+  await openFirstArtist(page);
+  const jukebox = page.getByTestId('artist-jukebox');
+  const n = Number((await jukebox.locator('.section-head .dim').textContent())!.split(' ')[0]);
+  expect(n).toBeGreaterThan(5);
+  await expect(jukebox.getByTestId('track-row')).toHaveCount(5);
+  const all = jukebox.getByTestId('artist-jukebox-all');
+  await expect(all).toHaveText(`[Show all ${n}]`);
+  await all.click();
+  await expect(jukebox.getByTestId('track-row')).toHaveCount(n);
+  await expect(all).toHaveCount(0);
+});
