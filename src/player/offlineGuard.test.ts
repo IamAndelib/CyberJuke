@@ -275,4 +275,30 @@ describe('offlineGuard', () => {
     await back.p.prev();
     expect(back.inner.prev).toHaveBeenCalledTimes(1);
   });
+
+  it('offline, Previous checks the song before in the list even when it was never heard (a list started midway)', async () => {
+    const [a, b, c] = ['a', 'b', 'c'].map(t);
+    // Started on b: nothing heard before it, yet the player's Previous goes to a.
+    const state: Partial<PlayerState> = { queue: [a, b, c], index: 1, current: b, previous: [], upNext: [{ track: c, index: 2 }], positionMs: 500 };
+    const midway = setup(state, [b.ytId]);
+    midway.offline();
+    await midway.p.prev();
+    expect(midway.inner.prev).not.toHaveBeenCalled();
+    expect(midway.refused).toHaveBeenCalledWith('offline');
+    // Repeat all at the first song: Previous goes round to the last one.
+    const first = { ...state, index: 0, current: a, upNext: [{ track: b, index: 1 }, { track: c, index: 2 }], repeat: 'all' as const };
+    const round = setup(first, [a.ytId]);
+    round.offline();
+    await round.p.prev();
+    expect(round.inner.prev).not.toHaveBeenCalled();
+    const roundSaved = setup(first, [a.ytId, c.ytId]);
+    roundSaved.offline();
+    await roundSaved.p.prev();
+    expect(roundSaved.inner.prev).toHaveBeenCalledTimes(1);
+    // Repeat off at the first song: Previous restarts it.
+    const start = setup({ ...first, repeat: 'off' }, [a.ytId]);
+    start.offline();
+    await start.p.prev();
+    expect(start.inner.prev).toHaveBeenCalledTimes(1);
+  });
 });
