@@ -93,6 +93,13 @@ test('offline with liked songs saved, the banner and the refusal toast open Like
   await setOffline(page, backend, true);
   await expect(region).toHaveText(BANNER_LIKED);
   expect(await region.evaluate((el) => el === (window as unknown as { __region: Element }).__region)).toBe(true);
+  // And back online: it hears that too, for a moment (the text is for screen readers only).
+  await setOffline(page, backend, false);
+  await expect(region).toHaveText('CONNECT. Back online.');
+  expect(await region.locator('.sr-only').evaluate((el) => el.getBoundingClientRect().height)).toBeLessThanOrEqual(1);
+  await expect(region).toHaveText('', { timeout: 8000 });
+  await setOffline(page, backend, true);
+  await expect(region).toHaveText(BANNER_LIKED);
 
   // The banner opens Liked, a full-size target.
   const banner = page.getByTestId('offline-banner');

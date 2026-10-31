@@ -29,6 +29,8 @@ export const OFFLINE = {
   waiting: 'Waiting for carrier…',
   /** Clear cache while offline: the saved liked songs are all that plays now. */
   clearOffline: "No carrier right now: nothing plays until you're back online.",
+  /** Said to a screen reader for a moment once the connection is back (the bar's live region). */
+  backOnline: 'CONNECT. Back online.',
   /** A pull to refresh while offline. */
   pullAgain: 'No carrier. Connect, then refresh.',
   lyrics: "No carrier. Lyrics load when you're back online.",

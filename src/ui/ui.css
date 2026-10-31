@@ -1297,6 +1297,16 @@ section[data-kind] > .shelf {
 /* ---- Offline line: the bar at the top, and the chip in Now Playing ----------------- */
 
 /* The offline line's live region: no box of its own while online (empty). */
+/* Text for screen readers only (the standard visually-hidden pattern). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .offline-status {
   display: flex;
   flex-direction: column;
