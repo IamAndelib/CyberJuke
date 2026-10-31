@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- Opened offline, Home still leads to music: its Shuffle plays your liked songs saved on the phone ("Shuffle liked songs"), and Latest lists the Jukebox kept on the phone from before, the songs that can't play dimmed. With nothing kept, the offline message offers **Liked** when liked songs are saved.
+
 ### Fixed
 - Offline, Now Playing says so in a bar across its top, like the rest of the app, instead of a squeezed line in its header.
 - Offline, the end of a list says more loads once you're back, instead of offering a Retry that can't work, and loads the rest by itself when the connection returns.

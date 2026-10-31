@@ -29,6 +29,10 @@ export const OFFLINE = {
   waiting: 'Waiting for carrier…',
   /** The end of a list with more to come, while offline (it loads by itself once back). */
   moreLater: "No carrier. More loads when you're back.",
+  /** Home's Shuffle while offline with liked songs saved: they play. */
+  heroKicker: 'No carrier',
+  heroLiked: 'Shuffle liked songs',
+  heroLikedSub: 'Saved on the phone · plays offline',
   /** A pull to refresh while offline. */
   pullAgain: 'No carrier. Connect, then refresh.',
   lyrics: "No carrier. Lyrics load when you're back online.",
