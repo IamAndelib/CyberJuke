@@ -257,29 +257,49 @@ test('offline, Now Playing says so too: with liked songs saved its line opens Li
   await expect(page.getByTestId('np-offline')).toHaveCount(0);
 });
 
-test('offline, Clear cache warns that nothing will play until the connection is back', async ({ page, backend }) => {
+test('Clear cache takes only the recent songs: saved liked songs stay, offline too', async ({ page, backend }) => {
   await start(page);
   await openSettings(page);
+  const body = 'The recent songs kept on the phone go. Saved liked songs stay, and still play offline.';
   await page.getByTestId('cache-clear').click();
   const sheet = page.getByTestId('confirm-sheet');
-  await expect(sheet).not.toContainText('No carrier right now');
+  await expect(sheet).toContainText('Clear the recent songs cache?');
+  await expect(sheet).toContainText(body);
   await page.getByTestId('confirm-cancel').click();
+  // Offline it no longer says nothing will play: the saved songs are untouched.
   await setOffline(page, backend, true);
   await page.getByTestId('cache-clear').click();
-  await expect(sheet).toContainText("No carrier right now: nothing plays until you're back online.");
+  await expect(sheet).toContainText(body);
+  await expect(sheet).not.toContainText('No carrier');
 });
 
-test('Settings → Listening cache: 256 MB by default, three sizes sent to the player and kept, Clear cache, and Download using mobile data', async ({ page }) => {
+test('Settings shows how much the saved liked songs take, apart from the cache size', async ({ page }) => {
+  await page.goto('/');
+  await openSettings(page);
+  const line = page.getByTestId('saved-space');
+  // Nothing known (the browser has no native player): no line.
+  await expect(line).toHaveCount(0);
+  const space = (count: number, bytes: number) =>
+    page.evaluate(([c, b]) => (window as unknown as { __cyberjukeCache: { space(c: number, b: number): void } }).__cyberjukeCache.space(c, b), [count, bytes]);
+  await space(24, 180 * 1024 * 1024);
+  await expect(line).toHaveText('Saved liked songs: 24 songs · 180 MB');
+  await space(1, 3 * 1024 * 1024);
+  await expect(line).toHaveText('Saved liked songs: 1 song · 3 MB');
+  await space(0, 0);
+  await expect(line).toHaveText('Saved liked songs: 0 songs · 0 MB');
+});
+
+test('Settings → Recent songs cache: 256 MB by default, three sizes sent to the player and kept, Clear cache, and Download using mobile data', async ({ page }) => {
   await page.goto('/');
   const sent = async () => (await playerCalls(page)).filter((c) => c[0] === 'setCacheLimit').map((c) => c[1]);
   await expect.poll(sent).toEqual([{ mb: 256 }]);
   await openSettings(page);
   const setting = page.getByTestId('listening-cache');
-  await expect(setting).toContainText('Listening cache');
-  await expect(setting).toContainText('Keeps music playing when the signal drops.');
+  await expect(setting).toContainText('Recent songs cache');
+  await expect(setting).toContainText("Keeps music playing when the signal drops. Saved liked songs don't count.");
   // How much is in use is never shown.
   await expect(setting).not.toContainText(/in use/i);
-  const group = page.getByRole('radiogroup', { name: 'Listening cache' });
+  const group = page.getByRole('radiogroup', { name: 'Recent songs cache' });
   await expect(group.getByRole('radio')).toHaveText(['128 MB', '256 MB', '512 MB']);
   await expect(page.getByTestId('cache-256')).toHaveAttribute('aria-checked', 'true');
   // One Tab stop; the arrow keys move the choice.
@@ -291,18 +311,18 @@ test('Settings → Listening cache: 256 MB by default, three sizes sent to the p
   await expect(page.getByTestId('cache-128')).toHaveAttribute('aria-checked', 'true');
   await expect.poll(sent).toEqual([{ mb: 256 }, { mb: 512 }, { mb: 128 }]);
 
-  // Clear cache asks first: it takes the saved liked songs too. Cancel leaves it be.
+  // Clear cache asks first. Cancel leaves it be.
   const clears = async () => (await playerCalls(page)).filter((c) => c[0] === 'clearCache').length;
   await page.getByTestId('cache-clear').click();
   const sheet = page.getByTestId('confirm-sheet');
-  await expect(sheet).toContainText('Clear the listening cache?');
+  await expect(sheet).toContainText('Clear the recent songs cache?');
   await expect(page.getByTestId('confirm-ok')).toHaveText('Clear cache');
   await page.getByTestId('confirm-cancel').click();
   await expect(sheet).toBeHidden();
   expect(await clears()).toBe(0);
   await page.getByTestId('cache-clear').click();
   await page.getByTestId('confirm-ok').click();
-  await expect(page.getByTestId('toast')).toHaveText('Cache cleared. Liked songs are saved again on Wi-Fi.');
+  await expect(page.getByTestId('toast')).toHaveText('Cache cleared');
   expect(await clears()).toBe(1);
 
   await page.reload();
@@ -311,7 +331,7 @@ test('Settings → Listening cache: 256 MB by default, three sizes sent to the p
   await expect(page.getByTestId('cache-128')).toHaveAttribute('aria-checked', 'true');
 
   // Download using mobile data: off by default (liked songs are saved on Wi-Fi only), sent to
-  // the player, and kept. On, Clear cache no longer says "on Wi-Fi".
+  // the player, and kept.
   const mobileData = async () => (await playerCalls(page)).filter((c) => c[0] === 'setDownloadOnMobileData').map((c) => c[1]);
   const toggle = page.getByTestId('mobile-data-toggle');
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
@@ -321,10 +341,6 @@ test('Settings → Listening cache: 256 MB by default, three sizes sent to the p
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await expect.poll(mobileData).toEqual([{ enabled: false }, { enabled: true }]);
-  await page.getByTestId('cache-clear').click();
-  await expect(sheet).toContainText('saved liked songs too. They are saved again.');
-  await page.getByTestId('confirm-ok').click();
-  await expect(page.getByTestId('toast')).toHaveText('Cache cleared. Liked songs are saved again.');
   await page.reload();
   await expect.poll(mobileData).toEqual([{ enabled: true }]);
 });

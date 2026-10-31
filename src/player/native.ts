@@ -175,7 +175,7 @@ interface JukePlayerPlugin {
   setCacheLimit(o: { mb: number }): Promise<void>;
   /** Download using mobile data: liked songs are saved on any network, not only Wi-Fi. Off by default; needs no cache. */
   setDownloadOnMobileData(o: { enabled: boolean }): Promise<void>;
-  /** Empties the listening cache. Playback goes on. */
+  /** Empties the listening cache (recent songs). Saved liked songs stay. Playback goes on. */
   clearCache(): Promise<void>;
   /**
    * Signed out (or starting signed out): the cached audio of every members-only track goes, and
@@ -186,6 +186,8 @@ interface JukePlayerPlugin {
   signedIn(): Promise<void>;
   /** The liked songs saved whole on the phone, by audio id: they play offline. */
   cachedIds(): Promise<{ ytIds: string[] }>;
+  /** Settings' line: the liked songs saved in their own space on the phone, and the bytes it holds. */
+  savedSpace(): Promise<{ count: number; bytes: number }>;
   /** Keep a screen area (CSS px relative to the WebView) out of the system back gesture; null clears it. */
   setGestureExclusion(rect: { left: number; top: number; width: number; height: number } | null): Promise<void>;
   /**

@@ -375,6 +375,9 @@ internal object AudioCache {
     /** Whether [audioId] is saved whole (any format). */
     fun isWhole(audioId: String): Boolean = locked { c -> wholeKeys(c, audioId).isNotEmpty() } == true
 
+    /** Settings' line: the liked songs whole in the saved store, and the bytes it holds; none without a cache. */
+    fun savedSpace(): Pair<Int, Long> = locked { inStore.size to savedKeys.totalBytes() } ?: (0 to 0L)
+
     /** Whether [audioId] is whole in the saved store (the saver's job is done). */
     fun isStored(audioId: String): Boolean = locked { storedKeys(audioId).isNotEmpty() } == true
 
