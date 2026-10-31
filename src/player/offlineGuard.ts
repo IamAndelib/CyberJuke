@@ -14,6 +14,7 @@
  *    unsaved, it is refused like its row ('unsaved' for a liked song, 'offline' for the rest).
  * Pausing (also during the wait for the network), seeking, queue edits and settings always go through.
  */
+import { UP_NEXT_MAX } from '../core/guards';
 import type { Track } from '../data/model';
 import { isSaved, savedQueue } from '../stores/savedOffline';
 import { livePosition, wantsPlay, type Player, type PlayerState } from './types';
@@ -59,14 +60,16 @@ export function offlineGuard(p: Player, o: OfflinePolicy): Player {
   const onto = (t: Track | null | undefined, run: () => Promise<void>) => (o.online() || isSaved(t, o.saved()) ? run() : refused(why(t)));
   /**
    * The song Previous lands on: in its first seconds the one before in play order, heard or not
-   * (the list's, or with shuffle the last one heard), going round to the last with Repeat all;
-   * else this one from its start. As the player's Previous does (Repeat one counts as off).
+   * (the list's, or with shuffle the last one heard), going round to the last with Repeat all
+   * (the list's; with shuffle the end of Up next, when it shows all of it); else this one from
+   * its start. As the player's Previous does (Repeat one counts as off).
    */
   const behind = () => {
     const s = p.state.peek();
     if (livePosition(s) >= PREV_RESTARTS_MS) return s.current;
     const before = s.shuffle ? s.previous.at(-1)?.track : s.index > 0 ? s.queue[s.index - 1] : undefined;
-    return before ?? (s.repeat === 'all' ? s.upNext.at(-1)?.track : undefined) ?? s.current;
+    const last = !s.shuffle ? s.queue.at(-1) : s.upNext.length < UP_NEXT_MAX ? s.upNext.at(-1)?.track : undefined;
+    return before ?? (s.repeat === 'all' ? last : undefined) ?? s.current;
   };
   /** Online, or the current track plays offline: run it; else refused as its row would be. */
   const resume = (run: () => Promise<void>) => {
