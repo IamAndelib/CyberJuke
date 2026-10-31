@@ -155,12 +155,13 @@ internal object CacheKeys {
 
 /**
  * Which songs leave the saved store: those no longer liked, decided once per start from the
- * page's liked list, so an unlike and a quick re-like cost nothing. An empty or unloaded list
- * (a failed load) never empties it. Pure (CachePolicyTest).
+ * page's liked list, so an unlike and a quick re-like cost nothing. An empty list (a failed
+ * load) never empties it, nor does one cut at the bridge's cap ([complete] false: more than
+ * [BridgeLimits.MAX_ITEMS] likes), whose older likes are still liked. Pure (CachePolicyTest).
  */
 internal object SavedReconcile {
-    fun toRemove(stored: Set<String>, liked: Set<String>, likedLoaded: Boolean): Set<String> =
-        if (!likedLoaded || liked.isEmpty()) emptySet() else stored - liked
+    fun toRemove(stored: Set<String>, liked: Set<String>, complete: Boolean): Set<String> =
+        if (!complete || liked.isEmpty()) emptySet() else stored - liked
 }
 
 /**
@@ -515,16 +516,18 @@ internal object SaveRefusal {
 
 /**
  * Opening a cache folder: [open], and when that fails because what's there is [damaged] (its
- * index can't be read), [wipe] it and open once more, so a damaged cache starts empty (liked
- * songs are saved again on Wi-Fi) instead of staying off until the app's data is cleared. Any
- * other failure (the folder in use) is never wiped. Pure (CachePolicyTest).
+ * index can't be read), [wipe] it and open once more, so a damaged cache starts empty instead
+ * of staying off until the app's data is cleared. Any other failure (the folder in use) is never
+ * wiped, nor one [mayWipe] holds back (the saved store's first: a passing fault, a full disk,
+ * mustn't take the user's saved songs; it is wiped if the next start fails too). Pure
+ * (CachePolicyTest).
  */
 internal object CacheStart {
-    fun <T> openOrWipe(open: () -> T, wipe: () -> Unit, damaged: (Exception) -> Boolean): T =
+    fun <T> openOrWipe(open: () -> T, wipe: () -> Unit, mayWipe: () -> Boolean = { true }, damaged: (Exception) -> Boolean): T =
         try {
             open()
         } catch (e: Exception) {
-            if (!damaged(e)) throw e
+            if (!damaged(e) || !mayWipe()) throw e
             wipe()
             open()
         }
@@ -746,6 +749,12 @@ internal object LikedSaverPolicy {
         val saved: Set<String>,
         /** Whole in the listening cache, not yet in the saved store: copied first, with no network ([AudioCache.copyable]). */
         val copyable: Set<String> = emptySet(),
+        /**
+         * The player's playing and next tracks: copied once whole, never downloaded meanwhile (the
+         * download's link lookup would stand in for the one playback is using, and the song
+         * comes whole into the listening cache as it plays anyway).
+         */
+        val playing: Set<String> = emptySet(),
         /** Liked just now this session. */
         val fresh: Set<String> = emptySet(),
         /** Of those, the ones already tried once (their retries wait for the gap). */
@@ -794,7 +803,7 @@ internal object LikedSaverPolicy {
         f.liked.firstOrNull { it in f.copyable && it !in f.saved && it !in f.skip && !denied.getOrPut(it) { f.denied(it) } }?.let { return it }
         if (!f.online || f.playbackNeedsNetwork || !networkAllows(f)) return null
         val todo = f.liked.asSequence().filter {
-            it !in f.saved && it !in f.skip && (!f.quiet || CacheKeys.isMp3(it)) && !denied.getOrPut(it) { f.denied(it) }
+            it !in f.saved && it !in f.skip && it !in f.playing && (!f.quiet || CacheKeys.isMp3(it)) && !denied.getOrPut(it) { f.denied(it) }
         }
         todo.firstOrNull { it in f.fresh && it !in f.tried }?.let { return it }
         if (sinceLastMs < MIN_GAP_MS) return null

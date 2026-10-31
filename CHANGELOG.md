@@ -22,6 +22,7 @@
 - Offline, an album, playlist or list of releases says it needs a connection to load, instead of talking about searching Global.
 - Liked songs saved on the phone, Jukebox MP3s included, keep their art offline: in Liked and every list, in Now Playing, and on the lock screen and in the notification. Their covers are saved with them, and go when you unlike them.
 - Liked songs keep saving after the Wi-Fi drops mid-download, or YouTube's link for one expires: they're tried again instead of being skipped until the app restarts, and a server error is no longer taken as the song being unavailable.
+- Saving liked songs is sturdier: it waits while Battery Saver or Doze holds the app's connection back instead of giving songs up, a one-off fault opening the saved songs no longer deletes them, and with more than 2,000 likes the older saved ones stay.
 - If the listening cache's files on the phone are ever damaged, it starts again empty, instead of staying off (with no liked songs offline) until the app's data is cleared.
 - Offline, **Next**, the end of a song, the notification and headphones go to the next liked song saved on the phone, skipping the ones that aren't, instead of saying "No carrier" or stopping; with **Repeat all** it goes round. **Previous** checks the song it really goes back to.
 - The automatic update check waits while the phone is offline, and checks once it's back, instead of failing and waiting an hour.

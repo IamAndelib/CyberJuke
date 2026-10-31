@@ -50,6 +50,9 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
 
     private var online = false
     private var unmetered = false
+
+    /** The system blocks the app's network though it is up (onBlockedStatusChanged, API 29+). */
+    private var blocked = false
     private var stopped = false
 
     /** Liked just now this session: saved first. */
@@ -114,6 +117,18 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         if (validated) strikes.clear()
         online = validated
         this.unmetered = unmetered
+        check()
+    }
+
+    /**
+     * The app's network is [blocked] (or no longer is) by the system while the network itself is
+     * up: saves wait, as Media3's RequirementsWatcher has them do, instead of failing into strikes;
+     * unblocked, the songs that stopped meanwhile start afresh.
+     */
+    fun onBlocked(blocked: Boolean) {
+        if (blocked == this.blocked) return
+        this.blocked = blocked
+        if (!blocked) strikes.clear()
         check()
     }
 
@@ -205,10 +220,12 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             liked = liked,
             saved = AudioCache.inStore,
             copyable = AudioCache.copyable,
+            playing = host.loadingPair(),
             fresh = fresh,
             tried = tried,
             skip = host.stillLoading() + failed + strikes.givenUp() + strikes.waiting(now),
-            online = online,
+            // Online, and not blocked for the app (Doze, Battery Saver, data saver in the background).
+            online = online && !blocked,
             unmetered = unmetered,
             mobileDataAllowed = AudioCache.downloadOnMobileData,
             quiet = NetBlock.isQuiet(),
