@@ -57,10 +57,16 @@ export function offlineGuard(p: Player, o: OfflinePolicy): Player {
   const why = (t: Track | null | undefined): OfflineRefusal => (t && o.liked(t) ? 'unsaved' : 'offline');
   /** Online, or `t` saved: run it; else refused. */
   const onto = (t: Track | null | undefined, run: () => Promise<void>) => (o.online() || isSaved(t, o.saved()) ? run() : refused(why(t)));
-  /** The song Previous lands on: the one before in its first seconds, else this one from its start. */
+  /**
+   * The song Previous lands on: in its first seconds the one before in play order, heard or not
+   * (the list's, or with shuffle the last one heard), going round to the last with Repeat all;
+   * else this one from its start. As the player's Previous does (Repeat one counts as off).
+   */
   const behind = () => {
     const s = p.state.peek();
-    return livePosition(s) < PREV_RESTARTS_MS && s.previous.length ? s.previous[s.previous.length - 1].track : s.current;
+    if (livePosition(s) >= PREV_RESTARTS_MS) return s.current;
+    const before = s.shuffle ? s.previous.at(-1)?.track : s.index > 0 ? s.queue[s.index - 1] : undefined;
+    return before ?? (s.repeat === 'all' ? s.upNext.at(-1)?.track : undefined) ?? s.current;
   };
   /** Online, or the current track plays offline: run it; else refused as its row would be. */
   const resume = (run: () => Promise<void>) => {
