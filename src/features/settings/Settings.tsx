@@ -17,10 +17,8 @@ import {
 import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import { player } from '../../player';
-import { plural } from '../../core/text';
-import { clearListeningCache, loadSavedSpace, savedSpace } from '../../player/listeningCache';
+import { clearListeningCache } from '../../player/listeningCache';
 import { block, netStatusText } from '../../stores/block';
-import { savedOffline } from '../../stores/savedOffline';
 import { AuthError, SIGN_UP_URL, auth, authErrorText } from '../../data/auth';
 import { RELEASES_URL, REPO_URL } from '../../data/model';
 import { toast } from '../../stores/toast';
@@ -131,23 +129,14 @@ function CheckEverySetting() {
   );
 }
 
-/** "24 songs · 180 MB": the saved liked songs and the space they take. */
-function savedSpaceText({ count, bytes }: { count: number; bytes: number }): string {
-  const mb = bytes > 0 ? Math.max(1, Math.round(bytes / (1024 * 1024))) : 0;
-  return `${plural(count, 'song')} · ${mb} MB`;
-}
-
 /**
  * "Recent songs cache": how much recently played and next music the phone keeps, and Clear
- * cache. Saved liked songs have a space of their own, outside it: their line says how much.
+ * cache. Saved liked songs have a space of their own, outside it (not shown: the app looks
+ * after it).
  */
 function ListeningCacheSetting() {
   const cur = settings.value.cacheMb;
   const onKey = arrowChoice(CACHE_SIZES, cur, (mb) => updateSettings({ cacheMb: mb }));
-  const space = savedSpace.value;
-  // Asked when Settings shows, and again as saved songs come and go.
-  const saved = savedOffline.value;
-  useEffect(loadSavedSpace, [saved]);
   // M3: it asks first.
   const clear = () =>
     askConfirm({
@@ -167,13 +156,8 @@ function ListeningCacheSetting() {
           Recent songs cache
         </div>
         <div class="setting-desc" id="cache-desc">
-          Keeps music playing when the signal drops. Saved liked songs don't count.
+          Keeps music playing when the signal drops.
         </div>
-        {space && (
-          <div class="setting-desc saved-space" data-testid="saved-space">
-            Saved liked songs: {savedSpaceText(space)}
-          </div>
-        )}
       </div>
       <div class="seg-grid three" role="radiogroup" aria-labelledby="cache-label" aria-describedby="cache-desc" onKeyDown={onKey}>
         {CACHE_SIZES.map((mb) => (
@@ -505,7 +489,7 @@ function Updates() {
       <div class="setting">
         <div class="setting-text">
           <div class="setting-name">Check for updates automatically</div>
-          <div class="setting-desc">Off unless you turn it on. Asks GitHub at most once a day.</div>
+          <div class="setting-desc">Checks once every 24h.</div>
         </div>
         <Toggle on={s.checkUpdates} onChange={(v) => updateSettings({ checkUpdates: v })} label="Check for updates automatically" testid="updates-auto" />
       </div>
@@ -670,26 +654,35 @@ export function Settings() {
           <b>CyberJuke</b> v{__APP_VERSION__} is an <b>unofficial</b> player for the{' '}
           <A href="https://beta.cyberspace.online/jukebox">Cyberspace Jukebox</A>, not made or endorsed by Cyberspace.
         </p>
-        <p>
-          <b>Data:</b> public posts with music, read as the site shows them. Nothing is posted. Signing in adds
-          members-only tracks.
-        </p>
-        <p>
-          <b>Audio:</b> streamed from where each poster linked it, so some tracks may be skipped.
-        </p>
-        <p>
-          <b>Global:</b> Global search and artist pages look beyond the Jukebox. What they find is never added to it.
-        </p>
-        <p>
-          <b>Credits:</b> Cyberspace and <A href="https://beta.cyberspace.online/genghis_khan">@genghis_khan</A> for the
-          Jukebox and its look; everyone who shares music; and{' '}
-          <A href="https://github.com/TeamNewPipe/NewPipeExtractor">NewPipeExtractor</A> (GPL-3.0) for playback and
-          Global search.
-        </p>
-        <p data-testid="about-signal">
-          <b>Signal Radio:</b> <A href="https://github.com/hyphen8d/signal">SIGNAL by hyphen8d (MIT)</A>, the stations
-          Cyberspace's Jukebox plays as Signal Radio, bundled with the app.
-        </p>
+        {/* The rest folds away, as Licenses does: what it reads and plays, then who made it possible. */}
+        <details data-testid="about-how">
+          <summary>How it works</summary>
+          <p>
+            <b>Data:</b> public posts with music, read as the site shows them. Nothing is posted. Signing in adds
+            members-only tracks.
+          </p>
+          <p>
+            <b>Audio:</b> streamed from where each poster linked it, so some tracks may be skipped.
+          </p>
+          <p>
+            <b>Global:</b> Global search and artist pages look beyond the Jukebox. What they find is never added to it.
+          </p>
+        </details>
+        <details data-testid="about-credits">
+          <summary>Credits</summary>
+          <p>
+            Cyberspace and <A href="https://beta.cyberspace.online/genghis_khan">@genghis_khan</A> for the Jukebox and
+            its look, and everyone who shares music.
+          </p>
+          <p>
+            <A href="https://github.com/TeamNewPipe/NewPipeExtractor">NewPipeExtractor</A> (GPL-3.0) for playback and
+            Global search.
+          </p>
+          <p data-testid="about-signal">
+            <A href="https://github.com/hyphen8d/signal">SIGNAL by hyphen8d (MIT)</A>: the stations Cyberspace's Jukebox
+            plays as Signal Radio, bundled with the app.
+          </p>
+        </details>
       </section>
 
       <section class="card prose" data-testid="support">

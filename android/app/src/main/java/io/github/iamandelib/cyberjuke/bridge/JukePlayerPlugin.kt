@@ -67,7 +67,7 @@ import kotlin.math.roundToInt
  *   getAppInfo, getLaunchOptions, getBlockState, setNetworkPrefs, retryNow, getNetStatus,
  *   setGestureExclusion, setThemeBackground, firstScreenShown, addAutoplay, setAutoplay, restore,
  *   removeIds, setLikedIds,
- *   setCacheLimit, setDownloadOnMobileData, clearCache, signedOut, signedIn, cachedIds, savedSpace; events 'state', 'trackError',
+ *   setCacheLimit, setDownloadOnMobileData, clearCache, signedOut, signedIn, cachedIds; events 'state', 'trackError',
  *   'blocked', 'unblocked', 'extractorBroken', 'queueLow', 'tracks', 'openNowPlaying',
  *   'cacheChanged'.
  *
@@ -76,8 +76,7 @@ import kotlin.math.roundToInt
  *   on any network, not only Wi-Fi), clearCache(), signedOut() (members-only audio goes, and stays
  *   out until signedIn()), cachedIds() -> { ytIds }: the liked songs saved whole, which play
  *   offline. cacheChanged { ytIds } sends that set again when it changes, at most every 2 s.
- *   savedSpace() -> { count, bytes }: the liked songs whole in the saved store, and what it
- *   holds (Settings); clearCache() empties the listening cache only, never the saved store.
+ *   clearCache() empties the listening cache only, never the saved store.
  *   Each `ytIds` holds audio ids ([SessionPolicy.isValidAudioId]): a video id, or `mp3:<file>`
  *   for a Jukebox MP3 (its latex.gg file name); anything else is dropped.
  *   The upkeep calls resolve once done, and reject when there is no cache;
@@ -923,15 +922,6 @@ class JukePlayerPlugin : Plugin() {
             } catch (e: Exception) {
                 call.reject("cachedIds failed: ${e.javaClass.simpleName}")
             }
-        }
-    }
-
-    /** `savedSpace()`: Settings' "Saved liked songs" line, { count, bytes } of the saved store. */
-    @PluginMethod
-    fun savedSpace(call: PluginCall) {
-        Background.run("savedSpace") {
-            val (count, bytes) = AudioCache.savedSpace()
-            call.resolve(JSObject().put("count", count).put("bytes", bytes))
         }
     }
 

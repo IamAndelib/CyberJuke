@@ -1,8 +1,7 @@
 /**
  * The native listening cache: the audio of recently played and next tracks, on the phone only,
  * up to the size chosen in Settings. Liked songs are saved so they play offline (`savedOffline`),
- * in a space of their own that the size doesn't cover (`savedSpace`). This wires the page's side
- * of it:
+ * in a space of their own that the size doesn't cover. This wires the page's side of it:
  *  - the liked songs (newest like first) and which are members-only, sent at start and when
  *    Liked changes (a burst of likes sends once); none while Liked couldn't be read (native
  *    keeps the Liked it has rather than hear that this session's likes are all of it);
@@ -14,7 +13,7 @@
  * `window.__cyberjukeCache` so the e2e suite can say what is, and record the calls).
  */
 import { Capacitor } from '@capacitor/core';
-import { effect, signal } from '@preact/signals';
+import { effect } from '@preact/signals';
 import { audioIdOf } from '../core/guards';
 import { logError } from '../core/log';
 import { TEST_HOOKS, exposeForTests } from '../core/testHooks';
@@ -29,19 +28,6 @@ export const LIKED_SEND_DELAY_MS = 1000;
 
 const native = Capacitor.isNativePlatform();
 const fail = (where: string) => (e: unknown) => logError(where, e);
-
-/** Settings' "Saved liked songs" line: songs and bytes saved for offline, or null when unknown (the browser). */
-export const savedSpace = signal<{ count: number; bytes: number } | null>(null);
-
-/** Asks native how much is saved (Settings, when it shows and as saved songs change). */
-export function loadSavedSpace(): void {
-  if (!native) return;
-  JukePlayer.savedSpace()
-    .then((r) => {
-      savedSpace.value = { count: Number(r?.count) || 0, bytes: Number(r?.bytes) || 0 };
-    })
-    .catch(fail('cache.savedSpace'));
-}
 
 /** Browser (dev/test builds): what native would have been asked. */
 function record(call: unknown[]): void {
@@ -167,10 +153,7 @@ export function startListeningCache(): void {
   });
 
   if (!native) {
-    exposeForTests('__cyberjukeCache', {
-      saved: (audioIds: string[]) => setSavedOffline(audioIds),
-      space: (count: number, bytes: number) => (savedSpace.value = { count, bytes }),
-    });
+    exposeForTests('__cyberjukeCache', { saved: (audioIds: string[]) => setSavedOffline(audioIds) });
     return;
   }
   // Each report is the whole set. The first answer can be read before a change and arrive

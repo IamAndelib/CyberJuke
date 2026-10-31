@@ -301,7 +301,15 @@ test('Account is the first card and says "members-only shared tracks"', async ({
   expect((await account.boundingBox())!.y).toBeLessThan((await page.getByTestId('theme-picker').boundingBox())!.y);
   await expect(account.locator('.signin-lead')).toHaveText('Optional. Signed in, the Jukebox also shows members-only shared tracks, marked [members].');
   await expect(settings).not.toContainText('members-only posts');
-  await expect(page.getByTestId('about')).toContainText('Signing in adds members-only tracks.');
+  // About is one line, with How it works and Credits folded away until opened.
+  const about = page.getByTestId('about');
+  await expect(about).toContainText('unofficial player for the Cyberspace Jukebox');
+  await expect(about.getByText('Signing in adds members-only tracks.')).toBeHidden();
+  await expect(about.getByTestId('about-signal')).toBeHidden();
+  await about.getByTestId('about-how').locator('summary').click();
+  await expect(about.getByText('Signing in adds members-only tracks.')).toBeVisible();
+  await about.getByTestId('about-credits').locator('summary').click();
+  await expect(about.getByTestId('about-signal')).toContainText('SIGNAL by hyphen8d (MIT)');
 });
 
 test('Source code: the last card links to the repository and its latest release', async ({ page }) => {
@@ -354,7 +362,7 @@ test('Updates: Check now finds a newer release (banner, dot on the Settings butt
   const card = page.getByTestId('updates');
   // Opt-in: off until turned on, so nothing has asked GitHub.
   await expect(card.getByTestId('updates-auto')).toHaveAttribute('aria-checked', 'false');
-  await expect(card).toContainText('Off unless you turn it on');
+  await expect(card).toContainText('Checks once every 24h.');
   await expect(card.getByTestId('updates-status')).toHaveText('Not checked yet.');
   await expect(page.getByTestId('settings-update-dot')).toHaveCount(0);
 

@@ -273,21 +273,6 @@ test('Clear cache takes only the recent songs: saved liked songs stay, offline t
   await expect(sheet).not.toContainText('No carrier');
 });
 
-test('Settings shows how much the saved liked songs take, apart from the cache size', async ({ page }) => {
-  await page.goto('/');
-  await openSettings(page);
-  const line = page.getByTestId('saved-space');
-  // Nothing known (the browser has no native player): no line.
-  await expect(line).toHaveCount(0);
-  const space = (count: number, bytes: number) =>
-    page.evaluate(([c, b]) => (window as unknown as { __cyberjukeCache: { space(c: number, b: number): void } }).__cyberjukeCache.space(c, b), [count, bytes]);
-  await space(24, 180 * 1024 * 1024);
-  await expect(line).toHaveText('Saved liked songs: 24 songs · 180 MB');
-  await space(1, 3 * 1024 * 1024);
-  await expect(line).toHaveText('Saved liked songs: 1 song · 3 MB');
-  await space(0, 0);
-  await expect(line).toHaveText('Saved liked songs: 0 songs · 0 MB');
-});
 
 test('Settings → Recent songs cache: 256 MB by default, three sizes sent to the player and kept, Clear cache, and Download using mobile data', async ({ page }) => {
   await page.goto('/');
@@ -296,7 +281,9 @@ test('Settings → Recent songs cache: 256 MB by default, three sizes sent to th
   await openSettings(page);
   const setting = page.getByTestId('listening-cache');
   await expect(setting).toContainText('Recent songs cache');
-  await expect(setting).toContainText("Keeps music playing when the signal drops. Saved liked songs don't count.");
+  await expect(setting).toContainText('Keeps music playing when the signal drops.');
+  // Saved liked songs are looked after by the app: no line about them here.
+  await expect(setting).not.toContainText(/saved liked/i);
   // How much is in use is never shown.
   await expect(setting).not.toContainText(/in use/i);
   const group = page.getByRole('radiogroup', { name: 'Recent songs cache' });
