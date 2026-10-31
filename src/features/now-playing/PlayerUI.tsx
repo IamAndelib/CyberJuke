@@ -576,6 +576,8 @@ function NowPlayingContent() {
     <>
       {t && (
         <div class="np-scroll">
+          {/* Offline: the app's offline line, as its bar at the top (the sheet covers that one). */}
+          <OfflineLine class="np-offline" testid="np-offline" />
           <div class="np-grab" aria-hidden="true" data-testid="np-grab">
             <span />
           </div>
@@ -586,7 +588,6 @@ function NowPlayingContent() {
             <div class="np-head-title">
               <span class="np-kicker">Now playing</span>
               <NpFrom />
-              <NpOffline />
             </div>
             <button class="icon-btn" onClick={() => openMenu(t)} aria-label="More options" data-testid="np-more">
               <Icon name="more" />
@@ -722,11 +723,6 @@ function NpFrom() {
       <Marquee text={text} />
     </span>
   );
-}
-
-/** Offline, the app's offline line (the sheet covers the bar at the top), as a chip under the source. */
-function NpOffline() {
-  return <OfflineLine class="np-offline" testid="np-offline" />;
 }
 
 /** Artist line in Now Playing: tapping opens the artist page (or a chooser for several). */

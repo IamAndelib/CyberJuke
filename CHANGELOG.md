@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Offline, Now Playing says so in a bar across its top, like the rest of the app, instead of a squeezed line in its header.
 - Liked songs saved on the phone keep their art offline: in Liked and every list, in Now Playing, and on the lock screen and in the notification. Their covers are saved with them, and go when you unlike them.
 - Liked songs keep saving after the Wi-Fi drops mid-download, or YouTube's link for one expires: they're tried again instead of being skipped until the app restarts, and a server error is no longer taken as the song being unavailable.
 - If the listening cache's files on the phone are ever damaged, it starts again empty, instead of staying off (with no liked songs offline) until the app's data is cleared.
