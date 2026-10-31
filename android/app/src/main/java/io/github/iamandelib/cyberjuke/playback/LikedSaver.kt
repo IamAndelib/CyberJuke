@@ -218,7 +218,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             sinceLastMs = if (lastExtractionAt == 0L) Long.MAX_VALUE else now - lastExtractionAt,
             retryInMs = strikes.nextDueInMs(now),
             denied = AudioCache::isDenied,
-            cache = !AudioCache.startFailed,
+            cache = !AudioCache.startFailed && !AudioCache.savedFailed,
         )
     }
 
@@ -227,7 +227,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         // A copy from the listening cache asks nothing of the network.
         if (!copy) lastExtractionAt = SystemClock.elapsedRealtime()
         if (isFresh) tried.add(audioId)
-        val j = SaveJob(audioId, SaveJob.Live())
+        val j = SaveJob(audioId, SaveJob.Live(), copy)
         job = j
         // Set before it is queued: upkeep arriving before it runs still stops it.
         AudioCache.cancelSave = { j.cancel() }
@@ -281,7 +281,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
      * through [Deps] ([Live] in the app), so the outcome table is a JVM test (SaveJobTest).
      * Stops once the song's size says it doesn't fit ([LikedSaverPolicy.tooBig]).
      */
-    internal class SaveJob(val audioId: String, private val deps: Deps) {
+    internal class SaveJob(val audioId: String, private val deps: Deps, private val copy: Boolean = false) {
         /** A Jukebox MP3: no extraction, and YouTube's back-off is none of its business. */
         private val mp3 = CacheKeys.isMp3(audioId)
 
@@ -357,7 +357,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
 
             override fun listeningCopy(audioId: String) = AudioCache.listeningCopy(audioId)
 
-            override fun hasCache() = AudioCache.open() != null
+            override fun hasCache() = AudioCache.open() != null && AudioCache.savedStore != null
 
             override fun limitBytes() = AudioCache.limitBytes
 
@@ -424,7 +424,8 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
          * of its bytes are read.
          */
         private val progress = Progress { length, cached ->
-            if (!tooBig) {
+            // A copy is already on the phone, and the saved store has no size limit.
+            if (!tooBig && !copying) {
                 tooBig = LikedSaverPolicy.tooBig(if (length > 0) length else cached, deps.limitBytes())
                 if (tooBig) writer?.cancel()
             }
@@ -436,8 +437,11 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
          */
         private fun sizeOutcome(): SaveOutcome? = if (tooBig) SaveOutcome.FAILED.also { deps.discard(audioId) } else null
 
-        /** A YouTube back-off is in force: it holds a video's save, never an MP3's. */
-        private fun quiet() = !mp3 && deps.quiet()
+        /** A YouTube back-off is in force: it holds a video's download, never an MP3's or a copy's. */
+        private fun quiet() = !mp3 && !copying && deps.quiet()
+
+        /** Copying a listening copy (set on the job's thread before the write). */
+        private var copying = false
 
         fun run(): SaveOutcome {
             // Cancelled, or members-only while signed out: no fault of the song.
@@ -448,7 +452,13 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             if (!deps.hasCache()) return SaveOutcome.STOPPED
             // Whole in the listening cache (played, or saved before 1.3.6): copied as it is, any
             // quality, with no request, so a back-off doesn't hold it.
-            deps.listeningCopy(audioId)?.let { key -> return write { deps.copyWriter(audioId, key, progress) } }
+            deps.listeningCopy(audioId)?.let { key ->
+                copying = true
+                return write { deps.copyWriter(audioId, key, progress) }
+            }
+            // Picked to copy, but the listening copy went meanwhile: a strike, never a download
+            // the policy didn't allow (the network, the gap).
+            if (copy) return SaveOutcome.STOPPED
             // A back-off: no fault of the song either.
             if (quiet()) return SaveOutcome.CANCELLED
             // A Jukebox MP3: no extraction, no format to check; its file's bytes, as below.

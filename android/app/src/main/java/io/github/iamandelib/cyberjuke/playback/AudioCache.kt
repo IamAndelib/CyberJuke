@@ -108,6 +108,11 @@ internal object AudioCache {
     var savedStore: SimpleCache? = null
         private set
 
+    /** The saved store failed to start, even wiped: liked songs aren't saved in this process ([LikedSaverPolicy.Facts.cache]). */
+    @Volatile
+    var savedFailed = false
+        private set
+
     /** What [savedStore] holds (its own lock, a leaf). */
     private val savedKeys = SavedKeys()
 
@@ -299,6 +304,7 @@ internal object AudioCache {
             damaged = { it is Cache.CacheException },
         )
     } catch (e: Exception) {
+        savedFailed = true
         Log.w(TAG, "No saved store: ${e.javaClass.simpleName}")
         null
     }

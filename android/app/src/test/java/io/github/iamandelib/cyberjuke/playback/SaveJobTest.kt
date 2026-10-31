@@ -115,8 +115,8 @@ class SaveJobTest {
             forgotten.add(ytId)
         }
 
-        fun run(audioId: String = id): SaveOutcome {
-            val j = SaveJob(audioId, this)
+        fun run(audioId: String = id, copy: Boolean = false): SaveOutcome {
+            val j = SaveJob(audioId, this, copy)
             job = j
             return j.run()
         }
@@ -158,6 +158,16 @@ class SaveJobTest {
         assertEquals(listOf("denied", "whole", "copy $key", "cache", "bytes", "whole"), w.calls)
         // A byte the listening copy lost: a strike, as any stopped save.
         assertEquals(SaveOutcome.STOPPED, World(listening = key, write = { throw IOException("missing") }).run())
+        // A copy is on the phone already: its size never stops it, and nothing is discarded.
+        val big = World(listening = key, limit = 128 * mb, reports = listOf(110 * mb to 0L))
+        assertEquals(SaveOutcome.SAVED, big.run(copy = true))
+        assertTrue(big.discarded.isEmpty())
+        // A copy failing during a back-off is a strike, not a cancel picked again at once.
+        assertEquals(SaveOutcome.STOPPED, World(listening = key, quiet = true, write = { throw IOException("disk full") }).run(copy = true))
+        // Picked to copy, the listening copy gone meanwhile: a strike, no extraction.
+        val gone = World()
+        assertEquals(SaveOutcome.STOPPED, gone.run(copy = true))
+        assertFalse("resolve" in gone.calls)
         // Already in the saved store: nothing copied.
         val done = World(listening = key, whole = true)
         assertEquals(SaveOutcome.SAVED, done.run())
