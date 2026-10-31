@@ -137,13 +137,13 @@ internal object StreamResolver {
 
     /**
      * Blocking. Throws [ResolveException], [ManifestOnlyException] or [BlockedException].
-     * [midStream]: the load starts past byte 0 (a resume), so keep the itag in use.
+     * [midStream]: the load starts past byte 0 (a resume), so keep the itag in use. [rung]: the
+     * quality rung, the setting's unless given (the liked saver's, [QualityLadder.saveRung]).
      */
     @Throws(IOException::class)
-    fun resolve(ytId: String, midStream: Boolean = false): ResolvedStream {
+    fun resolve(ytId: String, midStream: Boolean = false, rung: Int = currentRung()): ResolvedStream {
         // Y1: no request during a back-off, and no stale URL either (a 403 on it would be one).
         NetBlock.check()
-        val rung = currentRung()
         val k = rungKey(ytId, rung)
         // A resume keeps the file it was playing (so does a track kept through an outage): a
         // cached stream of another itag won't do.

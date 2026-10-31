@@ -127,8 +127,12 @@ internal object AudioCache {
     /** Guarded by the open cache's lock (see the class comment). */
     private val ledger = CacheLedger(DEFAULT_MB * MB)
 
-    /** Liked songs saved whole, guarded like [ledger]. */
+    /** Liked songs saved whole (in either store), guarded like [ledger]. */
     private val saved = HashSet<String>()
+
+    /** Of those, the ones whole in the saved store ([inStore]), and the ones whole only in the listening cache ([copyable]). */
+    private val stored = HashSet<String>()
+    private val copies = HashSet<String>()
 
     /** The liked list came from the page or the file (until then no like is "fresh"). */
     private var likedKnown = false
@@ -165,9 +169,19 @@ internal object AudioCache {
     @Volatile
     var cancelSave: (() -> Unit)? = null
 
-    /** The liked songs saved whole (a snapshot; any thread). */
+    /** The liked songs saved whole, in either store: they play offline (a snapshot; any thread). */
     @Volatile
     var savedLiked: Set<String> = emptySet()
+        private set
+
+    /** The liked songs whole in the saved store: the saver is done with them (a snapshot). */
+    @Volatile
+    var inStore: Set<String> = emptySet()
+        private set
+
+    /** The liked songs whole in the listening cache but not yet in the saved store: copied, no network needed (a snapshot). */
+    @Volatile
+    var copyable: Set<String> = emptySet()
         private set
 
     /** The liked songs (audio ids), newest like first (a snapshot). */
@@ -299,7 +313,11 @@ internal object AudioCache {
             ledger.resetSpans()
             val had = saved.isNotEmpty() || savedLiked.isNotEmpty()
             saved.clear()
+            stored.clear()
+            copies.clear()
             savedLiked = emptySet()
+            inStore = emptySet()
+            copyable = emptySet()
             publish()
             had
         }
@@ -315,11 +333,16 @@ internal object AudioCache {
     // ---- reading -----------------------------------------------------------------------------
 
     /** The keys of [audioId] whole in the saved store, then those whole in the listening cache (most recently used first). Under the lock. */
-    private fun wholeKeys(c: Cache, audioId: String): List<String> {
-        val s = savedStore
-        val saved = if (s == null) emptyList() else savedKeys.keysOf(audioId).filter { isWhole(s, it) }
-        return CacheKeys.wholeOf(saved, ledger.keysOf(audioId).filter { isWhole(c, it) })
+    private fun wholeKeys(c: Cache, audioId: String): List<String> = CacheKeys.wholeOf(storedKeys(audioId), listeningKeys(c, audioId))
+
+    /** [audioId]'s keys whole in the saved store. */
+    private fun storedKeys(audioId: String): List<String> {
+        val s = savedStore ?: return emptyList()
+        return savedKeys.keysOf(audioId).filter { isWhole(s, it) }
     }
+
+    /** [audioId]'s keys whole in the listening cache, most recently used first. Under its lock. */
+    private fun listeningKeys(c: Cache, audioId: String): List<String> = ledger.keysOf(audioId).filter { isWhole(c, it) }
 
     private fun isWhole(c: Cache, key: String): Boolean {
         val length = c.getContentMetadata(key).get(ContentMetadata.KEY_CONTENT_LENGTH, -1L)
@@ -344,6 +367,12 @@ internal object AudioCache {
 
     /** Whether [audioId] is saved whole (any format). */
     fun isWhole(audioId: String): Boolean = locked { c -> wholeKeys(c, audioId).isNotEmpty() } == true
+
+    /** Whether [audioId] is whole in the saved store (the saver's job is done). */
+    fun isStored(audioId: String): Boolean = locked { storedKeys(audioId).isNotEmpty() } == true
+
+    /** The key of [audioId]'s whole listening copy to copy into the saved store, or null (none). */
+    fun listeningCopy(audioId: String): String? = locked { c -> listeningKeys(c, audioId).firstOrNull() }
 
     /** Signed out: this track's audio may not be cached ([MembersAudio.denied]). */
     fun isDenied(audioId: String): Boolean = members.denied(audioId)
@@ -393,7 +422,8 @@ internal object AudioCache {
             val justLiked = ledger.setLiked(ids, known)
             liked = ledger.liked
             // Unliked: no longer a saved liked song.
-            val dropped = saved.retainAll(liked.toSet())
+            val keep = liked.toSet()
+            val dropped = saved.retainAll(keep) or stored.retainAll(keep) or copies.retainAll(keep)
             refreshSaved(c, liked, dropped)
             publish()
             justLiked
@@ -453,15 +483,19 @@ internal object AudioCache {
     fun signedIn() = members.signIn()
 
     /**
-     * A source that writes what it reads into the cache, for the liked saver; null without a
-     * cache. Without FLAG_BLOCK_ON_CACHE it never waits for a span playback is writing: it reads
-     * past it from the network instead (not cached then). Without FLAG_IGNORE_CACHE_ON_ERROR
-     * (unlike playback's, [CacheRouter]) a cache that can't be written fails the save at once,
-     * into the saver's back-off, instead of downloading the song past the cache for nothing.
+     * A source that writes what it reads into the saved store, for the liked saver; null without
+     * both stores. It reads what the listening cache has of the song first (a whole copy there is
+     * copied, with no request), only the rest from the network, and writes nothing into the
+     * listening cache: one copy of a saved song. Without FLAG_BLOCK_ON_CACHE it never waits for
+     * a span being written: it reads past it instead (not saved then). Without
+     * FLAG_IGNORE_CACHE_ON_ERROR (unlike playback's, [CacheRouter]) a store that can't be written
+     * fails the save at once, into the saver's back-off, instead of downloading the song for nothing.
      */
-    fun downloadSource(): CacheDataSource? {
+    fun saveSource(): CacheDataSource? {
         val c = open() ?: return null
-        return CacheDataSource(c, CacheMissGuard(OkHttpDataSource.Factory(Http.streaming).createDataSource()), 0)
+        val s = savedStore ?: return null
+        val listening = CacheDataSource(c, CacheMissGuard(OkHttpDataSource.Factory(Http.streaming).createDataSource()), FileDataSource(), null, 0, null)
+        return CacheDataSource(s, listening, 0)
     }
 
     /** Playback's data sources: YouTube audio and Jukebox MP3s through the cache, the rest straight to [upstream]. */
@@ -473,17 +507,24 @@ internal object AudioCache {
         for (key in ledger.victims(extra, protect)) c.removeResource(key)
     }
 
-    /** Rechecks which of [ids] (liked ones) are saved whole; tells the listeners when that changed. */
+    /** Rechecks which of [ids] (liked ones) are saved whole, and where; tells the listeners when that changed. */
     private fun refreshSaved(c: Cache, ids: Collection<String>, changedAlready: Boolean = false) {
         var changed = changedAlready
         for (id in ids) {
-            val whole = ledger.isLiked(id) && wholeKeys(c, id).isNotEmpty()
-            changed = (if (whole) saved.add(id) else saved.remove(id)) || changed
+            val liked = ledger.isLiked(id)
+            val inStore = liked && storedKeys(id).isNotEmpty()
+            val inListening = liked && listeningKeys(c, id).isNotEmpty()
+            changed = (mark(saved, id, inStore || inListening) or mark(stored, id, inStore) or mark(copies, id, inListening && !inStore)) || changed
         }
         if (!changed) return
         savedLiked = HashSet(saved)
+        inStore = HashSet(stored)
+        copyable = HashSet(copies)
         listeners.forEach { it.onSavedChanged() }
     }
+
+    /** [id] in [set] or not, as [on] says; true when that changed. */
+    private fun mark(set: MutableSet<String>, id: String, on: Boolean): Boolean = if (on) set.add(id) else set.remove(id)
 
     private fun publish() {
         likedFull = ledger.likedFull(LikedSaverPolicy.LISTENING_RESERVE_BYTES)
@@ -609,7 +650,7 @@ internal class CacheMissException : IOException("Not in the listening cache any 
  * per source, and a track keeps its source) and reads the network. A copy found
  * missing is also remembered ([AudioCache.misses]), so [StreamResolver.cachedKey] stops handing
  * out its key and the retry resolves a stream URL instead of the `cyberjuke://` one. The liked
- * saver's [AudioCache.downloadSource] has no such flag: a CacheWriter that can't write must
+ * saver's [AudioCache.saveSource] has no such flag: a CacheWriter that can't write must
  * fail, into the saver's back-off ([SaveStrikes]), not read the whole song for nothing.
  */
 @OptIn(UnstableApi::class)

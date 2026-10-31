@@ -59,6 +59,14 @@ class QualityLadderTest {
     }
 
     @Test
+    fun aLikedSongIsSavedAtTheTopUnlessLow() {
+        // Never Auto's rung of the moment.
+        assertEquals(0, QualityLadder.saveRung(AudioQuality.AUTO))
+        assertEquals(0, QualityLadder.saveRung(AudioQuality.HIGH))
+        assertEquals(QualityLadder.LOWEST, QualityLadder.saveRung(AudioQuality.LOW))
+    }
+
+    @Test
     fun highIsTheTopLowTheBottomAutoItsRung() {
         assertEquals(0, QualityLadder.rungFor(AudioQuality.HIGH, 2))
         assertEquals(QualityLadder.LOWEST, QualityLadder.rungFor(AudioQuality.LOW, 0))

@@ -36,6 +36,8 @@ class SaveJobTest {
         var reports: List<Pair<Long, Long>> = emptyList(),
         /** What it reports once the last byte came (a length learned only at the end), with no stop after. */
         var endReport: Pair<Long, Long>? = null,
+        /** The key of a whole copy in the listening cache. */
+        var listening: String? = null,
     ) : SaveJob.Deps {
         val calls = ArrayList<String>()
         var job: SaveJob? = null
@@ -72,6 +74,13 @@ class SaveJobTest {
 
         override fun mp3Writer(audioId: String, progress: SaveJob.Progress): SaveJob.Writer? {
             calls.add("mp3Writer")
+            return newWriter(progress)
+        }
+
+        override fun listeningCopy(audioId: String) = listening
+
+        override fun copyWriter(audioId: String, key: String, progress: SaveJob.Progress): SaveJob.Writer? {
+            calls.add("copy $key")
             return newWriter(progress)
         }
 
@@ -138,6 +147,21 @@ class SaveJobTest {
         j.cancel()
         assertEquals(SaveOutcome.CANCELLED, j.run())
         assertTrue(w.calls.isEmpty())
+    }
+
+    @Test
+    fun aListeningCopyIsCopiedWithNoExtraction() {
+        val key = "yt:$id:250:3000"
+        // In a back-off too: it asks nothing of YouTube.
+        val w = World(listening = key, quiet = true)
+        assertEquals(SaveOutcome.SAVED, w.run())
+        assertEquals(listOf("denied", "whole", "copy $key", "cache", "bytes", "whole"), w.calls)
+        // A byte the listening copy lost: a strike, as any stopped save.
+        assertEquals(SaveOutcome.STOPPED, World(listening = key, write = { throw IOException("missing") }).run())
+        // Already in the saved store: nothing copied.
+        val done = World(listening = key, whole = true)
+        assertEquals(SaveOutcome.SAVED, done.run())
+        assertFalse(done.calls.any { it.startsWith("copy") })
     }
 
     @Test
