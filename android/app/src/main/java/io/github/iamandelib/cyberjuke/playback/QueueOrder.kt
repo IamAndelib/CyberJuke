@@ -130,6 +130,13 @@ internal interface QueueHost<T> {
     fun insertAuto(at: Int?, items: List<T>)
     fun removeAt(index: Int)
 
+    /**
+     * Swaps the item at [index] for [item] (Player.replaceMediaItem). With another source Media3
+     * adds it after the old one and removes the old one: it keeps its index, not its place in the
+     * shuffle order, and if it was playing, playback moves on ([NativeQueue.replace] puts both back).
+     */
+    fun replaceAt(index: Int, item: T)
+
     /** A user jump to [index] (Player.seekTo(index, 0)). */
     fun seekTo(index: Int)
 }
@@ -165,6 +172,27 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
 
     private fun isHeard(index: Int): Boolean = host.uidAt(index).let { it != 0L && it in heard }
 
+    /** In [replace]: the moves Media3 makes on the way are none of the queue's business. */
+    private var replacing = false
+
+    /**
+     * The same track from another source (a fresh stream link, or its manifest): it keeps its
+     * place in the play order and, if it was playing, stays the one playing. Media3 alone would
+     * put it anywhere in the shuffle order and move playback on to the next song ([QueueHost.replaceAt]).
+     */
+    fun replace(index: Int, item: T) {
+        val playing = index == host.currentIndex
+        val order = if (host.shuffleEnabled) host.shuffleOrder() else null
+        replacing = true
+        try {
+            host.replaceAt(index, item)
+            order?.let { if (!it.contentEquals(host.shuffleOrder())) host.setShuffleOrder(it) }
+            if (playing && host.currentIndex != index) host.seekTo(index)
+        } finally {
+            replacing = false
+        }
+    }
+
     private fun hear(index: Int) {
         host.uidAt(index).takeIf { it != 0L }?.let { heard.add(it) }
     }
@@ -177,6 +205,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
 
     /** The current item changed (any reason): keep the pending ones right after it. */
     fun onTransition() {
+        if (replacing) return
         hearCurrent()
         prune()
         if (host.shuffleEnabled) enforceShuffleOrder() else enforceLinearOrder()
@@ -187,6 +216,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
      * a queued track moved by hand keeps its new place among the queued ones.
      */
     fun onPlaylistChanged() {
+        if (replacing) return
         prune()
         if (!host.shuffleEnabled) resortByList()
         // Additions re-randomise the shuffle order around our items; put them back next.

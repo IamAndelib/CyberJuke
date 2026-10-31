@@ -7,6 +7,7 @@
 - Offline, Search still searches the Jukebox kept on the phone (its saved liked songs play), and no longer suggests searching Global.
 
 ### Fixed
+- With shuffle on, a song whose stream link had to be refreshed (or switched to its fallback) keeps playing, instead of skipping to another song.
 - Offline, Now Playing says so in a bar across its top, like the rest of the app, instead of a squeezed line in its header.
 - Offline, the end of a list says more loads once you're back, instead of offering a Retry that can't work, and loads the rest by itself when the connection returns.
 - Pulling down to refresh Home while offline says to connect first, instead of flickering the list.

@@ -1479,7 +1479,7 @@ class PlaybackService : MediaSessionService() {
                     .setUri(Uri.parse(m.manifestUrl))
                     .setMimeType(m.mimeType)
                     .build()
-                p.replaceMediaItem(index, replacement)
+                queue.replace(index, replacement)
                 p.prepare()
                 return
             }
@@ -1601,7 +1601,7 @@ class PlaybackService : MediaSessionService() {
         if (item.localConfiguration?.uri?.scheme != JukeUris.SCHEME) {
             // Swapped to its HLS manifest earlier: that manifest is what expired (L15).
             // Back to our URI, so the resolver fetches a fresh one.
-            p.replaceMediaItem(index, item.buildUpon().setUri(JukeUris.forYt(ytId)).setMimeType(null).build())
+            queue.replace(index, item.buildUpon().setUri(JukeUris.forYt(ytId)).setMimeType(null).build())
         }
         p.prepare()
     }
