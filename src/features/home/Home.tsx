@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals';
 import { useMemo, useState } from 'preact/hooks';
 import { source } from '../../data';
+import type { Track } from '../../data/model';
 import { shuffled } from '../../core/shuffle';
 import { isOffline } from '../../core/errors';
 import { OFFLINE } from '../../core/offlineText';
@@ -11,7 +12,9 @@ import { toast } from '../../stores/toast';
 import { updateAvailable } from '../../stores/updates';
 import { Icon } from '../../ui/icons';
 import { CatalogError, EmptyState, PagedTracks, Tracks } from '../../ui/components/TrackList';
-import { OfflineGate } from '../../ui/components/OfflineGate';
+import { OfflineGate, useSeenOnline } from '../../ui/components/OfflineGate';
+import { online } from '../../core/network';
+import { savedLiked } from '../../stores/savedOffline';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
 import { openSettings } from '../../ui/nav';
@@ -50,14 +53,21 @@ async function shuffleJukebox(genre: string | null): Promise<void> {
   await playAll(tracks, { shuffle: false, ctx: listCtx(shuffleLabel(genre)) });
 }
 
+/** Offline, the liked songs saved on the phone, shuffled: what plays (Liked's own list). */
+const LIKED_CTX = listCtx('Liked');
+
 function ShuffleHero() {
   const [busy, setBusy] = useState(false);
   const genre = homeGenre.value;
+  // Offline with liked songs saved, the hero shuffles them: Home always leads to music.
+  const liked = !online.value && savedLiked.value.length > 0;
   const go = async () => {
-    if (busy || !canStartPlayback()) return;
+    // The liked songs are saved: no connection needed (canStartPlayback would refuse it).
+    if (busy || (!liked && !canStartPlayback())) return;
     setBusy(true);
     try {
-      await shuffleJukebox(genre);
+      if (liked) await playAll(shuffled(savedLiked.peek()), { shuffle: false, ctx: LIKED_CTX });
+      else await shuffleJukebox(genre);
     } catch (e) {
       toast(isOffline(e) ? OFFLINE.tap : "Couldn't shuffle right now");
     } finally {
@@ -68,9 +78,9 @@ function ShuffleHero() {
     <div class="dos">
       <button class="hero dos-frame" onClick={go} data-testid="shuffle-all" aria-busy={busy}>
         <span class="hero-text">
-          <span class="hero-kicker">Feeling lucky?</span>
-          <span class="hero-title">{genre ? `Shuffle ${genre}` : 'Shuffle the Jukebox'}</span>
-          <span class="hero-sub">{busy ? 'Spinning the reels…' : `Random picks from ${genre ?? 'the whole Jukebox'}`}</span>
+          <span class="hero-kicker">{liked ? OFFLINE.heroKicker : 'Feeling lucky?'}</span>
+          <span class="hero-title">{liked ? OFFLINE.heroLiked : genre ? `Shuffle ${genre}` : 'Shuffle the Jukebox'}</span>
+          <span class="hero-sub">{busy ? 'Spinning the reels…' : liked ? OFFLINE.heroLikedSub : `Random picks from ${genre ?? 'the whole Jukebox'}`}</span>
         </span>
         <span class="hero-btn" aria-hidden="true">
           {busy ? <span class="spinner big" /> : <Icon name="shuffle" size={32} />}
@@ -180,6 +190,30 @@ function MostSaved({ genre }: { genre: string | null }) {
   );
 }
 
+/**
+ * Latest or Most saved. Opened offline, Latest is the Jukebox saved on the phone from before
+ * (newest first, the chip's genre): its saved liked songs play and the rest are dimmed, as a
+ * list that loses the connection keeps its rows. With nothing saved, the offline state.
+ */
+function LatestOrSaved({ sort, genre, paged, queue, chunkKey }: { sort: 'latest' | 'saved'; genre: string | null; paged: ReturnType<typeof usePaged>; queue: () => Track[]; chunkKey: string }) {
+  const seen = useSeenOnline();
+  const ctx = radio(genre == null ? 'Home · Latest' : `Home · ${genre}`);
+  // Most saved is the stored Jukebox already.
+  if (sort === 'saved')
+    return (
+      <OfflineGate seen={seen || catalog.tracks.value.length > 0}>
+        <MostSaved genre={genre} />
+      </OfflineGate>
+    );
+  const stored = genre == null ? catalog.tracks.value : catalogGenre(genre);
+  if (!seen && stored.length) return <Tracks tracks={stored} ctx={ctx} chunkKey={chunkKey} />;
+  return (
+    <OfflineGate seen={seen}>
+      <PagedTracks paged={paged} ctx={ctx} queue={queue} chunkKey={chunkKey} />
+    </OfflineGate>
+  );
+}
+
 export function Home() {
   const g = homeGenre.value;
   const sort = homeSort.value;
@@ -210,9 +244,7 @@ export function Home() {
       <ShuffleHero />
       <GenreChips />
       <SortRail />
-      <OfflineGate>
-        {sort === 'latest' ? <PagedTracks paged={paged} ctx={radio(g == null ? 'Home · Latest' : `Home · ${g}`)} queue={queue} chunkKey={key} /> : <MostSaved genre={g} />}
-      </OfflineGate>
+      <LatestOrSaved sort={sort} genre={g} paged={paged} queue={queue} chunkKey={key} />
     </Screen>
   );
 }

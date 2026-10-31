@@ -33,6 +33,10 @@ export const OFFLINE = {
   clearOffline: "No carrier right now: nothing plays until you're back online.",
   /** Said to a screen reader for a moment once the connection is back (the bar's live region). */
   backOnline: 'CONNECT. Back online.',
+  /** Home's Shuffle while offline with liked songs saved: they play. */
+  heroKicker: 'No carrier',
+  heroLiked: 'Shuffle liked songs',
+  heroLikedSub: 'Saved on the phone · plays offline',
   /** A pull to refresh while offline. */
   pullAgain: 'No carrier. Connect, then refresh.',
   lyrics: "No carrier. Lyrics load when you're back online.",
