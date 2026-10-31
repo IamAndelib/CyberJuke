@@ -27,6 +27,8 @@ export const OFFLINE = {
   lostWaits: "Signal lost. Press play once you're back online.",
   /** In place of the time (Now Playing) and the artist (mini player) while native waits for the network. */
   waiting: 'Waiting for carrier…',
+  /** The end of a list with more to come, while offline (it loads by itself once back). */
+  moreLater: "No carrier. More loads when you're back.",
   /** A pull to refresh while offline. */
   pullAgain: 'No carrier. Connect, then refresh.',
   lyrics: "No carrier. Lyrics load when you're back online.",
