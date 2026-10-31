@@ -30,11 +30,10 @@ export const requestsFor = (backend: { queries: { limit?: number; where?: unknow
  */
 export async function toListEnd(page: Page): Promise<void> {
   const rows = page.locator('[data-testid="upnext-row"][data-section="list"]');
-  const title = page.getByTestId('np-title');
-  while ((await rows.count()) > 0) {
-    const t = (await title.textContent())!;
+  // Each Next leaves one row fewer ahead (by the rows, not the title: two songs can share one).
+  for (let n = await rows.count(); n > 0; n = await rows.count()) {
     await page.getByTestId('np-next').click();
-    await expect(title).not.toHaveText(t);
+    await expect(rows).toHaveCount(n - 1);
   }
 }
 

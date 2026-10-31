@@ -8,19 +8,23 @@
  *  - the size and Download using mobile data settings, sent at start and on change, and Clear cache;
  *  - signing out (and starting signed out): Liked at once, then `signedOut()`, so native drops
  *    every members-only track's audio and caches none until a sign-in;
- *  - which liked songs are saved: asked at start, then native says when that changes.
+ *  - which liked songs are saved: asked at start, then native says when that changes; their
+ *    lyrics are kept with them (data/lyrics keepSaved), once the page is idle.
  * In the browser there is no cache: nothing is saved (dev/test builds expose
  * `window.__cyberjukeCache` so the e2e suite can say what is, and record the calls).
  */
 import { Capacitor } from '@capacitor/core';
 import { effect } from '@preact/signals';
 import { audioIdOf } from '../core/guards';
+import { whenIdle } from '../core/idle';
+import { online } from '../core/network';
 import { logError } from '../core/log';
 import { TEST_HOOKS, exposeForTests } from '../core/testHooks';
 import { auth } from '../data/auth';
+import { lyrics } from '../data/lyrics';
 import { isCoverUrl, type Track } from '../data/model';
 import { liked, likedUnreadable, onMembersOnlyDropped, settings, type CacheMb } from '../stores/library';
-import { setSavedOffline } from '../stores/savedOffline';
+import { savedLiked, setSavedOffline } from '../stores/savedOffline';
 import { BRIDGE_MAX_ITEMS, JukePlayer } from './native';
 
 /** A burst of likes (or Undo) sends the list once, this long after the last change. */
@@ -120,6 +124,18 @@ export function startListeningCache(): void {
     if (sent === null) return send(o, key);
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => send(o, key), LIKED_SEND_DELAY_MS);
+  });
+
+  // The saved songs' lyrics: kept, and those missing looked up, once the page is idle (it reads
+  // the lyrics files: not while the app starts).
+  let cancelKeep: (() => void) | null = null;
+  effect(() => {
+    // Read so the lookups resume once the connection is back.
+    if (likedUnreadable.value || !online.value) return;
+    const saved = savedLiked.value;
+    const ids = new Set(liked.value.map((t) => t.id));
+    cancelKeep?.();
+    cancelKeep = whenIdle(() => void lyrics.keepSaved(saved, ids), 5000, 2000);
   });
 
   let lastMb: CacheMb | null = null;

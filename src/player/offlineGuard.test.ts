@@ -295,6 +295,17 @@ describe('offlineGuard', () => {
     roundSaved.offline();
     await roundSaved.p.prev();
     expect(roundSaved.inner.prev).toHaveBeenCalledTimes(1);
+    // A long list: the last song is the list's, past the 50 Up next shows.
+    const long = Array.from({ length: 60 }, (_, k) => t(`x${k}`));
+    const longFirst = { queue: long, index: 0, current: long[0], previous: [], upNext: long.slice(1, 51).map((track, k) => ({ track, index: k + 1 })), positionMs: 500, repeat: 'all' as const };
+    const fifty = setup(longFirst, [long[0].ytId, long[50].ytId]);
+    fifty.offline();
+    await fifty.p.prev();
+    expect(fifty.inner.prev).not.toHaveBeenCalled();
+    const last = setup(longFirst, [long[0].ytId, long[59].ytId]);
+    last.offline();
+    await last.p.prev();
+    expect(last.inner.prev).toHaveBeenCalledTimes(1);
     // Repeat off at the first song: Previous restarts it.
     const start = setup({ ...first, repeat: 'off' }, [a.ytId]);
     start.offline();

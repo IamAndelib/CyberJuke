@@ -8,7 +8,6 @@ import { openSearch, playerCalls, saved, seedStorage, start } from '../helpers';
  * Search finds the saved Jukebox. Nothing points to a connection it can't use.
  */
 
-/** What native reports as saved whole (by ytId). */
 
 /** Reopens the app with the device offline from the start (navigator.onLine, as the Network plugin reads it on the web). */
 async function relaunchOffline(page: Page, backend: { offline: boolean }) {

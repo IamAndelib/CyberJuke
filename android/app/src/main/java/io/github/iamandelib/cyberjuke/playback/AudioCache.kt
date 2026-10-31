@@ -424,8 +424,9 @@ internal object AudioCache {
     /**
      * The liked audio ids (videos and Jukebox MP3s), newest like first. Liked songs are evicted
      * last, least recently liked first; an unliked one is an ordinary listening entry from now on.
+     * [complete]: the page's whole Liked, not cut at the bridge's cap ([SavedReconcile]).
      */
-    fun setLiked(ids: List<String>): Boolean {
+    fun setLiked(ids: List<String>, complete: Boolean = ids.size < BridgeLimits.MAX_ITEMS): Boolean {
         val fresh = locked { c ->
             val known = likedKnown
             likedKnown = true
@@ -438,7 +439,7 @@ internal object AudioCache {
             if (!reconciled) {
                 reconciled = true
                 savedStore?.let { s ->
-                    SavedReconcile.toRemove(savedKeys.audioIds(), keep, complete = ids.size < BridgeLimits.MAX_ITEMS).forEach { id -> savedKeys.keysOf(id).forEach { s.removeResource(it) } }
+                    SavedReconcile.toRemove(savedKeys.audioIds(), keep, complete).forEach { id -> savedKeys.keysOf(id).forEach { s.removeResource(it) } }
                 }
             }
             val dropped = saved.retainAll(keep) or stored.retainAll(keep) or copies.retainAll(keep)
@@ -490,7 +491,9 @@ internal object AudioCache {
         val done = locked { c -> gone.forEach { removeAudio(c, it) } } != null
         // No cache (it didn't start): the audio is still on the phone, so its tags stay written
         // down, and the sign-out at the next start removes it.
-        if (done) members.removed(gone)
+        // Nor while the saved store couldn't open: its files are still there, and the next start's
+        // sign-out (still signed out) must find them tagged.
+        if (done && !savedFailed) members.removed(gone)
         // Their saved covers too (else they'd wait for the saver's next tidy, on an allowed network).
         ArtStore.files?.let { art -> gone.forEach { art.remove(it) } }
         appContext?.let { writeIds(it, MEMBERS_FILE, members.tagged().toList()) }

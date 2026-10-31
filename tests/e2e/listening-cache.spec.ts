@@ -11,7 +11,6 @@ import { bufferedAhead, openNowPlaying, openSettings, playAndOpen, playerCalls, 
 const track = (id: string) => ({ id, ytId: 'abcdefghij' + id.slice(-1), title: 'Track ' + id, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '2026-01-01T00:00:00Z', nsfw: false, artworkUrl: '' });
 const LIKED = [track('l1'), track('l2'), track('l3')];
 
-/** What native reports as saved whole (by ytId). */
 
 const BANNER = '[ offline ] no carrier · connect to play';
 const BANNER_LIKED = '[ offline ] no carrier · your liked songs still play';
