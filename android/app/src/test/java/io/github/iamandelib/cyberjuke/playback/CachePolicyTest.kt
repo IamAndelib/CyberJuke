@@ -7,6 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class CachePolicyTest {
@@ -872,17 +873,46 @@ class CachePolicyTest {
 
     @Test
     fun removesUnliked() {
-        assertEquals(setOf("old00000000"), SavedReconcile.toRemove(setOf("new00000000", "old00000000"), setOf("new00000000", "mid00000000"), likedLoaded = true))
+        assertEquals(setOf("old00000000"), SavedReconcile.toRemove(setOf("new00000000", "old00000000"), setOf("new00000000", "mid00000000"), complete = true))
     }
 
     @Test
     fun emptyLikedKeepsAll() {
         // A failed load reads as no likes: the saved songs stay.
-        assertTrue(SavedReconcile.toRemove(setOf("new00000000"), emptySet(), likedLoaded = true).isEmpty())
+        assertTrue(SavedReconcile.toRemove(setOf("new00000000"), emptySet(), complete = true).isEmpty())
     }
 
     @Test
-    fun notLoadedKeepsAll() {
-        assertTrue(SavedReconcile.toRemove(setOf("new00000000"), setOf("mid00000000"), likedLoaded = false).isEmpty())
+    fun aListCutAtTheCapKeepsAll() {
+        // Over BridgeLimits.MAX_ITEMS likes the page sends the newest ones: the older are still liked.
+        assertTrue(SavedReconcile.toRemove(setOf("new00000000"), setOf("mid00000000"), complete = false).isEmpty())
+    }
+
+    @Test
+    fun theSongsPlayingAreCopiedNeverDownloaded() {
+        val f = Facts(liked, saved = emptySet(), playing = setOf("new00000000", "mid00000000"))
+        // Not downloaded while playing or next (the backlog moves on to the others).
+        assertEquals("old00000000", LikedSaverPolicy.next(f))
+        assertEquals("old00000000", LikedSaverPolicy.next(f.copy(fresh = setOf("new00000000"))))
+        // Once whole in the listening cache, copied (no link lookup).
+        assertEquals("new00000000", LikedSaverPolicy.next(f.copy(copyable = setOf("new00000000"))))
+    }
+
+    @Test
+    fun aDamagedSavedStoreIsWipedOnlyWhenItFailsAgain() {
+        var wiped = 0
+        val damaged = { throw IllegalStateException("index unreadable") }
+        // The first time: left alone, the failure goes on to the caller (no store this start).
+        try {
+            CacheStart.openOrWipe<String>(open = damaged, wipe = { wiped++ }, damaged = { true }, mayWipe = { false })
+            fail()
+        } catch (_: IllegalStateException) {
+        }
+        assertEquals(0, wiped)
+        // Again at the next start: wiped and opened afresh.
+        var opens = 0
+        val again = CacheStart.openOrWipe(open = { if (opens++ == 0) throw IllegalStateException("still") else "open" }, wipe = { wiped++ }, damaged = { true }, mayWipe = { true })
+        assertEquals("open", again)
+        assertEquals(1, wiped)
     }
 }

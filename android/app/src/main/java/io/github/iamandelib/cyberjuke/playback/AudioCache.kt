@@ -66,6 +66,7 @@ internal object AudioCache {
     /** In noBackupFilesDir: the SimpleCache folder, the liked list (newest first), the members-only tags. */
     private const val DIR = "audio"
     private const val SAVED_DIR = "saved"
+    private const val SAVED_DAMAGED = "saved-damaged"
     private const val LIKED_FILE = "audio-liked"
     private const val MEMBERS_FILE = "audio-members"
 
@@ -294,16 +295,22 @@ internal object AudioCache {
         return c
     }
 
-    /** The saved store, wiped once if damaged ([CacheStart]); null if it still fails: the listening cache goes on alone. */
+    /**
+     * The saved store. Damaged, it is left out for this start and wiped only if the next start
+     * finds it damaged too (a marker file beside it), so one passing fault doesn't take the saved
+     * songs; null meanwhile: the listening cache goes on alone.
+     */
     private fun openSaved(dir: File, db: StandaloneDatabaseProvider): SimpleCache? = try {
+        val damagedBefore = File(dir.parentFile, SAVED_DAMAGED)
         CacheStart.openOrWipe(
             open = { start(dir, db, SavedEvictor()) { savedKeys.clear() } },
             wipe = {
-                Log.w(TAG, "Saved store damaged: starting it empty")
+                Log.w(TAG, "Saved store damaged again: starting it empty")
                 SimpleCache.delete(dir, db)
             },
             damaged = { it is Cache.CacheException },
-        )
+            mayWipe = { damagedBefore.exists().also { if (!it) damagedBefore.createNewFile() } },
+        ).also { damagedBefore.delete() }
     } catch (e: Exception) {
         savedFailed = true
         Log.w(TAG, "No saved store: ${e.javaClass.simpleName}")
@@ -435,7 +442,7 @@ internal object AudioCache {
             if (!reconciled) {
                 reconciled = true
                 savedStore?.let { s ->
-                    SavedReconcile.toRemove(savedKeys.audioIds(), keep, likedLoaded = true).forEach { id -> savedKeys.keysOf(id).forEach { s.removeResource(it) } }
+                    SavedReconcile.toRemove(savedKeys.audioIds(), keep, complete = ids.size < BridgeLimits.MAX_ITEMS).forEach { id -> savedKeys.keysOf(id).forEach { s.removeResource(it) } }
                 }
             }
             val dropped = saved.retainAll(keep) or stored.retainAll(keep) or copies.retainAll(keep)
@@ -526,6 +533,9 @@ internal object AudioCache {
         for (id in ids) {
             val liked = ledger.isLiked(id)
             val inStore = liked && storedKeys(id).isNotEmpty()
+            // Saved whole: what a stopped save left of another file of it (another format, a
+            // re-encode) is no use now, and the saved store never evicts it.
+            if (inStore) savedStore?.let { s -> savedKeys.keysOf(id).filterNot { isWhole(s, it) }.forEach { s.removeResource(it) } }
             val inListening = liked && listeningKeys(c, id).isNotEmpty()
             changed = (mark(saved, id, inStore || inListening) or mark(stored, id, inStore) or mark(copies, id, inListening && !inStore)) || changed
         }

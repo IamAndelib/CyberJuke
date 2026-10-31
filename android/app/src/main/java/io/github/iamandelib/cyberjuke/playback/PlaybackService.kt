@@ -299,6 +299,11 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
+        // API 29+: Doze, Battery Saver or data saver block the app while the network stays up.
+        override fun onBlockedStatusChanged(network: Network, blocked: Boolean) {
+            handler.post { likedSaver.onBlocked(blocked) }
+        }
+
         override fun onLost(network: Network) {
             AudioCache.online = false
             handler.post { likedSaver.onNetwork(validated = false, unmetered = false) }
