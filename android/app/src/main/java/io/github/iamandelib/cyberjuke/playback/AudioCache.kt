@@ -142,6 +142,9 @@ internal object AudioCache {
     /** The liked list came from the page or the file (until then no like is "fresh"). */
     private var likedKnown = false
 
+    /** The saved store has been matched to the page's liked list in this process ([SavedReconcile]). */
+    private var reconciled = false
+
     /** Members-only audio (thread-safe itself). */
     private val members = MembersAudio()
 
@@ -429,6 +432,14 @@ internal object AudioCache {
             liked = ledger.liked
             // Unliked: no longer a saved liked song.
             val keep = liked.toSet()
+            // Once per start, from the page's list: the saved songs no longer liked leave the
+            // saved store (unliked in an earlier session; one unliked now stays till the next).
+            if (!reconciled) {
+                reconciled = true
+                savedStore?.let { s ->
+                    SavedReconcile.toRemove(savedKeys.audioIds(), keep, likedLoaded = true).forEach { id -> savedKeys.keysOf(id).forEach { s.removeResource(it) } }
+                }
+            }
             val dropped = saved.retainAll(keep) or stored.retainAll(keep) or copies.retainAll(keep)
             refreshSaved(c, liked, dropped)
             publish()
