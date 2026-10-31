@@ -1,6 +1,6 @@
 import { expect, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { playerCalls, seedStorage, start } from '../helpers';
+import { openSearch, playerCalls, seedStorage, start } from '../helpers';
 
 /**
  * Opened offline, Home and Search still lead to music: Home's hero shuffles the liked songs
@@ -74,4 +74,16 @@ test('opened offline with no Jukebox saved before, Home says no carrier, and wit
   await home.getByTestId('offline-liked').click();
   await expect(page.getByTestId('screen-library')).toBeVisible();
   await expect(page.getByTestId('lib-liked')).toHaveAttribute('aria-selected', 'true');
+});
+
+test('offline, Search finds the saved Jukebox, with no way to Global', async ({ page, backend }) => {
+  await start(page);
+  const title = (await page.getByTestId('track-title').first().textContent())!.trim();
+  await relaunchOffline(page, backend);
+  await openSearch(page);
+  await page.getByTestId('search-input').fill(title.slice(0, 6));
+  const search = page.getByTestId('search');
+  await expect(search.getByTestId('track-row').first()).toBeVisible();
+  await expect(search.getByTestId('offline')).toHaveCount(0);
+  await expect(search.getByText('Search globally')).toHaveCount(0);
 });
