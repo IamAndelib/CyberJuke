@@ -240,6 +240,18 @@ test('offline, Now Playing says so too: with liked songs saved its line opens Li
   await expect(page.getByTestId('np-offline')).toHaveCount(0);
 });
 
+test('offline, Clear cache warns that nothing will play until the connection is back', async ({ page, backend }) => {
+  await start(page);
+  await openSettings(page);
+  await page.getByTestId('cache-clear').click();
+  const sheet = page.getByTestId('confirm-sheet');
+  await expect(sheet).not.toContainText('No carrier right now');
+  await page.getByTestId('confirm-cancel').click();
+  await setOffline(page, backend, true);
+  await page.getByTestId('cache-clear').click();
+  await expect(sheet).toContainText("No carrier right now: nothing plays until you're back online.");
+});
+
 test('Settings → Listening cache: 256 MB by default, three sizes sent to the player and kept, Clear cache, and Download using mobile data', async ({ page }) => {
   await page.goto('/');
   const sent = async () => (await playerCalls(page)).filter((c) => c[0] === 'setCacheLimit').map((c) => c[1]);

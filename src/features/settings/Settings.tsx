@@ -17,6 +17,8 @@ import {
 import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import { player } from '../../player';
+import { online } from '../../core/network';
+import { OFFLINE } from '../../core/offlineText';
 import { clearListeningCache } from '../../player/listeningCache';
 import { block, netStatusText } from '../../stores/block';
 import { AuthError, SIGN_UP_URL, auth, authErrorText } from '../../data/auth';
@@ -144,7 +146,7 @@ function ListeningCacheSetting() {
   const clear = () =>
     askConfirm({
       title: 'Clear the listening cache?',
-      body: `The music kept on the phone goes, saved liked songs too. They are ${savedAgain(settings.value.downloadOnMobileData)}.`,
+      body: `The music kept on the phone goes, saved liked songs too. They are ${savedAgain(settings.value.downloadOnMobileData)}.${online.peek() ? '' : ` ${OFFLINE.clearOffline}`}`,
       confirm: 'Clear cache',
       run: () =>
         clearListeningCache().then(
