@@ -30,7 +30,7 @@ export const THEME_LABELS: Record<ThemeId, string> = {
 export type Quality = 'auto' | 'high' | 'low';
 export const QUALITIES: readonly Quality[] = ['auto', 'high', 'low'];
 
-/** The listening cache's size in MB (Settings → Listening cache). */
+/** The listening cache's size in MB (Settings → Recent songs cache). */
 export type CacheMb = 128 | 256 | 512;
 export const CACHE_SIZES: readonly CacheMb[] = [128, 256, 512];
 

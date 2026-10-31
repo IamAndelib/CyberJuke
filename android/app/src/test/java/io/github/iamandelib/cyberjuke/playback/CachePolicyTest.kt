@@ -274,7 +274,6 @@ class CachePolicyTest {
         assertEquals(0L, l.total)
         assertEquals(0L, l.likedBytes)
         assertEquals(emptyList<String>(), l.keysOf("liked00000a"))
-        assertFalse(l.likedFull(0L))
         count()
         assertEquals(16 * mb, l.total)
         assertEquals(8 * mb, l.likedBytes)
@@ -286,13 +285,21 @@ class CachePolicyTest {
     }
 
     @Test
-    fun likedFullLeavesRoomForListening() {
-        val l = CacheLedger(128 * mb)
+    fun likedProtectionOnlyUnsaved() {
+        val l = CacheLedger(100 * mb)
         l.setLiked(listOf("likeda00000"), known = false)
-        l.onAdded(CacheKeys.of("likeda00000", 251), 90 * mb, touched = 1)
-        assertFalse(l.likedFull(LikedSaverPolicy.LISTENING_RESERVE_BYTES))
-        l.onAdded(CacheKeys.of("likeda00000", 140), 10 * mb, touched = 2)
-        assertTrue(l.likedFull(LikedSaverPolicy.LISTENING_RESERVE_BYTES))
+        val liked = CacheKeys.of("likeda00000", 251)
+        l.onAdded(liked, 60 * mb, touched = 1)
+        l.onAdded(CacheKeys.of("listen00000", 251), 30 * mb, touched = 2)
+        // Not saved yet: the liked copy is protected, the new song goes first.
+        assertEquals(listOf(CacheKeys.of("listen00000", 251)), l.victims(extra = 20 * mb, protect = CacheKeys.of("newsng00000", 251)))
+        // In the saved store: the listening copy is an ordinary entry, the oldest, and goes.
+        l.setStored(setOf("likeda00000"))
+        assertTrue(l.isLiked("likeda00000"))
+        assertEquals(listOf(liked), l.victims(extra = 20 * mb, protect = CacheKeys.of("newsng00000", 251)))
+        // Unliked or out of the store again: protected as before.
+        l.setStored(emptySet())
+        assertEquals(listOf(CacheKeys.of("listen00000", 251)), l.victims(extra = 20 * mb, protect = CacheKeys.of("newsng00000", 251)))
     }
 
     // ---- the liked saver ----
@@ -312,7 +319,7 @@ class CachePolicyTest {
 
     @Test
     fun aListeningCopyIsCopiedFirstWithNoNetwork() {
-        val f = Facts(liked, saved = setOf("new00000000"), copyable = setOf("new00000000", "old00000000"), online = false, quiet = true, sinceLastMs = 1_000L, likedFull = true)
+        val f = Facts(liked, saved = setOf("new00000000"), copyable = setOf("new00000000", "old00000000"), online = false, quiet = true, sinceLastMs = 1_000L)
         // Offline, in a back-off, inside the gap: a copy needs none of it (one already in the store isn't copied again).
         assertEquals("old00000000", LikedSaverPolicy.next(f))
         assertTrue(LikedSaverPolicy.keepGoing(f, copy = true))
@@ -327,8 +334,8 @@ class CachePolicyTest {
 
     @Test
     fun aSongLikedJustNowIsSavedFirstOnWifi() {
-        val f = Facts(liked, saved = emptySet(), fresh = setOf("mid00000000"), sinceLastMs = 1_000L, likedFull = true)
-        // Before the backlog, the gap and a full cache.
+        val f = Facts(liked, saved = emptySet(), fresh = setOf("mid00000000"), sinceLastMs = 1_000L)
+        // Before the backlog and the gap.
         assertEquals("mid00000000", LikedSaverPolicy.next(f))
         assertTrue(LikedSaverPolicy.keepGoing(f))
     }
@@ -354,8 +361,10 @@ class CachePolicyTest {
         for (f in listOf(base.copy(online = false), base.copy(quiet = true), base.copy(playbackNeedsNetwork = true), base.copy(busy = true))) {
             assertNull(f.toString(), LikedSaverPolicy.next(f))
         }
-        // Full of liked songs: the backlog waits (a fresh like still goes).
-        assertNull(LikedSaverPolicy.next(Facts(liked, saved = emptySet(), likedFull = true)))
+        // Under the free-space floor: nothing, not even a fresh like or a copy.
+        assertNull(LikedSaverPolicy.next(Facts(liked, saved = emptySet(), lowSpace = true)))
+        assertNull(LikedSaverPolicy.next(base.copy(lowSpace = true)))
+        assertNull(LikedSaverPolicy.next(base.copy(lowSpace = true, copyable = setOf("new00000000"))))
     }
 
     @Test
@@ -365,15 +374,15 @@ class CachePolicyTest {
     }
 
     @Test
-    fun aSongTooBigForTheCacheIsNotSaved() {
-        val reserve = LikedSaverPolicy.LISTENING_RESERVE_BYTES
-        // Over what the limit leaves beside listening: never.
-        assertTrue(LikedSaverPolicy.tooBig(128 * mb - reserve + 1, 128 * mb))
-        assertTrue(LikedSaverPolicy.tooBig(150 * mb, 128 * mb))
-        assertFalse(LikedSaverPolicy.tooBig(128 * mb - reserve, 128 * mb))
-        assertFalse(LikedSaverPolicy.tooBig(150 * mb, 256 * mb))
-        // A YouTube track (about 4 MB) always fits.
-        assertFalse(LikedSaverPolicy.tooBig(4 * mb, 128 * mb))
+    fun aSongTooBigForTheRoomLeftIsNotSaved() {
+        // Saves leave the phone 1 GB free: of 1.2 GB free, 200 MB may be filled.
+        val room = LikedSaverPolicy.roomFor(1024 * mb + 200 * mb)
+        assertEquals(200 * mb, room)
+        assertTrue(LikedSaverPolicy.tooBig(200 * mb + 1, room))
+        assertFalse(LikedSaverPolicy.tooBig(200 * mb, room))
+        // A long Jukebox mix fits with room to spare; nothing fits under the floor.
+        assertFalse(LikedSaverPolicy.tooBig(150 * mb, room))
+        assertTrue(LikedSaverPolicy.tooBig(4 * mb, LikedSaverPolicy.roomFor(1000 * mb)))
     }
 
     @Test
@@ -526,7 +535,7 @@ class CachePolicyTest {
         assertFalse(LikedSaverPolicy.mayDownload(f.copy(unmetered = false)))
         assertTrue(LikedSaverPolicy.mayDownload(f.copy(unmetered = false, mobileDataAllowed = true)))
         // A back-off or a full cache holds the audio, not a cover.
-        assertTrue(LikedSaverPolicy.mayDownload(f.copy(quiet = true, likedFull = true, busy = true)))
+        assertTrue(LikedSaverPolicy.mayDownload(f.copy(quiet = true, lowSpace = true, busy = true)))
     }
 
     @Test

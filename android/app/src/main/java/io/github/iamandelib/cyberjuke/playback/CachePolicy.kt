@@ -192,6 +192,10 @@ internal class SavedKeys {
     @Synchronized
     fun keysOf(audioId: String): List<String> = byAudio[audioId]?.keys?.toList() ?: emptyList()
 
+    /** The bytes held, all songs together. */
+    @Synchronized
+    fun totalBytes(): Long = byAudio.values.sumOf { it.values.sum() }
+
     /** The audio ids with anything here (whole or not). */
     @Synchronized
     fun audioIds(): Set<String> = HashSet(byAudio.keys)
@@ -235,6 +239,12 @@ internal class CacheLedger(limitBytes: Long) {
 
     private var rank: Map<String, Int> = emptyMap()
 
+    /** Liked songs whole in the saved store: no longer protected here (one copy each). */
+    private var stored: Set<String> = emptySet()
+
+    /** An entry's place among the protected (liked, not in the saved store), or -1. */
+    private fun rankOf(audioId: String): Int = if (audioId in stored) -1 else rank[audioId] ?: -1
+
     /** The liked audio ids, newest like first. */
     var liked: List<String> = emptyList()
         private set
@@ -252,7 +262,7 @@ internal class CacheLedger(limitBytes: Long) {
     fun onAdded(key: String, bytes: Long, touched: Long) {
         val audioId = CacheKeys.audioIdOf(key) ?: key
         val e = entries[key] ?: Entry(key, audioId).also {
-            it.likedRank = rank[audioId] ?: -1
+            it.likedRank = rankOf(audioId)
             entries[key] = it
             keysByAudio.getOrPut(audioId) { HashSet(2) }.add(key)
         }
@@ -316,15 +326,25 @@ internal class CacheLedger(limitBytes: Long) {
         val fresh = if (added.size <= MAX_FRESH) added else emptyList()
         rank = next
         liked = ids.distinct()
+        rerank()
+        return fresh
+    }
+
+    /** The liked songs whole in the saved store ([stored]): the listening cache stops protecting them. */
+    fun setStored(ids: Set<String>) {
+        stored = HashSet(ids)
+        rerank()
+    }
+
+    private fun rerank() {
         listening.clear()
         likedEntries.clear()
         likedBytes = 0L
         for (e in entries.values) {
-            e.likedRank = next[e.audioId] ?: -1
+            e.likedRank = rankOf(e.audioId)
             if (e.likedRank >= 0) likedBytes += e.bytes
             relist(e)
         }
-        return fresh
     }
 
     fun isLiked(audioId: String): Boolean = audioId in rank
@@ -353,7 +373,7 @@ internal class CacheLedger(limitBytes: Long) {
             over -= e.bytes
             if (over <= 0) return out
         }
-        if (protect != null && !isLiked(CacheKeys.audioIdOf(protect) ?: protect)) {
+        if (protect != null && rankOf(CacheKeys.audioIdOf(protect) ?: protect) < 0) {
             // As Media3's LeastRecentlyUsedCacheEvictor may: the spans of the key being written
             // go (its content stays while the write holds its lock), and playback reads what it
             // needs again from the network.
@@ -368,9 +388,6 @@ internal class CacheLedger(limitBytes: Long) {
         }
         return out
     }
-
-    /** Liked songs leave this much room under the limit before the backfill stops adding more. */
-    fun likedFull(reserve: Long): Boolean = likedBytes + reserve > limit
 
     private fun unlist(e: Entry) {
         listening.remove(e)
@@ -700,15 +717,16 @@ internal class MembersAudio {
  *   on any network: those bytes cost nothing more.)
  * - A song liked just now ([Facts.fresh]) first, at once; if that try fails, again after
  *   [MIN_GAP_MS] like any other.
- * - Older likes (the backfill) at most one extraction per [MIN_GAP_MS], and only while the
- *   cache has room for liked songs ([Facts.likedFull]).
+ * - Older likes (the backfill) at most one extraction per [MIN_GAP_MS].
+ * - Nothing while the phone has under [FREE_FLOOR_BYTES] free ([Facts.lowSpace]): the saved
+ *   store has no size limit of its own.
  * - Never while offline, or while playback needs the network ([PlaybackNeed]): playback always
  *   comes first (a running save gives way, [keepGoing]). During a YouTube back-off
  *   ([Facts.quiet]) only Jukebox MP3s (audio ids `mp3:<file>`): no extraction, not YouTube's.
  * - Never without a cache to save into ([Facts.cache]): no extraction for nothing.
- * - Never a song too big for it ([tooBig]; a long Jukebox mix can be 150 MB): over the limit
- *   less [LISTENING_RESERVE_BYTES] it is given up on. The save learns the size when its request
- *   opens, or as the bytes come when the response doesn't say.
+ * - Never a song too big for the room left ([tooBig]: what is free less [FREE_FLOOR_BYTES]);
+ *   it is given up on. The save learns the size when its request opens, or as the bytes come
+ *   when the response doesn't say.
  *
  * Event-driven: asked again when something it depends on changes. The one timer is
  * [recheckInMs]: a one-shot re-check for the end of the gap, pending only while the gap alone
@@ -719,8 +737,11 @@ internal object LikedSaverPolicy {
     /** At least this long between two backfill extractions (YouTube request volume). */
     const val MIN_GAP_MS = 30_000L
 
-    /** Liked songs leave this much of the limit to listening (the playing and next tracks). */
-    const val LISTENING_RESERVE_BYTES = 32L * 1024 * 1024
+    /** Saves leave the phone at least this much free space. */
+    const val FREE_FLOOR_BYTES = 1L shl 30
+
+    /** Of [freeBytes] free, what saves may fill. */
+    fun roomFor(freeBytes: Long): Long = freeBytes - FREE_FLOOR_BYTES
 
     data class Facts(
         /** Newest like first. */
@@ -747,7 +768,8 @@ internal object LikedSaverPolicy {
         val quiet: Boolean = false,
         val playbackNeedsNetwork: Boolean = false,
         val busy: Boolean = false,
-        val likedFull: Boolean = false,
+        /** Under [FREE_FLOOR_BYTES] free on the phone: nothing is saved. */
+        val lowSpace: Boolean = false,
         /** Since the last saver extraction; Long.MAX_VALUE when none yet. */
         val sinceLastMs: Long = Long.MAX_VALUE,
         /** Until the earliest retry after a stop is due ([SaveStrikes.nextDueInMs]); null when none waits. */
@@ -769,7 +791,7 @@ internal object LikedSaverPolicy {
     fun next(f: Facts): String? = pick(f, f.sinceLastMs)
 
     private fun pick(f: Facts, sinceLastMs: Long): String? {
-        if (!f.cache || f.busy) return null
+        if (!f.cache || f.busy || f.lowSpace) return null
         // Each candidate's denied answer is asked once (and only for those looked at).
         val denied = HashMap<String, Boolean>()
         // A copy needs no network, no gap and no YouTube: on any network, or none.
@@ -781,7 +803,6 @@ internal object LikedSaverPolicy {
         todo.firstOrNull { it in f.fresh && it !in f.tried }?.let { return it }
         if (sinceLastMs < MIN_GAP_MS) return null
         todo.firstOrNull { it in f.fresh }?.let { return it }
-        if (f.likedFull) return null
         return todo.firstOrNull()
     }
 
@@ -809,11 +830,9 @@ internal object LikedSaverPolicy {
 
     /**
      * Whether a song of [bytes] (its length, or what has come so far when that isn't known) is
-     * too big to save in a cache of [limit] bytes: over the limit less [LISTENING_RESERVE_BYTES].
-     * Saved, it would leave listening no room and liked songs alone over the limit, pushing each
-     * other out, and the backfill would download it again and again.
+     * too big for the [room] saves may fill ([roomFor]): saved, it would leave the phone short.
      */
-    fun tooBig(bytes: Long, limit: Long): Boolean = bytes > limit - LISTENING_RESERVE_BYTES
+    fun tooBig(bytes: Long, room: Long): Boolean = bytes > room
 }
 
 /**

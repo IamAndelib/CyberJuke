@@ -214,7 +214,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             quiet = NetBlock.isQuiet(),
             playbackNeedsNetwork = host.playbackNeedsNetwork(),
             busy = job != null,
-            likedFull = AudioCache.likedFull,
+            lowSpace = AudioCache.freeBytes() < LikedSaverPolicy.FREE_FLOOR_BYTES,
             sinceLastMs = if (lastExtractionAt == 0L) Long.MAX_VALUE else now - lastExtractionAt,
             retryInMs = strikes.nextDueInMs(now),
             denied = AudioCache::isDenied,
@@ -306,8 +306,8 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             /** Whether there is a cache to save into. */
             fun hasCache(): Boolean = true
 
-            /** The cache's size limit now, in bytes. */
-            fun limitBytes(): Long
+            /** What saves may fill now ([LikedSaverPolicy.roomFor] the free space), in bytes. */
+            fun roomBytes(): Long
 
             /** Removes [audioId]'s audio from the cache (a song too big to keep). */
             fun discard(audioId: String)
@@ -359,7 +359,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
 
             override fun hasCache() = AudioCache.open() != null && AudioCache.savedStore != null
 
-            override fun limitBytes() = AudioCache.limitBytes
+            override fun roomBytes() = LikedSaverPolicy.roomFor(AudioCache.freeBytes())
 
             override fun discard(audioId: String) = AudioCache.discard(audioId)
 
@@ -413,6 +413,9 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         /** The song's size said it doesn't fit ([LikedSaverPolicy.tooBig]); set on the job's thread. */
         private var tooBig = false
 
+        /** The room at the save's start (the free space shrinks as it writes). */
+        private val room by lazy { deps.roomBytes() }
+
         fun cancel() {
             cancelled = true
             writer?.cancel()
@@ -426,14 +429,14 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         private val progress = Progress { length, cached ->
             // A copy is already on the phone, and the saved store has no size limit.
             if (!tooBig && !copying) {
-                tooBig = LikedSaverPolicy.tooBig(if (length > 0) length else cached, deps.limitBytes())
+                tooBig = LikedSaverPolicy.tooBig(if (length > 0) length else cached, room)
                 if (tooBig) writer?.cancel()
             }
         }
 
         /**
-         * A save its size stopped: one too big for the cache is given up on, and what it has in
-         * the cache goes (liked bytes it can never use). Null: no such stop.
+         * A save its size stopped: one too big for the room left is given up on, and what it has
+         * on the phone goes. Null: no such stop.
          */
         private fun sizeOutcome(): SaveOutcome? = if (tooBig) SaveOutcome.FAILED.also { deps.discard(audioId) } else null
 

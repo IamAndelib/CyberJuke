@@ -356,3 +356,9 @@
   font-size: 16px;
   white-space: nowrap;
 }
+
+/* "Saved liked songs: 24 songs · 180 MB" under the cache's description: a fact, not a hint. */
+.saved-space {
+  margin-top: 6px;
+  color: var(--color-fg);
+}

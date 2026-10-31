@@ -56,7 +56,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Threads: the ledger and the saved set are only touched under the cache's own lock (its span
  * callbacks hold it; everything else takes it). The main thread only reads the published
- * snapshots ([savedLiked], [liked], [likedFull]) and [downloadOnMobileData], never the cache itself. Nothing here runs on a
+ * snapshots ([savedLiked], [liked]) and [downloadOnMobileData], never the cache itself. Nothing here runs on a
  * timer.
  */
 @OptIn(UnstableApi::class)
@@ -197,10 +197,8 @@ internal object AudioCache {
     var liked: List<String> = emptyList()
         private set
 
-    /** Liked songs fill the cache: the backfill waits ([LikedSaverPolicy]). */
-    @Volatile
-    var likedFull: Boolean = false
-        private set
+    /** Free space where the stores are, in bytes (0 before [init]): saves keep [LikedSaverPolicy.FREE_FLOOR_BYTES] of it. */
+    fun freeBytes(): Long = appContext?.noBackupFilesDir?.usableSpace ?: 0L
 
     /** Settings' Download using mobile data: liked songs are saved on any network, not only Wi-Fi. */
     @Volatile
@@ -327,7 +325,7 @@ internal object AudioCache {
             savedLiked = emptySet()
             inStore = emptySet()
             copyable = emptySet()
-            publish()
+            ledger.setStored(emptySet())
             had
         }
         if (hadSaved) listeners.forEach { it.onSavedChanged() }
@@ -376,6 +374,9 @@ internal object AudioCache {
 
     /** Whether [audioId] is saved whole (any format). */
     fun isWhole(audioId: String): Boolean = locked { c -> wholeKeys(c, audioId).isNotEmpty() } == true
+
+    /** Settings' line: the liked songs whole in the saved store, and the bytes it holds; none without a cache. */
+    fun savedSpace(): Pair<Int, Long> = locked { inStore.size to savedKeys.totalBytes() } ?: (0 to 0L)
 
     /** Whether [audioId] is whole in the saved store (the saver's job is done). */
     fun isStored(audioId: String): Boolean = locked { storedKeys(audioId).isNotEmpty() } == true
@@ -442,7 +443,6 @@ internal object AudioCache {
             }
             val dropped = saved.retainAll(keep) or stored.retainAll(keep) or copies.retainAll(keep)
             refreshSaved(c, liked, dropped)
-            publish()
             justLiked
         } ?: return false
         appContext?.let { writeIds(it, LIKED_FILE, liked) }
@@ -463,7 +463,6 @@ internal object AudioCache {
         return locked { c ->
             ledger.limit = limitMb * MB
             evict(c, 0L, null)
-            publish()
         } != null
     }
 
@@ -537,15 +536,13 @@ internal object AudioCache {
         savedLiked = HashSet(saved)
         inStore = HashSet(stored)
         copyable = HashSet(copies)
+        // Saved in the store: the listening cache stops protecting its copy (one copy each).
+        ledger.setStored(stored)
         listeners.forEach { it.onSavedChanged() }
     }
 
     /** [id] in [set] or not, as [on] says; true when that changed. */
     private fun mark(set: MutableSet<String>, id: String, on: Boolean): Boolean = if (on) set.add(id) else set.remove(id)
-
-    private fun publish() {
-        likedFull = ledger.likedFull(LikedSaverPolicy.LISTENING_RESERVE_BYTES)
-    }
 
     /** Counts the cache's spans into the [ledger] and evicts by its order (incremental, no scans). */
     private class JukeCacheEvictor : CacheEvictor {
@@ -586,7 +583,6 @@ internal object AudioCache {
         private fun changed(cache: Cache, key: String) {
             val audioId = CacheKeys.audioIdOf(key) ?: return
             if (ledger.isLiked(audioId) || audioId in saved) refreshSaved(cache, listOf(audioId))
-            publish()
         }
     }
 

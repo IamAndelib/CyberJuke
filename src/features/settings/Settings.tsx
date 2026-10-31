@@ -17,10 +17,10 @@ import {
 import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import { player } from '../../player';
-import { online } from '../../core/network';
-import { OFFLINE } from '../../core/offlineText';
-import { clearListeningCache } from '../../player/listeningCache';
+import { plural } from '../../core/text';
+import { clearListeningCache, loadSavedSpace, savedSpace } from '../../player/listeningCache';
 import { block, netStatusText } from '../../stores/block';
+import { savedOffline } from '../../stores/savedOffline';
 import { AuthError, SIGN_UP_URL, auth, authErrorText } from '../../data/auth';
 import { RELEASES_URL, REPO_URL } from '../../data/model';
 import { toast } from '../../stores/toast';
@@ -81,9 +81,6 @@ const QUALITY_DESCS: Record<Quality, string> = {
 
 const CROSSFADE_LABELS: Record<CrossfadeMs, string> = { 0: 'Off', 3000: '3 s', 6000: '6 s', 10000: '10 s' };
 
-/** Where liked songs are saved again after Clear cache: on Wi-Fi, unless Download using mobile data is on. */
-const savedAgain = (mobileData: boolean) => (mobileData ? 'saved again' : 'saved again on Wi-Fi');
-
 /** The maintainer's Ko-fi page (Support's button; README's Support, the repository's Sponsor button). */
 const KOFI_URL = 'https://ko-fi.com/iamandelib';
 
@@ -134,24 +131,32 @@ function CheckEverySetting() {
   );
 }
 
+/** "24 songs · 180 MB": the saved liked songs and the space they take. */
+function savedSpaceText({ count, bytes }: { count: number; bytes: number }): string {
+  const mb = bytes > 0 ? Math.max(1, Math.round(bytes / (1024 * 1024))) : 0;
+  return `${plural(count, 'song')} · ${mb} MB`;
+}
+
 /**
- * "Listening cache": how much music the phone keeps (recent and next tracks, and liked songs
- * to play offline), and Clear cache. The app handles the limit by itself; how much is in use
- * isn't shown.
+ * "Recent songs cache": how much recently played and next music the phone keeps, and Clear
+ * cache. Saved liked songs have a space of their own, outside it: their line says how much.
  */
 function ListeningCacheSetting() {
   const cur = settings.value.cacheMb;
   const onKey = arrowChoice(CACHE_SIZES, cur, (mb) => updateSettings({ cacheMb: mb }));
-  // M3: it takes the saved liked songs too, so it asks first.
+  const space = savedSpace.value;
+  // Asked when Settings shows, and again as saved songs come and go.
+  const saved = savedOffline.value;
+  useEffect(loadSavedSpace, [saved]);
+  // M3: it asks first.
   const clear = () =>
     askConfirm({
-      title: 'Clear the listening cache?',
-      body: `The music kept on the phone goes, saved liked songs too. They are ${savedAgain(settings.value.downloadOnMobileData)}.${online.peek() ? '' : ` ${OFFLINE.clearOffline}`}`,
+      title: 'Clear the recent songs cache?',
+      body: 'The recent songs kept on the phone go. Saved liked songs stay, and still play offline.',
       confirm: 'Clear cache',
       run: () =>
         clearListeningCache().then(
-          // After Clear cache: liked songs come back by themselves.
-          () => void toast(`Cache cleared. Liked songs are ${savedAgain(settings.value.downloadOnMobileData)}.`),
+          () => void toast('Cache cleared'),
           () => void toast("Couldn't clear the cache"),
         ),
     });
@@ -159,11 +164,16 @@ function ListeningCacheSetting() {
     <div class="setting stack" data-testid="listening-cache">
       <div class="setting-text">
         <div class="setting-name" id="cache-label">
-          Listening cache
+          Recent songs cache
         </div>
         <div class="setting-desc" id="cache-desc">
-          Keeps music playing when the signal drops.
+          Keeps music playing when the signal drops. Saved liked songs don't count.
         </div>
+        {space && (
+          <div class="setting-desc saved-space" data-testid="saved-space">
+            Saved liked songs: {savedSpaceText(space)}
+          </div>
+        )}
       </div>
       <div class="seg-grid three" role="radiogroup" aria-labelledby="cache-label" aria-describedby="cache-desc" onKeyDown={onKey}>
         {CACHE_SIZES.map((mb) => (
