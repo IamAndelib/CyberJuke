@@ -8,6 +8,7 @@
 - Liked songs are saved at the best quality (the lowest with Quality on Low), not at whatever Auto had picked at that moment; one you've already played is copied on the phone, with no download.
 
 ### Fixed
+- With shuffle on, a song whose stream link had to be refreshed (or switched to its fallback) keeps playing, instead of skipping to another song.
 - Offline, Now Playing says so in a bar across its top, like the rest of the app, instead of a squeezed line in its header.
 - Offline, the end of a list says more loads once you're back, instead of offering a Retry that can't work, and loads the rest by itself when the connection returns.
 - Pulling down to refresh Home while offline says to connect first, instead of flickering the list.
@@ -16,7 +17,7 @@
 - Offline, Clear cache warns that nothing will play until you're back online, since it takes the saved liked songs too.
 - Screen readers hear when the connection is back, as they hear when it's lost.
 - Offline, an album, playlist or list of releases says it needs a connection to load, instead of talking about searching Global.
-- Liked songs saved on the phone keep their art offline: in Liked and every list, in Now Playing, and on the lock screen and in the notification. Their covers are saved with them, and go when you unlike them.
+- Liked songs saved on the phone, Jukebox MP3s included, keep their art offline: in Liked and every list, in Now Playing, and on the lock screen and in the notification. Their covers are saved with them, and go when you unlike them.
 - Liked songs keep saving after the Wi-Fi drops mid-download, or YouTube's link for one expires: they're tried again instead of being skipped until the app restarts, and a server error is no longer taken as the song being unavailable.
 - If the listening cache's files on the phone are ever damaged, it starts again empty, instead of staying off (with no liked songs offline) until the app's data is cleared.
 - Offline, **Next**, the end of a song, the notification and headphones go to the next liked song saved on the phone, skipping the ones that aren't, instead of saying "No carrier" or stopping; with **Repeat all** it goes round. **Previous** checks the song it really goes back to.

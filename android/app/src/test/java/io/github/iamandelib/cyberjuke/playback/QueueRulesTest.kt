@@ -238,6 +238,35 @@ class QueueRulesTest {
 
         override fun removeAt(index: Int) = remove(index)
 
+        /**
+         * Media3's replaceMediaItem with another source: it adds the item after the old one and
+         * removes the old one (ExoPlayerImpl.replaceMediaItems). The item keeps its index and uid
+         * (buildUpon keeps the extras), not its place in the shuffle order, and if it was playing,
+         * playback moves on to what comes after it in the play order with the new item in it:
+         * the new item itself in list order, anything with shuffle on.
+         */
+        override fun replaceAt(index: Int, item: String) {
+            require(index in ids.indices)
+            val playing = index == current
+            ids.add(index + 1, item)
+            serials.add(index + 1, serials[index])
+            auto.add(index + 1, auto[index])
+            uids.add(index + 1, uids[index])
+            orderInsert(index + 1, 1)
+            if (current > index) current++
+            // The removed current one's successor, in the play order with the new item in it.
+            var next = if (playing) nextIndex(current, "off") else -1
+            if (next > index) next--
+            if (!playing && current > index) current--
+            ids.removeAt(index)
+            serials.removeAt(index)
+            auto.removeAt(index)
+            uids.removeAt(index)
+            orderRemove(index)
+            if (playing) current = if (next >= 0) next else index.coerceAtMost(ids.size - 1)
+            if (playing && current != index) emit(timelineChanged, transition) else emit(timelineChanged)
+        }
+
         // ---- ExoPlayer shuffle order bookkeeping (DefaultShuffleOrder) ----
         private fun orderInsert(at: Int, n: Int) {
             for (k in order.indices) if (order[k] >= at) order[k] += n

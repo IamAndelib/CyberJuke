@@ -55,7 +55,7 @@ afterAll(() => {
 
 describe('the listening cache wiring', () => {
   it('at start sends Liked (newest first) and the size, and asks what is saved: a change reported before the answer wins', async () => {
-    expect(fake.of('setLikedIds')).toEqual([{ ytIds: ['bxxxxxxxxxx', 'axxxxxxxxxx'], membersOnly: [] }]);
+    expect(fake.of('setLikedIds')).toEqual([{ ytIds: ['bxxxxxxxxxx', 'axxxxxxxxxx'], membersOnly: [], covers: {} }]);
     expect(fake.of('setCacheLimit')).toEqual([{ mb: 256 }]);
     expect(fake.of('setDownloadOnMobileData')).toEqual([{ enabled: false }]);
     // The answer, read before the change, comes in after it: it is older, and is dropped.
@@ -108,14 +108,17 @@ describe('the listening cache wiring', () => {
   });
 
   it('says which liked songs are members-only', () => {
-    expect(likedPayload([t('m1', true), t('pub'), t('m1', true)])).toEqual({ ytIds: ['m1xxxxxxxxx', 'pubxxxxxxxx'], membersOnly: ['m1xxxxxxxxx'] });
+    expect(likedPayload([t('m1', true), t('pub'), t('m1', true)])).toEqual({ ytIds: ['m1xxxxxxxxx', 'pubxxxxxxxx'], membersOnly: ['m1xxxxxxxxx'], covers: {} });
   });
 
   it('sends a liked Jukebox MP3 by its audio id, so native keeps it, saves it and drops it at sign-out if members-only', () => {
-    const mp3 = (id: string, file: string, membersOnly = false): Track => ({ id, ytId: '', mp3: `https://latex.gg/share/${file}.mp3`, membersOnly }) as Track;
-    expect(likedPayload([mp3('p1', 'IZq8cMcx'), t('pub'), mp3('p2', 'FEHdI7AK', true), mp3('p1', 'IZq8cMcx')])).toEqual({
+    const mp3 = (id: string, file: string, membersOnly = false, artworkUrl = ''): Track => ({ id, ytId: '', mp3: `https://latex.gg/share/${file}.mp3`, membersOnly, artworkUrl }) as Track;
+    const cover = 'https://bunker.cyberspace.online/uploads/jukebox/c1.jpg';
+    expect(likedPayload([mp3('p1', 'IZq8cMcx', false, cover), t('pub'), mp3('p2', 'FEHdI7AK', true, 'https://evil.example/c.jpg'), mp3('p1', 'IZq8cMcx')])).toEqual({
       ytIds: ['mp3:IZq8cMcx.mp3', 'pubxxxxxxxx', 'mp3:FEHdI7AK.mp3'],
       membersOnly: ['mp3:FEHdI7AK.mp3'],
+      // Its cover, so it shows offline too (a video's frames native knows from its id; only the site's covers).
+      covers: { 'mp3:IZq8cMcx.mp3': cover },
     });
     // Saved whole, native says so by the same id: it plays offline.
     fake.listeners.get('cacheChanged')!({ ytIds: ['mp3:IZq8cMcx.mp3'] });
@@ -130,7 +133,7 @@ describe('the listening cache wiring', () => {
     lib.dropMembersOnly();
     // No debounce: native has the Liked without m1 before it drops members-only audio.
     expect(fake.names()).toEqual(['setLikedIds', 'signedOut']);
-    expect(fake.of('setLikedIds')).toEqual([{ ytIds: ['pubxxxxxxxx'], membersOnly: [] }]);
+    expect(fake.of('setLikedIds')).toEqual([{ ytIds: ['pubxxxxxxxx'], membersOnly: [], covers: {} }]);
     // And nothing more after the delay.
     vi.advanceTimersByTime(LIKED_SEND_DELAY_MS);
     expect(fake.names()).toEqual(['setLikedIds', 'signedOut']);
@@ -159,7 +162,7 @@ describe('the listening cache wiring', () => {
     failing = false;
     await vi.advanceTimersByTimeAsync(lib.LIST_RETRY_MS[0]);
     vi.advanceTimersByTime(LIKED_SEND_DELAY_MS);
-    expect(fake.of('setLikedIds')).toEqual([{ ytIds: ['newxxxxxxxx', 'oldxxxxxxxx'], membersOnly: [] }]);
+    expect(fake.of('setLikedIds')).toEqual([{ ytIds: ['newxxxxxxxx', 'oldxxxxxxxx'], membersOnly: [], covers: {} }]);
   });
 
   it('Clear cache asks native', async () => {

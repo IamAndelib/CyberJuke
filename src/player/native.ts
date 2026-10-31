@@ -170,7 +170,7 @@ interface JukePlayerPlugin {
    * Every `ytIds` here, in cachedIds and in cacheChanged holds audio ids (isAudioId): a video id,
    * or `mp3:<file>` for a Jukebox MP3 (audioIdOf). Native drops any other entry.
    */
-  setLikedIds(o: { ytIds: string[]; membersOnly: string[] }): Promise<void>;
+  setLikedIds(o: { ytIds: string[]; membersOnly: string[]; covers?: Record<string, string> }): Promise<void>;
   /** The listening cache's size; 128, 256 or 512 (anything else is 256). A smaller one evicts at once. */
   setCacheLimit(o: { mb: number }): Promise<void>;
   /** Download using mobile data: liked songs are saved on any network, not only Wi-Fi. Off by default; needs no cache. */
