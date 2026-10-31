@@ -143,6 +143,11 @@ export async function recordOpens(page: Page): Promise<void> {
 }
 export const opened = (page: Page) => page.evaluate(() => window.__opened ?? []);
 
+/** Says which liked songs native has saved whole (the browser build's stand-in, `__cyberjukeCache`). */
+export async function saved(page: Page, audioIds: string[]): Promise<void> {
+  await page.evaluate((ids) => (window as unknown as { __cyberjukeCache: { saved(ids: string[]): void } }).__cyberjukeCache.saved(ids), audioIds);
+}
+
 /** The device loses (or gets back) its connection: the browser's, the stub backend's and the image hosts'. */
 export async function setOffline(page: Page, backend: { offline: boolean }, off: boolean): Promise<void> {
   backend.offline = off;

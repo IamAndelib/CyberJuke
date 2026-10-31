@@ -1,6 +1,6 @@
 import { expect, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { openSearch, playerCalls, seedStorage, start } from '../helpers';
+import { openSearch, playerCalls, saved, seedStorage, start } from '../helpers';
 
 /**
  * Opened offline, Home and Search still lead to music: Home's hero shuffles the liked songs
@@ -9,7 +9,6 @@ import { openSearch, playerCalls, seedStorage, start } from '../helpers';
  */
 
 /** What native reports as saved whole (by ytId). */
-const saved = (page: Page, ytIds: string[]) => page.evaluate((ids) => (window as unknown as { __cyberjukeCache: { saved(ids: string[]): void } }).__cyberjukeCache.saved(ids), ytIds);
 
 /** Reopens the app with the device offline from the start (navigator.onLine, as the Network plugin reads it on the web). */
 async function relaunchOffline(page: Page, backend: { offline: boolean }) {

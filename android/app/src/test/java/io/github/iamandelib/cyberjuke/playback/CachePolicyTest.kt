@@ -79,7 +79,6 @@ class CachePolicyTest {
         l.onAdded(other, 4 * mb, touched = 9)
         assertTrue(l.isLiked(liked))
         assertEquals(listOf(liked), l.keysOf(liked))
-        assertEquals(8 * mb, l.likedBytes)
         // The liked MP3 grows by 8 MB: the MP3 nobody liked first, however recent; then, liked
         // songs alone being over the limit, the least recently liked.
         assertEquals(listOf(other, CacheKeys.of("likeda00000", 251)), l.victims(8 * mb, protect = liked))
@@ -122,7 +121,6 @@ class CachePolicyTest {
         l.onAdded(CacheKeys.of("listen0000a", 251), 5 * mb, touched = 2)
         l.onAdded(CacheKeys.of("listen0000b", 251), 5 * mb, touched = 3)
         assertEquals(15 * mb, l.total)
-        assertEquals(5 * mb, l.likedBytes)
         assertEquals(emptyList<String>(), l.victims())
         // 15 MB more: the two listening entries go, oldest first; the liked one, older still, stays.
         assertEquals(listOf(CacheKeys.of("listen0000a", 251), CacheKeys.of("listen0000b", 251)), l.victims(15 * mb))
@@ -178,7 +176,6 @@ class CachePolicyTest {
                 assertTrue(l.total <= 128 * mb)
             }
             // The liked songs are all still there; the other listening entry went first.
-            assertEquals(100 * mb, l.likedBytes)
             assertEquals(0L, l.bytesOf(CacheKeys.of("listen0000a", 251)))
         }
     }
@@ -207,7 +204,6 @@ class CachePolicyTest {
         l.onAdded(CacheKeys.of("listen0000a", 251), 4 * mb, touched = 3)
         assertEquals(listOf(CacheKeys.of("listen0000a", 251)), l.victims())
         l.setLiked(listOf("likedb00000"))
-        assertEquals(4 * mb, l.likedBytes)
         // a is listening now, and the least recently used.
         assertEquals(listOf(CacheKeys.of("likeda00000", 251)), l.victims())
         assertFalse(l.isLiked("likeda00000"))
@@ -273,11 +269,9 @@ class CachePolicyTest {
         // Forgotten after the failed start: none of it is there to evict, nor saved.
         l.resetSpans()
         assertEquals(0L, l.total)
-        assertEquals(0L, l.likedBytes)
         assertEquals(emptyList<String>(), l.keysOf("liked00000a"))
         count()
         assertEquals(16 * mb, l.total)
-        assertEquals(8 * mb, l.likedBytes)
         assertEquals(emptyList<String>(), l.victims())
         // The liked list and the limit stay.
         assertTrue(l.isLiked("liked00000a"))

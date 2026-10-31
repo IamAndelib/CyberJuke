@@ -25,10 +25,6 @@
   padding-top: var(--safe-top);
   padding-bottom: 0;
 }
-.offline-banner > .offline-link {
-  min-height: 44px;
-  padding: 6px 0;
-}
 .offline-status:has(> .offline-banner) + .main .topbar {
   padding-top: 10px;
 }

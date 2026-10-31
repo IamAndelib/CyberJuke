@@ -14,10 +14,11 @@ import io.github.iamandelib.cyberjuke.net.NetBlock
 import java.io.IOException
 
 /**
- * Saves liked songs into the listening cache, so they play offline ([LikedSaverPolicy] decides
+ * Saves liked songs into the saved store ([AudioCache]), so they play offline ([LikedSaverPolicy] decides
  * when and which), on Wi-Fi only unless Settings' Download using mobile data is on. A song
- * liked just now goes first (usually it is saved already, having just played: what plays is
- * kept as it streams, on any network); older likes are filled in one at a time, newest first. A
+ * liked just now goes first (usually it is copied from the listening cache, having just played:
+ * what plays is kept as it streams, on any network); older likes are filled in one at a time,
+ * newest first. A
  * Jukebox MP3 is saved the same way, by its audio id (`mp3:<file>`), with no extraction: its
  * file comes straight from latex.gg, and a YouTube back-off doesn't hold it.
  *
@@ -29,9 +30,9 @@ import java.io.IOException
  * that could start) or for the retry of a save that stopped ([SaveStrikes]), whichever is
  * sooner; cancelled by the next check and by [stop]. Downloads run on the one
  * background thread ([Background]), one at a time, through a [CacheWriter] (only the bytes not
- * yet cached are fetched), and give way at once when playback needs the network ([giveWay],
- * [PlaybackNeed]). A song too big for the cache stops as soon as its size is known
- * ([LikedSaverPolicy.tooBig]).
+ * yet saved are fetched), and give way at once when playback needs the network ([giveWay],
+ * [PlaybackNeed]). A song too big for the room left on the phone stops as soon as its size is
+ * known ([LikedSaverPolicy.tooBig]).
  *
  * Main thread, except [SaveJob.run].
  */
@@ -326,10 +327,10 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             /** What saves may fill now ([LikedSaverPolicy.roomFor] the free space), in bytes. */
             fun roomBytes(): Long
 
-            /** Removes [audioId]'s audio from the cache (a song too big to keep). */
+            /** Removes [audioId]'s audio from the phone (a song too big to keep). */
             fun discard(audioId: String)
 
-            /** A writer fetching [stream]'s bytes not yet cached into the cache, or null without a cache. */
+            /** A writer fetching [stream]'s bytes not yet saved into the saved store, or null without one. */
             @Throws(IOException::class)
             fun writer(ytId: String, stream: ResolvedStream, progress: Progress): Writer?
 
@@ -350,7 +351,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
 
         /**
          * A writer's progress, on its thread (CacheWriter.ProgressListener): the song's [length]
-         * (-1 until known: the response didn't say) and its bytes in the cache so far ([cached]).
+         * (-1 until known: the response didn't say) and its bytes saved so far ([cached]).
          */
         fun interface Progress {
             fun onProgress(length: Long, cached: Long)
@@ -386,34 +387,32 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             override fun resolve(ytId: String): ResolvedStream =
                 StreamResolver.resolve(ytId, rung = QualityLadder.saveRung(StreamResolver.quality))
 
-            override fun writer(ytId: String, stream: ResolvedStream, progress: Progress): Writer? {
-                val source = AudioCache.saveSource() ?: return null
-                val spec = YtDataSpecResolver.streamSpec(DataSpec.Builder().setUri(JukeUris.forYt(ytId)).build(), ytId, stream)
-                return writerOf(CacheWriter(source, spec, null) { length, cached, _ -> progress.onProgress(length, cached) })
-            }
+            override fun writer(ytId: String, stream: ResolvedStream, progress: Progress): Writer? =
+                writerOf(YtDataSpecResolver.streamSpec(DataSpec.Builder().setUri(JukeUris.forYt(ytId)).build(), ytId, stream), progress)
 
             // The same writer, with the request playback would make: the latex.gg link rebuilt
             // from the file name, and its key (mp3Spec).
             override fun mp3Writer(audioId: String, progress: Progress): Writer? {
                 val url = SessionPolicy.mp3UrlForFile(SessionPolicy.mp3FileOfAudioId(audioId)) ?: throw IOException("Not a Jukebox MP3")
-                val source = AudioCache.saveSource() ?: return null
-                val spec = YtDataSpecResolver.mp3Spec(DataSpec.Builder().setUri(url).build(), url)
-                return writerOf(CacheWriter(source, spec, null) { length, cached, _ -> progress.onProgress(length, cached) })
+                return writerOf(YtDataSpecResolver.mp3Spec(DataSpec.Builder().setUri(url).build(), url), progress)
             }
 
             // Our own URI: a byte the listening copy lost fails the copy at once (CacheMissGuard),
             // never a request.
             override fun copyWriter(audioId: String, key: String, progress: Progress): Writer? {
-                val source = AudioCache.saveSource() ?: return null
                 val uri = SessionPolicy.mp3FileOfAudioId(audioId)?.let { JukeUris.forMp3File(it) } ?: JukeUris.forYt(audioId)
-                val spec = DataSpec.Builder().setUri(uri).setKey(key).build()
-                return writerOf(CacheWriter(source, spec, null) { length, cached, _ -> progress.onProgress(length, cached) })
+                return writerOf(DataSpec.Builder().setUri(uri).setKey(key).build(), progress)
             }
 
-            private fun writerOf(w: CacheWriter) = object : Writer {
-                override fun cache() = w.cache()
+            /** A [CacheWriter] of [spec] into the saved store ([AudioCache.saveSource]), or null without one. */
+            private fun writerOf(spec: DataSpec, progress: Progress): Writer? {
+                val source = AudioCache.saveSource() ?: return null
+                val w = CacheWriter(source, spec, null) { length, cached, _ -> progress.onProgress(length, cached) }
+                return object : Writer {
+                    override fun cache() = w.cache()
 
-                override fun cancel() = w.cancel()
+                    override fun cancel() = w.cancel()
+                }
             }
 
             override fun httpCode(e: IOException) = e.findCause<HttpDataSource.InvalidResponseCodeException>()?.responseCode
@@ -497,7 +496,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
                 // A back-off (BlockedException) is no strike either.
                 return if (cancelled || quiet()) SaveOutcome.CANCELLED else SaveOutcome.STOPPED
             }
-            // Only an audio-only format is kept in the cache.
+            // Only an audio-only format is kept.
             if (!stream.audioOnly || stream.itag <= 0) return SaveOutcome.FAILED
             if (cancelled) return SaveOutcome.CANCELLED
             return write { deps.writer(audioId, stream, progress) }

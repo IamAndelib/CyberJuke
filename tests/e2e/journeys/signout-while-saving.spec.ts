@@ -1,6 +1,6 @@
 import { AUTH_USER, expect, MEMBERS_POSTS, test } from '../../fixtures';
 import type { Page } from '@playwright/test';
-import { openSettings, playerCalls, setOffline, start, toastsGone, waitForTracks } from '../../helpers';
+import { openSettings, playerCalls, saved, setOffline, start, toastsGone, waitForTracks } from '../../helpers';
 
 /**
  * Signed in, a members-only track is liked and played; the listening cache is still saving it
@@ -15,7 +15,6 @@ const BANNER_LIKED = '[ offline ] no carrier · your liked songs still play';
 const homeRow = (page: Page, title: string) =>
   page.getByTestId('screen-home').getByTestId('track-row').filter({ has: page.getByTestId('track-title').getByText(title, { exact: true }) });
 
-const saved = (page: Page, ytIds: string[]) => page.evaluate((ids) => (window as unknown as { __cyberjukeCache: { saved(ids: string[]): void } }).__cyberjukeCache.saved(ids), ytIds);
 
 test('signing out while a members-only like is being saved: Liked is sent first, then signedOut; the track is gone everywhere, quietly', async ({ page, backend }) => {
   await start(page);

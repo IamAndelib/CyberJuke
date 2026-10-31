@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { OFFLINE } from '../../src/core/offlineText';
-import { clockStart, expectStable, FAKE_TRACK_MS, openNowPlaying, openSearch, openSettings, playOn, seedStorage, setOffline, SETTINGS_KEY, start, toListEnd } from '../helpers';
+import { clockStart, expectStable, FAKE_TRACK_MS, openNowPlaying, openSearch, openSettings, playOn, saved, seedStorage, setOffline, SETTINGS_KEY, start, toListEnd } from '../helpers';
 
 /** Signal Radio: the Radio tab, tuning in, a station that plays on, and its tracks kept. */
 
@@ -211,7 +211,7 @@ test('offline a station dims even with one of its tracks saved: a round starts a
   await start(page);
   await openRadio(page);
   const cipher = page.locator('[data-testid="station"][data-station="cipher"]');
-  await page.evaluate((ids) => (window as unknown as { __cyberjukeCache: { saved(ids: string[]): void } }).__cyberjukeCache.saved(ids), [station('cipher').tracks[0].ytId]);
+  await saved(page, [station('cipher').tracks[0].ytId]);
   await setOffline(page, backend, true);
   await expect(cipher).toHaveClass(/\boff\b/);
   await expect(cipher.getByTestId('station-tune')).toHaveAttribute('aria-disabled', 'true');

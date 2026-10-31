@@ -24,11 +24,11 @@ import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * The listening cache: the audio of recently played and next tracks and of liked songs, on the
- * phone only (noBackupFilesDir/audio, which Android never clears and never backs up, as Metrolist
- * keeps its caches out of cacheDir; its index is in the ExoPlayer database, kept out of backups
- * by the backup rules). Up to the
- * size chosen in Settings (128, 256 or 512 MB); over it, [CacheLedger]'s order decides what goes.
+ * The listening cache: the audio of recently played and next tracks, on the phone only
+ * (noBackupFilesDir/audio, which Android never clears and never backs up, as Metrolist keeps its
+ * caches out of cacheDir; its index is in the ExoPlayer database, kept out of backups by the
+ * backup rules). Up to the size chosen in Settings (128, 256 or 512 MB); over it, [CacheLedger]'s
+ * order decides what goes (a liked song not saved yet goes last).
  *
  * - One [SimpleCache] for the process (it refuses a second one on the same folder), opened on
  *   first use off the main thread and kept open for the process's life: never released, so
@@ -56,8 +56,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Threads: the ledger and the saved set are only touched under the cache's own lock (its span
  * callbacks hold it; everything else takes it). The main thread only reads the published
- * snapshots ([savedLiked], [liked]) and [downloadOnMobileData], never the cache itself. Nothing here runs on a
- * timer.
+ * snapshots ([savedLiked], [inStore], [copyable], [liked]) and [downloadOnMobileData], never the
+ * cache itself. Nothing here runs on a timer.
  */
 @OptIn(UnstableApi::class)
 internal object AudioCache {
@@ -216,10 +216,6 @@ internal object AudioCache {
         appContext = context.applicationContext
         limitMb = sizeOf(mb)
     }
-
-    /** The size limit now (Settings), in bytes. */
-    val limitBytes: Long
-        get() = limitMb * MB
 
     /** One of [SIZES_MB]; anything else is the default. */
     fun sizeOf(mb: Int): Int = if (mb in SIZES_MB) mb else DEFAULT_MB
@@ -495,6 +491,8 @@ internal object AudioCache {
         // No cache (it didn't start): the audio is still on the phone, so its tags stay written
         // down, and the sign-out at the next start removes it.
         if (done) members.removed(gone)
+        // Their saved covers too (else they'd wait for the saver's next tidy, on an allowed network).
+        ArtStore.files?.let { art -> gone.forEach { art.remove(it) } }
         appContext?.let { writeIds(it, MEMBERS_FILE, members.tagged().toList()) }
         if (gone.isNotEmpty()) Log.i(TAG, "Members-only audio removed")
         return done
