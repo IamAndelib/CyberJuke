@@ -83,6 +83,8 @@ internal class ExoQueueHost(private val player: () -> ExoPlayer) : QueueHost<Med
 
     override fun removeAt(index: Int) = p.removeMediaItem(index)
 
+    override fun replaceAt(index: Int, item: MediaItem) = p.replaceMediaItem(index, item)
+
     override fun seekTo(index: Int) = p.seekTo(index, 0L)
 
     /** [item] with [edit] applied to its extras, and a new uid ([QueueCommands.EXTRA_UID]): every item goes in through here. */

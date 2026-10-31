@@ -28,6 +28,36 @@ class QueueOpsTest {
     }
 
     @Test
+    fun aRefreshedLinkKeepsTheSongPlayingInItsPlaceWithShuffleOn() {
+        for (seed in 0L until 30L) {
+            val p = player((0 until 8).map { "t$it" }, start = 2, shuffle = true, seed = seed)
+            p.next()
+            val playing = p.current
+            val id = p.ids[playing]
+            val up = p.upNext()
+            val played = p.played()
+            // The playing song gets another source (a fresh link, or its manifest).
+            p.queue.replace(playing, id)
+            assertEquals("seed $seed: still playing", playing, p.current)
+            assertEquals("seed $seed: what's next is unchanged", up, p.upNext())
+            assertEquals("seed $seed: what played is unchanged", played, p.played())
+            // A song further on, the same: its place stays.
+            val later = p.ids.indexOf(up[1])
+            p.queue.replace(later, up[1])
+            assertEquals("seed $seed", playing, p.current)
+            assertEquals("seed $seed", up, p.upNext())
+        }
+    }
+
+    @Test
+    fun aRefreshedLinkKeepsTheSongPlayingWithShuffleOff() {
+        val p = player(listOf("a", "b", "c", "d"), start = 1)
+        p.queue.replace(1, "b")
+        assertEquals(1, p.current)
+        assertEquals(listOf("c", "d"), p.upNext())
+    }
+
+    @Test
     fun turningShuffleOnAgainShufflesAfresh() {
         for (seed in 0L until 20L) {
             val p = player((0 until 12).map { "t$it" }, start = 3, seed = seed)
