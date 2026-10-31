@@ -150,13 +150,13 @@ test('an album page is a page, not a dialog, and says what failed in its own wor
   await openFirstArtist(page);
   const card = page.getByTestId('artist-albums').getByTestId('release-card').first();
   await expect(card).toBeVisible();
-  // Offline: the album needs Global, as Releases says.
+  // Offline: it says what it can't load, in its own words.
   await setOffline(page, backend, true);
   await card.click();
   const album = page.getByTestId('screen-album');
   await expect(album).toBeVisible();
   await expect(album).not.toHaveAttribute('role', 'dialog');
-  await expect(album.getByTestId('offline')).toContainText('Connect to the internet to search Global.');
+  await expect(album.getByTestId('offline')).toContainText('Connect to the internet to load this album.');
 });
 
 test.describe('an album that can\'t be read', () => {
