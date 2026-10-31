@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { box, expectStable, isFeedQuery, nextFrame, openNowPlaying, playAndOpen, scrollTo, scrollTopOf, start, waitForTracks } from '../helpers';
+import { box, expectStable, isFeedQuery, nextFrame, openNowPlaying, playAndOpen, recordToasts, scrollTo, scrollTopOf, setOffline, start, toastsSeen, waitForTracks } from '../helpers';
 
 /**
  * Motion and touch: text selection, the marquee, press feedback, pull-to-refresh,
@@ -141,6 +141,24 @@ test('pull to refresh: follows the finger on a rubber band with no re-render, th
   await expect.poll(() => offsetOf(page, 'screen-home')).toBe(0);
   // At rest the content carries no transform at all.
   await expect.poll(() => page.getByTestId('screen-home').locator('.screen-body').evaluate((el) => (el as HTMLElement).style.transform)).toBe('');
+});
+
+test('pull to refresh offline: it says to connect first, asks for nothing, and the list stays', async ({ page, backend }) => {
+  await start(page);
+  await expect(page.getByTestId('genre-chip').first()).toBeVisible();
+  await setOffline(page, backend, true);
+  const rows = await page.getByTestId('screen-home').getByTestId('track-row').count();
+  const asked = backend.queries.length;
+  await recordToasts(page);
+  const f = await finger(page, 200, 320);
+  await f.move(0, 400);
+  await f.end();
+  await expect(page.getByTestId('toast')).toHaveText('No carrier. Connect, then refresh.');
+  await expect.poll(() => offsetOf(page, 'screen-home')).toBe(0);
+  expect(backend.queries.length).toBe(asked);
+  expect(await page.getByTestId('screen-home').getByTestId('track-row').count()).toBe(rows);
+  await expect(page.getByTestId('screen-home').getByTestId('offline')).toHaveCount(0);
+  expect(await toastsSeen(page)).toEqual(['No carrier. Connect, then refresh.']);
 });
 
 test('pull to refresh: a short pull springs back, a sideways swipe is ignored', async ({ page, backend }) => {
