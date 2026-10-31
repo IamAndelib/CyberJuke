@@ -3,6 +3,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { scrollAnimating } from '../clickGuard';
 import { Icon } from '../icons';
 import { reducedMotion } from '../../core/motion';
+import { online } from '../../core/network';
+import { OFFLINE } from '../../core/offlineText';
+import { toast } from '../../stores/toast';
 import { PULL_MIN_SPIN_MS, PULL_REFRESH_AT, PULL_REST, PULL_SPRING_MS, pullIntent, rubberBand } from '../pullToRefresh';
 import { scrollToTop } from '../scrollToTop';
 import { FastScroller } from './FastScroller';
@@ -42,6 +45,8 @@ const PTR_LABEL = { pull: '[ pull to refresh ]', release: '[ release to refresh 
  * as a transform on the indicator and the content once per frame, so a drag re-renders
  * nothing. The content follows on a rubber band, springs back on release (or rests
  * while refreshing, for at least PULL_MIN_SPIN_MS), and a sideways swipe is left alone.
+ * Offline it springs back and says to connect first: a refresh can't work, and trying
+ * would only drop what the list shows.
  * Touch listeners are passive, so they never hold up the start of a scroll.
  *
  * Back-to-top: a finger down on it only stops a fling; the jump starts when the finger
@@ -224,7 +229,8 @@ export function Screen({
     };
     const release = async () => {
       const go = pull.d >= PULL_REFRESH_AT && !!refresh.current;
-      if (!go) return springTo(0);
+      if (go && !online.peek()) toast(OFFLINE.pullAgain);
+      if (!go || !online.peek()) return springTo(0);
       pull.busy = true;
       setLabel('busy');
       ptr.current?.setAttribute('aria-busy', 'true');

@@ -117,7 +117,7 @@ test('the search button sits above the tab bar, then above the mini player; hidd
   await expect(fab).toHaveCount(0);
 });
 
-test('the new-tracks pill appears when there are newer posts; tapping it refreshes and scrolls to the top', async ({ page }) => {
+test('the new-tracks pill appears when there are newer posts; tapping it refreshes and scrolls to the top', async ({ page, backend }) => {
   const future = Date.now() + 3600_000;
   let latestFetches = 0;
   await page.route(/firestore\.googleapis\.com\/.*:runQuery/, async (route) => {
@@ -151,6 +151,11 @@ test('the new-tracks pill appears when there are newer posts; tapping it refresh
   await expect(pill).toHaveText(/3 new tracks/);
   expect((await page.getByTestId('track-title').first().innerText()).trim()).toBe(first);
   expect(latestFetches).toBe(before);
+  // Offline it can't load them: hidden until the connection is back, and still there then.
+  await setOffline(page, backend, true);
+  await expect(pill).toHaveCount(0);
+  await setOffline(page, backend, false);
+  await expect(pill).toHaveText(/3 new tracks/);
 
   await pill.click();
   await expect(pill).toHaveCount(0);

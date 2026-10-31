@@ -93,6 +93,13 @@ test('offline with liked songs saved, the banner and the refusal toast open Like
   await setOffline(page, backend, true);
   await expect(region).toHaveText(BANNER_LIKED);
   expect(await region.evaluate((el) => el === (window as unknown as { __region: Element }).__region)).toBe(true);
+  // And back online: it hears that too, for a moment (the text is for screen readers only).
+  await setOffline(page, backend, false);
+  await expect(region).toHaveText('CONNECT. Back online.');
+  expect(await region.locator('.sr-only').evaluate((el) => el.getBoundingClientRect().height)).toBeLessThanOrEqual(1);
+  await expect(region).toHaveText('', { timeout: 8000 });
+  await setOffline(page, backend, true);
+  await expect(region).toHaveText(BANNER_LIKED);
 
   // The banner opens Liked, a full-size target.
   const banner = page.getByTestId('offline-banner');
@@ -138,6 +145,23 @@ test('with nothing playing, Add to queue says "Playing" when it starts the song;
   await page.getByTestId('menu-add-queue').click();
   await expect(page.getByTestId('toast')).toHaveText('Playing');
   await expect(page.getByTestId('mini-player')).toBeVisible();
+});
+
+test('offline, Up next tells a screen reader which songs can\u2019t play, and the paused current song dims like its row', async ({ page, backend }) => {
+  await start(page);
+  await playAndOpen(page);
+  await page.getByTestId('np-toggle').click();
+  await expect(page.getByTestId('np-toggle')).toHaveAttribute('aria-label', 'Play');
+  await bufferedAhead(page, 0);
+  await setOffline(page, backend, true);
+  const row = page.getByTestId('upnext-row').first();
+  await expect(row).toHaveClass(/\boff\b/);
+  await expect(row.locator('.row-main')).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByTestId('upnext-current')).toHaveClass(/\boff\b/);
+  // Back online: playable again.
+  await setOffline(page, backend, false);
+  await expect(row.locator('.row-main')).not.toHaveAttribute('aria-disabled');
+  await expect(page.getByTestId('upnext-current')).not.toHaveClass(/\boff\b/);
 });
 
 test('offline, the track the app reopened on is dimmed and asks to connect unless saved; with audio loaded it plays', async ({ page, backend }) => {
@@ -231,6 +255,18 @@ test('offline, Now Playing says so too: with liked songs saved its line opens Li
   await expect(page.getByTestId('np-offline-liked')).toBeVisible();
   await setOffline(page, backend, false);
   await expect(page.getByTestId('np-offline')).toHaveCount(0);
+});
+
+test('offline, Clear cache warns that nothing will play until the connection is back', async ({ page, backend }) => {
+  await start(page);
+  await openSettings(page);
+  await page.getByTestId('cache-clear').click();
+  const sheet = page.getByTestId('confirm-sheet');
+  await expect(sheet).not.toContainText('No carrier right now');
+  await page.getByTestId('confirm-cancel').click();
+  await setOffline(page, backend, true);
+  await page.getByTestId('cache-clear').click();
+  await expect(sheet).toContainText("No carrier right now: nothing plays until you're back online.");
 });
 
 test('Settings → Listening cache: 256 MB by default, three sizes sent to the player and kept, Clear cache, and Download using mobile data', async ({ page }) => {

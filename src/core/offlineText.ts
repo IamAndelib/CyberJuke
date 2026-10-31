@@ -29,6 +29,10 @@ export const OFFLINE = {
   waiting: 'Waiting for carrier…',
   /** The end of a list with more to come, while offline (it loads by itself once back). */
   moreLater: "No carrier. More loads when you're back.",
+  /** Clear cache while offline: the saved liked songs are all that plays now. */
+  clearOffline: "No carrier right now: nothing plays until you're back online.",
+  /** Said to a screen reader for a moment once the connection is back (the bar's live region). */
+  backOnline: 'CONNECT. Back online.',
   /** Home's Shuffle while offline with liked songs saved: they play. */
   heroKicker: 'No carrier',
   heroLiked: 'Shuffle liked songs',
@@ -40,6 +44,9 @@ export const OFFLINE = {
 
 /** Offline, a song that couldn't load was passed over for the next saved one. */
 export const skippedOffline = (title: string): string => `No carrier. Skipped "${title}": not saved on the phone.`;
+
+/** Offline, a page of Global's (an album, a playlist, a list) that can't load: what it would load. */
+export const loadThis = (what: string): string => `Connect to the internet to load this ${what}.`;
 
 /** The connection dropped mid-track; the player picks up by itself once it's back. */
 export const signalLost = (title: string): string => `Signal lost. "${title}" picks up when you're back.`;

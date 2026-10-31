@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { freshness, refreshLatest } from '../../stores/newTracks';
 import { FRESHNESS_LIMIT } from '../../data/firestore';
 import { SMOOTH_SCROLL_MS, scrollAnimating } from '../../ui/clickGuard';
+import { online } from '../../core/network';
 import { Icon } from '../../ui/icons';
 import { reducedMotion } from '../../core/motion';
 import { plural } from '../../core/text';
@@ -70,7 +71,8 @@ export function NewTracksPill({ toLatest }: { toLatest: () => void }) {
     const id = setTimeout(() => setLeaving(null), reducedMotion() ? 0 : PILL_FADE_MS);
     return () => clearTimeout(id);
   }, [leaving]);
-  const count = p?.count ?? leaving;
+  // Offline the new posts can't load: the pill waits, and shows again once back.
+  const count = online.value ? (p?.count ?? leaving) : null;
   return (
     <div class="ntp-dock" ref={ref}>
       {count != null && (

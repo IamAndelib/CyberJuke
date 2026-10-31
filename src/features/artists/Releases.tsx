@@ -7,7 +7,7 @@ import { Screen } from '../../ui/components/Screen';
 import { GlobalError, ReleaseGrid, releasesLoader } from '../../ui/components/Music';
 import { EmptyState } from '../../ui/components/TrackList';
 import { OfflineGate } from '../../ui/components/OfflineGate';
-import { OFFLINE } from '../../core/offlineText';
+import { loadThis } from '../../core/offlineText';
 import { useFeed } from '../../ui/usePaged';
 
 function GridSkeleton() {
@@ -43,11 +43,11 @@ export function ReleasesPage({ release }: { release: ReleasesRef }) {
         <BackButton testid="releases-back" label={`Back to ${artist}`} />
       }
     >
-      <OfflineGate body={OFFLINE.global}>
+      <OfflineGate body={loadThis('list')}>
         {snap.status === 'loading' ? (
           <GridSkeleton />
         ) : snap.status === 'error' && snap.error ? (
-          <GlobalError error={snap.error} onRetry={() => feed.retry()} testid="releases-error" unavailable="Couldn't load this list." />
+          <GlobalError error={snap.error} onRetry={() => feed.retry()} testid="releases-error" unavailable="Couldn't load this list." offlineBody={loadThis('list')} />
         ) : n ? (
           <>
             <ReleaseGrid releases={snap.items} artist={artist} kind={kind} />

@@ -6,7 +6,7 @@ import { PlayShuffle, Tracks } from '../../ui/components/TrackList';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
 import { OfflineGate } from '../../ui/components/OfflineGate';
-import { OFFLINE } from '../../core/offlineText';
+import { loadThis } from '../../core/offlineText';
 import { Cover, GlobalError, LoadMore, MUSIC_TRACK_OPTS } from '../../ui/components/Music';
 import { useFeed } from '../../ui/usePaged';
 import { list } from '../../ui/playAll';
@@ -42,6 +42,7 @@ export function AlbumPage({ album }: { album: AlbumRef }) {
     MUSIC_TRACK_OPTS,
   );
   const meta: AlbumMeta = snap.meta ?? album;
+  const kindWord = album.kind === 'album' ? 'album' : 'playlist';
   const kindLabel = album.label ?? (album.kind === 'album' ? 'Album' : 'Playlist');
   const tracks = snap.items;
   useSearchContext({ label: meta.title, tracks: () => tracks });
@@ -81,12 +82,12 @@ export function AlbumPage({ album }: { album: AlbumRef }) {
           </div>
         </div>
       </div>
-      <OfflineGate body={OFFLINE.global}>
+      <OfflineGate body={loadThis(kindWord)}>
         <PlayShuffle tracks={tracks} ctx={ctx} testid="album" />
         {snap.status === 'loading' ? (
           <SkeletonRows n={6} />
         ) : snap.status === 'error' && snap.error ? (
-          <GlobalError error={snap.error} onRetry={() => feed.retry()} unavailable={`Couldn't load this ${album.kind === 'album' ? 'album' : 'playlist'}.`} />
+          <GlobalError error={snap.error} onRetry={() => feed.retry()} unavailable={`Couldn't load this ${kindWord}.`} offlineBody={loadThis(kindWord)} />
         ) : (
           <>
             <Tracks tracks={tracks} ctx={ctx} />

@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals';
 import { useLayoutEffect, useRef } from 'preact/hooks';
-import { autoplayLabel, currentId, currentTrack, isPlaying, player, playContext, previousTracks, repeatMode, shuffleOn, upNextSections, type PlayContext, type UpItem, type UpNextKind } from '../../player';
+import { autoplayLabel, currentId, currentPlaysOffline, currentTrack, isPlaying, player, playContext, previousTracks, repeatMode, shuffleOn, upNextSections, type PlayContext, type UpItem, type UpNextKind } from '../../player';
 import type { Track } from '../../data/model';
 import { online } from '../../core/network';
 import { settings } from '../../stores/library';
@@ -162,6 +162,8 @@ export function UpNext() {
         >
           <button
             class="row-main"
+            // Offline and not saved: a screen reader hears it can't play, as the dimmed row shows.
+            aria-disabled={offClass(it.track) ? true : undefined}
             {...longPress(it.track, kind === 'queued' ? it : null)}
             onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id))}
             aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', autoplay' }[kind]}`}
@@ -268,7 +270,7 @@ export function UpNext() {
             <li class="upnext-label" data-testid="upnext-current-label" aria-hidden="true">
               Now playing
             </li>
-            <li class="row is-current" data-testid="upnext-current" data-track-id={current.id} data-section="current">
+            <li class={'row is-current' + (!online.value && !currentPlaysOffline.value ? ' off' : '')} data-testid="upnext-current" data-track-id={current.id} data-section="current">
               <div class="row-main" aria-current="true" {...longPress(current)}>
                 <RowBody track={current} playing={isPlaying.value} />
               </div>

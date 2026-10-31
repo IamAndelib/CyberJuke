@@ -230,14 +230,17 @@ export function GlobalError({
   onRetry,
   testid = 'global-error',
   unavailable,
+  offlineBody = OFFLINE.global,
 }: {
   error: LoadError;
   onRetry?: () => void;
   testid?: string;
+  /** What offline says it needs the connection for (by default, Global search). */
+  offlineBody?: string;
   /** What to say when it isn't the network or a block (by default, that Global search isn't available). */
   unavailable?: string;
 }) {
-  if (!online.value) return <OfflineState body={OFFLINE.global} onRedial={onRetry} alert compact />;
+  if (!online.value) return <OfflineState body={offlineBody} onRedial={onRetry} alert compact />;
   const code = (error.code as MusicErrorCode) ?? 'UNAVAILABLE';
   return (
     <div class="state compact" role="alert" data-testid={testid} data-code={error.code}>
