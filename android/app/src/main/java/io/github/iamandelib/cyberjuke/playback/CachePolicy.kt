@@ -148,6 +148,43 @@ internal object CacheKeys {
      */
     fun pickFor(audioId: String, whole: List<String>, keepKey: String?, rungItag: Int?, wantedBps: Int): String? =
         if (isMp3(audioId)) whole.firstOrNull() else pickKey(whole, keepKey, rungItag, wantedBps)
+
+    /** The whole copies [pickFor] chooses from: the saved store's first, then the listening cache's. */
+    fun wholeOf(saved: List<String>, listening: List<String>): List<String> = (saved + listening).distinct()
+}
+
+/**
+ * The keys the saved store holds (the sum of their spans), by audio id: kept from its span
+ * callbacks and read from any thread. Its own lock is a leaf (nothing is called while it is
+ * held), so it can be read under either store's lock. Pure (CachePolicyTest).
+ */
+internal class SavedKeys {
+    /** Audio id -> its keys -> their bytes. */
+    private val byAudio = HashMap<String, HashMap<String, Long>>()
+
+    @Synchronized
+    fun onAdded(key: String, length: Long) {
+        val audioId = CacheKeys.audioIdOf(key) ?: return
+        val keys = byAudio.getOrPut(audioId) { HashMap() }
+        keys[key] = (keys[key] ?: 0L) + length
+    }
+
+    @Synchronized
+    fun onRemoved(key: String, length: Long) {
+        val audioId = CacheKeys.audioIdOf(key) ?: return
+        val keys = byAudio[audioId] ?: return
+        val left = (keys[key] ?: return) - length
+        if (left > 0) keys[key] = left else keys.remove(key)
+        if (keys.isEmpty()) byAudio.remove(audioId)
+    }
+
+    /** [audioId]'s keys here. */
+    @Synchronized
+    fun keysOf(audioId: String): List<String> = byAudio[audioId]?.keys?.toList() ?: emptyList()
+
+    /** Forgets everything (the store failed to start). */
+    @Synchronized
+    fun clear() = byAudio.clear()
 }
 
 /**

@@ -811,4 +811,36 @@ class CachePolicyTest {
         assertEquals(SaveOutcome.STOPPED, SaveOutcome.afterWrite(whole = false))
         assertEquals(SaveOutcome.SAVED, SaveOutcome.afterWrite(whole = true))
     }
+
+    @Test
+    fun savedFirstPick() {
+        val saved = "yt:dQw4w9WgXcQ:251:4000"
+        val listening = "yt:dQw4w9WgXcQ:140:3000"
+        val whole = CacheKeys.wholeOf(listOf(saved), listOf(listening, saved))
+        // The saved copy first (and once), so it plays before a listening one of any format.
+        assertEquals(listOf(saved, listening), whole)
+        assertEquals(saved, CacheKeys.pickFor("dQw4w9WgXcQ", whole, keepKey = null, rungItag = null, wantedBps = 0))
+        // A resume still stays in the very file it was playing, wherever it is.
+        assertEquals(listening, CacheKeys.pickFor("dQw4w9WgXcQ", whole, keepKey = listening, rungItag = null, wantedBps = 0))
+    }
+
+    @Test
+    fun savedKeysFollowTheSpans() {
+        val k = SavedKeys()
+        val a = "yt:dQw4w9WgXcQ:251:4000"
+        val mp3 = "mp3:IZq8cMcx.mp3"
+        k.onAdded(a, 1000)
+        k.onAdded(a, 3000)
+        k.onAdded(mp3, 500)
+        k.onAdded("ci-tone", 10)
+        assertEquals(listOf(a), k.keysOf("dQw4w9WgXcQ"))
+        assertEquals(listOf(mp3), k.keysOf(mp3))
+        // A key stays while any of its spans does.
+        k.onRemoved(a, 1000)
+        assertEquals(listOf(a), k.keysOf("dQw4w9WgXcQ"))
+        k.onRemoved(a, 3000)
+        assertTrue(k.keysOf("dQw4w9WgXcQ").isEmpty())
+        k.clear()
+        assertTrue(k.keysOf(mp3).isEmpty())
+    }
 }

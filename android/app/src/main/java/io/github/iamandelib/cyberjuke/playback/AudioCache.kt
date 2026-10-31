@@ -8,6 +8,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.FileDataSource
 import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
@@ -47,6 +48,11 @@ import java.util.concurrent.atomic.AtomicBoolean
  *   sign-in.
  * - No googlevideo URL is kept: the upstream ([CacheMissGuard]) reports the URL it was asked
  *   for, so the cache never records a redirect.
+ * - Beside it, the saved store (noBackupFilesDir/saved, the same keys, never evicted): the liked
+ *   songs saved for offline, as NewPipe, InnerTune and Metrolist keep downloads apart from their
+ *   player cache. It is read first ([CacheRouter], [wholeKey]); members-only audio and a song
+ *   discarded leave both, Clear cache only the listening cache. Opened with it, sharing its
+ *   database (two SimpleCaches may, in different folders); one that fails to start is left out.
  *
  * Threads: the ledger and the saved set are only touched under the cache's own lock (its span
  * callbacks hold it; everything else takes it). The main thread only reads the published
@@ -59,6 +65,7 @@ internal object AudioCache {
 
     /** In noBackupFilesDir: the SimpleCache folder, the liked list (newest first), the members-only tags. */
     private const val DIR = "audio"
+    private const val SAVED_DIR = "saved"
     private const val LIKED_FILE = "audio-liked"
     private const val MEMBERS_FILE = "audio-members"
 
@@ -95,6 +102,14 @@ internal object AudioCache {
 
     @Volatile
     private var cache: SimpleCache? = null
+
+    /** The saved store, opened with [cache] (null: not yet, none, or it failed to start). */
+    @Volatile
+    var savedStore: SimpleCache? = null
+        private set
+
+    /** What [savedStore] holds (its own lock, a leaf). */
+    private val savedKeys = SavedKeys()
 
     /**
      * The cache failed to start: not tried again in this process. Another start would count every
@@ -211,13 +226,15 @@ internal object AudioCache {
                 likedKnown = liked.isNotEmpty()
             }
             ledger.limit = limitMb * MB
+            // Before the listening cache, so its count already sees what is saved.
+            savedStore = openSaved(File(ctx.noBackupFilesDir, SAVED_DIR), db)
             val dir = File(ctx.noBackupFilesDir, DIR)
             // Failed to start (its folder or index unreadable), it would fail every read and
             // write: wiped and started once more, empty (CacheStart); failing again, none, and
             // playback streams.
             val c = try {
                 CacheStart.openOrWipe(
-                    open = { start(dir, db) },
+                    open = { start(dir, db, JukeCacheEvictor()) { forgetFailedStart(it) } },
                     wipe = {
                         Log.w(TAG, "Listening cache damaged: starting it empty")
                         SimpleCache.delete(dir, db)
@@ -241,20 +258,35 @@ internal object AudioCache {
         }
     }
 
-    /** A cache over [dir], its index read; a [Cache.CacheException] when that fails (released then). */
-    private fun start(dir: File, db: StandaloneDatabaseProvider): SimpleCache {
-        val c = SimpleCache(dir, JukeCacheEvictor(), db)
+    /** A cache over [dir], its index read; a [Cache.CacheException] when that fails (released, then [failed]). */
+    private fun start(dir: File, db: StandaloneDatabaseProvider, evictor: CacheEvictor, failed: (SimpleCache) -> Unit): SimpleCache {
+        val c = SimpleCache(dir, evictor, db)
         try {
             c.checkInitialization()
         } catch (e: Cache.CacheException) {
             try {
                 c.release()
             } finally {
-                forgetFailedStart(c)
+                failed(c)
             }
             throw e
         }
         return c
+    }
+
+    /** The saved store, wiped once if damaged ([CacheStart]); null if it still fails: the listening cache goes on alone. */
+    private fun openSaved(dir: File, db: StandaloneDatabaseProvider): SimpleCache? = try {
+        CacheStart.openOrWipe(
+            open = { start(dir, db, SavedEvictor()) { savedKeys.clear() } },
+            wipe = {
+                Log.w(TAG, "Saved store damaged: starting it empty")
+                SimpleCache.delete(dir, db)
+            },
+            damaged = { it is Cache.CacheException },
+        )
+    } catch (e: Exception) {
+        Log.w(TAG, "No saved store: ${e.javaClass.simpleName}")
+        null
     }
 
     /**
@@ -282,10 +314,22 @@ internal object AudioCache {
 
     // ---- reading -----------------------------------------------------------------------------
 
-    /** The keys of [audioId] saved whole, most recently used first. Under the lock. */
-    private fun wholeKeys(c: Cache, audioId: String): List<String> = ledger.keysOf(audioId).filter { key ->
+    /** The keys of [audioId] whole in the saved store, then those whole in the listening cache (most recently used first). Under the lock. */
+    private fun wholeKeys(c: Cache, audioId: String): List<String> {
+        val s = savedStore
+        val saved = if (s == null) emptyList() else savedKeys.keysOf(audioId).filter { isWhole(s, it) }
+        return CacheKeys.wholeOf(saved, ledger.keysOf(audioId).filter { isWhole(c, it) })
+    }
+
+    private fun isWhole(c: Cache, key: String): Boolean {
         val length = c.getContentMetadata(key).get(ContentMetadata.KEY_CONTENT_LENGTH, -1L)
-        CacheKeys.isWhole(length) { c.isCached(key, 0L, it) }
+        return CacheKeys.isWhole(length) { c.isCached(key, 0L, it) }
+    }
+
+    /** [audioId]'s audio goes from both stores. Under the listening cache's lock (the saved store's is taken inside it, never the other way). */
+    private fun removeAudio(c: Cache, audioId: String) {
+        ledger.keysOf(audioId).forEach { c.removeResource(it) }
+        savedStore?.let { s -> savedKeys.keysOf(audioId).forEach { s.removeResource(it) } }
     }
 
     /**
@@ -323,8 +367,8 @@ internal object AudioCache {
      */
     private fun reconcileMembers(c: SimpleCache, ids: Collection<String>) {
         val r = synchronized(c) {
-            members.reconcile(ids.filter { ledger.keysOf(it).isNotEmpty() }).also { r ->
-                r.remove.forEach { id -> ledger.keysOf(id).forEach { c.removeResource(it) } }
+            members.reconcile(ids.filter { ledger.keysOf(it).isNotEmpty() || savedKeys.keysOf(it).isNotEmpty() }).also { r ->
+                r.remove.forEach { removeAudio(c, it) }
             }
         }
         if (r.tagged) appContext?.let { writeIds(it, MEMBERS_FILE, members.tagged().toList()) }
@@ -378,10 +422,10 @@ internal object AudioCache {
 
     /** [audioId]'s audio goes: a liked save too big to keep ([LikedSaverPolicy.tooBig]). */
     fun discard(audioId: String) {
-        locked { c -> ledger.keysOf(audioId).forEach { c.removeResource(it) } }
+        locked { c -> removeAudio(c, audioId) }
     }
 
-    /** Clear cache (Settings): everything goes. Playback goes on (from the network). */
+    /** Clear cache (Settings): the listening cache empties (the saved store stays). Playback goes on (from the network). */
     fun clear(): Boolean {
         val done = locked { c -> c.keys.toList().forEach { c.removeResource(it) } } != null
         if (done) {
@@ -397,7 +441,7 @@ internal object AudioCache {
      */
     fun signedOut(): Boolean {
         val gone = members.signOut()
-        val done = locked { c -> gone.forEach { id -> ledger.keysOf(id).forEach { c.removeResource(it) } } } != null
+        val done = locked { c -> gone.forEach { removeAudio(c, it) } } != null
         // No cache (it didn't start): the audio is still on the phone, so its tags stay written
         // down, and the sign-out at the next start removes it.
         if (done) members.removed(gone)
@@ -488,6 +532,40 @@ internal object AudioCache {
         }
     }
 
+    /**
+     * Counts the saved store's spans ([savedKeys]); it never evicts. Called under that store's
+     * lock, so the saved set is rechecked afterwards, off it, under the listening cache's.
+     */
+    private class SavedEvictor : CacheEvictor {
+        override fun requiresCacheSpanTouches(): Boolean = false
+
+        override fun onCacheInitialized() = Unit
+
+        override fun onStartFile(cache: Cache, key: String, position: Long, length: Long) = Unit
+
+        override fun onSpanAdded(cache: Cache, span: CacheSpan) {
+            savedKeys.onAdded(span.key, span.length)
+            val audioId = CacheKeys.audioIdOf(span.key) ?: return
+            if (members.denied(audioId)) {
+                cache.removeResource(span.key)
+                return
+            }
+            if (members.onCached(audioId)) appContext?.let { writeIds(it, MEMBERS_FILE, members.tagged().toList()) }
+            recheck(audioId)
+        }
+
+        override fun onSpanRemoved(cache: Cache, span: CacheSpan) {
+            savedKeys.onRemoved(span.key, span.length)
+            CacheKeys.audioIdOf(span.key)?.let { recheck(it) }
+        }
+
+        override fun onSpanTouched(cache: Cache, oldSpan: CacheSpan, newSpan: CacheSpan) = Unit
+
+        private fun recheck(audioId: String) = Background.run("savedChanged") {
+            locked { c -> if (ledger.isLiked(audioId) || audioId in saved) refreshSaved(c, listOf(audioId)) }
+        }
+    }
+
     // ---- id lists on disk (beside the cache: never cleared, never backed up) -------------------
 
     private fun readIds(ctx: Context, name: String): List<String>? = try {
@@ -571,7 +649,11 @@ internal class CacheRouter(private val cached: DataSource?, private val plain: D
     class Factory(private val upstream: DataSource.Factory) : DataSource.Factory {
         override fun createDataSource(): DataSource {
             val c = AudioCache.open()
-            val cached = c?.let { CacheDataSource(it, CacheMissGuard(upstream.createDataSource()), CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR) }
+            val listening = c?.let { CacheDataSource(it, CacheMissGuard(upstream.createDataSource()), CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR) }
+            // The saved store first, read only: what it lacks comes through the listening cache.
+            val cached = listening?.let { l ->
+                AudioCache.savedStore?.let { CacheDataSource(it, l, FileDataSource(), null, CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR, null) } ?: l
+            }
             return CacheRouter(cached, upstream.createDataSource())
         }
     }
