@@ -200,18 +200,18 @@
   font-size: 12px;
   color: var(--color-fg-dim);
 }
-/* Offline: the offline line (ui/ui.css) as a small chip under the source, since the sheet
-   covers the bar at the top. */
+/* Offline: the offline line (ui/ui.css) as a bar across the top, like the app's own
+   (app/shell.css .offline-banner), which the sheet covers. */
 .np-offline {
-  align-self: center;
-  max-width: 100%;
-  margin-top: 4px;
-  padding: 2px 8px;
+  padding: 6px var(--gutter);
 }
-/* Its link keeps a 44px target in the small chip. */
-.np-offline .offline-link {
+/* With liked songs saved the whole bar is a button: its padding goes onto the button, a full-size target. */
+.np-offline:has(> .offline-link) {
+  padding-block: 0;
+}
+.np-offline > .offline-link {
   min-height: 44px;
-  margin: -10px 0;
+  padding: 6px 0;
 }
 .np-art {
   margin: 8px calc(var(--gutter) + 18px) 26px calc(var(--gutter) + 8px);

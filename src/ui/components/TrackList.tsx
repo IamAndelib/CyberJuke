@@ -11,6 +11,8 @@ import type { PlayContext } from '../../player';
 import { SkeletonRows, TrackRow } from './TrackRow';
 import { OfflineState } from './OfflineGate';
 import { afterPress } from '../press';
+import { online } from '../../core/network';
+import { OFFLINE } from '../../core/offlineText';
 
 
 /**
@@ -146,15 +148,17 @@ export function PagedTracks({
   }, [hasRows]);
 
   const failed = !!error;
+  const offline = !online.value;
   useEffect(() => {
     const el = sentinel.current;
-    // A failed page waits for "Retry loading more" (or the connection coming back), not the next render.
-    if (!el || !hasMore || status !== 'ready' || failed || chunks.more) return;
+    // A failed page waits for "Retry loading more" (or the connection coming back), not the next
+    // render; offline nothing is asked for until the connection is back.
+    if (!el || !hasMore || status !== 'ready' || failed || offline || chunks.more) return;
     // Re-observing after each page fires the callback again if the sentinel is still visible.
     const io = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && loadMore(), { rootMargin: '600px 0px' });
     io.observe(el);
     return () => io.disconnect();
-  }, [tracks.length, hasMore, status, failed, loadMore, chunks.more]);
+  }, [tracks.length, hasMore, status, failed, offline, loadMore, chunks.more]);
 
   if (status === 'loading') return <SkeletonRows />;
   if (status === 'error' && error) return <ErrorState {...error} onRetry={paged.retry} />;
@@ -170,7 +174,9 @@ export function PagedTracks({
       {chunks.more && <div ref={chunks.sentinel} class="list-foot" aria-hidden="true" />}
       {hasMore && !chunks.more && (
         <div ref={sentinel} class="list-foot">
-          {error && !loadingMore ? (
+          {offline ? (
+            <span class="loading-text">{OFFLINE.moreLater}</span>
+          ) : error && !loadingMore ? (
             <button class="btn" onClick={(e) => afterPress(e.currentTarget, loadMore)}>
               <Icon name="refresh" size={18} /> Retry loading more
             </button>
