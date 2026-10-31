@@ -13,6 +13,8 @@ const saved = (page: Page, ytIds: string[]) => page.evaluate((ids) => (window as
 
 /** Reopens the app with the device offline from the start (navigator.onLine, as the Network plugin reads it on the web). */
 async function relaunchOffline(page: Page, backend: { offline: boolean }) {
+  // The Jukebox is kept on the phone first (it loads in idle time after the first list).
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('cyberjuke.file:data/cyberjuke/catalog-public.json') != null)).toBe(true);
   await page.addInitScript(() => {
     Object.defineProperty(Navigator.prototype, 'onLine', { configurable: true, get: () => false });
   });

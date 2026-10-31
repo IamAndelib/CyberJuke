@@ -132,6 +132,8 @@ async function expectCentred(page: Page, screen: string): Promise<void> {
 
 test('offline, lists already shown stay with their rows dimmed; lists opened offline ask to connect; all come back by themselves', async ({ page, backend }) => {
   await start(page);
+  // The Jukebox is kept on the phone (it loads in idle time after the first list): Search reads it offline.
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('cyberjuke.file:data/cyberjuke/catalog-public.json') != null)).toBe(true);
   await setOffline(page, backend, true);
   await expect(page.getByTestId('offline-banner')).toHaveText(BANNER);
 
@@ -168,12 +170,13 @@ test('offline, lists already shown stay with their rows dimmed; lists opened off
   await expect(artists.locator('.fineprint')).toHaveCount(0);
   await expectCentred(page, 'screen-artists');
 
-  // Search: the Jukebox and Global.
+  // Search: the Jukebox searches what's kept on the phone (nothing saved: every row dimmed); Global needs a connection.
   await openSearch(page);
   const search = page.getByTestId('search');
   await page.getByTestId('mode-jukebox').click();
-  await expect(search.getByTestId('offline')).toHaveText(NO_CARRIER);
-  await expect(search.getByTestId('track-row')).toHaveCount(0);
+  await expect(search.getByTestId('offline')).toHaveCount(0);
+  await expect(search.getByTestId('track-row').first()).toHaveClass(/\boff\b/);
+  await expect(search.locator('.row:not(.off)')).toHaveCount(0);
   await page.getByTestId('mode-global').click();
   await page.getByTestId('search-input').fill('Lumen');
   await expect(search.getByTestId('offline')).toHaveText(NO_CARRIER_GLOBAL);
