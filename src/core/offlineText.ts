@@ -27,6 +27,8 @@ export const OFFLINE = {
   lostWaits: "Signal lost. Press play once you're back online.",
   /** In place of the time (Now Playing) and the artist (mini player) while native waits for the network. */
   waiting: 'Waiting for carrier…',
+  /** The end of a list with more to come, while offline (it loads by itself once back). */
+  moreLater: "No carrier. More loads when you're back.",
   /** Clear cache while offline: the saved liked songs are all that plays now. */
   clearOffline: "No carrier right now: nothing plays until you're back online.",
   /** Said to a screen reader for a moment once the connection is back (the bar's live region). */

@@ -17,6 +17,24 @@ test('tracks load on Home', async ({ page }) => {
   await expect(page.getByTestId('members-tag')).toHaveCount(0);
 });
 
+test('offline at the end of the list: it says more comes once back, asks for nothing, and loads more on reconnect', async ({ page, backend }) => {
+  await start(page);
+  const rows = page.getByTestId('track-row');
+  const before = await rows.count();
+  await setOffline(page, backend, true);
+  const asked = backend.queries.length;
+  await rows.last().scrollIntoViewIfNeeded();
+  const foot = page.locator('.list-foot').last();
+  await expect(foot).toHaveText("No carrier. More loads when you're back.");
+  await expect(page.getByRole('button', { name: 'Retry loading more' })).toHaveCount(0);
+  await page.waitForTimeout(500);
+  expect(backend.queries.length).toBe(asked);
+  // Back online: the next page comes by itself.
+  await setOffline(page, backend, false);
+  await rows.last().scrollIntoViewIfNeeded();
+  await expect.poll(() => rows.count()).toBeGreaterThan(before);
+});
+
 test('a genre chip filters the list', async ({ page }) => {
   await start(page);
   const chip = page.getByTestId('genre-chip').first();

@@ -258,6 +258,13 @@ export function GlobalError({
 }
 
 export function LoadMore({ busy, onClick, error, children = 'Load more', testid = 'load-more' }: { busy: boolean; onClick: () => void; error?: boolean; children?: ComponentChildren; testid?: string }) {
+  // Offline nothing more can load: it says so, and the button is back with the connection.
+  if (!online.value)
+    return (
+      <div class="list-foot">
+        <span class="loading-text">{OFFLINE.moreLater}</span>
+      </div>
+    );
   return (
     <div class="list-foot">
       <button class="btn" onClick={onClick} disabled={busy} aria-busy={busy} data-testid={testid}>

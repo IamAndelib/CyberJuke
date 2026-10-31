@@ -231,10 +231,19 @@ test('offline, Now Playing says so too: with liked songs saved its line opens Li
   await expect(page.getByTestId('np-offline-status')).toHaveAttribute('role', 'status');
   await expect(page.getByTestId('np-offline-status')).toHaveText(BANNER);
   await expect(page.getByTestId('np-offline-liked')).toHaveCount(0);
+  // A bar across the top of Now Playing, as the app's own: full width, above the header, clear of its buttons.
+  const sheet = (await page.getByTestId('now-playing').boundingBox())!;
+  const box = (await line.boundingBox())!;
+  const close = (await page.getByTestId('np-close').boundingBox())!;
+  const more = (await page.getByTestId('np-more').boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(sheet.width - 1);
+  expect(box.y + box.height).toBeLessThanOrEqual(Math.min(close.y, more.y));
 
   // With a liked song saved: they still play, and a tap closes the sheet and opens Liked.
   await saved(page, ['abcdefghij2']);
   await expect(page.getByTestId('np-offline-liked')).toHaveText(BANNER_LIKED);
+  // Its whole height is the target.
+  expect((await page.getByTestId('np-offline-liked').boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await page.getByTestId('np-offline-liked').click();
   await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
   await expect(page.getByTestId('screen-library')).toBeVisible();

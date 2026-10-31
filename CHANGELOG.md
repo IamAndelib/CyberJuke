@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Offline, Now Playing says so in a bar across its top, like the rest of the app, instead of a squeezed line in its header.
+- Offline, the end of a list says more loads once you're back, instead of offering a Retry that can't work, and loads the rest by itself when the connection returns.
 - Pulling down to refresh Home while offline says to connect first, instead of flickering the list.
 - The "new tracks" button on Home hides while offline, where tapping it couldn't load them, and comes back with the connection.
 - Offline, songs in Up next that can't play are announced as unavailable to screen readers, and a paused song that can't go on is dimmed like the rest.
