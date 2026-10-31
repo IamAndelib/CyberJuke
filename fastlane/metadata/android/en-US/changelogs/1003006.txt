@@ -1,0 +1,7 @@
+- Offline, Home, Search, Next and Previous lead to your saved liked songs
+- Saved liked songs keep their art and lyrics offline
+- Liked songs have a space of their own: streaming no longer pushes them out
+- Saved at the best quality; songs you've played are copied, not downloaded
+- Saving waits out Battery Saver and dropped Wi-Fi
+- Settings: Recent songs cache, and Clear cache keeps saved songs
+- Many smaller fixes
