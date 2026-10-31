@@ -31,7 +31,7 @@ class SaveJobTest {
         var resolve: () -> ResolvedStream = { audio },
         var hasCache: Boolean = true,
         var write: (SaveJob) -> Unit = {},
-        var limit: Long = 256 * mb,
+        var room: Long = 256 * mb,
         /** What the writer reports before the bytes are written: (length, -1 unknown; cached so far). */
         var reports: List<Pair<Long, Long>> = emptyList(),
         /** What it reports once the last byte came (a length learned only at the end), with no stop after. */
@@ -49,7 +49,7 @@ class SaveJobTest {
 
         override fun quiet() = quiet
 
-        override fun limitBytes() = limit
+        override fun roomBytes() = room
 
         override fun discard(audioId: String) {
             discarded.add(audioId)
@@ -159,7 +159,7 @@ class SaveJobTest {
         // A byte the listening copy lost: a strike, as any stopped save.
         assertEquals(SaveOutcome.STOPPED, World(listening = key, write = { throw IOException("missing") }).run())
         // A copy is on the phone already: its size never stops it, and nothing is discarded.
-        val big = World(listening = key, limit = 128 * mb, reports = listOf(110 * mb to 0L))
+        val big = World(listening = key, room = 64 * mb, reports = listOf(110 * mb to 0L))
         assertEquals(SaveOutcome.SAVED, big.run(copy = true))
         assertTrue(big.discarded.isEmpty())
         // A copy failing during a back-off is a strike, not a cancel picked again at once.
@@ -312,34 +312,33 @@ class SaveJobTest {
     }
 
     @Test
-    fun aSongTooBigForTheCacheIsGivenUpOnBeforeItsBytesCome() {
-        // A 150 MB mix (or a long video) in a 128 MB cache: its length, told when the request
-        // opens, is over what the cache leaves beside listening. Stopped before a byte is read,
-        // given up on, and whatever of it was in the cache goes.
+    fun aSongTooBigForTheRoomLeftIsGivenUpOnBeforeItsBytesCome() {
+        // A 150 MB mix (or a long video) with 128 MB to fill before the free-space floor: its
+        // length, told when the request opens, is over it. Stopped before a byte is read, given
+        // up on, and whatever of it was on the phone goes.
         for (audioId in listOf(mp3Id, id)) {
-            val w = World(limit = 128 * mb, reports = listOf(150 * mb to 0L))
+            val w = World(room = 128 * mb, reports = listOf(150 * mb to 0L))
             assertEquals(audioId, SaveOutcome.FAILED, w.run(audioId = audioId))
             assertTrue(w.cancelledWriter)
             assertFalse("bytes" in w.calls)
             assertEquals(listOf(audioId), w.discarded)
         }
-        // Up to the limit less the listening reserve, it fits.
-        val reserve = LikedSaverPolicy.LISTENING_RESERVE_BYTES
-        assertEquals(SaveOutcome.SAVED, World(limit = 128 * mb, reports = listOf(128 * mb - reserve to 0L)).run(audioId = mp3Id))
-        assertEquals(SaveOutcome.FAILED, World(limit = 128 * mb, reports = listOf(128 * mb - reserve + 1 to 0L)).run(audioId = mp3Id))
-        // A bigger cache takes it.
-        assertEquals(SaveOutcome.SAVED, World(limit = 512 * mb, reports = listOf(150 * mb to 0L)).run(audioId = mp3Id))
+        // Up to the room left, it fits.
+        assertEquals(SaveOutcome.SAVED, World(room = 128 * mb, reports = listOf(128 * mb to 0L)).run(audioId = mp3Id))
+        assertEquals(SaveOutcome.FAILED, World(room = 128 * mb, reports = listOf(128 * mb + 1 to 0L)).run(audioId = mp3Id))
+        // More room takes it.
+        assertEquals(SaveOutcome.SAVED, World(room = 512 * mb, reports = listOf(150 * mb to 0L)).run(audioId = mp3Id))
     }
 
     @Test
     fun withNoLengthTheSaveStopsOnceTheBytesAreTooMany() {
         // latex.gg sent no Content-Length: the bytes so far count, and the save stops at the cap.
-        val w = World(limit = 128 * mb, reports = listOf(-1L to 50 * mb, -1L to 97 * mb, -1L to 120 * mb))
+        val w = World(room = 96 * mb, reports = listOf(-1L to 50 * mb, -1L to 97 * mb, -1L to 120 * mb))
         assertEquals(SaveOutcome.FAILED, w.run(audioId = mp3Id))
         assertTrue(w.cancelledWriter)
         assertEquals(listOf(mp3Id), w.discarded)
         // A length learned only with the last byte (no stop comes after it) still counts.
-        val atEnd = World(limit = 128 * mb, endReport = 100 * mb to 100 * mb)
+        val atEnd = World(room = 96 * mb, endReport = 100 * mb to 100 * mb)
         assertEquals(SaveOutcome.FAILED, atEnd.run(audioId = mp3Id))
         assertEquals(listOf(mp3Id), atEnd.discarded)
     }
