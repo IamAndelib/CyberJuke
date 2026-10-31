@@ -125,7 +125,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         job?.let { running ->
             // Playback needs the network, Wi-Fi left (with Download using mobile data off), or the
             // song became members-only while signed out.
-            if (!LikedSaverPolicy.keepGoing(f, CacheKeys.isMp3(running.audioId)) || AudioCache.isDenied(running.audioId)) {
+            if (!LikedSaverPolicy.keepGoing(f, CacheKeys.isMp3(running.audioId), copy = running.audioId in f.copyable) || AudioCache.isDenied(running.audioId)) {
                 running.cancel()
             }
             return
@@ -137,7 +137,7 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             fetchArt(f)
             return
         }
-        start(audioId, audioId in fresh)
+        start(audioId, audioId in fresh, copy = audioId in f.copyable)
     }
 
     /**
@@ -203,7 +203,8 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
         val now = SystemClock.elapsedRealtime()
         return LikedSaverPolicy.Facts(
             liked = liked,
-            saved = AudioCache.savedLiked,
+            saved = AudioCache.inStore,
+            copyable = AudioCache.copyable,
             fresh = fresh,
             tried = tried,
             skip = host.stillLoading() + failed + strikes.givenUp() + strikes.waiting(now),
@@ -217,15 +218,16 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             sinceLastMs = if (lastExtractionAt == 0L) Long.MAX_VALUE else now - lastExtractionAt,
             retryInMs = strikes.nextDueInMs(now),
             denied = AudioCache::isDenied,
-            cache = !AudioCache.startFailed,
+            cache = !AudioCache.startFailed && !AudioCache.savedFailed,
         )
     }
 
-    private fun start(audioId: String, isFresh: Boolean) {
+    private fun start(audioId: String, isFresh: Boolean, copy: Boolean) {
         // An MP3's download counts like an extraction: the backfill stays spaced out either way.
-        lastExtractionAt = SystemClock.elapsedRealtime()
+        // A copy from the listening cache asks nothing of the network.
+        if (!copy) lastExtractionAt = SystemClock.elapsedRealtime()
         if (isFresh) tried.add(audioId)
-        val j = SaveJob(audioId, SaveJob.Live())
+        val j = SaveJob(audioId, SaveJob.Live(), copy)
         job = j
         // Set before it is queued: upkeep arriving before it runs still stops it.
         AudioCache.cancelSave = { j.cancel() }
@@ -272,13 +274,14 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
     }
 
     /**
-     * One song into the cache: the extraction, then its bytes not yet cached through a
+     * One song into the saved store: copied from a whole listening copy (no network), else the
+     * extraction at the save quality ([QualityLadder.saveRung]), then its bytes through a
      * [Writer]; a Jukebox MP3 ([audioId] `mp3:<file>`) has no extraction, only its file's bytes.
      * Cancelled from any thread; runs on [Background]'s thread. The world it needs comes
      * through [Deps] ([Live] in the app), so the outcome table is a JVM test (SaveJobTest).
      * Stops once the song's size says it doesn't fit ([LikedSaverPolicy.tooBig]).
      */
-    internal class SaveJob(val audioId: String, private val deps: Deps) {
+    internal class SaveJob(val audioId: String, private val deps: Deps, private val copy: Boolean = false) {
         /** A Jukebox MP3: no extraction, and YouTube's back-off is none of its business. */
         private val mp3 = CacheKeys.isMp3(audioId)
 
@@ -290,8 +293,11 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             /** Members-only while signed out: not cached. */
             fun isDenied(audioId: String): Boolean
 
-            /** Saved whole in the cache. */
+            /** Saved whole in the saved store. */
             fun isWhole(audioId: String): Boolean
+
+            /** The key of [audioId]'s whole copy in the listening cache, or null. */
+            fun listeningCopy(audioId: String): String? = null
 
             /** An extraction ([StreamResolver.resolve]): a [ResolveException], a [ManifestOnlyException] or another IOException. */
             @Throws(IOException::class)
@@ -313,6 +319,10 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             /** A writer fetching a Jukebox MP3's bytes not yet cached from latex.gg, or null without a cache. */
             @Throws(IOException::class)
             fun mp3Writer(audioId: String, progress: Progress): Writer?
+
+            /** A writer copying [audioId]'s listening copy [key] into the saved store (never the network), or null without both. */
+            @Throws(IOException::class)
+            fun copyWriter(audioId: String, key: String, progress: Progress): Writer?
 
             /** The HTTP status [e], from a writer, carries; null for none ([SaveRefusal] reads it). */
             fun httpCode(e: IOException): Int?
@@ -343,20 +353,24 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
 
             override fun isDenied(audioId: String) = AudioCache.isDenied(audioId)
 
-            override fun isWhole(audioId: String) = AudioCache.isWhole(audioId)
+            override fun isWhole(audioId: String) = AudioCache.isStored(audioId)
 
-            override fun hasCache() = AudioCache.open() != null
+            override fun listeningCopy(audioId: String) = AudioCache.listeningCopy(audioId)
+
+            override fun hasCache() = AudioCache.open() != null && AudioCache.savedStore != null
 
             override fun limitBytes() = AudioCache.limitBytes
 
             override fun discard(audioId: String) = AudioCache.discard(audioId)
 
             // An extraction, like playing it would be (it counts toward YouTube's limits, hence
-            // one at a time and spaced out); a back-off stops it (BlockedException).
-            override fun resolve(ytId: String): ResolvedStream = StreamResolver.resolve(ytId)
+            // one at a time and spaced out); a back-off stops it (BlockedException). At the save
+            // quality, not Auto's rung of the moment.
+            override fun resolve(ytId: String): ResolvedStream =
+                StreamResolver.resolve(ytId, rung = QualityLadder.saveRung(StreamResolver.quality))
 
             override fun writer(ytId: String, stream: ResolvedStream, progress: Progress): Writer? {
-                val source = AudioCache.downloadSource() ?: return null
+                val source = AudioCache.saveSource() ?: return null
                 val spec = YtDataSpecResolver.streamSpec(DataSpec.Builder().setUri(JukeUris.forYt(ytId)).build(), ytId, stream)
                 return writerOf(CacheWriter(source, spec, null) { length, cached, _ -> progress.onProgress(length, cached) })
             }
@@ -365,8 +379,17 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
             // from the file name, and its key (mp3Spec).
             override fun mp3Writer(audioId: String, progress: Progress): Writer? {
                 val url = SessionPolicy.mp3UrlForFile(SessionPolicy.mp3FileOfAudioId(audioId)) ?: throw IOException("Not a Jukebox MP3")
-                val source = AudioCache.downloadSource() ?: return null
+                val source = AudioCache.saveSource() ?: return null
                 val spec = YtDataSpecResolver.mp3Spec(DataSpec.Builder().setUri(url).build(), url)
+                return writerOf(CacheWriter(source, spec, null) { length, cached, _ -> progress.onProgress(length, cached) })
+            }
+
+            // Our own URI: a byte the listening copy lost fails the copy at once (CacheMissGuard),
+            // never a request.
+            override fun copyWriter(audioId: String, key: String, progress: Progress): Writer? {
+                val source = AudioCache.saveSource() ?: return null
+                val uri = SessionPolicy.mp3FileOfAudioId(audioId)?.let { JukeUris.forMp3File(it) } ?: JukeUris.forYt(audioId)
+                val spec = DataSpec.Builder().setUri(uri).setKey(key).build()
                 return writerOf(CacheWriter(source, spec, null) { length, cached, _ -> progress.onProgress(length, cached) })
             }
 
@@ -401,7 +424,8 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
          * of its bytes are read.
          */
         private val progress = Progress { length, cached ->
-            if (!tooBig) {
+            // A copy is already on the phone, and the saved store has no size limit.
+            if (!tooBig && !copying) {
                 tooBig = LikedSaverPolicy.tooBig(if (length > 0) length else cached, deps.limitBytes())
                 if (tooBig) writer?.cancel()
             }
@@ -413,16 +437,30 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
          */
         private fun sizeOutcome(): SaveOutcome? = if (tooBig) SaveOutcome.FAILED.also { deps.discard(audioId) } else null
 
-        /** A YouTube back-off is in force: it holds a video's save, never an MP3's. */
-        private fun quiet() = !mp3 && deps.quiet()
+        /** A YouTube back-off is in force: it holds a video's download, never an MP3's or a copy's. */
+        private fun quiet() = !mp3 && !copying && deps.quiet()
+
+        /** Copying a listening copy (set on the job's thread before the write). */
+        private var copying = false
 
         fun run(): SaveOutcome {
-            // Cancelled, a back-off, or members-only while signed out: no fault of the song.
-            if (cancelled || quiet() || deps.isDenied(audioId)) return SaveOutcome.CANCELLED
+            // Cancelled, or members-only while signed out: no fault of the song.
+            if (cancelled || deps.isDenied(audioId)) return SaveOutcome.CANCELLED
             if (deps.isWhole(audioId)) return SaveOutcome.SAVED
             // Before the extraction: without a cache (it failed to start just now) there is
             // nothing to save into, and the saver stops ([LikedSaverPolicy.Facts.cache]).
             if (!deps.hasCache()) return SaveOutcome.STOPPED
+            // Whole in the listening cache (played, or saved before 1.3.6): copied as it is, any
+            // quality, with no request, so a back-off doesn't hold it.
+            deps.listeningCopy(audioId)?.let { key ->
+                copying = true
+                return write { deps.copyWriter(audioId, key, progress) }
+            }
+            // Picked to copy, but the listening copy went meanwhile: a strike, never a download
+            // the policy didn't allow (the network, the gap).
+            if (copy) return SaveOutcome.STOPPED
+            // A back-off: no fault of the song either.
+            if (quiet()) return SaveOutcome.CANCELLED
             // A Jukebox MP3: no extraction, no format to check; its file's bytes, as below.
             if (mp3) return write { deps.mp3Writer(audioId, progress) }
             val stream = try {

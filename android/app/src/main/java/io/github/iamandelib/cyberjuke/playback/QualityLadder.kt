@@ -74,6 +74,12 @@ internal object QualityLadder {
     /** The index [rung] (counted from the top, [LOWEST] for the bottom) plays in a ladder of [size]. */
     fun index(size: Int, rung: Int): Int = rung.coerceIn(0, (size - 1).coerceAtLeast(0))
 
+    /**
+     * The rung a liked song is saved at: the top for Auto and High, the lowest for Low; never
+     * Auto's rung of the moment, which only says how the network was doing just then.
+     */
+    fun saveRung(quality: AudioQuality): Int = rungFor(quality, 0)
+
     /** The rung a setting asks for; [autoRung] is the governor's, for AUTO. */
     fun rungFor(quality: AudioQuality, autoRung: Int): Int = when (quality) {
         AudioQuality.HIGH -> 0

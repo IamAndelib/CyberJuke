@@ -711,8 +711,10 @@ internal object LikedSaverPolicy {
     data class Facts(
         /** Newest like first. */
         val liked: List<String>,
-        /** Saved whole in the cache. */
+        /** Done: whole in the saved store. */
         val saved: Set<String>,
+        /** Whole in the listening cache, not yet in the saved store: copied first, with no network ([AudioCache.copyable]). */
+        val copyable: Set<String> = emptySet(),
         /** Liked just now this session. */
         val fresh: Set<String> = emptySet(),
         /** Of those, the ones already tried once (their retries wait for the gap). */
@@ -753,9 +755,12 @@ internal object LikedSaverPolicy {
     fun next(f: Facts): String? = pick(f, f.sinceLastMs)
 
     private fun pick(f: Facts, sinceLastMs: Long): String? {
-        if (!f.cache || f.busy || !f.online || f.playbackNeedsNetwork || !networkAllows(f)) return null
+        if (!f.cache || f.busy) return null
         // Each candidate's denied answer is asked once (and only for those looked at).
         val denied = HashMap<String, Boolean>()
+        // A copy needs no network, no gap and no YouTube: on any network, or none.
+        f.liked.firstOrNull { it in f.copyable && it !in f.saved && it !in f.skip && !denied.getOrPut(it) { f.denied(it) } }?.let { return it }
+        if (!f.online || f.playbackNeedsNetwork || !networkAllows(f)) return null
         val todo = f.liked.asSequence().filter {
             it !in f.saved && it !in f.skip && (!f.quiet || CacheKeys.isMp3(it)) && !denied.getOrPut(it) { f.denied(it) }
         }
@@ -784,9 +789,9 @@ internal object LikedSaverPolicy {
         return listOfNotNull(gap, f.retryInMs).minOrNull()
     }
 
-    /** Whether a save, a Jukebox MP3's if [mp3], may go on, or must stop and give way. */
-    fun keepGoing(f: Facts, mp3: Boolean = false): Boolean =
-        f.cache && f.online && (mp3 || !f.quiet) && !f.playbackNeedsNetwork && networkAllows(f)
+    /** Whether a save, a Jukebox MP3's if [mp3], a copy from the listening cache if [copy], may go on, or must stop and give way. */
+    fun keepGoing(f: Facts, mp3: Boolean = false, copy: Boolean = false): Boolean =
+        f.cache && (copy || f.online && (mp3 || !f.quiet) && !f.playbackNeedsNetwork && networkAllows(f))
 
     /**
      * Whether a song of [bytes] (its length, or what has come so far when that isn't known) is

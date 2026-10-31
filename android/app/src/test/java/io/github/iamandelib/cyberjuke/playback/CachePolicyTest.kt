@@ -311,6 +311,21 @@ class CachePolicyTest {
     }
 
     @Test
+    fun aListeningCopyIsCopiedFirstWithNoNetwork() {
+        val f = Facts(liked, saved = setOf("new00000000"), copyable = setOf("new00000000", "old00000000"), online = false, quiet = true, sinceLastMs = 1_000L, likedFull = true)
+        // Offline, in a back-off, inside the gap: a copy needs none of it (one already in the store isn't copied again).
+        assertEquals("old00000000", LikedSaverPolicy.next(f))
+        assertTrue(LikedSaverPolicy.keepGoing(f, copy = true))
+        assertFalse(LikedSaverPolicy.keepGoing(f))
+        // Skipped (still loading) or denied: not copied, and nothing else starts offline.
+        assertNull(LikedSaverPolicy.next(f.copy(skip = setOf("old00000000"))))
+        assertNull(LikedSaverPolicy.next(f.copy(denied = { it == "old00000000" })))
+        // No store to copy into, or a save running: none.
+        assertNull(LikedSaverPolicy.next(f.copy(cache = false)))
+        assertNull(LikedSaverPolicy.next(f.copy(busy = true)))
+    }
+
+    @Test
     fun aSongLikedJustNowIsSavedFirstOnWifi() {
         val f = Facts(liked, saved = emptySet(), fresh = setOf("mid00000000"), sinceLastMs = 1_000L, likedFull = true)
         // Before the backlog, the gap and a full cache.
