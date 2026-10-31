@@ -192,10 +192,6 @@ internal class SavedKeys {
     @Synchronized
     fun keysOf(audioId: String): List<String> = byAudio[audioId]?.keys?.toList() ?: emptyList()
 
-    /** The bytes held, all songs together. */
-    @Synchronized
-    fun totalBytes(): Long = byAudio.values.sumOf { it.values.sum() }
-
     /** The audio ids with anything here (whole or not). */
     @Synchronized
     fun audioIds(): Set<String> = HashSet(byAudio.keys)

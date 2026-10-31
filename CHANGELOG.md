@@ -16,7 +16,8 @@
 - Pulling down to refresh Home while offline says to connect first, instead of flickering the list.
 - The "new tracks" button on Home hides while offline, where tapping it couldn't load them, and comes back with the connection.
 - Offline, songs in Up next that can't play are announced as unavailable to screen readers, and a paused song that can't go on is dimmed like the rest.
-- Settings → Storage: the size is now the **Recent songs cache**, and a line under it says how many liked songs are saved and the space they take. **Clear cache** empties only the recent songs: saved liked songs stay and still play offline.
+- Settings → Storage: the size is now the **Recent songs cache**, and **Clear cache** empties only the recent songs: saved liked songs stay and still play offline.
+- Settings is briefer: About folds **How it works** and **Credits** away until you open them, and automatic update checks just say they check once every 24h.
 - Screen readers hear when the connection is back, as they hear when it's lost.
 - Offline, an album, playlist or list of releases says it needs a connection to load, instead of talking about searching Global.
 - Liked songs saved on the phone, Jukebox MP3s included, keep their art offline: in Liked and every list, in Now Playing, and on the lock screen and in the notification. Their covers are saved with them, and go when you unlike them.

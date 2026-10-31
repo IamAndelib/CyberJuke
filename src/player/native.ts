@@ -186,8 +186,6 @@ interface JukePlayerPlugin {
   signedIn(): Promise<void>;
   /** The liked songs saved whole on the phone, by audio id: they play offline. */
   cachedIds(): Promise<{ ytIds: string[] }>;
-  /** Settings' line: the liked songs saved in their own space on the phone, and the bytes it holds. */
-  savedSpace(): Promise<{ count: number; bytes: number }>;
   /** Keep a screen area (CSS px relative to the WebView) out of the system back gesture; null clears it. */
   setGestureExclusion(rect: { left: number; top: number; width: number; height: number } | null): Promise<void>;
   /**
