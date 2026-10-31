@@ -495,6 +495,8 @@ internal object AudioCache {
         // No cache (it didn't start): the audio is still on the phone, so its tags stay written
         // down, and the sign-out at the next start removes it.
         if (done) members.removed(gone)
+        // Their saved covers too (else they'd wait for the saver's next tidy, on an allowed network).
+        ArtStore.files?.let { art -> gone.forEach { art.remove(it) } }
         appContext?.let { writeIds(it, MEMBERS_FILE, members.tagged().toList()) }
         if (gone.isNotEmpty()) Log.i(TAG, "Members-only audio removed")
         return done

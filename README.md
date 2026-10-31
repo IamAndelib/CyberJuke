@@ -120,7 +120,7 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 | What was playing last (the queue and where in it), so the app reopens on it | App files, excluded from backups; signing out removes members-only tracks from it |
 | Audio of recently played and next tracks (the listening cache) | Up to the chosen size, on the phone only, never backed up (app files that Android neither backs up nor clears to free space, and its index excluded from backups). It is kept by video ID and format (a Jukebox MP3 by its latex.gg file name), never by stream URL. Members-only tracks are removed on sign-out, and none is kept while signed out. Clear cache in Settings |
 | Audio of your saved liked songs (so they play offline) | Kept apart from the listening cache, the same way (on the phone only, never backed up, kept by video ID and format or the MP3's file name), with no size limit but 1 GB left free. A song you unlike goes the next time the app starts; members-only ones go on sign-out |
-| Covers of your saved liked songs (so they show offline) | App files that Android neither backs up nor clears, kept by video ID, or for a Jukebox MP3 by a hash of its cover's address; a song's go when you unlike it |
+| Covers of your saved liked songs (so they show offline) | App files that Android neither backs up nor clears, kept by video ID, or for a Jukebox MP3 by a hash of its cover's address; a song's go once you unlike it, and members-only ones on sign-out |
 | Login token, user id and @username (only if you sign in) | Encrypted with an Android Keystore key; excluded from Android cloud and device-transfer backups |
 | Stream URLs, YouTube Music results | Memory only |
 
@@ -148,7 +148,7 @@ Signing in is optional. Without it, CyberJuke shows the Jukebox's public posts. 
 
 - **Your password** goes only to Cyberspace's own login service (Google's Firebase Auth, the same one the website uses). CyberJuke never stores or logs it.
 - **What is kept:** a login token (the refresh token), your user id and your @username, encrypted on the phone with an Android Keystore key. The short-lived access token stays in memory and is renewed before it expires. If the token can't be saved, you stay signed in until the app closes.
-- **Sign out** (Settings → Account) deletes the token and clears the cached Jukebox data, including the members-only shared tracks wherever they were saved (liked tracks, history, lyrics, and their audio in the listening cache). Signing in or out reloads the whole catalog.
+- **Sign out** (Settings → Account) deletes the token and clears the cached Jukebox data, including the members-only shared tracks wherever they were saved (liked tracks, history, lyrics, and their audio and covers on the phone). Signing in or out reloads the whole catalog.
 - New accounts are made on [cyberspace.online](https://cyberspace.online/?signup=1); CyberJuke has no sign-up of its own.
 - Signed in, requests stay as light as before: the same page sizes, cache times and refresh intervals.
 
