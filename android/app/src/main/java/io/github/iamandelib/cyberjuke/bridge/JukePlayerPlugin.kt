@@ -34,6 +34,7 @@ import io.github.iamandelib.cyberjuke.net.Family
 import io.github.iamandelib.cyberjuke.net.Ipv4Mode
 import io.github.iamandelib.cyberjuke.net.NetBlock
 import io.github.iamandelib.cyberjuke.net.NetPrefs
+import io.github.iamandelib.cyberjuke.playback.ArtStore
 import io.github.iamandelib.cyberjuke.playback.AudioCache
 import io.github.iamandelib.cyberjuke.playback.AudioQuality
 import io.github.iamandelib.cyberjuke.playback.Background
@@ -70,8 +71,8 @@ import kotlin.math.roundToInt
  *   'blocked', 'unblocked', 'extractorBroken', 'queueLow', 'tracks', 'openNowPlaying',
  *   'cacheChanged'.
  *
- * - The listening cache ([AudioCache]): setLikedIds({ ytIds, membersOnly? }) (newest like
- *   first), setCacheLimit({ mb }), setDownloadOnMobileData({ enabled }) (liked songs saved
+ * - The listening cache ([AudioCache]): setLikedIds({ ytIds, membersOnly?, covers? }) (newest like
+ *   first; covers: a Jukebox MP3's cover by audio id), setCacheLimit({ mb }), setDownloadOnMobileData({ enabled }) (liked songs saved
  *   on any network, not only Wi-Fi), clearCache(), signedOut() (members-only audio goes, and stays
  *   out until signedIn()), cachedIds() -> { ytIds }: the liked songs saved whole, which play
  *   offline. cacheChanged { ytIds } sends that set again when it changes, at most every 2 s.
@@ -846,12 +847,15 @@ class JukePlayerPlugin : Plugin() {
      * `setLikedIds({ ytIds, membersOnly? })`: the liked songs' audio ids (a video id, or
      * `mp3:<file>`), newest like first (at most BRIDGE_MAX_ITEMS), and which of them are
      * members-only. Kept in the cache last, and saved for offline (those liked since the last
-     * call first), on Wi-Fi unless Download using mobile data is on.
+     * call first), on Wi-Fi unless Download using mobile data is on. `covers?` gives a Jukebox
+     * MP3's cover by audio id, kept with it ([ArtStore.setMp3Covers]).
      */
     @PluginMethod
     fun setLikedIds(call: PluginCall) {
         val ids = audioIdsArg(call, "ytIds") ?: return
         val members = if (call.data.has("membersOnly")) audioIdsArg(call, "membersOnly") ?: return else emptyList()
+        val covers = call.getObject("covers")
+        ArtStore.setMp3Covers(ids.mapNotNull { id -> covers?.optString(id)?.takeIf { it.isNotEmpty() }?.let { id to it } }.toMap())
         AudioCache.markMembers(members)
         upkeep(call, "setLikedIds") { AudioCache.setLiked(ids) }
     }

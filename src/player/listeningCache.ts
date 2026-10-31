@@ -18,7 +18,7 @@ import { audioIdOf } from '../core/guards';
 import { logError } from '../core/log';
 import { TEST_HOOKS, exposeForTests } from '../core/testHooks';
 import { auth } from '../data/auth';
-import type { Track } from '../data/model';
+import { isCoverUrl, type Track } from '../data/model';
 import { liked, likedUnreadable, onMembersOnlyDropped, settings, type CacheMb } from '../stores/library';
 import { setSavedOffline } from '../stores/savedOffline';
 import { BRIDGE_MAX_ITEMS, JukePlayer } from './native';
@@ -51,12 +51,23 @@ export function audioIdsOf(tracks: readonly Track[]): string[] {
   return out;
 }
 
-/** What setLikedIds sends for `tracks`: their audio ids (in `ytIds`, the bridge's name), and the members-only ones among them. */
-export function likedPayload(tracks: readonly Track[]): { ytIds: string[]; membersOnly: string[] } {
+export type LikedPayload = { ytIds: string[]; membersOnly: string[]; covers: Record<string, string> };
+
+/**
+ * What setLikedIds sends for `tracks`: their audio ids (in `ytIds`, the bridge's name), the
+ * members-only ones among them, and a Jukebox MP3's cover by its audio id (native keeps it with
+ * the saved song, so it shows offline; a video's frames it knows from its id).
+ */
+export function likedPayload(tracks: readonly Track[]): LikedPayload {
   const ytIds = audioIdsOf(tracks);
   const sent = new Set(ytIds);
   const membersOnly = audioIdsOf(tracks.filter((t) => t.membersOnly && sent.has(audioIdOf(t))));
-  return { ytIds, membersOnly };
+  const covers: Record<string, string> = {};
+  for (const t of tracks) {
+    const id = audioIdOf(t);
+    if (id && !t.ytId && sent.has(id) && isCoverUrl(t.artworkUrl)) covers[id] ??= t.artworkUrl;
+  }
+  return { ytIds, membersOnly, covers };
 }
 
 /** Native's `name` call, or in the browser a record of it (with `shown`, what the e2e suite checks). */
@@ -65,7 +76,7 @@ function send(name: string, call: () => Promise<unknown>, ...shown: unknown[]): 
   else record([name, ...shown]);
 }
 
-const sendLiked = (o: { ytIds: string[]; membersOnly: string[] }) => send('setLikedIds', () => JukePlayer.setLikedIds(o), o.ytIds);
+const sendLiked = (o: LikedPayload) => send('setLikedIds', () => JukePlayer.setLikedIds(o), o.ytIds);
 const sendLimit = (mb: CacheMb) => send('setCacheLimit', () => JukePlayer.setCacheLimit({ mb }), { mb });
 const sendMobileData = (enabled: boolean) => send('setDownloadOnMobileData', () => JukePlayer.setDownloadOnMobileData({ enabled }), { enabled });
 const sendSignedOut = () => send('signedOut', () => JukePlayer.signedOut());
@@ -90,13 +101,13 @@ export function startListeningCache(): void {
   // Liked, newest like first: at once, then a short while after the last change.
   let sent: string | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
-  const send = (o: { ytIds: string[]; membersOnly: string[] }, key: string) => {
+  const send = (o: LikedPayload, key: string) => {
     if (timer) clearTimeout(timer);
     timer = null;
     sent = key;
     sendLiked(o);
   };
-  const keyOf = (o: { ytIds: string[]; membersOnly: string[] }) => o.ytIds.join(',') + '|' + o.membersOnly.join(',');
+  const keyOf = (o: LikedPayload) => o.ytIds.join(',') + '|' + o.membersOnly.join(',') + '|' + Object.values(o.covers).join(',');
   effect(() => {
     if (likedUnreadable.value) return;
     const o = likedPayload(liked.value);
