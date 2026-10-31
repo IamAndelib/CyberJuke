@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => false }, registerPlugin: () => ({}) }));
 
@@ -226,6 +226,9 @@ describe('lyrics client cache', () => {
 });
 
 describe('kept lyrics of saved liked songs', () => {
+  beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] }));
+  afterEach(() => vi.useRealTimers());
+
   function setup(max = 300) {
     const store = new Map<string, string>();
     const keptStore = new Map<string, string>();
@@ -243,8 +246,12 @@ describe('kept lyrics of saved liked songs', () => {
       isOffline: () => offline,
       pause: async () => {},
     });
-    const keptIds = () => (JSON.parse(keptStore.get(l.LYRICS_CACHE_KEY) ?? '[]') as [string][]).map((e) => e[0]);
-    return { c, plugin, keptIds, goOffline: () => (offline = true) };
+    // The kept file is written a moment after the last change.
+    const keptIds = async () => {
+      await vi.advanceTimersByTimeAsync(l.LYRICS_PERSIST_MS);
+      return (JSON.parse(keptStore.get(l.LYRICS_CACHE_KEY) ?? '[]') as [string][]).map((e) => e[0]);
+    };
+    return { c, plugin, store, keptIds, goOffline: () => (offline = true) };
   }
 
   it('looks up the saved songs it has no lyrics for, once, and keeps them out of the LRU', async () => {
@@ -253,7 +260,7 @@ describe('kept lyrics of saved liked songs', () => {
     // Looked up in the background (no length yet), one after the other.
     expect(plugin.lyrics).toHaveBeenCalledTimes(2);
     expect(plugin.lyrics.mock.calls[0][0]).not.toHaveProperty('durationSec');
-    expect(keptIds()).toEqual(['a', 'b']);
+    expect(await keptIds()).toEqual(['a', 'b']);
     // A one-entry LRU would have let 'a' go: kept, it stays, and nothing is asked again.
     await c.get(track('c'));
     expect(c.peek('a')?.found).toBe(true);
@@ -266,11 +273,11 @@ describe('kept lyrics of saved liked songs', () => {
     await c.get(track('a'), 200_000);
     await c.keepSaved([track('a')], new Set(['a']));
     expect(plugin.lyrics).toHaveBeenCalledTimes(1);
-    expect(keptIds()).toEqual(['a']);
+    expect(await keptIds()).toEqual(['a']);
     await c.keepSaved([], new Set());
-    expect(keptIds()).toEqual(['a']);
+    expect(await keptIds()).toEqual(['a']);
     await c.keepSaved([], new Set(['z']));
-    expect(keptIds()).toEqual([]);
+    expect(await keptIds()).toEqual([]);
   });
 
   it('offline it shows the kept lyrics; online, ones looked up without a length are matched again once', async () => {
@@ -295,9 +302,46 @@ describe('kept lyrics of saved liked songs', () => {
     expect(offline.plugin.lyrics).not.toHaveBeenCalled();
     const { c, keptIds } = setup();
     await c.keepSaved([{ ...track('m'), membersOnly: true }, track('p')], new Set(['m', 'p']));
-    expect(keptIds()).toEqual(['m', 'p']);
+    expect(await keptIds()).toEqual(['m', 'p']);
     await c.dropMembersOnly();
-    expect(keptIds()).toEqual(['p']);
+    expect(await keptIds()).toEqual(['p']);
     expect(c.peek('m')).toBeUndefined();
+  });
+
+  it("a saved song's lookups stay out of the recent-lyrics cache, and \"not found\" isn't asked again", async () => {
+    const { c, plugin, store } = setup(1);
+    await c.get(track('recent'), 200_000);
+    await c.keepSaved([track('a', 'Nope'), track('b')], new Set(['a', 'b', 'recent']));
+    expect(plugin.lyrics).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(l.LYRICS_PERSIST_MS);
+    // The one-entry cache still holds the lyrics opened last.
+    expect(JSON.parse(store.get(l.LYRICS_CACHE_KEY)!).map((e: [string]) => e[0])).toEqual(['recent']);
+    await c.keepSaved([track('a', 'Nope'), track('b')], new Set(['a', 'b', 'recent']));
+    await c.get(track('a', 'Nope'));
+    expect(plugin.lyrics).toHaveBeenCalledTimes(3);
+  });
+
+  it('a liked song no longer saved is matched with its length once, then never asked again', async () => {
+    const { c, plugin } = setup();
+    await c.keepSaved([track('a')], new Set(['a']));
+    // Its audio left the phone; it's still liked, so its lyrics stay kept.
+    await c.keepSaved([], new Set(['a']));
+    await c.get(track('a'), 200_000);
+    await c.get(track('a'), 200_000);
+    expect(plugin.lyrics).toHaveBeenCalledTimes(2);
+    expect(c.peek('a')).toMatchObject({ plain: 'matched 200' });
+  });
+
+  it('signing out mid-way: the members-only songs still to look up are not looked up', async () => {
+    const { c, plugin, keptIds } = setup();
+    let release: () => void = () => {};
+    plugin.lyrics.mockImplementationOnce(() => new Promise((r) => (release = () => r({ found: true, source: 'LRCLIB', plain: 'p' }))));
+    const running = c.keepSaved([track('p'), { ...track('m'), membersOnly: true }], new Set(['p', 'm']));
+    await vi.waitFor(() => expect(plugin.lyrics).toHaveBeenCalledTimes(1));
+    await c.dropMembersOnly();
+    release();
+    await running;
+    expect(plugin.lyrics).toHaveBeenCalledTimes(1);
+    expect(await keptIds()).toEqual(['p']);
   });
 });

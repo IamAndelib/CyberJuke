@@ -222,8 +222,9 @@ export function createLyricsClient(deps: LyricsDeps): LyricsClient {
   let drops = 0;
   /** The kept lyrics of saved liked songs (keepSaved), by track id; read with the cache. */
   const kept = new Map<string, CacheEntry>();
-  /** The saved songs whose lyrics are kept (the last keepSaved). */
+  /** The saved songs whose lyrics are kept (the last keepSaved), and the members-only ones among them. */
   let keepIds = new Set<string>();
+  let keepMembers = new Set<string>();
   /** Saved songs still to look up in the background, in order; a running loop takes from it. */
   let toLookUp: Track[] = [];
   let lookingUp = false;
@@ -250,8 +251,17 @@ export function createLyricsClient(deps: LyricsDeps): LyricsClient {
           for (const [k, v] of keptEntries) kept.set(k, v);
           return (cache = c);
         }));
-  const persistKept = () => {
+  /** A kept entry still good: found lyrics, or "not found" for NOT_FOUND_TTL_MS. */
+  const fresh = (e: CacheEntry | undefined): e is CacheEntry => !!e && (e.l.found || now() - e.at < NOT_FOUND_TTL_MS);
+  // The kept file, written as the cache file is: once, a moment after the last change.
+  let keptTimer: ReturnType<typeof setTimeout> | null = null;
+  const persistKeptNow = () => {
+    if (keptTimer) clearTimeout(keptTimer);
+    keptTimer = null;
     deps.keptStorage?.set(LYRICS_CACHE_KEY, JSON.stringify([...kept])).catch(() => {});
+  };
+  const persistKept = () => {
+    keptTimer ??= setTimeout(persistKeptNow, LYRICS_PERSIST_MS);
   };
 
   let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -280,13 +290,18 @@ export function createLyricsClient(deps: LyricsDeps): LyricsClient {
       }
       // Members-only lyrics leave the phone now, not a moment later (S8).
       if (changed) persistNow();
+      // Nor are they looked up any more (a loop running goes on with the rest).
+      for (const id of keepMembers) keepIds.delete(id);
+      keepMembers = new Set();
+      toLookUp = toLookUp.filter((t) => !t.membersOnly);
       let keptChanged = false;
       for (const [k, v] of kept) if (v.m) keptChanged = kept.delete(k) || keptChanged;
-      if (keptChanged) persistKept();
+      if (keptChanged) persistKeptNow();
     },
     async keepSaved(saved, likedIds) {
       await ready();
       keepIds = new Set(saved.map((t) => t.id));
+      keepMembers = new Set(saved.filter((t) => t.membersOnly).map((t) => t.id));
       let changed = false;
       // Unliked: no longer kept (an empty Liked is one not read, never a reason).
       if (likedIds.size) for (const k of kept.keys()) if (!likedIds.has(k)) changed = kept.delete(k) || changed;
@@ -300,13 +315,13 @@ export function createLyricsClient(deps: LyricsDeps): LyricsClient {
       }
       if (changed) persistKept();
       // Those still unknown (not even "not found" lately): looked up one at a time.
-      toLookUp = saved.filter((t) => !kept.has(t.id) && !cache?.get(t.id));
+      toLookUp = saved.filter((t) => !fresh(kept.get(t.id)) && !cache?.get(t.id));
       if (lookingUp) return;
       lookingUp = true;
       try {
         for (let t = toLookUp.shift(); t; t = toLookUp.shift()) {
           if (deps.isOffline?.() || !deps.plugin()) break;
-          if (kept.has(t.id) || cache?.get(t.id) || !keepIds.has(t.id)) continue;
+          if (fresh(kept.get(t.id)) || cache?.get(t.id) || !keepIds.has(t.id)) continue;
           await client.get(t);
           await pause(KEEP_LOOKUP_GAP_MS);
         }
@@ -316,8 +331,9 @@ export function createLyricsClient(deps: LyricsDeps): LyricsClient {
     },
     async get(track, durationMs) {
       const c = await ready();
-      // Kept, unless it was looked up without a length and now one can be matched online.
-      const k = kept.get(track.id);
+      // Kept, unless it was looked up without a length and now one can be matched online (or
+      // it's a "not found" from over a week ago).
+      const k = fresh(kept.get(track.id)) ? kept.get(track.id) : undefined;
       if (k && !(k.nd && durationMs && !deps.isOffline?.())) return { status: 'ok', lyrics: k.l };
       const hit = k ? undefined : c.touch(track.id);
       if (hit) return { status: 'ok', lyrics: hit.l };
@@ -343,15 +359,16 @@ export function createLyricsClient(deps: LyricsDeps): LyricsClient {
             // Signed out while it was looked up: members-only lyrics don't stay (S8).
             if (track.membersOnly && asked !== drops) return { status: 'ok', lyrics };
             const e: CacheEntry = { at: now(), l: lyrics, ...(track.membersOnly && { m: true as const }), ...(!durationMs && { nd: true as const }) };
-            c.set(track.id, e, e.at);
-            persist();
-            // A saved song's: kept (found ones only; "not found" is asked again in a week). Asked
-            // again with its length and not found that way, the one kept stays, asked no more.
-            if (keepIds.has(track.id) && (lyrics.found || k)) {
-              kept.set(track.id, lyrics.found ? e : { ...k!, nd: undefined });
+            // A saved (or kept) song's goes to the kept file only, "not found" too (asked again in
+            // a week), so it doesn't push recent lyrics out of the cache. Asked again with its
+            // length and not found that way, the one kept stays, asked no more.
+            if (k || keepIds.has(track.id)) {
+              kept.set(track.id, lyrics.found || !k?.l.found ? e : { ...k, nd: undefined });
               persistKept();
               return { status: 'ok', lyrics: kept.get(track.id)!.l };
             }
+            c.set(track.id, e, e.at);
+            persist();
             return { status: 'ok', lyrics };
           })
           .catch((e): LyricsOutcome => {

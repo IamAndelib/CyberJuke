@@ -17,6 +17,7 @@ import { Capacitor } from '@capacitor/core';
 import { effect } from '@preact/signals';
 import { audioIdOf } from '../core/guards';
 import { whenIdle } from '../core/idle';
+import { online } from '../core/network';
 import { logError } from '../core/log';
 import { TEST_HOOKS, exposeForTests } from '../core/testHooks';
 import { auth } from '../data/auth';
@@ -129,7 +130,8 @@ export function startListeningCache(): void {
   // the lyrics files: not while the app starts).
   let cancelKeep: (() => void) | null = null;
   effect(() => {
-    if (likedUnreadable.value) return;
+    // Read so the lookups resume once the connection is back.
+    if (likedUnreadable.value || !online.value) return;
     const saved = savedLiked.value;
     const ids = new Set(liked.value.map((t) => t.id));
     cancelKeep?.();
