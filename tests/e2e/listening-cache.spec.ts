@@ -102,10 +102,11 @@ test('offline with liked songs saved, the banner and the refusal toast open Like
   await expect(page.getByTestId('screen-library')).toBeVisible();
   await expect(page.getByTestId('lib-liked')).toHaveAttribute('aria-selected', 'true');
 
-  // Elsewhere, playing is refused, pointing to Liked.
+  // Elsewhere, playing what isn't saved is refused, pointing to Liked (Home's Shuffle plays them).
   await page.getByTestId('lib-recent').click();
   await page.getByTestId('tab-home').click();
-  await page.getByTestId('shuffle-all').click();
+  await expect(page.getByTestId('shuffle-all')).toContainText('Shuffle liked songs');
+  await page.getByTestId('screen-home').locator('.row.off').first().getByTestId('track-play').click({ force: true });
   await expect(page.getByTestId('toast')).toContainText(TAP_LIKED);
   await page.getByTestId('toast-action').click();
   await expect(page.getByTestId('screen-library')).toBeVisible();

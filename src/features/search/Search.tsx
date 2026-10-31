@@ -30,6 +30,7 @@ import { Screen } from '../../ui/components/Screen';
 import { BackButton } from '../../ui/components/BackButton';
 import { afterPress } from '../../ui/press';
 import { OfflineGate } from '../../ui/components/OfflineGate';
+import { online } from '../../core/network';
 import { CoverRow, GlobalError, LoadMore, MUSIC_ITEM_OPTS, MusicRow, searchLoader } from '../../ui/components/Music';
 import { useFeed } from '../../ui/usePaged';
 import { globalFeeds } from '../../stores/feed';
@@ -76,6 +77,8 @@ function useDebounced(value: string, ms: number, scope: string): string {
 
 /** The one place a wider scope is suggested: under few or no results. */
 function Bridge({ q, to = 'global' }: { q: string; to?: 'jukebox' | 'global' }) {
+  // Offline, Global can't be searched: no way there.
+  if (to === 'global' && !online.value) return null;
   return (
     <div class="bridge">
       <button class="link-btn bridge-btn" onClick={(e) => afterPress(e.currentTarget, () => (searchMode.value = to))} data-testid={to === 'global' ? 'search-bridge' : 'here-bridge'}>
@@ -591,9 +594,8 @@ export function Search() {
         ) : mode === 'here' && ctx ? (
           <HereResults q={debounced} ctx={ctx} />
         ) : (
-          <OfflineGate>
-            <JukeboxResults q={debounced} />
-          </OfflineGate>
+          // The stored Jukebox: offline its saved liked songs play, the rest are dimmed.
+          <JukeboxResults q={debounced} />
         )}
       </div>
     </Screen>
