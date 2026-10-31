@@ -777,9 +777,10 @@ internal object LikedSaverPolicy {
     )
 
     /**
-     * After Clear cache: the liked songs of the player's [pair] (playing and next) count as
-     * liked just now. Their bytes are in the player's memory, so nothing writes them back;
-     * saved first, like a new like, once the player has loaded them.
+     * After Clear cache: the liked songs of the player's [pair] (playing and next) not yet in the
+     * saved store count as liked just now. Their bytes are in the player's memory, so nothing
+     * writes them back; saved first, like a new like, once they're no longer playing or next
+     * ([Facts.playing]).
      */
     fun freshAfterClear(liked: Collection<String>, pair: Set<String>): Set<String> = pair.filterTo(HashSet()) { it in liked }
 

@@ -196,9 +196,9 @@ internal class LikedSaver(private val handler: Handler, private val host: Host) 
     }
 
     /**
-     * Clear cache: the liked songs playing and next count as liked just now
-     * ([LikedSaverPolicy.freshAfterClear]), so they are saved again first, once the player has
-     * loaded them.
+     * Clear cache (the listening cache only): the liked songs playing and next count as liked
+     * just now ([LikedSaverPolicy.freshAfterClear]), so those not in the saved store are saved
+     * first, once they're no longer playing or next.
      */
     private fun cleared() {
         val again = LikedSaverPolicy.freshAfterClear(AudioCache.liked, host.loadingPair())

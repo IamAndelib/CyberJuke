@@ -858,7 +858,9 @@ class JukePlayerPlugin : Plugin() {
         val covers = call.getObject("covers")
         ArtStore.setMp3Covers(ids.mapNotNull { id -> covers?.optString(id)?.takeIf { it.isNotEmpty() }?.let { id to it } }.toMap())
         AudioCache.markMembers(members)
-        upkeep(call, "setLikedIds") { AudioCache.setLiked(ids) }
+        // Counted as sent, before invalid ids are dropped: a list at the cap is cut, whatever it holds.
+        val complete = (call.getArray("ytIds")?.length() ?: 0) < BridgeLimits.MAX_ITEMS
+        upkeep(call, "setLikedIds") { AudioCache.setLiked(ids, complete) }
     }
 
     /** `setCacheLimit({ mb: 128 | 256 | 512 })`; anything else is 256. A smaller one evicts at once. */
