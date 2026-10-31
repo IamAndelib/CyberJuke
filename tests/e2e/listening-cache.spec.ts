@@ -139,6 +139,23 @@ test('with nothing playing, Add to queue says "Playing" when it starts the song;
   await expect(page.getByTestId('mini-player')).toBeVisible();
 });
 
+test('offline, Up next tells a screen reader which songs can\u2019t play, and the paused current song dims like its row', async ({ page, backend }) => {
+  await start(page);
+  await playAndOpen(page);
+  await page.getByTestId('np-toggle').click();
+  await expect(page.getByTestId('np-toggle')).toHaveAttribute('aria-label', 'Play');
+  await bufferedAhead(page, 0);
+  await setOffline(page, backend, true);
+  const row = page.getByTestId('upnext-row').first();
+  await expect(row).toHaveClass(/\boff\b/);
+  await expect(row.locator('.row-main')).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByTestId('upnext-current')).toHaveClass(/\boff\b/);
+  // Back online: playable again.
+  await setOffline(page, backend, false);
+  await expect(row.locator('.row-main')).not.toHaveAttribute('aria-disabled');
+  await expect(page.getByTestId('upnext-current')).not.toHaveClass(/\boff\b/);
+});
+
 test('offline, the track the app reopened on is dimmed and asks to connect unless saved; with audio loaded it plays', async ({ page, backend }) => {
   await seedStorage(page, { 'CapacitorStorage.liked': LIKED });
   await page.goto('/');
