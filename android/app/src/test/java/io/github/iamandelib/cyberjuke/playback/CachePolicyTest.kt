@@ -503,6 +503,18 @@ class CachePolicyTest {
     }
 
     @Test
+    fun coversAreFetchedOnTheNetworksASaveMayUse() {
+        val f = Facts(liked, saved = emptySet())
+        assertTrue(LikedSaverPolicy.mayDownload(f))
+        assertFalse(LikedSaverPolicy.mayDownload(f.copy(online = false)))
+        assertFalse(LikedSaverPolicy.mayDownload(f.copy(playbackNeedsNetwork = true)))
+        assertFalse(LikedSaverPolicy.mayDownload(f.copy(unmetered = false)))
+        assertTrue(LikedSaverPolicy.mayDownload(f.copy(unmetered = false, mobileDataAllowed = true)))
+        // A back-off or a full cache holds the audio, not a cover.
+        assertTrue(LikedSaverPolicy.mayDownload(f.copy(quiet = true, likedFull = true, busy = true)))
+    }
+
+    @Test
     fun deniedSongsAreNeverPickedAndOnlyTheCandidateIsAsked() {
         val asked = ArrayList<String>()
         val f = Facts(liked, saved = setOf("new00000000"), denied = { asked.add(it); it == "mid00000000" })

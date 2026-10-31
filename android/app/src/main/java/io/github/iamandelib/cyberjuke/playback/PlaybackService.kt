@@ -31,6 +31,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSourceBitmapLoader
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
@@ -67,6 +68,7 @@ import io.github.iamandelib.cyberjuke.net.NetEpochState
 import io.github.iamandelib.cyberjuke.net.NetPrefs
 import org.json.JSONArray
 import java.io.EOFException
+import java.io.File
 import java.net.SocketException
 
 /**
@@ -577,8 +579,15 @@ class PlaybackService : MediaSessionService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
+        ArtStore.init(File(noBackupFilesDir, "art"))
         mediaSession = MediaSession.Builder(this, SessionPlayer(exo))
             .setSessionActivity(sessionActivity)
+            // A saved song's cover from the phone (offline too), sized as Media3's own loader would.
+            .setBitmapLoader(
+                SavedArtBitmapLoader(
+                    DataSourceBitmapLoader.Builder(this).setMaximumOutputDimension(MediaSession.getBitmapDimensionLimit(this) * 2 - 1).build(),
+                ),
+            )
             .setCallback(SessionCallback())
             .build()
 

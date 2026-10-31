@@ -14,10 +14,12 @@ import androidx.activity.EdgeToEdge;
 import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
+import io.github.iamandelib.cyberjuke.bridge.ArtWebViewClient;
 import io.github.iamandelib.cyberjuke.bridge.JukePlayerPlugin;
 import io.github.iamandelib.cyberjuke.bridge.MusicPlugin;
 import io.github.iamandelib.cyberjuke.bridge.SecureStorePlugin;
 import io.github.iamandelib.cyberjuke.playback.LaunchOptions;
+import java.io.File;
 
 public class MainActivity extends BridgeActivity {
 
@@ -86,6 +88,8 @@ public class MainActivity extends BridgeActivity {
         // No bridge without a working WebView (Capacitor shows its own error then).
         if (getBridge() != null) {
             getBridge().addWebViewListener(new RendererWatch());
+            // Saved liked songs' covers come from the phone (offline too); all else as Capacitor does.
+            getBridge().setWebViewClient(new ArtWebViewClient(getBridge(), new File(getNoBackupFilesDir(), "art")));
             WebView webView = getBridge().getWebView();
             if (webView != null) restrictWebView(webView.getSettings());
         }
