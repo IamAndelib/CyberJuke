@@ -6,6 +6,7 @@
 - Opened offline, Home still leads to music: its Shuffle plays your liked songs saved on the phone ("Shuffle liked songs"), and Latest lists the Jukebox kept on the phone from before, the songs that can't play dimmed. With nothing kept, the offline message offers **Liked** when liked songs are saved.
 - Offline, Search still searches the Jukebox kept on the phone (its saved liked songs play), and no longer suggests searching Global.
 - Liked songs are saved at the best quality (the lowest with Quality on Low), not at whatever Auto had picked at that moment; one you've already played is copied on the phone, with no download.
+- A liked song you unlike leaves the phone the next time the app starts, so liking it again straight away costs nothing.
 
 ### Fixed
 - With shuffle on, a song whose stream link had to be refreshed (or switched to its fallback) keeps playing, instead of skipping to another song.

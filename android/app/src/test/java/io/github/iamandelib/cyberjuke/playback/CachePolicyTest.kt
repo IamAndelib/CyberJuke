@@ -853,9 +853,27 @@ class CachePolicyTest {
         // A key stays while any of its spans does.
         k.onRemoved(a, 1000)
         assertEquals(listOf(a), k.keysOf("dQw4w9WgXcQ"))
+        assertEquals(setOf("dQw4w9WgXcQ", mp3), k.audioIds())
         k.onRemoved(a, 3000)
         assertTrue(k.keysOf("dQw4w9WgXcQ").isEmpty())
+        assertEquals(setOf(mp3), k.audioIds())
         k.clear()
         assertTrue(k.keysOf(mp3).isEmpty())
+    }
+
+    @Test
+    fun removesUnliked() {
+        assertEquals(setOf("old00000000"), SavedReconcile.toRemove(setOf("new00000000", "old00000000"), setOf("new00000000", "mid00000000"), likedLoaded = true))
+    }
+
+    @Test
+    fun emptyLikedKeepsAll() {
+        // A failed load reads as no likes: the saved songs stay.
+        assertTrue(SavedReconcile.toRemove(setOf("new00000000"), emptySet(), likedLoaded = true).isEmpty())
+    }
+
+    @Test
+    fun notLoadedKeepsAll() {
+        assertTrue(SavedReconcile.toRemove(setOf("new00000000"), setOf("mid00000000"), likedLoaded = false).isEmpty())
     }
 }

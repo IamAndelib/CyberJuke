@@ -154,6 +154,16 @@ internal object CacheKeys {
 }
 
 /**
+ * Which songs leave the saved store: those no longer liked, decided once per start from the
+ * page's liked list, so an unlike and a quick re-like cost nothing. An empty or unloaded list
+ * (a failed load) never empties it. Pure (CachePolicyTest).
+ */
+internal object SavedReconcile {
+    fun toRemove(stored: Set<String>, liked: Set<String>, likedLoaded: Boolean): Set<String> =
+        if (!likedLoaded || liked.isEmpty()) emptySet() else stored - liked
+}
+
+/**
  * The keys the saved store holds (the sum of their spans), by audio id: kept from its span
  * callbacks and read from any thread. Its own lock is a leaf (nothing is called while it is
  * held), so it can be read under either store's lock. Pure (CachePolicyTest).
@@ -181,6 +191,10 @@ internal class SavedKeys {
     /** [audioId]'s keys here. */
     @Synchronized
     fun keysOf(audioId: String): List<String> = byAudio[audioId]?.keys?.toList() ?: emptyList()
+
+    /** The audio ids with anything here (whole or not). */
+    @Synchronized
+    fun audioIds(): Set<String> = HashSet(byAudio.keys)
 
     /** Forgets everything (the store failed to start). */
     @Synchronized
