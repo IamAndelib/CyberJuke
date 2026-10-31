@@ -1,5 +1,7 @@
 # Offline, done properly (1.3.6): design
 
+> Historical: the design as planned before it was built (1.3.6). Where it and the code differ, the code and its comments are the reference.
+
 Status: draft for the maintainer's review. Nothing here is built yet.
 Main at writing: 3f9839e (1.3.5).
 

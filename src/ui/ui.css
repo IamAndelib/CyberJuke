@@ -1320,12 +1320,12 @@ section[data-kind] > .shelf {
   text-align: center;
   text-wrap: balance;
 }
-/* With liked songs saved: the whole line opens Liked. */
+/* With liked songs saved: the whole line opens Liked, a full-size target. */
 .offline-link {
   display: block;
   width: 100%;
-  min-height: 24px;
-  padding: 0;
+  min-height: 44px;
+  padding: 6px 0;
   border: 0;
   background: none;
   color: inherit;

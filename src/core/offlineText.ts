@@ -1,7 +1,7 @@
 /**
  * Every offline line the app shows, in one voice (the terminal style of `[ NO CARRIER ]`
  * and "Feeling lucky?"), so they stay consistent. Offline the only music that plays is liked
- * songs saved on the phone (the listening cache), so they say that when some are, and
+ * songs saved on the phone, so they say that when some are, and
  * "connect" otherwise. Here in core because the player's toasts use them as well as the
  * screens.
  */
@@ -29,7 +29,6 @@ export const OFFLINE = {
   waiting: 'Waiting for carrier…',
   /** The end of a list with more to come, while offline (it loads by itself once back). */
   moreLater: "No carrier. More loads when you're back.",
-  /** Clear cache while offline: the saved liked songs are all that plays now. */
   /** Said to a screen reader for a moment once the connection is back (the bar's live region). */
   backOnline: 'CONNECT. Back online.',
   /** Home's Shuffle while offline with liked songs saved: they play. */

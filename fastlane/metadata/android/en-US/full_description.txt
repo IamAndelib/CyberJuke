@@ -10,7 +10,7 @@
 <li><b>Signal Radio:</b> the stations the Jukebox plays (SIGNAL, by hyphen8d), each an endless shuffle.</li>
 <li><b>Genres</b> and <b>artists</b> in A–Z or popular order, with favourites. An artist page shows what Cyberspace people shared, then the artist's top songs, albums, live albums, EPs and singles.</li>
 <li><b>Background playback:</b> notification, lock screen and headset controls, with Shuffle and Repeat; the queue keeps going with the screen off.</li>
-<li><b>Listening cache:</b> what you play and the next track stay on the phone (128 to 512 MB), so a weak signal doesn't stop the music. Liked songs are saved to play offline.</li>
+<li><b>Recent songs cache:</b> what you play and the next track stay on the phone (128 to 512 MB), so a weak signal doesn't stop the music. Liked songs are saved to play offline.</li>
 <li><b>Audio quality</b> Auto (follows the connection), High or Low; <b>Crossfade</b> over 3, 6 or 10 seconds; <b>Gapless playback</b>.</li>
 <li><b>Now Playing</b> with seek, shuffle, repeat, like, synced lyrics and the whole queue to reorder.</li>
 <li><b>Library:</b> liked and recently played tracks, on your phone.</li>
@@ -23,7 +23,7 @@
 <p>Without an account, CyberJuke shows the Jukebox's public posts. Signing in with your Cyberspace account also shows the members-only shared tracks. Your password goes only to Cyberspace's own login service (Firebase Auth, the same one the website uses) and is never stored. The login token is encrypted on the phone with an Android Keystore key, is excluded from backups, and is deleted when you sign out.</p>
 
 <p><b>Privacy</b></p>
-<p>No analytics, no tracking, no ads. CyberJuke talks only to Cyberspace (the track list, MP3 covers and the login if you sign in), YouTube (audio, artwork, Global search, artist pages and Global radio), latex.gg (Jukebox MP3s) and LRCLIB (lrclib.net) when you open lyrics. (Installed from GitHub instead, it can also ask GitHub at most once a day whether a new release is out, if you turn that on; installed from F-Droid, it never does.) Your library, history and listening cache stay on the phone, outside backups; your settings may go into your own Android backup.</p>
+<p>No analytics, no tracking, no ads. CyberJuke talks only to Cyberspace (the track list, MP3 covers and the login if you sign in), YouTube (audio, artwork, Global search, artist pages and Global radio), latex.gg (Jukebox MP3s) and LRCLIB (lrclib.net) when you open lyrics. (Installed from GitHub instead, it can also ask GitHub at most once a day whether a new release is out, if you turn that on; installed from F-Droid, it never does.) Your library, history and saved songs stay on the phone, outside backups; your settings may go into your own Android backup.</p>
 
 <p><b>YouTube and NewPipe</b></p>
 <p>Most Jukebox tracks are YouTube links (some are MP3s). CyberJuke plays the audio with NewPipeExtractor, the library behind NewPipe, and Media3/ExoPlayer. This is why it has the NonFreeNet anti-feature, and it means:</p>

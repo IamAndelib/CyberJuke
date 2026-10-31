@@ -881,7 +881,7 @@ class JukePlayerPlugin : Plugin() {
         call.resolve()
     }
 
-    /** `clearCache()`: Settings' Clear cache. Playback goes on; liked songs are saved again (on Wi-Fi, unless Download using mobile data is on). */
+    /** `clearCache()`: Settings' Clear cache: the recent songs go, the saved liked songs stay. Playback goes on. */
     @PluginMethod
     fun clearCache(call: PluginCall) {
         upkeep(call, "clearCache") { AudioCache.clear() }

@@ -209,10 +209,6 @@
 .np-offline:has(> .offline-link) {
   padding-block: 0;
 }
-.np-offline > .offline-link {
-  min-height: 44px;
-  padding: 6px 0;
-}
 .np-art {
   margin: 8px calc(var(--gutter) + 18px) 26px calc(var(--gutter) + 8px);
   max-width: 420px;

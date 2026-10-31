@@ -226,7 +226,7 @@ class PlaybackService : MediaSessionService() {
     /** The playing track and the next, the pair that may open its stream ([updateLoadAhead]). */
     private var loadingIds: Set<String> = emptySet()
 
-    /** Saves liked songs into the listening cache while the service runs anyway. */
+    /** Saves liked songs into the saved store while the service runs anyway. */
     private val likedSaver = LikedSaver(
         handler,
         object : LikedSaver.Host {

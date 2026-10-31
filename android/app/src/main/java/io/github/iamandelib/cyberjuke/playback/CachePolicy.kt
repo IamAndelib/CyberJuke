@@ -252,10 +252,6 @@ internal class CacheLedger(limitBytes: Long) {
     var total = 0L
         private set
 
-    /** Bytes of liked songs in the cache. */
-    var likedBytes = 0L
-        private set
-
     fun onAdded(key: String, bytes: Long, touched: Long) {
         val audioId = CacheKeys.audioIdOf(key) ?: key
         val e = entries[key] ?: Entry(key, audioId).also {
@@ -267,7 +263,6 @@ internal class CacheLedger(limitBytes: Long) {
         e.bytes += bytes
         e.touched = maxOf(e.touched, touched)
         total += bytes
-        if (e.likedRank >= 0) likedBytes += bytes
         relist(e)
     }
 
@@ -276,7 +271,6 @@ internal class CacheLedger(limitBytes: Long) {
         unlist(e)
         e.bytes -= bytes
         total -= bytes
-        if (e.likedRank >= 0) likedBytes -= bytes
         if (e.bytes > 0) {
             relist(e)
             return
@@ -298,7 +292,6 @@ internal class CacheLedger(limitBytes: Long) {
         listening.clear()
         likedEntries.clear()
         total = 0L
-        likedBytes = 0L
     }
 
     fun onTouched(key: String, touched: Long) {
@@ -336,10 +329,8 @@ internal class CacheLedger(limitBytes: Long) {
     private fun rerank() {
         listening.clear()
         likedEntries.clear()
-        likedBytes = 0L
         for (e in entries.values) {
             e.likedRank = rankOf(e.audioId)
-            if (e.likedRank >= 0) likedBytes += e.bytes
             relist(e)
         }
     }
@@ -705,7 +696,7 @@ internal class MembersAudio {
 }
 
 /**
- * When the LikedSaver saves a liked song into the cache, and which. Pure (CachePolicyTest).
+ * When the LikedSaver saves a liked song into the saved store, and which. Pure (CachePolicyTest).
  *
  * - One at a time, newest like first; never one the player is still loading anyway (the
  *   playing track or the next, [PlaybackNeed.stillLoading]), one that failed this session, nor
@@ -781,7 +772,7 @@ internal object LikedSaverPolicy {
         val retryInMs: Long? = null,
         /** Members-only while signed out: never saved. Asked only of a candidate. */
         val denied: (String) -> Boolean = { false },
-        /** There is a cache to save into (none after it failed to start: [AudioCache.startFailed]). */
+        /** There are stores to save into (none after one failed to start: [AudioCache.startFailed], [AudioCache.savedFailed]). */
         val cache: Boolean = true,
     )
 
@@ -841,8 +832,8 @@ internal object LikedSaverPolicy {
 }
 
 /**
- * How a liked save ended: [SAVED] (whole in the cache), [FAILED] (not this service's life: also
- * a song too big for the cache), [STOPPED] (a strike: tried again later, [SaveStrikes]),
+ * How a liked save ended: [SAVED] (whole in the saved store), [FAILED] (not this service's life:
+ * also a song too big for the room left on the phone), [STOPPED] (a strike: tried again later, [SaveStrikes]),
  * [CANCELLED] (no fault of the song). Pure.
  */
 internal enum class SaveOutcome {
@@ -854,7 +845,7 @@ internal enum class SaveOutcome {
 
     companion object {
         /**
-         * The writer got to the end: saved only if the song is now whole in the cache. A span
+         * The writer got to the end: saved only if the song is now whole in the saved store. A span
          * playback was writing at the same time is read past, not written (its lock), and a
          * length never learned leaves it not whole: a strike then, and it is tried again later.
          */

@@ -82,7 +82,7 @@ const sendMobileData = (enabled: boolean) => send('setDownloadOnMobileData', () 
 const sendSignedOut = () => send('signedOut', () => JukePlayer.signedOut());
 const sendSignedIn = () => send('signedIn', () => JukePlayer.signedIn());
 
-/** Settings' Clear cache: everything goes; playback goes on, and liked songs are saved again (on Wi-Fi, or with Download using mobile data, on any network). */
+/** Settings' Clear cache: the recent songs go, the saved liked songs stay; playback goes on. */
 export function clearListeningCache(): Promise<void> {
   if (!native) {
     record(['clearCache']);
