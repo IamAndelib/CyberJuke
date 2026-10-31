@@ -8,6 +8,7 @@
 - Liked songs are saved at the best quality (the lowest with Quality on Low), not at whatever Auto had picked at that moment; one you've already played is copied on the phone, with no download.
 - Liked songs saved for offline are kept in a space of their own, so the music you stream no longer pushes them out, a smaller cache size no longer deletes them, and they don't count toward it. Saves stop while the phone has less than 1 GB free.
 - A liked song you unlike leaves the phone the next time the app starts, so liking it again straight away costs nothing.
+- Liked songs saved on the phone keep their lyrics too, so they show offline: ones you haven't opened yet are looked up once in the background, and they no longer make way for other songs' lyrics.
 - Settings → Storage: the size is now the **Recent songs cache**, and **Clear cache** empties only the recent songs: saved liked songs stay and still play offline.
 - Settings is briefer: About folds **How it works** and **Credits** away until you open them, and automatic update checks just say they check once every 24h.
 

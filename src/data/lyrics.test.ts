@@ -224,3 +224,80 @@ describe('lyrics client cache', () => {
     expect(await none.get(track('a'))).toEqual({ status: 'error', offline: false });
   });
 });
+
+describe('kept lyrics of saved liked songs', () => {
+  function setup(max = 300) {
+    const store = new Map<string, string>();
+    const keptStore = new Map<string, string>();
+    let offline = false;
+    const plugin = {
+      lyrics: vi.fn(async ({ title, durationSec }: { title: string; durationSec?: number }) =>
+        title === 'Nope' ? { found: false } : { found: true, source: 'LRCLIB', plain: durationSec ? `matched ${durationSec}` : 'any length' },
+      ),
+    };
+    const c = l.createLyricsClient({
+      plugin: () => plugin,
+      storage: { get: async (k) => store.get(k) ?? null, set: async (k, v) => void store.set(k, v) },
+      keptStorage: { get: async (k) => keptStore.get(k) ?? null, set: async (k, v) => void keptStore.set(k, v) },
+      max,
+      isOffline: () => offline,
+      pause: async () => {},
+    });
+    const keptIds = () => (JSON.parse(keptStore.get(l.LYRICS_CACHE_KEY) ?? '[]') as [string][]).map((e) => e[0]);
+    return { c, plugin, keptIds, goOffline: () => (offline = true) };
+  }
+
+  it('looks up the saved songs it has no lyrics for, once, and keeps them out of the LRU', async () => {
+    const { c, plugin, keptIds } = setup(1);
+    await c.keepSaved([track('a'), track('b')], new Set(['a', 'b', 'c']));
+    // Looked up in the background (no length yet), one after the other.
+    expect(plugin.lyrics).toHaveBeenCalledTimes(2);
+    expect(plugin.lyrics.mock.calls[0][0]).not.toHaveProperty('durationSec');
+    expect(keptIds()).toEqual(['a', 'b']);
+    // A one-entry LRU would have let 'a' go: kept, it stays, and nothing is asked again.
+    await c.get(track('c'));
+    expect(c.peek('a')?.found).toBe(true);
+    await c.keepSaved([track('a'), track('b')], new Set(['a', 'b', 'c']));
+    expect(plugin.lyrics).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps lyrics already looked up, and lets go of unliked songs but never on an empty Liked', async () => {
+    const { c, plugin, keptIds } = setup();
+    await c.get(track('a'), 200_000);
+    await c.keepSaved([track('a')], new Set(['a']));
+    expect(plugin.lyrics).toHaveBeenCalledTimes(1);
+    expect(keptIds()).toEqual(['a']);
+    await c.keepSaved([], new Set());
+    expect(keptIds()).toEqual(['a']);
+    await c.keepSaved([], new Set(['z']));
+    expect(keptIds()).toEqual([]);
+  });
+
+  it('offline it shows the kept lyrics; online, ones looked up without a length are matched again once', async () => {
+    const { c, plugin } = setup();
+    await c.keepSaved([track('a')], new Set(['a']));
+    expect((await c.get(track('a'), 200_000)).status).toBe('ok');
+    expect(c.peek('a')).toMatchObject({ plain: 'matched 200' });
+    expect(plugin.lyrics).toHaveBeenCalledTimes(2);
+    await c.get(track('a'), 200_000);
+    expect(plugin.lyrics).toHaveBeenCalledTimes(2);
+    const other = setup();
+    await other.c.keepSaved([track('b')], new Set(['b']));
+    other.goOffline();
+    expect(await other.c.get(track('b'), 180_000)).toEqual({ status: 'ok', lyrics: { found: true, source: 'LRCLIB', plain: 'any length' } });
+    expect(other.plugin.lyrics).toHaveBeenCalledTimes(1);
+  });
+
+  it('nothing is looked up offline, and signing out drops kept members-only lyrics', async () => {
+    const offline = setup();
+    offline.goOffline();
+    await offline.c.keepSaved([track('a')], new Set(['a']));
+    expect(offline.plugin.lyrics).not.toHaveBeenCalled();
+    const { c, keptIds } = setup();
+    await c.keepSaved([{ ...track('m'), membersOnly: true }, track('p')], new Set(['m', 'p']));
+    expect(keptIds()).toEqual(['m', 'p']);
+    await c.dropMembersOnly();
+    expect(keptIds()).toEqual(['p']);
+    expect(c.peek('m')).toBeUndefined();
+  });
+});
