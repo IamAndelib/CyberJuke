@@ -4,13 +4,14 @@ import okhttp3.Call
 import okhttp3.Request
 import java.io.File
 import java.io.IOException
+import java.security.MessageDigest
 
 /**
  * The covers of the liked songs saved on the phone, as plain files in no_backup/art (never
  * backed up), so Liked, Now Playing and the lock screen show them offline, as music players
  * that keep downloads do (Metrolist, InnerTune). A video's two frames are kept: the small one
  * rows show and the big one Now Playing and the notification show (src/data/model artworkUrl,
- * smallArt). [LikedSaver] fetches them once a song is saved, on the networks it saves on;
+ * smallArt); a Jukebox MP3 keeps the cover the page sends with Liked ([setMp3Covers]). [LikedSaver] fetches them once a song is saved, on the networks it saves on;
  * the page's images ([io.github.iamandelib.cyberjuke.bridge.ArtWebViewClient]) and the
  * notification's ([SavedArtBitmapLoader]) are served from here when there. Pure but for the
  * files and the fetch (ArtStoreTest).
@@ -21,12 +22,41 @@ internal object ArtStore {
     /** A cover is a small image: anything bigger isn't kept. */
     const val MAX_BYTES = 1L shl 20
 
-    /** The covers a saved song keeps: its video's frames (a Jukebox MP3 has none from its id). */
-    fun coversOf(audioId: String): List<String> =
-        if (SessionPolicy.isValidYtId(audioId)) listOf("hq", "mq").map { "https://i.ytimg.com/vi/$audioId/${it}default.jpg" } else emptyList()
+    /** A Jukebox MP3's cover is kept as `c-<hash of its URL>`. */
+    private const val COVER_PREFIX = "c-"
 
-    /** The file a cover is kept under (`<video>-hq.jpg`), or null for any URL that isn't a frame this keeps. */
+    /** Each liked Jukebox MP3's cover, by audio id, as the page last sent it (setLikedIds). */
+    @Volatile
+    private var mp3Covers: Map<String, String> = emptyMap()
+
+    /** Whether the page has sent them since the process started: until then no MP3 cover is taken. */
+    @Volatile
+    private var coversKnown = false
+
+    /** The page's covers: only an MP3's, and only one from the site ([SessionPolicy.isAllowedArtwork]). */
+    fun setMp3Covers(covers: Map<String, String>) {
+        mp3Covers = covers.filter { (id, url) -> SessionPolicy.mp3FileOfAudioId(id) != null && isCover(url) }
+        coversKnown = true
+    }
+
+    /** As at a fresh start (tests). */
+    fun forgetMp3Covers() {
+        mp3Covers = emptyMap()
+        coversKnown = false
+    }
+
+    /** The covers a saved song keeps: its video's frames, or the cover the page sent for a Jukebox MP3. */
+    fun coversOf(audioId: String): List<String> =
+        if (SessionPolicy.isValidYtId(audioId)) listOf("hq", "mq").map { "https://i.ytimg.com/vi/$audioId/${it}default.jpg" } else listOfNotNull(mp3Covers[audioId])
+
+    /** The file a cover is kept under (`<video>-hq.jpg`, `c-<hash>`), or null for any URL this doesn't keep. */
     fun nameFor(url: String): String? = FRAME.matchEntire(url)?.let { "${it.groupValues[1]}-${it.groupValues[2]}.jpg" }
+        ?: url.takeIf { isCover(it) }?.let { COVER_PREFIX + sha256(it).take(32) }
+
+    private fun isCover(url: String) = url.startsWith("https://bunker.cyberspace.online/") && SessionPolicy.isAllowedArtwork(url)
+
+    private fun sha256(s: String): String =
+        MessageDigest.getInstance("SHA-256").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
 
     /** The folder, once the app or the service has started. */
     @Volatile
@@ -64,10 +94,14 @@ internal object ArtStore {
             return part.renameTo(File(dir, name))
         }
 
-        /** Every cover but those of [audioIds] goes (songs no longer liked), half-written ones too. */
+        /**
+         * Every cover but those of [audioIds] goes (songs no longer liked), half-written ones too;
+         * an MP3's only once the page has said which it has ([setMp3Covers]).
+         */
         fun keepOnly(audioIds: Set<String>) {
             val keep = audioIds.flatMap { coversOf(it) }.mapNotNullTo(HashSet()) { nameFor(it) }
-            dir.listFiles()?.forEach { if (it.name !in keep) it.delete() }
+            val known = coversKnown
+            dir.listFiles()?.forEach { if (it.name !in keep && (known || !it.name.startsWith(COVER_PREFIX) || it.name.endsWith(".part"))) it.delete() }
         }
 
         /** [audioId]'s covers go. */

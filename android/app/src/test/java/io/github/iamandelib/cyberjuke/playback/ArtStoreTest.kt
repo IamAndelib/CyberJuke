@@ -81,6 +81,43 @@ class ArtStoreTest {
     }
 
     @Test
+    fun aJukeboxMp3KeepsTheCoverThePageSent() {
+        val mp3 = "mp3:IZq8cMcx.mp3"
+        val cover = "https://bunker.cyberspace.online/uploads/jukebox/c1.jpg"
+        ArtStore.setMp3Covers(mapOf(mp3 to cover, "mp3:FEHdI7AK.mp3" to "https://evil.example/c.jpg", id to cover))
+        // Only an MP3's, and only the site's covers.
+        assertEquals(listOf(cover), ArtStore.coversOf(mp3))
+        assertTrue(ArtStore.coversOf("mp3:FEHdI7AK.mp3").isEmpty())
+        assertEquals(listOf(hq, mq), ArtStore.coversOf(id))
+        // Kept under a name of its own, never the URL's.
+        val name = ArtStore.nameFor(cover)!!
+        assertTrue(name, Regex("^c-[0-9a-f]{32}$").matches(name))
+        assertNull(ArtStore.nameFor("https://evil.example/c.jpg"))
+        ArtStore.setMp3Covers(emptyMap())
+    }
+
+    @Test
+    fun mp3CoversStayUntilThePageHasSaidWhichAreLiked() {
+        val dir = Files.createTempDirectory("art").toFile()
+        val store = ArtStore.Files(dir)
+        val cover = "https://bunker.cyberspace.online/uploads/jukebox/c1.jpg"
+        ArtStore.forgetMp3Covers()
+        val name = ArtStore.nameFor(cover)!!
+        dir.resolve(name).writeText("x")
+        // A fresh start: not known yet, so not taken.
+        store.keepOnly(setOf(id))
+        assertTrue(dir.resolve(name).exists())
+        // Known: kept while liked, gone after.
+        ArtStore.setMp3Covers(mapOf("mp3:IZq8cMcx.mp3" to cover))
+        store.keepOnly(setOf("mp3:IZq8cMcx.mp3"))
+        assertTrue(dir.resolve(name).exists())
+        store.keepOnly(setOf(id))
+        assertFalse(dir.resolve(name).exists())
+        ArtStore.forgetMp3Covers()
+        dir.deleteRecursively()
+    }
+
+    @Test
     fun coversOfSongsNoLongerLikedGo() {
         val dir = Files.createTempDirectory("art").toFile()
         val store = ArtStore.Files(dir)
