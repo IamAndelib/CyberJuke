@@ -64,6 +64,17 @@ function tidy(raw: string): string {
   return n.trim();
 }
 
+/** A credited artist, with their channel when YouTube Music linked one. */
+export interface CreditedArtist {
+  name: string;
+  channelId?: string;
+}
+
+/** A track's artists: a Global song's linked credits as YouTube Music gives them, else its split credit. */
+export function creditedArtists(t: Pick<Track, 'artist' | 'artists'>): CreditedArtist[] {
+  return t.artists?.length ? t.artists : splitArtists(t.artist).map((name) => ({ name }));
+}
+
 export function artistKey(name: string): string {
   return normalize(name ?? '');
 }

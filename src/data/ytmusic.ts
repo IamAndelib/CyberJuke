@@ -169,6 +169,7 @@ export function musicItemToTrack(item: MusicItem, fallbackArtist = '', album?: s
     artworkUrl: artworkUrl(ytId),
     source: 'ytmusic',
     ...(album && { album }),
+    ...(!!item.artists?.length && { artists: item.artists }),
   });
 }
 

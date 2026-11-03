@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildArtistIndex, splitArtists } from './artists';
+import { buildArtistIndex, creditedArtists, splitArtists } from './artists';
 import type { Track } from './model';
 
 const t = (id: string, artist: string): Track => ({
@@ -79,6 +79,15 @@ describe('splitArtists', () => {
     expect(splitArtists('')).toEqual([]);
     expect(splitArtists('Unknown artist')).toEqual([]);
     expect(splitArtists('A, , a ,A')).toEqual(['A']);
+  });
+});
+
+describe('creditedArtists', () => {
+  it("takes a Global song's linked artists as they are, else splits the credit", () => {
+    const artists = [{ name: 'Bill Withers', channelId: 'UCDjpW6k2Sfg_FTr1toLvffQ' }, { name: 'Grover Washington, Jr.', channelId: 'UCsN1HTruhFfXcSMGMsBmX_w' }];
+    expect(creditedArtists({ artist: 'Bill Withers & Grover Washington, Jr.', artists })).toEqual(artists);
+    expect(creditedArtists({ artist: 'Farhot, Samon Kawamura' })).toEqual([{ name: 'Farhot' }, { name: 'Samon Kawamura' }]);
+    expect(creditedArtists({ artist: 'Tycho', artists: [] })).toEqual([{ name: 'Tycho' }]);
   });
 });
 

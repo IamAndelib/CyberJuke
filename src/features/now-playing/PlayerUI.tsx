@@ -29,7 +29,8 @@ import { Icon } from '../../ui/icons';
 import { artistChoice, lyricsOpen, menuQueued, menuTrack, nowPlayingOpen, openArtistPage, openGenrePage, openMenu } from '../../ui/nav';
 import { openExternal, openPost, youtubeUrl } from '../../ui/links';
 import { positionNow, useTickValue } from '../../ui/useTick';
-import { splitArtists } from '../../data/artists';
+import { creditedArtists, type CreditedArtist } from '../../data/artists';
+import { artistChannels } from '../../stores/artistChannels';
 import { isGlobal, isLocal, isSignal, type Track } from '../../data/model';
 import { localFolderOf } from '../../stores/local';
 import { addToPlaylist } from '../../ui/components/AddToPlaylistSheet';
@@ -735,9 +736,16 @@ function NpFrom() {
   );
 }
 
+/** A credited artist's page; with their channel known, it opens by that channel, not by a name search. */
+function openCredited(a: CreditedArtist): void {
+  if (a.channelId) artistChannels.remember(a.name, a.channelId);
+  openArtistPage(a.name);
+}
+
 /** Artist line in Now Playing: tapping opens the artist page (or a chooser for several). */
 function NpArtist({ track }: { track: Track }) {
-  const names = splitArtists(track.artist);
+  const artists = creditedArtists(track);
+  const names = artists.map((a) => a.name);
   if (!names.length)
     return (
       <div class="np-artist">
@@ -748,7 +756,7 @@ function NpArtist({ track }: { track: Track }) {
     <div class="np-artist">
       <button
         class="np-link"
-        onClick={() => (names.length === 1 ? openArtistPage(names[0]) : (artistChoice.value = names))}
+        onClick={() => (artists.length === 1 ? openCredited(artists[0]) : (artistChoice.value = artists))}
         aria-label={names.length === 1 ? `Open artist ${names[0]}` : `Choose an artist: ${names.join(', ')}`}
         aria-haspopup={names.length > 1 ? 'dialog' : undefined}
         data-testid="np-artist"
@@ -763,21 +771,21 @@ function NpArtist({ track }: { track: Track }) {
 export function ArtistChooser() {
   const open = artistChoice.value;
   const sheet = useRef<HTMLDivElement>(null);
-  const names = useSheetContent(open, sheet);
+  const artists = useSheetContent(open, sheet);
   useModal(open != null, sheet);
   const close = () => (artistChoice.value = null);
   return (
     <div class={'sheet-wrap' + (open ? ' open' : '')} aria-hidden={!open} inert={!open}>
       <div class="scrim" onClick={close} />
       <div class="sheet" ref={sheet} role="dialog" aria-modal="true" aria-label="Choose an artist" data-testid="artist-chooser">
-        {names && (
+        {artists && (
           <>
             <div class="sheet-head">
               <span class="section-title">Artists</span>
             </div>
-            {names.map((n) => (
-              <button key={n} class="sheet-item" onClick={() => openArtistPage(n)} data-testid="chooser-artist">
-                <Icon name="artists" size={20} /> <span class="sheet-text">{n}</span>
+            {artists.map((a) => (
+              <button key={a.name} class="sheet-item" onClick={() => openCredited(a)} data-testid="chooser-artist">
+                <Icon name="artists" size={20} /> <span class="sheet-text">{a.name}</span>
               </button>
             ))}
             <SheetCancel onClose={close} />
@@ -879,9 +887,9 @@ export function TrackMenu() {
             >
               <Icon name={fav ? 'heart' : 'heartOutline'} size={20} /> {fav ? 'Unlike' : 'Like'}
             </button>
-            {!local && splitArtists(t.artist).map((n) => (
-              <button key={n} class="sheet-item" onClick={() => openArtistPage(n)} data-testid="menu-more-by">
-                <Icon name="artists" size={20} /> <span class="sheet-text">More by {n}</span>
+            {!local && creditedArtists(t).map((a) => (
+              <button key={a.name} class="sheet-item" onClick={() => openCredited(a)} data-testid="menu-more-by">
+                <Icon name="artists" size={20} /> <span class="sheet-text">More by {a.name}</span>
               </button>
             ))}
             {block.degraded.value && t.ytId && (
