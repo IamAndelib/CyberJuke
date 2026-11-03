@@ -79,7 +79,6 @@ export function ArtistGrid() {
         ) : (
           <ArtistTiles list={list} sort={sort} />
         )}
-        <p class="fineprint">Everyone whose music has been shared on the Jukebox. Tap ☆ to pin an artist to the top.</p>
       </OfflineGate>
     </Screen>
   );
