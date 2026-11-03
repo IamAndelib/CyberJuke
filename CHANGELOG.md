@@ -11,6 +11,7 @@
 - Offline, the line at the top says which songs still play (liked, local, or both), and a tap on it opens Library instead of Liked.
 - Genres and Artists no longer end with a line explaining them.
 - In Now Playing, **≡+** and ♥ sit on the artist's line, so a long title has its line to itself.
+- An artist with nothing on the Jukebox or on Global (often the uploader named in a downloaded file) gets a 404 page instead of empty sections.
 
 ### Fixed
 - Artists whose name has a comma stay one artist: Earth, Wind & Fire, Tyler, The Creator, Grover Washington, Jr. and the like no longer split into two in Artists, Now Playing and ⋯ → More by.
