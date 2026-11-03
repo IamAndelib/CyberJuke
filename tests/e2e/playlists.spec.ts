@@ -78,6 +78,16 @@ test.describe('a playlist', () => {
     expect(q.list.map((t) => t.title)).toEqual(['Song 3']);
   });
 
+  test('a cover is the first four covers, a note in each square without one; an empty playlist is its icon', async ({ page }) => {
+    await page.getByTestId('tab-library').click();
+    const night = page.getByTestId('lib-playlist').filter({ hasText: 'Night drive' });
+    await expect(night.locator('.mosaic .art')).toHaveCount(3);
+    await expect(night.getByTestId('mosaic-note')).toHaveCount(1);
+    await expect(page.getByTestId('lib-playlist').filter({ hasText: 'Road trip' }).locator('.mosaic-empty')).toHaveCount(1);
+    await openPlaylist(page, 'Night drive');
+    await expect(page.getByTestId('screen-playlist').locator('.album-cover').getByTestId('mosaic-note')).toHaveCount(1);
+  });
+
   test('Edit songs moves them with ↑ ↓ and takes one out with ✕ (Undo puts it back); Done ends it, and it is kept', async ({ page }) => {
     await openPlaylist(page, 'Night drive');
     await page.getByTestId('pl-more').click();
