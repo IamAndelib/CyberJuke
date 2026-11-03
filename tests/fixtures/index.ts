@@ -6,6 +6,7 @@
  *   `test.use({ musicOptions })`, or `musicOptions: false` for none;
  * - stand-ins for YouTube thumbnails and the IFrame player, and for Jukebox MP3s on
  *   latex.gg with their covers;
+ * - with `test.use({ localOptions })`, a fake JukeLocal: folders, songs, the picker (./local);
  * - no handover grace: a lost connection counts as offline at once;
  * - `window.__cyberjukeVisibility(state)` to fake the page going to the background and back;
  * - checks after the test: no CSP violation and no uncaught page error.
@@ -15,15 +16,19 @@ import { test as base, expect } from '@playwright/test';
 import { stubBackend, type Backend, type BackendOptions } from './backend';
 import { stubMusic, type MusicStubOptions } from './music';
 import { stubLatex } from './latex';
+import { stubLocal, type LocalStubOptions } from './local';
 import { stubYouTube } from './youtube';
 
 export { expect };
 export { ATTACHMENT_ONLY_GENRE, AUTH_USER, AUTH_USER_B, BANNED_POST, MEMBERS_POSTS, MP3_POSTS, coverUrl } from './data';
 export { FAKE_MP3_SECONDS } from './latex';
+export { musicFolder, type FakeLocalFolder, type FakePick } from './local';
 
 interface Options {
   backendOptions: BackendOptions;
   musicOptions: MusicStubOptions | false;
+  /** A fake JukeLocal (local music), off unless a test sets it. */
+  localOptions: LocalStubOptions | false;
   live: boolean;
   /** Uncaught page errors matching these are tolerated (a test that causes one on purpose). */
   allowPageErrors: RegExp[];
@@ -40,6 +45,7 @@ interface Fixtures {
 export const test = base.extend<Options & Fixtures>({
   backendOptions: [{}, { option: true }],
   musicOptions: [{}, { option: true }],
+  localOptions: [false, { option: true }],
   live: [false, { option: true }],
   allowPageErrors: [[], { option: true }],
 
@@ -81,7 +87,7 @@ export const test = base.extend<Options & Fixtures>({
   ],
 
   stubs: [
-    async ({ page, musicOptions }, use) => {
+    async ({ page, musicOptions, localOptions }, use) => {
       // Offline at once: the handover grace (core/network.ts) only where a test sets it.
       await page.addInitScript(() => (window.__cyberjukeOfflineGraceMs = 0));
       // The page's visibility, faked: the app follows document.visibilityState and its event.
@@ -98,6 +104,7 @@ export const test = base.extend<Options & Fixtures>({
       await stubYouTube(page);
       await stubLatex(page);
       if (musicOptions !== false) await stubMusic(page, musicOptions);
+      if (localOptions !== false) await stubLocal(page, localOptions);
       await use();
     },
     { auto: true },

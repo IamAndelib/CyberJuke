@@ -1,15 +1,15 @@
 /**
  * Every offline line the app shows, in one voice (the terminal style of `[ NO CARRIER ]`
  * and "Feeling lucky?"), so they stay consistent. Offline the only music that plays is liked
- * songs saved on the phone, so they say that when some are, and
+ * songs saved on the phone and local songs, so they say which when some are (stillPlays), and
  * "connect" otherwise. Here in core because the player's toasts use them as well as the
  * screens.
  */
 export const OFFLINE = {
   /** The bar at the top while the device is offline (wrapped, the · stays on the first line). */
   banner: '[ offline ] no carrier\u00a0· connect to play',
-  /** The bar while offline with liked songs saved (it opens Liked). */
-  bannerLiked: '[ offline ] no carrier\u00a0· your liked songs still play',
+  /** The bar while offline with songs that still play (stillPlays; it opens Library). */
+  bannerPlays: (what: string) => `[ offline ] no carrier\u00a0· your ${what} still play`,
   /** The state a list shows instead of its rows (OfflineGate). */
   glyph: '[ NO CARRIER ]',
   title: "Line's dead",
@@ -18,9 +18,9 @@ export const OFFLINE = {
   redial: 'Redial',
   /** A tap that would play something. */
   tap: 'No carrier. Connect to play.',
-  /** The same with liked songs saved: its button opens Liked. */
-  tapLiked: 'No carrier. Your liked songs still play.',
-  likedAction: 'Liked',
+  /** The same with songs that still play: its button opens Library. */
+  tapPlays: (what: string) => `No carrier. Your ${what} still play.`,
+  libraryAction: 'Library',
   /** A liked song not saved on the phone yet, tapped offline. */
   notSaved: 'Not saved yet. Needs a connection.',
   /** The connection dropped mid-track and the player won't pick up by itself. */
@@ -39,6 +39,11 @@ export const OFFLINE = {
   pullAgain: 'No carrier. Connect, then refresh.',
   lyrics: "No carrier. Lyrics load when you're back online.",
 } as const;
+
+/** What still plays offline, as the offline lines name it: liked songs saved, local songs, both, or nothing. */
+export function stillPlays(liked: boolean, local: boolean): string | null {
+  return liked && local ? 'liked and local songs' : liked ? 'liked songs' : local ? 'local songs' : null;
+}
 
 /** Offline, a song that couldn't load was passed over for the next saved one. */
 export const skippedOffline = (title: string): string => `No carrier. Skipped "${title}": not saved on the phone.`;

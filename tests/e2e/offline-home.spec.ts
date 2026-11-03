@@ -66,13 +66,13 @@ test('opened offline with no Jukebox saved before, Home says no carrier, and wit
   await page.goto('/');
   const home = page.getByTestId('screen-home');
   await expect(home.getByTestId('offline')).toBeVisible();
-  await expect(home.getByTestId('offline-liked')).toHaveCount(0);
+  await expect(home.getByTestId('offline-library')).toHaveCount(0);
   await expect(page.getByTestId('shuffle-all')).toContainText('Shuffle the Jukebox');
-  // A liked song saved on the phone: the state offers Liked, and the hero shuffles them.
+  // A liked song saved on the phone: the state offers Library, and the hero shuffles them.
   await saved(page, [liked.ytId]);
   await expect(page.getByTestId('shuffle-all')).toContainText('Shuffle liked songs');
-  await home.getByTestId('offline-liked').click();
-  await expect(page.getByTestId('screen-liked')).toBeVisible();
+  await home.getByTestId('offline-library').click();
+  await expect(page.getByTestId('screen-library')).toBeVisible();
 });
 
 test('offline, Search finds the saved Jukebox, with no way to Global', async ({ page, backend }) => {

@@ -32,7 +32,7 @@ describe('theme migration', () => {
   it('migrates a saved GRiD theme to Brutalist and saves it', async () => {
     store.set('settings', JSON.stringify({ theme: 'grid', showNsfw: true, quality: 'low' }));
     await lib.loadLibrary();
-    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: false, cacheMb: 256, crossfadeMs: 0, gapless: true, downloadOnMobileData: false, version: lib.SETTINGS_VERSION });
+    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: false, cacheMb: 256, crossfadeMs: 0, gapless: true, downloadOnMobileData: false, localMusic: false, localSort: 'title', version: lib.SETTINGS_VERSION });
     await flush();
     expect(JSON.parse(store.get('settings')!).theme).toBe('brutalist');
   });
@@ -275,6 +275,39 @@ describe('download using mobile data setting', () => {
       await lib.loadLibrary();
       expect(lib.settings.value.downloadOnMobileData).toBe(false);
     }
+  });
+});
+
+describe('local music settings', () => {
+  it('is off and sorted by title unless chosen, also in settings saved before them; only a known sort is kept', async () => {
+    store.set('settings', JSON.stringify({ theme: 'vt320', version: 3 }));
+    await lib.loadLibrary();
+    expect(lib.settings.value).toMatchObject({ localMusic: false, localSort: 'title' });
+    lib.updateSettings({ localMusic: true, localSort: 'album' });
+    await flush();
+    await lib.loadLibrary();
+    expect(lib.settings.value).toMatchObject({ localMusic: true, localSort: 'album' });
+    store.set('settings', JSON.stringify({ localMusic: 'yes', localSort: 'year', version: 3 }));
+    await lib.loadLibrary();
+    expect(lib.settings.value).toMatchObject({ localMusic: false, localSort: 'title' });
+  });
+});
+
+describe('liked local songs', () => {
+  const song = (id: string) => ({ id, ytId: '', title: id, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '', source: 'local' as const });
+
+  it('show in Liked only while their file is on the phone, and are kept meanwhile', async () => {
+    await lib.loadLibrary();
+    const a = song('loc:00000000000000a1');
+    const b = song('loc:00000000000000b2');
+    lib.toggleLike(a);
+    lib.toggleLike(b);
+    lib.localHere.value = new Set([a.id]);
+    expect(lib.likedShown.value.map((t) => t.id)).toEqual(lib.liked.value.filter((t) => t.id === a.id).map((t) => t.id));
+    expect(lib.liked.value.map((t) => t.id)).toContain(b.id);
+    lib.localHere.value = new Set([a.id, b.id]);
+    expect(lib.likedShown.value.map((t) => t.id).sort()).toEqual([a.id, b.id].sort());
+    lib.localHere.value = new Set();
   });
 });
 

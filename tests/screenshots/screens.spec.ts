@@ -1,4 +1,4 @@
-import { AUTH_USER, expect, MEMBERS_POSTS, test } from '../fixtures';
+import { AUTH_USER, expect, MEMBERS_POSTS, musicFolder, test } from '../fixtures';
 import type { Page } from '@playwright/test';
 import { nextFrame, openNowPlaying, openSettings, seedStorage, setLyricsMode, SETTINGS_KEY, shot, toastsGone, openLibrary } from '../helpers';
 
@@ -301,14 +301,15 @@ for (const theme of ['dark', 'c64'] as const) {
     await page.evaluate(() => (window as unknown as { __cyberjukeCache: { saved(ids: string[]): void } }).__cyberjukeCache.saved(['abcdefghij1', 'abcdefghij3']));
     backend.offline = true;
     await page.context().setOffline(true);
-    await page.getByTestId('offline-banner-liked').click();
+    await page.getByTestId('offline-banner-library').click();
+    await page.getByTestId('lib-liked').click();
     await expect(page.getByTestId('liked-list').getByTestId('track-row')).toHaveCount(4);
     await settle(page);
     await shot(page, `offline-liked-${theme}`);
     // Now Playing covers the bar, so its header says so.
     await page.getByTestId('liked-list').getByTestId('track-play').first().click();
     await openNowPlaying(page);
-    await expect(page.getByTestId('np-offline-liked')).toBeVisible();
+    await expect(page.getByTestId('np-offline-library')).toBeVisible();
     await settle(page);
     await shot(page, `offline-now-playing-${theme}`);
   });
@@ -419,3 +420,45 @@ for (const theme of THEMES) {
     });
   }
 }
+
+test.describe('local music', () => {
+  test.use({
+    localOptions: {
+      folders: [musicFolder(14), { id: 'tree:albums', name: 'SD card › Albums', gone: true, songs: [{ hex: '00000000000000a1', title: 'Card one' }] }],
+    },
+  });
+  for (const theme of THEMES) {
+    for (const width of [320, 360]) {
+      test(`Library, Local, its Settings card, Now Playing and offline (${theme}, ${width}px)`, async ({ page, backend }) => {
+        await page.setViewportSize({ width, height: 915 });
+        await seedStorage(page, { [SETTINGS_KEY]: { theme, showNsfw: false, quality: 'high', localMusic: true, version: 3 } });
+        await page.goto('/');
+        await expect(page.getByTestId('track-row').first()).toBeVisible();
+        const tag = `${theme}-${width}`;
+        await page.getByTestId('tab-library').click();
+        await expect(page.getByTestId('lib-local')).toContainText('14 songs');
+        await settle(page);
+        await shot(page, `local-library-${tag}`);
+        await openLibrary(page, 'local');
+        await expect(page.getByTestId('local-list').getByTestId('track-row').first()).toBeVisible();
+        await settle(page);
+        await shot(page, `local-page-${tag}`);
+        await page.getByTestId('local-play').click();
+        await openNowPlaying(page);
+        await settle(page);
+        await shot(page, `local-now-playing-${tag}`);
+        await page.getByTestId('np-close').click();
+        await openSettings(page);
+        await page.getByTestId('local-card').scrollIntoViewIfNeeded();
+        await settle(page);
+        await shot(page, `local-settings-${tag}`);
+        backend.offline = true;
+        await page.context().setOffline(true);
+        await page.getByTestId('tab-library').click();
+        await expect(page.getByTestId('offline-banner-library')).toHaveText('[ offline ] no carrier · your local songs still play');
+        await settle(page);
+        await shot(page, `local-offline-${tag}`);
+      });
+    }
+  }
+});

@@ -26,9 +26,6 @@ export const savedLiked = computed<Track[]>(() => {
   return saved.size ? likedShown.value.filter((t) => isSaved(t, saved)) : [];
 });
 
-/** Some liked song plays offline (the offline banner and toast point to Liked then). */
-export const hasSavedLiked = computed(() => savedLiked.value.length > 0);
-
 /** Whether `t` plays offline. */
 export function isSaved(t: Track | null | undefined, saved: ReadonlySet<string> = savedOffline.peek()): boolean {
   // A song from a folder on the phone always plays offline.

@@ -34,7 +34,8 @@ import { auth } from '../data/auth';
 import { openNowPlayingWhen, openSettings } from '../ui/nav';
 import { retryWatchedFeeds } from '../stores/feed';
 import { JukePlayer } from '../player/native';
-import { hasCurrent, setOpenLiked, startPlayerPrefs, startQueuePurge } from '../player';
+import { hasCurrent, setOpenLibrary, startPlayerPrefs, startQueuePurge } from '../player';
+import { startLocal } from '../stores/local';
 import { startListeningCache } from '../player/listeningCache';
 import { startUpdates } from '../stores/updates';
 import { playFrom, radio } from '../ui/playAll';
@@ -45,7 +46,7 @@ import { BootError } from './BootError';
 import { wireBack } from './back';
 import { firstScreenShown, keepThemeBackground, styleSystemBars } from './windowChrome';
 import { Home } from '../features/home/Home';
-import { Library, openLiked } from '../features/library/Library';
+import { Library, openLibrary } from '../features/library/Library';
 import { Screen } from '../ui/components/Screen';
 import { whenIdle } from '../core/idle';
 import { TrackRow } from '../ui/components/TrackRow';
@@ -163,7 +164,7 @@ async function boot(): Promise<void> {
   // default size first), and before startAccount acts on them: starting signed out drops
   // members-only audio too.
   void stored.then(startListeningCache);
-  setOpenLiked(openLiked);
+  setOpenLibrary(openLibrary);
   // Sign-ins and sign-outs are followed from here on (restore() may already be refreshing the login).
   startAccount(stored, openSettings);
   // Home's first page is asked for now, not after the first render: the login decides
@@ -207,6 +208,7 @@ async function boot(): Promise<void> {
   startCatalog(firstPage);
   afterFirstPage(firstPage, () => void startUpdates(native ? () => JukePlayer.getAppInfo() : undefined));
   startFreshness();
+  startLocal();
   maybeAutoplay().catch((e) => logError('autoplay', e));
 }
 

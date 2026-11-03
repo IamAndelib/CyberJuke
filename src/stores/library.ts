@@ -6,7 +6,7 @@
  * (android/app/src/main/res/xml/data_extraction_rules.xml), unlike Preferences.
  */
 import { computed, signal, type ReadonlySignal } from '@preact/signals';
-import type { Track } from '../data/model';
+import { isLocal, type Track } from '../data/model';
 import { artistKey } from '../data/artists';
 import { auth } from '../data/auth';
 import { asTrack, asTracks } from '../core/guards';
@@ -80,11 +80,17 @@ export interface Settings {
    * default), only on Wi-Fi; what plays is kept in the listening cache either way. Native only.
    */
   downloadOnMobileData: boolean;
+  /** Settings → Local music: songs from the folders the person chose play (off until turned on). */
+  localMusic: boolean;
+  /** How Library → Local is sorted. */
+  localSort: LocalSort;
   /** The saved format's version: each migration below runs once. */
   version: number;
 }
 
 export type Ipv4Mode = 'auto' | 'always' | 'off';
+export type LocalSort = 'title' | 'artist' | 'album';
+export const LOCAL_SORTS: readonly LocalSort[] = ['title', 'artist', 'album'];
 export const IPV4_MODES: readonly Ipv4Mode[] = ['auto', 'always', 'off'];
 
 /**
@@ -106,6 +112,8 @@ const DEFAULT_SETTINGS: Settings = {
   crossfadeMs: 0,
   gapless: true,
   downloadOnMobileData: false,
+  localMusic: false,
+  localSort: 'title',
   version: SETTINGS_VERSION,
 };
 
@@ -132,13 +140,23 @@ export const history = signal<HistoryEntry[]>([]);
 /** History as a plain track list, each track once. */
 export const recent = computed<Track[]>(() => uniqueTracks(history.value));
 export const settings = signal<Settings>({ ...DEFAULT_SETTINGS });
+/**
+ * The ids of the local songs on the phone now (stores/local keeps it). A liked local song not
+ * among them (its folder removed or out of reach, local music off) is hidden from Liked but
+ * kept, and comes back with its folder.
+ */
+export const localHere = signal<ReadonlySet<string>>(new Set());
 /** The NSFW setting alone: a theme change doesn't touch what depends on it (the catalog, the search index). */
 export const showNsfw = computed(() => settings.value.showNsfw);
 /**
  * What Library shows with the NSFW setting applied, as the catalog does: Liked and the history
  * keep every track, so turning the setting back on brings them back.
  */
-export const likedShown = computed(() => (showNsfw.value ? liked.value : liked.value.filter((t) => !t.nsfw)));
+export const likedShown = computed(() => {
+  const nsfw = showNsfw.value;
+  const here = localHere.value;
+  return liked.value.filter((t) => (nsfw || !t.nsfw) && (!isLocal(t) || here.has(t.id)));
+});
 export const historyShown = computed(() => (showNsfw.value ? history.value : history.value.filter((e) => !e.track.nsfw)));
 export const recentShown = computed(() => (showNsfw.value ? recent.value : recent.value.filter((t) => !t.nsfw)));
 /** Favorite genres, in the order they were added. */
@@ -287,6 +305,9 @@ export async function loadSettings(): Promise<void> {
   merged.gapless = merged.gapless !== false;
   // Saved before Download using mobile data (or unknown): off.
   merged.downloadOnMobileData = merged.downloadOnMobileData === true;
+  // Saved before Local music (or unknown): off, sorted by title.
+  merged.localMusic = merged.localMusic === true;
+  if (!LOCAL_SORTS.includes(merged.localSort)) merged.localSort = DEFAULT_SETTINGS.localSort;
   settings.value = merged;
   if (migrated || preferIpv4 !== undefined || upgraded) write(K_SETTINGS, merged);
 }
