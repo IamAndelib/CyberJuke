@@ -186,7 +186,7 @@ export const TrackRow = memo(function TrackRow({
           )}
         </div>
         <div class="row-text">
-          <div class="row-title" data-testid="track-title">
+          <div class={isCurrent ? 'row-title is-current' : 'row-title'} data-testid="track-title">
             {track.title}
           </div>
           <div class="row-artist">{track.artist}</div>
