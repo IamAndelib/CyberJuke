@@ -1,5 +1,5 @@
 import { expect, test } from '../../fixtures';
-import { clockStart, homeSettled, isFeedQuery, playOn, recordToasts, runFor, setVisibility, start, toastsSeen, tracksEndedIn, waitForTracks } from '../../helpers';
+import { clockStart, homeSettled, isFeedQuery, playOn, recordToasts, runFor, setVisibility, start, toastsSeen, tracksEndedIn, waitForTracks, openLibrary } from '../../helpers';
 
 /**
  * An hour with the phone in the pocket, screen locked, music on. In the background the app
@@ -48,7 +48,7 @@ test('an hour locked: nothing is asked in the background; on return one check, o
   await runFor(page, 10_000);
   expect(limits()).toEqual([24, 25, 300]);
   await page.getByTestId('tab-library').click();
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   // Recently played: the track that was playing and every one that followed it.
   const count = Number(/(\d+)/.exec((await page.getByTestId('lib-recent').textContent())!)![1]);
   expect(count).toBe(tracksEndedIn(HOUR) + 1);

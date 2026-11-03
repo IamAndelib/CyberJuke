@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { bufferedAhead, openNowPlaying, openSettings, playAndOpen, playerCalls, recordToasts, saved, seedStorage, setOffline, start, toastsSeen } from '../helpers';
+import { bufferedAhead, openNowPlaying, openSettings, playAndOpen, playerCalls, recordToasts, saved, seedStorage, setOffline, start, toastsSeen, openLibrary } from '../helpers';
 
 /**
  * The listening cache (native): liked songs saved on the phone play offline, from any list,
@@ -23,7 +23,7 @@ const queues = async (page: Page) => (await playerCalls(page)).filter((c) => c[0
 test('offline, any list plays its saved songs from the tapped one; unsaved rows are dimmed and say so', async ({ page, backend }) => {
   await seedStorage(page, { 'CapacitorStorage.liked': LIKED });
   await page.goto('/');
-  await page.getByTestId('tab-library').click();
+  await openLibrary(page, 'liked');
   const rows = page.getByTestId('liked-list').getByTestId('track-row');
   await expect(rows).toHaveCount(3);
   // Liked is sent to native, newest like first; starting signed out, at once again before
@@ -58,7 +58,7 @@ test('offline, any list plays its saved songs from the tapped one; unsaved rows 
 
   // Recently played follows the same rule: a saved liked song is bright there and plays, and
   // Play plays the saved ones.
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   const recent = page.getByTestId('recent-list').getByTestId('track-row');
   await expect(recent).toHaveCount(2);
   for (const play of await recent.getByTestId('track-play').all()) await expect(play).not.toHaveAttribute('aria-disabled');
@@ -75,7 +75,7 @@ test('offline, any list plays its saved songs from the tapped one; unsaved rows 
 
   // Back online: every row plays again.
   await setOffline(page, backend, false);
-  await page.getByTestId('lib-liked').click();
+  await openLibrary(page, 'liked');
   for (const play of await rows.getByTestId('track-play').all()) await expect(play).not.toHaveAttribute('aria-disabled');
 });
 
@@ -104,18 +104,16 @@ test('offline with liked songs saved, the banner and the refusal toast open Like
   await expect(banner).toHaveText(BANNER_LIKED);
   expect((await page.getByTestId('offline-banner-liked').boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await page.getByTestId('offline-banner-liked').click();
-  await expect(page.getByTestId('screen-library')).toBeVisible();
-  await expect(page.getByTestId('lib-liked')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('screen-liked')).toBeVisible();
 
   // Elsewhere, playing what isn't saved is refused, pointing to Liked (Home's Shuffle plays them).
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   await page.getByTestId('tab-home').click();
   await expect(page.getByTestId('shuffle-all')).toContainText('Shuffle liked songs');
   await page.getByTestId('screen-home').locator('.row.off').first().getByTestId('track-play').click({ force: true });
   await expect(page.getByTestId('toast')).toContainText(TAP_LIKED);
   await page.getByTestId('toast-action').click();
-  await expect(page.getByTestId('screen-library')).toBeVisible();
-  await expect(page.getByTestId('lib-liked')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('screen-liked')).toBeVisible();
   await expect(page.getByTestId('liked-list').getByTestId('track-row')).toHaveCount(3);
 
   // Nothing saved (yet): back to asking for a connection.
@@ -165,7 +163,7 @@ test('offline, Up next tells a screen reader which songs can\u2019t play, and th
 test('offline, the track the app reopened on is dimmed and asks to connect unless saved; with audio loaded it plays', async ({ page, backend }) => {
   await seedStorage(page, { 'CapacitorStorage.liked': LIKED });
   await page.goto('/');
-  await page.getByTestId('tab-library').click();
+  await openLibrary(page, 'liked');
   const rows = page.getByTestId('liked-list').getByTestId('track-row');
   await expect(rows).toHaveCount(3);
   await saved(page, ['abcdefghij1']);
@@ -189,7 +187,7 @@ test('offline, the track the app reopened on is dimmed and asks to connect unles
   await expect(toast).toHaveText(NOT_SAVED);
   await expect(toggle).toHaveAttribute('aria-label', 'Play');
   // Any other tap clears the message first (past the row's double-tap window, too).
-  await page.getByTestId('lib-liked').click();
+  await openLibrary(page, 'liked');
   await expect(toast).toHaveCount(0);
   await page.waitForTimeout(500);
   await current.getByTestId('track-play').click({ force: true });
@@ -245,8 +243,7 @@ test('offline, Now Playing says so too: with liked songs saved its line opens Li
   expect((await page.getByTestId('np-offline-liked').boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await page.getByTestId('np-offline-liked').click();
   await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
-  await expect(page.getByTestId('screen-library')).toBeVisible();
-  await expect(page.getByTestId('lib-liked')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('screen-liked')).toBeVisible();
 
   // Back online: gone.
   await openNowPlaying(page);

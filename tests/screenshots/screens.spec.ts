@@ -1,6 +1,6 @@
 import { AUTH_USER, expect, MEMBERS_POSTS, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { nextFrame, openNowPlaying, openSettings, seedStorage, setLyricsMode, SETTINGS_KEY, shot, toastsGone } from '../helpers';
+import { nextFrame, openNowPlaying, openSettings, seedStorage, setLyricsMode, SETTINGS_KEY, shot, toastsGone, openLibrary } from '../helpers';
 
 /**
  * Phone-size screenshots of every screen, written to test-results/screenshots/ (a CI
@@ -232,7 +232,7 @@ test('history days, the new-tracks pill, the block banner (dark)', async ({ page
   await settle(page);
   await shot(page, 'pill');
   await page.getByTestId('tab-library').click();
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   await expect(page.getByTestId('history-day-label')).toHaveCount(3);
   await settle(page);
   await shot(page, 'history-days');
@@ -279,7 +279,7 @@ for (const theme of ['dark', 'c64'] as const) {
     await settle(page);
     await shot(page, `offline-home-${theme}`);
     await page.getByTestId('tab-library').click();
-    await page.getByTestId('lib-recent').click();
+    await openLibrary(page, 'recent');
     await settle(page);
     await shot(page, `offline-library-${theme}`);
     await page.getByTestId('search-fab').click();

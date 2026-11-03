@@ -421,11 +421,11 @@ test('radio groups and the Library tabs are one Tab stop each, worked with the a
   await page.getByTestId('ipv4-auto').focus();
   await page.keyboard.press('End');
   await expect(page.locator('[data-testid^="ipv4-"]').last()).toHaveAttribute('aria-checked', 'true');
+  // Library's lists are plain buttons, one per row: Enter opens one.
   await page.getByTestId('tab-library').click();
-  await page.getByTestId('lib-liked').focus();
-  await page.keyboard.press('ArrowRight');
-  await expect(page.getByTestId('lib-recent')).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByTestId('lib-recent')).toBeFocused();
+  await page.getByTestId('lib-recent').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('screen-recent')).toBeVisible();
 });
 
 // The waiting action runs before a tap that follows it, so it acts on the screen it was tapped on.

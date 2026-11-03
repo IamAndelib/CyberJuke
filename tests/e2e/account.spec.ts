@@ -1,6 +1,6 @@
 import { AUTH_USER, AUTH_USER_B, BANNED_POST, expect, MEMBERS_POSTS, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { expectStable, openSettings, playerCalls, seedStorage, start, toastsGone, waitForTracks } from '../helpers';
+import { expectStable, openSettings, playerCalls, seedStorage, start, toastsGone, waitForTracks, openLibrary } from '../helpers';
 
 /** Optional "Sign in with Cyberspace": members-only posts, errors, token refresh, sign-out. */
 
@@ -115,9 +115,9 @@ test('signing in shows [members] posts in Latest, search and Now Playing; signin
   await waitForTracks(page);
   await expect(homeRow(page, MEMBERS_POSTS[0].title)).toHaveCount(0);
   await expect(page.getByTestId('screen-home').getByTestId('members-tag')).toHaveCount(0);
-  await page.getByTestId('tab-library').click();
+  await openLibrary(page, 'liked');
   await expect(page.getByTestId('liked-list').getByTestId('track-row')).toHaveCount(0);
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   await expect(page.getByTestId('recent-list').getByText(MEMBERS_POSTS[0].title)).toHaveCount(0);
   await page.getByTestId('search-fab').click();
   await page.getByTestId('mode-jukebox').click();
@@ -215,9 +215,9 @@ test('members-only likes and plays come back for the account that had them, and 
   };
   const library = async () => {
     await page.getByTestId('tab-library').click();
-    await page.getByTestId('lib-liked').click();
+    await openLibrary(page, 'liked');
     const l = await liked.allTextContents();
-    await page.getByTestId('lib-recent').click();
+    await openLibrary(page, 'recent');
     const r = await recent.allTextContents();
     return { liked: l.map((x) => x.trim()), recent: r.map((x) => x.trim()) };
   };
@@ -292,9 +292,9 @@ test('signed out at startup: members-only tracks restored from a backup are drop
     ],
   });
   await page.goto('/');
-  await page.getByTestId('tab-library').click();
+  await openLibrary(page, 'liked');
   await expect(page.getByTestId('liked-list').getByTestId('track-title')).toHaveText(['Public Liked']);
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   await expect(page.getByTestId('recent-list').getByTestId('track-title')).toHaveText(['Public Played']);
   await expect.poll(() => page.evaluate(() => /Members (Liked|Played)/.test(JSON.stringify({ ...localStorage })))).toBe(false);
 });

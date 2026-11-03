@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { OFFLINE } from '../../src/core/offlineText';
-import { clockStart, expectStable, FAKE_TRACK_MS, openNowPlaying, openSearch, openSettings, playOn, saved, seedStorage, setOffline, SETTINGS_KEY, start, toListEnd } from '../helpers';
+import { clockStart, expectStable, FAKE_TRACK_MS, openNowPlaying, openSearch, openSettings, playOn, saved, seedStorage, setOffline, SETTINGS_KEY, start, toListEnd, openLibrary } from '../helpers';
 
 /** Signal Radio: the Radio tab, tuning in, a station that plays on, and its tracks kept. */
 
@@ -125,7 +125,7 @@ test('a station plays on past its rounds, and its tracks are kept like any other
   // Played station tracks come back after a reload with their titles (Recently played).
   await page.reload();
   await page.getByTestId('tab-library').click();
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   const recent = page.getByTestId('recent-list').getByTestId('track-title');
   await expect(recent.first()).toHaveText(now);
 });
@@ -170,7 +170,7 @@ test("a station's track played from another list is just a track there: with Aut
   await expect(page.getByTestId('mini-title')).not.toHaveText(first);
   // From Recently played, which now holds two of the station's tracks: the older one.
   await page.getByTestId('tab-library').click();
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   const rows = page.getByTestId('recent-list').getByTestId('track-row');
   await expect(rows).toHaveCount(2);
   await rows.filter({ hasText: first }).getByTestId('track-play').click();
