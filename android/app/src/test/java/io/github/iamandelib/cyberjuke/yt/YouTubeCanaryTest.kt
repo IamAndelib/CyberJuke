@@ -146,6 +146,8 @@ class YouTubeCanaryTest {
         val songs = r.items.filter { it.kind == "song" && SessionPolicy.isValidYtId(it.ytId) }
         assertTrue("music search: ${r.items.size} items, ${songs.size} songs with an id", songs.size >= 3)
         assertTrue("music search: no song by Queen", songs.any { it.subtitle.contains("Queen", ignoreCase = true) })
+        // NewPipe's uploader name and channel URL: the credited artist, whose page opens by id.
+        assertTrue("music search: no song credits Queen by channel", songs.any { s -> s.artists.any { it.name.contains("Queen", ignoreCase = true) } })
     }
 
     @Test
@@ -156,6 +158,7 @@ class YouTubeCanaryTest {
         assertTrue("artist page: no top songs (source ${a.source})", a.topSongs.isNotEmpty())
         assertTrue("artist page: no releases (source ${a.source})", a.releases.isNotEmpty())
         assertTrue("artist page: top songs without ids", a.topSongs.all { SessionPolicy.isValidYtId(it.ytId) })
+        assertTrue("artist page: no top song credits $QUEEN", a.topSongs.any { s -> s.artists.any { it.channelId == QUEEN } })
     }
 
     /**

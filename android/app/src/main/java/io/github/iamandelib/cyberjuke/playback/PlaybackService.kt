@@ -1441,6 +1441,7 @@ class PlaybackService : MediaSessionService() {
                     postUrl = extra?.postUrl,
                     membersOnly = extra?.membersOnly == true,
                     album = item.mediaMetadata.albumTitle?.toString(),
+                    artists = extra?.artists ?: emptyList(),
                     heard = (extras?.getLong(QueueCommands.EXTRA_UID, 0L) ?: 0L).let { it != 0L && it in heard },
                     section = when {
                         serial != 0L && serial in pending -> NativeQueue.Section.QUEUED

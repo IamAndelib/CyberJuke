@@ -7,7 +7,7 @@ import { UNKNOWN_ARTIST, UNTITLED, artworkUrl, isCoverUrl, makeTrack, type Track
 import { history, knownTrack, liked, IPV4_MODES, type CrossfadeMs, type Ipv4Mode, type Quality } from '../stores/library';
 import { catalog } from '../stores/catalog';
 import { toast } from '../stores/toast';
-import { LOCAL_ID_RE, UP_NEXT_MAX, YT_ID_RE, hasAudio, isLocalTrack, isMp3Url, parseNativeState } from '../core/guards';
+import { LOCAL_ID_RE, UP_NEXT_MAX, YT_ID_RE, hasAudio, isLocalTrack, isMp3Url, parseNativeState, parseTrackArtists } from '../core/guards';
 import { localArtUrl } from '../data/local';
 import { logError } from '../core/log';
 import { trackErrorText } from './errorText';
@@ -31,6 +31,7 @@ export function toNative(t: Track): NativeTrack {
     ...(t.membersOnly && { membersOnly: true }),
     ...(t.album && { album: clip(t.album) }),
     ...(t.mp3 && { mp3: t.mp3 }),
+    ...(!!t.artists?.length && { artists: t.artists.map((a) => ({ name: clip(a.name), channelId: a.channelId })) }),
     // A local song: native finds its file by the id (LocalLibrary), never from the page.
     ...(isLocalTrack(t) && { local: true }),
   };
@@ -72,6 +73,7 @@ function fromNative(t: NativeTrack): Track | null {
     });
   }
   if (!mp3 && !YT_ID_RE.test(t.ytId)) return null;
+  const artists = parseTrackArtists(t.artists);
   return makeTrack({
     id: t.id,
     ytId: t.ytId,
@@ -84,6 +86,7 @@ function fromNative(t: NativeTrack): Track | null {
     ...(t.membersOnly === true && { membersOnly: true }),
     ...(typeof t.album === 'string' && t.album && { album: t.album }),
     ...(t.id.startsWith('ytm:') && { source: 'ytmusic' as const }),
+    ...(artists.length > 0 && { artists }),
   });
 }
 

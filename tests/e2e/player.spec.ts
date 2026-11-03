@@ -197,6 +197,27 @@ test('several credited artists open a chooser from Now Playing', async ({ page }
   await expect(chooser).toBeHidden();
 });
 
+test.describe('an artist that searching their name does not find', () => {
+  test.use({ musicOptions: { linkedArtist: 'Grover Washington, Jr.', unknownArtists: ['Grover Washington, Jr.'] } });
+  test("a Global song's artist opens their page by channel", async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('search-fab').click();
+    await page.getByTestId('mode-global').click();
+    await page.getByTestId('search-input').fill('Grover Washington, Jr.');
+    const row = page.getByTestId('global-results').getByTestId('track-row').first();
+    await expect(row).toContainText('Grover Washington, Jr.');
+    await row.getByTestId('track-play').click();
+    await page.getByTestId('search-close').click();
+    await openNowPlaying(page);
+    await page.getByTestId('np-artist').click();
+    await expect(page.getByTestId('artist-chooser')).toBeHidden();
+    await expect(page.getByTestId('screen-artist').locator('.topbar-title')).toHaveText('Grover Washington, Jr.');
+    await expect(page.getByTestId('artist-top').getByTestId('track-row').first()).toBeVisible();
+    const pages = (await musicCalls(page)).filter((c) => c[0] === 'artistPage');
+    expect(pages).toEqual([['artistPage', expect.stringMatching(/^UC/)]]);
+  });
+});
+
 // ---- Queue ---------------------------------------------------------------------------
 
 /** ⋯ → Add to queue on row i (a real tap: the fast scroller's thumb stays clear of ⋯). */

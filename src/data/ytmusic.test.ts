@@ -53,6 +53,13 @@ describe('musicItemToTrack', () => {
     ]);
   });
 
+  it("keeps a song's linked artists, and none it wasn't given", () => {
+    const artists = [{ name: 'Bill Withers', channelId: 'UCDjpW6k2Sfg_FTr1toLvffQ' }, { name: 'Grover Washington, Jr.', channelId: 'UCsN1HTruhFfXcSMGMsBmX_w' }];
+    expect(m.musicItemToTrack(song('abcdefghijk', { subtitle: 'Bill Withers & Grover Washington, Jr.', artists }))!.artists).toEqual(artists);
+    expect(m.musicItemToTrack(song('abcdefghijk'))).not.toHaveProperty('artists');
+    expect(m.musicItemToTrack(song('abcdefghijk', { artists: [] }))).not.toHaveProperty('artists');
+  });
+
   it("tags an album's tracks with the album, and nothing else", () => {
     const [t] = m.musicTracks([song('abcdefghijk')], 'Artist', 'Blue Lines');
     expect(t.album).toBe('Blue Lines');
