@@ -68,7 +68,6 @@ export function GenreGrid() {
         ) : status !== 'error' ? (
           <TileSkeleton testid="genre-skeleton" />
         ) : null}
-        <p class="fineprint">Genres are free text chosen by each poster. Tap ☆ to pin a genre to the top.</p>
       </OfflineGate>
     </Screen>
   );
