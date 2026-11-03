@@ -2,6 +2,7 @@ import { signal } from '@preact/signals';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JsonFile } from '../core/storage';
 import type { Track } from '../data/model';
+import type { CreateResult } from './playlists';
 
 vi.mock('@capacitor/preferences', () => ({
   Preferences: { get: async () => ({ value: null }), set: async () => undefined, remove: async () => undefined },
@@ -29,7 +30,7 @@ function memoryFile(initial: unknown = null): JsonFile<unknown> & { value: unkno
 }
 
 const tr = (id: string, o: Partial<Track> = {}): Track => ({ id, ytId: id.padEnd(11, 'x').slice(0, 11), title: id, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '', ...o });
-const idOf = (r: pl.CreateResult) => (r.result === 'created' ? r.id : '');
+const idOf = (r: CreateResult) => (r.result === 'created' ? r.id : '');
 const shownTitles = (id: string) => pl.playlistShown(id)?.tracks.map((t) => t.title);
 const lastToast = () => toasts.value.at(-1)!;
 
