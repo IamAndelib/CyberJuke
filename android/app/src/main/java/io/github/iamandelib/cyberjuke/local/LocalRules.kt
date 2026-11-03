@@ -53,8 +53,8 @@ internal object LocalRules {
 
     private fun extensionOf(name: String): String = name.substringAfterLast('.', "").lowercase()
 
-    /** Which tags a song is read for: 2 added album artist, track, disc and year. */
-    const val TAGS = 2
+    /** Which tags a song is read for: 2 added album artist, track, disc and year; 3 the file name's guess. */
+    const val TAGS = 3
 
     /** Whether a file seen before has to be read again: new, a different size or date, or read for fewer tags. */
     fun needsRead(old: LocalIndex.Entry?, size: Long, modified: Long): Boolean =
@@ -82,6 +82,19 @@ internal object LocalRules {
         tag?.trim()?.takeIf { it.isNotEmpty() } ?: fileName.substringBeforeLast('.').ifEmpty { fileName }
 
     const val UNKNOWN_ARTIST = "Unknown artist"
+
+    private val NAME_SPLIT = Regex(" [-–—] ")
+
+    /**
+     * A file named "Artist - Title.mp3" (a downloaded song's usual name), for a song with
+     * neither an artist nor a title tag: its artist and title. Null unless the name is exactly two
+     * parts around " - " (or an en or em dash), and the first isn't a track number ("01 - Title").
+     */
+    fun guessFromName(fileName: String): Pair<String, String>? {
+        val parts = fileName.substringBeforeLast('.').split(NAME_SPLIT).map { it.trim() }
+        if (parts.size != 2 || parts.any { it.isEmpty() } || parts[0].all { it.isDigit() }) return null
+        return parts[0] to parts[1]
+    }
 
     /** The artist shown: the tag, else the album artist's, else "Unknown artist". */
     fun shownArtist(artist: String?, albumArtist: String?): String =
