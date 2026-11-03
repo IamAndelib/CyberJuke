@@ -8,9 +8,13 @@ import { catalog } from '../../stores/catalog';
 import { displayArtist, jukeboxTracksBy } from '../../stores/artists';
 import { toggleFavoriteArtistWithUndo } from '../../stores/undo';
 import { useFavArtist } from '../../ui/useFavs';
-import { useSearchContext, type AlbumRef } from '../../ui/nav';
+import { openLocalPage, useSearchContext, type AlbumRef } from '../../ui/nav';
+import { afterPress } from '../../ui/press';
+import { localArtistKeyOf, localTracksBy } from '../../stores/local';
 import { CatalogError, PlayShuffle, Tracks } from '../../ui/components/TrackList';
 import { list as listCtx } from '../../ui/playAll';
+
+const localCtx = (name: string) => listCtx(`${name} · on this phone`);
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
 import { OfflineGate } from '../../ui/components/OfflineGate';
@@ -126,6 +130,8 @@ export function ArtistPage({ name: raw }: { name: string }) {
             <p class="section-note dim">Nothing by {name} has been shared on the Jukebox yet.</p>
           )}
         </section>
+
+        <OnThisPhone name={name} />
 
         {failed ? (
           <SearchSections name={name} />
@@ -294,5 +300,28 @@ function SearchSections({ name }: { name: string }) {
         )}
       </section>
     </>
+  );
+}
+
+/** The local songs crediting this artist (Library → Local), the first few, then their local page. */
+function OnThisPhone({ name }: { name: string }) {
+  const tracks = localTracksBy(name);
+  if (!tracks.length) return null;
+  const key = localArtistKeyOf(name);
+  return (
+    <section data-testid="artist-local">
+      <div class="section-head">
+        <h2 class="section-title">On this phone</h2>
+        <span class="dim small">{plural(tracks.length, 'song')}</span>
+      </div>
+      <Tracks tracks={tracks.slice(0, JUKEBOX_FIRST)} ctx={localCtx(name)} queue={() => tracks} inLocal />
+      {key && (
+        <div class="list-foot">
+          <button class="link-btn" onClick={(e) => afterPress(e.currentTarget, () => openLocalPage('localArtist', key))} data-testid="artist-local-open">
+            [Open in Local]
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
