@@ -51,6 +51,28 @@
   border-radius: var(--radius);
   color: var(--color-fg);
 }
+/* Library as a grid: three tiles to a row, a list's mark or a playlist's cover over its name. */
+.lib-grid {
+  list-style: none;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 10px;
+  padding: 12px var(--gutter) 8px;
+}
+.lib-grid .lib-tile {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+.lib-grid .lib-tile .icon {
+  width: 40px;
+  height: 40px;
+}
+.lib-cell .shelf-title {
+  margin-top: 6px;
+  font-size: 13px;
+}
 .lib-chev {
   flex: none;
   margin-right: 6px;
