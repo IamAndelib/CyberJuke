@@ -13,7 +13,7 @@ describe('openNowPlayingWhen (notification tap)', () => {
 
   it('opens Now Playing at once when there is a track, closing menus', () => {
     menuTrack.value = { id: 'x' } as Track;
-    artistChoice.value = ['A', 'B'];
+    artistChoice.value = [{ name: 'A' }, { name: 'B' }];
     openNowPlayingWhen(signal(true));
     expect(nowPlayingOpen.value).toBe(true);
     expect(menuTrack.value).toBeNull();
@@ -96,7 +96,7 @@ describe('canGoBack (Android back goes to the page only then)', () => {
     const states: [string, () => void][] = [
       ['a confirm sheet', () => (confirmRequest.value = { title: 'Clear?', confirm: 'Clear', run: () => {} })],
       ['a track menu', () => (menuTrack.value = { id: 'x' } as Track)],
-      ['the artist chooser', () => (artistChoice.value = ['A', 'B'])],
+      ['the artist chooser', () => (artistChoice.value = [{ name: 'A' }, { name: 'B' }])],
       ['Now Playing with lyrics', () => ((nowPlayingOpen.value = true), (lyricsOpen.value = true))],
       ['a page on Home', () => openArtistPage('A')],
       ['Settings', () => openSettings()],

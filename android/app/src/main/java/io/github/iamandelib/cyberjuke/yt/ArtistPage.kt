@@ -32,6 +32,7 @@ internal object ArtistPage {
         val durationSec: Long?,
         val thumbnailUrl: String?,
         val channelId: String?,
+        val artists: List<YtMusic.Credit> = emptyList(),
     )
 
     /** A shelf's "See all" target: browse [browseId] with [params]; [shelf] is its title. */
@@ -267,6 +268,7 @@ internal object ArtistPage {
             durationSec = durationOf(textOf(fixed?.optJSONObject("text"))),
             thumbnailUrl = thumbnailOf(row.optJSONObject("thumbnail"), large = false),
             channelId = channel ?: pageChannelId,
+            artists = MusicText.artistsOf(runs),
         )
     }
 

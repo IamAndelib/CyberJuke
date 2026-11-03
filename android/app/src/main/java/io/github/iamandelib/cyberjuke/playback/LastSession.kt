@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.AtomicFile
 import android.util.Log
 import io.github.iamandelib.cyberjuke.local.LocalRules
+import io.github.iamandelib.cyberjuke.yt.MusicText
+import io.github.iamandelib.cyberjuke.yt.YtMusic
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -58,6 +60,8 @@ internal data class LastSession(
         val heard: Boolean = false,
         /** A song from a folder on the phone, by its id; then [ytId] is "" and there is no [mp3]. */
         val local: Boolean = false,
+        /** A Global song's credited artists ([TrackExtras.Extra.artists]): its artist page opens by channel. */
+        val artists: List<YtMusic.Credit> = emptyList(),
     ) {
         /** The NativeTrack JSON that [JukeTracks.toMediaItem] takes. */
         fun toNativeTrack(): JSONObject = JSONObject().apply {
@@ -72,6 +76,7 @@ internal data class LastSession(
             postUrl?.let { put("postUrl", it) }
             if (membersOnly) put("membersOnly", true)
             album?.let { put("album", it) }
+            if (artists.isNotEmpty()) put("artists", MusicText.creditsJson(artists))
         }
     }
 
@@ -233,6 +238,7 @@ internal data class LastSession(
                     },
                     membersOnly = t.optBoolean("membersOnly", false),
                     album = t.str("album"),
+                    artists = MusicText.creditsOf(t.optJSONArray("artists")),
                     heard = t.optBoolean("h", false),
                     local = local,
                 )

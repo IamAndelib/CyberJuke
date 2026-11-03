@@ -20,6 +20,7 @@ import io.github.iamandelib.cyberjuke.playback.SessionPolicy
 import io.github.iamandelib.cyberjuke.playback.TooLargeException
 import io.github.iamandelib.cyberjuke.playback.isDebuggable
 import io.github.iamandelib.cyberjuke.yt.ArtistPage
+import io.github.iamandelib.cyberjuke.yt.MusicText
 import io.github.iamandelib.cyberjuke.yt.YtCompat
 import io.github.iamandelib.cyberjuke.yt.YtGuard
 import io.github.iamandelib.cyberjuke.yt.YtMusic
@@ -34,7 +35,8 @@ import java.util.concurrent.Executors
  *     subtitle: string; url: string; ytId?: string; durationSec?: number;
  *     thumbnailUrl?: string; itemCount?: number;
  *     artistUrl?: string;   // songs + albums: first credited artist's channel URL
- *     channelId?: string }  // songs + albums: that artist's UC… id; artists: their own
+ *     channelId?: string;   // songs + albums: that artist's UC… id; artists: their own
+ *     artists?: { name: string; channelId: string }[] }  // songs: each linked credited artist
  *   interface MusicPage { items: MusicItem[]; next?: string }
  *   search({ query, filter: 'songs' | 'albums' | 'artists' | 'playlists' }): Promise<MusicPage>
  *   more({ next }): Promise<MusicPage>
@@ -325,6 +327,7 @@ class MusicPlugin : Plugin() {
         i.itemCount?.let { o.put("itemCount", it) }
         i.artistUrl?.let { o.put("artistUrl", it) }
         i.channelId?.let { o.put("channelId", it) }
+        if (i.artists.isNotEmpty()) o.put("artists", MusicText.creditsJson(i.artists))
         return o
     }
 
