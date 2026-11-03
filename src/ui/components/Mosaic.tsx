@@ -4,8 +4,8 @@ import { Art } from './Art';
 
 /**
  * A playlist's cover: the first four different song covers, 2×2 (YouTube Music's and
- * InnerTune's). With one to three, the first fills it; with none, an outlined tile with the
- * playlist icon. [size]: a row's (sm) or the playlist page's (lg).
+ * InnerTune's). With one to three, the rest of the squares hold a note; with none, an
+ * outlined tile with the playlist icon. [size]: a row's (sm) or the playlist page's (lg).
  */
 export function Mosaic({ tracks, size }: { tracks: readonly Track[]; size: 'sm' | 'lg' }) {
   const seen = new Set<string>();
@@ -22,11 +22,15 @@ export function Mosaic({ tracks, size }: { tracks: readonly Track[]; size: 'sm' 
         <Icon name="playlist" size={size === 'lg' ? 64 : 24} />
       </div>
     );
-  if (covers.length < 4) return <Art track={covers[0]!} size={size === 'lg' ? 'fill' : 'sm'} class={`mosaic-${size}`} />;
   return (
     <div class={`mosaic mosaic-${size}`} aria-hidden="true">
       {covers.map((t) => (
         <Art key={t.id} track={t} size="fill" />
+      ))}
+      {Array.from({ length: 4 - covers.length }, (_, i) => (
+        <div key={i} class="mosaic-note" data-testid="mosaic-note">
+          <Icon name="note" size={size === 'lg' ? 32 : 12} />
+        </div>
       ))}
     </div>
   );
