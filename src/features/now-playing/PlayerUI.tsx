@@ -619,7 +619,7 @@ function NowPlayingContent() {
           </div>
 
           <div class="np-meta">
-            {/* Title and artist as one block, the heart centred beside both (it never sits on the scrolling title). */}
+            {/* Title and artist as one block; ≡+ and ♥ beside it on the artist’s line, clear of a long title. */}
             <div class="np-id">
               <div class="np-titles">
                 <h2 class="np-title" data-testid="np-title">

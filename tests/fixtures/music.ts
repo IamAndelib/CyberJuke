@@ -185,7 +185,7 @@ const FAKE_MUSIC = `
       calls.push(['artist', name]);
       if (opts.botCheck) return fail('BOT_CHECK', 'Sign in to confirm you are not a bot');
       const q = name.trim();
-      const items = ['Ivy ' + q, q + ' Butterfly', q].map((a) => ({ kind: 'artist', title: a, subtitle: '',
+      const items = ['Ivy ' + q, q + ' Butterfly', ...((opts.unknownArtists || []).includes(q) ? [] : [q])].map((a) => ({ kind: 'artist', title: a, subtitle: '',
         url: 'https://music.youtube.com/channel/' + chan(a), channelId: chan(a), thumbnailUrl: thumb('artist' + a) }));
       return wait({ items });
     },
@@ -256,6 +256,8 @@ export interface MusicStubOptions {
   noArtistPage?: boolean;
   /** playlist() rejects UNAVAILABLE for albums and playlists (not the top songs one). */
   noAlbum?: boolean;
+  /** artist() finds no artist of exactly these names (only the decoys): their page isn't resolved. */
+  unknownArtists?: string[];
   /** Only these release kinds on the artist page. */
   shelves?: ('album' | 'live' | 'ep' | 'single')[];
   /** The first artistReleases() call rejects UNAVAILABLE (an evicted "See all" token). */
