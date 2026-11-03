@@ -316,3 +316,19 @@ export async function shot(page: Page, name: string): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
   await page.screenshot({ path: `test-results/screenshots/${name}.png` });
 }
+
+/**
+ * Library → one of its lists, as its own page: the Library tab at its list (a tap on the tab
+ * again goes back to it from a page), then that list's row.
+ */
+export async function openLibrary(page: Page, which: 'liked' | 'recent'): Promise<void> {
+  const tab = page.getByTestId('tab-library');
+  await tab.click();
+  const row = page.getByTestId(`lib-${which}`);
+  if (!(await row.isVisible())) await tab.click();
+  await row.click();
+  await expect(page.getByTestId(`screen-${which}`)).toBeVisible();
+  // A tap where the row was, this soon after it opened the page, is the double tap's second
+  // half, and is ignored (nav.ts OPEN_GUARD_MS): the test's next tap is a new one.
+  await page.waitForTimeout(350);
+}

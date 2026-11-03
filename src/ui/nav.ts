@@ -47,7 +47,10 @@ export type Page =
   | { kind: 'artist'; name: string }
   | { kind: 'album'; album: AlbumRef }
   | { kind: 'releases'; release: ReleasesRef }
-  | { kind: 'search' };
+  | { kind: 'search' }
+  /** Library's lists, each its own page (Library's root is a list of them). */
+  | { kind: 'liked' }
+  | { kind: 'recent' };
 
 export interface StackEntry {
   /** Unique for the app session (the page's key). */
@@ -177,6 +180,8 @@ function samePage(a: Page, b: Page): boolean {
       return a.release.token === r.token && a.release.kind === r.kind;
     }
     case 'search':
+    case 'liked':
+    case 'recent':
       return true;
   }
 }
@@ -235,6 +240,11 @@ export function openArtistPage(name: string): void {
 /** Genre page on the current tab. */
 export function openGenrePage(name: string): void {
   pushPage({ kind: 'genre', name });
+}
+
+/** One of Library's lists, as its own page over Library's list (Library's rows). */
+export function openLibraryPage(kind: 'liked' | 'recent'): void {
+  pushPage({ kind });
 }
 
 /** Album or playlist page on the current tab. */

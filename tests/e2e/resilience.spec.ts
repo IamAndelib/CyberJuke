@@ -1,7 +1,7 @@
 import { expect, test } from '../fixtures';
 import { failImagesOnce, setImagesOffline } from '../fixtures/youtube';
 import type { Locator, Page } from '@playwright/test';
-import { bufferedAhead, expectStable, isFeedQuery, opened, openNowPlaying, openSearch, playerCalls, recordOpens, scrollTo, seedStorage, setOffline, setVisibility, start, waitForTracks, windowChrome } from '../helpers';
+import { bufferedAhead, expectStable, isFeedQuery, opened, openNowPlaying, openSearch, playerCalls, recordOpens, scrollTo, seedStorage, setOffline, setVisibility, start, waitForTracks, windowChrome, openLibrary } from '../helpers';
 
 /**
  * When things go wrong: YouTube limiting the network or changing something (Y1),
@@ -336,7 +336,7 @@ test('offline, Library stays, its rows dimmed; a tap says to connect', async ({ 
   const track = (id: string) => ({ id, ytId: 'abcdefghij' + id.slice(-1), title: 'Track ' + id, artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '2026-01-01T00:00:00Z', nsfw: false, artworkUrl: '' });
   await seedStorage(page, { 'CapacitorStorage.liked': [track('l1'), track('l2')] });
   await page.goto('/');
-  await page.getByTestId('tab-library').click();
+  await openLibrary(page, 'liked');
   const rows = page.getByTestId('liked-list').getByTestId('track-row');
   await expect(rows).toHaveCount(2);
   await expect(rows.first().getByTestId('track-play')).not.toHaveAttribute('aria-disabled');
@@ -439,12 +439,12 @@ test('art that failed to load offline loads once the connection is back, and on 
   };
   await seedStorage(page, { 'CapacitorStorage.liked': Array.from({ length: 130 }, (_, i) => track(i)) });
   await page.goto('/');
-  await page.getByTestId('tab-library').click();
+  await openLibrary(page, 'liked');
   const rows = page.getByTestId('liked-list').getByTestId('track-row');
   await expect(rows).toHaveCount(60);
   await expect(rows.first().locator('img')).toBeVisible();
   const loaded = (row: Locator) => row.locator('img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0);
-  const toEnd = () => page.getByTestId('screen-library').evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  const toEnd = () => page.getByTestId('screen-liked').evaluate((el) => el.scrollTo(0, el.scrollHeight));
 
   // Offline, rows scrolled into view get the placeholder.
   await setOffline(page, backend, true);
@@ -484,7 +484,7 @@ test('art caught in the network switch as the connection comes back still loads'
   // The images' host already gone as the app opens, then the connection with it.
   setImagesOffline(page, true);
   await page.goto('/');
-  await page.getByTestId('tab-library').click();
+  await openLibrary(page, 'liked');
   const row = page.getByTestId('liked-list').getByTestId('track-row').first();
   await expect(row.locator('.art-ph')).toBeVisible();
   await setOffline(page, backend, true);
@@ -518,7 +518,7 @@ test('a post link only opens on beta.cyberspace.online', async ({ page }) => {
     'CapacitorStorage.liked': [track('l1', 'https://beta.cyberspace.online/someone/a-post'), track('l2', 'https://beta.cyberspace.online.evil.example/x'), track('l3', 'javascript:alert(1)')],
   });
   await page.goto('/');
-  await page.getByTestId('tab-library').click();
+  await openLibrary(page, 'liked');
   const rows = page.getByTestId('liked-list').getByTestId('track-row');
   await expect(rows).toHaveCount(3);
   for (let i = 0; i < 3; i++) {

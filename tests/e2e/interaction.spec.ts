@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { androidBack, backCalls, box, expectStable, openNowPlaying, openSearch, openSettings, playAndOpen, playerCalls, scrollTo, scrollTopOf, seedStorage, start, toastsGone, touchDrag, touchSwipe, touchTap, waitForTracks } from '../helpers';
+import { androidBack, backCalls, box, expectStable, openNowPlaying, openSearch, openSettings, playAndOpen, playerCalls, scrollTo, scrollTopOf, seedStorage, start, toastsGone, touchDrag, touchSwipe, touchTap, waitForTracks, openLibrary } from '../helpers';
 
 /**
  * Wave 1c interaction: navigation in place (P4, P5, SM7, M10), undo toasts and confirm
@@ -336,7 +336,7 @@ test('Clear history asks first, away from Play; Undo brings the plays back (M3, 
   await page.getByTestId('track-play').nth(1).click();
   await page.getByTestId('tab-library').click();
   await expect(page.getByTestId('screen-library').locator('.topbar-sub')).toHaveText('On this device');
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   await expect(page.getByTestId('recent-list').getByTestId('track-row')).toHaveCount(2);
   const clear = page.getByTestId('lib-clear');
   const play = page.getByTestId('lib-play-all');
@@ -356,7 +356,7 @@ test('Clear history asks first, away from Play; Undo brings the plays back (M3, 
   await page.getByTestId('confirm-ok').click();
   await expect(page.getByTestId('recent-list').getByTestId('track-row')).toHaveCount(0);
   // Clear has gone with the plays: focus stays on the page, not lost to the document.
-  await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-testid="screen-library"]'))).toBe(true);
+  await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-testid="screen-recent"]'))).toBe(true);
   const toast = page.getByTestId('toast').last();
   await expect(toast).toContainText('Listening history cleared');
   await toast.getByTestId('toast-action').click();

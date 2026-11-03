@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../../fixtures';
-import { clockStart, isFeedQuery, openNowPlaying, playOn, recordToasts, seedStorage, toastsSeen, tracksEndedIn } from '../../helpers';
+import { clockStart, isFeedQuery, openNowPlaying, playOn, recordToasts, seedStorage, toastsSeen, tracksEndedIn, openLibrary } from '../../helpers';
 import { UP_NEXT_MAX } from '../../../src/core/guards';
 
 /**
@@ -40,12 +40,12 @@ test('four hours of Liked, then autoplay: no message, the history pruned, the li
   await clockStart(page);
   await page.goto('/');
   await recordToasts(page);
-  await page.getByTestId('tab-library').click();
+  await openLibrary(page, 'liked');
   const likedRows = page.getByTestId('liked-list').getByTestId('track-row');
   await expect(likedRows).toHaveCount(60);
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   await expect(page.getByTestId('lib-recent')).toContainText(String(OLD_KEPT));
-  await page.getByTestId('lib-liked').click();
+  await openLibrary(page, 'liked');
   await page.getByTestId('lib-play-all').click();
   await expect(page.getByTestId('mini-title')).toHaveText('Liked 0');
   // Up next shows the first UP_NEXT_MAX of what is to come, however long the queue (59 of the
@@ -83,7 +83,7 @@ test('four hours of Liked, then autoplay: no message, the history pruned, the li
 
   // Recently played: the night's plays (each track once) on top of the 100 old ones kept, rendered 60 rows at a time.
   await page.getByTestId('tab-library').click();
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   const count = Number(/(\d+)/.exec((await page.getByTestId('lib-recent').textContent())!)![1]);
   const tracksPlayed = HOURS * tracksEndedIn(60 * 60_000) + 1;
   expect(count).toBe(OLD_KEPT + tracksPlayed);

@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test, FAKE_MP3_SECONDS, MP3_POSTS, coverUrl } from '../fixtures';
-import { expectStable, musicCalls, openNowPlaying, openSearch, playerCalls, setOffline, start } from '../helpers';
+import { expectStable, musicCalls, openNowPlaying, openSearch, playerCalls, setOffline, start, openLibrary } from '../helpers';
 
 /** Jukebox MP3s (Cyberspace 4.0): posts whose audio is a latex.gg MP3 with a cover. */
 
@@ -55,7 +55,7 @@ test('an MP3 can be liked and shared, and stays in Liked and Recently played aft
 
   await page.reload();
   await page.getByTestId('tab-library').click();
-  await page.getByTestId('lib-liked').click();
+  await openLibrary(page, 'liked');
   const liked = page.getByTestId('liked-list').getByTestId('track-row');
   await expect(liked.getByTestId('track-title')).toHaveText([first.title]);
   await expect(liked.locator('img')).toHaveAttribute('src', coverUrl(first.file));
@@ -63,7 +63,7 @@ test('an MP3 can be liked and shared, and stays in Liked and Recently played aft
   await expect(page.getByTestId('mini-title')).toHaveText(first.title);
   await page.reload();
   await page.getByTestId('tab-library').click();
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   await expect(page.getByTestId('history-day').first().getByTestId('track-title').filter({ hasText: first.title })).not.toHaveCount(0);
 });
 
@@ -111,7 +111,7 @@ test('a liked MP3 is saved for offline by its file name: offline it stays bright
   await page.evaluate((ids) => (window as unknown as { __cyberjukeCache: { saved(ids: string[]): void } }).__cyberjukeCache.saved(ids), [`mp3:${first.file}.mp3`]);
 
   await page.getByTestId('tab-library').click();
-  await page.getByTestId('lib-liked').click();
+  await openLibrary(page, 'liked');
   const rows = page.getByTestId('liked-list').getByTestId('track-row');
   await expect(rows.getByTestId('track-title')).toHaveText([second.title, first.title]);
   await setOffline(page, backend, true);

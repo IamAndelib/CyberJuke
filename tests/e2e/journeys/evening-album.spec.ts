@@ -1,5 +1,5 @@
 import { expect, test } from '../../fixtures';
-import { clockStart, fakeYt, openNowPlaying, openSearch, playerCalls, recordToasts, runFor, toastsSeen } from '../../helpers';
+import { clockStart, fakeYt, openNowPlaying, openSearch, playerCalls, recordToasts, runFor, toastsSeen, openLibrary } from '../../helpers';
 
 /**
  * An evening with an album from Global: found, played from the top, and left alone. Each track
@@ -47,7 +47,7 @@ test('an album plays through by itself, one track skipped: Up next shrinks, Rece
 
   // Recently played: the four tracks heard, newest first.
   await page.getByTestId('tab-library').click();
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   await expect(page.getByTestId('recent-list').getByTestId('track-title')).toHaveText([titles[3], titles[2], titles[1], titles[0]]);
 
   const calls = await playerCalls(page);

@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { openSearch, openSettings, seedStorage, start, waitForTracks } from '../helpers';
+import { openSearch, openSettings, seedStorage, start, waitForTracks, openLibrary } from '../helpers';
 
 /** Library: Liked, Recently played by day, and the one-time move of history into a file. */
 
@@ -13,10 +13,10 @@ test('like from the track menu adds it to Library, and it survives a reload', as
   await page.getByTestId('menu-like').click();
   await expect(page.getByTestId('toast').last()).toHaveText('Added to Liked songs');
   await page.getByTestId('tab-library').click();
-  await page.getByTestId('lib-liked').click();
+  await openLibrary(page, 'liked');
   await expect(page.getByTestId('liked-list').getByTestId('track-title')).toHaveText([title]);
   await page.reload();
-  await page.getByTestId('tab-library').click();
+  await openLibrary(page, 'liked');
   await expect(page.getByTestId('liked-list').getByTestId('track-title')).toHaveText([title]);
 
   // Its ⋯ menu knows it is liked: Unlike (not Like), and that unlikes it.
@@ -29,7 +29,7 @@ test('like from the track menu adds it to Library, and it survives a reload', as
   await page.getByTestId('track-more').nth(1).click();
   await expect(like).toHaveText('Like');
   await page.getByTestId('track-menu').getByRole('button', { name: /cancel/i }).click();
-  await page.getByTestId('tab-library').click();
+  await openLibrary(page, 'liked');
   await page.getByTestId('liked-list').getByTestId('track-more').first().click();
   await expect(like).toHaveText('Unlike');
   await like.click();
@@ -68,7 +68,7 @@ test('history saved by older versions moves into a file once, grouped by day; ne
   });
   await page.goto('/');
   await page.getByTestId('tab-library').click();
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   const labels = page.getByTestId('history-day-label');
   await expect(labels).toHaveCount(3);
   const texts = (await labels.allTextContents()).map((t) => t.replace(/\d+$/, '').trim());
@@ -98,7 +98,7 @@ test('history saved by older versions moves into a file once, grouped by day; ne
   await expect(page.getByTestId('history-day').first().getByTestId('track-title').first()).toHaveText(title);
   await page.reload();
   await page.getByTestId('tab-library').click();
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   await expect(page.getByTestId('history-day').first().getByTestId('track-title').first()).toHaveText(title);
 });
 
@@ -109,11 +109,11 @@ test('with NSFW hidden, Liked and Recently played hide NSFW tracks too, and show
     'CapacitorStorage.history': [{ track: nsfw, playedAt: Date.now() - 1000 }, { track: tr('s2', 'Seed Played'), playedAt: Date.now() - 2000 }],
   });
   await page.goto('/');
-  await page.getByTestId('tab-library').click();
+  await openLibrary(page, 'liked');
   const titles = (list: string) => page.getByTestId(list).getByTestId('track-title');
   await expect(titles('liked-list')).toHaveText(['Seed Liked']);
   await expect(page.getByTestId('lib-liked').locator('.count')).toHaveText('1');
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   await expect(titles('recent-list')).toHaveText(['Seed Played']);
   await expect(page.getByTestId('lib-recent').locator('.count')).toHaveText('1');
   // Kept, not dropped: on again, they're back.
@@ -121,7 +121,7 @@ test('with NSFW hidden, Liked and Recently played hide NSFW tracks too, and show
   await page.getByTestId('nsfw-toggle').click();
   await page.getByTestId('tab-library').click();
   await expect(titles('recent-list')).toHaveText(['Seed NSFW', 'Seed Played']);
-  await page.getByTestId('lib-liked').click();
+  await openLibrary(page, 'liked');
   await expect(titles('liked-list')).toHaveCount(2);
 });
 
@@ -129,7 +129,7 @@ test('old untimed history is kept on upgrade', async ({ page }) => {
   await seedStorage(page, { 'CapacitorStorage.recent': [tr('o1', 'Old o1'), tr('o2', 'Old o2'), tr('o3', 'Old o3')] });
   await page.goto('/');
   await page.getByTestId('tab-library').click();
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   await expect(page.getByTestId('recent-list').getByTestId('track-title')).toHaveText(['Old o1', 'Old o2', 'Old o3']);
   await expect(page.getByTestId('history-day-label')).toHaveCount(1);
   await expect.poll(() => page.evaluate(() => localStorage.getItem('CapacitorStorage.recent'))).toBeNull();
@@ -140,7 +140,7 @@ test('Here: search from Library is scoped to Liked', async ({ page }) => {
   const title = (await page.getByTestId('track-title').nth(2).textContent())!.trim();
   await page.getByTestId('track-more').nth(2).click();
   await page.getByTestId('menu-like').click();
-  await page.getByTestId('tab-library').click();
+  await openLibrary(page, 'liked');
   await expect(page.getByTestId('liked-list').getByTestId('track-row')).toHaveCount(1);
   await openSearch(page);
   await expect(page.getByTestId('mode-here')).toHaveAttribute('aria-selected', 'true');
@@ -169,8 +169,33 @@ test('a Recently played row plays the history with each track once', async ({ pa
   });
   await page.goto('/');
   await page.getByTestId('tab-library').click();
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   await page.getByTestId('recent-list').getByTestId('track-play').first().click();
   const q = await page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => { current: { title: string }; list: { title: string }[] } }).__cyberjukeQueue());
   expect([q.current.title, ...q.list.map((t) => t.title)]).toEqual(['Seed One', 'Seed Two', 'Seed Three']);
+});
+
+test('Library is a list of its lists: Liked and Recently played open on their own pages, and Back returns', async ({ page }) => {
+  await seedStorage(page, {
+    'CapacitorStorage.liked': [tr('s1', 'Seed Liked')],
+    'CapacitorStorage.history': [{ track: tr('s2', 'Seed Played'), playedAt: Date.now() - 1000 }],
+  });
+  await page.goto('/');
+  await page.getByTestId('tab-library').click();
+  // Each row: its icon in an outlined tile, its name and count, a chevron.
+  await expect(page.getByTestId('lib-liked')).toContainText('Liked');
+  await expect(page.getByTestId('lib-liked')).toContainText('1 song');
+  await expect(page.getByTestId('lib-recent')).toContainText('Recently played');
+  await expect(page.getByTestId('liked-list')).toHaveCount(0);
+  await page.getByTestId('lib-liked').click();
+  await expect(page.getByTestId('screen-liked')).toBeVisible();
+  await expect(page.getByTestId('liked-list').getByTestId('track-title')).toHaveText(['Seed Liked']);
+  await page.getByTestId('liked-back').click();
+  await expect(page.getByTestId('screen-library')).toBeVisible();
+  await openLibrary(page, 'recent');
+  await expect(page.getByTestId('recent-list').getByTestId('track-title')).toHaveText(['Seed Played']);
+  await expect(page.getByTestId('lib-clear')).toBeVisible();
+  // The Library tab again: back to its list.
+  await page.getByTestId('tab-library').click();
+  await expect(page.getByTestId('screen-library')).toBeVisible();
 });
