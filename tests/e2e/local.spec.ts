@@ -206,6 +206,9 @@ test.describe('the A–Z scroller', () => {
     expect(pb.x + pb.width).toBeLessThanOrEqual(th.x);
     expect(Math.abs(pb.y + pb.height / 2 - (th.y + th.height / 2))).toBeLessThanOrEqual(4);
     await page.mouse.up();
+  });
+});
+
 test.describe('an artist found nowhere', () => {
   // A file downloaded from a video often names the uploader, who has no page anywhere.
   const UPLOADER = 'Montag Studios GmbH';
