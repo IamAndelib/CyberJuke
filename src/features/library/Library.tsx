@@ -16,7 +16,8 @@ import { EmptyState, PlayShuffle, Tracks } from '../../ui/components/TrackList';
 import { playFrom } from '../../ui/playAll';
 import { TrackRow } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
-import { askConfirm, nowPlayingOpen, openLibraryPage, openLocalPage, openSettings, popToRoot, selectTab, useSearchContext } from '../../ui/nav';
+import { splitArtists } from '../../data/artists';
+import { askConfirm, nowPlayingOpen, openArtistPage, openLibraryPage, openLocalPage, openSettings, popToRoot, selectTab, useSearchContext } from '../../ui/nav';
 import { list } from '../../ui/playAll';
 import { afterPress } from '../../ui/press';
 import { plural } from '../../core/text';
@@ -228,7 +229,7 @@ function AlbumGrid() {
             <span class="shelf-title" data-testid="local-album-title">
               {a.title}
             </span>
-            <span class="shelf-year">{a.year ? `${a.artist} · ${a.year}` : a.artist}</span>
+            <span class="shelf-year">{!a.artist ? plural(a.songs.length, 'song') : a.year ? `${a.artist} · ${a.year}` : a.artist}</span>
           </button>
         </li>
       ))}
@@ -391,9 +392,13 @@ export function LocalAlbumPage({ albumKey }: { albumKey: string }) {
           <h2 class="album-title" data-testid="album-title">
             {a.title}
           </h2>
-          <button class="np-link album-artist" onClick={(e) => afterPress(e.currentTarget, () => openLocalPage('localArtist', a.artistKey))} data-testid="album-artist">
-            {a.artist}
-          </button>
+          {a.artist ? (
+            <button class="np-link album-artist" onClick={(e) => afterPress(e.currentTarget, () => openLocalPage('localArtist', a.artistKey))} data-testid="album-artist">
+              {a.artist}
+            </button>
+          ) : (
+            <div class="album-artist dim">Songs with no album tag</div>
+          )}
           <div class="dim small">{a.year ? `${a.year} · ${plural(tracks.length, 'song')}` : plural(tracks.length, 'song')}</div>
         </div>
       </div>
@@ -416,6 +421,13 @@ export function LocalArtistPage({ artistKey }: { artistKey: string }) {
   return (
     <Screen testid="screen-local-artist" title={a.name} subtitle="Artist · on this phone" left={<BackButton testid="local-artist-back" />} scrollKey={`local-artist:${a.key}`}>
       <PlayShuffle tracks={tracks} ctx={ctx} testid="artist" />
+      {splitArtists(a.name).length > 0 && (
+        <div class="local-global">
+          <button class="link-btn" onClick={(e) => afterPress(e.currentTarget, () => openArtistPage(a.name))} data-testid="local-artist-global">
+            [See on Global]
+          </button>
+        </div>
+      )}
       {a.albums.length > 0 && (
         <section data-kind="album" data-testid="local-artist-albums">
           <div class="section-head">

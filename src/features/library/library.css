@@ -85,3 +85,12 @@
 .local-add {
   margin-top: 12px;
 }
+
+.local-global {
+  margin: 4px var(--gutter) 0;
+}
+.local-global .link-btn {
+  min-height: 44px;
+  padding: 0 4px;
+  margin-left: -4px;
+}
