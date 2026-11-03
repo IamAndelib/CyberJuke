@@ -82,15 +82,15 @@ export interface Settings {
   downloadOnMobileData: boolean;
   /** Settings → Local music: songs from the folders the person chose play (off until turned on). */
   localMusic: boolean;
-  /** How Library → Local is sorted. */
-  localSort: LocalSort;
+  /** What Library → Local shows: its songs, albums or artists. */
+  localView: LocalView;
   /** The saved format's version: each migration below runs once. */
   version: number;
 }
 
 export type Ipv4Mode = 'auto' | 'always' | 'off';
-export type LocalSort = 'title' | 'artist' | 'album';
-export const LOCAL_SORTS: readonly LocalSort[] = ['title', 'artist', 'album'];
+export type LocalView = 'songs' | 'albums' | 'artists';
+export const LOCAL_VIEWS: readonly LocalView[] = ['songs', 'albums', 'artists'];
 export const IPV4_MODES: readonly Ipv4Mode[] = ['auto', 'always', 'off'];
 
 /**
@@ -113,7 +113,7 @@ const DEFAULT_SETTINGS: Settings = {
   gapless: true,
   downloadOnMobileData: false,
   localMusic: false,
-  localSort: 'title',
+  localView: 'songs',
   version: SETTINGS_VERSION,
 };
 
@@ -305,9 +305,11 @@ export async function loadSettings(): Promise<void> {
   merged.gapless = merged.gapless !== false;
   // Saved before Download using mobile data (or unknown): off.
   merged.downloadOnMobileData = merged.downloadOnMobileData === true;
-  // Saved before Local music (or unknown): off, sorted by title.
+  // Saved before Local music (or unknown): off, showing its songs.
   merged.localMusic = merged.localMusic === true;
-  if (!LOCAL_SORTS.includes(merged.localSort)) merged.localSort = DEFAULT_SETTINGS.localSort;
+  if (!LOCAL_VIEWS.includes(merged.localView)) merged.localView = DEFAULT_SETTINGS.localView;
+  // Previews had a sort (localSort) where the view now is.
+  delete (merged as { localSort?: unknown }).localSort;
   settings.value = merged;
   if (migrated || preferIpv4 !== undefined || upgraded) write(K_SETTINGS, merged);
 }

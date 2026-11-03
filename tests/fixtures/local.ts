@@ -14,6 +14,10 @@ export interface FakeLocalSong {
   title: string;
   artist?: string;
   album?: string;
+  albumArtist?: string;
+  track?: number;
+  disc?: number;
+  year?: number;
   cover?: boolean;
 }
 
@@ -39,17 +43,29 @@ export interface LocalStubOptions {
 
 const hex = (n: number) => n.toString(16).padStart(16, '0');
 
-/** A folder "Music" of [n] songs: tagged, on two albums by two artists, the last ones untagged. */
+/**
+ * A folder "Music" of [n] songs, the last untagged: the others alternate between Ana Tape's
+ * album "Attic" (2001, with covers) and Zed Loop's "Basement" (2009), numbered so an album's
+ * order isn't its titles' (track n - i).
+ */
 export function musicFolder(n = 6, id = 'tree:music', name = 'Music'): FakeLocalFolder {
   const base = id === 'tree:music' ? 0 : 0x100;
   return {
     id,
     name,
-    songs: Array.from({ length: n }, (_, i) =>
-      i >= n - 1
-        ? { hex: hex(base + i + 1), title: `voice memo ${i + 1}` }
-        : { hex: hex(base + i + 1), title: `${name} song ${String.fromCharCode(65 + ((i * 3) % 26))}`, artist: i % 2 ? 'Zed Loop' : 'Ana Tape', album: i % 3 ? 'Basement' : 'Attic', cover: i % 2 === 0 },
-    ),
+    songs: Array.from({ length: n }, (_, i) => {
+      if (i >= n - 1) return { hex: hex(base + i + 1), title: `voice memo ${i + 1}` };
+      const ana = i % 2 === 0;
+      return {
+        hex: hex(base + i + 1),
+        title: `${name} song ${String.fromCharCode(65 + ((i * 3) % 26))}`,
+        artist: ana ? 'Ana Tape' : 'Zed Loop',
+        album: ana ? 'Attic' : 'Basement',
+        year: ana ? 2001 : 2009,
+        track: n - i,
+        cover: ana,
+      };
+    }),
   };
 }
 
@@ -67,7 +83,7 @@ export async function stubLocal(page: Page, o: LocalStubOptions): Promise<void> 
   );
   await page.addInitScript(
     ({ init }) => {
-      type Song = { hex: string; title: string; artist?: string; album?: string; cover?: boolean };
+      type Song = { hex: string; title: string; artist?: string; album?: string; albumArtist?: string; track?: number; disc?: number; year?: number; cover?: boolean };
       type Folder = { id: string; name: string; songs: Song[]; gone?: boolean };
       type Pick = Folder | { inside: string } | 'cancel';
       type State = { folders: Folder[]; picks: Pick[]; added: string[]; removed: string[]; disabled: number };
@@ -128,7 +144,19 @@ export async function stubLocal(page: Page, o: LocalStubOptions): Promise<void> 
         },
         tracks: async () => ({
           tracks: st.folders.flatMap((f) =>
-            f.songs.map((s) => ({ id: `loc:${s.hex}`, title: s.title, artist: s.artist ?? 'Unknown artist', album: s.album ?? '', durationMs: 4000, folder: f.id, cover: !!s.cover })),
+            f.songs.map((s) => ({
+              id: `loc:${s.hex}`,
+              title: s.title,
+              artist: s.artist ?? 'Unknown artist',
+              album: s.album ?? '',
+              albumArtist: s.albumArtist ?? '',
+              track: s.track ?? 0,
+              disc: s.disc ?? 0,
+              year: s.year ?? 0,
+              durationMs: 4000,
+              folder: f.id,
+              cover: !!s.cover,
+            })),
           ),
         }),
         scan: async () => look(null),

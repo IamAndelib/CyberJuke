@@ -24,26 +24,16 @@ const plugin: JukeLocalPlugin = {
 };
 vi.stubGlobal('window', { __cyberjukeLocalStub: plugin, addEventListener: () => undefined, removeEventListener: () => undefined });
 
-const { sortLocal, removeFolder, localTracks, localFolderList, startLocal } = await import('./local');
+const { byTitle, removeFolder, localTracks, localFolderList, startLocal } = await import('./local');
 const { updateSettings } = await import('./library');
 const { runToastAction, toasts } = await import('./toast');
 
 const t = (title: string, artist = 'Unknown artist', album = '') => makeTrack({ id: `loc:${title}`, ytId: '', title, artist, ...(album && { album }), source: 'local' });
 
-describe('Local sorted', () => {
-  const list = [t('memo'), t('Beta', 'Zed', 'Attic'), t('alpha', 'Ana', 'Basement'), t('Gamma', 'Ana'), t('track 10', 'Zed', 'Attic'), t('track 9', 'Zed', 'Attic')];
-  const titles = (by: 'title' | 'artist' | 'album') => sortLocal(list, by).map((x) => x.title);
-
-  it('by title, regardless of case and with numbers in order; untagged songs last', () => {
-    expect(titles('title')).toEqual(['alpha', 'Beta', 'Gamma', 'track 9', 'track 10', 'memo']);
-  });
-
-  it('by artist, then album and title; an unknown artist last', () => {
-    expect(titles('artist')).toEqual(['Gamma', 'alpha', 'Beta', 'track 9', 'track 10', 'memo']);
-  });
-
-  it('by album, then title; songs with no album last', () => {
-    expect(titles('album')).toEqual(['Beta', 'track 9', 'track 10', 'alpha', 'Gamma', 'memo']);
+describe('Local\u2019s songs', () => {
+  it('go by title, regardless of case and with numbers in order; songs with no tags at all last', () => {
+    const list = [t('memo'), t('Beta', 'Zed', 'Attic'), t('alpha', 'Ana', 'Basement'), t('Gamma', 'Ana'), t('track 10', 'Zed', 'Attic'), t('track 9', 'Zed', 'Attic')];
+    expect(byTitle(list).map((x) => x.title)).toEqual(['alpha', 'Beta', 'Gamma', 'track 9', 'track 10', 'memo']);
   });
 });
 

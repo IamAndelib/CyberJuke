@@ -21,7 +21,8 @@ import {
 import { logError } from '../core/log';
 import { stillPlays } from '../core/offlineText';
 import { savedLiked } from './savedOffline';
-import { localHere, settings, updateSettings, type LocalSort } from './library';
+import { localHere, settings, updateSettings } from './library';
+import { UNKNOWN_ARTIST, byName, groupLocal } from '../data/localGroups';
 import { toast } from './toast';
 
 const folders = signal<LocalFolder[]>([]);
@@ -60,27 +61,18 @@ export const scanningName = computed(() => {
   return s ? (folders.value.find((f) => f.id === s.folder)?.name ?? '') : '';
 });
 
-const UNKNOWN_ARTIST = 'Unknown artist';
-const cmp = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true }).compare;
-/** Missing (an untagged song's artist or album): sorts after every tagged one. */
-const missing = (t: Track, by: LocalSort): boolean =>
-  by === 'artist' ? t.artist === UNKNOWN_ARTIST : by === 'album' ? !t.album : t.artist === UNKNOWN_ARTIST && !t.album;
-
-/** Local's order: by [by], then album and title; songs without that tag go last. */
-export function sortLocal(tracks: readonly Track[], by: LocalSort): Track[] {
-  const keys = (t: Track): string[] => (by === 'artist' ? [t.artist, t.album ?? '', t.title] : by === 'album' ? [t.album ?? '', t.title] : [t.title]);
-  return [...tracks].sort((a, b) => {
-    const m = Number(missing(a, by)) - Number(missing(b, by));
-    if (m) return m;
-    const ka = keys(a);
-    const kb = keys(b);
-    for (let i = 0; i < ka.length; i++) {
-      const c = cmp(ka[i]!, kb[i]!);
-      if (c) return c;
-    }
-    return 0;
-  });
+/** Local's songs by title, those with no tags at all (no artist, no album) last. */
+export function byTitle(tracks: readonly Track[]): Track[] {
+  const untagged = (t: Track) => t.artist === UNKNOWN_ARTIST && !t.album;
+  return [...tracks].sort((a, b) => Number(untagged(a)) - Number(untagged(b)) || byName(a.title, b.title));
 }
+
+/** Local's albums and artists (data/localGroups). */
+export const localGroups = computed(() => groupLocal(shownSongs.value));
+
+/** The local songs as tracks, by id (for an album's or an artist's list). */
+const trackById = computed(() => new Map(localTracks.value.map((t) => [t.id, t])));
+export const tracksOf = (songs: readonly LocalSong[]): Track[] => songs.map((s) => trackById.value.get(s.id)).filter((t): t is Track => !!t);
 
 /** Reads the folders and songs again from the plugin. */
 async function refresh(): Promise<void> {

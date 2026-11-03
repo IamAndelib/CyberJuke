@@ -32,7 +32,7 @@ describe('theme migration', () => {
   it('migrates a saved GRiD theme to Brutalist and saves it', async () => {
     store.set('settings', JSON.stringify({ theme: 'grid', showNsfw: true, quality: 'low' }));
     await lib.loadLibrary();
-    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: false, cacheMb: 256, crossfadeMs: 0, gapless: true, downloadOnMobileData: false, localMusic: false, localSort: 'title', version: lib.SETTINGS_VERSION });
+    expect(lib.settings.value).toEqual({ theme: 'brutalist', showNsfw: true, quality: 'low', checkEvery: 15, ipv4: 'auto', autoplay: true, checkUpdates: false, cacheMb: 256, crossfadeMs: 0, gapless: true, downloadOnMobileData: false, localMusic: false, localView: 'songs', version: lib.SETTINGS_VERSION });
     await flush();
     expect(JSON.parse(store.get('settings')!).theme).toBe('brutalist');
   });
@@ -279,17 +279,18 @@ describe('download using mobile data setting', () => {
 });
 
 describe('local music settings', () => {
-  it('is off and sorted by title unless chosen, also in settings saved before them; only a known sort is kept', async () => {
+  it('is off and shows songs unless chosen, also in settings saved before them; only a known view is kept', async () => {
     store.set('settings', JSON.stringify({ theme: 'vt320', version: 3 }));
     await lib.loadLibrary();
-    expect(lib.settings.value).toMatchObject({ localMusic: false, localSort: 'title' });
-    lib.updateSettings({ localMusic: true, localSort: 'album' });
+    expect(lib.settings.value).toMatchObject({ localMusic: false, localView: 'songs' });
+    lib.updateSettings({ localMusic: true, localView: 'albums' });
     await flush();
     await lib.loadLibrary();
-    expect(lib.settings.value).toMatchObject({ localMusic: true, localSort: 'album' });
-    store.set('settings', JSON.stringify({ localMusic: 'yes', localSort: 'year', version: 3 }));
+    expect(lib.settings.value).toMatchObject({ localMusic: true, localView: 'albums' });
+    store.set('settings', JSON.stringify({ localMusic: 'yes', localView: 'year', localSort: 'artist', version: 3 }));
     await lib.loadLibrary();
-    expect(lib.settings.value).toMatchObject({ localMusic: false, localSort: 'title' });
+    expect(lib.settings.value).toMatchObject({ localMusic: false, localView: 'songs' });
+    expect('localSort' in lib.settings.value).toBe(false);
   });
 });
 

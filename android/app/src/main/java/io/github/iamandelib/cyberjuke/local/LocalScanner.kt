@@ -118,6 +118,10 @@ internal class LocalScanner(private val context: Context) {
         var artist: String? = null
         var albumArtist: String? = null
         var album: String? = null
+        var track: String? = null
+        var disc: String? = null
+        var year: String? = null
+        var date: String? = null
         var duration = 0L
         var picture: ByteArray? = null
         val r = MediaMetadataRetriever()
@@ -127,6 +131,10 @@ internal class LocalScanner(private val context: Context) {
             artist = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
             albumArtist = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
             album = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+            track = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
+            disc = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER)
+            year = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
+            date = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE)
             duration = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
             picture = r.embeddedPicture
         } catch (e: Exception) {
@@ -147,6 +155,10 @@ internal class LocalScanner(private val context: Context) {
             title = LocalRules.shownTitle(title, p.child.name),
             artist = LocalRules.shownArtist(artist, albumArtist),
             album = album?.trim().orEmpty(),
+            albumArtist = albumArtist?.trim().orEmpty(),
+            track = LocalRules.number(track),
+            disc = LocalRules.number(disc),
+            year = LocalRules.year(year).takeIf { it > 0 } ?: LocalRules.year(date),
             durationMs = duration,
             size = p.child.size,
             modified = p.child.modified,
