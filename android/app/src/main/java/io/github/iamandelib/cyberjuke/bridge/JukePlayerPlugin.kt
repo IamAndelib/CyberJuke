@@ -56,6 +56,7 @@ import io.github.iamandelib.cyberjuke.playback.SessionPolicy
 import io.github.iamandelib.cyberjuke.playback.StreamResolver
 import io.github.iamandelib.cyberjuke.playback.TooLargeException
 import io.github.iamandelib.cyberjuke.playback.TrackExtras
+import io.github.iamandelib.cyberjuke.yt.MusicText
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.roundToInt
@@ -106,6 +107,8 @@ import kotlin.math.roundToInt
  *   them up anywhere: radio items the service added itself, and after a WebView reload also the
  *   albums and playlists the user started), so it can show them; sent again after a resume or a
  *   new state listener.
+ * - A track's optional `artists` ([{ name, channelId }], a Global song's credited artists) is
+ *   kept with the last session and echoed in `tracks`, like `album`; radio items carry it too.
  *
  * - state: NativeState. Sent on every player event and once a second while playing and the
  *   app is in the foreground (no ticks in the background). `queueIds` is only included when
@@ -1226,6 +1229,7 @@ class JukePlayerPlugin : Plugin() {
             extra?.postUrl?.let { o.put("postUrl", it) }
             if (extra?.membersOnly == true) o.put("membersOnly", true)
             item.mediaMetadata.albumTitle?.toString()?.let { o.put("album", it) }
+            extra?.artists?.takeIf { it.isNotEmpty() }?.let { o.put("artists", MusicText.creditsJson(it)) }
             arr.put(o)
         }
         if (announcedTracks.size > MAX_ANNOUNCED) announcedTracks.clear()

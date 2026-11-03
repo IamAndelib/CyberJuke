@@ -11,8 +11,11 @@ import type { CrossfadeMs, Quality } from '../stores/library';
  * `mp3`: a Jukebox MP3 (Track.mp3, a latex.gg share link matching MP3_URL_RE), played
  * from that URL; its `ytId` is ''. Native keeps it with the last session and echoes it.
  * `artworkUrl` is then the post's cover (https://bunker.cyberspace.online/uploads/…).
+ * `artists`: a Global song's credited artists and their channels (Track.artists, at most 10).
+ * Native keeps them with the last session, echoes them in `tracks`, and sets them on the
+ * radio songs it adds.
  */
-export interface NativeTrack { id: string; ytId: string; title: string; artist: string; artworkUrl: string; by?: string; postUrl?: string; membersOnly?: boolean; album?: string; mp3?: string; local?: boolean }
+export interface NativeTrack { id: string; ytId: string; title: string; artist: string; artworkUrl: string; by?: string; postUrl?: string; membersOnly?: boolean; album?: string; mp3?: string; local?: boolean; artists?: { name: string; channelId: string }[] }
 export type RepeatMode = 'off' | 'all' | 'one';
 export interface NativeState {
   /**

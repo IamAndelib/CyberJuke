@@ -61,7 +61,12 @@ internal object YtMusic {
         val artistUrl: String? = null,
         /** Songs/albums: [artistUrl]'s channel id; artists: their own channel id. */
         val channelId: String? = null,
+        /** Songs: each credited artist that has a channel, in credit order ([MusicText.artistsOf]). */
+        val artists: List<Credit> = emptyList(),
     )
+
+    /** A credited artist and their channel (`UC…`): their artist page, without a search. */
+    data class Credit(val name: String, val channelId: String)
 
     /**
      * Opaque continuation: the NewPipe [Page] plus what produced it. Callers only store it
@@ -228,6 +233,7 @@ internal object YtMusic {
                 thumbnailUrl = s.thumbnailUrl,
                 artistUrl = s.channelId?.let { "https://www.youtube.com/channel/$it" },
                 channelId = s.channelId,
+                artists = s.artists,
             )
         },
         topSongsPlaylistUrl = p.topSongsPlaylistUrl,
@@ -312,6 +318,8 @@ internal object YtMusic {
                     thumbnailUrl = thumb,
                     artistUrl = item.uploaderUrl,
                     channelId = MusicText.channelIdOf(item.uploaderUrl),
+                    // NewPipe gives the first credited artist only (getUploaderName/getUploaderUrl).
+                    artists = MusicText.creditOf(item.uploaderName, item.uploaderUrl),
                 )
             }
             is PlaylistInfoItem -> Item(

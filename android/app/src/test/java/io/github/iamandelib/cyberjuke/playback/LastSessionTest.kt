@@ -1,6 +1,7 @@
 package io.github.iamandelib.cyberjuke.playback
 
 import io.github.iamandelib.cyberjuke.playback.NativeQueue.Section
+import io.github.iamandelib.cyberjuke.yt.YtMusic
 import org.json.JSONObject
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -45,6 +46,17 @@ class LastSessionTest {
         val odd = JSONObject(s.encode())
         odd.getJSONArray("tracks").getJSONObject(0).put("album", 7)
         assertNull(LastSession.decode(odd.toString())!!.entries[0].album)
+    }
+
+    @Test
+    fun aGlobalSongKeepsItsArtists() {
+        // Its artist page opens by channel after a restart too; a track without them has none.
+        val credits = listOf(YtMusic.Credit("Bill Withers", "UCDjpW6k2Sfg_FTr1toLvffQ"), YtMusic.Credit("Grover Washington, Jr.", "UCsN1HTruhFfXcSMGMsBmX_w"))
+        val s = LastSession.of(listOf(entry(0).copy(artists = credits), entry(1)), 0, 0L, 0L, false, null, 0, null, null)!!
+        val back = LastSession.decode(s.encode())!!
+        assertEquals(listOf(credits, emptyList()), back.entries.map { it.artists })
+        assertEquals("Grover Washington, Jr.", back.entries[0].toNativeTrack().getJSONArray("artists").getJSONObject(1).getString("name"))
+        assertEquals(false, back.entries[1].toNativeTrack().has("artists"))
     }
 
     @Test

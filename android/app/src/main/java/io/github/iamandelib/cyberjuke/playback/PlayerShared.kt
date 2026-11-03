@@ -7,6 +7,8 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.session.SessionCommand
 import io.github.iamandelib.cyberjuke.local.LocalLibrary
 import io.github.iamandelib.cyberjuke.local.LocalRules
+import io.github.iamandelib.cyberjuke.yt.MusicText
+import io.github.iamandelib.cyberjuke.yt.YtMusic
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.SecureRandom
@@ -120,7 +122,8 @@ internal object JukeUris {
  * post URL and a Jukebox MP3's latex.gg link. MediaMetadata extras are readable by every
  * connected controller, so these live here, keyed by mediaId, instead. Read back for the last
  * session and the `tracks` event (membersOnly must survive both, or a sign-out could miss a
- * restored members-only track).
+ * restored members-only track). A Global song's credited artists ride along too (not
+ * private, but kept off the controllers' metadata).
  */
 internal object TrackExtras {
     /**
@@ -133,6 +136,8 @@ internal object TrackExtras {
         val membersOnly: Boolean = false,
         val restored: Boolean = false,
         val mp3: String? = null,
+        /** A Global song's credited artists and their channels (NativeTrack `artists`). */
+        val artists: List<YtMusic.Credit> = emptyList(),
     )
 
     /** A bounded LRU, far above what one session holds (a 2000-track list, plus queued and autoplay tracks). */
@@ -141,12 +146,20 @@ internal object TrackExtras {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Extra>?) = size > MAX
     }
 
-    fun put(mediaId: String, by: String?, postUrl: String?, membersOnly: Boolean = false, restored: Boolean = false, mp3: String? = null) {
+    fun put(
+        mediaId: String,
+        by: String?,
+        postUrl: String?,
+        membersOnly: Boolean = false,
+        restored: Boolean = false,
+        mp3: String? = null,
+        artists: List<YtMusic.Credit> = emptyList(),
+    ) {
         synchronized(map) {
-            if (by == null && postUrl == null && !membersOnly && !restored && mp3 == null) {
+            if (by == null && postUrl == null && !membersOnly && !restored && mp3 == null && artists.isEmpty()) {
                 map.remove(mediaId)
             } else {
-                map[mediaId] = Extra(by, postUrl, membersOnly, restored, mp3)
+                map[mediaId] = Extra(by, postUrl, membersOnly, restored, mp3, artists)
             }
         }
     }
@@ -236,7 +249,10 @@ internal object JukeTracks {
             o.str("artworkUrl")?.takeIf { SessionPolicy.isAllowedArtwork(it) }?.let { Uri.parse(it) }
         }
         val membersOnly = o.optBoolean("membersOnly", false)
-        TrackExtras.put(id, o.str("by"), o.str("postUrl"), membersOnly, restored, SessionPolicy.mp3UrlForFile(mp3File))
+        TrackExtras.put(
+            id, o.str("by"), o.str("postUrl"), membersOnly, restored, SessionPolicy.mp3UrlForFile(mp3File),
+            MusicText.creditsOf(o.optJSONArray("artists")),
+        )
         // Its audio is tagged in the listening cache, so a sign-out removes it (an MP3's too).
         if (membersOnly) JukeUris.audioIdOf(uri)?.let { AudioCache.markMembers(listOf(it)) }
         val extras = Bundle().apply { ytId?.let { putString(JukeUris.EXTRA_YT_ID, it) } }
