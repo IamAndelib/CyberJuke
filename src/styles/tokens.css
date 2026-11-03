@@ -17,6 +17,8 @@
   /* A row's press: the text colour over its background, like Material's state layer
      (themes' --color-surface is too faint for it in some). */
   --press: var(--color-surface);
+  /* A held choice (chip, switch): a stronger tint than a row's, still unlike the filled chosen one. */
+  --press-choice: var(--color-surface);
 
   /* ---- Motion -------------------------------------------------------------------------- */
   /* Material's emphasized motion for Now Playing and the sheets: in over 250ms, slowing
@@ -39,9 +41,10 @@
   --z-toast: 40;
 }
 
-/* WebView 111+: the state layer is the theme's text colour at 14% (Material uses ~10%). */
+/* WebView 111+: the state layer is the theme's text colour at 14% (Material uses ~10%), 24% on a held choice. */
 @supports (color: color-mix(in srgb, red 50%, transparent)) {
   :root {
     --press: color-mix(in srgb, var(--color-fg) 14%, transparent);
+    --press-choice: color-mix(in srgb, var(--color-fg) 24%, transparent);
   }
 }
