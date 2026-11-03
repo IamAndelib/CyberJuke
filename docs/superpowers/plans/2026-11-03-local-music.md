@@ -135,8 +135,10 @@
 - [ ] The toasts "Already in Music" and "Removed Music [Undo]".
 - [ ] A pixel `folder` icon in `ui/icons.tsx`.
 
-### Task 3.3: Library → Local
-- [ ] The switch reads Liked · Recent · Local while it's on (otherwise unchanged).
+### Task 3.3: Library as a list, and the Local page
+- [ ] Library's root is a list: Liked, Recently played and (while on) Local as rows with outlined icon tiles (`ui/icons.tsx` gains `clock` and `folder`) and a chevron.
+- [ ] Each row pushes its page on Library's stack (`nav.ts` page kinds `liked`, `recent`, `local`); Back returns. `openLiked()` opens the Liked page.
+- [ ] e2e that open Liked or Recently played through the old switch (`lib-liked`, `lib-recent`) open them through the rows instead: same intent, named in the PR.
 - [ ] Play/Shuffle, the Title/Artist/Album switch (remembered), and the rows with the album on the meta line; untagged songs go last.
 - [ ] The empty, first-look, nothing-found and unreachable states.
 - [ ] Here search on Local, and pull down to look again.

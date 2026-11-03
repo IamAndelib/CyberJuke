@@ -1,6 +1,6 @@
 # Local music (1.4.0): design
 
-Status: approved by the maintainer on 3 Nov 2026, with every recommended option. Nothing is built yet.
+Status: approved by the maintainer on 3 Nov 2026, with every recommended option, and updated the same day after the playlist concepts (Library becomes a list). Nothing is built yet.
 Main at writing: db554ac (1.3.6).
 
 ## 1. What we're building, and for whom
@@ -18,7 +18,7 @@ People who keep music files on their phone can play them in CyberJuke, beside th
 - **Lyrics:** looked up on LRCLIB as for any song. Only the title, artist and length are sent.
 - **Settings:** its own "Local music" card.
 - **From the concept screenshots:**
-  - the Library switch reads **Liked · Recent · Local**;
+  - Library becomes a list (chosen with the playlist concepts): **Liked**, **Recently played** and **Local** are rows with outlined icon tiles, each opening its own page. Playlists join that list in 1.5.0;
   - sorting is a **Title / Artist / Album** switch;
   - local songs in mixed lists carry an **On phone** tag.
 
@@ -64,8 +64,12 @@ A new card between Content and Storage.
 
 ## 4. Library → Local
 
-- **The switch:** while local music is on it reads **Liked · Recent · Local**, each with a count. Off, it's as today: **Liked · Recently played**.
-- **The list:**
+- **Library is a list** (in place of today's Liked / Recently played switch):
+  - rows for **Liked** ("8 songs"), **Recently played** and, while local music is on, **Local** ("19 songs · on this phone");
+  - each row has an outlined square tile with its icon (heart, clock, folder), no picture texture, and a chevron;
+  - a tap opens that list as its own page, with Back to Library. Liked and Recently played keep today's content; [Clear] sits in Recently played's top bar.
+  - **Trade-off until 1.5.0:** with local music off, Library is two rows, one more tap than today's switch. Playlists fill the list in 1.5.0.
+- **The Local page:**
   - Play and Shuffle, then a **Title / Artist / Album** switch. The choice is remembered in settings (`localSort`).
   - Then the usual rows: cover, title, artist, and the album on the meta line.
   - Songs without tags sort last. They show their file name (without the extension) and "Unknown artist".
