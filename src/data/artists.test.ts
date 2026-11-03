@@ -89,6 +89,10 @@ describe('creditedArtists', () => {
     expect(creditedArtists({ artist: 'Farhot, Samon Kawamura' })).toEqual([{ name: 'Farhot' }, { name: 'Samon Kawamura' }]);
     expect(creditedArtists({ artist: 'Tycho', artists: [] })).toEqual([{ name: 'Tycho' }]);
   });
+  it('keeps every name of the credit when YouTube Music linked only some (a search song links its first artist)', () => {
+    const artists = [{ name: 'Calvin Harris', channelId: 'UCcalvin' }];
+    expect(creditedArtists({ artist: 'Calvin Harris, Dua Lipa', artists })).toEqual([{ name: 'Calvin Harris', channelId: 'UCcalvin' }, { name: 'Dua Lipa' }]);
+  });
 });
 
 describe('buildArtistIndex', () => {
