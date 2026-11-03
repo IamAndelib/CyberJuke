@@ -226,10 +226,10 @@
 .np-meta {
   padding: 0 calc(var(--gutter) - 8px) 0 calc(var(--gutter) + 4px);
 }
-/* Title over artist, the heart centred on both lines (as music players do). */
+/* Title over artist; ≡+ and ♥ sit on the artist's line, clear of a long title. */
 .np-id {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 4px;
 }
 .np-id:last-child {

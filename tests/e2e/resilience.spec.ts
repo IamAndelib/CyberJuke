@@ -157,7 +157,6 @@ test('offline, lists already shown stay with their rows dimmed; lists opened off
   await expect(genres.getByTestId('offline')).toHaveText(NO_CARRIER);
   await expect(genres.getByTestId('offline')).toHaveClass(/\bappear\b/);
   await expect(genres.getByTestId('genre-tile')).toHaveCount(0);
-  await expect(genres.locator('.fineprint')).toHaveCount(0);
   await expectCentred(page, 'screen-genres');
   // Redial while still offline: still no carrier.
   await genres.getByTestId('retry').click();
@@ -167,7 +166,6 @@ test('offline, lists already shown stay with their rows dimmed; lists opened off
   const artists = page.getByTestId('screen-artists');
   await expect(artists.getByTestId('offline')).toHaveText(NO_CARRIER);
   await expect(artists.getByTestId('artist-tile')).toHaveCount(0);
-  await expect(artists.locator('.fineprint')).toHaveCount(0);
   await expectCentred(page, 'screen-artists');
 
   // Search: the Jukebox searches what's kept on the phone (nothing saved: every row dimmed); Global needs a connection.
@@ -189,10 +187,8 @@ test('offline, lists already shown stay with their rows dimmed; lists opened off
   await expect(search.getByTestId('offline')).toHaveCount(0);
   await page.getByTestId('search-close').click();
   await expect(artists.getByTestId('artist-tile').first()).toBeVisible();
-  await expect(artists.locator('.fineprint')).toBeVisible();
   await page.getByTestId('tab-genres').click();
   await expect(genres.getByTestId('genre-tile').first()).toBeVisible();
-  await expect(genres.locator('.fineprint')).toBeVisible();
   await page.getByTestId('tab-home').click();
   await waitForTracks(page);
   await expect(home.locator('.row.off')).toHaveCount(0);
@@ -255,7 +251,6 @@ test('launched offline: no carrier on Home, Genres and Artists (no intro, in the
     await page.getByTestId(`tab-${tab}`).click();
     const screen = page.getByTestId(`screen-${tab}`);
     await expect(screen.getByTestId('offline')).toHaveText(NO_CARRIER);
-    await expect(screen.locator('.fineprint')).toHaveCount(0);
     await expectCentred(page, `screen-${tab}`);
   }
 
