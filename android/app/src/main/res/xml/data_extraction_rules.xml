@@ -18,6 +18,8 @@
     members-only tags are in no_backup/ (audio/, audio-liked, audio-members), which Android
     never backs up, as are the saved liked songs (no_backup/saved/, indexed in the same
     database) and their covers (no_backup/art/).
+  - Local music's folder list, song list and covers are in no_backup/local/, which Android never
+    backs up either; the folders' read grants are Android's own and are never backed up.
   The cache directory (lyrics) is never backed up by Android.
 
   disableIfNoEncryptionCapabilities: what is left (settings, recent searches) goes to the cloud

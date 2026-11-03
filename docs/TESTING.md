@@ -78,6 +78,17 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 - [ ] Swipe the app away while a station plays and reopen it: Now Playing and Up next show the station's titles, not "Unknown track".
 - [ ] Settings → **Autoplay** off, then tune in and let it play past its first round: it keeps going. A Jukebox list still stops at its end.
 
+## Local music
+- [ ] Settings → **Local music** → on: Android's folder picker opens at once. Back out: it stays on with no folder. On Android 7, 12 and 13+ (or what you have), choose **Music**: the row says "Looking… N songs so far", then "N songs". No storage permission is asked for, and Android's app info lists none.
+- [ ] **Add folder** with a folder inside Music: "Already in Music", nothing added. A folder under **Download** with subfolders: songs in the subfolders show too.
+- [ ] Library → **Local**: "N songs · on this phone". Title, Artist and Album sort it (untagged songs last, with their file name and "Unknown artist"); the choice stays after the app restarts. Covers show for files that have one.
+- [ ] A first look through a big folder (about 1,000 songs): note how long it takes until the count stops. Songs show as each folder is done; scrolling and playing work meanwhile.
+- [ ] Play from Local and lock the screen: it plays to the end of the list and stops there (no autoplay). The notification and lock screen show the title, artist and cover. Now Playing reads "On this phone · Music"; the artist isn't a link; ⋯ has Add to queue and Like only.
+- [ ] Like a local song: in Liked it has an "On phone" tag. Airplane mode on: it isn't dimmed, and it plays. Lyrics open for a well-known song.
+- [ ] An SD card: choose a folder on it, then take the card out (or turn it off in Android's storage settings) and reopen the app: Local says "Can't reach …" and hides its songs, and Settings says "Can't reach this folder". Put it back and tap **[Choose it again]**: the songs return.
+- [ ] ✕ on a folder: its row and songs go at once; **Undo** brings them back. Without Undo, it stays gone after the app restarts.
+- [ ] Turn local music off: it asks first; then Local leaves Library, local songs leave the queue, and choosing folders again starts from nothing.
+
 ## Browsing and gestures
 - [ ] Open a genre page and tap ★ in the top bar: the genre shows under ★ Favourites on the Genres tab. Same on an artist page.
 - [ ] Now Playing: the ♥ sits beside the title and artist; a long title scrolls without running under it.
