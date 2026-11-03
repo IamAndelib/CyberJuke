@@ -14,6 +14,7 @@
 
 ### Fixed
 - Holding down an option in a switch or a row of chips (Settings, Home's genres) tints it instead of filling it, so it no longer looks chosen alongside the one that is.
+- A song you play from Recently played shows its title in the highlight colour at the top of the list, like a song played from anywhere else.
 
 ## [1.3.6] - 2026-10-31
 

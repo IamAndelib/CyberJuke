@@ -94,7 +94,8 @@ h3 {
 .section-title,
 .state-title,
 .album-title,
-.row.is-current .row-title {
+.row.is-current .row-title,
+.row-title.is-current {
   text-shadow: var(--glow);
 }
 
