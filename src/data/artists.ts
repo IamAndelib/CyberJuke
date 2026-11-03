@@ -11,7 +11,7 @@
  */
 import { UNKNOWN_ARTIST, type Track } from './model';
 import { normalize } from './text';
-import { names as KNOWN_NAMES } from './artistNames.json';
+import artistNames from './artistNames.json' with { type: 'json' };
 
 /** "(feat. X)" / "[ft. X]" become ", X" so the brackets don't stick to the names. */
 const BRACKETED_FEAT = /[([]\s*(?:feat\.?|ft\.?|featuring)\s+([^)\]]*)[)\]]/gi;
@@ -21,6 +21,7 @@ const SUFFIX = String.raw`\s*(?:jr|sr|ii|iii|iv|inc|ltd)\.?(?=\s*(?:$|[,;)\]]|\/
 const SEPARATOR = new RegExp(String.raw`(\s*(?:;|,(?!${SUFFIX})|\s\/|\/\s|\s(?:feat\.?|ft\.?|featuring)\s)\s*)`, 'i');
 /** A known name's key: "&" reads as "and", so "Earth, Wind and Fire" is known too. */
 const knownKey = (s: string) => normalize(s.replace(/&/g, ' and '));
+const KNOWN_NAMES = artistNames.names;
 const KNOWN = new Set(KNOWN_NAMES.map(knownKey));
 /** Most pieces (names and separators) a known name splits into. */
 const KNOWN_SPAN = Math.max(1, ...KNOWN_NAMES.map((n) => n.split(SEPARATOR).length));
