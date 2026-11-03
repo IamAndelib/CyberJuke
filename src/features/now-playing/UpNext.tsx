@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals';
 import { useLayoutEffect, useRef } from 'preact/hooks';
 import { autoplayLabel, currentId, currentPlaysOffline, currentTrack, isPlaying, player, playContext, previousTracks, repeatMode, shuffleOn, upNextSections, type PlayContext, type UpItem, type UpNextKind } from '../../player';
-import type { Track } from '../../data/model';
+import { isLocal, type Track } from '../../data/model';
 import { online } from '../../core/network';
 import { settings } from '../../stores/library';
 import { isSaved, savedOffline } from '../../stores/savedOffline';
@@ -70,6 +70,13 @@ function RowBody({ track, playing }: { track: Track; playing?: boolean }) {
       <div class="row-text">
         <div class="row-title">{track.title}</div>
         <div class="row-artist">{track.artist}</div>
+        {isLocal(track) && (
+          <div class="row-meta">
+            <span class="tag" data-testid="local-tag">
+              On phone
+            </span>
+          </div>
+        )}
       </div>
     </>
   );

@@ -29,6 +29,9 @@ import { openExternal } from '../../ui/links';
 import { arrowChoice } from '../../ui/arrowChoice';
 import { askConfirm, closeSettings, usePageActive } from '../../ui/nav';
 import { BackButton } from '../../ui/components/BackButton';
+import { localAvailable, type LocalFolder } from '../../data/local';
+import { addFolder, localFolderList, localScan, removeFolder, turnOff, turnOn } from '../../stores/local';
+import { plural } from '../../core/text';
 
 function Swatch({ id }: { id: ThemeId }) {
   const on = settings.value.theme === id;
@@ -67,6 +70,74 @@ function Toggle({ on, onChange, label, describedBy, testid }: { on: boolean; onC
       <span class="toggle-opt off">OFF</span>
       <span class="toggle-opt on">ON</span>
     </button>
+  );
+}
+
+/** One chosen folder: its name, how many songs (or the look in progress, or that it's out of reach), ✕. */
+function LocalFolderRow({ f }: { f: LocalFolder }) {
+  const scan = localScan.value;
+  const looking = scan?.folder === f.id;
+  return (
+    <li class="local-folder" data-testid="local-folder">
+      <Icon name="folder" size={20} />
+      <div class="setting-text">
+        <div class="local-folder-name">{f.name}</div>
+        <div class="setting-desc" data-testid="local-folder-state">
+          {looking ? `Looking… ${plural(scan.found, 'song')} so far` : f.state === 'gone' ? 'Can’t reach this folder' : plural(f.songs, 'song')}
+        </div>
+        {f.state === 'gone' && !looking && (
+          <button class="link-btn local-again" onClick={() => void addFolder(f.id)} data-testid="local-again">
+            [Choose it again]
+          </button>
+        )}
+      </div>
+      <button class="icon-btn" onClick={() => removeFolder(f)} aria-label={`Remove ${f.name}`} data-testid="local-remove">
+        <Icon name="close" size={20} />
+      </button>
+    </li>
+  );
+}
+
+/** Settings → Local music: on opens the picker; off asks first. Only the folders chosen here are read. */
+function LocalMusicSetting() {
+  const on = settings.value.localMusic;
+  const list = localFolderList.value;
+  const setOn = (v: boolean) => {
+    if (v) return void turnOn();
+    askConfirm({
+      title: 'Turn off local music?',
+      body: 'CyberJuke forgets your folders and its list of their songs. Your files stay as they are.',
+      confirm: 'Turn off',
+      run: () => void turnOff(),
+    });
+  };
+  return (
+    <section class="card" data-testid="local-card">
+      <h2 class="card-title">Local music</h2>
+      <div class="setting">
+        <div class="setting-text">
+          <div class="setting-name">Play music from this phone</div>
+          <div class="setting-desc" id="local-desc">
+            Only from folders you choose.
+          </div>
+        </div>
+        <Toggle on={on} onChange={setOn} label="Play music from this phone" describedBy="local-desc" testid="local-toggle" />
+      </div>
+      {on && (
+        <div class="setting stack">
+          {list.length > 0 && (
+            <ul class="local-folders" aria-label="Folders">
+              {list.map((f) => (
+                <LocalFolderRow key={f.id} f={f} />
+              ))}
+            </ul>
+          )}
+          <button class="btn" onClick={() => void addFolder()} data-testid="local-add-folder">
+            Add folder
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -604,6 +675,8 @@ export function Settings() {
         </div>
         <CheckEverySetting />
       </section>
+
+      {localAvailable() && <LocalMusicSetting />}
 
       <section class="card">
         <h2 class="card-title">Storage</h2>

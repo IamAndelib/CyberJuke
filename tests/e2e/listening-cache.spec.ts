@@ -99,27 +99,28 @@ test('offline with liked songs saved, the banner and the refusal toast open Like
   await setOffline(page, backend, true);
   await expect(region).toHaveText(BANNER_LIKED);
 
-  // The banner opens Liked, a full-size target.
+  // The banner opens Library, a full-size target.
   const banner = page.getByTestId('offline-banner');
   await expect(banner).toHaveText(BANNER_LIKED);
-  expect((await page.getByTestId('offline-banner-liked').boundingBox())!.height).toBeGreaterThanOrEqual(44);
-  await page.getByTestId('offline-banner-liked').click();
-  await expect(page.getByTestId('screen-liked')).toBeVisible();
+  expect((await page.getByTestId('offline-banner-library').boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await page.getByTestId('offline-banner-library').click();
+  await expect(page.getByTestId('screen-library')).toBeVisible();
 
-  // Elsewhere, playing what isn't saved is refused, pointing to Liked (Home's Shuffle plays them).
+  // Elsewhere, playing what isn't saved is refused, pointing to Library (Home's Shuffle plays them).
   await openLibrary(page, 'recent');
   await page.getByTestId('tab-home').click();
   await expect(page.getByTestId('shuffle-all')).toContainText('Shuffle liked songs');
   await page.getByTestId('screen-home').locator('.row.off').first().getByTestId('track-play').click({ force: true });
   await expect(page.getByTestId('toast')).toContainText(TAP_LIKED);
   await page.getByTestId('toast-action').click();
-  await expect(page.getByTestId('screen-liked')).toBeVisible();
+  await expect(page.getByTestId('screen-library')).toBeVisible();
+  await openLibrary(page, 'liked');
   await expect(page.getByTestId('liked-list').getByTestId('track-row')).toHaveCount(3);
 
   // Nothing saved (yet): back to asking for a connection.
   await saved(page, []);
   await expect(banner).toHaveText(BANNER);
-  await expect(page.getByTestId('offline-banner-liked')).toHaveCount(0);
+  await expect(page.getByTestId('offline-banner-library')).toHaveCount(0);
   await page.getByTestId('tab-home').click();
   await page.getByTestId('shuffle-all').click();
   await expect(page.getByTestId('toast')).toHaveText(TAP);
@@ -227,7 +228,7 @@ test('offline, Now Playing says so too: with liked songs saved its line opens Li
   await expect(line).toHaveText(BANNER);
   await expect(page.getByTestId('np-offline-status')).toHaveAttribute('role', 'status');
   await expect(page.getByTestId('np-offline-status')).toHaveText(BANNER);
-  await expect(page.getByTestId('np-offline-liked')).toHaveCount(0);
+  await expect(page.getByTestId('np-offline-library')).toHaveCount(0);
   // A bar across the top of Now Playing, as the app's own: full width, above the header, clear of its buttons.
   const sheet = (await page.getByTestId('now-playing').boundingBox())!;
   const box = (await line.boundingBox())!;
@@ -236,18 +237,18 @@ test('offline, Now Playing says so too: with liked songs saved its line opens Li
   expect(box.width).toBeGreaterThanOrEqual(sheet.width - 1);
   expect(box.y + box.height).toBeLessThanOrEqual(Math.min(close.y, more.y));
 
-  // With a liked song saved: they still play, and a tap closes the sheet and opens Liked.
+  // With a liked song saved: they still play, and a tap closes the sheet and opens Library.
   await saved(page, ['abcdefghij2']);
-  await expect(page.getByTestId('np-offline-liked')).toHaveText(BANNER_LIKED);
+  await expect(page.getByTestId('np-offline-library')).toHaveText(BANNER_LIKED);
   // Its whole height is the target.
-  expect((await page.getByTestId('np-offline-liked').boundingBox())!.height).toBeGreaterThanOrEqual(44);
-  await page.getByTestId('np-offline-liked').click();
+  expect((await page.getByTestId('np-offline-library').boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await page.getByTestId('np-offline-library').click();
   await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
-  await expect(page.getByTestId('screen-liked')).toBeVisible();
+  await expect(page.getByTestId('screen-library')).toBeVisible();
 
   // Back online: gone.
   await openNowPlaying(page);
-  await expect(page.getByTestId('np-offline-liked')).toBeVisible();
+  await expect(page.getByTestId('np-offline-library')).toBeVisible();
   await setOffline(page, backend, false);
   await expect(page.getByTestId('np-offline')).toHaveCount(0);
 });

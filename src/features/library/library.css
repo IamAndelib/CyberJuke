@@ -56,3 +56,32 @@
   margin-right: 6px;
   color: var(--color-fg-dim);
 }
+
+/* Library → Local. */
+.local-sort {
+  margin-top: 8px;
+}
+.local-status {
+  margin: 14px var(--gutter) 4px;
+  color: var(--color-fg-dim);
+  font-size: 14px;
+}
+.local-gone {
+  margin: 14px var(--gutter) 0;
+  padding: 10px 12px;
+  border: var(--border-w) dashed var(--color-fg-dim);
+  border-radius: var(--radius);
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.local-gone .link-btn {
+  min-height: 44px;
+  padding: 0 4px;
+  margin-left: -4px;
+}
+.local-add {
+  margin-top: 12px;
+}

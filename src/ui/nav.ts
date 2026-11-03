@@ -50,7 +50,8 @@ export type Page =
   | { kind: 'search' }
   /** Library's lists, each its own page (Library's root is a list of them). */
   | { kind: 'liked' }
-  | { kind: 'recent' };
+  | { kind: 'recent' }
+  | { kind: 'local' };
 
 export interface StackEntry {
   /** Unique for the app session (the page's key). */
@@ -182,6 +183,7 @@ function samePage(a: Page, b: Page): boolean {
     case 'search':
     case 'liked':
     case 'recent':
+    case 'local':
       return true;
   }
 }
@@ -243,7 +245,7 @@ export function openGenrePage(name: string): void {
 }
 
 /** One of Library's lists, as its own page over Library's list (Library's rows). */
-export function openLibraryPage(kind: 'liked' | 'recent'): void {
+export function openLibraryPage(kind: 'liked' | 'recent' | 'local'): void {
   pushPage({ kind });
 }
 

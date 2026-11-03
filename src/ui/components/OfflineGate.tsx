@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { online, recheckNetwork } from '../../core/network';
 import { OFFLINE } from '../../core/offlineText';
 import { Icon } from '../icons';
-import { goToLiked } from '../../player';
-import { hasSavedLiked } from '../../stores/savedOffline';
+import { goToLibrary } from '../../player';
+import { offlinePlays } from '../../stores/local';
 
 /** Redial shows it's dialling at least this long, so a tap that changes nothing still shows. */
 const REDIAL_MIN_MS = 600;
@@ -61,9 +61,9 @@ export function OfflineState({
       <button class="btn" onClick={redial} aria-busy={busy} data-testid="retry">
         {busy ? <span class="spinner" aria-hidden="true" /> : <Icon name="refresh" size={18} />} {OFFLINE.redial}
       </button>
-      {hasSavedLiked.value && (
-        <button class="btn primary" onClick={goToLiked} data-testid={`${testid}-liked`}>
-          <Icon name="heart" size={18} /> {OFFLINE.likedAction}
+      {offlinePlays.value && (
+        <button class="btn primary" onClick={goToLibrary} data-testid={`${testid}-library`}>
+          <Icon name="library" size={18} /> {OFFLINE.libraryAction}
         </button>
       )}
     </div>

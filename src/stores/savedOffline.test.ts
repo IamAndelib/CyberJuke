@@ -2,7 +2,7 @@ import { effect } from '@preact/signals';
 import { describe, expect, it } from 'vitest';
 import type { Track } from '../data/model';
 import { liked, settings } from './library';
-import { hasSavedLiked, isSaved, savedLiked, savedOffline, savedQueue, savedTracks, setSavedOffline } from './savedOffline';
+import { isSaved, savedLiked, savedOffline, savedQueue, savedTracks, setSavedOffline } from './savedOffline';
 
 const t = (id: string): Track => ({ id, ytId: id.padEnd(11, '0') }) as Track;
 const [a, b, c, d] = ['a', 'b', 'c', 'd'].map(t);
@@ -50,13 +50,13 @@ describe('savedOffline', () => {
     liked.value = [d, c, b, a];
     setSavedOffline([a.ytId, c.ytId, 'notliked00']);
     expect(savedLiked.value).toEqual([c, a]);
-    expect(hasSavedLiked.value).toBe(true);
+    expect(savedLiked.value.length).toBeGreaterThan(0);
     setSavedOffline([]);
-    expect(hasSavedLiked.value).toBe(false);
+    expect(savedLiked.value).toEqual([]);
     // Saved, but not liked any more: not offered.
     setSavedOffline([b.ytId]);
     liked.value = [a];
-    expect(hasSavedLiked.value).toBe(false);
+    expect(savedLiked.value).toEqual([]);
     liked.value = [];
     setSavedOffline([]);
   });
@@ -66,7 +66,7 @@ describe('savedOffline', () => {
     liked.value = [hidden];
     setSavedOffline([hidden.ytId]);
     expect(settings.peek().showNsfw).toBe(false);
-    expect(hasSavedLiked.value).toBe(false);
+    expect(savedLiked.value).toEqual([]);
     settings.value = { ...settings.peek(), showNsfw: true };
     expect(savedLiked.value).toEqual([hidden]);
     settings.value = { ...settings.peek(), showNsfw: false };

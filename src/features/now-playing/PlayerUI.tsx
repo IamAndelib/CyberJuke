@@ -30,7 +30,8 @@ import { artistChoice, lyricsOpen, menuQueued, menuTrack, nowPlayingOpen, openAr
 import { openExternal, openPost, youtubeUrl } from '../../ui/links';
 import { positionNow, useTickValue } from '../../ui/useTick';
 import { splitArtists } from '../../data/artists';
-import { isGlobal, isSignal, type Track } from '../../data/model';
+import { isGlobal, isLocal, isSignal, type Track } from '../../data/model';
+import { localFolderOf } from '../../stores/local';
 import { hasAudio } from '../../core/guards';
 import { reducedMotion } from '../../core/motion';
 import { OFFLINE } from '../../core/offlineText';
@@ -643,7 +644,12 @@ function NowPlayingContent() {
           <SeekBar />
           <NpControls />
 
-          {isGlobal(t) ? (
+          {isLocal(t) ? (
+            <div class="np-post np-global" data-testid="np-local">
+              <span>On this phone{localFolderOf(t.id) && ` · ${localFolderOf(t.id)}`}</span>
+              <Icon name="folder" size={18} />
+            </div>
+          ) : isGlobal(t) ? (
             <div class="np-post np-global" data-testid="np-global">
               <span>From Global search</span>
               <Icon name="search" size={18} />
@@ -727,7 +733,8 @@ function NpFrom() {
 
 /** Artist line in Now Playing: tapping opens the artist page (or a chooser for several). */
 function NpArtist({ track }: { track: Track }) {
-  const names = splitArtists(track.artist);
+  // A local song's artist is only its tag: it has no artist page.
+  const names = isLocal(track) ? [] : splitArtists(track.artist);
   if (!names.length)
     return (
       <div class="np-artist">
@@ -789,6 +796,8 @@ export function TrackMenu() {
   const fav = useLiked(t?.id);
   // A track still being looked up (nothing to play yet) can't be queued, shared or liked.
   const known = hasAudio(t);
+  // A local song has nothing to share or open elsewhere: Add to queue and Like.
+  const local = isLocal(t);
   // Held in Now Playing's "Queued by you": Remove from queue takes Add to queue's place, for
   // that row as the queue has it now. Gone from there (it started playing, or the queue moved),
   // the menu closes rather than act on another row.
@@ -840,17 +849,19 @@ export function TrackMenu() {
                 <Icon name="playNext" size={20} /> Add to queue
               </button>
             )}
-            <button
-              class="sheet-item"
-              onClick={() => {
-                close();
-                void shareTrack(t);
-              }}
-              disabled={!known}
-              data-testid="menu-share"
-            >
-              <Icon name="share" size={20} /> Share
-            </button>
+            {!local && (
+              <button
+                class="sheet-item"
+                onClick={() => {
+                  close();
+                  void shareTrack(t);
+                }}
+                disabled={!known}
+                data-testid="menu-share"
+              >
+                <Icon name="share" size={20} /> Share
+              </button>
+            )}
             <button
               class="sheet-item"
               onClick={() => {
@@ -862,7 +873,7 @@ export function TrackMenu() {
             >
               <Icon name={fav ? 'heart' : 'heartOutline'} size={20} /> {fav ? 'Unlike' : 'Like'}
             </button>
-            {splitArtists(t.artist).map((n) => (
+            {!local && splitArtists(t.artist).map((n) => (
               <button key={n} class="sheet-item" onClick={() => openArtistPage(n)} data-testid="menu-more-by">
                 <Icon name="artists" size={20} /> <span class="sheet-text">More by {n}</span>
               </button>

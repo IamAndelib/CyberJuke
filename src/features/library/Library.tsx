@@ -1,7 +1,10 @@
 import { computed, type ReadonlySignal } from '@preact/signals';
 import { useCallback, useMemo, useRef } from 'preact/hooks';
 import type { Track } from '../../data/model';
-import { historyShown, likedShown, recentShown } from '../../stores/library';
+import { LOCAL_SORTS, historyShown, likedShown, recentShown, settings, updateSettings, type LocalSort } from '../../stores/library';
+import { addFolder, localFolderList, localLoading, localOn, localScan, localTracks, lookAgain, scanningName, sortLocal, turnOn, unreachableFolders } from '../../stores/local';
+import { SkeletonRows } from '../../ui/components/TrackRow';
+import { arrowChoice } from '../../ui/arrowChoice';
 import { dayKey, groupByDay } from '../../stores/history';
 import { useChunks } from '../../ui/useChunks';
 import { clearHistoryWithUndo } from '../../stores/undo';
@@ -11,20 +14,20 @@ import { EmptyState, PlayShuffle, Tracks } from '../../ui/components/TrackList';
 import { playFrom } from '../../ui/playAll';
 import { TrackRow } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
-import { askConfirm, nowPlayingOpen, openLibraryPage, popToRoot, selectTab, useSearchContext } from '../../ui/nav';
+import { askConfirm, nowPlayingOpen, openLibraryPage, openSettings, popToRoot, selectTab, useSearchContext } from '../../ui/nav';
 import { list } from '../../ui/playAll';
 import { afterPress } from '../../ui/press';
 import { plural } from '../../core/text';
 
 const LIKED_CTX = list('Liked');
 const RECENT_CTX = list('Recently played');
+const LOCAL_CTX = list('Local');
 
-/** Library → Liked, from anywhere (the offline line, at the top and in Now Playing, and the offline toast's button). */
-export function openLiked(): void {
+/** Library's list, from anywhere (the offline line, at the top and in Now Playing, and the offline toast's button). */
+export function openLibrary(): void {
   nowPlayingOpen.value = false;
   popToRoot('library');
   selectTab('library');
-  openLibraryPage('liked');
 }
 
 /** M3: clearing history asks first, and can still be undone from the toast. It counts what the tab counts. */
@@ -38,17 +41,18 @@ function confirmClear(): void {
 }
 
 /** A row's count: only it follows its list (a play changes Recently played's). */
-function Count({ of }: { of: ReadonlySignal<Track[]> }) {
+function Count({ of, after }: { of: ReadonlySignal<Track[]>; after?: string }) {
   const n = of.value.length;
   return (
     <>
       <span class="count">{n}</span> {n === 1 ? 'song' : 'songs'}
+      {after}
     </>
   );
 }
 
 /** One of Library's lists: an outlined tile with its icon, its name and count, a chevron; a tap opens its page. */
-function LibRow({ icon, title, of, onOpen, testid }: { icon: IconName; title: string; of: ReadonlySignal<Track[]>; onOpen: () => void; testid: string }) {
+function LibRow({ icon, title, of, after, onOpen, testid }: { icon: IconName; title: string; of: ReadonlySignal<Track[]>; after?: string; onOpen: () => void; testid: string }) {
   return (
     <li class="row lib-row">
       <button class="row-main" onClick={(e) => afterPress(e.currentTarget, onOpen)} data-testid={testid}>
@@ -60,7 +64,7 @@ function LibRow({ icon, title, of, onOpen, testid }: { icon: IconName; title: st
         <div class="row-text">
           <div class="row-title">{title}</div>
           <div class="row-artist">
-            <Count of={of} />
+            <Count of={of} after={after} />
           </div>
         </div>
         <Icon name="chevron" size={16} class="lib-chev" />
@@ -83,6 +87,7 @@ export function Library() {
       <ul class="list lib-list" aria-label="Library">
         <LibRow icon="heart" title="Liked" of={likedShown} onOpen={() => openLibraryPage('liked')} testid="lib-liked" />
         <LibRow icon="clock" title="Recently played" of={recentShown} onOpen={() => openLibraryPage('recent')} testid="lib-recent" />
+        {localOn.value && <LibRow icon="folder" title="Local" of={localTracks} after=" · on this phone" onOpen={() => openLibraryPage('local')} testid="lib-local" />}
       </ul>
     </Screen>
   );
@@ -185,5 +190,101 @@ function HistoryDays() {
       })}
       {more ? <div ref={sentinel} class="list-foot" aria-hidden="true" /> : <div class="list-foot end">— end of tape —</div>}
     </>
+  );
+}
+
+const SORT_LABELS: Record<LocalSort, string> = { title: 'Title', artist: 'Artist', album: 'Album' };
+
+/** Local's order: Title, Artist or Album, remembered. */
+function SortSwitch() {
+  const cur = settings.value.localSort;
+  const choose = (v: LocalSort) => updateSettings({ localSort: v });
+  return (
+    <div class="segmented local-sort" role="radiogroup" aria-label="Sort by" onKeyDown={arrowChoice(LOCAL_SORTS, cur, choose)} data-testid="local-sort">
+      {LOCAL_SORTS.map((v) => (
+        <button key={v} role="radio" aria-checked={cur === v} tabIndex={cur === v ? 0 : -1} class={cur === v ? 'on' : ''} onClick={() => choose(v)} data-value={v} data-testid={`local-sort-${v}`}>
+          {SORT_LABELS[v]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** A folder that can't be read right now: its songs are hidden until it's chosen again. */
+function Unreachable() {
+  return (
+    <>
+      {unreachableFolders.value.map((f) => (
+        <div key={f.id} class="local-gone" role="status" data-testid="local-gone">
+          <span>
+            Can’t reach “{f.name}”.{f.songs > 0 && (f.songs === 1 ? ' Its 1 song is hidden.' : ` Its ${f.songs} songs are hidden.`)}
+          </span>
+          <button class="link-btn" onClick={() => void addFolder(f.id)} data-testid="local-gone-again">
+            [Choose it again]
+          </button>
+        </div>
+      ))}
+    </>
+  );
+}
+
+const sortedLocal = computed(() => sortLocal(localTracks.value, settings.value.localSort));
+
+/** Library → Local: the songs in the folders chosen in Settings, sorted as chosen; pull down to look again. */
+export function LocalPage() {
+  const tracks = sortedLocal.value;
+  const scan = localScan.value;
+  useSearchContext({ label: 'Local', tracks: () => sortedLocal.value });
+  const looking = scan && <p class="local-status" role="status" data-testid="local-status">{`Looking in ${scanningName.value}… ${plural(scan.found, 'song')} so far`}</p>;
+  let body;
+  if (tracks.length) {
+    body = (
+      <>
+        {looking}
+        <PlayShuffle tracks={tracks} ctx={LOCAL_CTX} testid="local" />
+        <SortSwitch />
+        <div data-testid="local-list">
+          <Tracks tracks={tracks} ctx={LOCAL_CTX} inLocal chunkKey="local" />
+        </div>
+      </>
+    );
+  } else if (scan || localLoading.value) {
+    body = (
+      <div data-testid="local-looking">
+        {looking}
+        <SkeletonRows n={6} />
+      </div>
+    );
+  } else if (!settings.value.localMusic || !localFolderList.value.length) {
+    body = (
+      <EmptyState title="No folders yet" testid="local-empty">
+        Choose the folders CyberJuke may play music from. It looks nowhere else.
+        <div>
+          <button class="btn primary local-add" onClick={() => void turnOn()} data-testid="local-add">
+            Add folder
+          </button>
+        </div>
+      </EmptyState>
+    );
+  } else if (!unreachableFolders.value.length) {
+    body = (
+      <EmptyState title="No music in these folders" testid="local-none">
+        CyberJuke plays MP3, FLAC, Ogg, Opus, M4A and WAV files.
+        <div>
+          <button class="link-btn" onClick={() => void addFolder()} data-testid="local-none-add">
+            [Add folder]
+          </button>{' '}
+          <button class="link-btn" onClick={(e) => afterPress(e.currentTarget, openSettings)} data-testid="local-none-folders">
+            [Folders]
+          </button>
+        </div>
+      </EmptyState>
+    );
+  }
+  return (
+    <Screen testid="screen-local" title="Local" subtitle="On this phone" left={<BackButton testid="local-back" />} scrollKey="library:local" onRefresh={lookAgain} refreshOffline>
+      <Unreachable />
+      {body}
+    </Screen>
   );
 }

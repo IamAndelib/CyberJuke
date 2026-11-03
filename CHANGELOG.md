@@ -2,8 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- Play music from folders on your phone: turn on **Settings → Local music** and choose the folders. CyberJuke reads those and nothing else; the songs show under **Library → Local**, sorted by title, artist or album, play offline, and can be liked.
+
 ### Changed
 - Library is a list: **Liked** and **Recently played** are rows that open on their own pages, ready for more lists to join them.
+- Offline, the line at the top says which songs still play (liked, local, or both), and a tap on it opens Library instead of Liked.
 
 ### Fixed
 - Holding down an option in a switch or a row of chips (Settings, Home's genres) tints it instead of filling it, so it no longer looks chosen alongside the one that is.
