@@ -1509,6 +1509,14 @@ section[data-kind] > .shelf {
   width: 100%;
   aspect-ratio: 1;
 }
+/* A square with no cover to fill it: a dim note, on an empty art box's colour. */
+.mosaic-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(var(--color-surface), var(--color-surface)), var(--color-bg);
+  color: var(--color-fg-dim);
+}
 .mosaic-empty {
   display: flex;
   align-items: center;
