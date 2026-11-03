@@ -42,7 +42,7 @@ test.describe('turning it on', () => {
     await expect(page.getByTestId('local-list').getByTestId('track-row').first()).toContainText('Attic');
     // Albums: a grid of covers, A–Z; an album plays in track order; its artist opens the artist.
     await page.getByTestId('local-view-albums').click();
-    await expect(page.getByTestId('local-albums').getByTestId('local-album')).toHaveText(['AtticAna Tape · 2001', 'BasementZed Loop · 2009']);
+    await expect(page.getByTestId('local-albums').getByTestId('local-album')).toHaveText(['AtticAna Tape · 2001', 'BasementZed Loop · 2009', 'Unknown album1 song']);
     await page.getByTestId('local-album').first().click();
     await expect(page.getByTestId('screen-local-album')).toBeVisible();
     // A tap right where the card was, this soon, is a double tap's second half (nav.ts OPEN_GUARD_MS).
@@ -142,7 +142,7 @@ test.describe('a folder out of reach', () => {
 test.describe('playing', () => {
   test.use({ localOptions: { folders: [MUSIC] } });
 
-  test('Local plays its list; Now Playing reads "On this phone · Music", the artist is plain, the menu has only what applies', async ({ page }) => {
+  test('Local plays its list; Now Playing reads "On this phone · Music", the menu has only what applies, and the artist opens their artist page', async ({ page }) => {
     await localOn(page);
     await page.goto('/');
     await openLibrary(page, 'local');
@@ -151,12 +151,30 @@ test.describe('playing', () => {
     await openNowPlaying(page);
     await expect(page.getByTestId('np-local')).toHaveText('On this phone · Music');
     await expect(page.getByTestId('now-playing')).toContainText('Playing from Local');
-    await expect(page.getByTestId('np-artist')).toHaveCount(0);
     await page.getByTestId('np-more').click();
     const menu = page.getByTestId('track-menu');
     await expect(menu.getByTestId('menu-add-queue')).toBeVisible();
     await expect(menu.getByTestId('menu-like')).toBeVisible();
     for (const id of ['menu-share', 'menu-more-by', 'menu-open-post', 'menu-open-youtube']) await expect(menu.getByTestId(id)).toHaveCount(0);
+    await menu.getByRole('button', { name: /cancel/i }).click();
+    // The tag's artist, as any other song's: their artist page (the Jukebox's, then Global's).
+    await page.getByTestId('np-artist').click();
+    await expect(page.getByTestId('screen-artist')).toBeVisible();
+    await expect(page.getByTestId('screen-artist')).toContainText('Ana Tape');
+  });
+
+  test('songs with no album tag are the Unknown album, last; an Unknown artist isn\u2019t a link', async ({ page }) => {
+    await seedStorage(page, { 'CapacitorStorage.settings': { localMusic: true, localView: 'albums', version: 3 } });
+    await page.goto('/');
+    await openLibrary(page, 'local');
+    await page.getByTestId('local-album').last().click();
+    await expect(page.getByTestId('screen-local-album')).toContainText('Songs with no album tag');
+    await expect(page.getByTestId('album-artist')).toHaveCount(0);
+    await page.waitForTimeout(350);
+    await page.getByTestId('album-play').click();
+    await expect(page.getByTestId('mini-title')).toHaveText('voice memo 6');
+    await openNowPlaying(page);
+    await expect(page.getByTestId('np-artist')).toHaveCount(0);
   });
 
   test('a liked local song is tagged "On phone" in Liked and plays offline; Here searches Local', async ({ page, backend }) => {

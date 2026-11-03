@@ -228,7 +228,7 @@ function AlbumGrid() {
             <span class="shelf-title" data-testid="local-album-title">
               {a.title}
             </span>
-            <span class="shelf-year">{a.year ? `${a.artist} · ${a.year}` : a.artist}</span>
+            <span class="shelf-year">{!a.artist ? plural(a.songs.length, 'song') : a.year ? `${a.artist} · ${a.year}` : a.artist}</span>
           </button>
         </li>
       ))}
@@ -391,9 +391,13 @@ export function LocalAlbumPage({ albumKey }: { albumKey: string }) {
           <h2 class="album-title" data-testid="album-title">
             {a.title}
           </h2>
-          <button class="np-link album-artist" onClick={(e) => afterPress(e.currentTarget, () => openLocalPage('localArtist', a.artistKey))} data-testid="album-artist">
-            {a.artist}
-          </button>
+          {a.artist ? (
+            <button class="np-link album-artist" onClick={(e) => afterPress(e.currentTarget, () => openLocalPage('localArtist', a.artistKey))} data-testid="album-artist">
+              {a.artist}
+            </button>
+          ) : (
+            <div class="album-artist dim">Songs with no album tag</div>
+          )}
           <div class="dim small">{a.year ? `${a.year} · ${plural(tracks.length, 'song')}` : plural(tracks.length, 'song')}</div>
         </div>
       </div>

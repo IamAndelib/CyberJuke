@@ -67,6 +67,23 @@ describe('local albums', () => {
   });
 });
 
+describe('songs without tags', () => {
+  it('with no album, whoever they are by, make one Unknown album at the end, by title; it is on no artist\u2019s shelf', () => {
+    const { albums, artists } = groupLocal([
+      song('zebra rip', 'Unknown artist'),
+      song('Battery', 'Metallica', 'Master of Puppets'),
+      song('Loose single', 'TOOL'),
+      song('another rip', 'Unknown artist'),
+    ]);
+    expect(albums.map((a) => [a.title, a.artist])).toEqual([
+      ['Master of Puppets', 'Metallica'],
+      ['Unknown album', ''],
+    ]);
+    expect(albums[1]!.songs.map((s) => s.title)).toEqual(['another rip', 'Loose single', 'zebra rip']);
+    expect(artists.flatMap((a) => a.albums.map((x) => x.title))).toEqual(['Master of Puppets']);
+  });
+});
+
 describe('local artists', () => {
   it('list their albums newest first (unknown year last) and every song by title; Unknown artist goes last', () => {
     const { artists } = groupLocal([

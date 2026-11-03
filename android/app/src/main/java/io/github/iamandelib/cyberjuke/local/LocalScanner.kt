@@ -147,13 +147,15 @@ internal class LocalScanner(private val context: Context) {
             }
         }
         val cover = writeCover(picture ?: p.coverUri?.let { readSmall(it) }, art)
+        // No artist and no title tag: a name like "Artist - Title.mp3" says them.
+        val guess = if (title.isNullOrBlank() && artist.isNullOrBlank() && albumArtist.isNullOrBlank()) LocalRules.guessFromName(p.child.name) else null
         return LocalIndex.Entry(
             id = p.id,
             folder = folderId,
             uri = p.uri,
             name = p.child.name,
-            title = LocalRules.shownTitle(title, p.child.name),
-            artist = LocalRules.shownArtist(artist, albumArtist),
+            title = guess?.second ?: LocalRules.shownTitle(title, p.child.name),
+            artist = guess?.first ?: LocalRules.shownArtist(artist, albumArtist),
             album = album?.trim().orEmpty(),
             albumArtist = albumArtist?.trim().orEmpty(),
             track = LocalRules.number(track),

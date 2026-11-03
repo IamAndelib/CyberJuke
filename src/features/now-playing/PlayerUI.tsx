@@ -733,8 +733,7 @@ function NpFrom() {
 
 /** Artist line in Now Playing: tapping opens the artist page (or a chooser for several). */
 function NpArtist({ track }: { track: Track }) {
-  // A local song's artist is only its tag: it has no artist page.
-  const names = isLocal(track) ? [] : splitArtists(track.artist);
+  const names = splitArtists(track.artist);
   if (!names.length)
     return (
       <div class="np-artist">

@@ -55,6 +55,17 @@ class LocalRulesTest {
     }
 
     @Test
+    fun anUntaggedFilesNameGivesItsArtistAndTitleOnlyWhenItIsClearlyTwoParts() {
+        assertEquals("Gojira" to "Flying Whales", LocalRules.guessFromName("Gojira - Flying Whales.mp3"))
+        assertEquals("Sigur Rós" to "Hoppípolla", LocalRules.guessFromName("Sigur Rós – Hoppípolla.flac"))
+        assertNull(LocalRules.guessFromName("voice memo 3.m4a"))
+        assertNull(LocalRules.guessFromName("01 - Battery.mp3"))
+        assertNull(LocalRules.guessFromName("A - B - C.mp3"))
+        assertNull(LocalRules.guessFromName(" - Title.mp3"))
+        assertNull(LocalRules.guessFromName("Artist-Title.mp3"))
+    }
+
+    @Test
     fun trackDiscAndYearTagsAreReadAsNumbers() {
         assertEquals(4, LocalRules.number("4"))
         assertEquals(4, LocalRules.number(" 04/12 "))
