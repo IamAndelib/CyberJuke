@@ -372,14 +372,14 @@ export interface Removed<T> {
   prev?: string;
 }
 
-function removedFrom<T>(list: T[], index: number, key: (x: T) => string): Removed<T> {
+export function removedFrom<T>(list: T[], index: number, key: (x: T) => string): Removed<T> {
   const r: Removed<T> = { item: list[index], index };
   if (index + 1 < list.length) r.next = key(list[index + 1]);
   if (index > 0) r.prev = key(list[index - 1]);
   return r;
 }
 
-function putBack<T>(list: T[], r: Removed<T>, key: (x: T) => string): T[] {
+export function putBack<T>(list: T[], r: Removed<T>, key: (x: T) => string): T[] {
   let i = r.next != null ? list.findIndex((x) => key(x) === r.next) : -1;
   if (i < 0 && r.prev != null) {
     const p = list.findIndex((x) => key(x) === r.prev);

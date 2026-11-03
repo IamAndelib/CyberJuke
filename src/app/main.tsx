@@ -36,6 +36,7 @@ import { retryWatchedFeeds } from '../stores/feed';
 import { JukePlayer } from '../player/native';
 import { hasCurrent, setOpenLibrary, startPlayerPrefs, startQueuePurge } from '../player';
 import { startLocal } from '../stores/local';
+import { loadPlaylists } from '../stores/playlists';
 import { startListeningCache } from '../player/listeningCache';
 import { startUpdates } from '../stores/updates';
 import { playFrom, radio } from '../ui/playAll';
@@ -158,6 +159,7 @@ async function boot(): Promise<void> {
   // and may arrive just after it.
   const settingsRead = loadSettings().catch((e) => logError('loadSettings', e));
   const listsRead = loadLists().catch((e) => logError('loadLibrary', e));
+  void loadPlaylists().catch((e) => logError('loadPlaylists', e));
   const stored = Promise.all([settingsRead, listsRead]).then(() => undefined);
   await auth.restore();
   // The listening cache hears Liked and its size once they're read (not an empty list or the
