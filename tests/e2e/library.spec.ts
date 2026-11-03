@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { openSearch, openSettings, seedStorage, start, waitForTracks, openLibrary } from '../helpers';
+import { openSearch, openSettings, seedStorage, start, touchTap, waitForTracks, openLibrary } from '../helpers';
 
 /** Library: Liked, Recently played by day, and the one-time move of history into a file. */
 
@@ -198,4 +198,30 @@ test('Library is a list of its lists: Liked and Recently played open on their ow
   // The Library tab again: back to its list.
   await page.getByTestId('tab-library').click();
   await expect(page.getByTestId('screen-library')).toBeVisible();
+});
+
+// A row that moves as it becomes current (Preact 11 moves keyed rows with moveBefore()) kept its
+// title's old colour in Chromium: the bar and badge showed, the accent title didn't.
+test('a song played from Recently played moves to the top with its title in the accent colour', async ({ page }) => {
+  await start(page);
+  for (const i of [2, 1, 0]) {
+    await page.getByTestId('track-play').nth(i).click();
+    await expect(page.getByTestId('track-row').nth(i)).toHaveClass(/is-current/);
+  }
+  await openLibrary(page, 'recent');
+  const rows = page.getByTestId('recent-list').getByTestId('track-row');
+  await expect(rows).toHaveCount(3);
+  const accent = await page.evaluate(() => {
+    const el = document.body.appendChild(document.createElement('div'));
+    el.style.color = 'var(--color-accent)';
+    const c = getComputedStyle(el).color;
+    el.remove();
+    return c;
+  });
+  const title = (await rows.nth(2).getByTestId('track-title').textContent())!;
+  await touchTap(page, rows.nth(2).getByTestId('track-play'));
+  await expect(rows.first().getByTestId('track-title')).toHaveText(title);
+  await expect(rows.first()).toHaveClass(/is-current/);
+  await expect(rows.first().getByTestId('track-title')).toHaveCSS('color', accent);
+  await expect(rows.nth(1).getByTestId('track-title')).not.toHaveCSS('color', accent);
 });

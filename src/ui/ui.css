@@ -189,7 +189,8 @@
 .row-main:is(:active, [data-pressed]) {
   background: var(--press);
 }
-.row.is-current .row-title {
+.row.is-current .row-title,
+.row-title.is-current {
   color: var(--color-accent);
 }
 /* Offline: a row that can't play dims (saved liked songs and the current track stay bright), and
