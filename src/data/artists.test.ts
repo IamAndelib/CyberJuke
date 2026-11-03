@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildArtistIndex, splitArtists } from './artists';
+import { buildArtistIndex, creditedArtists, splitArtists } from './artists';
 import type { Track } from './model';
 
 const t = (id: string, artist: string): Track => ({
@@ -31,8 +31,41 @@ describe('splitArtists', () => {
   it('never splits on "and" or "&"', () => {
     expect(splitArtists('The Jesus and Mary Chain')).toEqual(['The Jesus and Mary Chain']);
     expect(splitArtists('Joey Valence & Brae')).toEqual(['Joey Valence & Brae']);
-    expect(splitArtists('Earth, Wind & Fire')).toEqual(['Earth', 'Wind & Fire']);
     expect(splitArtists('Yungstar feat. Trey D & Solo')).toEqual(['Yungstar', 'Trey D & Solo']);
+  });
+
+  it('keeps a Jr./Sr./II/III/Inc. after a comma with the name', () => {
+    expect(splitArtists('Grover Washington, Jr.')).toEqual(['Grover Washington, Jr.']);
+    expect(splitArtists('Sammy Davis, Jr.')).toEqual(['Sammy Davis, Jr.']);
+    expect(splitArtists('Hank Williams, Jr')).toEqual(['Hank Williams, Jr']);
+    expect(splitArtists('Ken Griffey, Sr.')).toEqual(['Ken Griffey, Sr.']);
+    expect(splitArtists('Loudon Wainwright, III')).toEqual(['Loudon Wainwright, III']);
+    expect(splitArtists('Murder, Inc.')).toEqual(['Murder, Inc.']);
+    expect(splitArtists('Grover Washington, Jr. feat. Bill Withers')).toEqual(['Grover Washington, Jr.', 'Bill Withers']);
+    expect(splitArtists('Bill Withers, Grover Washington, Jr.')).toEqual(['Bill Withers', 'Grover Washington, Jr.']);
+    expect(splitArtists('Harry Connick, Jr.; Wynton Marsalis')).toEqual(['Harry Connick, Jr.', 'Wynton Marsalis']);
+    expect(splitArtists('Grover Washington, Jr. (feat. Bill Withers)')).toEqual(['Grover Washington, Jr.', 'Bill Withers']);
+    // Only a suffix on its own: a name that merely starts with one still splits off.
+    expect(splitArtists('Marvin Gaye, Jr. Walker & The All Stars')).toEqual(['Marvin Gaye', 'Jr. Walker & The All Stars']);
+    expect(splitArtists('Ray Parker Jr., Jrue')).toEqual(['Ray Parker Jr.', 'Jrue']);
+  });
+
+  it('keeps a well-known name with a comma whole, also inside a longer credit', () => {
+    expect(splitArtists('Earth, Wind & Fire')).toEqual(['Earth, Wind & Fire']);
+    expect(splitArtists('Earth, Wind and Fire')).toEqual(['Earth, Wind and Fire']);
+    expect(splitArtists('Tyler, The Creator')).toEqual(['Tyler, The Creator']);
+    expect(splitArtists('Crosby, Stills, Nash & Young')).toEqual(['Crosby, Stills, Nash & Young']);
+    expect(splitArtists('10,000 Maniacs')).toEqual(['10,000 Maniacs']);
+    expect(splitArtists('Earth, Wind & Fire, The Emotions')).toEqual(['Earth, Wind & Fire', 'The Emotions']);
+    expect(splitArtists('Earth, Wind & Fire feat. The Emotions')).toEqual(['Earth, Wind & Fire', 'The Emotions']);
+    expect(splitArtists('Kendrick Lamar, Tyler, The Creator')).toEqual(['Kendrick Lamar', 'Tyler, The Creator']);
+  });
+
+  it('still splits collaborations', () => {
+    expect(splitArtists('Swedish House Mafia, The Weeknd')).toEqual(['Swedish House Mafia', 'The Weeknd']);
+    expect(splitArtists('Daft Punk, Pharrell Williams & Nile Rodgers')).toEqual(['Daft Punk', 'Pharrell Williams & Nile Rodgers']);
+    expect(splitArtists('Mumford & Sons, Hozier')).toEqual(['Mumford & Sons', 'Hozier']);
+    expect(splitArtists('Earth, Wind')).toEqual(['Earth', 'Wind']);
   });
 
   it('keeps a slash inside a name and handles bracketed features', () => {
@@ -49,7 +82,25 @@ describe('splitArtists', () => {
   });
 });
 
+describe('creditedArtists', () => {
+  it("takes a Global song's linked artists as they are, else splits the credit", () => {
+    const artists = [{ name: 'Bill Withers', channelId: 'UCDjpW6k2Sfg_FTr1toLvffQ' }, { name: 'Grover Washington, Jr.', channelId: 'UCsN1HTruhFfXcSMGMsBmX_w' }];
+    expect(creditedArtists({ artist: 'Bill Withers & Grover Washington, Jr.', artists })).toEqual(artists);
+    expect(creditedArtists({ artist: 'Farhot, Samon Kawamura' })).toEqual([{ name: 'Farhot' }, { name: 'Samon Kawamura' }]);
+    expect(creditedArtists({ artist: 'Tycho', artists: [] })).toEqual([{ name: 'Tycho' }]);
+  });
+  it('keeps every name of the credit when YouTube Music linked only some (a search song links its first artist)', () => {
+    const artists = [{ name: 'Calvin Harris', channelId: 'UCcalvin' }];
+    expect(creditedArtists({ artist: 'Calvin Harris, Dua Lipa', artists })).toEqual([{ name: 'Calvin Harris', channelId: 'UCcalvin' }, { name: 'Dua Lipa' }]);
+  });
+});
+
 describe('buildArtistIndex', () => {
+  it('indexes a well-known comma name as one artist', () => {
+    const idx = buildArtistIndex([t('e1', 'Earth, Wind & Fire'), t('e2', 'Earth, Wind & Fire')]);
+    expect(idx.artists.map((a) => [a.name, a.count])).toEqual([['Earth, Wind & Fire', 2]]);
+  });
+
   const tracks = [
     t('1', 'Björk'),
     t('2', 'bjork, Thom Yorke'),

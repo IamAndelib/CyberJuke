@@ -103,6 +103,12 @@ class ArtistPageTest {
         assertNull(p.topSongs[1].durationSec)
         assertEquals("Queen & David Bowie", p.topSongs[2].subtitle)
         assertEquals("UCEPMVbUzImPl4p8k4LkGevA", p.topSongs[2].channelId)
+        // Each linked artist of the credit, by channel: the page opens without a search.
+        assertEquals(listOf(YtMusic.Credit("Queen", "UCEPMVbUzImPl4p8k4LkGevA")), p.topSongs[0].artists)
+        assertEquals(
+            listOf(YtMusic.Credit("Queen", "UCEPMVbUzImPl4p8k4LkGevA"), YtMusic.Credit("David Bowie", "UCaaaaaaaaaaaaaaaaaaaaaa")),
+            p.topSongs[2].artists,
+        )
         assertTrue(p.topSongs[0].thumbnailUrl!!.endsWith("w120-h120"))
         assertEquals(
             "https://music.youtube.com/playlist?list=OLAK5uy_topsongsQueenXXXXXXXXXXXXXXXXXX",

@@ -76,6 +76,7 @@ internal object Radio {
             thumbnailUrl = thumbnailOf(r.optJSONObject("thumbnail")),
             artistUrl = channelId?.let { "https://www.youtube.com/channel/$it" },
             channelId = channelId,
+            artists = MusicText.artistsOf(runs),
         )
     }
 

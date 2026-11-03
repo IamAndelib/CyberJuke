@@ -48,6 +48,17 @@ export interface Track {
    * of one album by it, so Crossfade leaves their transition alone (Gapless playback).
    */
   album?: string;
+  /**
+   * A Global song's credited artists, each with their channel, as YouTube Music links them
+   * (in credit order, at most 10): their artist pages open by channel, with no name search.
+   */
+  artists?: TrackArtist[];
+}
+
+/** A credited artist and their YouTube Music channel (`UC…`). */
+export interface TrackArtist {
+  name: string;
+  channelId: string;
 }
 
 export type TrackOrigin = 'jukebox' | 'ytmusic' | 'signal' | 'local';

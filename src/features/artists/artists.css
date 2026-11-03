@@ -46,3 +46,30 @@
   overflow-wrap: break-word;
   hyphens: auto;
 }
+
+/* An artist found nowhere: a big 404 over a search printout. */
+.nf {
+  padding: 18px var(--gutter) 8px;
+}
+.nf-big {
+  font-family: var(--font-display);
+  font-size: 84px;
+  line-height: 1;
+  letter-spacing: 4px;
+  text-shadow: var(--glow);
+}
+.nf-term {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  color: var(--color-fg-dim);
+}
+.nf-term b {
+  font-weight: normal;
+  color: var(--color-fg);
+}
+.nf-err {
+  color: var(--color-accent);
+}

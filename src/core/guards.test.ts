@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { asTrack, audioIdOf, hasAudio, asTracks, isAudioId, isTrackFull, parseMusicItem, parseMusicPage, parseNativeState, parseRunQueryRows, parseLocalFolders, parseLocalSongs } from './guards';
+import { asTrack, audioIdOf, hasAudio, asTracks, isAudioId, isTrackFull, parseMusicItem, parseMusicPage, parseNativeState, parseRunQueryRows, parseLocalFolders, parseLocalSongs, parseTrackArtists } from './guards';
 
 const track = {
   id: 'p1',
@@ -118,6 +118,24 @@ describe('parseMusicPage', () => {
     expect(page.next).toBe('tok');
     expect(parseMusicPage(undefined)).toEqual({ items: [] });
     expect(parseMusicItem({ kind: 'song', url: '' })).toBeNull();
+  });
+});
+
+describe('parseTrackArtists', () => {
+  const GW = { name: 'Grover Washington, Jr.', channelId: 'UCsN1HTruhFfXcSMGMsBmX_w' };
+
+  it('keeps each artist with a name and a UC… channel, at most 10', () => {
+    expect(parseMusicItem({ kind: 'song', title: 'S', subtitle: 'Grover Washington, Jr.', url: 'u', artists: [GW] })!.artists).toEqual([GW]);
+    expect(parseTrackArtists([GW, { name: '', channelId: GW.channelId }, { name: 'X', channelId: 'PL123' }, { name: 7, channelId: GW.channelId }, 'x', null])).toEqual([GW]);
+    expect(parseTrackArtists([{ name: ' Padded ', channelId: GW.channelId }])).toEqual([{ name: 'Padded', channelId: GW.channelId }]);
+    expect(parseTrackArtists(Array.from({ length: 15 }, () => GW))).toHaveLength(10);
+    expect(parseTrackArtists('nope')).toEqual([]);
+    expect(parseMusicItem({ kind: 'song', title: 'S', subtitle: 'A', url: 'u', artists: [{ name: 'A' }] })).not.toHaveProperty('artists');
+  });
+
+  it('keeps a stored Global track\'s artists', () => {
+    expect(asTrack({ ...track, artists: [GW, { name: 'bad' }] })!.artists).toEqual([GW]);
+    expect(asTrack(track)).not.toHaveProperty('artists');
   });
 });
 

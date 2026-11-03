@@ -206,6 +206,25 @@ test.describe('the A–Z scroller', () => {
     expect(pb.x + pb.width).toBeLessThanOrEqual(th.x);
     expect(Math.abs(pb.y + pb.height / 2 - (th.y + th.height / 2))).toBeLessThanOrEqual(4);
     await page.mouse.up();
+test.describe('an artist found nowhere', () => {
+  // A file downloaded from a video often names the uploader, who has no page anywhere.
+  const UPLOADER = 'Montag Studios GmbH';
+  test.use({
+    localOptions: { folders: [{ id: 'tree:music', name: 'Music', songs: [{ hex: '00000000000000b1', title: 'Blue Monday', artist: UPLOADER }] }] },
+    musicOptions: { unknownArtists: [UPLOADER] },
+  });
+
+  test('their page says 404, not empty sections: nothing on the Jukebox, no match on Global', async ({ page }) => {
+    await localOn(page);
+    await page.goto('/');
+    await openLibrary(page, 'local');
+    await page.getByTestId('local-play').click();
+    await openNowPlaying(page);
+    await page.getByTestId('np-artist').click();
+    const nf = page.getByTestId('artist-404');
+    await expect(nf).toContainText(`> locate "${UPLOADER}"`);
+    await expect(nf).toContainText('ERR 404: ARTIST NOT FOUND');
+    await expect(page.getByTestId('artist-jukebox')).toHaveCount(0);
   });
 });
 

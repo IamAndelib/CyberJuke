@@ -200,6 +200,22 @@ describe('NativePlayer: a session native restored after a restart', () => {
     expect(p.state.value.upNext.map((u) => 'album' in u.track)).toEqual([false, false]);
   });
 
+  it("sends a Global song's artists to native, and keeps the ones native describes", () => {
+    const artists = [{ name: 'Bill Withers', channelId: 'UCDjpW6k2Sfg_FTr1toLvffQ' }, { name: 'Grover Washington, Jr.', channelId: 'UCsN1HTruhFfXcSMGMsBmX_w' }];
+    expect(toNative(tr('G', { artists })).artists).toEqual(artists);
+    expect('artists' in toNative(tr('A'))).toBe(false);
+    const p = new NativePlayer();
+    emit('tracks', {
+      tracks: [
+        { id: 'ytm:' + tr('G').ytId, ytId: tr('G').ytId, title: 'Just the Two of Us', artist: 'Bill Withers & Grover Washington, Jr.', artworkUrl: '', artists: [...artists, { name: 'No channel' }] },
+        { id: 'ytm:' + tr('H').ytId, ytId: tr('H').ytId, title: 'Other', artist: 'Y', artworkUrl: '' },
+      ],
+    });
+    emit('state', state({ trackId: 'ytm:' + tr('G').ytId, queueIds: ['ytm:' + tr('G').ytId, 'ytm:' + tr('H').ytId], upNextIds: ['ytm:' + tr('H').ytId], upNextKinds: 'a', upNextIndex: [1] }));
+    expect(p.state.value.current?.artists).toEqual(artists);
+    expect(p.state.value.upNext[0].track).not.toHaveProperty('artists');
+  });
+
   const LOC = 'loc:0123456789abcdef';
 
   it('sends a local song to native by its id only (local: true, no link), and names a restored one', async () => {

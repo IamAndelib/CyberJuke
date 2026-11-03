@@ -7,6 +7,7 @@ import androidx.media3.common.MediaItem
 import io.github.iamandelib.cyberjuke.net.FailureKind
 import io.github.iamandelib.cyberjuke.net.NetBlock
 import io.github.iamandelib.cyberjuke.net.Surface
+import io.github.iamandelib.cyberjuke.yt.MusicText
 import io.github.iamandelib.cyberjuke.yt.Radio
 import io.github.iamandelib.cyberjuke.yt.YtCompat
 import io.github.iamandelib.cyberjuke.yt.YtGuard
@@ -139,7 +140,8 @@ internal class RadioFeeder(private val handler: Handler, private val host: Host)
                         .put("ytId", ytId)
                         .put("title", it.title)
                         .put("artist", Radio.cleanCredit(it.subtitle))
-                        .put("artworkUrl", "https://i.ytimg.com/vi/$ytId/hqdefault.jpg"),
+                        .put("artworkUrl", "https://i.ytimg.com/vi/$ytId/hqdefault.jpg")
+                        .apply { if (it.artists.isNotEmpty()) put("artists", MusicText.creditsJson(it.artists)) },
                 )
             }.getOrNull()
         }

@@ -9,7 +9,7 @@
  *   UNAVAILABLE unless a test stub is installed as `window.__cyberjukeMusicStub`.
  */
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { UNKNOWN_ARTIST, UNTITLED, artworkUrl, makeTrack, type Track } from './model';
+import { UNKNOWN_ARTIST, UNTITLED, artworkUrl, makeTrack, type Track, type TrackArtist } from './model';
 import { artistKey, cleanCredit, splitArtists } from './artists';
 import { Cache } from '../core/cache';
 import { TEST_HOOKS } from '../core/testHooks';
@@ -30,6 +30,8 @@ export interface MusicItem {
   artistUrl?: string;
   /** Songs and albums: the first credited artist's channel id; artists: their own. */
   channelId?: string;
+  /** Songs: each credited artist YouTube Music links, with their channel. */
+  artists?: TrackArtist[];
 }
 export interface MusicPage {
   items: MusicItem[];
@@ -167,6 +169,7 @@ export function musicItemToTrack(item: MusicItem, fallbackArtist = '', album?: s
     artworkUrl: artworkUrl(ytId),
     source: 'ytmusic',
     ...(album && { album }),
+    ...(!!item.artists?.length && { artists: item.artists }),
   });
 }
 

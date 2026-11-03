@@ -11,6 +11,7 @@ CyberJuke is copyright © 2026 IamAndelib and is licensed under the GNU General 
 - **Audio and artwork:** these come from YouTube, and for Jukebox MP3s from latex.gg (the audio) and Cyberspace's image server (the cover), and belong to their rights holders. CyberJuke neither hosts nor redistributes any audio.
 - **Global search and artist pages:** song, album, artist and playlist results, and an artist's top songs and discography, come from YouTube Music and belong to their rights holders. They are fetched on the phone (NewPipeExtractor, and the artist's YouTube Music page), cached briefly in memory, and never added to the Jukebox. The app labels this content "Global"; it is not affiliated with or endorsed by YouTube.
 - **Signal Radio:** the stations and their track lists are curated by hyphen8d (SIGNAL, a standalone project; Cyberspace's Jukebox plays the same stations as Signal Radio) and bundled with the app (MIT, see below). Their audio and artwork come from YouTube, like everything else.
+- **Artist names:** the list of well-known artists whose name holds a comma (so "Earth, Wind & Fire" stays one artist) is bundled with the app, made from [MusicBrainz](https://musicbrainz.org) artist names and [ListenBrainz](https://listenbrainz.org) listener counts, both released under CC0 by the MetaBrainz Foundation.
 - **Cyberspace's look:** the app's visual style recreates Cyberspace's look (colours, monospace type, borders) in the app's own CSS. No Cyberspace logos, images or code are included.
 
 ## Third-party components
@@ -27,6 +28,7 @@ CyberJuke is copyright © 2026 IamAndelib and is licensed under the GNU General 
 | [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) | SIL OFL 1.1 | Font (`public/fonts/`, license in `public/fonts/OFL.txt`) |
 | [Departure Mono](https://departuremono.com) | SIL OFL 1.1 | Font (`public/fonts/`, license in `public/fonts/OFL.txt`) |
 | [SIGNAL](https://github.com/hyphen8d/signal) by hyphen8d, Copyright (c) 2026 Matthew Arevalo | MIT | The Signal Radio stations: names, taglines, descriptions and track lists, bundled as data (`src/data/radio/stations.json`, made by `scripts/update-stations.mjs`) |
+| [MusicBrainz](https://musicbrainz.org) and [ListenBrainz](https://listenbrainz.org) data, MetaBrainz Foundation | CC0-1.0 | Artist names that hold a comma, bundled as data (`src/data/artistNames.json`, made by `scripts/update-artist-names.mjs`) |
 | AndroidX libraries, Kotlin standard library, kotlinx.coroutines, Guava, Okio | Apache-2.0 | Android runtime |
 | [desugar_jdk_libs](https://github.com/google/desugar_jdk_libs) | GPL-2.0 with the Classpath Exception | Newer Java APIs on older Android (needed by NewPipeExtractor) |
 | [nanojson](https://github.com/TeamNewPipe/nanojson) | Apache-2.0 | JSON parsing (NewPipeExtractor) |

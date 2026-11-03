@@ -78,6 +78,9 @@ class RadioTest {
         val a = page.items[0]
         assertEquals("Queen & David Bowie", a.subtitle)
         assertEquals("UCEPMVbUzImPl4p8k4LkGevA", a.channelId)
+        // Only linked artists are credits (David Bowie has no link here), never the album.
+        assertEquals(listOf(YtMusic.Credit("Queen", "UCEPMVbUzImPl4p8k4LkGevA")), a.artists)
+        assertTrue(page.items[1].artists.isEmpty())
         assertEquals(248L, a.durationSec)
         assertEquals("https://lh3.googleusercontent.com/a=w300-h300", a.thumbnailUrl)
         assertEquals("Queen", Radio.cleanCredit(page.items[1].subtitle))

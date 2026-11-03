@@ -31,6 +31,9 @@ function hash(s: string): number {
  * gets that many pages: after the first, more() gives 10 "<Name> Rarity <k>" songs a
  * page, the last page ending with "Moonlit Rarity"; songPageDelay slows those pages).
  *
+ * linkedArtist: songs credited to exactly that name carry it in `artists`, with its channel
+ * (as native search gives it).
+ *
  * radio({ ytId, next }) gives a song's radio: 25 songs a page titled "Radio <n>" by
  * "Radio Artist <k>" (never the seed), with a `next` token for 4 more pages; botCheck
  * rejects it.
@@ -54,9 +57,12 @@ const FAKE_MUSIC = `
     const id = ytId(seed);
     const it = { kind: 'song', title, subtitle: artist, url: 'https://music.youtube.com/watch?v=' + id, ytId: id, thumbnailUrl: thumb(seed) };
     if (!noChannel) {
-      const first = artist.split(', ')[0];
+      const linked = artist === opts.linkedArtist;
+      const first = linked ? artist : artist.split(', ')[0];
       it.channelId = chan(first);
       it.artistUrl = 'https://www.youtube.com/channel/' + it.channelId;
+      // As native search gives it (NewPipe's uploader): the credited artist and their channel.
+      if (linked) it.artists = [{ name: artist, channelId: it.channelId }];
     }
     if (hash(seed) % 5) it.durationSec = 150 + (hash(seed) % 180);
     return it;
@@ -185,7 +191,7 @@ const FAKE_MUSIC = `
       calls.push(['artist', name]);
       if (opts.botCheck) return fail('BOT_CHECK', 'Sign in to confirm you are not a bot');
       const q = name.trim();
-      const items = ['Ivy ' + q, q + ' Butterfly', q].map((a) => ({ kind: 'artist', title: a, subtitle: '',
+      const items = ['Ivy ' + q, q + ' Butterfly', ...((opts.unknownArtists || []).includes(q) ? [] : [q])].map((a) => ({ kind: 'artist', title: a, subtitle: '',
         url: 'https://music.youtube.com/channel/' + chan(a), channelId: chan(a), thumbnailUrl: thumb('artist' + a) }));
       return wait({ items });
     },
@@ -256,6 +262,8 @@ export interface MusicStubOptions {
   noArtistPage?: boolean;
   /** playlist() rejects UNAVAILABLE for albums and playlists (not the top songs one). */
   noAlbum?: boolean;
+  /** artist() finds no artist of exactly these names (only the decoys): their page isn't resolved. */
+  unknownArtists?: string[];
   /** Only these release kinds on the artist page. */
   shelves?: ('album' | 'live' | 'ep' | 'single')[];
   /** The first artistReleases() call rejects UNAVAILABLE (an evicted "See all" token). */
@@ -266,6 +274,8 @@ export interface MusicStubOptions {
   songPageDelay?: number;
   /** Those later pages wait until the test calls `window.__cyberjukeReleaseSongPages()`. */
   holdSongPages?: boolean;
+  /** Songs credited to exactly this name carry it in `artists`, with its channel (as native search gives it). */
+  linkedArtist?: string;
 }
 
 export async function stubMusic(page: Page, opts: MusicStubOptions = {}): Promise<void> {

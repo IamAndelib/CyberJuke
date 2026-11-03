@@ -3,7 +3,7 @@
  * state, music pages), Firestore responses, and lists read back from storage. Each
  * returns well-typed data or drops what doesn't fit; none of them throw.
  */
-import type { FsDocument, FsRunQueryRow, Track, TrackOrigin } from '../data/model';
+import type { FsDocument, FsRunQueryRow, Track, TrackArtist, TrackOrigin } from '../data/model';
 import type { NativeState, RepeatMode } from '../player/native';
 import type { MusicItem, MusicPage } from '../data/ytmusic';
 import type { LocalFolder, LocalFolderState, LocalSong } from '../data/local';
@@ -113,6 +113,22 @@ export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [
 
 const KINDS: readonly MusicItem['kind'][] = ['song', 'album', 'artist', 'playlist'];
 
+const CHANNEL_ID_RE = /^UC[A-Za-z0-9_-]{10,}$/;
+/** Most credited artists a track keeps (as native does). */
+const MAX_ARTISTS = 10;
+
+/** A song's credited artists (MusicItem / Track / NativeTrack `artists`): each a name and a channel id, else dropped. */
+export function parseTrackArtists(x: unknown): TrackArtist[] {
+  if (!Array.isArray(x)) return [];
+  const out: TrackArtist[] = [];
+  for (const a of x) {
+    if (!isObj(a) || !isStr(a.name) || !a.name.trim() || !isStr(a.channelId) || !CHANNEL_ID_RE.test(a.channelId)) continue;
+    out.push({ name: a.name.trim(), channelId: a.channelId });
+    if (out.length === MAX_ARTISTS) break;
+  }
+  return out;
+}
+
 /** One search/album/artist item from JukeMusic, or null when it's unusable. */
 export function parseMusicItem(x: unknown): MusicItem | null {
   if (!isObj(x) || !KINDS.includes(x.kind as MusicItem['kind']) || !isStr(x.url) || !x.url) return null;
@@ -130,6 +146,8 @@ export function parseMusicItem(x: unknown): MusicItem | null {
   if (n !== undefined && n >= 0) item.itemCount = n;
   if (isStr(x.artistUrl)) item.artistUrl = x.artistUrl;
   if (isStr(x.channelId)) item.channelId = x.channelId;
+  const artists = parseTrackArtists(x.artists);
+  if (artists.length) item.artists = artists;
   return item;
 }
 
@@ -225,6 +243,8 @@ export function asTrack(x: unknown): Track | null {
   if (ORIGINS.includes(x.source as TrackOrigin)) t.source = x.source as TrackOrigin;
   if (x.membersOnly === true) t.membersOnly = true;
   if (isStr(x.album) && x.album) t.album = x.album;
+  const artists = parseTrackArtists(x.artists);
+  if (artists.length) t.artists = artists;
   return t;
 }
 

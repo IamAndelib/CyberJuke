@@ -14,6 +14,7 @@ import { computed, effect, signal, untracked, useComputed, type ReadonlySignal }
 import { createContext } from 'preact';
 import { useContext, useEffect, useRef } from 'preact/hooks';
 import type { Track } from '../data/model';
+import type { CreditedArtist } from '../data/artists';
 import type { UpItem } from '../player';
 import type { ReleaseKind } from '../data/ytmusic';
 
@@ -93,7 +94,7 @@ export function openMenu(track: Track, queued: UpItem | null = null): void {
   menuTrack.value = track;
 }
 /** Artist chooser (a track credits several artists), opened from Now Playing. */
-export const artistChoice = signal<string[] | null>(null);
+export const artistChoice = signal<CreditedArtist[] | null>(null);
 
 /** A question in a confirm sheet (M3): Clear history, Sign out. */
 export interface ConfirmRequest {

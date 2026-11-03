@@ -91,90 +91,114 @@ export function ArtistPage({ name: raw }: { name: string }) {
       onRefresh={() => Promise.all([refreshCatalog(), page.feed.refresh()]).then(() => {})}
     >
       <OfflineGate>
-        <section data-testid="artist-jukebox">
-          <div class="section-head">
-            <h2 class="section-title">Shared on the Jukebox</h2>
-            {jukebox.length > 0 && <span class="dim small">{plural(jukebox.length, 'track')}</span>}
-          </div>
-          {catalogFailed ? (
-            // P7: a failed catalog says so and offers Retry, instead of an endless skeleton.
-            <CatalogError />
-          ) : !catalogReady ? (
-            <SkeletonRows n={3} />
-          ) : jukebox.length ? (
-            <>
-              <PlayShuffle tracks={jukebox} ctx={ctx} testid="artist-jukebox" />
-              <Tracks tracks={allJukebox ? jukebox : jukebox.slice(0, JUKEBOX_FIRST)} ctx={ctx} queue={() => jukebox} />
-              {!allJukebox && jukebox.length > JUKEBOX_FIRST && (
-                <div class="list-foot">
-                  <button
-                    class="link-btn"
-                    onClick={(e) => {
-                      // The button goes: focus (TalkBack, a keyboard) moves on to the first track it shows.
-                      const list = e.currentTarget.closest('section');
-                      setAllJukebox(true);
-                      requestAnimationFrame(() => list?.querySelectorAll<HTMLElement>('[data-testid="track-play"]')[JUKEBOX_FIRST]?.focus());
-                    }}
-                    data-testid="artist-jukebox-all"
-                  >
-                    [Show all {jukebox.length}]
-                  </button>
-                </div>
-              )}
-            </>
-          ) : (
-            <p class="section-note dim">Nothing by {name} has been shared on the Jukebox yet.</p>
-          )}
-        </section>
-
-        {failed ? (
-          <SearchSections name={name} />
-        ) : page.snap.status === 'loading' ? (
-          <div data-testid="artist-page-loading">
-            <section>
-              <div class="section-head">
-                <h2 class="section-title">Top songs</h2>
-              </div>
-              <SkeletonRows n={4} />
-            </section>
-            <section>
-              <div class="section-head">
-                <h2 class="section-title">Albums</h2>
-              </div>
-              <ShelfSkeleton />
-            </section>
-          </div>
-        ) : meta?.resolved === false ? null : (
+        {catalogReady && !jukebox.length && meta?.resolved === false ? (
+          <NotFound name={name} />
+        ) : (
           <>
-            {page.snap.items.length > 0 && (
-              <section data-testid="artist-top">
-                <div class="section-head">
-                  <h2 class="section-title">Top songs</h2>
-                </div>
-                <PlayShuffle tracks={page.snap.items} ctx={ctx} testid="artist-top" />
-                <Tracks tracks={page.snap.items} ctx={ctx} />
-                {page.snap.hasMore && (
-                  <LoadMore busy={page.snap.loadingMore} error={!!page.snap.error} onClick={() => page.feed.loadMore()} testid="top-load-more" />
+            <section data-testid="artist-jukebox">
+              <div class="section-head">
+                <h2 class="section-title">Shared on the Jukebox</h2>
+                {jukebox.length > 0 && <span class="dim small">{plural(jukebox.length, 'track')}</span>}
+              </div>
+              {catalogFailed ? (
+                // P7: a failed catalog says so and offers Retry, instead of an endless skeleton.
+                <CatalogError />
+              ) : !catalogReady ? (
+                <SkeletonRows n={3} />
+              ) : jukebox.length ? (
+                <>
+                  <PlayShuffle tracks={jukebox} ctx={ctx} testid="artist-jukebox" />
+                  <Tracks tracks={allJukebox ? jukebox : jukebox.slice(0, JUKEBOX_FIRST)} ctx={ctx} queue={() => jukebox} />
+                  {!allJukebox && jukebox.length > JUKEBOX_FIRST && (
+                    <div class="list-foot">
+                      <button
+                        class="link-btn"
+                        onClick={(e) => {
+                          // The button goes: focus (TalkBack, a keyboard) moves on to the first track it shows.
+                          const list = e.currentTarget.closest('section');
+                          setAllJukebox(true);
+                          requestAnimationFrame(() => list?.querySelectorAll<HTMLElement>('[data-testid="track-play"]')[JUKEBOX_FIRST]?.focus());
+                        }}
+                        data-testid="artist-jukebox-all"
+                      >
+                        [Show all {jukebox.length}]
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p class="section-note dim">Nothing by {name} has been shared on the Jukebox yet.</p>
+              )}
+            </section>
+
+            {failed ? (
+              <SearchSections name={name} />
+            ) : page.snap.status === 'loading' ? (
+              <div data-testid="artist-page-loading">
+                <section>
+                  <div class="section-head">
+                    <h2 class="section-title">Top songs</h2>
+                  </div>
+                  <SkeletonRows n={4} />
+                </section>
+                <section>
+                  <div class="section-head">
+                    <h2 class="section-title">Albums</h2>
+                  </div>
+                  <ShelfSkeleton />
+                </section>
+              </div>
+            ) : meta?.resolved === false ? null : (
+              <>
+                {page.snap.items.length > 0 && (
+                  <section data-testid="artist-top">
+                    <div class="section-head">
+                      <h2 class="section-title">Top songs</h2>
+                    </div>
+                    <PlayShuffle tracks={page.snap.items} ctx={ctx} testid="artist-top" />
+                    <Tracks tracks={page.snap.items} ctx={ctx} />
+                    {page.snap.hasMore && (
+                      <LoadMore busy={page.snap.loadingMore} error={!!page.snap.error} onClick={() => page.feed.loadMore()} testid="top-load-more" />
+                    )}
+                  </section>
                 )}
-              </section>
+                {meta &&
+                  SHELF_ORDER.map((kind) => (
+                    <ReleaseShelf
+                      key={kind}
+                      kind={kind}
+                      title={SHELF_LABEL[kind]}
+                      releases={meta.releases[kind]}
+                      artist={name}
+                      token={shelfToken(kind, meta.more)}
+                      channelId={meta.channelId}
+                      testid={SHELF_TESTID[kind]}
+                    />
+                  ))}
+              </>
             )}
-            {meta &&
-              SHELF_ORDER.map((kind) => (
-                <ReleaseShelf
-                  key={kind}
-                  kind={kind}
-                  title={SHELF_LABEL[kind]}
-                  releases={meta.releases[kind]}
-                  artist={name}
-                  token={shelfToken(kind, meta.more)}
-                  channelId={meta.channelId}
-                  testid={SHELF_TESTID[kind]}
-                />
-              ))}
           </>
         )}
       </OfflineGate>
     </Screen>
+  );
+}
+
+/** Nobody by this name on the Jukebox or on Global (a local file's uploader, say): a 404 instead of empty sections. */
+function NotFound({ name }: { name: string }) {
+  return (
+    <div class="nf" role="status" data-testid="artist-404">
+      <div class="nf-big" aria-hidden="true">
+        404
+      </div>
+      <pre class="nf-term">
+        {'> locate '}
+        <b>"{name}"</b>
+        {'\n  jukebox ........ 0 tracks\n  global ......... no match\n  radio .......... dead air\n'}
+        <span class="nf-err">{'> ERR 404: ARTIST NOT FOUND'}</span>
+        {'\n> _'}
+      </pre>
+    </div>
   );
 }
 
