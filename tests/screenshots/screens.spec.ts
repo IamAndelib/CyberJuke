@@ -515,6 +515,19 @@ test.describe('playlists', () => {
         await expect(page.getByTestId('name-sheet')).toBeVisible();
         await settle(page);
         await shot(page, `playlist-rename-${tag}`);
+        await page.getByTestId('name-cancel').click();
+        await page.getByTestId('pl-play').click();
+        await openNowPlaying(page);
+        await settle(page);
+        await shot(page, `playlist-now-playing-${tag}`);
+        await page.getByTestId('np-add-playlist').click();
+        await expect(page.getByTestId('add-to-playlist')).toBeVisible();
+        await settle(page);
+        await shot(page, `playlist-add-${tag}`);
+        await page.getByTestId('add-to-playlist').getByRole('button', { name: /cancel/i }).click();
+        await page.getByTestId('up-next').evaluate((el) => el.scrollIntoView({ block: 'start' }));
+        await settle(page);
+        await shot(page, `playlist-queue-${tag}`);
       });
     }
   }

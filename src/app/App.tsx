@@ -37,6 +37,7 @@ import { Radio } from '../features/radio/Radio';
 import { Library, LikedPage, LocalAlbumPage, LocalArtistPage, LocalPage, RecentPage } from '../features/library/Library';
 import { PlaylistMenu, PlaylistPage } from '../features/library/Playlist';
 import { NameSheet } from '../ui/components/NameSheet';
+import { AddToPlaylistSheet } from '../ui/components/AddToPlaylistSheet';
 import { ReleasesPage } from '../features/artists/Releases';
 import { Search } from '../features/search/Search';
 import { Settings } from '../features/settings/Settings';
@@ -307,6 +308,7 @@ export function Overlays() {
       <TrackMenu />
       <ArtistChooser />
       <PlaylistMenu />
+      <AddToPlaylistSheet />
       <NameSheet />
       <ConfirmSheet />
       <Toasts />

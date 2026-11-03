@@ -32,6 +32,7 @@ import { positionNow, useTickValue } from '../../ui/useTick';
 import { splitArtists } from '../../data/artists';
 import { isGlobal, isLocal, isSignal, type Track } from '../../data/model';
 import { localFolderOf } from '../../stores/local';
+import { addToPlaylist } from '../../ui/components/AddToPlaylistSheet';
 import { hasAudio } from '../../core/guards';
 import { reducedMotion } from '../../core/motion';
 import { OFFLINE } from '../../core/offlineText';
@@ -626,6 +627,9 @@ function NowPlayingContent() {
                 </h2>
                 <NpArtist track={t} />
               </div>
+              <button class="icon-btn np-add" aria-label="Add to playlist" aria-haspopup="dialog" onClick={() => addToPlaylist(t)} disabled={!hasAudio(t)} data-testid="np-add-playlist">
+                <Icon name="playlistAdd" size={28} />
+              </button>
               <NpLike track={t} />
             </div>
             {(t.membersOnly || (t.genre && !isSignal(t))) && (
@@ -848,6 +852,9 @@ export function TrackMenu() {
                 <Icon name="playNext" size={20} /> Add to queue
               </button>
             )}
+            <button class="sheet-item" onClick={() => addToPlaylist(t)} disabled={!known} data-testid="menu-add-playlist">
+              <Icon name="playlistAdd" size={20} /> Add to playlist
+            </button>
             {!local && (
               <button
                 class="sheet-item"

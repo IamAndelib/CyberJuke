@@ -1526,3 +1526,33 @@ section[data-kind] > .shelf {
   margin: 0;
   padding: 4px 18px 12px;
 }
+
+/* ---- Add to playlist (ui/components/AddToPlaylistSheet) --------------------------------- */
+
+.pl-pick {
+  min-height: 64px;
+}
+.pl-pick > .art,
+.pl-pick > .mosaic {
+  flex: none;
+  width: 44px;
+  height: 44px;
+}
+.pl-pick-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+.pl-pick-name,
+.pl-pick-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pl-pick-sub {
+  font-size: 12px;
+  color: var(--color-fg-dim);
+}
+.pl-pick.has {
+  opacity: 0.6;
+}
