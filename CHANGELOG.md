@@ -4,7 +4,7 @@
 
 ### Added
 - Play music from folders on your phone: turn on **Settings → Local music** and choose the folders. CyberJuke reads those and nothing else; the songs show under **Library → Local** as songs, albums and artists (an album in its track order; songs with no album tag make an Unknown album, and an untagged file named "Artist - Title" is read that way), play offline, and can be liked. A local song's artist in Now Playing opens their artist page. Local's **+** adds another folder.
-- Playlists: make your own under **Library → Playlists**, then play, reorder (⋯ → Edit songs), rename or delete them.
+- Playlists: make your own from any songs, Jukebox, Global, Radio or your own files, with **Add to playlist** in a song's ⋯ menu, **≡+** in the player, or **Save queue as playlist**. Find them in Library, where you can play, reorder (⋯ → Edit songs), rename or delete them.
 
 ### Changed
 - Library is a list: **Liked** and **Recently played** are rows that open on their own pages, ready for more lists to join them.

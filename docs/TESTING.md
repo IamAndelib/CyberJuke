@@ -114,6 +114,12 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 - [ ] Every theme (Settings → Theme) is readable.
 - [ ] Settings → Theme **Light**, then **Bubblegum**: the clock and icons at the top and the navigation buttons or bar at the bottom are dark and easy to see; on **Dark** and **C64** they are light. Turn the phone sideways and back, and switch the phone's dark mode on and off: they stay that way. Close the app completely and open it: the screen doesn't shift down after it shows, and there's no grey or white strip above or below the app.
 
+## Playlists
+- [ ] Library → **New playlist**: a name, then its empty page. In Now Playing, **≡+** (beside the heart, lined up with it) adds the playing song: "Added to …" with Undo. With no playlists yet, ≡+ asks for a new one's name, and Undo after making it takes the song out but keeps the playlist.
+- [ ] A song's ⋯ → **Add to playlist**: the playlist you last added to comes first; one that has the song says "Already in it". **[Save queue as playlist]** under the Queue heading saves what's listed there, with shuffle and repeat on too.
+- [ ] A playlist's ⋯: **Edit songs** (↑ ↓ ✕, ✕ with Undo, [Done]), **Rename**, **Delete playlist** (asks first). Play it with the screen off: the notification says the song, and after a restart the app reopens on it.
+- [ ] Update the app over a version with playlists: they're all there. Signed in, add a members-only song to a playlist; sign out: it's gone from the playlist; sign back in: it's back.
+
 ## Account (if you use Cyberspace sign-in)
 - [ ] Sign in: tracks marked **[members]** appear.
 - [ ] Close the app completely and reopen it: you're still signed in.

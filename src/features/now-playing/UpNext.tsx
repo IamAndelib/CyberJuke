@@ -6,6 +6,8 @@ import { online } from '../../core/network';
 import { settings } from '../../stores/library';
 import { isSaved, savedOffline } from '../../stores/savedOffline';
 import { toast } from '../../stores/toast';
+import { PLAYLISTS_MAX, PLAYLIST_MAX_SONGS, createPlaylist } from '../../stores/playlists';
+import { askName } from '../../ui/nav';
 import { Icon } from '../../ui/icons';
 import { afterPress } from '../../ui/press';
 import { Art } from '../../ui/components/Art';
@@ -80,6 +82,22 @@ function RowBody({ track, playing }: { track: Track; playing?: boolean }) {
       </div>
     </>
   );
+}
+
+/** [Save queue as playlist]: New playlist with the queue as it shows (played, playing, up next), each song once. */
+function saveQueue(tracks: Track[]): void {
+  const seen = new Set<string>();
+  const songs = tracks.filter((t) => !seen.has(t.id) && (seen.add(t.id), true)).slice(0, PLAYLIST_MAX_SONGS);
+  askName({
+    title: 'New playlist',
+    note: `With ${plural(songs.length, 'song')}`,
+    confirm: 'Create',
+    run: (name) => {
+      const r = createPlaylist(name, songs);
+      if (r.result === 'created') toast(`Saved as ${name}`);
+      else if (r.result === 'full') toast(`You have ${PLAYLISTS_MAX} playlists, the most there can be`);
+    },
+  });
 }
 
 /** A count Up next shows: "50+" when it may hold more than it shows. */
@@ -251,6 +269,13 @@ export function UpNext() {
         </h3>
         {total > 0 && <span class="dim small">{upTo(total)} up next</span>}
       </div>
+      {current && (
+        <div class="upnext-save">
+          <button class="link-btn" onClick={() => saveQueue([...played.map((u) => u.track), current, ...[...sec.queued, ...sec.list, ...sec.autoplay].map((u) => u.track)])} data-testid="upnext-save">
+            [Save queue as playlist]
+          </button>
+        </div>
+      )}
       {repeat !== 'off' && (
         <div class="dim small upnext-empty" data-testid="upnext-repeat">
           {repeat === 'one' ? 'Repeating this song.' : 'Repeating the queue.'}

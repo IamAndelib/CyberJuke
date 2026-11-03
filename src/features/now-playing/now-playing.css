@@ -662,3 +662,14 @@ button.lyr-line {
 .upnext-label.auto::before {
   content: '~ ';
 }
+
+/* [Save queue as playlist]: under the Queue heading, left-aligned with it. */
+.upnext-save {
+  display: flex;
+  margin: -6px var(--gutter) 0;
+}
+.upnext-save .link-btn {
+  min-height: 40px;
+  padding: 0 4px;
+  margin-left: -4px;
+}

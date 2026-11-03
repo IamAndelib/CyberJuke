@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { openLibrary, openNowPlaying, seedStorage } from '../helpers';
+import { openLibrary, openNowPlaying, seedStorage, start } from '../helpers';
 
 /** Your own playlists: Library's Playlists section and a playlist's page (adding comes from the player, the menu and the queue). */
 
@@ -130,5 +130,78 @@ test.describe('a playlist', () => {
     await openPlaylist(page, 'Night drive');
     await page.getByTestId('search-fab').click();
     await expect(page.getByTestId('search-input')).toHaveAttribute('placeholder', 'Search in Night drive');
+  });
+});
+
+test.describe('adding songs', () => {
+  test('with no playlists, ≡+ opens New playlist with the song; you stay in Now Playing, and Undo takes the song out but keeps the playlist', async ({ page }) => {
+    await start(page);
+    const title = (await page.getByTestId('track-title').first().textContent())!.trim();
+    await page.getByTestId('track-play').first().click();
+    await openNowPlaying(page);
+    await page.getByTestId('np-add-playlist').click();
+    const sheet = page.getByTestId('name-sheet');
+    await expect(sheet).toContainText('New playlist');
+    await expect(sheet).toContainText(`With ${title}`);
+    await page.getByTestId('name-input').fill('Road trip');
+    await page.getByTestId('name-ok').click();
+    await expect(page.getByTestId('toast').last()).toContainText('Added to Road trip');
+    await expect(page.getByTestId('now-playing')).toHaveClass(/open/);
+    await page.getByTestId('toast').last().getByRole('button', { name: 'Undo' }).click();
+    await page.getByTestId('np-close').click();
+    await page.getByTestId('tab-library').click();
+    await expect(page.getByTestId('lib-playlist')).toHaveText([/Road trip0 songs/]);
+  });
+
+  test('a song’s ⋯ has Add to playlist: the sheet adds it, and then reads "Already in it" for that playlist', async ({ page }) => {
+    await seedStorage(page, seeded([NIGHT, EMPTY]));
+    await start(page);
+    const title = (await page.getByTestId('track-title').first().textContent())!.trim();
+    await page.getByTestId('track-more').first().click();
+    await page.getByTestId('menu-add-playlist').click();
+    const sheet = page.getByTestId('add-to-playlist');
+    await expect(sheet).toContainText(`${title} ·`);
+    await expect(sheet.getByTestId('pl-pick-new')).toBeVisible();
+    await sheet.getByTestId('pl-pick').filter({ hasText: 'Road trip' }).click();
+    await expect(page.getByTestId('toast').last()).toContainText('Added to Road trip');
+    await page.getByTestId('track-more').first().click();
+    await page.getByTestId('menu-add-playlist').click();
+    // The one just added to comes first, and has it.
+    const first = sheet.getByTestId('pl-pick').first();
+    await expect(first).toContainText('Road trip');
+    await expect(first).toContainText('Already in it');
+    await expect(first).toBeDisabled();
+    await expect(sheet.getByTestId('pl-pick').nth(1)).toBeEnabled();
+  });
+
+  test('Save queue as playlist saves the queue as it shows, played, playing and up next, with shuffle and repeat on', async ({ page }) => {
+    await seedStorage(page, seeded([]));
+    await start(page);
+    await page.getByTestId('track-play').nth(2).click();
+    await openNowPlaying(page);
+    await page.getByTestId('np-shuffle').click();
+    await page.getByTestId('np-repeat').click();
+    await expect(page.getByTestId('upnext-repeat')).toBeVisible();
+    const q = await page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => { current: { id: string }; previous: { id: string }[]; upNext: { id: string }[] } }).__cyberjukeQueue());
+    await page.getByTestId('upnext-save').click();
+    await expect(page.getByTestId('name-sheet')).toContainText(/With \d+ songs/);
+    await page.getByTestId('name-input').fill('Saved queue');
+    await page.getByTestId('name-ok').click();
+    await expect(page.getByTestId('toast').last()).toContainText('Saved as Saved queue');
+    const file = await saved(page);
+    const ids = (file.playlists[0].tracks as { id: string }[]).map((t) => t.id);
+    expect(ids[0]).toBe(q.current.id);
+    expect(ids.length).toBeGreaterThan(1);
+  });
+
+  test('≡+ and ♥ are drawn on the same rows: their tops and bottoms line up', async ({ page }) => {
+    await start(page);
+    await page.getByTestId('track-play').first().click();
+    await openNowPlaying(page);
+    const box = (id: string) => page.getByTestId(id).locator('svg path').first().evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return { top: Math.round(r.top), bottom: Math.round(r.bottom) };
+    });
+    expect(await box('np-add-playlist')).toEqual(await box('np-like'));
   });
 });

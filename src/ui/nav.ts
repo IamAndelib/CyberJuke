@@ -125,6 +125,9 @@ export function askName(req: NameRequest): void {
   nameRequest.value = req;
 }
 
+/** The song Add to playlist's sheet is for. */
+export const addToPlaylistFor = signal<Track | null>(null);
+
 /** The playlist whose ⋯ sheet (Edit songs, Rename, Delete) is open. */
 export const playlistMenuFor = signal<string | null>(null);
 
@@ -225,6 +228,7 @@ function closeOverlays(): void {
   confirmRequest.value = null;
   nameRequest.value = null;
   playlistMenuFor.value = null;
+  addToPlaylistFor.value = null;
   nowPlayingOpen.value = false;
 }
 
@@ -436,7 +440,7 @@ export function useSearchContext(ctx: SearchContext | null): void {
  * than Home, it goes to Home). Native hands back to the page only while this is true.
  */
 export const canGoBack = computed(
-  () => confirmRequest.value != null || nameRequest.value != null || playlistMenuFor.value != null || menuTrack.value != null || artistChoice.value != null || nowPlayingOpen.value || stack.value.length > 0 || tab.value !== 'home',
+  () => confirmRequest.value != null || nameRequest.value != null || playlistMenuFor.value != null || addToPlaylistFor.value != null || menuTrack.value != null || artistChoice.value != null || nowPlayingOpen.value || stack.value.length > 0 || tab.value !== 'home',
 );
 
 /**
@@ -455,6 +459,10 @@ export function goBack(switchTab = true): boolean {
   }
   if (playlistMenuFor.value) {
     playlistMenuFor.value = null;
+    return true;
+  }
+  if (addToPlaylistFor.value) {
+    addToPlaylistFor.value = null;
     return true;
   }
   if (menuTrack.value) {
