@@ -12,6 +12,8 @@ interface ToastAction {
   stale?: () => boolean;
   /** Undo would bring back members-only tracks: it goes when signing out (S8). */
   membersOnly?: boolean;
+  /** Runs once if the button goes untapped (the toast timed out, was replaced or lost it): the part an Undo had held back. */
+  done?: () => void;
 }
 
 interface Toast {
@@ -40,18 +42,23 @@ function unwatch(id: number): void {
 }
 
 export function dismissToast(id: number): void {
+  const action = toasts.peek().find((t) => t.id === id)?.action;
   clearTimeout(timers.get(id));
   timers.delete(id);
   deadlines.delete(id);
   held.delete(id);
   unwatch(id);
   if (toasts.value.some((t) => t.id === id)) toasts.value = toasts.value.filter((x) => x.id !== id);
+  action?.done?.();
 }
 
 /** Take the button off a toast; its text stays for the rest of its time. */
 function dropToastAction(id: number): void {
   unwatch(id);
-  if (toasts.peek().some((t) => t.id === id && t.action)) toasts.value = toasts.peek().map((t) => (t.id === id ? { id: t.id, text: t.text } : t));
+  const action = toasts.peek().find((t) => t.id === id)?.action;
+  if (!action) return;
+  toasts.value = toasts.peek().map((t) => (t.id === id ? { id: t.id, text: t.text } : t));
+  action.done?.();
 }
 
 /** Take the button off every toast whose action matches. */
@@ -114,9 +121,11 @@ export function releaseToast(id: number): void {
 
 /** The toast's button was tapped: run its action once and dismiss it. */
 export function runToastAction(id: number): void {
-  const t = toasts.value.find((x) => x.id === id);
+  const action = toasts.value.find((x) => x.id === id)?.action;
+  // Tapped: what it held back stays held (the button goes first, so dismissing doesn't settle it).
+  if (action) toasts.value = toasts.value.map((t) => (t.id === id ? { id: t.id, text: t.text } : t));
   dismissToast(id);
-  t?.action?.run();
+  action?.run();
 }
 
 // Tests: show any message (the layout checks and screenshots of long ones).

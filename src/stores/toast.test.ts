@@ -57,3 +57,25 @@ describe('a held toast', () => {
     }
   });
 });
+
+describe('what an Undo holds back', () => {
+  it('runs once when the toast goes untapped (timed out, replaced, or its button dropped), never after Undo', () => {
+    vi.useFakeTimers();
+    let done = 0;
+    const action = () => ({ label: 'Undo', run: () => {}, done: () => done++ });
+    toast('Removed Music', 4000, action());
+    vi.advanceTimersByTime(4000);
+    expect(done).toBe(1);
+    toast('Removed Music', 4000, action());
+    toast('Something else');
+    expect(done).toBe(2);
+    toast('Removed Music', 4000, { ...action(), membersOnly: true });
+    dropToastActions((a) => a.membersOnly === true);
+    vi.advanceTimersByTime(4000);
+    expect(done).toBe(3);
+    runToastAction(toast('Removed Music', 4000, action()));
+    vi.advanceTimersByTime(4000);
+    expect(done).toBe(3);
+    vi.useRealTimers();
+  });
+});
