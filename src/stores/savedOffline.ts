@@ -5,7 +5,7 @@
  * `cacheChanged`); in the browser nothing is ever saved, so it stays empty.
  */
 import { computed, signal } from '@preact/signals';
-import { audioIdOf, isAudioId } from '../core/guards';
+import { audioIdOf, isLocalTrack, isAudioId } from '../core/guards';
 import type { Track } from '../data/model';
 import { likedShown } from './library';
 
@@ -31,6 +31,8 @@ export const hasSavedLiked = computed(() => savedLiked.value.length > 0);
 
 /** Whether `t` plays offline. */
 export function isSaved(t: Track | null | undefined, saved: ReadonlySet<string> = savedOffline.peek()): boolean {
+  // A song from a folder on the phone always plays offline.
+  if (isLocalTrack(t)) return true;
   const id = audioIdOf(t);
   return !!id && saved.has(id);
 }

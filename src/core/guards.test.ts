@@ -230,3 +230,20 @@ describe('local music answers', () => {
     ]);
   });
 });
+
+describe('local songs as stored tracks', () => {
+  const local = { id: 'loc:0123456789abcdef', ytId: '', title: 'Night Shift', artist: 'The Low Hum', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '', source: 'local' as const };
+
+  it('a liked local song survives a reload, as a full track and repaired', () => {
+    expect(isTrackFull(local)).toBe(true);
+    expect(asTrack(local)).toMatchObject({ id: 'loc:0123456789abcdef', ytId: '', source: 'local' });
+    expect(hasAudio(local)).toBe(true);
+  });
+
+  it('a loc: id without the local origin, or a malformed one, has nothing to play', () => {
+    expect(asTrack({ ...local, source: undefined })).toBeNull();
+    expect(asTrack({ ...local, id: 'loc:XYZ' })).toBeNull();
+    expect(isTrackFull({ ...local, id: 'loc:123' })).toBe(false);
+    expect(audioIdOf(local)).toBe('');
+  });
+});

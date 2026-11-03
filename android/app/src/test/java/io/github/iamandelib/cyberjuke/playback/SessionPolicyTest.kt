@@ -246,4 +246,17 @@ class SessionPolicyTest {
         assertFalse(SessionPolicy.isAllowedArtwork(""))
         assertFalse(SessionPolicy.isAllowedArtwork(null))
     }
+
+    @Test
+    fun aLocalSongPlaysByItsOwnIdOnly() {
+        val id = "loc:0123456789abcdef"
+        assertEquals(SessionPolicy.Playable.Local(id), SessionPolicy.playableOf(null, null, id))
+        // A video id or an MP3 link still wins: a local song has neither.
+        assertEquals(SessionPolicy.Playable.Yt("fJ9rUzIMcZQ"), SessionPolicy.playableOf("fJ9rUzIMcZQ", null, id))
+        for (bad in listOf("loc:XYZ", "loc:0123", "content://x/y", "")) {
+            val e = runCatching { SessionPolicy.playableOf(null, null, bad) }.exceptionOrNull()
+            assertTrue(bad, e is IllegalArgumentException)
+            assertEquals("track.id invalid for a local song", e!!.message)
+        }
+    }
 }

@@ -71,6 +71,8 @@ internal object TrackErrorPolicy {
         val outagePauses: Int = 0,
         /** The item is a Jukebox MP3 (a latex.gg file), not a YouTube video. */
         val mp3: Boolean = false,
+        /** The item is a song from a folder on the phone: no network is involved, so a failure is the file's. */
+        val local: Boolean = false,
     )
 
     sealed class Action {
@@ -105,6 +107,8 @@ internal object TrackErrorPolicy {
     }
 
     fun decide(f: Facts): Action {
+        // A file on the phone that can't be read (deleted, the card taken out): skip it.
+        if (f.local) return perVideo(f)
         if (f.mp3) return mp3(f)
         if (f.blocked) return Action.WaitBlocked
         f.kind?.blockReason?.let { return Action.Block(it) }

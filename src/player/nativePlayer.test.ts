@@ -200,6 +200,36 @@ describe('NativePlayer: a session native restored after a restart', () => {
     expect(p.state.value.upNext.map((u) => 'album' in u.track)).toEqual([false, false]);
   });
 
+  const LOC = 'loc:0123456789abcdef';
+
+  it('sends a local song to native by its id only (local: true, no link), and names a restored one', async () => {
+    const l = tr(LOC, { ytId: '', source: 'local', artworkUrl: '/_local/art/0123456789abcdef.jpg' });
+    expect(toNative(l)).toMatchObject({ id: LOC, ytId: '', local: true });
+    expect('mp3' in toNative(l)).toBe(false);
+    expect('local' in toNative(tr('A'))).toBe(false);
+    const p = new NativePlayer();
+    await p.playList([tr('A'), l], 1, { label: 'Local', mode: 'list' });
+    expect(fake.plugin.setQueue.mock.calls[0][0].tracks.map((t: { id: string; local?: boolean }) => [t.id, t.local])).toEqual([
+      ['A', undefined],
+      [LOC, true],
+    ]);
+  });
+
+  it('names a local song native restored after a restart, its cover only as the phone keeps it', () => {
+    const p = new NativePlayer();
+    emit('tracks', {
+      tracks: [
+        { id: LOC, ytId: '', local: true, title: 'Night Shift', artist: 'The Low Hum', artworkUrl: '/_local/art/0123456789abcdef.jpg', album: 'Basement Weather' },
+        { id: 'loc:fedcba9876543210', ytId: '', local: true, title: 'Other', artist: 'X', artworkUrl: 'https://evil.example/x.jpg' },
+        { id: 'loc:bad', ytId: '', local: true, title: 'Bad', artist: 'X', artworkUrl: '' },
+      ],
+    });
+    emit('state', state({ trackId: LOC, queueIds: [LOC, 'loc:fedcba9876543210', 'loc:bad'], upNextIds: ['loc:fedcba9876543210'], upNextKinds: 'l', upNextIndex: [1] }));
+    const cur = p.state.value.current!;
+    expect([cur.source, cur.title, cur.album, cur.artworkUrl]).toEqual(['local', 'Night Shift', 'Basement Weather', '/_local/art/0123456789abcdef.jpg']);
+    expect(p.state.value.upNext[0].track.artworkUrl).toBe('');
+  });
+
   const MP3 = 'https://latex.gg/share/IZq8cMcx.mp3';
   const COVER = 'https://bunker.cyberspace.online/uploads/jukebox/u/1.jpg';
 

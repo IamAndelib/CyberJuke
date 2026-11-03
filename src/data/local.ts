@@ -8,6 +8,7 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import { TEST_HOOKS } from '../core/testHooks';
 import { parseLocalFolders, parseLocalSongs } from '../core/guards';
+import { makeTrack, type Track } from './model';
 
 export type LocalFolderState = 'ok' | 'scanning' | 'gone';
 
@@ -67,10 +68,24 @@ function plugin(): JukeLocalPlugin | null {
 /** Whether this build can play local music at all (the app on a phone, or a test's fake). */
 export const localAvailable = (): boolean => plugin() !== null;
 
-export const LOCAL_ID_RE = /^loc:[0-9a-f]{16}$/;
-
 /** Where a local song's cover is served on the page's own origin (ArtWebViewClient), when it has one. */
 export const localArtUrl = (id: string): string => `/_local/art/${id.slice(4)}.jpg`;
+
+/** A local song as a Track: no video id or link, its album, its cover from the phone when it has one. */
+export function songToTrack(s: LocalSong): Track {
+  return makeTrack({
+    id: s.id,
+    ytId: '',
+    title: s.title,
+    artist: s.artist,
+    ...(s.album && { album: s.album }),
+    artworkUrl: s.cover ? localArtUrl(s.id) : '',
+    source: 'local',
+  });
+}
+
+/** In the browser build (tests), where a local song's audio is served from (the fake's route). */
+export const localAudioUrl = (id: string): string => `/_local/audio/${id.slice(4)}.mp3`;
 
 export async function localFolders(): Promise<LocalFolder[]> {
   const p = plugin();

@@ -90,4 +90,9 @@ describe('savedOffline', () => {
     expect(savedTracks([d, c, b, a], saved)).toEqual([c, a]);
     expect(savedTracks([b, d], saved)).toEqual([]);
   });
+  it('a local song always plays offline, saved or not', () => {
+    const l = { id: 'loc:0123456789abcdef', ytId: '', title: 'L', artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '', source: 'local' as const };
+    expect(isSaved(l, new Set())).toBe(true);
+    expect(savedTracks([l], new Set())).toEqual([l]);
+  });
 });

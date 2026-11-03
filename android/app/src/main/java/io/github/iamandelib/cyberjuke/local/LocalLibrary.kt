@@ -39,8 +39,8 @@ internal object LocalLibrary {
         r
     }
 
-    /** A song's cover file, when one is kept. */
-    fun coverOf(context: Context, id: String): File? = synchronized(this) {
-        indexOf(context).artFile(id).takeIf { songs[id]?.cover == true && it.isFile }
+    /** A song's cover file, when one is kept (null before the index is loaded). */
+    fun coverFile(id: String): File? = synchronized(this) {
+        index?.artFile(id)?.takeIf { songs[id]?.cover == true && it.isFile }
     }
 }

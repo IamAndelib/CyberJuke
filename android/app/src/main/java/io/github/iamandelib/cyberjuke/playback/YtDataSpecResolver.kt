@@ -5,8 +5,10 @@ import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.ResolvingDataSource
+import io.github.iamandelib.cyberjuke.local.LocalLibrary
 import io.github.iamandelib.cyberjuke.net.Hosts
 import io.github.iamandelib.cyberjuke.yt.YtCompat
+import java.io.FileNotFoundException
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicLong
 
@@ -30,6 +32,12 @@ internal object YtDataSpecResolver : ResolvingDataSource.Resolver {
     val gate = OpenGate()
 
     override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
+        JukeUris.localIdOf(dataSpec.uri)?.let { id ->
+            // A song from a folder on the phone: its file, from our own list (never a URI from the
+            // page), with no cache key, so it is never copied into the listening cache.
+            val song = LocalLibrary.songs[id] ?: throw FileNotFoundException("Not on the phone any more")
+            return dataSpec.buildUpon().setUri(Uri.parse(song.uri)).setKey(null).build()
+        }
         JukeUris.mp3UrlOf(dataSpec.uri)?.let { url ->
             val audioId = JukeUris.audioIdOf(dataSpec.uri) ?: throw IOException("Not a Jukebox MP3")
             // Its turn, too: prepared early, the file after next would be requested now.

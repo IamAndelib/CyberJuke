@@ -5,6 +5,8 @@ import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.session.SessionCommand
+import io.github.iamandelib.cyberjuke.local.LocalLibrary
+import io.github.iamandelib.cyberjuke.local.LocalRules
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.SecureRandom
@@ -19,12 +21,46 @@ internal object JukeUris {
     const val SCHEME = "cyberjuke"
     private const val HOST_YT = "yt"
     private const val HOST_MP3 = "mp3"
+    private const val HOST_LOCAL = "local"
+    private const val HOST_LOCAL_ART = "local-art"
     const val EXTRA_YT_ID = "ytId"
 
     fun forYt(ytId: String): Uri = Uri.parse("$SCHEME://$HOST_YT/${Uri.encode(ytId)}")
 
     /** A Jukebox MP3 by its file name ([SessionPolicy.Playable.Mp3], already checked). */
     fun forMp3File(file: String): Uri = Uri.parse("$SCHEME://$HOST_MP3/$file")
+
+    /** A song from a folder on the phone, by its id ([SessionPolicy.Playable.Local], already checked). */
+    fun forLocal(id: String): Uri = Uri.parse("$SCHEME://$HOST_LOCAL/${id.removePrefix(LOCAL_PREFIX)}")
+
+    /** Its cover, kept on the phone ([io.github.iamandelib.cyberjuke.local.LocalLibrary.coverFile]): what the notification asks for. */
+    fun forLocalArt(id: String): Uri = Uri.parse("$SCHEME://$HOST_LOCAL_ART/${id.removePrefix(LOCAL_PREFIX)}")
+
+    private const val LOCAL_PREFIX = "loc:"
+
+    /** The local song id of a `cyberjuke://local/<hex>` URI, or null for any other URI. */
+    fun localIdOf(uri: Uri?): String? = hostId(uri, HOST_LOCAL)
+
+    /** The local song id of a `cyberjuke://local-art/<hex>` URI, or null for any other URI. */
+    fun localArtIdOf(uri: Uri?): String? = hostId(uri, HOST_LOCAL_ART)
+
+    private fun hostId(uri: Uri?, host: String): String? {
+        if (uri == null || uri.scheme != SCHEME || uri.host != host) return null
+        return (LOCAL_PREFIX + (uri.lastPathSegment ?: return null)).takeIf { LocalRules.isId(it) }
+    }
+
+    /**
+     * The item is a song from a folder on the phone: by its URI, or, for a controller's copy
+     * (no URI), by its id, which is the song's own (`loc:` + 16 hex).
+     */
+    fun isLocal(item: MediaItem?): Boolean {
+        if (item == null) return false
+        val uri = item.localConfiguration?.uri
+        return if (uri != null) localIdOf(uri) != null else LocalRules.isId(item.mediaId)
+    }
+
+    /** Not YouTube's (a Jukebox MP3 or a local song): a back-off, Auto quality and YouTube's error rules leave it alone. */
+    fun isOwnFile(item: MediaItem?): Boolean = isMp3(item) || isLocal(item)
 
     fun ytIdOf(uri: Uri?): String? {
         if (uri == null || uri.scheme != SCHEME || uri.host != HOST_YT) return null
@@ -184,12 +220,20 @@ internal object JukeTracks {
      */
     fun toMediaItem(o: JSONObject, restored: Boolean = false): MediaItem {
         val id = o.str("id") ?: throw IllegalArgumentException("track.id missing")
-        val playable = SessionPolicy.playableOf(o.str("ytId"), o.str("mp3"))
+        val playable = SessionPolicy.playableOf(o.str("ytId"), o.str("mp3"), id.takeIf { o.optBoolean("local", false) })
         val ytId = (playable as? SessionPolicy.Playable.Yt)?.id
         val mp3File = (playable as? SessionPolicy.Playable.Mp3)?.file
+        val local = playable is SessionPolicy.Playable.Local
         val uri = when (playable) {
             is SessionPolicy.Playable.Yt -> JukeUris.forYt(playable.id)
             is SessionPolicy.Playable.Mp3 -> JukeUris.forMp3File(playable.file)
+            is SessionPolicy.Playable.Local -> JukeUris.forLocal(playable.id)
+        }
+        // A local song's cover is the phone's own, never a link from the page.
+        val artwork = if (local) {
+            JukeUris.forLocalArt(id).takeIf { LocalLibrary.songs[id]?.cover == true }
+        } else {
+            o.str("artworkUrl")?.takeIf { SessionPolicy.isAllowedArtwork(it) }?.let { Uri.parse(it) }
         }
         val membersOnly = o.optBoolean("membersOnly", false)
         TrackExtras.put(id, o.str("by"), o.str("postUrl"), membersOnly, restored, SessionPolicy.mp3UrlForFile(mp3File))
@@ -202,7 +246,7 @@ internal object JukeTracks {
             // The album it was opened from, if any: Crossfade leaves two tracks of one album alone.
             // Read back for the last session and the `tracks` event, so the rule survives a restart.
             .setAlbumTitle(o.str("album"))
-            .setArtworkUri(o.str("artworkUrl")?.takeIf { SessionPolicy.isAllowedArtwork(it) }?.let { Uri.parse(it) })
+            .setArtworkUri(artwork)
             .setExtras(extras)
             .build()
         return MediaItem.Builder()

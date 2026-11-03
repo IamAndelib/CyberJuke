@@ -1,6 +1,7 @@
 package io.github.iamandelib.cyberjuke.playback
 
 import androidx.media3.common.Player
+import io.github.iamandelib.cyberjuke.local.LocalRules
 import io.github.iamandelib.cyberjuke.net.Hosts
 import java.net.URI
 import java.security.MessageDigest
@@ -194,6 +195,9 @@ internal object SessionPolicy {
 
         /** A Jukebox MP3, by its latex.gg file name (its URL is rebuilt from it, [mp3UrlForFile]). */
         data class Mp3(val file: String) : Playable()
+
+        /** A song from a folder on the phone, by its id (`loc:` + 16 hex); its file comes from LocalLibrary, never from the page. */
+        data class Local(val id: String) : Playable()
     }
 
     /**
@@ -201,9 +205,10 @@ internal object SessionPolicy {
      * ytId, which then wins over any `mp3`; an MP3 only with no ytId at all. Throws
      * IllegalArgumentException naming the bad field (never its value).
      */
-    fun playableOf(ytId: String?, mp3: String?): Playable = when {
+    fun playableOf(ytId: String?, mp3: String?, localId: String? = null): Playable = when {
         ytId != null -> if (isValidYtId(ytId)) Playable.Yt(ytId) else throw IllegalArgumentException("track.ytId invalid")
         mp3 != null -> mp3FileOf(mp3)?.let { Playable.Mp3(it) } ?: throw IllegalArgumentException("track.mp3 invalid")
+        localId != null -> if (LocalRules.isId(localId)) Playable.Local(localId) else throw IllegalArgumentException("track.id invalid for a local song")
         else -> throw IllegalArgumentException("track.ytId missing")
     }
 

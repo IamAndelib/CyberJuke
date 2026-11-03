@@ -33,12 +33,12 @@ internal fun Player.offlineNext(from: Int = currentMediaItemIndex): Int? {
     val t = currentTimeline
     if (AudioCache.online || from < 0 || from >= t.windowCount) return null
     val saved = AudioCache.savedLiked
-    if (saved.isEmpty()) return null
     val mode = if (repeatMode == Player.REPEAT_MODE_ONE) Player.REPEAT_MODE_OFF else repeatMode
     return OfflineNext.target(
         from,
         mediaItemCount,
         { t.getNextWindowIndex(it, mode, shuffleModeEnabled) },
-        { JukeUris.audioIdOf(getMediaItemAt(it)) in saved },
+        // A saved liked song, or a song from a folder on the phone, which always plays.
+        { getMediaItemAt(it).let { m -> JukeUris.isLocal(m) || JukeUris.audioIdOf(m) in saved } },
     )
 }

@@ -336,4 +336,10 @@ describe('autoplay', () => {
     await first;
     await vi.waitFor(() => expect(radio).toHaveBeenCalledTimes(2));
   });
+  it('a local song as the seed gets nothing: a local list ends like an album', async () => {
+    const seed = track('loc:0123456789abcdef', { ytId: '', source: 'local' });
+    const { ap, added } = setup({ current: seed, seed, queue: [seed], upNext: [] });
+    await ap.fill({ left: 0, seedId: seed.id });
+    expect(added).toEqual([]);
+  });
 });

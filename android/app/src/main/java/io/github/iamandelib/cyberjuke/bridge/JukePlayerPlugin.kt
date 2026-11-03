@@ -28,6 +28,7 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import com.google.common.util.concurrent.ListenableFuture
 import io.github.iamandelib.cyberjuke.MainActivity
 import io.github.iamandelib.cyberjuke.ThemeWindow
+import io.github.iamandelib.cyberjuke.local.LocalLibrary
 import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.Families
 import io.github.iamandelib.cyberjuke.net.Family
@@ -1126,7 +1127,7 @@ class JukePlayerPlugin : Plugin() {
      * A YouTube back-off holds [c]'s current item: no prepare (it would extract). A Jukebox MP3
      * isn't YouTube's, so it plays on through one.
      */
-    private fun blocked(c: MediaController): Boolean = NetBlock.isBlocked() && !JukeUris.isMp3(c.currentMediaItem)
+    private fun blocked(c: MediaController): Boolean = NetBlock.isBlocked() && !JukeUris.isOwnFile(c.currentMediaItem)
 
     /**
      * While a back-off runs: pause (no prepare, no extraction) and remind the web. [play]: the
@@ -1135,7 +1136,7 @@ class JukePlayerPlugin : Plugin() {
     private fun refuseWhileBlocked(c: MediaController, play: Boolean = true): Boolean {
         val (until, reason) = NetBlock.active()
         if (reason == null) return false
-        if (JukeUris.isMp3(c.currentMediaItem)) return false
+        if (JukeUris.isOwnFile(c.currentMediaItem)) return false
         // Already false in the usual case; the service only cancels a resume on a change.
         if (c.playWhenReady) c.playWhenReady = false
         if (play) NetBlock.wantResume()
@@ -1205,15 +1206,22 @@ class JukePlayerPlugin : Plugin() {
             // Ours (Global radio), or the last session's: the page may know neither.
             if (!(id.startsWith(QueueCommands.GLOBAL_PREFIX) || extra?.restored == true) || id in announcedTracks) continue
             val ytId = JukeUris.ytIdOf(item)
-            val mp3 = if (ytId == null) JukeUris.mp3UrlOf(item) ?: continue else null
+            val local = ytId == null && JukeUris.isLocal(item)
+            val mp3 = if (ytId == null && !local) JukeUris.mp3UrlOf(item) ?: continue else null
             announcedTracks.add(id)
             val o = JSObject()
             o.put("id", id)
             o.put("ytId", ytId ?: "")
             mp3?.let { o.put("mp3", it) }
+            if (local) o.put("local", true)
             o.put("title", item.mediaMetadata.title?.toString() ?: "")
             o.put("artist", item.mediaMetadata.artist?.toString() ?: "")
-            o.put("artworkUrl", item.mediaMetadata.artworkUri?.toString() ?: "")
+            // A local song's cover is served on the page's own origin (ArtWebViewClient), when the phone keeps one.
+            o.put(
+                "artworkUrl",
+                if (local) id.takeIf { LocalLibrary.songs[it]?.cover == true }?.let { "/_local/art/${it.removePrefix("loc:")}.jpg" } ?: ""
+                else item.mediaMetadata.artworkUri?.toString() ?: "",
+            )
             extra?.by?.let { o.put("by", it) }
             extra?.postUrl?.let { o.put("postUrl", it) }
             if (extra?.membersOnly == true) o.put("membersOnly", true)
