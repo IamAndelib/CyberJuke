@@ -26,6 +26,7 @@ npm run screenshots  # renders every screen into test-results/screenshots/ (not 
 npm run media        # regenerates the README and store images in media/ and fastlane/
 npm run sync         # build the web app and copy it into android/
 npm run stations     # rebuild src/data/radio/stations.json from hyphen8d/signal at the pinned commit
+npm run artist-names # rebuild src/data/artistNames.json from the pinned MusicBrainz export (needs bzip2)
 cd android && ./gradlew testDebugUnitTest   # Kotlin unit tests
 cd android && ./gradlew assembleDebug       # debug APK in android/app/build/outputs/apk/debug/
 ```
@@ -93,6 +94,7 @@ Keep both `.jks` files and their passwords backed up outside the repository (`*.
 - **Renovate** ([`.github/renovate.json`](.github/renovate.json)) proposes grouped updates every Monday, and NewPipeExtractor updates at any time. It needs the [Renovate GitHub App](https://github.com/apps/renovate) installed on the repository by its owner.
 - **NewPipeExtractor** is pinned in `android/variables.gradle` (`newPipeExtractorVersion`) to the commit the NewPipe app ships. When YouTube breaks playback, updating it is usually the fix; the daily canary opens a `youtube-breakage` issue when that happens.
 - **Signal Radio's stations** come from [hyphen8d/signal](https://github.com/hyphen8d/signal) at the commit pinned in `scripts/update-stations.mjs` (`COMMIT`). Renovate doesn't follow it: a refresh is a reviewed PR that bumps `COMMIT` and runs `npm run stations`.
+- **Artist names that hold a comma** ("Earth, Wind & Fire", kept whole when credits are split) come from the MusicBrainz full export pinned in `scripts/update-artist-names.mjs` (`DUMP`, `TABLE_SHA256`), ranked by ListenBrainz listeners (both CC0). MetaBrainz keeps only the latest few exports: a refresh is a reviewed PR that bumps both and runs `npm run artist-names`. Behind the session proxy, Node's fetch needs `NODE_USE_ENV_PROXY=1`.
 - **GitHub Actions** are pinned to full commit SHAs with a `# vX.Y.Z` comment. Keep it that way when adding one: `git ls-remote --tags https://github.com/<owner>/<action>` gives the SHA.
 - **Gradle dependency verification:** run **Actions → Gradle verification metadata**, download the `verification-metadata` artifact and commit it as `android/gradle/verification-metadata.xml`. From then on, Gradle checks every dependency's SHA-256, and dependency updates need the file regenerated (the same workflow, or `./gradlew --write-verification-metadata sha256 help assembleDebug assemblePreview assembleRelease testDebugUnitTest`).
 - The Gradle wrapper JAR is validated in CI, and `distributionSha256Sum` pins the Gradle distribution. When upgrading Gradle, take the checksum from <https://gradle.org/release-checksums/>.

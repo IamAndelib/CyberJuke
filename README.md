@@ -141,7 +141,7 @@ CyberJuke has no account of its own, no analytics, no ads and no tracking. It co
 | LRCLIB | Artist, title, album (when known) and duration of the current track, a local song's from its tags | Lyrics panel open; once for each liked song saved on the phone without lyrics yet (artist and title only), liked local songs too. Beyond this and an artist you open, nothing about local music leaves the phone |
 | GitHub (`api.github.com`) | A request for the latest CyberJuke release (nothing about you or your library) | At most once a day when the app opens or comes back (an hour after a failed check), or **Check now**; only once you turn it on in Settings → Updates (off by default); never for F-Droid installs |
 
-The Signal Radio stations come with the app (`src/data/radio/stations.json`), so tuning in fetches no station list: a station track goes only to YouTube, by its video ID, like any other track.
+The Signal Radio stations come with the app (`src/data/radio/stations.json`), so tuning in fetches no station list: a station track goes only to YouTube, by its video ID, like any other track. The list of artist names that hold a comma comes with the app too (`src/data/artistNames.json`): the app never asks MusicBrainz or ListenBrainz anything.
 
 Nothing is sent to the developer. Your password is never stored or logged.
 
@@ -220,6 +220,7 @@ Maintainers: the publishing steps (signing keys, test builds, releases, F-Droid 
   > The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
   >
   > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+- **Artist names** that hold a comma, so "Earth, Wind & Fire" stays one artist: [MusicBrainz](https://musicbrainz.org) names ranked by [ListenBrainz](https://listenbrainz.org) listeners (MetaBrainz Foundation, CC0), bundled from a pinned export (`scripts/update-artist-names.mjs`).
 - Fonts: [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) and [Departure Mono](https://departuremono.com), both under the SIL Open Font License.
 
 See [NOTICE.md](NOTICE.md) for all third-party components and their licenses. Security issues: see [SECURITY.md](SECURITY.md).
