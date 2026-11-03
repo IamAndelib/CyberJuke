@@ -22,6 +22,7 @@ import {
   unlike,
 } from './library';
 import { toast } from './toast';
+import { PLAYLISTS_MAX, PLAYLIST_MAX_SONGS, addToPlaylist, createPlaylist, playlists, removeFromPlaylist, restoreToPlaylist } from './playlists';
 
 const UNDO = 'Undo';
 
@@ -75,4 +76,37 @@ export function clearHistoryWithUndo(): void {
     run: () => restoreHistory(old),
     ...(old.some((e) => e.track.membersOnly) && { membersOnly: true }),
   });
+}
+
+const playlistName = (id: string) => playlists.peek().find((p) => p.id === id)?.name ?? 'the playlist';
+
+/** Adds [track] to playlist [id]: "Added to Night drive", and Undo takes it out again. */
+export function addToPlaylistWithUndo(id: string, track: Track): void {
+  const name = playlistName(id);
+  const r = addToPlaylist(id, track);
+  if (r === 'already') toast(`Already in ${name}`, BRIEF_MS);
+  else if (r === 'full') toast(`${name} is full: ${PLAYLIST_MAX_SONGS.toLocaleString('en')} songs at most`);
+  else if (r === 'added') toast(`Added to ${name}`, undefined, { label: UNDO, run: () => void removeFromPlaylist(id, track.id), ...(track.membersOnly && { membersOnly: true }) });
+}
+
+/**
+ * A new playlist made from [track] (Add to playlist's New playlist): "Added to Road trip", and
+ * Undo takes the song out but keeps the playlist. Returns its id, or null when none was made.
+ */
+export function createWithSongWithUndo(name: string, track: Track): string | null {
+  const r = createPlaylist(name, [track]);
+  if (r.result === 'full') {
+    toast(`You have ${PLAYLISTS_MAX} playlists, the most there can be`);
+    return null;
+  }
+  if (r.result !== 'created') return null;
+  toast(`Added to ${playlistName(r.id)}`, undefined, { label: UNDO, run: () => void removeFromPlaylist(r.id, track.id), ...(track.membersOnly && { membersOnly: true }) });
+  return r.id;
+}
+
+/** Takes song [trackId] out of playlist [id] (Edit songs' ✕): "Removed from Night drive", and Undo puts it back. */
+export function removeFromPlaylistWithUndo(id: string, trackId: string): void {
+  const name = playlistName(id);
+  const r = removeFromPlaylist(id, trackId);
+  if (r) toast(`Removed from ${name}`, undefined, { label: UNDO, run: () => restoreToPlaylist(id, r), ...(r.item.membersOnly && { membersOnly: true }) });
 }
