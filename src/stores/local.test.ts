@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { JukeLocalPlugin } from '../data/local';
-import { makeTrack } from '../data/model';
 
 vi.mock('@capacitor/preferences', () => ({
   Preferences: { get: async () => ({ value: null }), set: async () => undefined, remove: async () => undefined },
@@ -14,8 +13,8 @@ const plugin: JukeLocalPlugin = {
   removeFolder: async ({ id }) => void removed.push(id),
   tracks: async () => ({
     tracks: [
-      { id: 'loc:0000000000000001', title: 'One', artist: 'A', album: '', durationMs: 1, folder: 'f1', cover: false },
-      { id: 'loc:0000000000000002', title: 'Two', artist: 'B', album: '', durationMs: 1, folder: 'f2', cover: false },
+      { id: 'loc:0000000000000001', title: 'One', artist: 'A', album: '', durationMs: 1, modified: 1000, folder: 'f1', cover: false },
+      { id: 'loc:0000000000000002', title: 'Two', artist: 'B', album: '', durationMs: 1, modified: 2000, folder: 'f2', cover: false },
     ],
   }),
   scan: async () => undefined,
@@ -24,16 +23,15 @@ const plugin: JukeLocalPlugin = {
 };
 vi.stubGlobal('window', { __cyberjukeLocalStub: plugin, addEventListener: () => undefined, removeEventListener: () => undefined });
 
-const { byTitle, removeFolder, localTracks, localFolderList, startLocal } = await import('./local');
+const { newestLocal, removeFolder, localTracks, localFolderList, startLocal } = await import('./local');
 const { updateSettings } = await import('./library');
 const { runToastAction, toasts } = await import('./toast');
 
-const t = (title: string, artist = 'Unknown artist', album = '') => makeTrack({ id: `loc:${title}`, ytId: '', title, artist, ...(album && { album }), source: 'local' });
-
 describe('Local\u2019s songs', () => {
-  it('go by title, regardless of case and with numbers in order; songs with no tags at all last', () => {
-    const list = [t('memo'), t('Beta', 'Zed', 'Attic'), t('alpha', 'Ana', 'Basement'), t('Gamma', 'Ana'), t('track 10', 'Zed', 'Attic'), t('track 9', 'Zed', 'Attic')];
-    expect(byTitle(list).map((x) => x.title)).toEqual(['alpha', 'Beta', 'Gamma', 'track 9', 'track 10', 'memo']);
+  it('newest first goes by the file\u2019s date, the latest at the top', async () => {
+    updateSettings({ localMusic: true });
+    startLocal();
+    await vi.waitFor(() => expect(newestLocal.value.map((x) => x.title)).toEqual(['Two', 'One']));
   });
 });
 

@@ -1,5 +1,5 @@
 import { expect, musicFolder, test, type FakeLocalFolder } from '../fixtures';
-import { openLibrary, openNowPlaying, openSearch, openSettings, saved, seedStorage, setOffline } from '../helpers';
+import { nextFrame, openLibrary, openNowPlaying, openSearch, openSettings, saved, seedStorage, setOffline } from '../helpers';
 
 /**
  * Local music (Settings → Local music, Library → Local) on the fake JukeLocal: the folder
@@ -136,6 +136,76 @@ test.describe('a folder out of reach', () => {
     await page.getByTestId('local-gone-again').click();
     await expect(page.getByTestId('local-gone')).toHaveCount(0);
     await expect(titles(page)).toHaveText(['Card one', 'Card two', ...BY_TITLE]);
+  });
+});
+
+test.describe('order', () => {
+  // Zoo's 4 songs make it the biggest album, and Zed Loop the artist with the most songs.
+  const ZOO: FakeLocalFolder = { id: 'tree:zoo', name: 'Zoo', songs: [1, 2, 3, 4].map((n) => ({ hex: `00000000000000c${n}`, title: `Zoo ${n}`, artist: 'Zed Loop', album: 'Zoo', track: n })) };
+  test.use({ localOptions: { folders: [MUSIC, ZOO] } });
+  const heads = (page: Parameters<typeof seedStorage>[0], id: string) => page.getByTestId(id).getByTestId('az-head');
+
+  test('songs are A–Z under letters; Newest puts the latest files first, plays in that order, and stays after a restart', async ({ page }) => {
+    await localOn(page);
+    await page.goto('/');
+    await openLibrary(page, 'local');
+    await expect(page.getByTestId('local-count')).toHaveText('10 songs');
+    await expect(heads(page, 'local-list')).toHaveText(['M', 'V', 'Z']);
+    await page.getByTestId('local-order-newest').click();
+    await expect(heads(page, 'local-list')).toHaveCount(0);
+    await expect(titles(page)).toHaveText(['Zoo 4', 'Zoo 3', 'Zoo 2', 'Zoo 1', 'voice memo 6', 'Music song M', 'Music song J', 'Music song G', 'Music song D', 'Music song A']);
+    await page.getByTestId('local-play').click();
+    await expect(page.getByTestId('mini-title')).toHaveText('Zoo 4');
+    await page.reload();
+    await openLibrary(page, 'local');
+    await expect(titles(page).first()).toHaveText('Zoo 4');
+  });
+
+  test('albums and artists: Most songs puts the biggest first and A–Z puts them under letters, Unknown last either way', async ({ page }) => {
+    await localOn(page);
+    await page.goto('/');
+    await openLibrary(page, 'local');
+    await page.getByTestId('local-view-albums').click();
+    await expect(page.getByTestId('local-count')).toHaveText('4 albums');
+    const albums = page.getByTestId('local-album-title');
+    await expect(albums).toHaveText(['Attic', 'Basement', 'Zoo', 'Unknown album']);
+    await expect(heads(page, 'local-albums')).toHaveText(['A', 'B', 'Z', '?']);
+    await page.getByTestId('local-order-songs').click();
+    await expect(albums).toHaveText(['Zoo', 'Attic', 'Basement', 'Unknown album']);
+    await page.getByTestId('local-view-artists').click();
+    const artists = page.getByTestId('local-artist-name');
+    await expect(artists).toHaveText(['Ana Tape', 'Zed Loop', 'Unknown artist']);
+    await page.getByTestId('local-order-songs').click();
+    await expect(artists).toHaveText(['Zed Loop', 'Ana Tape', 'Unknown artist']);
+  });
+});
+
+test.describe('the A–Z scroller', () => {
+  const MANY: FakeLocalFolder = { id: 'tree:many', name: 'Many', songs: Array.from({ length: 90 }, (_, i) => ({ hex: (0x200 + i).toString(16).padStart(16, '0'), title: `${String.fromCharCode(65 + (i % 26))} track ${i}`, artist: 'Ana Tape' })) };
+  test.use({ localOptions: { folders: [MANY] } });
+
+  test('a drag of the thumb shows a small letter beside it, clear of the songs, not the big one in the middle', async ({ page }) => {
+    await localOn(page);
+    await page.goto('/');
+    await openLibrary(page, 'local');
+    const screen = page.getByTestId('screen-local');
+    await expect(screen.getByTestId('track-row')).toHaveCount(90);
+    await page.mouse.move(200, 400);
+    await page.mouse.wheel(0, 600);
+    await expect(screen.getByTestId('scrollbar')).toHaveClass(/draggable/);
+    const tb = (await screen.getByTestId('scroll-thumb').boundingBox())!;
+    await page.mouse.move(tb.x + tb.width / 2, tb.y + 10);
+    await page.mouse.down();
+    await page.mouse.move(tb.x + tb.width / 2, tb.y + 200, { steps: 6 });
+    const popup = screen.getByTestId('az-popup');
+    await expect(popup).toHaveClass(/\bon\b/);
+    await nextFrame(page);
+    const pb = (await popup.locator('.az-pop-letter').boundingBox())!;
+    const th = (await screen.getByTestId('scroll-thumb').boundingBox())!;
+    expect(pb.width).toBeLessThan(60);
+    expect(pb.x + pb.width).toBeLessThanOrEqual(th.x);
+    expect(Math.abs(pb.y + pb.height / 2 - (th.y + th.height / 2))).toBeLessThanOrEqual(4);
+    await page.mouse.up();
   });
 });
 

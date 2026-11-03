@@ -32,7 +32,7 @@ import java.util.concurrent.Executors
  *   interface LocalFolder { id: string; name: string; songs: number; state: 'ok' | 'scanning' | 'gone' }
  *   interface LocalSong { id: string; title: string; artist: string; album: string;
  *     albumArtist: string; track: number; disc: number; year: number;   // "" / 0 when unknown
- *     durationMs: number; folder: string; cover: boolean }
+ *     durationMs: number; modified: number; folder: string; cover: boolean }   // modified: ms, 0 unknown
  *   folders(): Promise<{ folders: LocalFolder[] }>
  *   addFolder({ initial?: folder id }): Promise<{ result: 'added' | 'inside' | 'cancelled';
  *     folder?: LocalFolder; name?: string }>   // inside: the folder it is in, by name
@@ -165,7 +165,8 @@ class LocalPlugin : Plugin() {
                     JSObject()
                         .put("id", e.id).put("title", e.title).put("artist", e.artist).put("album", e.album)
                         .put("albumArtist", e.albumArtist).put("track", e.track).put("disc", e.disc).put("year", e.year)
-                        .put("durationMs", e.durationMs).put("folder", e.folder).put("cover", e.cover),
+                        .put("durationMs", e.durationMs).put("modified", maxOf(0L, e.modified))
+                        .put("folder", e.folder).put("cover", e.cover),
                 )
             }
             call.resolve(JSObject().put("tracks", arr))

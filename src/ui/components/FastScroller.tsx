@@ -22,7 +22,8 @@ const MIN_THUMB = 48;
  * press that moves DRAG_START_PX drags. While a draggable thumb shows, its rect is kept
  * out of Android's back gesture. With `az`, the letter of the `.az-head` section at
  * the top of the list shows in a centred box only while the thumb is dragged (never on
- * ordinary scrolling), fading LETTER_HIDE_MS after the drag ends.
+ * ordinary scrolling), fading LETTER_HIDE_MS after the drag ends; with `az: 'beside'`, a small
+ * one rides beside the thumb instead, clear of the list (Library → Local's songs).
  *
  * Lives in a zero-height sticky dock at the top of the scroller, so it stays put while
  * the content scrolls; everything is updated directly in a requestAnimationFrame.
@@ -33,7 +34,7 @@ export function FastScroller({
   onDragStart,
 }: {
   scroller: RefObject<HTMLDivElement | null>;
-  az: boolean;
+  az: boolean | 'beside';
   /** A drag of the thumb begins (the Screen cancels a pending scroll-memory restore). */
   onDragStart?: () => void;
 }) {
@@ -60,7 +61,8 @@ export function FastScroller({
     heads: [] as { top: number; letter: string }[],
     headsFor: -1,
     /** Sizes, measured when the scroller or its content resizes (never per scroll frame). */
-    size: null as { head: number; client: number; scroll: number; trackH: number; thumbH: number } | null,
+    /** `trackTop`: where the thumb's track starts, under the header (the bar's top padding). */
+    size: null as { head: number; client: number; scroll: number; trackTop: number; trackH: number; thumbH: number } | null,
   });
 
   const headerHeight = (el: HTMLElement) => (el.querySelector(':scope > .topbar') as HTMLElement | null)?.offsetHeight ?? 0;
@@ -107,7 +109,7 @@ export function FastScroller({
     const trackH = scrollable ? tr.clientHeight : 0;
     const thumbH = Math.min(trackH, Math.max(MIN_THUMB, (trackH * client) / scroll));
     th.style.height = `${thumbH}px`;
-    s.size = { head, client, scroll, trackH, thumbH };
+    s.size = { head, client, scroll, trackTop: head + tr.offsetTop, trackH, thumbH };
   };
 
   /** Move the thumb (and the A–Z letter) for the current scrollTop, from the cached sizes. */
@@ -123,6 +125,7 @@ export function FastScroller({
     if (max <= 1) return;
     const y = (Math.min(max, Math.max(0, el.scrollTop)) / max) * (z.trackH - z.thumbH);
     th.style.transform = `translateY(${y}px)`;
+    if (azRef.current === 'beside' && popup.current) popup.current.style.top = `${z.trackTop + y + z.thumbH / 2}px`;
     syncExclusion();
     if (azRef.current) {
       const l = currentLetter(el, z.head, z.scroll);
@@ -319,7 +322,7 @@ export function FastScroller({
         </div>
       </div>
       {az && (
-        <div class="az-pop" ref={popup} data-testid="az-popup">
+        <div class={az === 'beside' ? 'az-pop beside' : 'az-pop'} ref={popup} data-testid="az-popup">
           <span class="az-pop-letter" />
           <span class="az-pop-shadow" />
         </div>

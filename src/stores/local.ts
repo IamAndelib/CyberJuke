@@ -22,7 +22,7 @@ import { logError } from '../core/log';
 import { stillPlays } from '../core/offlineText';
 import { savedLiked } from './savedOffline';
 import { localHere, settings, updateSettings } from './library';
-import { UNKNOWN_ARTIST, byName, groupLocal } from '../data/localGroups';
+import { byName, groupLocal } from '../data/localGroups';
 import { toast } from './toast';
 
 const folders = signal<LocalFolder[]>([]);
@@ -61,11 +61,8 @@ export const scanningName = computed(() => {
   return s ? (folders.value.find((f) => f.id === s.folder)?.name ?? '') : '';
 });
 
-/** Local's songs by title, those with no tags at all (no artist, no album) last. */
-export function byTitle(tracks: readonly Track[]): Track[] {
-  const untagged = (t: Track) => t.artist === UNKNOWN_ARTIST && !t.album;
-  return [...tracks].sort((a, b) => Number(untagged(a)) - Number(untagged(b)) || byName(a.title, b.title));
-}
+/** Local's songs, the newest files first (then by title). */
+export const newestLocal = computed(() => tracksOf([...shownSongs.value].sort((a, b) => b.modified - a.modified || byName(a.title, b.title))));
 
 /** Local's albums and artists (data/localGroups). */
 export const localGroups = computed(() => groupLocal(shownSongs.value));

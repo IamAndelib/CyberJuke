@@ -13,6 +13,13 @@ export const genresSort = signal<GridSort>('popular');
 /** Artists grid order. */
 export const artistsSort = signal<GridSort>('popular');
 
+/** Library → Local's order in each view: A–Z, the newest files, or the most songs. */
+export type LocalSongsOrder = 'az' | 'newest';
+export type LocalGroupsOrder = 'az' | 'songs';
+export const localSongsOrder = signal<LocalSongsOrder>('az');
+export const localAlbumsOrder = signal<LocalGroupsOrder>('az');
+export const localArtistsOrder = signal<LocalGroupsOrder>('az');
+
 export type LibraryLayout = 'list' | 'grid';
 /** Library's lists and playlists as rows or as tiles. */
 export const libraryLayout = signal<LibraryLayout>('list');
@@ -42,3 +49,6 @@ function bind<T extends string>(sig: Signal<T>, key: string, allowed: readonly T
 bind(genresSort, K_GENRES_SORT, GRID_SORTS);
 bind(artistsSort, K_ARTISTS_SORT, GRID_SORTS);
 bind(libraryLayout, 'prefs.libraryLayout', ['list', 'grid']);
+bind(localSongsOrder, 'prefs.localSongsOrder', ['az', 'newest']);
+bind(localAlbumsOrder, 'prefs.localAlbumsOrder', ['az', 'songs']);
+bind(localArtistsOrder, 'prefs.localArtistsOrder', ['az', 'songs']);

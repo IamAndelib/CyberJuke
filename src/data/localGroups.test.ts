@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupLocal } from './localGroups';
+import { UNKNOWN_ALBUM_KEY, byMostSongs, groupLocal } from './localGroups';
 import type { LocalSong } from './local';
 
 let n = 0;
@@ -13,6 +13,7 @@ const song = (title: string, artist: string, album = '', o: Partial<LocalSong> =
   disc: 0,
   year: 0,
   durationMs: 1000,
+  modified: 0,
   folder: 'f',
   cover: false,
   ...o,
@@ -101,3 +102,19 @@ describe('local artists', () => {
     expect(artists[2]!.albums).toEqual([]);
   });
 });
+
+describe('most songs first', () => {
+  it('puts the albums with the most songs first, a tie in its order, and Unknown album last whatever its size', () => {
+    const { albums } = groupLocal([
+      song('a1', 'Ana', 'Attic'),
+      song('b1', 'Zed', 'Basement'),
+      song('b2', 'Zed', 'Basement'),
+      song('c1', 'Ana', 'Cellar'),
+      song('m1', 'Ana'),
+      song('m2', 'Zed'),
+      song('m3', 'Ana'),
+    ]);
+    expect(byMostSongs(albums, (a) => a.key === UNKNOWN_ALBUM_KEY).map((a) => a.title)).toEqual(['Basement', 'Attic', 'Cellar', 'Unknown album']);
+  });
+});
+

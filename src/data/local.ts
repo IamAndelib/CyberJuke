@@ -33,6 +33,8 @@ export interface LocalSong {
   disc: number;
   year: number;
   durationMs: number;
+  /** When the file last changed (came to the phone, usually), in ms: 0 when unknown. */
+  modified: number;
   /** The folder's id. */
   folder: string;
   /** A cover is kept on the phone (`/_local/art/<hex>.jpg`). */

@@ -1227,6 +1227,18 @@
   background-size: 4px 4px;
 }
 
+/* Beside the thumb: small, so the list stays readable while it moves (Library → Local). */
+.az-pop.beside {
+  --pop: 44px;
+  --pop-shadow: 4px;
+  left: auto;
+  right: 58px;
+  margin: calc(var(--pop) / -2) 0 0 0;
+}
+.az-pop.beside .az-pop-letter {
+  font-size: 26px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sb,
   .sb.on,
@@ -1385,7 +1397,7 @@ section[data-kind] > .shelf {
   contain-intrinsic-size: auto 60px;
 }
 /* A letter whose tiles are all in ★ Favourites (moved up) has nothing left to head. */
-.az-section:not(:has(.genre-cell)) {
+.az-section:has(> .genre-grid):not(:has(.genre-cell)) {
   display: none;
 }
 .az-section {

@@ -278,6 +278,7 @@ export function parseLocalSongs(x: unknown): LocalSong[] {
       disc: count(t.disc),
       year: count(t.year),
       durationMs: Math.max(0, finite(t.durationMs) ?? 0),
+      modified: Math.max(0, finite(t.modified) ?? 0),
       folder: t.folder,
       cover: t.cover === true,
     });
