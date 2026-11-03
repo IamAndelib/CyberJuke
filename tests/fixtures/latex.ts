@@ -12,7 +12,7 @@ export const FAKE_MP3_SECONDS = 4;
  * Silent MPEG-1 Layer III: 32 kbit/s, 44.1 kHz, mono, no CRC. A frame is 104 bytes
  * (144 * 32000 / 44100) and 1152 samples; zeroed side info and main data decode to silence.
  */
-function silentMp3(seconds: number): Buffer {
+export function silentMp3(seconds: number): Buffer {
   const header = Buffer.from([0xff, 0xfb, 0x10, 0xc4]);
   const frame = Buffer.concat([header, Buffer.alloc(104 - header.length)]);
   const frames = Math.ceil((seconds * 44100) / 1152);

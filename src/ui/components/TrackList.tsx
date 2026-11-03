@@ -39,6 +39,7 @@ export function Tracks({
   queue,
   hideGenre,
   showSaves,
+  inLocal,
   chunkKey = null,
 }: {
   tracks: Track[];
@@ -46,6 +47,8 @@ export function Tracks({
   queue?: () => Track[];
   hideGenre?: boolean;
   showSaves?: boolean;
+  /** Library → Local's own list (see TrackRow). */
+  inLocal?: boolean;
   chunkKey?: string | null;
 }) {
   const { shown, sentinel, more } = useChunks(tracks.length, chunkKey);
@@ -54,7 +57,7 @@ export function Tracks({
     <>
       <ul class="list" data-testid="track-list">
         {tracks.slice(0, shown).map((t, i) => (
-          <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} showSaves={showSaves} onPlay={play} />
+          <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} showSaves={showSaves} inLocal={inLocal} onPlay={play} />
         ))}
       </ul>
       {more && <div ref={sentinel} class="list-foot" aria-hidden="true" />}

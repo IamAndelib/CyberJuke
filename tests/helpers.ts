@@ -321,7 +321,7 @@ export async function shot(page: Page, name: string): Promise<void> {
  * Library → one of its lists, as its own page: the Library tab at its list (a tap on the tab
  * again goes back to it from a page), then that list's row.
  */
-export async function openLibrary(page: Page, which: 'liked' | 'recent'): Promise<void> {
+export async function openLibrary(page: Page, which: 'liked' | 'recent' | 'local'): Promise<void> {
   const tab = page.getByTestId('tab-library');
   await tab.click();
   const row = page.getByTestId(`lib-${which}`);

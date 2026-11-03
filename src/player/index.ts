@@ -22,7 +22,7 @@ import { heldFor } from '../core/held';
 import { online } from '../core/network';
 import { OFFLINE } from '../core/offlineText';
 import { exposeForTests } from '../core/testHooks';
-import type { Track } from '../data/model';
+import { isLocal, type Track } from '../data/model';
 import { hasSavedLiked, isSaved, savedOffline, savedTracks } from '../stores/savedOffline';
 import { createAutoplay, shuffleGenre, type Autoplay } from './autoplay';
 import { NativePlayer } from './nativePlayer';
@@ -314,11 +314,19 @@ function dropNsfwAutoplay(): Promise<void> {
   return ids.length ? player.removeIds(ids) : Promise.resolve();
 }
 
+/** Local music turned off: its songs leave the queue (they can't play any more). */
+function dropLocalFromQueue(): Promise<void> {
+  const ids = [...new Set(state.peek().queue.filter(isLocal).map((t) => t.id))];
+  return ids.length ? player.removeIds(ids) : Promise.resolve();
+}
+
 let purging = false;
 
 /** The queue holds a members-only track (recomputed only when the list itself changes). */
 const queueList = computed(() => state.value.queue);
 const queuedMembersOnly = computed(() => queueList.value.some((t) => t.membersOnly));
+const queuedLocal = computed(() => queueList.value.some(isLocal));
+const localMusic = computed(() => settings.value.localMusic);
 
 /** Follow sign-outs and the NSFW setting for the queue (call once at startup). */
 export function startQueuePurge(): void {
@@ -334,5 +342,9 @@ export function startQueuePurge(): void {
     const nsfw = showNsfw.value;
     if (nsfwWas && !nsfw) untracked(() => void dropNsfwAutoplay());
     nsfwWas = nsfw;
+  });
+  // Local music off with local songs queued: on turning it off, and at startup.
+  effect(() => {
+    if (!localMusic.value && queuedLocal.value) untracked(() => void dropLocalFromQueue());
   });
 }

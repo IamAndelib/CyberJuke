@@ -1,7 +1,7 @@
 import { useComputed } from '@preact/signals';
 import { memo } from 'preact/compat';
 import { useId } from 'preact/hooks';
-import type { Track } from '../../data/model';
+import { isLocal, type Track } from '../../data/model';
 import { online } from '../../core/network';
 import { currentId, currentPlaysOffline, isPlaying, player, type UpItem } from '../../player';
 import { isSaved, savedOffline } from '../../stores/savedOffline';
@@ -141,12 +141,15 @@ export const TrackRow = memo(function TrackRow({
   index,
   hideGenre,
   showSaves,
+  inLocal,
 }: {
   track: Track;
   /** Plays the list from row `index`. */
   onPlay: (index: number) => void;
   index: number;
   hideGenre?: boolean;
+  /** A row of Library → Local itself: its songs need no "On phone" tag there. */
+  inLocal?: boolean;
   /** Show the post's save count (Most saved). */
   showSaves?: boolean;
 }) {
@@ -161,7 +164,8 @@ export const TrackRow = memo(function TrackRow({
   const press = longPress(track);
   // The label names the row; its meta line (saves, members-only, genre, poster) describes it.
   const metaId = useId();
-  const hasMeta = showSaves || track.membersOnly || (track.genre && !hideGenre) || track.by;
+  const local = isLocal(track);
+  const hasMeta = local || showSaves || track.membersOnly || (track.genre && !hideGenre) || track.by;
   return (
     <li class={'row' + (isCurrent ? ' is-current' : '') + (off ? ' off' : '')} data-testid="track-row" data-track-id={track.id}>
       <button
@@ -193,6 +197,8 @@ export const TrackRow = memo(function TrackRow({
                 {track.saves ?? 0}
               </span>
             )}
+            {local && !inLocal && <span class="tag" data-testid="local-tag">On phone</span>}
+            {local && track.album && <span class="by">{track.album}</span>}
             {track.membersOnly && <MembersTag />}
             {track.genre && !hideGenre && <span class="tag">{track.genre}</span>}
             {track.by && <span class="by">by @{track.by}</span>}

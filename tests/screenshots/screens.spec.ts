@@ -1,4 +1,4 @@
-import { AUTH_USER, expect, MEMBERS_POSTS, test } from '../fixtures';
+import { AUTH_USER, expect, MEMBERS_POSTS, musicFolder, test } from '../fixtures';
 import type { Page } from '@playwright/test';
 import { nextFrame, openNowPlaying, openSettings, seedStorage, setLyricsMode, SETTINGS_KEY, shot, toastsGone, openLibrary } from '../helpers';
 
@@ -419,3 +419,39 @@ for (const theme of THEMES) {
     });
   }
 }
+
+test.describe('local music', () => {
+  test.use({
+    localOptions: {
+      folders: [musicFolder(14), { id: 'tree:albums', name: 'SD card › Albums', gone: true, songs: [{ hex: '00000000000000a1', title: 'Card one' }] }],
+    },
+  });
+  for (const theme of THEMES) {
+    for (const width of [320, 360]) {
+      test(`Library, Local, its Settings card and Now Playing (${theme}, ${width}px)`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 915 });
+        await seedStorage(page, { [SETTINGS_KEY]: { theme, showNsfw: false, quality: 'high', localMusic: true, version: 3 } });
+        await page.goto('/');
+        await expect(page.getByTestId('track-row').first()).toBeVisible();
+        const tag = `${theme}-${width}`;
+        await page.getByTestId('tab-library').click();
+        await expect(page.getByTestId('lib-local')).toContainText('14 songs');
+        await settle(page);
+        await shot(page, `local-library-${tag}`);
+        await openLibrary(page, 'local');
+        await expect(page.getByTestId('local-list').getByTestId('track-row').first()).toBeVisible();
+        await settle(page);
+        await shot(page, `local-page-${tag}`);
+        await page.getByTestId('local-play').click();
+        await openNowPlaying(page);
+        await settle(page);
+        await shot(page, `local-now-playing-${tag}`);
+        await page.getByTestId('np-close').click();
+        await openSettings(page);
+        await page.getByTestId('local-card').scrollIntoViewIfNeeded();
+        await settle(page);
+        await shot(page, `local-settings-${tag}`);
+      });
+    }
+  }
+});

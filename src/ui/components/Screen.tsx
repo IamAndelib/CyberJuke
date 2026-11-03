@@ -63,6 +63,7 @@ export function Screen({
   right,
   bar,
   onRefresh,
+  refreshOffline = false,
   children,
   testid,
   scrollKey,
@@ -79,6 +80,8 @@ export function Screen({
   /** Replaces the standard top bar (Search). */
   bar?: ComponentChildren;
   onRefresh?: () => Promise<void>;
+  /** The refresh needs no connection (Local looks through the phone's folders). */
+  refreshOffline?: boolean;
   children: ComponentChildren;
   testid?: string;
   scrollKey?: string;
@@ -101,6 +104,8 @@ export function Screen({
   const positions = useRef(new Map<string, number>()).current;
   const refresh = useRef(onRefresh);
   refresh.current = onRefresh;
+  const anyNetwork = useRef(refreshOffline);
+  anyNetwork.current = refreshOffline;
   /** Target of a restore still waiting for content; saving is paused meanwhile. */
   const pending = useRef<(() => void) | null>(null);
   const frame = useRef(0);
@@ -229,8 +234,9 @@ export function Screen({
     };
     const release = async () => {
       const go = pull.d >= PULL_REFRESH_AT && !!refresh.current;
-      if (go && !online.peek()) toast(OFFLINE.pullAgain);
-      if (!go || !online.peek()) return springTo(0);
+      const reachable = anyNetwork.current || online.peek();
+      if (go && !reachable) toast(OFFLINE.pullAgain);
+      if (!go || !reachable) return springTo(0);
       pull.busy = true;
       setLabel('busy');
       ptr.current?.setAttribute('aria-busy', 'true');

@@ -35,6 +35,7 @@ import { openNowPlayingWhen, openSettings } from '../ui/nav';
 import { retryWatchedFeeds } from '../stores/feed';
 import { JukePlayer } from '../player/native';
 import { hasCurrent, setOpenLiked, startPlayerPrefs, startQueuePurge } from '../player';
+import { startLocal } from '../stores/local';
 import { startListeningCache } from '../player/listeningCache';
 import { startUpdates } from '../stores/updates';
 import { playFrom, radio } from '../ui/playAll';
@@ -207,6 +208,7 @@ async function boot(): Promise<void> {
   startCatalog(firstPage);
   afterFirstPage(firstPage, () => void startUpdates(native ? () => JukePlayer.getAppInfo() : undefined));
   startFreshness();
+  startLocal();
   maybeAutoplay().catch((e) => logError('autoplay', e));
 }
 
