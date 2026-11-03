@@ -1,4 +1,6 @@
 import { computed, type ReadonlySignal } from '@preact/signals';
+import type { ComponentChildren } from 'preact';
+import { libraryLayout } from '../../stores/prefs';
 import { useCallback, useMemo, useRef } from 'preact/hooks';
 import type { Track } from '../../data/model';
 import { LOCAL_VIEWS, historyShown, likedShown, recentShown, settings, updateSettings, type LocalView } from '../../stores/library';
@@ -56,21 +58,40 @@ function Count({ of, after }: { of: ReadonlySignal<Track[]>; after?: string }) {
   );
 }
 
-/** One of Library's lists: an outlined tile with its icon, its name and count, a chevron; a tap opens its page. */
-function LibRow({ icon, title, of, after, onOpen, testid }: { icon: IconName; title: string; of: ReadonlySignal<Track[]>; after?: string; onOpen: () => void; testid: string }) {
+/** A list's mark: an outlined square with its icon, a label, not a missing picture. */
+const ListTile = ({ icon }: { icon: IconName }) => (
+  <div class="lib-tile" aria-hidden="true">
+    <Icon name={icon} size={24} />
+  </div>
+);
+
+/**
+ * One of Library's lists or playlists, a tap opens its page: a row (its picture, name and count,
+ * a chevron) or, in the grid, a tile (the picture over the name and count).
+ */
+function LibItem({ art, title, sub, onOpen, testid, nameTestid }: { art: ComponentChildren; title: string; sub: ComponentChildren; onOpen: () => void; testid: string; nameTestid?: string }) {
+  const open = (e: MouseEvent) => afterPress(e.currentTarget as HTMLElement, onOpen);
+  if (libraryLayout.value === 'grid')
+    return (
+      <li>
+        <button class="shelf-btn release-btn lib-cell" onClick={open} data-testid={testid}>
+          {art}
+          <span class="shelf-title" data-testid={nameTestid}>
+            {title}
+          </span>
+          <span class="shelf-year">{sub}</span>
+        </button>
+      </li>
+    );
   return (
     <li class="row lib-row">
-      <button class="row-main" onClick={(e) => afterPress(e.currentTarget, onOpen)} data-testid={testid}>
-        <div class="row-art">
-          <div class="lib-tile" aria-hidden="true">
-            <Icon name={icon} size={24} />
-          </div>
-        </div>
+      <button class="row-main" onClick={open} data-testid={testid}>
+        <div class="row-art">{art}</div>
         <div class="row-text">
-          <div class="row-title">{title}</div>
-          <div class="row-artist">
-            <Count of={of} after={after} />
+          <div class="row-title" data-testid={nameTestid}>
+            {title}
           </div>
+          <div class="row-artist">{sub}</div>
         </div>
         <Icon name="chevron" size={16} class="lib-chev" />
       </button>
@@ -78,21 +99,34 @@ function LibRow({ icon, title, of, after, onOpen, testid }: { icon: IconName; ti
   );
 }
 
+/** Library's rows, or its grid of tiles. */
+const libListClass = () => (libraryLayout.value === 'grid' ? 'lib-grid' : 'list lib-list');
+
 /** Liked and Recently played, each once, for Here search on Library's list. */
 const libraryTracks = computed(() => {
   const seen = new Set<string>();
   return [...likedShown.value, ...recentShown.value].filter((t) => !seen.has(t.id) && (seen.add(t.id), true));
 });
 
-/** The Library tab: a list of its lists, each opening its own page. */
+/** Top right: switches Library between rows and a grid of tiles (remembered). */
+function LayoutButton() {
+  const grid = libraryLayout.value === 'grid';
+  return (
+    <button class="icon-btn" onClick={() => (libraryLayout.value = grid ? 'list' : 'grid')} aria-label={grid ? 'Show as a list' : 'Show as a grid'} data-testid="lib-layout">
+      <Icon name={grid ? 'list' : 'grid'} />
+    </button>
+  );
+}
+
+/** The Library tab: its lists, then the playlists, each opening its own page. */
 export function Library() {
   useSearchContext({ label: 'Library', tracks: () => libraryTracks.value });
   return (
-    <Screen testid="screen-library" title="Library" subtitle="On this device" scrollKey="library">
-      <ul class="list lib-list" aria-label="Library">
-        <LibRow icon="heart" title="Liked" of={likedShown} onOpen={() => openLibraryPage('liked')} testid="lib-liked" />
-        <LibRow icon="clock" title="Recently played" of={recentShown} onOpen={() => openLibraryPage('recent')} testid="lib-recent" />
-        {localOn.value && <LibRow icon="folder" title="Local" of={localTracks} after=" · on this phone" onOpen={() => openLibraryPage('local')} testid="lib-local" />}
+    <Screen testid="screen-library" title="Library" subtitle="On this device" scrollKey="library" right={<LayoutButton />}>
+      <ul class={libListClass()} aria-label="Library">
+        <LibItem art={<ListTile icon="heart" />} title="Liked" sub={<Count of={likedShown} />} onOpen={() => openLibraryPage('liked')} testid="lib-liked" />
+        <LibItem art={<ListTile icon="clock" />} title="Recently played" sub={<Count of={recentShown} />} onOpen={() => openLibraryPage('recent')} testid="lib-recent" />
+        {localOn.value && <LibItem art={<ListTile icon="folder" />} title="Local" sub={<Count of={localTracks} after=" · on this phone" />} onOpen={() => openLibraryPage('local')} testid="lib-local" />}
       </ul>
       <Playlists />
     </Screen>
@@ -126,22 +160,17 @@ function Playlists() {
         )}
       </div>
       {all.length ? (
-        <ul class="list lib-list" aria-label="Playlists">
+        <ul class={libListClass()} aria-label="Playlists">
           {all.map((p) => (
-            <li key={p.id} class="row lib-row">
-              <button class="row-main" onClick={(e) => afterPress(e.currentTarget, () => openUserPlaylist(p.id))} data-testid="lib-playlist">
-                <div class="row-art">
-                  <Mosaic tracks={p.tracks} size="sm" />
-                </div>
-                <div class="row-text">
-                  <div class="row-title" data-testid="lib-playlist-name">
-                    {p.name}
-                  </div>
-                  <div class="row-artist">{plural(p.tracks.length, 'song')}</div>
-                </div>
-                <Icon name="chevron" size={16} class="lib-chev" />
-              </button>
-            </li>
+            <LibItem
+              key={p.id}
+              art={<Mosaic tracks={p.tracks} size={libraryLayout.value === 'grid' ? 'lg' : 'sm'} />}
+              title={p.name}
+              sub={plural(p.tracks.length, 'song')}
+              onOpen={() => openUserPlaylist(p.id)}
+              testid="lib-playlist"
+              nameTestid="lib-playlist-name"
+            />
           ))}
         </ul>
       ) : (

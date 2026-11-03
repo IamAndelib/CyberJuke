@@ -1,4 +1,4 @@
-/** Small UI preferences (sort orders), persisted in Preferences (core/storage kv). */
+/** Small UI preferences (sort orders, Library's layout), persisted in Preferences (core/storage kv). */
 import { signal, type Signal } from '@preact/signals';
 import { kv } from '../core/storage';
 
@@ -12,6 +12,10 @@ const K_ARTISTS_SORT = 'prefs.artistsSort';
 export const genresSort = signal<GridSort>('popular');
 /** Artists grid order. */
 export const artistsSort = signal<GridSort>('popular');
+
+export type LibraryLayout = 'list' | 'grid';
+/** Library's lists and playlists as rows or as tiles. */
+export const libraryLayout = signal<LibraryLayout>('list');
 
 function bind<T extends string>(sig: Signal<T>, key: string, allowed: readonly T[]): void {
   let first = true;
@@ -37,3 +41,4 @@ function bind<T extends string>(sig: Signal<T>, key: string, allowed: readonly T
 
 bind(genresSort, K_GENRES_SORT, GRID_SORTS);
 bind(artistsSort, K_ARTISTS_SORT, GRID_SORTS);
+bind(libraryLayout, 'prefs.libraryLayout', ['list', 'grid']);

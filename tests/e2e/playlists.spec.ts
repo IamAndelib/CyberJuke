@@ -88,6 +88,25 @@ test.describe('a playlist', () => {
     await expect(page.getByTestId('screen-playlist').locator('.album-cover').getByTestId('mosaic-note')).toHaveCount(1);
   });
 
+  test('the grid button shows Library as tiles, three to a row, and it stays so after a restart; a tile opens its page', async ({ page }) => {
+    await page.getByTestId('tab-library').click();
+    await expect(page.getByTestId('lib-layout')).toHaveAccessibleName('Show as a grid');
+    await page.getByTestId('lib-layout').click();
+    await expect(page.getByTestId('lib-layout')).toHaveAccessibleName('Show as a list');
+    const tops = async (id: string) => (await page.getByTestId(id).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top))));
+    const lists = [...(await tops('lib-liked')), ...(await tops('lib-recent'))];
+    expect(new Set(lists).size).toBe(1);
+    const covers = await tops('lib-playlist');
+    expect(covers).toHaveLength(2);
+    expect(covers[0]).toBe(covers[1]);
+    await expect(page.getByTestId('lib-playlist-name')).toHaveText(['Night drive', 'Road trip']);
+    await page.reload();
+    await page.getByTestId('tab-library').click();
+    await expect(page.getByTestId('screen-library').locator('.lib-grid')).toHaveCount(2);
+    await page.getByTestId('lib-liked').click();
+    await expect(page.getByTestId('screen-liked')).toBeVisible();
+  });
+
   test('Edit songs moves them with ↑ ↓ and takes one out with ✕ (Undo puts it back); Done ends it, and it is kept', async ({ page }) => {
     await openPlaylist(page, 'Night drive');
     await page.getByTestId('pl-more').click();
