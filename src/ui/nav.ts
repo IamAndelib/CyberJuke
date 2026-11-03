@@ -54,7 +54,9 @@ export type Page =
   | { kind: 'local' }
   /** A local album or artist (data/localGroups keys). */
   | { kind: 'localAlbum'; key: string }
-  | { kind: 'localArtist'; key: string };
+  | { kind: 'localArtist'; key: string }
+  /** One of the person's own playlists (stores/playlists; `album` with kind playlist is Global's). */
+  | { kind: 'userPlaylist'; id: string };
 
 export interface StackEntry {
   /** Unique for the app session (the page's key). */
@@ -104,6 +106,27 @@ export interface ConfirmRequest {
   info?: boolean;
 }
 export const confirmRequest = signal<ConfirmRequest | null>(null);
+
+/** A sheet asking for a name (a new playlist's, a playlist's new one). */
+export interface NameRequest {
+  title: string;
+  /** A line under the title ("With Flying Whales"). */
+  note?: string;
+  initial?: string;
+  /** The button that takes the name ("Create", "Rename"). */
+  confirm: string;
+  /** Takes the trimmed, non-empty name. */
+  run(name: string): void;
+}
+export const nameRequest = signal<NameRequest | null>(null);
+
+export function askName(req: NameRequest): void {
+  menuTrack.value = null;
+  nameRequest.value = req;
+}
+
+/** The playlist whose ⋯ sheet (Edit songs, Rename, Delete) is open. */
+export const playlistMenuFor = signal<string | null>(null);
 
 /**
  * The media notification was tapped: Now Playing, over whatever was open (menus and sheets
@@ -191,6 +214,8 @@ function samePage(a: Page, b: Page): boolean {
     case 'localAlbum':
     case 'localArtist':
       return a.key === (b as typeof a).key;
+    case 'userPlaylist':
+      return a.id === (b as typeof a).id;
   }
 }
 
@@ -198,6 +223,8 @@ function closeOverlays(): void {
   menuTrack.value = null;
   artistChoice.value = null;
   confirmRequest.value = null;
+  nameRequest.value = null;
+  playlistMenuFor.value = null;
   nowPlayingOpen.value = false;
 }
 
@@ -253,6 +280,11 @@ export function openGenrePage(name: string): void {
 /** One of Library's lists, as its own page over Library's list (Library's rows). */
 export function openLibraryPage(kind: 'liked' | 'recent' | 'local'): void {
   pushPage({ kind });
+}
+
+/** One of the person's own playlists, on the current tab. */
+export function openUserPlaylist(id: string): void {
+  pushPage({ kind: 'userPlaylist', id });
 }
 
 /** A local album or artist, over Library → Local. */
@@ -404,7 +436,7 @@ export function useSearchContext(ctx: SearchContext | null): void {
  * than Home, it goes to Home). Native hands back to the page only while this is true.
  */
 export const canGoBack = computed(
-  () => confirmRequest.value != null || menuTrack.value != null || artistChoice.value != null || nowPlayingOpen.value || stack.value.length > 0 || tab.value !== 'home',
+  () => confirmRequest.value != null || nameRequest.value != null || playlistMenuFor.value != null || menuTrack.value != null || artistChoice.value != null || nowPlayingOpen.value || stack.value.length > 0 || tab.value !== 'home',
 );
 
 /**
@@ -415,6 +447,14 @@ export const canGoBack = computed(
 export function goBack(switchTab = true): boolean {
   if (confirmRequest.value) {
     confirmRequest.value = null;
+    return true;
+  }
+  if (nameRequest.value) {
+    nameRequest.value = null;
+    return true;
+  }
+  if (playlistMenuFor.value) {
+    playlistMenuFor.value = null;
     return true;
   }
   if (menuTrack.value) {

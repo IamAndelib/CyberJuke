@@ -85,3 +85,32 @@
 .local-add {
   margin-top: 12px;
 }
+
+/* Playlists. */
+.lib-new {
+  min-height: 44px;
+  padding: 0 6px;
+}
+.pl-edit-row {
+  display: flex;
+  align-items: center;
+}
+.pl-edit-row .row-main {
+  flex: 1;
+  min-width: 0;
+}
+.pl-edit-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+}
+.pl-edit-actions .icon-btn {
+  width: 44px;
+  min-width: 44px;
+  height: 48px;
+  min-height: 48px;
+}
+.pl-done {
+  min-height: 44px;
+  padding: 0 8px;
+}
