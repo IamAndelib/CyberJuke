@@ -17,6 +17,7 @@ import com.getcapacitor.WebViewListener;
 import io.github.iamandelib.cyberjuke.bridge.ArtWebViewClient;
 import io.github.iamandelib.cyberjuke.bridge.JukePlayerPlugin;
 import io.github.iamandelib.cyberjuke.bridge.MusicPlugin;
+import io.github.iamandelib.cyberjuke.bridge.LocalPlugin;
 import io.github.iamandelib.cyberjuke.bridge.SecureStorePlugin;
 import io.github.iamandelib.cyberjuke.playback.LaunchOptions;
 import java.io.File;
@@ -59,6 +60,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(JukePlayerPlugin.class);
         registerPlugin(MusicPlugin.class);
         registerPlugin(SecureStorePlugin.class);
+        registerPlugin(LocalPlugin.class);
         Intent launch = getIntent();
         // Recreated from its saved state in a new process (Android stopped the app; the launcher
         // or Recents brought it back): the intent is the one that first opened it, not a new tap.

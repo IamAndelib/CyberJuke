@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { asTrack, audioIdOf, hasAudio, asTracks, isAudioId, isTrackFull, parseMusicItem, parseMusicPage, parseNativeState, parseRunQueryRows } from './guards';
+import { asTrack, audioIdOf, hasAudio, asTracks, isAudioId, isTrackFull, parseMusicItem, parseMusicPage, parseNativeState, parseRunQueryRows, parseLocalFolders, parseLocalSongs } from './guards';
 
 const track = {
   id: 'p1',
@@ -191,5 +191,42 @@ describe('stored tracks', () => {
     expect(asTrack({ ...track, album: '' })).not.toHaveProperty('album');
     expect(asTrack({ ...track, album: 7 })).not.toHaveProperty('album');
     expect(asTrack(track)).not.toHaveProperty('album');
+  });
+});
+
+describe('local music answers', () => {
+  it('keeps folders with an id, defaulting a missing name, count or state', () => {
+    expect(
+      parseLocalFolders({
+        folders: [
+          { id: 'content://t/a', name: 'Music', songs: 312, state: 'ok' },
+          { id: 'content://t/b', state: 'gone' },
+          { id: 'content://t/c', name: 'X', songs: -3, state: 'weird' },
+          { name: 'no id' },
+          null,
+        ],
+      }),
+    ).toEqual([
+      { id: 'content://t/a', name: 'Music', songs: 312, state: 'ok' },
+      { id: 'content://t/b', name: 'Folder', songs: 0, state: 'gone' },
+      { id: 'content://t/c', name: 'X', songs: 0, state: 'ok' },
+    ]);
+    expect(parseLocalFolders(null)).toEqual([]);
+  });
+
+  it('keeps songs with a loc: id and a folder, filling missing tags', () => {
+    expect(
+      parseLocalSongs({
+        tracks: [
+          { id: 'loc:0123456789abcdef', title: 'Night Shift', artist: 'The Low Hum', album: 'Basement Weather', durationMs: 201000, folder: 'f', cover: true },
+          { id: 'loc:fedcba9876543210', title: ' ', folder: 'f' },
+          { id: 'loc:XYZ', title: 'bad id', folder: 'f' },
+          { id: 'loc:0000000000000000', title: 'no folder' },
+        ],
+      }),
+    ).toEqual([
+      { id: 'loc:0123456789abcdef', title: 'Night Shift', artist: 'The Low Hum', album: 'Basement Weather', durationMs: 201000, folder: 'f', cover: true },
+      { id: 'loc:fedcba9876543210', title: 'Untitled', artist: 'Unknown artist', album: '', durationMs: 0, folder: 'f', cover: false },
+    ]);
   });
 });

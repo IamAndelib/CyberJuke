@@ -6,6 +6,7 @@
 import type { FsDocument, FsRunQueryRow, Track, TrackOrigin } from '../data/model';
 import type { NativeState, RepeatMode } from '../player/native';
 import type { MusicItem, MusicPage } from '../data/ytmusic';
+import type { LocalFolder, LocalFolderState, LocalSong } from '../data/local';
 
 export function isObj(x: unknown): x is Record<string, unknown> {
   return typeof x === 'object' && x !== null && !Array.isArray(x);
@@ -228,6 +229,46 @@ export function asTracks(x: unknown): Track[] {
   for (const it of x) {
     const t = asTrack(it);
     if (t) out.push(t);
+  }
+  return out;
+}
+
+// ---- Local music (data/local) ------------------------------------------------------------
+
+const LOCAL_SONG_ID_RE = /^loc:[0-9a-f]{16}$/;
+const FOLDER_STATES: readonly LocalFolderState[] = ['ok', 'scanning', 'gone'];
+
+/** The chosen folders, as JukeLocal reports them; unusable ones dropped. */
+export function parseLocalFolders(x: unknown): LocalFolder[] {
+  const list = isObj(x) && Array.isArray(x.folders) ? x.folders : [];
+  const out: LocalFolder[] = [];
+  for (const f of list) {
+    if (!isObj(f) || !isStr(f.id) || !f.id) continue;
+    out.push({
+      id: f.id,
+      name: isStr(f.name) && f.name ? f.name : 'Folder',
+      songs: Math.max(0, Math.trunc(finite(f.songs) ?? 0)),
+      state: FOLDER_STATES.includes(f.state as LocalFolderState) ? (f.state as LocalFolderState) : 'ok',
+    });
+  }
+  return out;
+}
+
+/** The songs in them; one without a well-formed id or folder is dropped. */
+export function parseLocalSongs(x: unknown): LocalSong[] {
+  const list = isObj(x) && Array.isArray(x.tracks) ? x.tracks : [];
+  const out: LocalSong[] = [];
+  for (const t of list) {
+    if (!isObj(t) || !isStr(t.id) || !LOCAL_SONG_ID_RE.test(t.id) || !isStr(t.folder) || !t.folder) continue;
+    out.push({
+      id: t.id,
+      title: isStr(t.title) && t.title.trim() ? t.title : 'Untitled',
+      artist: isStr(t.artist) && t.artist.trim() ? t.artist : 'Unknown artist',
+      album: isStr(t.album) ? t.album : '',
+      durationMs: Math.max(0, finite(t.durationMs) ?? 0),
+      folder: t.folder,
+      cover: t.cover === true,
+    });
   }
   return out;
 }

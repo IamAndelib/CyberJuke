@@ -24,6 +24,7 @@ Human docs come first, so don't duplicate them here:
   | `JukePlayer` | `src/player/native.ts` (a contract: change both sides together) | `bridge/JukePlayerPlugin.kt` → `playback/PlaybackService.kt` |
   | `JukeMusic` | `src/data/ytmusic.ts` | `bridge/MusicPlugin.kt` → `yt/` |
   | `SecureStore` | `src/data/secureStore.ts` | `bridge/SecureStorePlugin.kt` |
+  | `JukeLocal` | `src/data/local.ts` | `bridge/LocalPlugin.kt` → `local/` |
 
 - `tests/spec/queue-rules.json` is one queue spec shared by `src/player/queue.ts`, `QueueOrder.kt` and their tests. Keep the TS and Kotlin sides in step.
 - Only `yt/YtCompat.kt` (streams) and `yt/YtMusic.kt` (YouTube Music) touch NewPipeExtractor's API. It is pinned in `android/variables.gradle` (`newPipeExtractorVersion`).
