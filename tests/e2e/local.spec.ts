@@ -1,5 +1,5 @@
 import { expect, musicFolder, test, type FakeLocalFolder } from '../fixtures';
-import { openLibrary, openNowPlaying, openSearch, openSettings, seedStorage, setOffline } from '../helpers';
+import { openLibrary, openNowPlaying, openSearch, openSettings, saved, seedStorage, setOffline } from '../helpers';
 
 /**
  * Local music (Settings → Local music, Library → Local) on the fake JukeLocal: the folder
@@ -12,7 +12,8 @@ const ALBUMS: FakeLocalFolder = { id: 'tree:albums', name: 'SD card › Albums',
 /** Local's titles in the default order: by title, the untagged song last. */
 const BY_TITLE = ['Music song A', 'Music song D', 'Music song G', 'Music song J', 'Music song M', 'voice memo 6'];
 
-const localOn = (page: Parameters<typeof seedStorage>[0]) => seedStorage(page, { 'CapacitorStorage.settings': { localMusic: true, version: 3 } });
+const localOn = (page: Parameters<typeof seedStorage>[0], more: Record<string, unknown> = {}) =>
+  seedStorage(page, { 'CapacitorStorage.settings': { localMusic: true, version: 3 }, ...more });
 const titles = (page: Parameters<typeof seedStorage>[0]) => page.getByTestId('local-list').getByTestId('track-title');
 const fake = (page: Parameters<typeof seedStorage>[0]) =>
   page.evaluate(() => (window as unknown as { __localFake: { added: string[]; removed: string[]; disabled: number } }).__localFake);
@@ -151,6 +152,27 @@ test.describe('playing', () => {
     await expect(row).not.toHaveClass(/\boff\b/);
     await row.getByTestId('track-play').click();
     await expect(page.getByTestId('mini-title')).toHaveText('Music song A');
+  });
+
+  test('offline, the line and a refused tap name what still plays, local songs or both, and lead to Library', async ({ page, backend }) => {
+    const liked = { id: 'l1', ytId: 'abcdefghij1', title: 'Track l1', artist: 'A', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '2026-01-01T00:00:00Z', nsfw: false, artworkUrl: '' };
+    await localOn(page, { 'CapacitorStorage.liked': [liked] });
+    await page.goto('/');
+    await expect(page.getByTestId('track-row').first()).toBeVisible();
+    await setOffline(page, backend, true);
+    const line = page.getByTestId('offline-banner-library');
+    await expect(line).toHaveText('[ offline ] no carrier · your local songs still play');
+    await page.getByTestId('screen-home').locator('.row.off').first().getByTestId('track-play').click({ force: true });
+    await expect(page.getByTestId('toast').last()).toContainText('No carrier. Your local songs still play.');
+    await page.getByTestId('toast-action').click();
+    await expect(page.getByTestId('screen-library')).toBeVisible();
+    await expect(page.getByTestId('lib-local')).toBeVisible();
+    // A Jukebox liked song saved on the phone too: both.
+    await saved(page, [liked.ytId]);
+    await expect(line).toHaveText('[ offline ] no carrier · your liked and local songs still play');
+    await openLibrary(page, 'local');
+    await line.click();
+    await expect(page.getByTestId('screen-library')).toBeVisible();
   });
 
   test('turning it off asks first, then Local and its songs in the queue go', async ({ page }) => {

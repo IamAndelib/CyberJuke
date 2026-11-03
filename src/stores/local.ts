@@ -4,7 +4,7 @@
  * the grants; this keeps what the screens show, and turns the person's taps into plugin calls.
  */
 import { computed, signal } from '@preact/signals';
-import type { Track } from '../data/model';
+import { isLocal, type Track } from '../data/model';
 import {
   addLocalFolder,
   disableLocal,
@@ -19,6 +19,8 @@ import {
   type LocalSong,
 } from '../data/local';
 import { logError } from '../core/log';
+import { stillPlays } from '../core/offlineText';
+import { savedLiked } from './savedOffline';
 import { localHere, settings, updateSettings, type LocalSort } from './library';
 import { toast } from './toast';
 
@@ -44,6 +46,8 @@ const shownSongs = computed(() => {
   return songs.value.filter((s) => ok.has(s.folder));
 });
 export const localTracks = computed<Track[]>(() => shownSongs.value.map(songToTrack));
+/** What still plays offline, as the offline line and toast name it: Jukebox liked songs saved on the phone, local songs, both, or null. */
+export const offlinePlays = computed(() => stillPlays(savedLiked.value.some((t) => !isLocal(t)), localTracks.value.length > 0));
 /** Which folder each local song is in, by name, for Now Playing ("On this phone · Music"). */
 const folderNames = computed(() => {
   const names = new Map(folders.value.map((f) => [f.id, f.name]));

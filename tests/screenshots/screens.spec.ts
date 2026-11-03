@@ -301,14 +301,15 @@ for (const theme of ['dark', 'c64'] as const) {
     await page.evaluate(() => (window as unknown as { __cyberjukeCache: { saved(ids: string[]): void } }).__cyberjukeCache.saved(['abcdefghij1', 'abcdefghij3']));
     backend.offline = true;
     await page.context().setOffline(true);
-    await page.getByTestId('offline-banner-liked').click();
+    await page.getByTestId('offline-banner-library').click();
+    await page.getByTestId('lib-liked').click();
     await expect(page.getByTestId('liked-list').getByTestId('track-row')).toHaveCount(4);
     await settle(page);
     await shot(page, `offline-liked-${theme}`);
     // Now Playing covers the bar, so its header says so.
     await page.getByTestId('liked-list').getByTestId('track-play').first().click();
     await openNowPlaying(page);
-    await expect(page.getByTestId('np-offline-liked')).toBeVisible();
+    await expect(page.getByTestId('np-offline-library')).toBeVisible();
     await settle(page);
     await shot(page, `offline-now-playing-${theme}`);
   });
@@ -428,7 +429,7 @@ test.describe('local music', () => {
   });
   for (const theme of THEMES) {
     for (const width of [320, 360]) {
-      test(`Library, Local, its Settings card and Now Playing (${theme}, ${width}px)`, async ({ page }) => {
+      test(`Library, Local, its Settings card, Now Playing and offline (${theme}, ${width}px)`, async ({ page, backend }) => {
         await page.setViewportSize({ width, height: 915 });
         await seedStorage(page, { [SETTINGS_KEY]: { theme, showNsfw: false, quality: 'high', localMusic: true, version: 3 } });
         await page.goto('/');
@@ -451,6 +452,12 @@ test.describe('local music', () => {
         await page.getByTestId('local-card').scrollIntoViewIfNeeded();
         await settle(page);
         await shot(page, `local-settings-${tag}`);
+        backend.offline = true;
+        await page.context().setOffline(true);
+        await page.getByTestId('tab-library').click();
+        await expect(page.getByTestId('offline-banner-library')).toHaveText('[ offline ] no carrier · your local songs still play');
+        await settle(page);
+        await shot(page, `local-offline-${tag}`);
       });
     }
   }

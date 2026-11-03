@@ -23,12 +23,11 @@ const LIKED_CTX = list('Liked');
 const RECENT_CTX = list('Recently played');
 const LOCAL_CTX = list('Local');
 
-/** Library → Liked, from anywhere (the offline line, at the top and in Now Playing, and the offline toast's button). */
-export function openLiked(): void {
+/** Library's list, from anywhere (the offline line, at the top and in Now Playing, and the offline toast's button). */
+export function openLibrary(): void {
   nowPlayingOpen.value = false;
   popToRoot('library');
   selectTab('library');
-  openLibraryPage('liked');
 }
 
 /** M3: clearing history asks first, and can still be undone from the toast. It counts what the tab counts. */

@@ -12,6 +12,7 @@ import { Capacitor } from '@capacitor/core';
 import { computed, effect, untracked } from '@preact/signals';
 import { addRecent, likedIds, recent, settings, showNsfw } from '../stores/library';
 import { block } from '../stores/block';
+import { offlinePlays } from '../stores/local';
 import { catalog } from '../stores/catalog';
 import { toast } from '../stores/toast';
 import { auth } from '../data/auth';
@@ -23,7 +24,7 @@ import { online } from '../core/network';
 import { OFFLINE } from '../core/offlineText';
 import { exposeForTests } from '../core/testHooks';
 import { isLocal, type Track } from '../data/model';
-import { hasSavedLiked, isSaved, savedOffline, savedTracks } from '../stores/savedOffline';
+import { isSaved, savedOffline, savedTracks } from '../stores/savedOffline';
 import { createAutoplay, shuffleGenre, type Autoplay } from './autoplay';
 import { NativePlayer } from './nativePlayer';
 import { offlineGuard, playsOffline, type OfflineRefusal } from './offlineGuard';
@@ -40,28 +41,29 @@ function commandFailed(message: string): void {
   toast(block.blocked.peek() ? 'Playback is paused while YouTube is limiting requests' : message);
 }
 
-/** Opens Library → Liked (the app sets it: the player can't reach the screens). */
-let openLiked: (() => void) | null = null;
+/** Opens Library (the app sets it: the player can't reach the screens). */
+let openLibrary: (() => void) | null = null;
 
-/** Where the offline toast's Liked button (and the offline line, ui/components/OfflineLine) goes. */
-export function setOpenLiked(open: () => void): void {
-  openLiked = open;
+/** Where the offline toast's Library button (and the offline line, ui/components/OfflineLine) goes. */
+export function setOpenLibrary(open: () => void): void {
+  openLibrary = open;
 }
 
-/** Opens Library → Liked (closing Now Playing first): for screens that can't import the Library. */
-export function goToLiked(): void {
-  openLiked?.();
+/** Opens Library's list (closing Now Playing first): for screens that can't import the Library. */
+export function goToLibrary(): void {
+  openLibrary?.();
 }
 
 /**
- * Says why playing was refused offline. With liked songs saved: a liked song not saved yet
- * says so; anything else that the saved ones still play (its button opens Liked). With none
- * saved yet, that it needs a connection.
+ * Says why playing was refused offline. With songs that still play (liked songs saved, local
+ * songs): a liked song not saved yet says so; anything else names what still plays (its button
+ * opens Library). With none, that it needs a connection.
  */
 function refuseOffline(why: OfflineRefusal): void {
-  if (!hasSavedLiked.peek()) toast(OFFLINE.tap);
+  const plays = offlinePlays.peek();
+  if (!plays) toast(OFFLINE.tap);
   else if (why === 'unsaved') toast(OFFLINE.notSaved);
-  else toast(OFFLINE.tapLiked, undefined, openLiked ? { label: OFFLINE.likedAction, run: openLiked } : undefined);
+  else toast(OFFLINE.tapPlays(plays), undefined, openLibrary ? { label: OFFLINE.libraryAction, run: openLibrary } : undefined);
 }
 
 /**
