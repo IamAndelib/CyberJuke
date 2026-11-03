@@ -128,7 +128,13 @@ h3 {
   color: var(--color-bg);
   text-shadow: none;
 }
-:is(.chip, .segmented button, .seg-grid button, .np-flip, .field-reveal):is(:active, [data-pressed]):not(.on, :disabled) {
+/* A held choice is tinted (Material's state layer), so it never looks like the chosen one. */
+:is(.chip, .segmented button, .seg-grid button):is(:active, [data-pressed]):not(.on, :disabled) {
+  background: var(--press-choice);
+  border-color: var(--color-fg);
+  color: var(--color-fg);
+}
+:is(.np-flip, .field-reveal):is(:active, [data-pressed]):not(:disabled) {
   background: var(--color-fg);
   border-color: var(--color-fg);
   color: var(--color-bg);

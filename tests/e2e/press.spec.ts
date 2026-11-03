@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { openNowPlaying, openSearch, start } from '../helpers';
+import { openNowPlaying, openSearch, openSettings, start } from '../helpers';
 
 // U3: press feedback the way Android's View shows it (ui/press.ts).
 
@@ -447,4 +447,27 @@ test('a quick tap right after another lets the first one go back up', async ({ p
     return [a, b].filter((el) => el.hasAttribute('data-pressed')).length;
   });
   expect(still).toBe(0);
+});
+
+/** The background of `held` while it is pressed, of the chosen option beside it, and of `held` at rest. */
+async function heldVsChosen(held: Locator, chosen: Locator) {
+  const bg = (l: Locator) => l.evaluate((el) => getComputedStyle(el).backgroundColor);
+  const rest = await bg(held);
+  await held.evaluate((el) => el.setAttribute('data-pressed', ''));
+  const pressed = await bg(held);
+  await held.evaluate((el) => el.removeAttribute('data-pressed'));
+  return { pressed, chosen: await bg(chosen), rest };
+}
+
+test('a held choice is tinted, never filled like the chosen one: chips and the Settings switches', async ({ page }) => {
+  await start(page);
+  const chips = page.locator('.chips').first();
+  const chip = await heldVsChosen(chips.locator('.chip:not(.on)').first(), chips.locator('.chip.on'));
+  expect(chip.pressed).not.toBe(chip.chosen);
+  expect(chip.pressed).not.toBe(chip.rest);
+  await openSettings(page);
+  const quality = page.getByTestId('quality-low').locator('xpath=..');
+  const seg = await heldVsChosen(quality.locator('button:not(.on)').first(), quality.locator('button.on'));
+  expect(seg.pressed).not.toBe(seg.chosen);
+  expect(seg.pressed).not.toBe(seg.rest);
 });
