@@ -23,7 +23,6 @@ import { stillPlays } from '../core/offlineText';
 import { savedLiked } from './savedOffline';
 import { localHere, settings, updateSettings } from './library';
 import { UNKNOWN_ARTIST, byName, groupLocal } from '../data/localGroups';
-import { artistKey, splitArtists } from '../data/artists';
 import { toast } from './toast';
 
 const folders = signal<LocalFolder[]>([]);
@@ -67,16 +66,6 @@ export function byTitle(tracks: readonly Track[]): Track[] {
   const untagged = (t: Track) => t.artist === UNKNOWN_ARTIST && !t.album;
   return [...tracks].sort((a, b) => Number(untagged(a)) - Number(untagged(b)) || byName(a.title, b.title));
 }
-
-/** The local songs crediting [name], by title (the artist page's "On this phone"); credits split as the Jukebox's are. */
-export function localTracksBy(name: string): Track[] {
-  const key = artistKey(name);
-  if (!key) return [];
-  return byTitle(localTracks.value.filter((t) => splitArtists(t.artist).some((a) => artistKey(a) === key)));
-}
-
-/** The local artist whose name is [name] (to open their page from the artist page), if any. */
-export const localArtistKeyOf = (name: string): string | null => localGroups.value.artists.find((a) => artistKey(a.name) === artistKey(name))?.key ?? null;
 
 /** Local's albums and artists (data/localGroups). */
 export const localGroups = computed(() => groupLocal(shownSongs.value));
