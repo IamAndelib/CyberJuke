@@ -4,7 +4,8 @@
  * A credit is split into separate artists only on `,` `;` `/` and feat./ft./featuring.
  * It is never split on "and" or "&": "The Jesus and Mary Chain" and "Joey Valence & Brae"
  * are one artist each. A `/` only separates when it has a space on at least one side,
- * so "AC/DC" stays whole while "Artist A / Artist B" splits.
+ * so "AC/DC" stays whole while "Artist A / Artist B" splits. A comma before Jr., Sr., II, III,
+ * IV, Inc. or Ltd. belongs to the name: "Grover Washington, Jr." is one artist.
  * Names are matched by `normalize` (accents, case and punctuation ignored).
  */
 import { UNKNOWN_ARTIST, type Track } from './model';
@@ -12,7 +13,9 @@ import { normalize } from './text';
 
 /** "(feat. X)" / "[ft. X]" become ", X" so the brackets don't stick to the names. */
 const BRACKETED_FEAT = /[([]\s*(?:feat\.?|ft\.?|featuring)\s+([^)\]]*)[)\]]/gi;
-const SEPARATOR = /\s*(?:[,;]|\s\/|\/\s|\s(?:feat\.?|ft\.?|featuring)\s)\s*/i;
+/** A suffix that ends a name: followed by the end of the credit or another separator. */
+const SUFFIX = String.raw`\s*(?:jr|sr|ii|iii|iv|inc|ltd)\.?(?=\s*(?:$|[,;)\]]|\/|\s(?:feat\.?|ft\.?|featuring)\s))`;
+const SEPARATOR = new RegExp(String.raw`\s*(?:;|,(?!${SUFFIX})|\s\/|\/\s|\s(?:feat\.?|ft\.?|featuring)\s)\s*`, 'i');
 
 /** The separate artists in one credit, in order, without duplicates. */
 export function splitArtists(credit: string): string[] {

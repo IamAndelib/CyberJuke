@@ -35,6 +35,22 @@ describe('splitArtists', () => {
     expect(splitArtists('Yungstar feat. Trey D & Solo')).toEqual(['Yungstar', 'Trey D & Solo']);
   });
 
+  it('keeps a Jr./Sr./II/III/Inc. after a comma with the name', () => {
+    expect(splitArtists('Grover Washington, Jr.')).toEqual(['Grover Washington, Jr.']);
+    expect(splitArtists('Sammy Davis, Jr.')).toEqual(['Sammy Davis, Jr.']);
+    expect(splitArtists('Hank Williams, Jr')).toEqual(['Hank Williams, Jr']);
+    expect(splitArtists('Ken Griffey, Sr.')).toEqual(['Ken Griffey, Sr.']);
+    expect(splitArtists('Loudon Wainwright, III')).toEqual(['Loudon Wainwright, III']);
+    expect(splitArtists('Murder, Inc.')).toEqual(['Murder, Inc.']);
+    expect(splitArtists('Grover Washington, Jr. feat. Bill Withers')).toEqual(['Grover Washington, Jr.', 'Bill Withers']);
+    expect(splitArtists('Bill Withers, Grover Washington, Jr.')).toEqual(['Bill Withers', 'Grover Washington, Jr.']);
+    expect(splitArtists('Harry Connick, Jr.; Wynton Marsalis')).toEqual(['Harry Connick, Jr.', 'Wynton Marsalis']);
+    expect(splitArtists('Grover Washington, Jr. (feat. Bill Withers)')).toEqual(['Grover Washington, Jr.', 'Bill Withers']);
+    // Only a suffix on its own: a name that merely starts with one still splits off.
+    expect(splitArtists('Marvin Gaye, Jr. Walker & The All Stars')).toEqual(['Marvin Gaye', 'Jr. Walker & The All Stars']);
+    expect(splitArtists('Ray Parker Jr., Jrue')).toEqual(['Ray Parker Jr.', 'Jrue']);
+  });
+
   it('keeps a slash inside a name and handles bracketed features', () => {
     expect(splitArtists('AC/DC')).toEqual(['AC/DC']);
     expect(splitArtists('Barren Gates (feat. Taylor Ravenna)')).toEqual(['Barren Gates', 'Taylor Ravenna']);
