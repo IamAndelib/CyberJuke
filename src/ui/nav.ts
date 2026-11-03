@@ -51,7 +51,10 @@ export type Page =
   /** Library's lists, each its own page (Library's root is a list of them). */
   | { kind: 'liked' }
   | { kind: 'recent' }
-  | { kind: 'local' };
+  | { kind: 'local' }
+  /** A local album or artist (data/localGroups keys). */
+  | { kind: 'localAlbum'; key: string }
+  | { kind: 'localArtist'; key: string };
 
 export interface StackEntry {
   /** Unique for the app session (the page's key). */
@@ -185,6 +188,9 @@ function samePage(a: Page, b: Page): boolean {
     case 'recent':
     case 'local':
       return true;
+    case 'localAlbum':
+    case 'localArtist':
+      return a.key === (b as typeof a).key;
   }
 }
 
@@ -247,6 +253,11 @@ export function openGenrePage(name: string): void {
 /** One of Library's lists, as its own page over Library's list (Library's rows). */
 export function openLibraryPage(kind: 'liked' | 'recent' | 'local'): void {
   pushPage({ kind });
+}
+
+/** A local album or artist, over Library → Local. */
+export function openLocalPage(kind: 'localAlbum' | 'localArtist', key: string): void {
+  pushPage({ kind, key });
 }
 
 /** Album or playlist page on the current tab. */

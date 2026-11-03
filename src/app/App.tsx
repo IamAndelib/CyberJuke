@@ -34,7 +34,7 @@ import { ArtistGrid } from '../features/artists/Artists';
 import { GenreDetail, GenreGrid } from '../features/genres/Genres';
 import { Home } from '../features/home/Home';
 import { Radio } from '../features/radio/Radio';
-import { Library, LikedPage, LocalPage, RecentPage } from '../features/library/Library';
+import { Library, LikedPage, LocalAlbumPage, LocalArtistPage, LocalPage, RecentPage } from '../features/library/Library';
 import { ReleasesPage } from '../features/artists/Releases';
 import { Search } from '../features/search/Search';
 import { Settings } from '../features/settings/Settings';
@@ -136,6 +136,10 @@ function PageView({ page }: { page: Page }) {
       return <RecentPage />;
     case 'local':
       return <LocalPage />;
+    case 'localAlbum':
+      return <LocalAlbumPage albumKey={page.key} />;
+    case 'localArtist':
+      return <LocalArtistPage artistKey={page.key} />;
   }
 }
 

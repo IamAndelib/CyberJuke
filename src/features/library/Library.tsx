@@ -1,8 +1,10 @@
 import { computed, type ReadonlySignal } from '@preact/signals';
 import { useCallback, useMemo, useRef } from 'preact/hooks';
 import type { Track } from '../../data/model';
-import { LOCAL_SORTS, historyShown, likedShown, recentShown, settings, updateSettings, type LocalSort } from '../../stores/library';
-import { addFolder, localFolderList, localLoading, localOn, localScan, localTracks, lookAgain, scanningName, sortLocal, turnOn, unreachableFolders } from '../../stores/local';
+import { LOCAL_VIEWS, historyShown, likedShown, recentShown, settings, updateSettings, type LocalView } from '../../stores/library';
+import type { LocalArtist } from '../../data/localGroups';
+import { Cover } from '../../ui/components/Music';
+import { addFolder, localFolderList, localLoading, localOn, localScan, localGroups, localTracks, lookAgain, scanningName, byTitle, tracksOf, turnOn, unreachableFolders } from '../../stores/local';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { arrowChoice } from '../../ui/arrowChoice';
 import { dayKey, groupByDay } from '../../stores/history';
@@ -14,7 +16,7 @@ import { EmptyState, PlayShuffle, Tracks } from '../../ui/components/TrackList';
 import { playFrom } from '../../ui/playAll';
 import { TrackRow } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
-import { askConfirm, nowPlayingOpen, openLibraryPage, openSettings, popToRoot, selectTab, useSearchContext } from '../../ui/nav';
+import { askConfirm, nowPlayingOpen, openLibraryPage, openLocalPage, openSettings, popToRoot, selectTab, useSearchContext } from '../../ui/nav';
 import { list } from '../../ui/playAll';
 import { afterPress } from '../../ui/press';
 import { plural } from '../../core/text';
@@ -193,20 +195,71 @@ function HistoryDays() {
   );
 }
 
-const SORT_LABELS: Record<LocalSort, string> = { title: 'Title', artist: 'Artist', album: 'Album' };
+const VIEW_LABELS: Record<LocalView, string> = { songs: 'Songs', albums: 'Albums', artists: 'Artists' };
 
-/** Local's order: Title, Artist or Album, remembered. */
-function SortSwitch() {
-  const cur = settings.value.localSort;
-  const choose = (v: LocalSort) => updateSettings({ localSort: v });
+/** Local as its songs, albums or artists, remembered. */
+function ViewSwitch() {
+  const cur = settings.value.localView;
+  const choose = (v: LocalView) => updateSettings({ localView: v });
   return (
-    <div class="segmented local-sort" role="radiogroup" aria-label="Sort by" onKeyDown={arrowChoice(LOCAL_SORTS, cur, choose)} data-testid="local-sort">
-      {LOCAL_SORTS.map((v) => (
-        <button key={v} role="radio" aria-checked={cur === v} tabIndex={cur === v ? 0 : -1} class={cur === v ? 'on' : ''} onClick={() => choose(v)} data-value={v} data-testid={`local-sort-${v}`}>
-          {SORT_LABELS[v]}
+    <div class="segmented local-sort" role="radiogroup" aria-label="Show" onKeyDown={arrowChoice(LOCAL_VIEWS, cur, choose)} data-testid="local-view">
+      {LOCAL_VIEWS.map((v) => (
+        <button key={v} role="radio" aria-checked={cur === v} tabIndex={cur === v ? 0 : -1} class={cur === v ? 'on' : ''} onClick={() => choose(v)} data-value={v} data-testid={`local-view-${v}`}>
+          {VIEW_LABELS[v]}
         </button>
       ))}
     </div>
+  );
+}
+
+/** Local's albums: a grid of covers, A–Z; a tap opens the album. */
+function AlbumGrid() {
+  return (
+    <ul class="release-grid" data-testid="local-albums">
+      {localGroups.value.albums.map((a) => (
+        <li key={a.key}>
+          <button
+            class="shelf-btn release-btn"
+            onClick={(e) => afterPress(e.currentTarget, () => openLocalPage('localAlbum', a.key))}
+            aria-label={`Open album ${a.title} by ${a.artist}`}
+            data-testid="local-album"
+          >
+            <Cover url={a.cover} size="md" />
+            <span class="shelf-title" data-testid="local-album-title">
+              {a.title}
+            </span>
+            <span class="shelf-year">{a.year ? `${a.artist} · ${a.year}` : a.artist}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** "2 albums · 7 songs", or only the songs when there's no album. */
+const artistCounts = (a: LocalArtist) => (a.albums.length ? `${plural(a.albums.length, 'album')} · ${plural(a.songs.length, 'song')}` : plural(a.songs.length, 'song'));
+
+/** Local's artists, A–Z (Unknown artist last); a tap opens the artist. */
+function ArtistList() {
+  return (
+    <ul class="list lib-list" data-testid="local-artists">
+      {localGroups.value.artists.map((a) => (
+        <li key={a.key} class="row lib-row">
+          <button class="row-main" onClick={(e) => afterPress(e.currentTarget, () => openLocalPage('localArtist', a.key))} data-testid="local-artist">
+            <div class="row-art">
+              <Cover url={a.albums.find((x) => x.cover)?.cover} size="sm" round />
+            </div>
+            <div class="row-text">
+              <div class="row-title" data-testid="local-artist-name">
+                {a.name}
+              </div>
+              <div class="row-artist">{artistCounts(a)}</div>
+            </div>
+            <Icon name="chevron" size={16} class="lib-chev" />
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -228,12 +281,13 @@ function Unreachable() {
   );
 }
 
-const sortedLocal = computed(() => sortLocal(localTracks.value, settings.value.localSort));
+const sortedLocal = computed(() => byTitle(localTracks.value));
 
-/** Library → Local: the songs in the folders chosen in Settings, sorted as chosen; pull down to look again. */
+/** Library → Local: the songs in the folders chosen in Settings, as songs, albums or artists; + adds a folder, pull down looks again. */
 export function LocalPage() {
   const tracks = sortedLocal.value;
   const scan = localScan.value;
+  const view = settings.value.localView;
   useSearchContext({ label: 'Local', tracks: () => sortedLocal.value });
   const looking = scan && <p class="local-status" role="status" data-testid="local-status">{`Looking in ${scanningName.value}… ${plural(scan.found, 'song')} so far`}</p>;
   let body;
@@ -242,10 +296,16 @@ export function LocalPage() {
       <>
         {looking}
         <PlayShuffle tracks={tracks} ctx={LOCAL_CTX} testid="local" />
-        <SortSwitch />
-        <div data-testid="local-list">
-          <Tracks tracks={tracks} ctx={LOCAL_CTX} inLocal chunkKey="local" />
-        </div>
+        <ViewSwitch />
+        {view === 'albums' ? (
+          <AlbumGrid />
+        ) : view === 'artists' ? (
+          <ArtistList />
+        ) : (
+          <div data-testid="local-list">
+            <Tracks tracks={tracks} ctx={LOCAL_CTX} inLocal chunkKey="local" />
+          </div>
+        )}
       </>
     );
   } else if (scan || localLoading.value) {
@@ -282,9 +342,111 @@ export function LocalPage() {
     );
   }
   return (
-    <Screen testid="screen-local" title="Local" subtitle="On this phone" left={<BackButton testid="local-back" />} scrollKey="library:local" onRefresh={lookAgain} refreshOffline>
+    <Screen
+      testid="screen-local"
+      title="Local"
+      subtitle="On this phone"
+      left={<BackButton testid="local-back" />}
+      right={
+        <button class="icon-btn" onClick={(e) => afterPress(e.currentTarget, () => void turnOn())} aria-label="Add folder" data-testid="local-add-top">
+          <Icon name="plus" />
+        </button>
+      }
+      scrollKey={`library:local:${view}`}
+      onRefresh={lookAgain}
+      refreshOffline
+    >
       <Unreachable />
       {body}
+    </Screen>
+  );
+}
+
+/** What a local album or artist page shows once its folder has gone (removed, out of reach, local music off). */
+function GonePage({ testid }: { testid: string }) {
+  return (
+    <Screen testid={testid} title="Local" subtitle="On this phone" left={<BackButton testid="local-back" />}>
+      <EmptyState title="Not on the phone any more">Its songs aren’t in your chosen folders now.</EmptyState>
+    </Screen>
+  );
+}
+
+/** A local album: its cover, title, artist (opens the artist), year and songs in track order. */
+export function LocalAlbumPage({ albumKey }: { albumKey: string }) {
+  const a = localGroups.value.albums.find((x) => x.key === albumKey);
+  const tracks = a ? tracksOf(a.songs) : [];
+  useSearchContext({ label: a?.title ?? 'Local', tracks: () => tracks });
+  if (!a) return <GonePage testid="screen-local-album" />;
+  const ctx = list(a.title);
+  return (
+    <Screen testid="screen-local-album" class="album-screen" title={a.title} subtitle="Album · on this phone" left={<BackButton testid="local-album-back" />} scrollKey={`local-album:${a.key}`}>
+      <div class="album-head">
+        <div class="dos album-cover">
+          <div class="dos-frame">
+            <Cover url={a.cover} size="lg" />
+          </div>
+          <div class="dos-shadow" aria-hidden="true" />
+        </div>
+        <div class="album-info">
+          <h2 class="album-title" data-testid="album-title">
+            {a.title}
+          </h2>
+          <button class="np-link album-artist" onClick={(e) => afterPress(e.currentTarget, () => openLocalPage('localArtist', a.artistKey))} data-testid="album-artist">
+            {a.artist}
+          </button>
+          <div class="dim small">{a.year ? `${a.year} · ${plural(tracks.length, 'song')}` : plural(tracks.length, 'song')}</div>
+        </div>
+      </div>
+      <PlayShuffle tracks={tracks} ctx={ctx} testid="album" />
+      <div data-testid="local-album-list">
+        <Tracks tracks={tracks} ctx={ctx} inLocal />
+      </div>
+      <div class="list-foot end">— end of tape —</div>
+    </Screen>
+  );
+}
+
+/** A local artist: Play and Shuffle, their albums newest first, then every song of theirs. */
+export function LocalArtistPage({ artistKey }: { artistKey: string }) {
+  const a = localGroups.value.artists.find((x) => x.key === artistKey);
+  const tracks = a ? tracksOf(a.songs) : [];
+  useSearchContext({ label: a?.name ?? 'Local', tracks: () => tracks });
+  if (!a) return <GonePage testid="screen-local-artist" />;
+  const ctx = list(a.name);
+  return (
+    <Screen testid="screen-local-artist" title={a.name} subtitle="Artist · on this phone" left={<BackButton testid="local-artist-back" />} scrollKey={`local-artist:${a.key}`}>
+      <PlayShuffle tracks={tracks} ctx={ctx} testid="artist" />
+      {a.albums.length > 0 && (
+        <section data-kind="album" data-testid="local-artist-albums">
+          <div class="section-head">
+            <h2 class="section-title">Albums</h2>
+          </div>
+          <ul class="shelf">
+            {a.albums.map((al) => (
+              <li key={al.key} class="shelf-item">
+                <button
+                  class="shelf-btn release-btn"
+                  onClick={(e) => afterPress(e.currentTarget, () => openLocalPage('localAlbum', al.key))}
+                  aria-label={`Open album ${al.title}${al.year ? `, ${al.year}` : ''}`}
+                  data-testid="local-album"
+                >
+                  <Cover url={al.cover} size="md" />
+                  <span class="shelf-title" data-testid="local-album-title">
+                    {al.title}
+                  </span>
+                  {al.year > 0 && <span class="shelf-year">{al.year}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <div class="section-head">
+        <h2 class="section-title">Songs</h2>
+      </div>
+      <div data-testid="local-artist-songs">
+        <Tracks tracks={tracks} ctx={ctx} inLocal />
+      </div>
     </Screen>
   );
 }

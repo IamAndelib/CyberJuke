@@ -40,14 +40,32 @@ test.describe('turning it on', () => {
     // In Local itself no "On phone" tag; the album is on the meta line.
     await expect(page.getByTestId('local-list').getByTestId('local-tag')).toHaveCount(0);
     await expect(page.getByTestId('local-list').getByTestId('track-row').first()).toContainText('Attic');
-    await page.getByTestId('local-sort-artist').click();
-    await expect(titles(page)).toHaveText(['Music song A', 'Music song G', 'Music song M', 'Music song J', 'Music song D', 'voice memo 6']);
-    await page.getByTestId('local-sort-album').click();
-    await expect(titles(page)).toHaveText(['Music song A', 'Music song J', 'Music song D', 'Music song G', 'Music song M', 'voice memo 6']);
+    // Albums: a grid of covers, A–Z; an album plays in track order; its artist opens the artist.
+    await page.getByTestId('local-view-albums').click();
+    await expect(page.getByTestId('local-albums').getByTestId('local-album')).toHaveText(['AtticAna Tape · 2001', 'BasementZed Loop · 2009']);
+    await page.getByTestId('local-album').first().click();
+    await expect(page.getByTestId('screen-local-album')).toBeVisible();
+    // A tap right where the card was, this soon, is a double tap's second half (nav.ts OPEN_GUARD_MS).
+    await page.waitForTimeout(350);
+    const albumTitles = page.getByTestId('local-album-list').getByTestId('track-title');
+    await expect(albumTitles).toHaveText(['Music song M', 'Music song G', 'Music song A']);
+    await page.getByTestId('album-play').click();
+    await expect(page.getByTestId('mini-title')).toHaveText('Music song M');
+    await page.getByTestId('album-artist').click();
+    await expect(page.getByTestId('screen-local-artist')).toContainText('Ana Tape');
+    await expect(page.getByTestId('local-artist-albums').getByTestId('local-album-title')).toHaveText(['Attic']);
+    await expect(page.getByTestId('local-artist-songs').getByTestId('track-title')).toHaveText(['Music song A', 'Music song G', 'Music song M']);
+    await page.getByTestId('local-artist-back').click();
+    await page.getByTestId('local-album-back').click();
+    // Artists: A–Z with what they have, Unknown artist last; the choice is remembered.
+    await page.getByTestId('local-view-artists').click();
+    await expect(page.getByTestId('local-artist')).toHaveText([/^Ana Tape1 album · 3 songs$/, /^Zed Loop1 album · 2 songs$/, /^Unknown artist1 song$/]);
     await page.reload();
     await openLibrary(page, 'local');
-    await expect(page.getByTestId('local-sort-album')).toHaveAttribute('aria-checked', 'true');
-    await expect(titles(page)).toHaveText(['Music song A', 'Music song J', 'Music song D', 'Music song G', 'Music song M', 'voice memo 6']);
+    await expect(page.getByTestId('local-view-artists')).toHaveAttribute('aria-checked', 'true');
+    await page.getByTestId('local-artist').nth(1).click();
+    await expect(page.getByTestId('screen-local-artist')).toContainText('Zed Loop');
+    await expect(page.getByTestId('local-artist-songs').getByTestId('track-title')).toHaveText(['Music song D', 'Music song J']);
   });
 });
 
@@ -69,6 +87,14 @@ test.describe('with no folder yet', () => {
 
 test.describe('folders', () => {
   test.use({ localOptions: { folders: [MUSIC], picks: [{ inside: 'Music' }] } });
+
+  test('Local’s + opens the picker too', async ({ page }) => {
+    await localOn(page);
+    await page.goto('/');
+    await openLibrary(page, 'local');
+    await page.getByTestId('local-add-top').click();
+    await expect(page.getByTestId('toast').last()).toHaveText('Already in Music');
+  });
 
   test('a folder inside a chosen one isn’t added; ✕ hides one at once with Undo, and its access goes only once the toast does', async ({ page }) => {
     await localOn(page);
