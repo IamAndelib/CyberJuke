@@ -17,7 +17,8 @@
     "sync": "npm run build && cap sync android",
     "screenshots": "playwright test --project=screenshots",
     "media": "bash scripts/make-media.sh",
-    "stations": "node scripts/update-stations.mjs"
+    "stations": "node scripts/update-stations.mjs",
+    "artist-names": "node scripts/update-artist-names.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

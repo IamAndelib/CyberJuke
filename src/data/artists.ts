@@ -4,15 +4,39 @@
  * A credit is split into separate artists only on `,` `;` `/` and feat./ft./featuring.
  * It is never split on "and" or "&": "The Jesus and Mary Chain" and "Joey Valence & Brae"
  * are one artist each. A `/` only separates when it has a space on at least one side,
- * so "AC/DC" stays whole while "Artist A / Artist B" splits.
+ * so "AC/DC" stays whole while "Artist A / Artist B" splits. A comma before Jr., Sr., II, III,
+ * IV, Inc. or Ltd. belongs to the name: "Grover Washington, Jr." is one artist. So do the
+ * well-known names that hold a separator (artistNames.json): "Earth, Wind & Fire" is one artist.
  * Names are matched by `normalize` (accents, case and punctuation ignored).
  */
 import { UNKNOWN_ARTIST, type Track } from './model';
 import { normalize } from './text';
+import artistNames from './artistNames.json' with { type: 'json' };
 
 /** "(feat. X)" / "[ft. X]" become ", X" so the brackets don't stick to the names. */
 const BRACKETED_FEAT = /[([]\s*(?:feat\.?|ft\.?|featuring)\s+([^)\]]*)[)\]]/gi;
-const SEPARATOR = /\s*(?:[,;]|\s\/|\/\s|\s(?:feat\.?|ft\.?|featuring)\s)\s*/i;
+/** A suffix that ends a name: followed by the end of the credit or another separator. */
+const SUFFIX = String.raw`\s*(?:jr|sr|ii|iii|iv|inc|ltd)\.?(?=\s*(?:$|[,;)\]]|\/|\s(?:feat\.?|ft\.?|featuring)\s))`;
+/** Captured, so a known name's parts can be joined back with what stood between them. */
+const SEPARATOR = new RegExp(String.raw`(\s*(?:;|,(?!${SUFFIX})|\s\/|\/\s|\s(?:feat\.?|ft\.?|featuring)\s)\s*)`, 'i');
+/** A known name's key: "&" reads as "and", so "Earth, Wind and Fire" is known too. */
+const knownKey = (s: string) => normalize(s.replace(/&/g, ' and '));
+const KNOWN_NAMES = artistNames.names;
+const KNOWN = new Set(KNOWN_NAMES.map(knownKey));
+/** Most pieces (names and separators) a known name splits into. */
+const KNOWN_SPAN = Math.max(1, ...KNOWN_NAMES.map((n) => n.split(SEPARATOR).length));
+
+/** The pieces of a split credit as names: the longest run of pieces that is a known name, else one. */
+function rejoinKnown(pieces: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < pieces.length; ) {
+    let j = Math.min(pieces.length, i + KNOWN_SPAN);
+    while (j > i + 1 && !KNOWN.has(knownKey(pieces.slice(i, j).join('')))) j -= 2;
+    out.push(pieces.slice(i, j).join(''));
+    i = j + 1;
+  }
+  return out;
+}
 
 /** The separate artists in one credit, in order, without duplicates. */
 export function splitArtists(credit: string): string[] {
@@ -20,7 +44,7 @@ export function splitArtists(credit: string): string[] {
   if (!s || s === UNKNOWN_ARTIST) return [];
   const out: string[] = [];
   const seen = new Set<string>();
-  for (const raw of s.split(SEPARATOR)) {
+  for (const raw of rejoinKnown(s.split(SEPARATOR))) {
     const name = tidy(raw);
     const k = artistKey(name);
     if (!k || seen.has(k)) continue;
