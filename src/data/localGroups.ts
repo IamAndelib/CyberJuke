@@ -39,6 +39,11 @@ export const UNKNOWN_ALBUM = 'Unknown album';
 /** The Unknown album's key: no real album's (theirs hold a line break between name and artist). */
 export const UNKNOWN_ALBUM_KEY = '\n';
 
+/** Those with the most songs first (a tie keeps its order); the Unknown one stays last. */
+export function byMostSongs<T extends { songs: readonly unknown[] }>(xs: readonly T[], unknown: (x: T) => boolean): T[] {
+  return [...xs].sort((a, b) => Number(unknown(a)) - Number(unknown(b)) || b.songs.length - a.songs.length);
+}
+
 /** Names as they match: case, accents' composed forms and spacing aside. */
 export const looseKey = (s: string): string => s.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
 

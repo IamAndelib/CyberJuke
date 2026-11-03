@@ -19,6 +19,8 @@ export interface FakeLocalSong {
   disc?: number;
   year?: number;
   cover?: boolean;
+  /** The file's last change, in ms (default: by hex, so a later song is a newer file). */
+  modified?: number;
 }
 
 export interface FakeLocalFolder {
@@ -83,7 +85,7 @@ export async function stubLocal(page: Page, o: LocalStubOptions): Promise<void> 
   );
   await page.addInitScript(
     ({ init }) => {
-      type Song = { hex: string; title: string; artist?: string; album?: string; albumArtist?: string; track?: number; disc?: number; year?: number; cover?: boolean };
+      type Song = { hex: string; title: string; artist?: string; album?: string; albumArtist?: string; track?: number; disc?: number; year?: number; cover?: boolean; modified?: number };
       type Folder = { id: string; name: string; songs: Song[]; gone?: boolean };
       type Pick = Folder | { inside: string } | 'cancel';
       type State = { folders: Folder[]; picks: Pick[]; added: string[]; removed: string[]; disabled: number };
@@ -154,6 +156,7 @@ export async function stubLocal(page: Page, o: LocalStubOptions): Promise<void> 
               disc: s.disc ?? 0,
               year: s.year ?? 0,
               durationMs: 4000,
+              modified: s.modified ?? parseInt(s.hex, 16) * 1000,
               folder: f.id,
               cover: !!s.cover,
             })),

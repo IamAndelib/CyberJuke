@@ -136,3 +136,12 @@
   min-height: 44px;
   padding: 0 8px;
 }
+
+/* Local's count, and its order on the right (Newest | A–Z, Most songs | A–Z). */
+.local-order {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px var(--gutter) 0;
+}

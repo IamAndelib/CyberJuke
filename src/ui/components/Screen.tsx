@@ -89,8 +89,8 @@ export function Screen({
   class?: string;
   role?: 'dialog' | 'region';
   label?: string;
-  /** A–Z sections (`.az-head`): show the section letter while scrolling. */
-  azScroller?: boolean;
+  /** A–Z sections (`.az-head`): show the section letter while dragging the thumb ('beside': small, beside it). */
+  azScroller?: boolean | 'beside';
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);

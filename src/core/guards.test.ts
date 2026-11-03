@@ -236,15 +236,15 @@ describe('local music answers', () => {
     expect(
       parseLocalSongs({
         tracks: [
-          { id: 'loc:0123456789abcdef', title: 'Night Shift', artist: 'The Low Hum', album: 'Basement Weather', albumArtist: 'Various', track: 4, disc: 2, year: 1990, durationMs: 201000, folder: 'f', cover: true },
-          { id: 'loc:fedcba9876543210', title: ' ', folder: 'f', track: -1, disc: 2.5, year: '1990' },
+          { id: 'loc:0123456789abcdef', title: 'Night Shift', artist: 'The Low Hum', album: 'Basement Weather', albumArtist: 'Various', track: 4, disc: 2, year: 1990, durationMs: 201000, modified: 1700000000000, folder: 'f', cover: true },
+          { id: 'loc:fedcba9876543210', title: ' ', folder: 'f', track: -1, disc: 2.5, year: '1990', modified: -1 },
           { id: 'loc:XYZ', title: 'bad id', folder: 'f' },
           { id: 'loc:0000000000000000', title: 'no folder' },
         ],
       }),
     ).toEqual([
-      { id: 'loc:0123456789abcdef', title: 'Night Shift', artist: 'The Low Hum', album: 'Basement Weather', albumArtist: 'Various', track: 4, disc: 2, year: 1990, durationMs: 201000, folder: 'f', cover: true },
-      { id: 'loc:fedcba9876543210', title: 'Untitled', artist: 'Unknown artist', album: '', albumArtist: '', track: 0, disc: 0, year: 0, durationMs: 0, folder: 'f', cover: false },
+      { id: 'loc:0123456789abcdef', title: 'Night Shift', artist: 'The Low Hum', album: 'Basement Weather', albumArtist: 'Various', track: 4, disc: 2, year: 1990, durationMs: 201000, modified: 1700000000000, folder: 'f', cover: true },
+      { id: 'loc:fedcba9876543210', title: 'Untitled', artist: 'Unknown artist', album: '', albumArtist: '', track: 0, disc: 0, year: 0, durationMs: 0, modified: 0, folder: 'f', cover: false },
     ]);
   });
 });

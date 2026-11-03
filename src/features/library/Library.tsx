@@ -1,12 +1,15 @@
-import { computed, type ReadonlySignal } from '@preact/signals';
+import { computed, type ReadonlySignal, type Signal } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
-import { libraryLayout } from '../../stores/prefs';
+import { libraryLayout, localAlbumsOrder, localArtistsOrder, localSongsOrder } from '../../stores/prefs';
 import { useCallback, useMemo, useRef } from 'preact/hooks';
 import type { Track } from '../../data/model';
 import { LOCAL_VIEWS, historyShown, likedShown, recentShown, settings, updateSettings, type LocalView } from '../../stores/library';
-import type { LocalArtist } from '../../data/localGroups';
+import { UNKNOWN_ALBUM_KEY, UNKNOWN_ARTIST, byMostSongs, type LocalAlbum, type LocalArtist } from '../../data/localGroups';
+import { groupAZ } from '../../ui/azSections';
+import { AZHead } from '../../ui/components/GridSort';
+import { Rail } from '../../ui/components/Rail';
 import { Cover } from '../../ui/components/Music';
-import { addFolder, localFolderList, localLoading, localOn, localScan, localGroups, localTracks, lookAgain, scanningName, byTitle, tracksOf, turnOn, unreachableFolders } from '../../stores/local';
+import { addFolder, localFolderList, localLoading, localOn, localScan, localGroups, localTracks, lookAgain, newestLocal, scanningName, tracksOf, turnOn, unreachableFolders } from '../../stores/local';
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { arrowChoice } from '../../ui/arrowChoice';
 import { dayKey, groupByDay } from '../../stores/history';
@@ -304,11 +307,11 @@ function ViewSwitch() {
   );
 }
 
-/** Local's albums: a grid of covers, A–Z; a tap opens the album. */
-function AlbumGrid() {
+/** Album covers in a grid; a tap opens the album. */
+function AlbumCards({ albums }: { albums: LocalAlbum[] }) {
   return (
-    <ul class="release-grid" data-testid="local-albums">
-      {localGroups.value.albums.map((a) => (
+    <ul class="release-grid">
+      {albums.map((a) => (
         <li key={a.key}>
           <button
             class="shelf-btn release-btn"
@@ -328,14 +331,32 @@ function AlbumGrid() {
   );
 }
 
+const unknownAlbum = (a: LocalAlbum) => a.key === UNKNOWN_ALBUM_KEY;
+
+/** Local's albums: A–Z under letters, or the most songs first; Unknown album last either way. */
+function AlbumGrid() {
+  const all = localGroups.value.albums;
+  return (
+    <div data-testid="local-albums">
+      {localAlbumsOrder.value === 'az' ? (
+        <AZSections items={all} name={(a) => a.title} unknown={unknownAlbum}>
+          {(xs) => <AlbumCards albums={xs} />}
+        </AZSections>
+      ) : (
+        <AlbumCards albums={byMostSongs(all, unknownAlbum)} />
+      )}
+    </div>
+  );
+}
+
 /** "2 albums · 7 songs", or only the songs when there's no album. */
 const artistCounts = (a: LocalArtist) => (a.albums.length ? `${plural(a.albums.length, 'album')} · ${plural(a.songs.length, 'song')}` : plural(a.songs.length, 'song'));
 
-/** Local's artists, A–Z (Unknown artist last); a tap opens the artist. */
-function ArtistList() {
+/** Artist rows; a tap opens the artist. */
+function ArtistRows({ artists }: { artists: LocalArtist[] }) {
   return (
-    <ul class="list lib-list" data-testid="local-artists">
-      {localGroups.value.artists.map((a) => (
+    <ul class="list lib-list">
+      {artists.map((a) => (
         <li key={a.key} class="row lib-row">
           <button class="row-main" onClick={(e) => afterPress(e.currentTarget, () => openLocalPage('localArtist', a.key))} data-testid="local-artist">
             <div class="row-art">
@@ -355,6 +376,96 @@ function ArtistList() {
   );
 }
 
+const unknownArtist = (a: LocalArtist) => a.name === UNKNOWN_ARTIST;
+
+/** Local's artists: A–Z under letters, or the most songs first; Unknown artist last either way. */
+function ArtistList() {
+  const all = localGroups.value.artists;
+  return (
+    <div data-testid="local-artists">
+      {localArtistsOrder.value === 'az' ? (
+        <AZSections items={all} name={(a) => a.name} unknown={unknownArtist}>
+          {(xs) => <ArtistRows artists={xs} />}
+        </AZSections>
+      ) : (
+        <ArtistRows artists={byMostSongs(all, unknownArtist)} />
+      )}
+    </div>
+  );
+}
+
+/** [items] under A–Z letter heads, as on Genres and Artists (the fast scroller reads them); an Unknown one under "?" at the end. */
+function AZSections<T>({ items, name, unknown = () => false, children }: { items: readonly T[]; name: (x: T) => string; unknown?: (x: T) => boolean; children: (xs: T[]) => ComponentChildren }) {
+  const rest = items.filter(unknown);
+  const sections = [...groupAZ(items.filter((x) => !unknown(x)), name), ...(rest.length ? [{ letter: '?', items: rest }] : [])];
+  return (
+    <>
+      {sections.map((sec) => (
+        <section class="az-section" key={sec.letter} data-letter={sec.letter}>
+          <AZHead letter={sec.letter} />
+          {children(sec.items)}
+        </section>
+      ))}
+    </>
+  );
+}
+
+/** Local's songs A–Z under letters; a tap plays them all in this order. Rendered in chunks, the rest in idle time (the scroller reaches all of them). */
+function SongsAZ({ tracks }: { tracks: Track[] }) {
+  const { shown, sentinel, more } = useChunks(tracks.length, 'local:az', undefined, { fill: true });
+  const list = useRef(tracks);
+  list.current = tracks;
+  const play = useCallback((i: number) => void playFrom(list.current, i, LOCAL_CTX), []);
+  let at = 0;
+  return (
+    <div data-testid="local-list">
+      <AZSections items={tracks.slice(0, shown)} name={(t) => t.title}>
+        {(xs) => {
+          const from = at;
+          at += xs.length;
+          return (
+            <ul class="list">
+              {xs.map((t, i) => (
+                <TrackRow key={t.id} track={t} index={from + i} inLocal onPlay={play} />
+              ))}
+            </ul>
+          );
+        }}
+      </AZSections>
+      {more && <div ref={sentinel} class="list-foot" aria-hidden="true" />}
+    </div>
+  );
+}
+
+const ORDERS = {
+  songs: [
+    { id: 'newest', label: 'Newest', testid: 'local-order-newest' },
+    { id: 'az', label: 'A–Z', testid: 'local-order-az' },
+  ],
+  groups: [
+    { id: 'songs', label: 'Most songs', testid: 'local-order-songs' },
+    { id: 'az', label: 'A–Z', testid: 'local-order-az' },
+  ],
+} as const;
+
+/** How many there are, and the view's order: Newest | A–Z for songs, Most songs | A–Z for albums and artists. */
+function OrderRow({ view }: { view: LocalView }) {
+  const g = localGroups.value;
+  const count = view === 'albums' ? plural(g.albums.length, 'album') : view === 'artists' ? plural(g.artists.length, 'artist') : plural(localTracks.value.length, 'song');
+  const order = view === 'songs' ? localSongsOrder : view === 'albums' ? localAlbumsOrder : localArtistsOrder;
+  return (
+    <div class="local-order">
+      <span class="dim small" data-testid="local-count">
+        {count}
+      </span>
+      <Rail<string> items={view === 'songs' ? ORDERS.songs : ORDERS.groups} value={order.value} onChange={(v) => ((order as Signal<string>).value = v)} label="Order" testid="local-order" />
+    </div>
+  );
+}
+
+/** The current view's order is A–Z: its letters and the fast scroller's letter show. */
+const localAZ = (view: LocalView) => (view === 'songs' ? localSongsOrder : view === 'albums' ? localAlbumsOrder : localArtistsOrder).value === 'az';
+
 /** A folder that can't be read right now: its songs are hidden until it's chosen again. */
 function Unreachable() {
   return (
@@ -373,14 +484,16 @@ function Unreachable() {
   );
 }
 
-const sortedLocal = computed(() => byTitle(localTracks.value));
+/** Local's songs in the chosen order: A–Z (as its letters run) or the newest files first. */
+const azLocal = computed(() => groupAZ(localTracks.value, (t) => t.title).flatMap((s) => s.items));
+const orderedLocal = computed(() => (localSongsOrder.value === 'newest' ? newestLocal.value : azLocal.value));
 
 /** Library → Local: the songs in the folders chosen in Settings, as songs, albums or artists; + adds a folder, pull down looks again. */
 export function LocalPage() {
-  const tracks = sortedLocal.value;
+  const tracks = orderedLocal.value;
   const scan = localScan.value;
   const view = settings.value.localView;
-  useSearchContext({ label: 'Local', tracks: () => sortedLocal.value });
+  useSearchContext({ label: 'Local', tracks: () => orderedLocal.value });
   const looking = scan && <p class="local-status" role="status" data-testid="local-status">{`Looking in ${scanningName.value}… ${plural(scan.found, 'song')} so far`}</p>;
   let body;
   if (tracks.length) {
@@ -389,10 +502,13 @@ export function LocalPage() {
         {looking}
         <PlayShuffle tracks={tracks} ctx={LOCAL_CTX} testid="local" />
         <ViewSwitch />
+        <OrderRow view={view} />
         {view === 'albums' ? (
           <AlbumGrid />
         ) : view === 'artists' ? (
           <ArtistList />
+        ) : localSongsOrder.value === 'az' ? (
+          <SongsAZ tracks={tracks} />
         ) : (
           <div data-testid="local-list">
             <Tracks tracks={tracks} ctx={LOCAL_CTX} inLocal chunkKey="local" />
@@ -445,6 +561,7 @@ export function LocalPage() {
         </button>
       }
       scrollKey={`library:local:${view}`}
+      azScroller={tracks.length > 0 && localAZ(view) ? 'beside' : false}
       onRefresh={lookAgain}
       refreshOffline
     >
