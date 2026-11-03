@@ -31,7 +31,6 @@ describe('splitArtists', () => {
   it('never splits on "and" or "&"', () => {
     expect(splitArtists('The Jesus and Mary Chain')).toEqual(['The Jesus and Mary Chain']);
     expect(splitArtists('Joey Valence & Brae')).toEqual(['Joey Valence & Brae']);
-    expect(splitArtists('Earth, Wind & Fire')).toEqual(['Earth', 'Wind & Fire']);
     expect(splitArtists('Yungstar feat. Trey D & Solo')).toEqual(['Yungstar', 'Trey D & Solo']);
   });
 
@@ -51,6 +50,24 @@ describe('splitArtists', () => {
     expect(splitArtists('Ray Parker Jr., Jrue')).toEqual(['Ray Parker Jr.', 'Jrue']);
   });
 
+  it('keeps a well-known name with a comma whole, also inside a longer credit', () => {
+    expect(splitArtists('Earth, Wind & Fire')).toEqual(['Earth, Wind & Fire']);
+    expect(splitArtists('Earth, Wind and Fire')).toEqual(['Earth, Wind and Fire']);
+    expect(splitArtists('Tyler, The Creator')).toEqual(['Tyler, The Creator']);
+    expect(splitArtists('Crosby, Stills, Nash & Young')).toEqual(['Crosby, Stills, Nash & Young']);
+    expect(splitArtists('10,000 Maniacs')).toEqual(['10,000 Maniacs']);
+    expect(splitArtists('Earth, Wind & Fire, The Emotions')).toEqual(['Earth, Wind & Fire', 'The Emotions']);
+    expect(splitArtists('Earth, Wind & Fire feat. The Emotions')).toEqual(['Earth, Wind & Fire', 'The Emotions']);
+    expect(splitArtists('Kendrick Lamar, Tyler, The Creator')).toEqual(['Kendrick Lamar', 'Tyler, The Creator']);
+  });
+
+  it('still splits collaborations', () => {
+    expect(splitArtists('Swedish House Mafia, The Weeknd')).toEqual(['Swedish House Mafia', 'The Weeknd']);
+    expect(splitArtists('Daft Punk, Pharrell Williams & Nile Rodgers')).toEqual(['Daft Punk', 'Pharrell Williams & Nile Rodgers']);
+    expect(splitArtists('Mumford & Sons, Hozier')).toEqual(['Mumford & Sons', 'Hozier']);
+    expect(splitArtists('Earth, Wind')).toEqual(['Earth', 'Wind']);
+  });
+
   it('keeps a slash inside a name and handles bracketed features', () => {
     expect(splitArtists('AC/DC')).toEqual(['AC/DC']);
     expect(splitArtists('Barren Gates (feat. Taylor Ravenna)')).toEqual(['Barren Gates', 'Taylor Ravenna']);
@@ -66,6 +83,11 @@ describe('splitArtists', () => {
 });
 
 describe('buildArtistIndex', () => {
+  it('indexes a well-known comma name as one artist', () => {
+    const idx = buildArtistIndex([t('e1', 'Earth, Wind & Fire'), t('e2', 'Earth, Wind & Fire')]);
+    expect(idx.artists.map((a) => [a.name, a.count])).toEqual([['Earth, Wind & Fire', 2]]);
+  });
+
   const tracks = [
     t('1', 'Björk'),
     t('2', 'bjork, Thom Yorke'),
