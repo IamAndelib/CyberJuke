@@ -35,6 +35,8 @@ import { GenreDetail, GenreGrid } from '../features/genres/Genres';
 import { Home } from '../features/home/Home';
 import { Radio } from '../features/radio/Radio';
 import { Library, LikedPage, LocalAlbumPage, LocalArtistPage, LocalPage, RecentPage } from '../features/library/Library';
+import { PlaylistMenu, PlaylistPage } from '../features/library/Playlist';
+import { NameSheet } from '../ui/components/NameSheet';
 import { ReleasesPage } from '../features/artists/Releases';
 import { Search } from '../features/search/Search';
 import { Settings } from '../features/settings/Settings';
@@ -140,6 +142,8 @@ function PageView({ page }: { page: Page }) {
       return <LocalAlbumPage albumKey={page.key} />;
     case 'localArtist':
       return <LocalArtistPage artistKey={page.key} />;
+    case 'userPlaylist':
+      return <PlaylistPage id={page.id} />;
   }
 }
 
@@ -302,6 +306,8 @@ export function Overlays() {
       <NowPlaying />
       <TrackMenu />
       <ArtistChooser />
+      <PlaylistMenu />
+      <NameSheet />
       <ConfirmSheet />
       <Toasts />
     </>

@@ -16,7 +16,10 @@ import { EmptyState, PlayShuffle, Tracks } from '../../ui/components/TrackList';
 import { playFrom } from '../../ui/playAll';
 import { TrackRow } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
-import { askConfirm, nowPlayingOpen, openLibraryPage, openLocalPage, openSettings, popToRoot, selectTab, useSearchContext } from '../../ui/nav';
+import { PLAYLISTS_MAX, createPlaylist, playlistsShown } from '../../stores/playlists';
+import { toast } from '../../stores/toast';
+import { Mosaic } from '../../ui/components/Mosaic';
+import { askConfirm, askName, nowPlayingOpen, openLibraryPage, openLocalPage, openUserPlaylist, openSettings, popToRoot, selectTab, useSearchContext } from '../../ui/nav';
 import { list } from '../../ui/playAll';
 import { afterPress } from '../../ui/press';
 import { plural } from '../../core/text';
@@ -91,7 +94,67 @@ export function Library() {
         <LibRow icon="clock" title="Recently played" of={recentShown} onOpen={() => openLibraryPage('recent')} testid="lib-recent" />
         {localOn.value && <LibRow icon="folder" title="Local" of={localTracks} after=" · on this phone" onOpen={() => openLibraryPage('local')} testid="lib-local" />}
       </ul>
+      <Playlists />
     </Screen>
+  );
+}
+
+/** New playlist from Library: its name, then its (empty) page. */
+function newPlaylist(): void {
+  askName({
+    title: 'New playlist',
+    confirm: 'Create',
+    run: (name) => {
+      const r = createPlaylist(name);
+      if (r.result === 'created') openUserPlaylist(r.id);
+      else if (r.result === 'full') toast(`You have ${PLAYLISTS_MAX} playlists, the most there can be`);
+    },
+  });
+}
+
+/** Library's playlists, newest first, under its lists; with none, a way to make one. */
+function Playlists() {
+  const all = playlistsShown.value;
+  return (
+    <section data-testid="lib-playlists">
+      <div class="section-head">
+        <h2 class="section-title">Playlists</h2>
+        {all.length > 0 && (
+          <button class="link-btn lib-new" onClick={(e) => afterPress(e.currentTarget, newPlaylist)} data-testid="lib-new-playlist">
+            [New playlist]
+          </button>
+        )}
+      </div>
+      {all.length ? (
+        <ul class="list lib-list" aria-label="Playlists">
+          {all.map((p) => (
+            <li key={p.id} class="row lib-row">
+              <button class="row-main" onClick={(e) => afterPress(e.currentTarget, () => openUserPlaylist(p.id))} data-testid="lib-playlist">
+                <div class="row-art">
+                  <Mosaic tracks={p.tracks} size="sm" />
+                </div>
+                <div class="row-text">
+                  <div class="row-title" data-testid="lib-playlist-name">
+                    {p.name}
+                  </div>
+                  <div class="row-artist">{plural(p.tracks.length, 'song')}</div>
+                </div>
+                <Icon name="chevron" size={16} class="lib-chev" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState title="No playlists yet" testid="lib-playlists-empty">
+          Make one here, or with <Icon name="playlistAdd" size={16} /> in the player.
+          <div>
+            <button class="btn primary local-add" onClick={(e) => afterPress(e.currentTarget, newPlaylist)} data-testid="lib-make-playlist">
+              New playlist
+            </button>
+          </div>
+        </EmptyState>
+      )}
+    </section>
   );
 }
 

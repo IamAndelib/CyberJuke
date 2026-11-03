@@ -477,3 +477,45 @@ test.describe('local music', () => {
     }
   }
 });
+
+test.describe('playlists', () => {
+  const tr = (n: number) => ({ id: `post${n}`, ytId: `abcdefghij${n}`, title: `Song with a name ${n}`, artist: 'Seeded Artist', genre: 'test', by: 'someone', postTitle: '', postUrl: '', createdAt: '2026-01-01T00:00:00Z', nsfw: false, artworkUrl: `https://i.ytimg.com/vi/abcdefghij${n}/hqdefault.jpg` });
+  const lists = [
+    { id: 'p1', name: 'Night drive', created: 3, updated: 3, tracks: [1, 2, 3, 4, 5, 6].map(tr) },
+    { id: 'p2', name: 'Sunday morning', created: 2, updated: 2, tracks: [tr(7)] },
+    { id: 'p3', name: 'Road trip', created: 1, updated: 1, tracks: [] },
+  ];
+  for (const theme of THEMES) {
+    for (const width of [320, 360]) {
+      test(`Library's playlists and a playlist (${theme}, ${width}px)`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 915 });
+        await seedStorage(page, { [SETTINGS_KEY]: { theme, version: 3 }, 'cyberjuke.file:data/cyberjuke/playlists.json': { version: 1, playlists: lists } });
+        await page.goto('/');
+        await expect(page.getByTestId('track-row').first()).toBeVisible();
+        const tag = `${theme}-${width}`;
+        await page.getByTestId('tab-library').click();
+        await expect(page.getByTestId('lib-playlist')).toHaveCount(3);
+        await settle(page);
+        await shot(page, `playlists-library-${tag}`);
+        await page.getByTestId('lib-playlist').first().click();
+        await expect(page.getByTestId('pl-list')).toBeVisible();
+        await settle(page);
+        await shot(page, `playlist-page-${tag}`);
+        await page.waitForTimeout(350);
+        await page.getByTestId('pl-more').click();
+        await expect(page.getByTestId('pl-menu')).toBeVisible();
+        await settle(page);
+        await shot(page, `playlist-menu-${tag}`);
+        await page.getByTestId('pl-edit').click();
+        await settle(page);
+        await shot(page, `playlist-edit-${tag}`);
+        await page.getByTestId('pl-done').click();
+        await page.getByTestId('pl-more').click();
+        await page.getByTestId('pl-rename').click();
+        await expect(page.getByTestId('name-sheet')).toBeVisible();
+        await settle(page);
+        await shot(page, `playlist-rename-${tag}`);
+      });
+    }
+  }
+});
