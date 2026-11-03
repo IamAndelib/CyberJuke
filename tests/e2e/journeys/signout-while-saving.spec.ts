@@ -1,6 +1,6 @@
 import { AUTH_USER, expect, MEMBERS_POSTS, test } from '../../fixtures';
 import type { Page } from '@playwright/test';
-import { openSettings, playerCalls, saved, setOffline, start, toastsGone, waitForTracks } from '../../helpers';
+import { openSettings, playerCalls, saved, setOffline, start, toastsGone, waitForTracks, openLibrary } from '../../helpers';
 
 /**
  * Signed in, a members-only track is liked and played; the listening cache is still saving it
@@ -59,9 +59,9 @@ test('signing out while a members-only like is being saved: Liked is sent first,
   // The playing track left the queue (K5), Liked and Recently played.
   await expect.poll(async () => (await playerCalls(page)).some((c) => c[0] === 'removeIds' && JSON.stringify(c[1]).includes(members.id))).toBe(true);
   await expect(page.getByTestId('mini-player')).not.toContainText(members.title);
-  await page.getByTestId('tab-library').click();
+  await openLibrary(page, 'liked');
   await expect(page.getByTestId('liked-list').getByTestId('track-title')).toHaveText([publicTitle]);
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   await expect(page.getByTestId('recent-list').getByText(members.title)).toHaveCount(0);
   await toastsGone(page);
   expect(backend.calls.members).toBeGreaterThan(0);
@@ -69,7 +69,7 @@ test('signing out while a members-only like is being saved: Liked is sent first,
   // On the train home, offline: the public like still plays; nothing remembers the other one.
   await setOffline(page, backend, true);
   await expect(page.getByTestId('offline-banner')).toHaveText(BANNER_LIKED);
-  await page.getByTestId('lib-liked').click();
+  await openLibrary(page, 'liked');
   const row = page.getByTestId('liked-list').getByTestId('track-row');
   await expect(row).toHaveCount(1);
   await expect(row.first().getByTestId('track-play')).not.toHaveAttribute('aria-disabled');

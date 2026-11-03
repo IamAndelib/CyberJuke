@@ -1,33 +1,30 @@
-import { signal, type ReadonlySignal } from '@preact/signals';
+import { computed, type ReadonlySignal } from '@preact/signals';
 import { useCallback, useMemo, useRef } from 'preact/hooks';
 import type { Track } from '../../data/model';
 import { historyShown, likedShown, recentShown } from '../../stores/library';
 import { dayKey, groupByDay } from '../../stores/history';
 import { useChunks } from '../../ui/useChunks';
-import { arrowChoice } from '../../ui/arrowChoice';
 import { clearHistoryWithUndo } from '../../stores/undo';
-import { Icon } from '../../ui/icons';
+import { Icon, type IconName } from '../../ui/icons';
+import { BackButton } from '../../ui/components/BackButton';
 import { EmptyState, PlayShuffle, Tracks } from '../../ui/components/TrackList';
 import { playFrom } from '../../ui/playAll';
 import { TrackRow } from '../../ui/components/TrackRow';
 import { Screen } from '../../ui/components/Screen';
-import { askConfirm, nowPlayingOpen, popToRoot, selectTab, useSearchContext } from '../../ui/nav';
+import { askConfirm, nowPlayingOpen, openLibraryPage, popToRoot, selectTab, useSearchContext } from '../../ui/nav';
 import { list } from '../../ui/playAll';
 import { afterPress } from '../../ui/press';
 import { plural } from '../../core/text';
-
-const SECTIONS = ['liked', 'recent'] as const;
-const section = signal<(typeof SECTIONS)[number]>('liked');
 
 const LIKED_CTX = list('Liked');
 const RECENT_CTX = list('Recently played');
 
 /** Library → Liked, from anywhere (the offline line, at the top and in Now Playing, and the offline toast's button). */
 export function openLiked(): void {
-  section.value = 'liked';
   nowPlayingOpen.value = false;
   popToRoot('library');
   selectTab('library');
+  openLibraryPage('liked');
 }
 
 /** M3: clearing history asks first, and can still be undone from the toast. It counts what the tab counts. */
@@ -40,63 +37,68 @@ function confirmClear(): void {
   });
 }
 
-/** A tab's count: only it follows the list (a play changes Recently played's). */
+/** A row's count: only it follows its list (a play changes Recently played's). */
 function Count({ of }: { of: ReadonlySignal<Track[]> }) {
-  return <span class="count">{of.value.length}</span>;
+  const n = of.value.length;
+  return (
+    <>
+      <span class="count">{n}</span> {n === 1 ? 'song' : 'songs'}
+    </>
+  );
 }
 
-/** The Library tab. Reads only the list shown: a track change re-renders nothing here on Liked. */
-export function Library() {
-  const sel = section.value;
-  const tracks = sel === 'liked' ? likedShown.value : recentShown.value;
-  const ctx = sel === 'liked' ? LIKED_CTX : RECENT_CTX;
-  useSearchContext(sel === 'liked' ? { label: 'Liked', tracks: () => likedShown.value } : { label: 'Recently played', tracks: () => recentShown.value });
+/** One of Library's lists: an outlined tile with its icon, its name and count, a chevron; a tap opens its page. */
+function LibRow({ icon, title, of, onOpen, testid }: { icon: IconName; title: string; of: ReadonlySignal<Track[]>; onOpen: () => void; testid: string }) {
   return (
-    <Screen
-      testid="screen-library"
-      title="Library"
-      subtitle="On this device"
-      scrollKey={`library:${sel}`}
-      right={
-        sel === 'recent' && tracks.length > 0 ? (
-          // Away from Play / Shuffle, so it can't be hit by accident.
-          <button class="link-btn lib-clear" onClick={confirmClear} data-testid="lib-clear">
-            [Clear]
-          </button>
-        ) : undefined
-      }
-    >
-      <div class="segmented" role="tablist" aria-label="Library section" onKeyDown={arrowChoice(SECTIONS, sel, (v) => (section.value = v))}>
-        <button
-          role="tab"
-          aria-selected={sel === 'liked'}
-          tabIndex={sel === 'liked' ? 0 : -1}
-          data-value="liked"
-          class={sel === 'liked' ? 'on' : ''}
-          onClick={() => (section.value = 'liked')}
-          data-testid="lib-liked"
-        >
-          Liked <Count of={likedShown} />
-        </button>
-        <button
-          role="tab"
-          aria-selected={sel === 'recent'}
-          tabIndex={sel === 'recent' ? 0 : -1}
-          data-value="recent"
-          class={sel === 'recent' ? 'on' : ''}
-          onClick={() => (section.value = 'recent')}
-          data-testid="lib-recent"
-        >
-          Recently played <Count of={recentShown} />
-        </button>
-      </div>
+    <li class="row lib-row">
+      <button class="row-main" onClick={(e) => afterPress(e.currentTarget, onOpen)} data-testid={testid}>
+        <div class="row-art">
+          <div class="lib-tile" aria-hidden="true">
+            <Icon name={icon} size={24} />
+          </div>
+        </div>
+        <div class="row-text">
+          <div class="row-title">{title}</div>
+          <div class="row-artist">
+            <Count of={of} />
+          </div>
+        </div>
+        <Icon name="chevron" size={16} class="lib-chev" />
+      </button>
+    </li>
+  );
+}
 
-      {tracks.length > 0 && <PlayShuffle tracks={tracks} ctx={ctx} testid="lib" playTestid="lib-play-all" />}
+/** Liked and Recently played, each once, for Here search on Library's list. */
+const libraryTracks = computed(() => {
+  const seen = new Set<string>();
+  return [...likedShown.value, ...recentShown.value].filter((t) => !seen.has(t.id) && (seen.add(t.id), true));
+});
 
-      <div data-testid={sel === 'liked' ? 'liked-list' : 'recent-list'}>
+/** The Library tab: a list of its lists, each opening its own page. */
+export function Library() {
+  useSearchContext({ label: 'Library', tracks: () => libraryTracks.value });
+  return (
+    <Screen testid="screen-library" title="Library" subtitle="On this device" scrollKey="library">
+      <ul class="list lib-list" aria-label="Library">
+        <LibRow icon="heart" title="Liked" of={likedShown} onOpen={() => openLibraryPage('liked')} testid="lib-liked" />
+        <LibRow icon="clock" title="Recently played" of={recentShown} onOpen={() => openLibraryPage('recent')} testid="lib-recent" />
+      </ul>
+    </Screen>
+  );
+}
+
+/** Liked, its own page: Play and Shuffle, the songs. */
+export function LikedPage() {
+  const tracks = likedShown.value;
+  useSearchContext({ label: 'Liked', tracks: () => likedShown.value });
+  return (
+    <Screen testid="screen-liked" title="Liked" subtitle="Library" left={<BackButton testid="liked-back" />} scrollKey="library:liked">
+      {tracks.length > 0 && <PlayShuffle tracks={tracks} ctx={LIKED_CTX} testid="lib" playTestid="lib-play-all" />}
+      <div data-testid="liked-list">
         {tracks.length ? (
-          sel === 'liked' ? <Tracks tracks={tracks} ctx={LIKED_CTX} /> : <HistoryDays />
-        ) : sel === 'liked' ? (
+          <Tracks tracks={tracks} ctx={LIKED_CTX} />
+        ) : (
           <EmptyState title="No liked songs yet">
             Tap <Icon name="heartOutline" size={16} /> in the player, or Like in a track's ⋯ menu, to keep it here.
             <div>
@@ -105,10 +107,34 @@ export function Library() {
               </button>
             </div>
           </EmptyState>
-        ) : (
-          <EmptyState title="Nothing played yet">Tracks you play show up here, newest first.</EmptyState>
         )}
       </div>
+    </Screen>
+  );
+}
+
+/** Recently played, its own page: by day, newest first; [Clear] in its top bar. */
+export function RecentPage() {
+  const tracks = recentShown.value;
+  useSearchContext({ label: 'Recently played', tracks: () => recentShown.value });
+  return (
+    <Screen
+      testid="screen-recent"
+      title="Recently played"
+      subtitle="Library"
+      left={<BackButton testid="recent-back" />}
+      scrollKey="library:recent"
+      right={
+        tracks.length > 0 ? (
+          // Away from Play / Shuffle, so it can't be hit by accident.
+          <button class="link-btn lib-clear" onClick={confirmClear} data-testid="lib-clear">
+            [Clear]
+          </button>
+        ) : undefined
+      }
+    >
+      {tracks.length > 0 && <PlayShuffle tracks={tracks} ctx={RECENT_CTX} testid="lib" playTestid="lib-play-all" />}
+      <div data-testid="recent-list">{tracks.length ? <HistoryDays /> : <EmptyState title="Nothing played yet">Tracks you play show up here, newest first.</EmptyState>}</div>
     </Screen>
   );
 }

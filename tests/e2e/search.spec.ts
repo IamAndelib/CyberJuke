@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { musicCalls, openSearch, openSettings, scrollTo, start, waitForTracks } from '../helpers';
+import { musicCalls, openSearch, openSettings, scrollTo, start, waitForTracks, openLibrary } from '../helpers';
 
 /** Search: Jukebox (the local catalog), Global (the music plugin) and Here (the screen it was opened from). */
 
@@ -206,9 +206,9 @@ test('a Global track shows "From Global search", and no visible text names YouTu
     await expect(page.getByTestId(`screen-${t}`)).toBeVisible();
     await grab();
   }
-  await page.getByTestId('tab-library').click();
+  await openLibrary(page, 'liked');
   await expect(page.getByTestId('liked-list').getByTestId('track-row')).toHaveCount(1);
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   await expect(page.getByTestId('recent-list').getByTestId('track-row').first()).toBeVisible();
   await openSettings(page);
   await page.locator('details').evaluateAll((els) => els.forEach((d) => ((d as HTMLDetailsElement).open = true)));

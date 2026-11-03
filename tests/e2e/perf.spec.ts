@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { seedStorage, start } from '../helpers';
+import { seedStorage, start, openLibrary } from '../helpers';
 
 /**
  * Playback must not re-render the screen. Counts Preact renders through the dev/test
@@ -185,7 +185,7 @@ test('a track change re-renders the current rows, not the lists; history renders
   });
   await start(page);
   await page.getByTestId('track-play').first().click();
-  await page.getByTestId('tab-library').click();
+  await openLibrary(page, 'liked');
   await expect(page.getByTestId('liked-list').getByTestId('track-row').first()).toBeVisible();
   const renders = () => page.evaluate(() => ({ ...(window as unknown as { __cyberjukeRenders: Renders }).__cyberjukeRenders.counts }));
   const reset = () => page.evaluate(() => (window as unknown as { __cyberjukeRenders: Renders }).__cyberjukeRenders.reset());
@@ -200,7 +200,7 @@ test('a track change re-renders the current rows, not the lists; history renders
   expect(liked.Library ?? 0).toBe(0);
   expect(liked.TrackRow ?? 0).toBeLessThanOrEqual(6);
 
-  await page.getByTestId('lib-recent').click();
+  await openLibrary(page, 'recent');
   await expect(page.getByTestId('recent-list').getByTestId('track-row').first()).toBeVisible();
   // The first chunk, not all 400 plays.
   expect(await page.getByTestId('recent-list').getByTestId('track-row').count()).toBeLessThan(150);

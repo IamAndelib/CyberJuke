@@ -72,8 +72,7 @@ test('opened offline with no Jukebox saved before, Home says no carrier, and wit
   await saved(page, [liked.ytId]);
   await expect(page.getByTestId('shuffle-all')).toContainText('Shuffle liked songs');
   await home.getByTestId('offline-liked').click();
-  await expect(page.getByTestId('screen-library')).toBeVisible();
-  await expect(page.getByTestId('lib-liked')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('screen-liked')).toBeVisible();
 });
 
 test('offline, Search finds the saved Jukebox, with no way to Global', async ({ page, backend }) => {

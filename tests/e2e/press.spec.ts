@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { openNowPlaying, openSearch, openSettings, start } from '../helpers';
+import { openNowPlaying, openSearch, openSettings, start, openLibrary } from '../helpers';
 
 // U3: press feedback the way Android's View shows it (ui/press.ts).
 
@@ -182,14 +182,6 @@ const tagged = async (p: Page) => {
 for (const { name, open, target } of [
   { name: "a Home genre chip", open: start, target: (p: Page) => p.getByTestId('genre-chip').first() },
   {
-    name: "Library's Recent switch",
-    open: async (p: Page) => {
-      await start(p);
-      await p.getByTestId('tab-library').click();
-    },
-    target: (p: Page) => p.getByTestId('lib-recent'),
-  },
-  {
     name: "Search's Global mode",
     open: async (p: Page) => {
       await start(p);
@@ -258,7 +250,7 @@ for (const { name, open, target } of [
     name: "empty Liked's [Browse the Jukebox]",
     open: async (p: Page) => {
       await start(p);
-      await p.getByTestId('tab-library').click();
+      await openLibrary(p, 'liked');
     },
     target: (p: Page) => p.getByRole('button', { name: '[Browse the Jukebox]' }),
   },
