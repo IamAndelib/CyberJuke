@@ -260,6 +260,9 @@ export function parseLocalFolders(x: unknown): LocalFolder[] {
 }
 
 /** The songs in them; one without a well-formed id or folder is dropped. */
+/** A track, disc or year tag's number: a whole number above 0, else 0 (unknown). */
+const count = (x: unknown): number => (typeof x === 'number' && Number.isInteger(x) && x > 0 && x < 10_000 ? x : 0);
+
 export function parseLocalSongs(x: unknown): LocalSong[] {
   const list = isObj(x) && Array.isArray(x.tracks) ? x.tracks : [];
   const out: LocalSong[] = [];
@@ -270,6 +273,10 @@ export function parseLocalSongs(x: unknown): LocalSong[] {
       title: isStr(t.title) && t.title.trim() ? t.title : 'Untitled',
       artist: isStr(t.artist) && t.artist.trim() ? t.artist : 'Unknown artist',
       album: isStr(t.album) ? t.album : '',
+      albumArtist: isStr(t.albumArtist) ? t.albumArtist : '',
+      track: count(t.track),
+      disc: count(t.disc),
+      year: count(t.year),
       durationMs: Math.max(0, finite(t.durationMs) ?? 0),
       folder: t.folder,
       cover: t.cover === true,

@@ -16,7 +16,9 @@ internal class LocalIndex(private val dir: File) {
 
     /**
      * A song. [uri] is its document URI under [folder]'s tree (what the player opens), [name] its
-     * file name. [cover]: a cover is kept in [artFile].
+     * file name. [cover]: a cover is kept in [artFile]. [albumArtist] is the tag as it is ("" for
+     * none); [track], [disc] and [year] are 0 when unknown. [tags]: the LocalRules.TAGS its tags
+     * were read with (an older one is read again).
      */
     data class Entry(
         val id: String,
@@ -30,6 +32,11 @@ internal class LocalIndex(private val dir: File) {
         val size: Long,
         val modified: Long,
         val cover: Boolean,
+        val albumArtist: String = "",
+        val track: Int = 0,
+        val disc: Int = 0,
+        val year: Int = 0,
+        val tags: Int = LocalRules.TAGS,
     )
 
     val folders = mutableListOf<Folder>()
@@ -80,7 +87,8 @@ internal class LocalIndex(private val dir: File) {
     fun songsIn(folderId: String): Int = entries.values.count { it.folder == folderId }
 
     companion object {
-        const val VERSION = 1
+        /** 2 added album artist, track, disc, year and tags; a version 1 index still reads (its songs are read again). */
+        const val VERSION = 2
 
         fun encode(folders: Collection<Folder>, entries: Collection<Entry>): String = JSONObject()
             .put("version", VERSION)
@@ -93,6 +101,7 @@ internal class LocalIndex(private val dir: File) {
                             JSONObject()
                                 .put("id", it.id).put("folder", it.folder).put("uri", it.uri).put("name", it.name)
                                 .put("title", it.title).put("artist", it.artist).put("album", it.album)
+                                .put("albumArtist", it.albumArtist).put("track", it.track).put("disc", it.disc).put("year", it.year).put("tags", it.tags)
                                 .put("durationMs", it.durationMs).put("size", it.size).put("modified", it.modified)
                                 .put("cover", it.cover),
                         )
@@ -104,7 +113,7 @@ internal class LocalIndex(private val dir: File) {
         /** Null for anything that isn't this version's index; a broken song is skipped. */
         fun decode(text: String): Pair<List<Folder>, List<Entry>>? = try {
             val o = JSONObject(text)
-            if (o.optInt("version") != VERSION) null else {
+            if (o.optInt("version") !in 1..VERSION) null else {
                 val f = o.getJSONArray("folders").let { a ->
                     (0 until a.length()).mapNotNull { i ->
                         a.optJSONObject(i)?.let { j -> Folder(j.getString("id"), j.optString("name")) }
@@ -129,6 +138,12 @@ internal class LocalIndex(private val dir: File) {
                 title = j.getString("title"),
                 artist = j.getString("artist"),
                 album = j.optString("album"),
+                albumArtist = j.optString("albumArtist"),
+                track = j.optInt("track"),
+                disc = j.optInt("disc"),
+                year = j.optInt("year"),
+                // Version 1 had no tags field: read with tag set 1.
+                tags = j.optInt("tags", 1),
                 durationMs = j.optLong("durationMs"),
                 size = j.optLong("size"),
                 modified = j.optLong("modified"),

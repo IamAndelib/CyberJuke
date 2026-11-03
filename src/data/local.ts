@@ -26,6 +26,12 @@ export interface LocalSong {
   title: string;
   artist: string;
   album: string;
+  /** The album artist tag as it is ('' for none). */
+  albumArtist: string;
+  /** Track and disc numbers and the year: 0 when unknown. */
+  track: number;
+  disc: number;
+  year: number;
   durationMs: number;
   /** The folder's id. */
   folder: string;

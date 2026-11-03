@@ -31,11 +31,29 @@ class LocalIndexTest {
     @Test
     fun aBrokenFileOrAnotherVersionReadsAsEmpty() {
         assertNull(LocalIndex.decode("{not json"))
-        assertNull(LocalIndex.decode("""{"version":2,"folders":[],"songs":[]}"""))
+        assertNull(LocalIndex.decode("""{"version":3,"folders":[],"songs":[]}"""))
         val d = dir()
         File(d, "index.json").writeText("garbage")
         val i = LocalIndex(d).apply { load() }
         assertTrue(i.folders.isEmpty() && i.entries.isEmpty())
+    }
+
+    @Test
+    fun albumArtistTrackDiscAndYearAreKept() {
+        val e = entry(1).copy(albumArtist = "Various", track = 4, disc = 2, year = 1990)
+        val (_, songs) = LocalIndex.decode(LocalIndex.encode(listOf(LocalIndex.Folder("tree-a", "Music")), listOf(e)))!!
+        assertEquals(listOf(e), songs)
+    }
+
+    @Test
+    fun aVersion1IndexStillReadsAndItsSongsAreReadAgain() {
+        val v1 = """{"version":1,"folders":[{"id":"tree-a","name":"Music"}],"songs":[{"id":"loc:0000000000000001","folder":"tree-a","uri":"content://x/1","name":"1.mp3","title":"Song 1","artist":"Artist","album":"Album","durationMs":1000,"size":10,"modified":20,"cover":false}]}"""
+        val (_, songs) = LocalIndex.decode(v1)!!
+        val e = songs.single()
+        assertEquals(1, e.tags)
+        assertEquals(0, e.track)
+        assertTrue(LocalRules.needsRead(e, 10, 20))
+        assertFalse(LocalRules.needsRead(e.copy(tags = LocalRules.TAGS), 10, 20))
     }
 
     @Test

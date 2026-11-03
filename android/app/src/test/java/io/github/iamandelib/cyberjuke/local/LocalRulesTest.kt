@@ -55,6 +55,20 @@ class LocalRulesTest {
     }
 
     @Test
+    fun trackDiscAndYearTagsAreReadAsNumbers() {
+        assertEquals(4, LocalRules.number("4"))
+        assertEquals(4, LocalRules.number(" 04/12 "))
+        assertEquals(0, LocalRules.number(null))
+        assertEquals(0, LocalRules.number("A"))
+        assertEquals(0, LocalRules.number("0"))
+        assertEquals(1990, LocalRules.year("1990"))
+        assertEquals(1990, LocalRules.year("1990-05-01"))
+        assertEquals(1990, LocalRules.year("19900501T000000.000Z"))
+        assertEquals(0, LocalRules.year("0"))
+        assertEquals(0, LocalRules.year(null))
+    }
+
+    @Test
     fun idsAreStableForOneFileAndDifferForAnother() {
         val a = LocalRules.idOf(ext, "primary:Music/a.mp3")
         assertEquals(a, LocalRules.idOf(ext, "primary:Music/a.mp3"))

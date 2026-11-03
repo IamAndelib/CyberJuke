@@ -53,9 +53,18 @@ internal object LocalRules {
 
     private fun extensionOf(name: String): String = name.substringAfterLast('.', "").lowercase()
 
-    /** Whether a file seen before has to be read again: new, or a different size or date. */
+    /** Which tags a song is read for: 2 added album artist, track, disc and year. */
+    const val TAGS = 2
+
+    /** Whether a file seen before has to be read again: new, a different size or date, or read for fewer tags. */
     fun needsRead(old: LocalIndex.Entry?, size: Long, modified: Long): Boolean =
-        old == null || old.size != size || old.modified != modified
+        old == null || old.size != size || old.modified != modified || old.tags < TAGS
+
+    /** A track or disc number tag ("4", "4/12", " 04 "): its number, 0 when there is none. */
+    fun number(tag: String?): Int = tag?.trim()?.substringBefore('/')?.trim()?.toIntOrNull()?.takeIf { it in 1..9999 } ?: 0
+
+    /** A year or date tag ("1990", "1990-05-01", "19900501T000000.000Z"): its year, 0 when there is none. */
+    fun year(tag: String?): Int = tag?.trim()?.take(4)?.toIntOrNull()?.takeIf { it in 1000..9999 } ?: 0
 
     /**
      * A song's id: `loc:` and the first 16 hex of SHA-256 of its provider and document id. It
