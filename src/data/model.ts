@@ -50,7 +50,7 @@ export interface Track {
   album?: string;
 }
 
-export type TrackOrigin = 'jukebox' | 'ytmusic' | 'signal';
+export type TrackOrigin = 'jukebox' | 'ytmusic' | 'signal' | 'local';
 
 /** A track that isn't a Jukebox post (Global, from native, a placeholder): the post fields left empty. */
 export function makeTrack(t: Pick<Track, 'id' | 'ytId' | 'title' | 'artist'> & Partial<Track>): Track {
@@ -68,6 +68,11 @@ export function audioKey(t: Pick<Track, 'id' | 'ytId' | 'mp3'>): string {
 /** True for tracks from Global search (not shared on the Jukebox). */
 export function isGlobal(t: Pick<Track, 'source'> | null | undefined): boolean {
   return t?.source === 'ytmusic';
+}
+
+/** True for songs from folders on the phone (data/local): id `loc:<hex>`, no video id or MP3 link. */
+export function isLocal(t: Pick<Track, 'source'> | null | undefined): boolean {
+  return t?.source === 'local';
 }
 
 /** True for Signal Radio's station tracks. */

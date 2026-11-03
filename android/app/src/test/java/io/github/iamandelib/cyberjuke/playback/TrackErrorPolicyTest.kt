@@ -372,4 +372,14 @@ class TrackErrorPolicyTest {
             assertEquals(true, ResolveException("x", "m", null, k).permanent)
         }
     }
+
+    @Test
+    fun aLocalFileThatCantBeReadIsSkippedNeverAnOutageOrABlock() {
+        // Whatever the failure looks like (an I/O error, offline), it is the file's: skip it.
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(Facts(kind = null, local = true, ioOther = true, networkValidated = false)))
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(Facts(kind = null, local = true, ioNetwork = true)))
+        assertEquals(Action.Skip, TrackErrorPolicy.decide(Facts(kind = null, local = true, blocked = true)))
+        assertEquals(Action.PauseAtEnd, TrackErrorPolicy.decide(Facts(kind = null, local = true, hasNext = false)))
+        assertEquals(Action.Stop, TrackErrorPolicy.decide(Facts(kind = null, local = true, consecutiveFailures = 4)))
+    }
 }

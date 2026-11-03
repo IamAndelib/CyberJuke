@@ -25,9 +25,15 @@ export const YT_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 export const MP3_URL_RE = /^https:\/\/latex\.gg\/share\/[A-Za-z0-9_-]+\.mp3$/i;
 export const isMp3Url = (x: unknown): x is string => isStr(x) && MP3_URL_RE.test(x);
 
-/** A track the player can load: a YouTube video id or a Jukebox MP3 (placeholders have neither). */
-export function hasAudio(t: Pick<Track, 'ytId' | 'mp3'> | null | undefined): boolean {
-  return !!t && (YT_ID_RE.test(t.ytId) || isMp3Url(t.mp3));
+/** A local song's id (data/local): `loc:` and 16 hex. */
+export const LOCAL_ID_RE = /^loc:[0-9a-f]{16}$/;
+
+/** A song from a folder on the phone, by its id and origin. */
+export const isLocalTrack = (t: Partial<Pick<Track, 'id' | 'source'>> | null | undefined): boolean => !!t && t.source === 'local' && isStr(t.id) && LOCAL_ID_RE.test(t.id);
+
+/** A track the player can load: a YouTube video id, a Jukebox MP3 or a local song (placeholders have none). */
+export function hasAudio(t: (Pick<Track, 'ytId' | 'mp3'> & Partial<Pick<Track, 'id' | 'source'>>) | null | undefined): boolean {
+  return !!t && (YT_ID_RE.test(t.ytId) || isMp3Url(t.mp3) || isLocalTrack(t));
 }
 
 /** A Jukebox MP3's audio id: `mp3:` and its latex.gg file name (the prefix as written, the file as MP3_URL_RE takes it). */
@@ -168,7 +174,7 @@ export function parseRunQueryRows(x: unknown): FsRunQueryRow[] | null {
 
 // ---- Stored tracks ---------------------------------------------------------------------
 
-const ORIGINS: readonly TrackOrigin[] = ['jukebox', 'ytmusic', 'signal'];
+const ORIGINS: readonly TrackOrigin[] = ['jukebox', 'ytmusic', 'signal', 'local'];
 const TRACK_STRINGS = ['id', 'ytId', 'title', 'artist', 'genre', 'by', 'postTitle', 'postUrl', 'createdAt', 'artworkUrl'] as const;
 
 /** Every field of a Track present and of the right type (optional ones when set). */
@@ -179,7 +185,7 @@ export function isTrackFull(x: unknown): x is Track {
   if (x.ytId !== '' && !YT_ID_RE.test(x.ytId as string)) return false;
   // An MP3 has no video id (Track.mp3): never both.
   if (x.mp3 !== undefined && x.ytId !== '') return false;
-  if (!x.id || !hasAudio(x as Pick<Track, 'ytId' | 'mp3'>) || typeof x.nsfw !== 'boolean') return false;
+  if (!x.id || !hasAudio(x as Pick<Track, 'ytId' | 'mp3' | 'id' | 'source'>) || typeof x.nsfw !== 'boolean') return false;
   if (x.saves !== undefined && finite(x.saves) === undefined) return false;
   if (x.replies !== undefined && finite(x.replies) === undefined) return false;
   if (x.source !== undefined && !ORIGINS.includes(x.source as TrackOrigin)) return false;
@@ -197,7 +203,7 @@ export function asTrack(x: unknown): Track | null {
   const ytId = isStr(x.ytId) && YT_ID_RE.test(x.ytId) ? x.ytId : '';
   // An MP3 has no video id (Track.mp3): a video id wins.
   const mp3 = !ytId && isMp3Url(x.mp3) ? x.mp3 : undefined;
-  if (!ytId && !mp3) return null;
+  if (!ytId && !mp3 && !isLocalTrack(x as Partial<Track>)) return null;
   const t: Track = {
     id: x.id,
     ytId,
@@ -235,7 +241,6 @@ export function asTracks(x: unknown): Track[] {
 
 // ---- Local music (data/local) ------------------------------------------------------------
 
-const LOCAL_SONG_ID_RE = /^loc:[0-9a-f]{16}$/;
 const FOLDER_STATES: readonly LocalFolderState[] = ['ok', 'scanning', 'gone'];
 
 /** The chosen folders, as JukeLocal reports them; unusable ones dropped. */
@@ -259,7 +264,7 @@ export function parseLocalSongs(x: unknown): LocalSong[] {
   const list = isObj(x) && Array.isArray(x.tracks) ? x.tracks : [];
   const out: LocalSong[] = [];
   for (const t of list) {
-    if (!isObj(t) || !isStr(t.id) || !LOCAL_SONG_ID_RE.test(t.id) || !isStr(t.folder) || !t.folder) continue;
+    if (!isObj(t) || !isStr(t.id) || !LOCAL_ID_RE.test(t.id) || !isStr(t.folder) || !t.folder) continue;
     out.push({
       id: t.id,
       title: isStr(t.title) && t.title.trim() ? t.title : 'Untitled',

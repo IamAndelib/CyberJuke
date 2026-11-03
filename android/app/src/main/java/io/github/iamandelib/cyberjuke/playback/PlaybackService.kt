@@ -58,6 +58,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import io.github.iamandelib.cyberjuke.MainActivity
 import io.github.iamandelib.cyberjuke.R
 import io.github.iamandelib.cyberjuke.findCause
+import io.github.iamandelib.cyberjuke.local.LocalLibrary
 import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.BlockedException
 import io.github.iamandelib.cyberjuke.net.Family
@@ -373,7 +374,7 @@ class PlaybackService : MediaSessionService() {
         override fun onResumeWanted() {
             handler.post {
                 pausedOnExternal = hasExternalOutput()
-                if (!BackOffHold.resumeWaits(blocked = true, currentIsMp3 = JukeUris.isMp3(player?.currentMediaItem))) return@post
+                if (!BackOffHold.resumeWaits(blocked = true, currentIsMp3 = JukeUris.isOwnFile(player?.currentMediaItem))) return@post
                 NetBlock.active().first.takeIf { it > 0L }?.let { scheduleResume(it) }
             }
         }
@@ -475,7 +476,7 @@ class PlaybackService : MediaSessionService() {
         handler.removeCallbacks(blockEnded)
         val p = player ?: return
         val (until, _) = NetBlock.active()
-        if (until > 0L && BackOffHold.resumeWaits(blocked = true, currentIsMp3 = JukeUris.isMp3(p.currentMediaItem))) {
+        if (until > 0L && BackOffHold.resumeWaits(blocked = true, currentIsMp3 = JukeUris.isOwnFile(p.currentMediaItem))) {
             scheduleResume(until)
             return
         }
@@ -585,6 +586,8 @@ class PlaybackService : MediaSessionService() {
         )
 
         ArtStore.init(File(noBackupFilesDir, "art"))
+        // Local music's list (no_backup/local): which file a `loc:` id is, and its cover.
+        LocalLibrary.init(this)
         mediaSession = MediaSession.Builder(this, SessionPlayer(exo))
             .setSessionActivity(sessionActivity)
             // A saved song's cover from the phone (offline too), sized as Media3's own loader would.
@@ -937,7 +940,7 @@ class PlaybackService : MediaSessionService() {
                 now = now,
             )
             // Auto quality is about YouTube's streams: a slow latex.gg (a Jukebox MP3) doesn't count.
-            if (rebuffer && !JukeUris.isMp3(player?.currentMediaItem)) governor.onRebuffer(now)
+            if (rebuffer && !JukeUris.isOwnFile(player?.currentMediaItem)) governor.onRebuffer(now)
             when (playbackState) {
                 Player.STATE_BUFFERING -> transitions.onBuffering(now)
                 Player.STATE_READY -> judged(transitions.onReady(now))
@@ -972,7 +975,7 @@ class PlaybackService : MediaSessionService() {
                 // Playing again: an outage's tries are over, and nothing waits for the network
                 // (Play pressed during the wait: the wait goes, and says so).
                 stopOutageRetry()
-                if (BackOffHold.playingSpendsResume(NetBlock.waitingForNetwork(), NetBlock.isBlocked(), JukeUris.isMp3(player?.currentMediaItem))) {
+                if (BackOffHold.playingSpendsResume(NetBlock.waitingForNetwork(), NetBlock.isBlocked(), JukeUris.isOwnFile(player?.currentMediaItem))) {
                     NetBlock.takeResume()
                 }
             }
@@ -998,7 +1001,7 @@ class PlaybackService : MediaSessionService() {
             // A pause outside a back-off is the user's: nothing to resume later. (During one,
             // a refused play the plugin turned into a pause keeps its resume; an MP3 plays
             // through a back-off, so its pause is the user's.)
-            if (!playWhenReady && BackOffHold.pauseIsUsers(NetBlock.isBlocked(), JukeUris.isMp3(player?.currentMediaItem))) {
+            if (!playWhenReady && BackOffHold.pauseIsUsers(NetBlock.isBlocked(), JukeUris.isOwnFile(player?.currentMediaItem))) {
                 NetBlock.cancelResume()
                 releaseResumeWakeLock()
                 stopOutageRetry()
@@ -1047,7 +1050,7 @@ class PlaybackService : MediaSessionService() {
             // Offline, a song ending moves on to the next saved one, past those that aren't (OfflineNext).
             val p = player
             if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && p != null && !AudioCache.online &&
-                JukeUris.audioIdOf(mediaItem) !in AudioCache.savedLiked
+                JukeUris.audioIdOf(mediaItem) !in AudioCache.savedLiked && !JukeUris.isLocal(mediaItem)
             ) {
                 p.offlineNext()?.let { p.seekToDefaultPosition(it) }
             }
@@ -1152,7 +1155,7 @@ class PlaybackService : MediaSessionService() {
             governor.onSettingChanged()
         }
         // A Jukebox MP3 has one fixed file: no rung to pick, and it doesn't count as a track at a rung.
-        if (quality != AudioQuality.AUTO || JukeUris.isMp3(item)) return
+        if (quality != AudioQuality.AUTO || JukeUris.isOwnFile(item)) return
         val ladder = JukeUris.ytIdOf(item)?.let { StreamResolver.lastServed(it) }?.ladderBps ?: emptyList()
         val before = StreamResolver.autoRung
         val rung = governor.onTrackStarted(SystemClock.elapsedRealtime(), ladder)
@@ -1423,12 +1426,14 @@ class PlaybackService : MediaSessionService() {
             val serial = extras?.getLong(QueueCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L
             val extra = TrackExtras.get(item.mediaId)
             val ytId = JukeUris.ytIdOf(item)
-            val mp3 = if (ytId == null) JukeUris.mp3UrlOf(item) ?: return null else null
+            val local = ytId == null && JukeUris.isLocal(item)
+            val mp3 = if (ytId == null && !local) JukeUris.mp3UrlOf(item) ?: return null else null
             entries.add(
                 LastSession.Entry(
                     id = item.mediaId,
                     ytId = ytId ?: "",
                     mp3 = mp3,
+                    local = local,
                     title = item.mediaMetadata.title?.toString(),
                     artist = item.mediaMetadata.artist?.toString(),
                     artworkUrl = item.mediaMetadata.artworkUri?.toString(),
@@ -1518,6 +1523,7 @@ class PlaybackService : MediaSessionService() {
             consecutiveFailures = consecutiveFailures,
             outagePauses = outagePauses,
             mp3 = JukeUris.isMp3(item),
+            local = JukeUris.isLocal(item),
         )
         // A track broken at one spot fails there again after each resume (READY in between).
         // Counted only where the unclear failure decides (not a connection failure, say).

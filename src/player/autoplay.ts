@@ -13,7 +13,7 @@
  */
 import { whenIdle } from '../core/idle';
 import { shuffled } from '../core/shuffle';
-import { audioKey, isGlobal, type Track } from '../data/model';
+import { audioKey, isGlobal, isLocal, type Track } from '../data/model';
 import { similarTracks } from '../data/similar';
 import { stationPlaying, stationQueue } from './radio';
 import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, AUTOPLAY_RESERVE, mayAutoplay, type Player, type QueueLow } from './types';
@@ -94,6 +94,8 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       return;
     }
     if (!mayAutoplay(s.repeat, s.queue.length)) return;
+    // A local list ends like an album: nothing from the Jukebox or Global after a song of the phone's own.
+    if (isLocal(seed)) return;
     if (e.seedId && e.seedId !== seed.id) return; // a signal for an older seed
     const inQueue = new Set([...s.queue.flatMap((t) => [t.id, audioKey(t)]), ...(deps.removed?.() ?? [])]);
     // The signal may be older than the last refill (one that came in during it): count

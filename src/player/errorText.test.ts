@@ -11,4 +11,7 @@ describe('trackErrorText', () => {
     expect(trackErrorText({ kind: 'network', resumes: true }, 'Song')).toBe('Signal lost. "Song" picks up when you\'re back.');
     expect(trackErrorText({ kind: 'track' }, 'Song')).toBe('Can\'t play "Song"');
   });
+  it('a local song skipped says its file is gone, not that it is unavailable', () => {
+    expect(trackErrorText({ skipped: true }, 'Night Shift', true)).toBe('Skipped "Night Shift": its file isn\'t on the phone');
+  });
 });

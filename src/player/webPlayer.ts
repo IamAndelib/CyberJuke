@@ -8,6 +8,11 @@ import { block } from '../stores/block';
 import { toast } from '../stores/toast';
 import { TEST_HOOKS, exposeForTests } from '../core/testHooks';
 import { UNTITLED } from '../data/model';
+import { isLocalTrack } from '../core/guards';
+import { localAudioUrl } from '../data/local';
+
+/** A track played by the audio element: a Jukebox MP3 by its link, a local song by the fake's route (tests). */
+const fileUrl = (t: Track | null | undefined): string | undefined => t?.mp3 ?? (isLocalTrack(t) ? localAudioUrl(t!.id) : undefined);
 import { trackErrorText, type TrackErrorFacts } from './errorText';
 import { Queue } from './queue';
 import { stationPlaying } from './radio';
@@ -109,7 +114,7 @@ export class WebPlayer implements Player {
     // drives native's "waiting for carrier" state through this.
     exposeForTests('__cyberjukeWaitingForNetwork', (on: boolean) => this.publish({ waitingForNetwork: on }));
     // Nor does it send `trackError`; e2e injects what native would say about the current track.
-    exposeForTests('__cyberjukeTrackError', (e: TrackErrorFacts) => toast(trackErrorText(e, this.q.current?.title ?? UNTITLED)));
+    exposeForTests('__cyberjukeTrackError', (e: TrackErrorFacts) => toast(trackErrorText(e, this.q.current?.title ?? UNTITLED, isLocalTrack(this.q.current))));
     // e2e: how much audio native would report loaded ahead (0: the track the app reopens on).
     exposeForTests('__cyberjukeBufferedAhead', (ms: number) => this.publish({ bufferedAheadMs: ms }));
   }
@@ -122,8 +127,8 @@ export class WebPlayer implements Player {
 
   /** The current track is a Jukebox MP3, loaded in the audio element. */
   private onMp3(): boolean {
-    const t = this.q.current;
-    return !!t?.mp3 && !!this.audio && this.loadedId === t.mp3;
+    const url = fileUrl(this.q.current);
+    return !!url && !!this.audio && this.loadedId === url;
   }
 
   /** Position and buffer of the audio element, as the IFrame player's are sampled. */
@@ -268,7 +273,7 @@ export class WebPlayer implements Player {
     if (!yt) return;
     // An MP3 is playing: the paused video's events aren't about it, but a video still loading
     // when it took over must not start under it.
-    if (this.q.current?.mp3) {
+    if (fileUrl(this.q.current)) {
       if (code === YT_PLAYING) yt.pauseVideo();
       return;
     }
@@ -296,7 +301,7 @@ export class WebPlayer implements Player {
 
   private onYtError(code: number): void {
     const t = this.q.current;
-    if (t?.mp3) return;
+    if (fileUrl(t)) return;
     const name = t ? `"${t.title}"` : 'track';
     if (SKIP_ERROR_CODES.has(code) || code === 2 || code === 5) {
       toast(`Skipped ${name}: unavailable`);
@@ -331,12 +336,13 @@ export class WebPlayer implements Player {
       return;
     }
     this.publish({ isPlaying: autoplay, isBuffering: autoplay, positionMs: 0, durationMs: 0, sampledAt: performance.now(), bufferedAheadMs: 0 });
-    if (t.mp3) {
+    const url = fileUrl(t);
+    if (url) {
       this.yt?.pauseVideo();
       const a = this.audioEl();
-      if (this.loadedId !== t.mp3 || force) {
-        this.loadedId = t.mp3;
-        a.src = t.mp3;
+      if (this.loadedId !== url || force) {
+        this.loadedId = url;
+        a.src = url;
       }
       if (autoplay) this.playAudio(a);
       return;

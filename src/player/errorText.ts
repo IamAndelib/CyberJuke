@@ -18,7 +18,9 @@ export interface TrackErrorFacts {
  * A lost connection is no fault of the track (native picks up by itself when `resumes`). An
  * older native sends no `kind`: about the track, as before.
  */
-export function trackErrorText(e: TrackErrorFacts | null | undefined, title: string): string {
+export function trackErrorText(e: TrackErrorFacts | null | undefined, title: string, local = false): string {
+  // A song from a folder on the phone fails only when its file is gone (or the card is out).
+  if (e?.skipped && local) return `Skipped "${title}": its file isn't on the phone`;
   if (e?.skipped) return e.kind === 'network' ? skippedOffline(title) : `Skipped "${title}": unavailable`;
   if (e?.kind === 'network') return e.resumes ? signalLost(title) : OFFLINE.lostWaits;
   return `Can't play "${title}"`;

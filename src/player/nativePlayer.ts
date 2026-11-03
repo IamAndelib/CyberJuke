@@ -7,7 +7,8 @@ import { UNKNOWN_ARTIST, UNTITLED, artworkUrl, isCoverUrl, makeTrack, type Track
 import { history, knownTrack, liked, IPV4_MODES, type CrossfadeMs, type Ipv4Mode, type Quality } from '../stores/library';
 import { catalog } from '../stores/catalog';
 import { toast } from '../stores/toast';
-import { UP_NEXT_MAX, YT_ID_RE, hasAudio, isMp3Url, parseNativeState } from '../core/guards';
+import { LOCAL_ID_RE, UP_NEXT_MAX, YT_ID_RE, hasAudio, isLocalTrack, isMp3Url, parseNativeState } from '../core/guards';
+import { localArtUrl } from '../data/local';
 import { logError } from '../core/log';
 import { trackErrorText } from './errorText';
 import { stationTrack } from './radio';
@@ -30,6 +31,8 @@ export function toNative(t: Track): NativeTrack {
     ...(t.membersOnly && { membersOnly: true }),
     ...(t.album && { album: clip(t.album) }),
     ...(t.mp3 && { mp3: t.mp3 }),
+    // A local song: native finds its file by the id (LocalLibrary), never from the page.
+    ...(isLocalTrack(t) && { local: true }),
   };
 }
 
@@ -56,6 +59,18 @@ const catalogById = computed(() => new Map(catalog.all.value.map((t) => [t.id, t
 function fromNative(t: NativeTrack): Track | null {
   if (!t || typeof t.id !== 'string' || !t.id || typeof t.ytId !== 'string') return null;
   const mp3 = t.ytId === '' && isMp3Url(t.mp3) ? t.mp3 : undefined;
+  if (t.ytId === '' && t.local === true && LOCAL_ID_RE.test(t.id)) {
+    return makeTrack({
+      id: t.id,
+      ytId: '',
+      title: typeof t.title === 'string' && t.title ? t.title : UNTITLED,
+      artist: typeof t.artist === 'string' && t.artist ? t.artist : UNKNOWN_ARTIST,
+      // Native sends the cover only when the phone keeps one.
+      artworkUrl: t.artworkUrl === localArtUrl(t.id) ? t.artworkUrl : '',
+      ...(typeof t.album === 'string' && t.album && { album: t.album }),
+      source: 'local',
+    });
+  }
   if (!mp3 && !YT_ID_RE.test(t.ytId)) return null;
   return makeTrack({
     id: t.id,
@@ -127,7 +142,7 @@ export class NativePlayer implements Player {
     JukePlayer.addListener('trackError', (e) => {
       const id = String(e?.trackId ?? '');
       const t = this.resolve(id);
-      toast(trackErrorText(e, t.title));
+      toast(trackErrorText(e, t.title, isLocalTrack(t)));
       // The track playList started was skipped: native won't report it, so stop waiting.
       if (this.expect?.id === id) {
         this.expect = null;

@@ -3,6 +3,7 @@ package io.github.iamandelib.cyberjuke.playback
 import android.content.Context
 import android.util.AtomicFile
 import android.util.Log
+import io.github.iamandelib.cyberjuke.local.LocalRules
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -55,12 +56,15 @@ internal data class LastSession(
         val mp3: String? = null,
         /** Heard in this list ("Played"): the current one always is. */
         val heard: Boolean = false,
+        /** A song from a folder on the phone, by its id; then [ytId] is "" and there is no [mp3]. */
+        val local: Boolean = false,
     ) {
         /** The NativeTrack JSON that [JukeTracks.toMediaItem] takes. */
         fun toNativeTrack(): JSONObject = JSONObject().apply {
             put("id", id)
             put("ytId", ytId)
             mp3?.let { put("mp3", it) }
+            if (local) put("local", true)
             title?.let { put("title", it) }
             artist?.let { put("artist", it) }
             artworkUrl?.let { put("artworkUrl", it) }
@@ -206,8 +210,11 @@ internal data class LastSession(
                 val t = arr.getJSONObject(i)
                 val ytId = t.str("ytId")
                 val mp3 = t.str("mp3")
+                // A local song: its own id, nothing else to play it by.
+                val local = ytId == null && mp3 == null && t.optBoolean("local", false) && LocalRules.isId(t.optString("id"))
                 when {
                     ytId != null -> if (!validYtId(ytId)) return null
+                    local -> Unit
                     !SessionPolicy.isValidMp3Url(mp3) -> return null
                 }
                 Entry(
@@ -227,6 +234,7 @@ internal data class LastSession(
                     membersOnly = t.optBoolean("membersOnly", false),
                     album = t.str("album"),
                     heard = t.optBoolean("h", false),
+                    local = local,
                 )
             }
             val index = o.getInt("index")

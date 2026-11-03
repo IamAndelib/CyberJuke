@@ -241,4 +241,21 @@ class LastSessionTest {
         p2.queue.restoreSession(listOf("q1", "a"), listOf(Section.QUEUED, Section.LIST), 0, 0L, null)
         assertEquals(0, p2.queue.pendingSerials.size)
     }
+
+    @Test
+    fun aLocalSongComesBackByItsIdOnly() {
+        val local = entry(1).copy(id = "loc:0123456789abcdef", ytId = "", artworkUrl = null, local = true)
+        val s = LastSession.of(listOf(entry(0), local), 1, 5_000L, 0L, false, null, 0, null, null)!!
+        val back = LastSession.decode(s.encode())!!
+        assertEquals(s, back)
+        val track = back.entries[1].toNativeTrack()
+        assertEquals(true, track.getBoolean("local"))
+        assertEquals("", track.getString("ytId"))
+        assertEquals(false, track.has("mp3"))
+        assertEquals(false, back.entries[0].toNativeTrack().has("local"))
+        // A local entry with an id that isn't a local song's drops the session.
+        val o = JSONObject(s.encode())
+        o.getJSONArray("tracks").getJSONObject(1).put("id", "t1")
+        assertNull(LastSession.decode(o.toString()))
+    }
 }
