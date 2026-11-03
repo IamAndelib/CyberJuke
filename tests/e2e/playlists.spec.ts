@@ -204,4 +204,19 @@ test.describe('adding songs', () => {
     });
     expect(await box('np-add-playlist')).toEqual(await box('np-like'));
   });
+
+  test('≡+ and ♥ sit on the artist’s line, below the title, so a long title has room', async ({ page }) => {
+    await start(page);
+    await page.getByTestId('track-play').first().click();
+    await openNowPlaying(page);
+    const box = (id: string) => page.getByTestId(id).locator('svg').first().evaluate((el) => el.getBoundingClientRect().toJSON() as DOMRect);
+    const artist = await page.getByTestId('np-artist').evaluate((el) => el.getBoundingClientRect().toJSON() as DOMRect);
+    const title = await page.getByTestId('np-title').evaluate((el) => el.getBoundingClientRect().toJSON() as DOMRect);
+    for (const id of ['np-add-playlist', 'np-like']) {
+      // Clear of the title's line (beside it they crowded a long, scrolling title), within the artist's.
+      const b = await box(id);
+      expect(b.top).toBeGreaterThanOrEqual(title.bottom);
+      expect(b.bottom).toBeLessThanOrEqual(artist.bottom);
+    }
+  });
 });

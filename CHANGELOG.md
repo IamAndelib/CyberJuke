@@ -10,6 +10,7 @@
 - Library is a list: **Liked** and **Recently played** are rows that open on their own pages, ready for more lists to join them.
 - Offline, the line at the top says which songs still play (liked, local, or both), and a tap on it opens Library instead of Liked.
 - Genres and Artists no longer end with a line explaining them.
+- In Now Playing, **≡+** and ♥ sit on the artist's line, so a long title has its line to itself.
 
 ### Fixed
 - Holding down an option in a switch or a row of chips (Settings, Home's genres) tints it instead of filling it, so it no longer looks chosen alongside the one that is.
