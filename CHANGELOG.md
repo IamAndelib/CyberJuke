@@ -8,6 +8,7 @@
 - Playlists: make your own from any songs, Jukebox, Global, Radio or your own files, with **Add to playlist** in a song's ⋯ menu, **≡+** in the player, or **Save queue as playlist**. Find them in Library, where you can play, reorder (⋯ → Edit songs), rename or delete them. A playlist's cover is its first four songs' covers.
 
 ### Changed
+- Liked can show your newest likes first, as before, or **A–Z** under letters, like Local, with the small letter beside the scroller; it remembers which.
 - Library is a list: **Liked** and **Recently played** are rows that open on their own pages, ready for more lists to join them.
 - Library's button at the top right shows its lists and playlists as a grid of tiles, three to a row, or as a list again; it remembers which.
 - Offline, the line at the top says which songs still play (liked, local, or both), and a tap on it opens Library instead of Liked.
@@ -16,6 +17,7 @@
 - An artist with nothing on the Jukebox or on Global (often the uploader named in a downloaded file) gets a 404 page instead of empty sections.
 
 ### Fixed
+- Dragging Local's scroller, the small letter beside it names the songs it sits next to, not the ones at the top of the screen.
 - Liked local songs keep their lyrics for offline, and offline Home's Shuffle plays them, even before any other liked song is saved on the phone.
 - A Global song's artist opens their page even when searching their name wouldn't find it.
 - Artists whose name has a comma stay one artist: Earth, Wind & Fire, Tyler, The Creator, Grover Washington, Jr. and the like no longer split into two in Artists, Now Playing and ⋯ → More by.
