@@ -4,6 +4,7 @@
 |---|---|
 | [PUBLISHING.md](PUBLISHING.md) | Maintainers: signing keys, test builds, releases and the F-Droid submission, step by step. |
 | [TESTING.md](TESTING.md) | Anyone testing a preview on a phone: a checklist to tick through. |
+| [PERFORMANCE.md](PERFORMANCE.md) | What has been measured (tab switches), what was left alone on purpose, and how to measure again. |
 | [fdroid/](fdroid/) | The F-Droid recipe draft and how it is submitted. |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | Building, tests, the code layout and the commit style. |
 | [../SECURITY.md](../SECURITY.md) | Reporting a security problem. |
