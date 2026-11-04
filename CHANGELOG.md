@@ -22,6 +22,7 @@
 - A Global song's artist opens their page even when searching their name wouldn't find it.
 - Artists whose name has a comma stay one artist: Earth, Wind & Fire, Tyler, The Creator, Grover Washington, Jr. and the like no longer split into two in Artists, Now Playing and ⋯ → More by.
 - Holding down an option in a switch or a row of chips (Settings, Home's genres) tints it instead of filling it, so it no longer looks chosen alongside the one that is.
+- Recently played hides your own songs while their folder is removed or local music is off, as Liked and playlists do; they come back with the folder.
 - A song you play from Recently played shows its title in the highlight colour at the top of the list, like a song played from anywhere else.
 
 ## [1.3.6] - 2026-10-31
