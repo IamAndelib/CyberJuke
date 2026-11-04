@@ -1,4 +1,4 @@
-import { expect, test } from '../fixtures';
+import { expect, musicFolder, test } from '../fixtures';
 import type { Page } from '@playwright/test';
 import { nextFrame, openNowPlaying, openSearch, seedStorage, setLyricsMode, SETTINGS_KEY, shot, toastsGone } from '../helpers';
 
@@ -29,96 +29,119 @@ async function settle(page: Page) {
   await nextFrame(page);
 }
 
-async function open(page: Page, theme = 'dark') {
+async function open(page: Page, theme = 'dark', more: Record<string, unknown> = {}) {
   await page.setViewportSize({ width: 412, height: 915 });
-  await seedStorage(page, { [SETTINGS_KEY]: { theme, showNsfw: false, quality: 'high' } });
+  await seedStorage(page, { [SETTINGS_KEY]: { theme, showNsfw: false, quality: 'high', ...more } });
   await page.goto('/');
   await expect(page.getByTestId('track-row').first()).toBeVisible();
   await settle(page);
 }
 
-test('README highlights', async ({ page }) => {
-  test.setTimeout(180_000);
-  await open(page);
-  await shot(page, 'media-01-home');
+test.describe('README highlights', () => {
+  // Local music on, with the test fixture's synthetic folder, so Library shows Local too.
+  test.use({ localOptions: { folders: [musicFolder()] } });
 
-  // Something liked and queued, then a radio from Home: Up next shows all three parts.
-  for (const i of [2, 4]) {
-    await page.getByTestId('track-more').nth(i).click();
-    await page.getByTestId('menu-like').click();
-  }
-  await page.getByTestId('track-play').nth(0).click();
-  for (const i of [3, 5]) {
-    await page.getByTestId('track-more').nth(i).click();
-    await page.getByTestId('menu-add-queue').click();
-  }
-  await openNowPlaying(page);
-  await settle(page);
-  await shot(page, 'media-02-now-playing');
-  await page.getByTestId('up-next').evaluate((el) => el.scrollIntoView({ block: 'start' }));
-  await expect(page.getByTestId('upnext-autoplay-label')).toBeVisible();
-  await settle(page);
-  await shot(page, 'media-03-up-next');
+  test('README highlights', async ({ page }) => {
+    test.setTimeout(180_000);
+    await open(page, 'dark', { localMusic: true, version: 3 });
+    await shot(page, 'media-01-home');
 
-  await setLyricsMode(page, 'english');
-  await page.getByTestId('now-playing').locator('.np-scroll').evaluate((el) => el.scrollTo(0, 0));
-  await page.getByTestId('np-lyrics-toggle').click();
-  await expect(page.getByTestId('np-lyrics')).not.toHaveAttribute('data-kind', 'loading');
-  await settle(page);
-  await shot(page, 'media-04-lyrics');
-  await page.getByTestId('np-lyrics-toggle').click();
-  await page.getByTestId('np-close').click();
+    // Something liked and queued, then a radio from Home: Up next shows all three parts.
+    for (const i of [2, 4]) {
+      await page.getByTestId('track-more').nth(i).click();
+      await page.getByTestId('menu-like').click();
+    }
+    await page.getByTestId('track-play').nth(0).click();
+    for (const i of [3, 5]) {
+      await page.getByTestId('track-more').nth(i).click();
+      await page.getByTestId('menu-add-queue').click();
+    }
+    await openNowPlaying(page);
+    await settle(page);
+    await shot(page, 'media-02-now-playing');
+    await page.getByTestId('up-next').evaluate((el) => el.scrollIntoView({ block: 'start' }));
+    await expect(page.getByTestId('upnext-autoplay-label')).toBeVisible();
+    await settle(page);
+    await shot(page, 'media-03-up-next');
 
-  await page.getByTestId('tab-artists').click();
-  await page.getByTestId('artist-grid').getByTestId('artist-tile').first().click();
-  await expect(page.getByTestId('artist-singles').getByTestId('release-card').first()).toBeVisible();
-  await settle(page);
-  await shot(page, 'media-05-artist');
-  await page.getByTestId('artist-back').click();
+    await setLyricsMode(page, 'english');
+    await page.getByTestId('now-playing').locator('.np-scroll').evaluate((el) => el.scrollTo(0, 0));
+    await page.getByTestId('np-lyrics-toggle').click();
+    await expect(page.getByTestId('np-lyrics')).not.toHaveAttribute('data-kind', 'loading');
+    await settle(page);
+    await shot(page, 'media-04-lyrics');
+    await page.getByTestId('np-lyrics-toggle').click();
+    await page.getByTestId('np-close').click();
 
-  await page.getByTestId('tab-genres').click();
-  await page.getByTestId('genre-grid').locator('[data-testid="genre-tile"][data-genre="synthwave"]').click();
-  await expect(page.getByTestId('screen-genre').getByTestId('track-row').first()).toBeVisible();
-  await settle(page);
-  await shot(page, 'media-06-genre');
-  await page.getByTestId('genre-back').click();
+    await page.getByTestId('tab-artists').click();
+    await page.getByTestId('artist-grid').getByTestId('artist-tile').first().click();
+    await expect(page.getByTestId('artist-singles').getByTestId('release-card').first()).toBeVisible();
+    await settle(page);
+    await shot(page, 'media-05-artist');
+    await page.getByTestId('artist-back').click();
 
-  // Here on the Genres tab, typo and all.
-  await openSearch(page);
-  await page.getByTestId('search-input').fill('synthwav');
-  await expect(page.getByTestId('here-places').getByTestId('here-place').first()).toBeVisible();
-  await page.getByTestId('search-input').press('Enter');
-  await page.getByTestId('search-input').blur();
-  await settle(page);
-  await shot(page, 'media-08-here-genres');
-  await page.getByTestId('search-close').click();
+    await page.getByTestId('tab-genres').click();
+    await page.getByTestId('genre-grid').locator('[data-testid="genre-tile"][data-genre="synthwave"]').click();
+    await expect(page.getByTestId('screen-genre').getByTestId('track-row').first()).toBeVisible();
+    await settle(page);
+    await shot(page, 'media-06-genre');
+    await page.getByTestId('genre-back').click();
 
-  // Search from Home: recent searches, then Jukebox results.
-  await page.getByTestId('tab-home').click();
-  for (const q of ['daft punk', 'night drive']) {
+    // Here on the Genres tab, typo and all.
     await openSearch(page);
-    await page.getByTestId('search-input').fill(q);
+    await page.getByTestId('search-input').fill('synthwav');
+    await expect(page.getByTestId('here-places').getByTestId('here-place').first()).toBeVisible();
     await page.getByTestId('search-input').press('Enter');
+    await page.getByTestId('search-input').blur();
+    await settle(page);
+    await shot(page, 'media-08-here-genres');
     await page.getByTestId('search-close').click();
-  }
-  await openSearch(page);
-  await page.getByTestId('search-input').fill('neon');
-  await expect(page.getByTestId('search-results')).toBeVisible();
-  await page.getByTestId('search-input').blur();
-  await settle(page);
-  await shot(page, 'media-07-search');
-  await page.getByTestId('search-close').click();
 
-  await page.getByTestId('tab-library').click();
-  await settle(page);
-  await shot(page, 'media-09-library');
+    // Search from Home: recent searches, then Jukebox results.
+    await page.getByTestId('tab-home').click();
+    for (const q of ['daft punk', 'night drive']) {
+      await openSearch(page);
+      await page.getByTestId('search-input').fill(q);
+      await page.getByTestId('search-input').press('Enter');
+      await page.getByTestId('search-close').click();
+    }
+    await openSearch(page);
+    await page.getByTestId('search-input').fill('neon');
+    await expect(page.getByTestId('search-results')).toBeVisible();
+    await page.getByTestId('search-input').blur();
+    await settle(page);
+    await shot(page, 'media-07-search');
+    await page.getByTestId('search-close').click();
 
-  // Signal Radio, a station on air.
-  await page.getByTestId('tab-radio').click();
-  await page.getByTestId('station-tune').first().click();
-  await expect(page.getByTestId('station-on')).toBeVisible();
-  await settle(page);
-  await shot(page, 'media-10-radio');
+    // Two playlists, made from the songs' ⋯ menus, a few songs in the first.
+    for (const [i, name] of [
+      [1, 'Night drive'],
+      [6, 'Sunday morning'],
+    ] as const) {
+      await page.getByTestId('track-more').nth(i).click();
+      await page.getByTestId('menu-add-playlist').click();
+      if (await page.getByTestId('add-to-playlist').isVisible()) await page.getByTestId('pl-pick-new').click();
+      await page.getByTestId('name-input').fill(name);
+      await page.getByTestId('name-ok').click();
+      await toastsGone(page);
+    }
+    for (const i of [2, 3, 7]) {
+      await page.getByTestId('track-more').nth(i).click();
+      await page.getByTestId('menu-add-playlist').click();
+      await page.getByTestId('pl-pick').filter({ hasText: 'Night drive' }).click();
+      await toastsGone(page);
+    }
+    await page.getByTestId('tab-library').click();
+    await settle(page);
+    await shot(page, 'media-09-library');
+
+    // Signal Radio, a station on air.
+    await page.getByTestId('tab-radio').click();
+    await page.getByTestId('station-tune').first().click();
+    await expect(page.getByTestId('station-on')).toBeVisible();
+    await settle(page);
+    await shot(page, 'media-10-radio');
+  });
 });
 
 // One test per theme: each gets a fresh page, so its seeded settings apply.
