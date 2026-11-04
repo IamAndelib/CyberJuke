@@ -310,6 +310,22 @@ describe('liked local songs', () => {
     expect(lib.likedShown.value.map((t) => t.id).sort()).toEqual([a.id, b.id].sort());
     lib.localHere.value = new Set();
   });
+
+  it('show in Recently played only while their file is on the phone, and are kept meanwhile', async () => {
+    await lib.loadLibrary();
+    const a = song('loc:00000000000000c3');
+    const b = song('loc:00000000000000d4');
+    lib.addRecent(a);
+    lib.addRecent(b);
+    lib.localHere.value = new Set([a.id]);
+    expect(lib.recentShown.value.map((t) => t.id)).toContain(a.id);
+    expect(lib.recentShown.value.map((t) => t.id)).not.toContain(b.id);
+    expect(lib.historyShown.value.map((e) => e.track.id)).not.toContain(b.id);
+    expect(lib.recent.value.map((t) => t.id)).toContain(b.id);
+    lib.localHere.value = new Set([a.id, b.id]);
+    expect(lib.recentShown.value.map((t) => t.id)).toContain(b.id);
+    lib.localHere.value = new Set();
+  });
 });
 
 describe('members-only tracks dropped at a sign-out', () => {
