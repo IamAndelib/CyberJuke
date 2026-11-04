@@ -30,7 +30,7 @@ import { NativePlayer } from './nativePlayer';
 import { offlineGuard, playsOffline, type OfflineRefusal } from './offlineGuard';
 import { stationPlaying } from './radio';
 import { safePlayer } from './safePlayer';
-import { nsfwAutoplayIds, sectionsOf, wantsPlay, type PlayContext, type Player, type UpItem, type UpNextSections } from './types';
+import { nsfwAutoplayIds, placeOf, sectionsOf, wantsPlay, type PlayContext, type Player, type UpItem, type UpNextSections } from './types';
 import { WebPlayer } from './webPlayer';
 
 export * from './types';
@@ -145,12 +145,8 @@ export const shuffleOn = computed(() => state.value.shuffle);
 export const repeatMode = computed(() => state.value.repeat);
 /** The current track's length (0 until known). */
 export const durationMs = computed(() => state.value.durationMs);
-/** Where the current track is in the list you started (autoplay's tracks after it not counted): "3 of 50", or "Single track". */
-export const queuePlace = computed(() => {
-  const s = state.value;
-  const n = s.queue.length - s.upNext.filter((u) => u.auto).length;
-  return n > 1 ? `${s.index + 1} of ${n}` : 'Single track';
-});
+/** Where the current track is in the list you started (placeOf). */
+export const queuePlace = computed(() => placeOf(state.value));
 /** "Next" does something: a track after this one, or repeat wraps around. */
 export const canSkipNext = computed(() => state.value.upNext.length > 0 || state.value.repeat === 'all');
 
