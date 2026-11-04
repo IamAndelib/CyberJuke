@@ -38,7 +38,7 @@ export function playsOffline(s: Pick<PlayerState, 'current' | 'isPlaying' | 'buf
 
 export type OfflineRefusal = 'unsaved' | 'offline';
 
-export interface OfflinePolicy {
+interface OfflinePolicy {
   online(): boolean;
   /** Audio ids (audioIdOf) of the liked songs saved whole on the phone. */
   saved(): ReadonlySet<string>;

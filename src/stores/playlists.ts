@@ -81,7 +81,7 @@ function parsePlaylist(x: unknown): Playlist | null {
 }
 
 /** The file's playlists; anything but this version's file reads as none. */
-export function parsePlaylists(raw: unknown): Playlist[] | null {
+function parsePlaylists(raw: unknown): Playlist[] | null {
   const o = raw as { version?: unknown; playlists?: unknown } | null;
   if (!o || o.version !== VERSION || !Array.isArray(o.playlists)) return null;
   const ids = new Set<string>();

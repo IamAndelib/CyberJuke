@@ -10,6 +10,7 @@
  * Pure (localGroups.test.ts).
  */
 import { localArtUrl, type LocalSong } from './local';
+import { UNKNOWN_ARTIST } from './model';
 
 export interface LocalAlbum {
   /** Its name and artist, matched loosely: the album's id while the list stands. */
@@ -34,8 +35,8 @@ export interface LocalArtist {
   songs: LocalSong[];
 }
 
-export const UNKNOWN_ARTIST = 'Unknown artist';
-export const UNKNOWN_ALBUM = 'Unknown album';
+export { UNKNOWN_ARTIST };
+const UNKNOWN_ALBUM = 'Unknown album';
 /** The Unknown album's key: no real album's (theirs hold a line break between name and artist). */
 export const UNKNOWN_ALBUM_KEY = '\n';
 
@@ -45,7 +46,7 @@ export function byMostSongs<T extends { songs: readonly unknown[] }>(xs: readonl
 }
 
 /** Names as they match: case, accents' composed forms and spacing aside. */
-export const looseKey = (s: string): string => s.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+const looseKey = (s: string): string => s.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
 
 export const byName = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true }).compare;
 

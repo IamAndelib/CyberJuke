@@ -41,9 +41,9 @@ export interface LocalSong {
   cover: boolean;
 }
 
-export type AddFolderResult = { result: 'added'; folder: LocalFolder } | { result: 'inside'; name: string } | { result: 'cancelled' };
+type AddFolderResult = { result: 'added'; folder: LocalFolder } | { result: 'inside'; name: string } | { result: 'cancelled' };
 
-export interface LocalChanged {
+interface LocalChanged {
   scanning: string | null;
   found: number;
   done: boolean;

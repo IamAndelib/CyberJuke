@@ -1557,7 +1557,6 @@ section[data-kind] > .shelf {
 .pl-pick {
   min-height: 64px;
 }
-.pl-pick > .art,
 .pl-pick > .mosaic {
   flex: none;
   width: 44px;

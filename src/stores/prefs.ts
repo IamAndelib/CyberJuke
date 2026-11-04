@@ -14,15 +14,15 @@ export const genresSort = signal<GridSort>('popular');
 export const artistsSort = signal<GridSort>('popular');
 
 /** Library → Local's order in each view: A–Z, the newest files, or the most songs. */
-export type LocalSongsOrder = 'az' | 'newest';
-export type LocalGroupsOrder = 'az' | 'songs';
+type LocalSongsOrder = 'az' | 'newest';
+type LocalGroupsOrder = 'az' | 'songs';
 export const localSongsOrder = signal<LocalSongsOrder>('az');
 export const localAlbumsOrder = signal<LocalGroupsOrder>('az');
 export const localArtistsOrder = signal<LocalGroupsOrder>('az');
 /** Liked's order: the newest likes first (as kept) or A–Z. */
 export const likedOrder = signal<LocalSongsOrder>('newest');
 
-export type LibraryLayout = 'list' | 'grid';
+type LibraryLayout = 'list' | 'grid';
 /** Library's lists and playlists as rows or as tiles. */
 export const libraryLayout = signal<LibraryLayout>('list');
 

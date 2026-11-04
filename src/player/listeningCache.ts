@@ -55,7 +55,7 @@ export function audioIdsOf(tracks: readonly Track[]): string[] {
   return out;
 }
 
-export type LikedPayload = { ytIds: string[]; membersOnly: string[]; covers: Record<string, string> };
+type LikedPayload = { ytIds: string[]; membersOnly: string[]; covers: Record<string, string> };
 
 /**
  * What setLikedIds sends for `tracks`: their audio ids (in `ytIds`, the bridge's name), the

@@ -39,7 +39,7 @@ const FDROID_INSTALLERS = new Set([
   'org.fdroid.fdroid.debug',
 ]);
 
-export interface AppRelease {
+interface AppRelease {
   version: string;
   url: string;
 }
@@ -145,7 +145,7 @@ function maybeAutoCheck(): void {
 let started = false;
 
 /** What the native app says about this install (JukePlayer.getAppInfo). */
-export type AppInfo = () => Promise<{ version: string; installer?: string }>;
+type AppInfo = () => Promise<{ version: string; installer?: string }>;
 
 /**
  * Once at startup (after the library has loaded): what this install is (`appInfo`, the real

@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals';
 import { useEffect, useRef } from 'preact/hooks';
 import type { Track } from '../../data/model';
-import { deletePlaylist, moveInPlaylist, playlistsShown, renamePlaylist, type Playlist } from '../../stores/playlists';
+import { deletePlaylist, moveInPlaylist, playlistShown, renamePlaylist } from '../../stores/playlists';
 import { removeFromPlaylistWithUndo } from '../../stores/undo';
 import { Art } from '../../ui/components/Art';
 import { BackButton } from '../../ui/components/BackButton';
@@ -17,8 +17,6 @@ import { plural } from '../../core/text';
 
 /** The playlist whose songs are being edited (↑ ↓ ✕), if any. */
 const editing = signal<string | null>(null);
-
-const shown = (id: string): Playlist | null => playlistsShown.value.find((p) => p.id === id) ?? null;
 
 /** A song's row while editing: its art and names, then ↑ ↓ ✕ (Up next's buttons). */
 function EditRow({ id, track, first, last }: { id: string; track: Track; first: boolean; last: boolean }) {
@@ -52,9 +50,9 @@ function EditRow({ id, track, first, last }: { id: string; track: Track; first: 
 
 /** One of your playlists: its mosaic, name and count, Play and Shuffle, the songs; ⋯ for Edit songs, Rename, Delete. */
 export function PlaylistPage({ id }: { id: string }) {
-  const p = shown(id);
+  const p = playlistShown(id);
   const isEditing = editing.value === id;
-  useSearchContext({ label: p?.name ?? 'Playlist', tracks: () => shown(id)?.tracks ?? [] });
+  useSearchContext({ label: p?.name ?? 'Playlist', tracks: () => playlistShown(id)?.tracks ?? [] });
   // Leaving the page ends editing.
   useEffect(() => () => void (editing.value === id && (editing.value = null)), [id]);
   if (!p)
@@ -127,7 +125,7 @@ export function PlaylistPage({ id }: { id: string }) {
 /** A playlist's ⋯: its mosaic and name, then Edit songs, Rename and Delete playlist. */
 export function PlaylistMenu() {
   const id = playlistMenuFor.value;
-  const p = id ? shown(id) : null;
+  const p = id ? playlistShown(id) : null;
   const sheet = useRef<HTMLDivElement>(null);
   const r = useSheetContent(p, sheet);
   const close = () => (playlistMenuFor.value = null);

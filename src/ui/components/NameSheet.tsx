@@ -24,7 +24,7 @@ export function NameSheet() {
   return (
     <div class={'sheet-wrap' + (req ? ' open' : '')} aria-hidden={!req} inert={!req}>
       <div class="scrim" onClick={close} />
-      <div class="sheet name-sheet" ref={sheet} role="dialog" aria-modal="true" aria-label={r?.title ?? 'Name'} data-testid="name-sheet">
+      <div class="sheet" ref={sheet} role="dialog" aria-modal="true" aria-label={r?.title ?? 'Name'} data-testid="name-sheet">
         {r && (
           <form
             onSubmit={(e) => {

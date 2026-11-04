@@ -1,6 +1,6 @@
 import { useRef } from 'preact/hooks';
 import type { Track } from '../../data/model';
-import { playlists, playlistsShown } from '../../stores/playlists';
+import { playlistHas, playlists, playlistsShown } from '../../stores/playlists';
 import { addToPlaylistWithUndo, createWithSongWithUndo } from '../../stores/undo';
 import { Icon } from '../icons';
 import { addToPlaylistFor, askName, menuTrack } from '../nav';
@@ -32,7 +32,7 @@ export function AddToPlaylistSheet() {
   return (
     <div class={'sheet-wrap' + (track ? ' open' : '')} aria-hidden={!track} inert={!track}>
       <div class="scrim" onClick={close} />
-      <div class="sheet pl-pick-sheet" ref={sheet} role="dialog" aria-modal="true" aria-label="Add to playlist" data-testid="add-to-playlist">
+      <div class="sheet" ref={sheet} role="dialog" aria-modal="true" aria-label="Add to playlist" data-testid="add-to-playlist">
         {t && (
           <>
             <div class="sheet-head confirm-head">
@@ -43,7 +43,7 @@ export function AddToPlaylistSheet() {
                 </div>
               </div>
             </div>
-            <div class="pl-pick-list">
+            <div>
               <button
                 class="sheet-item"
                 onClick={() => {
@@ -55,7 +55,7 @@ export function AddToPlaylistSheet() {
                 <Icon name="plus" size={20} /> New playlist
               </button>
               {lists.map((p) => {
-                const has = playlists.peek().find((x) => x.id === p.id)?.tracks.some((x) => x.id === t.id) ?? false;
+                const has = playlistHas(p.id, t.id);
                 return (
                   <button
                     key={p.id}
