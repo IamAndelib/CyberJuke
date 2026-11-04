@@ -23,7 +23,8 @@ const MIN_THUMB = 48;
  * out of Android's back gesture. With `az`, the letter of the `.az-head` section at
  * the top of the list shows in a centred box only while the thumb is dragged (never on
  * ordinary scrolling), fading LETTER_HIDE_MS after the drag ends; with `az: 'beside'`, a small
- * one rides beside the thumb instead, clear of the list (Library → Local's songs).
+ * one rides beside the thumb instead, clear of the list, and names the section level with it
+ * (the rows it sits next to), not the one at the top (Library → Local's songs).
  *
  * Lives in a zero-height sticky dock at the top of the scroller, so it stays put while
  * the content scrolls; everything is updated directly in a requestAnimationFrame.
@@ -67,8 +68,8 @@ export function FastScroller({
 
   const headerHeight = (el: HTMLElement) => (el.querySelector(':scope > .topbar') as HTMLElement | null)?.offsetHeight ?? 0;
 
-  /** Section letter at the top of the visible list. */
-  const currentLetter = (el: HTMLElement, head: number, scroll: number): string => {
+  /** Section letter at [at] px from the scroller's top: the list's top line, or the thumb's when the letter sits beside it. */
+  const currentLetter = (el: HTMLElement, at: number, scroll: number): string => {
     const s = st.current;
     if (s.headsFor !== scroll) {
       const base = el.getBoundingClientRect().top - el.scrollTop;
@@ -80,7 +81,7 @@ export function FastScroller({
       }
       s.headsFor = scroll;
     }
-    const line = el.scrollTop + head + 8;
+    const line = el.scrollTop + at;
     let cur = s.heads[0]?.letter ?? '';
     for (const h of s.heads) {
       if (h.top <= line) cur = h.letter;
@@ -125,10 +126,12 @@ export function FastScroller({
     if (max <= 1) return;
     const y = (Math.min(max, Math.max(0, el.scrollTop)) / max) * (z.trackH - z.thumbH);
     th.style.transform = `translateY(${y}px)`;
-    if (azRef.current === 'beside' && popup.current) popup.current.style.top = `${z.trackTop + y + z.thumbH / 2}px`;
+    const beside = azRef.current === 'beside';
+    const mid = z.trackTop + y + z.thumbH / 2;
+    if (beside && popup.current) popup.current.style.top = `${mid}px`;
     syncExclusion();
     if (azRef.current) {
-      const l = currentLetter(el, z.head, z.scroll);
+      const l = currentLetter(el, beside ? mid : z.head + 8, z.scroll);
       if (l !== s.letter) {
         s.letter = l;
         if (popup.current) popup.current.firstElementChild!.textContent = l;
