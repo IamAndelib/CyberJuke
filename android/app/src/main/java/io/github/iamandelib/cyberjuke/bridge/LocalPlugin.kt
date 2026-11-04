@@ -1,6 +1,7 @@
 package io.github.iamandelib.cyberjuke.bridge
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -59,6 +60,10 @@ class LocalPlugin : Plugin() {
     @Volatile
     private var scanner: LocalScanner? = null
 
+    /** The page is gone (the activity recreated): a running scan stops, and the next page's plugin scans again. */
+    @Volatile
+    private var stopped = false
+
     override fun load() {
         calls.execute { LocalLibrary.init(context) }
     }
@@ -81,7 +86,12 @@ class LocalPlugin : Plugin() {
         if (initial != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && LocalLibrary.edit(context, save = false) { i -> i.folders.any { it.id == initial } }) {
             intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, Uri.parse(initial))
         }
-        startActivityForResult(call, intent, "folderPicked")
+        try {
+            startActivityForResult(call, intent, "folderPicked")
+        } catch (e: ActivityNotFoundException) {
+            // No folder picker on this device (some TVs and locked-down profiles).
+            call.reject("UNAVAILABLE")
+        }
     }
 
     @ActivityCallback
@@ -201,7 +211,8 @@ class LocalPlugin : Plugin() {
         scans.execute {
             val folders = LocalLibrary.edit(context, save = false) { i -> i.folders.filter { ids == null || it.id in ids } }
             for (f in folders) {
-                val s = LocalScanner(context).also { scanner = it }
+                if (stopped) break
+                val s = LocalScanner(context.applicationContext).also { scanner = it }
                 scanning = f.id
                 emit(found = 0, done = false)
                 val known = LocalLibrary.songs
@@ -221,10 +232,21 @@ class LocalPlugin : Plugin() {
                     }
                 }
             }
+            // Covers written for songs that never made it into the list (their folder removed, or local
+            // music turned off, while they were read) go; with nothing chosen any more, everything goes.
+            // Not once stopped: the next page's scan may be writing covers for songs not listed yet.
+            if (!stopped) LocalLibrary.edit(context) { it.dropStrayArt() }
             scanning = null
             scanner = null
-            emit(done = true)
+            if (!stopped) emit(done = true)
         }
+    }
+
+    override fun handleOnDestroy() {
+        stopped = true
+        scanner?.cancelled = true
+        scans.shutdown()
+        calls.shutdown()
     }
 
     private fun emit(found: Int = 0, done: Boolean) {
