@@ -674,6 +674,7 @@ test("played songs get ↑ ↓ ✕: moves stay among them, the last one's ↓ pl
   await page.getByTestId('toast').filter({ hasText: 'Removed from queue' }).getByRole('button', { name: 'Undo' }).click();
   await expect(titles).toHaveText([t[1], t[0], t[2]]);
   // The last one's ↓ takes it past the playing song: it plays next.
+  await page.waitForTimeout(350); // past the guard the ✕ above started
   await page.getByRole('button', { name: `Move ${t[2]} down` }).click();
   await expect(titles).toHaveText([t[1], t[0]]);
   await expect(page.locator('[data-testid="upnext-row"][data-section="list"] .row-title').first()).toHaveText(t[2]);
