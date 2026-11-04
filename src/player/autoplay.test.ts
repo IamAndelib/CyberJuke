@@ -191,6 +191,19 @@ describe('autoplay', () => {
     calls.mockRestore();
   });
 
+  it('refills reuse one similarity index: the catalog itself goes to similarTracks while every song plays', async () => {
+    const seed = track('c0', { artist: 'A0' });
+    const { ap, s } = setup({ current: seed, seed, queue: [seed], upNext: [] });
+    const spy = await import('../data/similar');
+    const calls = vi.spyOn(spy, 'similarTracks');
+    await ap.fill({ left: 0, seedId: 'c0' });
+    s.value = { ...s.value, queue: [seed, track('c1')] };
+    await ap.fill({ left: 3, seedId: 'c0' });
+    expect(calls).toHaveBeenCalledTimes(2);
+    expect(calls.mock.calls[1][0]).toBe(calls.mock.calls[0][0]);
+    calls.mockRestore();
+  });
+
   it('a Global seed plays its radio, continuing from the last page', async () => {
     const seed = track('ytm:gseed', { source: 'ytmusic', genre: '' });
     const { ap, added, radio, s } = setup({ current: seed, seed, queue: [seed] });
