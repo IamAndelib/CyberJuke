@@ -28,6 +28,7 @@
 - Now Playing's "4 of 12" counts only the list you started, also once autoplay has lined up more than 50 songs after it.
 - A song you play from Recently played shows its title in the highlight colour at the top of the list, like a song played from anywhere else.
 - An artist or genre whose name takes three lines on a narrow phone has its ☆ in the middle of the tile, not at its top.
+- Held down, Shuffle and the other outlined buttons (Retry, Clear cache…) are tinted, as a held switch is, so the press shows; before they only shifted a little.
 
 ## [1.3.6] - 2026-10-31
 
