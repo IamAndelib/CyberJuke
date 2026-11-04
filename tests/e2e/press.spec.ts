@@ -463,3 +463,33 @@ test('a held choice is tinted, never filled like the chosen one: chips and the S
   expect(seg.pressed).not.toBe(seg.chosen);
   expect(seg.pressed).not.toBe(seg.rest);
 });
+
+test('a held Shuffle is tinted like a held choice and keeps its push; Play keeps just its push', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('tab-artists').click();
+  await page.getByTestId('artist-grid').getByTestId('artist-tile').first().click();
+  const shuffle = page.getByTestId('artist-jukebox-shuffle');
+  await expect(shuffle).toBeVisible();
+  const style = (l: Locator) => l.evaluate((el) => ({ bg: getComputedStyle(el).backgroundColor, t: getComputedStyle(el).transform }));
+  const tint = await page.evaluate(() => {
+    const probe = document.createElement('div');
+    probe.style.background = 'var(--press-choice)';
+    document.body.append(probe);
+    const c = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return c;
+  });
+  const rest = await style(shuffle);
+  await shuffle.evaluate((el) => el.setAttribute('data-pressed', ''));
+  const held = await style(shuffle);
+  expect(held.bg).toBe(tint);
+  expect(held.bg).not.toBe(rest.bg);
+  expect(held.t).toBe('matrix(1, 0, 0, 1, 2, 2)');
+  // Play, already filled, keeps its colour and its push.
+  const play = page.getByTestId('artist-jukebox-play');
+  const playRest = await style(play);
+  await play.evaluate((el) => el.setAttribute('data-pressed', ''));
+  const playHeld = await style(play);
+  expect(playHeld.bg).toBe(playRest.bg);
+  expect(playHeld.t).toBe('matrix(1, 0, 0, 1, 2, 2)');
+});

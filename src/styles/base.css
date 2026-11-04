@@ -176,6 +176,10 @@ h3 {
   transform: translate(2px, 2px);
   box-shadow: 1px 1px 0 var(--color-border);
 }
+/* An outlined one (Shuffle beside Play) is tinted too, as a held choice is, so the press shows. */
+.btn:not(.primary):is(:active, [data-pressed]):not(:disabled) {
+  background: var(--press-choice);
+}
 
 .link-btn {
   min-height: 44px;

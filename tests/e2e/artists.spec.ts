@@ -384,3 +384,21 @@ test("an artist page shows the Jukebox's 5 newest first, and all of them a tap a
   // Focus moves on to the first track shown, not off the page.
   await expect(jukebox.getByTestId('track-play').nth(5)).toBeFocused();
 });
+
+test("a tile's ☆ sits in the middle of the tile, also when a long name wraps it onto more lines", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 780 });
+  await page.goto('/');
+  await page.getByTestId('tab-artists').click();
+  const cells = page.getByTestId('artist-grid').getByTestId('artist-cell');
+  await expect.poll(() => cells.count()).toBeGreaterThan(300);
+  const off = await cells.evaluateAll((els) =>
+    els.map((c) => {
+      const t = c.querySelector('.genre-tile')!.getBoundingClientRect();
+      const s = c.querySelector('.genre-fav')!.getBoundingClientRect();
+      return { h: t.height, d: Math.abs(t.top + t.height / 2 - (s.top + s.height / 2)) };
+    }),
+  );
+  // On a narrow phone some names take three lines (taller than a tile's 60px), and every star is centred.
+  expect(off.some((o) => o.h > 64)).toBe(true);
+  expect(Math.max(...off.map((o) => o.d))).toBeLessThanOrEqual(1);
+});
