@@ -23,6 +23,7 @@
 - Holding down an option in a switch or a row of chips (Settings, Home's genres) tints it instead of filling it, so it no longer looks chosen alongside the one that is.
 - With the phone's clock set hours ahead, songs no longer ask YouTube for a new link at every try, which could get playback refused for a while.
 - With a keyboard, a focused switch (Settings' choices, Local's Songs | Albums | Artists) shows its focus ring; text fields' edges are easier to see in every theme.
+- Now Playing's "4 of 12" counts only the list you started, also once autoplay has lined up more than 50 songs after it.
 - A song you play from Recently played shows its title in the highlight colour at the top of the list, like a song played from anywhere else.
 
 ## [1.3.6] - 2026-10-31
