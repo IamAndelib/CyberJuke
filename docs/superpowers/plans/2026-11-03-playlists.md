@@ -1,4 +1,4 @@
-# Playlists 1.5.0 Implementation Plan
+# Playlists Implementation Plan (shipped in 1.4.0)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -131,4 +131,4 @@
 
 ## Then
 - A Preview for the maintainer's phone.
-- The whole-app review, then release 1.5.0 and the F-Droid recipe.
+- The whole-app review, then release 1.4.0 and the F-Droid recipe.
