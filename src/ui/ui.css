@@ -566,11 +566,14 @@
     font-size: clamp(13px, calc((100cqi - 56px) / 8), 16px);
   }
 }
-/* Star: its own 48px button over the tile's top-right corner. */
+/* Star: its own 48px button at the tile's right, in the middle of the tile however many lines
+   its name takes. */
 .genre-fav {
   position: absolute;
-  top: 6px;
+  top: 0;
+  bottom: 0;
   right: 0;
+  margin: auto 0;
   z-index: 1;
   display: flex;
   align-items: center;
