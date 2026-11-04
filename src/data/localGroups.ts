@@ -64,6 +64,13 @@ function mostCommon(names: string[]): string {
   return best;
 }
 
+/** Adds [s] to [key]'s list in [map] (in place: a big folder makes long lists). */
+function add<T>(map: Map<string, T[]>, key: string, s: T): void {
+  const list = map.get(key);
+  if (list) list.push(s);
+  else map.set(key, [s]);
+}
+
 /** An album's order: disc, then track (unnumbered after numbered), then title. */
 function albumOrder(a: LocalSong, b: LocalSong): number {
   return (a.disc || 1) - (b.disc || 1) || (a.track || 10_000) - (b.track || 10_000) || byName(a.title, b.title);
@@ -75,13 +82,13 @@ export function groupLocal(songs: readonly LocalSong[]): { albums: LocalAlbum[];
   const noAlbum: LocalSong[] = [];
   for (const s of songs) {
     const owner = looseKey(ownerOf(s));
-    artistSongs.set(owner, [...(artistSongs.get(owner) ?? []), s]);
+    add(artistSongs, owner, s);
     if (!s.album.trim()) {
       noAlbum.push(s);
       continue;
     }
     const key = looseKey(s.album) + '\n' + owner;
-    albumSongs.set(key, [...(albumSongs.get(key) ?? []), s]);
+    add(albumSongs, key, s);
   }
   const albums = [...albumSongs].map(([key, list]): LocalAlbum => {
     const ordered = [...list].sort(albumOrder);
@@ -103,10 +110,12 @@ export function groupLocal(songs: readonly LocalSong[]): { albums: LocalAlbum[];
     albums.push({ key: UNKNOWN_ALBUM_KEY, title: UNKNOWN_ALBUM, artist: '', artistKey: '', year: 0, cover: withCover ? localArtUrl(withCover.id) : '', songs: ordered });
   }
   const unknown = looseKey(UNKNOWN_ARTIST);
+  const albumsOf = new Map<string, LocalAlbum[]>();
+  for (const a of albums) if (a.key !== UNKNOWN_ALBUM_KEY) add(albumsOf, a.artistKey, a);
   const artists = [...artistSongs].map(([key, list]): LocalArtist => ({
     key,
     name: mostCommon(list.map(ownerOf)),
-    albums: albums.filter((a) => a.key !== UNKNOWN_ALBUM_KEY && a.artistKey === key).sort((a, b) => (b.year || -1) - (a.year || -1) || byName(a.title, b.title)),
+    albums: (albumsOf.get(key) ?? []).sort((a, b) => (b.year || -1) - (a.year || -1) || byName(a.title, b.title)),
     songs: [...list].sort((a, b) => byName(a.title, b.title)),
   }));
   artists.sort((a, b) => Number(a.key === unknown) - Number(b.key === unknown) || byName(a.name, b.name));

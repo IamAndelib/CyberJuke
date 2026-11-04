@@ -89,4 +89,27 @@ class LocalIndexTest {
         assertFalse(d.exists())
         assertTrue(i.folders.isEmpty() && i.entries.isEmpty())
     }
+
+    @Test
+    fun aSaveThatCantBeWrittenSaysSoInsteadOfThrowing() {
+        val notADir = Files.createTempFile("local", ".json").toFile()
+        val i = LocalIndex(notADir)
+        i.folders += LocalIndex.Folder("tree-a", "Music")
+        assertFalse(i.save())
+        assertEquals(1, i.folders.size)
+        assertTrue(LocalIndex(dir()).apply { folders += LocalIndex.Folder("tree-a", "Music") }.save())
+    }
+
+    @Test
+    fun coversNoSongHasAreSweptAway() {
+        val d = dir()
+        val i = LocalIndex(d)
+        i.folders += LocalIndex.Folder("tree-a", "Music")
+        i.entries[entry(2).id] = entry(2) // has a cover
+        i.entries[entry(4).id] = entry(4).copy(cover = false)
+        listOf(2, 3, 4).forEach { n -> i.artFile(entry(n).id).apply { parentFile!!.mkdirs(); writeText("jpg") } }
+        File(d, "art/0000000000000005.jpg.tmp").writeText("half")
+        i.dropStrayArt()
+        assertEquals(listOf("0000000000000002.jpg"), File(d, "art").list()!!.sorted())
+    }
 }

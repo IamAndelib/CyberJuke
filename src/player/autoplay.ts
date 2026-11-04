@@ -141,7 +141,8 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       return;
     }
     starved = null;
-    const usable = catalog.filter(playable);
+    // The catalog itself while every song plays (online): similarTracks keeps its index per array.
+    const usable = catalog.every(playable) ? catalog : catalog.filter(playable);
     // A Jukebox shuffle plays on like a station: random songs from its pool not yet queued,
     // then, once every one is, another round of it (but the song just queued).
     const pool = shufflePool(s.context?.label, usable)?.filter((t) => !t.membersOnly || deps.signedIn());
