@@ -3,13 +3,13 @@
 ## [Unreleased]
 
 ### Added
-- Play music from folders on your phone: turn on **Settings → Local music** and choose the folders. CyberJuke reads those and nothing else; the songs show under **Library → Local** as songs, albums and artists (an album in its track order; songs with no album tag make an Unknown album, and an untagged file named "Artist - Title" is read that way), play offline, and can be liked. A local song's artist in Now Playing opens their artist page. Local's **+** adds another folder.
+- Play music from folders on your phone: turn on **Settings → Local music** and choose the folders. CyberJuke reads those and nothing else; the songs show under **Library → Local** as songs, albums and artists (an album in its track order; songs with no album tag make an Unknown album, and an untagged file named "Artist - Title" is read that way), play offline, and can be liked. A local song's artist in Now Playing opens their artist page. Local's **+** adds another folder, and ✕ on a folder in Settings takes it out again (with Undo).
 - Local sorts its songs by **Newest** (the latest files first) or **A–Z**, and its albums and artists by **Most songs** or **A–Z**. A–Z groups them under letters, like Genres and Artists, and dragging the scroller shows a small letter beside it so the list stays readable. Each view remembers its order.
 - Playlists: make your own from any songs, Jukebox, Global, Radio or your own files, with **Add to playlist** in a song's ⋯ menu, **≡+** in the player, or **Save queue as playlist**. Find them in Library, where you can play, reorder (⋯ → Edit songs), rename or delete them. A playlist's cover is its first four songs' covers.
 
 ### Changed
 - Liked can show your newest likes first, as before, or **A–Z** under letters, like Local, with the small letter beside the scroller; it remembers which.
-- Library is a list: **Liked** and **Recently played** are rows that open on their own pages, ready for more lists to join them.
+- Library is a list: **Liked**, **Recently played**, **Local** and your playlists are rows that open on their own pages.
 - Library's button at the top right shows its lists and playlists as a grid of tiles, three to a row, or as a list again; it remembers which.
 - Offline, the line at the top says which songs still play (liked, local, or both), and a tap on it opens Library instead of Liked.
 - Genres and Artists no longer end with a line explaining them.
@@ -17,12 +17,9 @@
 - An artist with nothing on the Jukebox or on Global (often the uploader named in a downloaded file) gets a 404 page instead of empty sections.
 
 ### Fixed
-- Dragging Local's scroller, the small letter beside it names the songs it sits next to, not the ones at the top of the screen.
-- Liked local songs keep their lyrics for offline, and offline Home's Shuffle plays them, even before any other liked song is saved on the phone.
 - A Global song's artist opens their page even when searching their name wouldn't find it.
 - Artists whose name has a comma stay one artist: Earth, Wind & Fire, Tyler, The Creator, Grover Washington, Jr. and the like no longer split into two in Artists, Now Playing and ⋯ → More by. **Settings → About → Credits** names MusicBrainz and ListenBrainz, where the list of these names comes from.
 - Holding down an option in a switch or a row of chips (Settings, Home's genres) tints it instead of filling it, so it no longer looks chosen alongside the one that is.
-- Recently played hides your own songs while their folder is removed or local music is off, as Liked and playlists do; they come back with the folder.
 - A song you play from Recently played shows its title in the highlight colour at the top of the list, like a song played from anywhere else.
 
 ## [1.3.6] - 2026-10-31
