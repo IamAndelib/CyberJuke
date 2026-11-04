@@ -1,7 +1,7 @@
 import { effect } from '@preact/signals';
 import { describe, expect, it } from 'vitest';
 import type { Track } from '../data/model';
-import { liked, settings } from './library';
+import { liked, localHere, settings } from './library';
 import { isSaved, savedLiked, savedOffline, savedQueue, savedTracks, setSavedOffline } from './savedOffline';
 
 const t = (id: string): Track => ({ id, ytId: id.padEnd(11, '0') }) as Track;
@@ -95,4 +95,15 @@ describe('savedOffline', () => {
     expect(isSaved(l, new Set())).toBe(true);
     expect(savedTracks([l], new Set())).toEqual([l]);
   });
+
+  it('counts a liked local song as saved even while nothing else is saved yet', () => {
+    const local = { id: 'loc:0123456789abcdef', ytId: '', source: 'local' } as Track;
+    localHere.value = new Set([local.id]);
+    liked.value = [local, a];
+    setSavedOffline([]);
+    expect(savedLiked.value).toEqual([local]);
+    localHere.value = new Set();
+    liked.value = [];
+  });
 });
+
