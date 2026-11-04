@@ -37,6 +37,7 @@ test.describe('turning it on', () => {
     await expect(page.getByTestId('lib-local')).toContainText('6 songs · on this phone');
     await openLibrary(page, 'local');
     await expect(titles(page)).toHaveText(BY_TITLE);
+    await expect(page.getByTestId('screen-local').locator('.list-foot.end')).toHaveText('— end of tape —');
     // In Local itself no "On phone" tag; the album is on the meta line.
     await expect(page.getByTestId('local-list').getByTestId('local-tag')).toHaveCount(0);
     await expect(page.getByTestId('local-list').getByTestId('track-row').first()).toContainText('Attic');

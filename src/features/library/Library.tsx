@@ -220,7 +220,10 @@ export function LikedPage() {
       ) : (
       <div data-testid="liked-list">
         {tracks.length ? (
-          <Tracks tracks={tracks} ctx={LIKED_CTX} />
+          <>
+            <Tracks tracks={tracks} ctx={LIKED_CTX} />
+            <div class="list-foot end">— end of tape —</div>
+          </>
         ) : (
           <EmptyState title="No liked songs yet">
             Tap <Icon name="heartOutline" size={16} /> in the player, or Like in a song's ⋯ menu, to keep it here.
@@ -454,7 +457,7 @@ function SongsAZ({ tracks, ctx, testid, inLocal }: { tracks: Track[]; ctx: PlayC
           );
         }}
       </AZSections>
-      {more && <div ref={sentinel} class="list-foot" aria-hidden="true" />}
+      {more ? <div ref={sentinel} class="list-foot" aria-hidden="true" /> : <div class="list-foot end">— end of tape —</div>}
     </div>
   );
 }
@@ -534,6 +537,7 @@ export function LocalPage() {
         ) : (
           <div data-testid="local-list">
             <Tracks tracks={tracks} ctx={LOCAL_CTX} inLocal chunkKey="local" />
+            <div class="list-foot end">— end of tape —</div>
           </div>
         )}
       </>
@@ -682,6 +686,7 @@ export function LocalArtistPage({ artistKey }: { artistKey: string }) {
       <div data-testid="local-artist-songs">
         <Tracks tracks={tracks} ctx={ctx} inLocal />
       </div>
+      <div class="list-foot end">— end of tape —</div>
     </Screen>
   );
 }

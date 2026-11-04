@@ -235,8 +235,12 @@ test('Liked keeps the newest likes first, or A–Z under letters; A–Z plays in
   const titles = page.getByTestId('liked-list').getByTestId('track-title');
   await expect(page.getByTestId('liked-count')).toHaveText('4 songs');
   await expect(titles).toHaveText(['Zebra Crossing', 'Apple Tree', 'Moon River', 'Avalanche']);
+  // Like every list, it ends with the tape's end, in either order.
+  const end = page.getByTestId('screen-liked').locator('.list-foot.end');
+  await expect(end).toHaveText('— end of tape —');
   await page.getByTestId('liked-order-az').click();
   await expect(titles).toHaveText(['Apple Tree', 'Avalanche', 'Moon River', 'Zebra Crossing']);
+  await expect(end).toHaveText('— end of tape —');
   await expect(page.getByTestId('liked-list').getByTestId('az-head')).toHaveText(['A', 'M', 'Z']);
   await page.getByTestId('lib-play-all').click();
   await expect(page.getByTestId('mini-title')).toHaveText('Apple Tree');
