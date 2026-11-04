@@ -13,6 +13,7 @@
 - Library's button at the top right shows its lists and playlists as a grid of tiles, three to a row, or as a list again; it remembers which.
 - Offline, the line at the top says which songs still play (liked, local, or both), and a tap on it opens Library instead of Liked.
 - Genres and Artists no longer end with a line explaining them.
+- The queue's heading says how it plays, in small letters after a dot: "Queue · Shuffled · Repeat queue" (or Repeat song). On a narrow phone they move under "Queue" when they don't fit; the line below that said "Repeating the queue." is gone.
 - In Now Playing, **≡+** and ♥ sit on the artist's line, so a long title has its line to itself.
 - An artist with nothing on the Jukebox or on Global (often the uploader named in a downloaded file) gets a 404 page instead of empty sections.
 
@@ -23,6 +24,7 @@
 - Artists whose name has a comma stay one artist: Earth, Wind & Fire, Tyler, The Creator, Grover Washington, Jr. and the like no longer split into two in Artists, Now Playing and ⋯ → More by. **Settings → About → Credits** names MusicBrainz and ListenBrainz, where the list of these names comes from.
 - Holding down an option in a switch or a row of chips (Settings, Home's genres) tints it instead of filling it, so it no longer looks chosen alongside the one that is.
 - Recently played hides your own songs while their folder is removed or local music is off, as Liked and playlists do; they come back with the folder.
+- With the phone's clock set hours ahead, songs no longer ask YouTube for a new link at every try, which could get playback refused for a while.
 - With a keyboard, a focused switch (Settings' choices, Local's Songs | Albums | Artists) shows its focus ring; text fields' edges are easier to see in every theme.
 - A song you play from Recently played shows its title in the highlight colour at the top of the list, like a song played from anywhere else.
 

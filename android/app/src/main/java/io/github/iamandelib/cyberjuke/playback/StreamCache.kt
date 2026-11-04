@@ -42,15 +42,19 @@ internal object StreamUrls {
     /** The address family the URL is bound to ([boundToIpv6]), or null if it doesn't say. */
     fun familyOf(url: String): Family? = boundToIpv6(url)?.let { if (it) Family.IPV6 else Family.IPV4 }
 
+    /**
+     * googlevideo's `expire` for a URL resolved at [resolvedAtMs], unless it was (all but) past
+     * already then: links last hours, so the phone's clock is wrong, and the link's age decides.
+     */
+    private fun expireOf(url: String, resolvedAtMs: Long): Long? = expireMs(url)?.takeIf { it - EXPIRY_MARGIN_MS > resolvedAtMs }
+
     /** Until when a URL resolved at [resolvedAtMs] may be served from the cache. */
     fun cacheUntil(url: String, resolvedAtMs: Long): Long =
-        expireMs(url)?.let { it - EXPIRY_MARGIN_MS } ?: (resolvedAtMs + FALLBACK_TTL_MS)
+        expireOf(url, resolvedAtMs)?.let { it - EXPIRY_MARGIN_MS } ?: (resolvedAtMs + FALLBACK_TTL_MS)
 
     /** True once googlevideo itself would reject the URL as expired. */
-    fun isExpired(url: String, resolvedAtMs: Long, now: Long): Boolean {
-        val expire = expireMs(url) ?: (resolvedAtMs + 6L * FALLBACK_TTL_MS)
-        return now >= expire
-    }
+    fun isExpired(url: String, resolvedAtMs: Long, now: Long): Boolean =
+        now >= (expireOf(url, resolvedAtMs) ?: (resolvedAtMs + 6L * FALLBACK_TTL_MS))
 }
 
 /** googlevideo request details, pure (StreamCacheTest). */

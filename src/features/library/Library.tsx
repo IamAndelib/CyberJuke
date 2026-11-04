@@ -14,7 +14,7 @@ import { addFolder, localFolderList, localLoading, localOn, localScan, localGrou
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { arrowChoice } from '../../ui/arrowChoice';
 import { dayKey, groupByDay } from '../../stores/history';
-import { useChunks } from '../../ui/useChunks';
+import { takeSections, useChunks } from '../../ui/useChunks';
 import { clearHistoryWithUndo } from '../../stores/undo';
 import { Icon, type IconName } from '../../ui/icons';
 import { BackButton } from '../../ui/components/BackButton';
@@ -441,22 +441,26 @@ function SongsAZ({ tracks, ctx, testid, inLocal }: { tracks: Track[]; ctx: PlayC
   const list = useRef({ tracks, ctx });
   list.current = { tracks, ctx };
   const play = useCallback((i: number) => void playFrom(list.current.tracks, i, list.current.ctx), []);
+  // Grouped once per list (the tracks come sorted A–Z, so the rows keep their index), then cut
+  // to what is shown: not sorted again as each chunk comes in.
+  const sections = useMemo(() => groupAZ(tracks, (t) => t.title), [tracks]);
   let at = 0;
   return (
     <div data-testid={testid}>
-      <AZSections items={tracks.slice(0, shown)} name={(t) => t.title}>
-        {(xs) => {
-          const from = at;
-          at += xs.length;
-          return (
+      {takeSections(sections, shown).map((sec) => {
+        const from = at;
+        at += sec.items.length;
+        return (
+          <section class="az-section" key={sec.letter} data-letter={sec.letter}>
+            <AZHead letter={sec.letter} />
             <ul class="list">
-              {xs.map((t, i) => (
+              {sec.items.map((t, i) => (
                 <TrackRow key={t.id} track={t} index={from + i} inLocal={inLocal} onPlay={play} />
               ))}
             </ul>
-          );
-        }}
-      </AZSections>
+          </section>
+        );
+      })}
       {more ? <div ref={sentinel} class="list-foot" aria-hidden="true" /> : <div class="list-foot end">— end of tape —</div>}
     </div>
   );

@@ -1,6 +1,7 @@
 package io.github.iamandelib.cyberjuke.local
 
 import android.content.Context
+import android.util.Log
 import java.io.File
 
 /**
@@ -9,6 +10,7 @@ import java.io.File
  * is an immutable snapshot taken after each change, so the player reads it without the lock.
  */
 internal object LocalLibrary {
+    @Volatile
     private var index: LocalIndex? = null
 
     /** The songs by id, as of the last change. */
@@ -33,14 +35,17 @@ internal object LocalLibrary {
         val i = indexOf(context)
         val r = block(i)
         if (save) {
-            if (i.folders.isEmpty() && i.entries.isEmpty()) i.clear() else i.save()
+            if (i.folders.isEmpty() && i.entries.isEmpty()) i.clear() else if (!i.save()) Log.w(TAG, "index not saved")
             songs = i.entries.toMap()
         }
         r
     }
 
-    /** A song's cover file, when one is kept (null before the index is loaded). */
-    fun coverFile(id: String): File? = synchronized(this) {
-        index?.artFile(id)?.takeIf { songs[id]?.cover == true && it.isFile }
-    }
+    /**
+     * A song's cover file, when one is kept (null before the index is loaded). No lock: the
+     * notification asks for covers on the main thread, which mustn't wait for a save.
+     */
+    fun coverFile(id: String): File? = index?.artFile(id)?.takeIf { songs[id]?.cover == true && it.isFile }
+
+    private const val TAG = "CyberJukeLocal"
 }

@@ -41,6 +41,8 @@ test('with no playlists Library says so; New playlist names one and opens it, em
   await page.getByTestId('lib-make-playlist').click();
   const sheet = page.getByTestId('name-sheet');
   await expect(sheet).toContainText('New playlist');
+  // The field has focus, so the keyboard comes up for typing at once.
+  await expect(page.getByTestId('name-input')).toBeFocused();
   await expect(page.getByTestId('name-ok')).toBeDisabled();
   await page.getByTestId('name-input').fill('   ');
   await expect(page.getByTestId('name-ok')).toBeDisabled();
@@ -141,6 +143,7 @@ test.describe('a playlist', () => {
     await page.getByTestId('pl-more').click();
     await page.getByTestId('pl-rename').click();
     await expect(page.getByTestId('name-input')).toHaveValue('Night drive');
+    await expect(page.getByTestId('name-input')).toBeFocused();
     await page.getByTestId('name-input').fill('');
     await expect(page.getByTestId('name-ok')).toBeDisabled();
     await page.getByTestId('name-input').fill('Late night drive');
@@ -216,7 +219,7 @@ test.describe('adding songs', () => {
     await openNowPlaying(page);
     await page.getByTestId('np-shuffle').click();
     await page.getByTestId('np-repeat').click();
-    await expect(page.getByTestId('upnext-repeat')).toBeVisible();
+    await expect(page.getByTestId('upnext-title')).toHaveText('Queue · Shuffled · Repeat queue');
     const q = await page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => { current: { id: string }; previous: { id: string }[]; upNext: { id: string }[] } }).__cyberjukeQueue());
     expect((await page.getByTestId('upnext-save').boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await page.getByTestId('upnext-save').click();
