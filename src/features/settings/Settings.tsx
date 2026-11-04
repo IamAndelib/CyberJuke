@@ -755,6 +755,11 @@ export function Settings() {
             <A href="https://github.com/hyphen8d/signal">SIGNAL by hyphen8d (MIT)</A>: the stations Cyberspace's Jukebox
             plays as Signal Radio, bundled with the app.
           </p>
+          <p data-testid="about-musicbrainz">
+            <A href="https://musicbrainz.org">MusicBrainz</A> and <A href="https://listenbrainz.org">ListenBrainz</A>{' '}
+            (CC0): the well-known artist names with a comma, such as Earth, Wind &amp; Fire, kept whole. A fixed list bundled with
+            the app, which never contacts them.
+          </p>
         </details>
       </section>
 
@@ -793,7 +798,7 @@ export function Settings() {
             NewPipeExtractor (GPL-3.0); AndroidX Media3 and other AndroidX libraries, OkHttp, Okio, Kotlin,
             kotlinx.coroutines, Guava, nanojson and Apache Cordova (Apache-2.0); Preact, @preact/signals, Capacitor, the
             Ionic filesystem library, jsoup and the Signal Radio stations by hyphen8d (MIT); Rhino (MPL-2.0); Protocol Buffers and JSR 305 (BSD-3-Clause);
-            desugar_jdk_libs (GPL-2.0 with the Classpath Exception).
+            desugar_jdk_libs (GPL-2.0 with the Classpath Exception); MusicBrainz and ListenBrainz data (CC0).
           </p>
         </details>
         <LicenseTexts />
