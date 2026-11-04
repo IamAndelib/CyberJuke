@@ -8,6 +8,7 @@
 - Playlists: make your own from any songs, Jukebox, Global, Radio or your own files, with **Add to playlist** in a song's ⋯ menu, **≡+** in the player, or **Save queue as playlist**. Find them in Library, where you can play, reorder (⋯ → Edit songs), rename or delete them. A playlist's cover is its first four songs' covers.
 
 ### Changed
+- Liked can show your newest likes first, as before, or **A–Z** under letters, like Local, with the small letter beside the scroller; it remembers which.
 - Library is a list: **Liked** and **Recently played** are rows that open on their own pages, ready for more lists to join them.
 - Library's button at the top right shows its lists and playlists as a grid of tiles, three to a row, or as a list again; it remembers which.
 - Offline, the line at the top says which songs still play (liked, local, or both), and a tap on it opens Library instead of Liked.

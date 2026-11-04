@@ -19,6 +19,8 @@ export type LocalGroupsOrder = 'az' | 'songs';
 export const localSongsOrder = signal<LocalSongsOrder>('az');
 export const localAlbumsOrder = signal<LocalGroupsOrder>('az');
 export const localArtistsOrder = signal<LocalGroupsOrder>('az');
+/** Liked's order: the newest likes first (as kept) or A–Z. */
+export const likedOrder = signal<LocalSongsOrder>('newest');
 
 export type LibraryLayout = 'list' | 'grid';
 /** Library's lists and playlists as rows or as tiles. */
@@ -52,3 +54,4 @@ bind(libraryLayout, 'prefs.libraryLayout', ['list', 'grid']);
 bind(localSongsOrder, 'prefs.localSongsOrder', ['az', 'newest']);
 bind(localAlbumsOrder, 'prefs.localAlbumsOrder', ['az', 'songs']);
 bind(localArtistsOrder, 'prefs.localArtistsOrder', ['az', 'songs']);
+bind(likedOrder, 'prefs.likedOrder', ['newest', 'az']);
