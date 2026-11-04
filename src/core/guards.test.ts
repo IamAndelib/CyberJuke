@@ -252,6 +252,13 @@ describe('local music answers', () => {
 describe('local songs as stored tracks', () => {
   const local = { id: 'loc:0123456789abcdef', ytId: '', title: 'Night Shift', artist: 'The Low Hum', genre: '', by: '', postTitle: '', postUrl: '', createdAt: '', nsfw: false, artworkUrl: '', source: 'local' as const };
 
+  it('tidies the text of a stored track and a local song as it is read', () => {
+    expect(asTrack({ ...local, title: 'Night' + ' '.repeat(50_000) + 'Shift' })!.title).toBe('Night Shift');
+    const [song] = parseLocalSongs({ tracks: [{ id: local.id, title: 'T', artist: 'The\nLow  Hum', album: 'y'.repeat(5000), folder: 'f' }] });
+    expect(song).toMatchObject({ artist: 'The Low Hum' });
+    expect(song!.album.length).toBeLessThanOrEqual(300);
+  });
+
   it('a liked local song survives a reload, as a full track and repaired', () => {
     expect(isTrackFull(local)).toBe(true);
     expect(asTrack(local)).toMatchObject({ id: 'loc:0123456789abcdef', ytId: '', source: 'local' });
