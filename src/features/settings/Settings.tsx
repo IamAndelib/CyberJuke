@@ -798,7 +798,7 @@ export function Settings() {
             NewPipeExtractor (GPL-3.0); AndroidX Media3 and other AndroidX libraries, OkHttp, Okio, Kotlin,
             kotlinx.coroutines, Guava, nanojson and Apache Cordova (Apache-2.0); Preact, @preact/signals, Capacitor, the
             Ionic filesystem library, jsoup and the Signal Radio stations by hyphen8d (MIT); Rhino (MPL-2.0); Protocol Buffers and JSR 305 (BSD-3-Clause);
-            desugar_jdk_libs (GPL-2.0 with the Classpath Exception).
+            desugar_jdk_libs (GPL-2.0 with the Classpath Exception); MusicBrainz and ListenBrainz data (CC0).
           </p>
         </details>
         <LicenseTexts />

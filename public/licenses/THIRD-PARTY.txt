@@ -17,6 +17,9 @@ Web app (the interface)
   Signal Radio stations          MIT           Copyright (c) 2026 Matthew Arevalo
     (hyphen8d/signal: the
     station list and tracks)
+  MusicBrainz and ListenBrainz  CC0-1.0       MetaBrainz Foundation (no rights
+    data (the artist names                     reserved; credited by choice)
+    that hold a comma)
 
 Android app (playback)
   NewPipeExtractor               GPL-3.0       Copyright Team NewPipe and contributors
