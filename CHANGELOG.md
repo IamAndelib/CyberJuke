@@ -18,6 +18,7 @@
 
 ### Fixed
 - Dragging Local's scroller, the small letter beside it names the songs it sits next to, not the ones at the top of the screen.
+- Liked local songs keep their lyrics for offline, and offline Home's Shuffle plays them, even before any other liked song is saved on the phone.
 - A Global song's artist opens their page even when searching their name wouldn't find it.
 - Artists whose name has a comma stay one artist: Earth, Wind & Fire, Tyler, The Creator, Grover Washington, Jr. and the like no longer split into two in Artists, Now Playing and ⋯ → More by.
 - Holding down an option in a switch or a row of chips (Settings, Home's genres) tints it instead of filling it, so it no longer looks chosen alongside the one that is.

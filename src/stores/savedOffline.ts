@@ -23,7 +23,7 @@ export function setSavedOffline(audioIds: readonly unknown[]): void {
 /** The liked songs that play offline, in Liked's order (those Liked shows: hidden NSFW songs aren't offered). */
 export const savedLiked = computed<Track[]>(() => {
   const saved = savedOffline.value;
-  return saved.size ? likedShown.value.filter((t) => isSaved(t, saved)) : [];
+  return likedShown.value.filter((t) => isSaved(t, saved));
 });
 
 /** Whether `t` plays offline. */
