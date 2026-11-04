@@ -240,6 +240,10 @@ test.describe('an artist found nowhere', () => {
     await expect(nf).toContainText(`> locate "${UPLOADER}"`);
     await expect(nf).toContainText('ERR 404: ARTIST NOT FOUND');
     await expect(page.getByTestId('artist-jukebox')).toHaveCount(0);
+    // Nobody to star; TalkBack reads one plain sentence, not the printout.
+    await expect(page.getByTestId('artist-page-fav')).toHaveCount(0);
+    await expect(nf.locator('.nf-term')).toHaveAttribute('aria-hidden', 'true');
+    await expect(nf.locator('.sr-only')).toHaveText(`No artist named "${UPLOADER}" on the Jukebox or on Global.`);
   });
 });
 
