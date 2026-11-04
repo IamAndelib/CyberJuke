@@ -1,8 +1,9 @@
 import { computed, type ReadonlySignal, type Signal } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
-import { libraryLayout, localAlbumsOrder, localArtistsOrder, localSongsOrder } from '../../stores/prefs';
+import { libraryLayout, likedOrder, localAlbumsOrder, localArtistsOrder, localSongsOrder } from '../../stores/prefs';
 import { useCallback, useMemo, useRef } from 'preact/hooks';
 import type { Track } from '../../data/model';
+import type { PlayContext } from '../../player/types';
 import { LOCAL_VIEWS, historyShown, likedShown, recentShown, settings, updateSettings, type LocalView } from '../../stores/library';
 import { UNKNOWN_ALBUM_KEY, UNKNOWN_ARTIST, byMostSongs, type LocalAlbum, type LocalArtist } from '../../data/localGroups';
 import { groupAZ } from '../../ui/azSections';
@@ -191,12 +192,32 @@ function Playlists() {
 }
 
 /** Liked, its own page: Play and Shuffle, the songs. */
+/** Liked in the chosen order: newest likes first (as kept), or A–Z as its letters run. */
+const likedAZ = computed(() => groupAZ(likedShown.value, (t) => t.title).flatMap((sec) => sec.items));
+const likedOrdered = computed(() => (likedOrder.value === 'az' ? likedAZ.value : likedShown.value));
+
 export function LikedPage() {
-  const tracks = likedShown.value;
-  useSearchContext({ label: 'Liked', tracks: () => likedShown.value });
+  const tracks = likedOrdered.value;
+  const az = likedOrder.value === 'az';
+  useSearchContext({ label: 'Liked', tracks: () => likedOrdered.value });
   return (
-    <Screen testid="screen-liked" title="Liked" subtitle="Library" left={<BackButton testid="liked-back" />} scrollKey="library:liked">
-      {tracks.length > 0 && <PlayShuffle tracks={tracks} ctx={LIKED_CTX} testid="lib" playTestid="lib-play-all" />}
+    <Screen
+      testid="screen-liked"
+      title="Liked"
+      subtitle="Library"
+      left={<BackButton testid="liked-back" />}
+      scrollKey={`library:liked:${likedOrder.value}`}
+      azScroller={az && tracks.length > 0 ? 'beside' : false}
+    >
+      {tracks.length > 0 && (
+        <>
+          <PlayShuffle tracks={tracks} ctx={LIKED_CTX} testid="lib" playTestid="lib-play-all" />
+          <OrderRow count={plural(tracks.length, 'song')} prefix="liked" first="newest" order={likedOrder as Signal<string>} />
+        </>
+      )}
+      {tracks.length > 0 && az ? (
+        <SongsAZ tracks={tracks} ctx={LIKED_CTX} testid="liked-list" />
+      ) : (
       <div data-testid="liked-list">
         {tracks.length ? (
           <Tracks tracks={tracks} ctx={LIKED_CTX} />
@@ -211,6 +232,7 @@ export function LikedPage() {
           </EmptyState>
         )}
       </div>
+      )}
     </Screen>
   );
 }
@@ -410,15 +432,15 @@ function AZSections<T>({ items, name, unknown = () => false, children }: { items
   );
 }
 
-/** Local's songs A–Z under letters; a tap plays them all in this order. Rendered in chunks, the rest in idle time (the scroller reaches all of them). */
-function SongsAZ({ tracks }: { tracks: Track[] }) {
-  const { shown, sentinel, more } = useChunks(tracks.length, 'local:az', undefined, { fill: true });
-  const list = useRef(tracks);
-  list.current = tracks;
-  const play = useCallback((i: number) => void playFrom(list.current, i, LOCAL_CTX), []);
+/** Songs A–Z under letters; a tap plays them all in this order. Rendered in chunks, the rest in idle time (the scroller reaches all of them). */
+function SongsAZ({ tracks, ctx, testid, inLocal }: { tracks: Track[]; ctx: PlayContext; testid: string; inLocal?: boolean }) {
+  const { shown, sentinel, more } = useChunks(tracks.length, `${testid}:az`, undefined, { fill: true });
+  const list = useRef({ tracks, ctx });
+  list.current = { tracks, ctx };
+  const play = useCallback((i: number) => void playFrom(list.current.tracks, i, list.current.ctx), []);
   let at = 0;
   return (
-    <div data-testid="local-list">
+    <div data-testid={testid}>
       <AZSections items={tracks.slice(0, shown)} name={(t) => t.title}>
         {(xs) => {
           const from = at;
@@ -426,7 +448,7 @@ function SongsAZ({ tracks }: { tracks: Track[] }) {
           return (
             <ul class="list">
               {xs.map((t, i) => (
-                <TrackRow key={t.id} track={t} index={from + i} inLocal onPlay={play} />
+                <TrackRow key={t.id} track={t} index={from + i} inLocal={inLocal} onPlay={play} />
               ))}
             </ul>
           );
@@ -437,30 +459,30 @@ function SongsAZ({ tracks }: { tracks: Track[] }) {
   );
 }
 
-const ORDERS = {
-  songs: [
-    { id: 'newest', label: 'Newest', testid: 'local-order-newest' },
-    { id: 'az', label: 'A–Z', testid: 'local-order-az' },
-  ],
-  groups: [
-    { id: 'songs', label: 'Most songs', testid: 'local-order-songs' },
-    { id: 'az', label: 'A–Z', testid: 'local-order-az' },
-  ],
-} as const;
+/** Newest | A–Z (songs), or Most songs | A–Z (albums, artists): [prefix]-order-<id> test ids. */
+const orders = (prefix: string, first: 'newest' | 'songs') => [
+  { id: first, label: first === 'newest' ? 'Newest' : 'Most songs', testid: `${prefix}-order-${first}` },
+  { id: 'az', label: 'A–Z', testid: `${prefix}-order-az` },
+];
 
-/** How many there are, and the view's order: Newest | A–Z for songs, Most songs | A–Z for albums and artists. */
-function OrderRow({ view }: { view: LocalView }) {
+/** How many there are, and their order on the right. */
+function OrderRow({ count, prefix, first, order }: { count: string; prefix: string; first: 'newest' | 'songs'; order: Signal<string> }) {
+  return (
+    <div class="local-order">
+      <span class="dim small" data-testid={`${prefix}-count`}>
+        {count}
+      </span>
+      <Rail<string> items={orders(prefix, first)} value={order.value} onChange={(v) => (order.value = v)} label="Order" testid={`${prefix}-order`} />
+    </div>
+  );
+}
+
+/** Local's view: its count and its order. */
+function LocalOrderRow({ view }: { view: LocalView }) {
   const g = localGroups.value;
   const count = view === 'albums' ? plural(g.albums.length, 'album') : view === 'artists' ? plural(g.artists.length, 'artist') : plural(localTracks.value.length, 'song');
   const order = view === 'songs' ? localSongsOrder : view === 'albums' ? localAlbumsOrder : localArtistsOrder;
-  return (
-    <div class="local-order">
-      <span class="dim small" data-testid="local-count">
-        {count}
-      </span>
-      <Rail<string> items={view === 'songs' ? ORDERS.songs : ORDERS.groups} value={order.value} onChange={(v) => ((order as Signal<string>).value = v)} label="Order" testid="local-order" />
-    </div>
-  );
+  return <OrderRow count={count} prefix="local" first={view === 'songs' ? 'newest' : 'songs'} order={order as Signal<string>} />;
 }
 
 /** The current view's order is A–Z: its letters and the fast scroller's letter show. */
@@ -502,13 +524,13 @@ export function LocalPage() {
         {looking}
         <PlayShuffle tracks={tracks} ctx={LOCAL_CTX} testid="local" />
         <ViewSwitch />
-        <OrderRow view={view} />
+        <LocalOrderRow view={view} />
         {view === 'albums' ? (
           <AlbumGrid />
         ) : view === 'artists' ? (
           <ArtistList />
         ) : localSongsOrder.value === 'az' ? (
-          <SongsAZ tracks={tracks} />
+          <SongsAZ tracks={tracks} ctx={LOCAL_CTX} testid="local-list" inLocal />
         ) : (
           <div data-testid="local-list">
             <Tracks tracks={tracks} ctx={LOCAL_CTX} inLocal chunkKey="local" />
