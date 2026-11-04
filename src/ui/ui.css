@@ -1519,6 +1519,11 @@ section[data-kind] > .shelf {
   border: 0;
   border-radius: 0;
 }
+/* A cover's squares are one picture: no shadow or press of their own (a cover card frames it). */
+.shelf-btn .mosaic > .art {
+  box-shadow: none;
+  transform: none;
+}
 .mosaic-sm {
   width: 52px;
   height: 52px;

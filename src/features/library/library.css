@@ -65,6 +65,16 @@
   height: auto;
   aspect-ratio: 1;
 }
+/* Each tile, a list's mark or a playlist's cover, is a cover card: framed, with its shadow, and
+   pressed in as a whole (as .shelf-btn .art). */
+.lib-cell > :is(.lib-tile, .mosaic) {
+  border: var(--border-w) solid var(--color-fg);
+  box-shadow: 4px 4px 0 var(--color-border);
+}
+.lib-cell:is(:active, [data-pressed]) > :is(.lib-tile, .mosaic) {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0 var(--color-border);
+}
 .lib-grid .lib-tile .icon {
   width: 40px;
   height: 40px;
