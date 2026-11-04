@@ -79,7 +79,7 @@ test('history saved by older versions moves into a file once, grouped by day; ne
   await expect(page.getByTestId('lib-recent').locator('.count')).toHaveText('3');
   // Clear counts what the tab counts (tracks), not the 4 plays behind them.
   await page.getByTestId('lib-clear').click();
-  await expect(page.getByTestId('confirm-ok')).toHaveText('Clear 3 tracks');
+  await expect(page.getByTestId('confirm-ok')).toHaveText('Clear 3 songs');
   await page.getByTestId('confirm-cancel').click();
 
   // Migrated: the old key is gone; the file holds each track once.

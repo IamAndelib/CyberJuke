@@ -46,7 +46,7 @@ function confirmClear(): void {
   askConfirm({
     title: 'Clear listening history?',
     body: 'Everything under Recently played goes.',
-    confirm: `Clear ${plural(recentShown.peek().length, 'track')}`,
+    confirm: `Clear ${plural(recentShown.peek().length, 'song')}`,
     run: clearHistoryWithUndo,
   });
 }
@@ -126,7 +126,7 @@ function LayoutButton() {
 export function Library() {
   useSearchContext({ label: 'Library', tracks: () => libraryTracks.value });
   return (
-    <Screen testid="screen-library" title="Library" subtitle="On this device" scrollKey="library" right={<LayoutButton />}>
+    <Screen testid="screen-library" title="Library" subtitle="On this phone" scrollKey="library" right={<LayoutButton />}>
       <ul class={libListClass()} aria-label="Library">
         <LibItem art={<ListTile icon="heart" />} title="Liked" sub={<Count of={likedShown} />} onOpen={() => openLibraryPage('liked')} testid="lib-liked" />
         <LibItem art={<ListTile icon="clock" />} title="Recently played" sub={<Count of={recentShown} />} onOpen={() => openLibraryPage('recent')} testid="lib-recent" />
@@ -223,7 +223,7 @@ export function LikedPage() {
           <Tracks tracks={tracks} ctx={LIKED_CTX} />
         ) : (
           <EmptyState title="No liked songs yet">
-            Tap <Icon name="heartOutline" size={16} /> in the player, or Like in a track's ⋯ menu, to keep it here.
+            Tap <Icon name="heartOutline" size={16} /> in the player, or Like in a song's ⋯ menu, to keep it here.
             <div>
               <button class="link-btn" onClick={(e) => afterPress(e.currentTarget, () => selectTab('home'))}>
                 [Browse the Jukebox]
@@ -338,7 +338,7 @@ function AlbumCards({ albums }: { albums: LocalAlbum[] }) {
           <button
             class="shelf-btn release-btn"
             onClick={(e) => afterPress(e.currentTarget, () => openLocalPage('localAlbum', a.key))}
-            aria-label={`Open album ${a.title} by ${a.artist}`}
+            aria-label={`Open album ${a.title}${a.artist ? ` by ${a.artist}` : ''}`}
             data-testid="local-album"
           >
             <Cover url={a.cover} size="md" />
@@ -495,7 +495,7 @@ function Unreachable() {
       {unreachableFolders.value.map((f) => (
         <div key={f.id} class="local-gone" role="status" data-testid="local-gone">
           <span>
-            Can’t reach “{f.name}”.{f.songs > 0 && (f.songs === 1 ? ' Its 1 song is hidden.' : ` Its ${f.songs} songs are hidden.`)}
+            Can't reach "{f.name}".{f.songs > 0 && (f.songs === 1 ? ' Its 1 song is hidden.' : ` Its ${f.songs} songs are hidden.`)}
           </span>
           <button class="link-btn" onClick={() => void addFolder(f.id)} data-testid="local-gone-again">
             [Choose it again]
@@ -597,7 +597,7 @@ export function LocalPage() {
 function GonePage({ testid }: { testid: string }) {
   return (
     <Screen testid={testid} title="Local" subtitle="On this phone" left={<BackButton testid="local-back" />}>
-      <EmptyState title="Not on the phone any more">Its songs aren’t in your chosen folders now.</EmptyState>
+      <EmptyState title="Not on the phone any more">Its songs aren't in your chosen folders now.</EmptyState>
     </Screen>
   );
 }

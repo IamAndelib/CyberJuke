@@ -83,7 +83,7 @@ function LocalFolderRow({ f }: { f: LocalFolder }) {
       <div class="setting-text">
         <div class="local-folder-name">{f.name}</div>
         <div class="setting-desc" data-testid="local-folder-state">
-          {looking ? `Looking… ${plural(scan.found, 'song')} so far` : f.state === 'gone' ? 'Can’t reach this folder' : plural(f.songs, 'song')}
+          {looking ? `Looking… ${plural(scan.found, 'song')} so far` : f.state === 'gone' ? "Can't reach this folder" : plural(f.songs, 'song')}
         </div>
         {f.state === 'gone' && !looking && (
           <button class="link-btn local-again" onClick={() => void addFolder(f.id)} data-testid="local-again">

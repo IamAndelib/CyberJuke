@@ -335,7 +335,7 @@ test('Clear history asks first, away from Play; Undo brings the plays back (M3, 
   await expect(page.getByTestId('mini-player')).toBeVisible();
   await page.getByTestId('track-play').nth(1).click();
   await page.getByTestId('tab-library').click();
-  await expect(page.getByTestId('screen-library').locator('.topbar-sub')).toHaveText('On this device');
+  await expect(page.getByTestId('screen-library').locator('.topbar-sub')).toHaveText('On this phone');
   await openLibrary(page, 'recent');
   await expect(page.getByTestId('recent-list').getByTestId('track-row')).toHaveCount(2);
   const clear = page.getByTestId('lib-clear');
@@ -345,7 +345,7 @@ test('Clear history asks first, away from Play; Undo brings the plays back (M3, 
   await clear.click();
   const sheet = page.getByTestId('confirm-sheet');
   await expect(sheet).toBeVisible();
-  await expect(page.getByTestId('confirm-ok')).toHaveText('Clear 2 tracks');
+  await expect(page.getByTestId('confirm-ok')).toHaveText('Clear 2 songs');
   // A warning: focus starts on the safe choice, so Enter or a stray tap doesn't clear anything.
   await expect(sheet).toHaveAttribute('role', 'alertdialog');
   await expect(page.getByTestId('confirm-cancel')).toBeFocused();

@@ -43,6 +43,9 @@ test.describe('turning it on', () => {
     // Albums: a grid of covers, A–Z; an album plays in track order; its artist opens the artist.
     await page.getByTestId('local-view-albums').click();
     await expect(page.getByTestId('local-albums').getByTestId('local-album')).toHaveText(['AtticAna Tape · 2001', 'BasementZed Loop · 2009', 'Unknown album1 song']);
+    // Read aloud whole: an album's artist, and none for the Unknown album.
+    await expect(page.getByTestId('local-album').first()).toHaveAttribute('aria-label', 'Open album Attic by Ana Tape');
+    await expect(page.getByTestId('local-album').last()).toHaveAttribute('aria-label', 'Open album Unknown album');
     await page.getByTestId('local-album').first().click();
     await expect(page.getByTestId('screen-local-album')).toBeVisible();
     // A tap right where the card was, this soon, is a double tap's second half (nav.ts OPEN_GUARD_MS).
@@ -128,10 +131,10 @@ test.describe('a folder out of reach', () => {
     await localOn(page);
     await page.goto('/');
     await openLibrary(page, 'local');
-    await expect(page.getByTestId('local-gone')).toContainText('Can’t reach “SD card › Albums”. Its 2 songs are hidden.');
+    await expect(page.getByTestId('local-gone')).toContainText('Can\'t reach "SD card › Albums". Its 2 songs are hidden.');
     await expect(titles(page)).toHaveText(BY_TITLE);
     await openSettings(page);
-    await expect(page.getByTestId('local-folder').nth(1)).toContainText('Can’t reach this folder');
+    await expect(page.getByTestId('local-folder').nth(1)).toContainText("Can't reach this folder");
     await page.getByTestId('tab-library').click();
     await page.getByTestId('local-gone-again').click();
     await expect(page.getByTestId('local-gone')).toHaveCount(0);
