@@ -3,11 +3,13 @@ package io.github.iamandelib.cyberjuke.local
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 
 /**
  * The chosen folders and the songs found in them, kept in `no_backup/local/index.json` (never
  * backed up), and the songs' covers in `no_backup/local/art/`. Written whole and atomically
- * (a temp file, then a rename); a file that can't be read, or of another version, reads as empty.
+ * (a temp file, synced, then a rename); a file that can't be read, or of another version, reads
+ * as empty.
  * Used from one thread at a time (LocalLibrary's). Pure but for the files (LocalIndexTest).
  */
 internal class LocalIndex(private val dir: File) {
@@ -60,14 +62,23 @@ internal class LocalIndex(private val dir: File) {
         }
     }
 
-    fun save() {
+    /** Writes the file; false when it can't be (a full disk): what's in memory stays as it is. */
+    fun save(): Boolean = try {
         dir.mkdirs()
         val tmp = File(dir, "index.json.tmp")
-        tmp.writeText(encode(folders, entries.values))
-        if (!tmp.renameTo(file)) {
-            file.delete()
-            tmp.renameTo(file)
+        FileOutputStream(tmp).use {
+            it.write(encode(folders, entries.values).toByteArray())
+            it.fd.sync()
         }
+        tmp.renameTo(file) || (file.delete() && tmp.renameTo(file))
+    } catch (_: Exception) {
+        false
+    }
+
+    /** Deletes every cover no song has (one written while its folder was being removed, a half-written one). */
+    fun dropStrayArt() {
+        val kept = entries.values.filter { it.cover }.map { artFile(it.id).name }.toSet()
+        File(dir, "art").listFiles()?.forEach { if (it.name !in kept) it.delete() }
     }
 
     /** Drops [folderId] and its songs (and their covers). */

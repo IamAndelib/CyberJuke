@@ -41,6 +41,8 @@ test('with no playlists Library says so; New playlist names one and opens it, em
   await page.getByTestId('lib-make-playlist').click();
   const sheet = page.getByTestId('name-sheet');
   await expect(sheet).toContainText('New playlist');
+  // The field has focus, so the keyboard comes up for typing at once.
+  await expect(page.getByTestId('name-input')).toBeFocused();
   await expect(page.getByTestId('name-ok')).toBeDisabled();
   await page.getByTestId('name-input').fill('   ');
   await expect(page.getByTestId('name-ok')).toBeDisabled();
@@ -135,6 +137,7 @@ test.describe('a playlist', () => {
     await page.getByTestId('pl-more').click();
     await page.getByTestId('pl-rename').click();
     await expect(page.getByTestId('name-input')).toHaveValue('Night drive');
+    await expect(page.getByTestId('name-input')).toBeFocused();
     await page.getByTestId('name-input').fill('');
     await expect(page.getByTestId('name-ok')).toBeDisabled();
     await page.getByTestId('name-input').fill('Late night drive');

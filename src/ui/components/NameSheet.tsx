@@ -10,11 +10,8 @@ export function NameSheet() {
   const sheet = useRef<HTMLDivElement>(null);
   const r = useSheetContent(req, sheet);
   const [name, setName] = useState('');
-  const field = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (!req) return;
-    setName(req.initial ?? '');
-    requestAnimationFrame(() => field.current?.focus());
+    if (req) setName(req.initial ?? '');
   }, [req]);
   const close = () => (nameRequest.value = null);
   useModal(req != null, sheet);
@@ -44,7 +41,6 @@ export function NameSheet() {
             <label class="field name-field">
               <span class="field-label">Name</span>
               <input
-                ref={field}
                 class="field-input"
                 value={name}
                 maxLength={PLAYLIST_NAME_MAX}
@@ -52,6 +48,7 @@ export function NameSheet() {
                 autocomplete="off"
                 enterKeyHint="done"
                 data-testid="name-input"
+                data-autofocus
               />
             </label>
             <button type="submit" class="sheet-item confirm-ok" disabled={!clean} data-testid="name-ok">
