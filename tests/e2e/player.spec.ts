@@ -769,3 +769,12 @@ test('the seek bar: a second finger seeks; the mouse then the keys; a drag throu
   expect(await seeks()).toBe(3);
   await expect(pos).toHaveText(/^1:1\d$/);
 });
+
+test("Now Playing's ♥ lines up with Repeat below it, as far from the edge as the title side", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await start(page);
+  await page.getByTestId('track-play').first().click();
+  await openNowPlaying(page);
+  const right = (id: string) => page.getByTestId(id).locator('svg').evaluate((el) => Math.round(el.getBoundingClientRect().right));
+  await expect.poll(() => right('np-like')).toBe(await right('np-repeat'));
+});

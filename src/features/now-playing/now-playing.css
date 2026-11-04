@@ -223,8 +223,9 @@
   padding: 6px;
   position: relative;
 }
+/* ♥'s glyph ends where Repeat's does below it, as far from the edge as the title side. */
 .np-meta {
-  padding: 0 calc(var(--gutter) - 8px) 0 calc(var(--gutter) + 4px);
+  padding: 0 calc(var(--gutter) - 2px) 0 calc(var(--gutter) + 4px);
 }
 /* Title over artist; ≡+ and ♥ sit on the artist's line, clear of a long title. */
 .np-id {
