@@ -153,5 +153,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 4px var(--gutter) 0;
+  /* The rail's last choice has 10 px of its own on the right: its label ends at the gutter, where
+     Play/Shuffle and the A–Z rules do (as Home's rail). */
+  padding: 4px calc(var(--gutter) - 10px) 0 var(--gutter);
+}
+/* "Playlist · 6 songs" stays one line beside a narrow phone's cover. */
+.pl-count {
+  white-space: nowrap;
 }

@@ -235,6 +235,14 @@ test('Liked keeps the newest likes first, or A–Z under letters; A–Z plays in
   const titles = page.getByTestId('liked-list').getByTestId('track-title');
   await expect(page.getByTestId('liked-count')).toHaveText('4 songs');
   await expect(titles).toHaveText(['Zebra Crossing', 'Apple Tree', 'Moon River', 'Avalanche']);
+  // The order row's last choice lines up with the Shuffle button's right edge, as rows of controls do.
+  const textRight = await page.getByTestId('liked-order-az').evaluate((el) => {
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    return Math.round(r.getBoundingClientRect().right);
+  });
+  const shuffleRight = await page.getByTestId('lib-shuffle').evaluate((el) => Math.round(el.getBoundingClientRect().right));
+  expect(Math.abs(textRight - shuffleRight)).toBeLessThanOrEqual(2);
   // Like every list, it ends with the tape's end, in either order.
   const end = page.getByTestId('screen-liked').locator('.list-foot.end');
   await expect(end).toHaveText('— end of tape —');

@@ -96,7 +96,7 @@ export function PlaylistPage({ id }: { id: string }) {
           <h2 class="album-title" data-testid="pl-title">
             {p.name}
           </h2>
-          <div class="dim small" data-testid="pl-count">
+          <div class="dim small pl-count" data-testid="pl-count">
             Playlist · {plural(tracks.length, 'song')}
           </div>
         </div>
