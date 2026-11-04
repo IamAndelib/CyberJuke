@@ -756,9 +756,8 @@ export function Settings() {
             plays as Signal Radio, bundled with the app.
           </p>
           <p data-testid="about-musicbrainz">
-            <A href="https://musicbrainz.org">MusicBrainz</A> and <A href="https://listenbrainz.org">ListenBrainz</A>{' '}
-            (CC0): the well-known artist names with a comma, such as Earth, Wind &amp; Fire, kept whole. A fixed list bundled with
-            the app, which never contacts them.
+            <A href="https://musicbrainz.org">MusicBrainz</A> and <A href="https://listenbrainz.org">ListenBrainz</A> (CC0): artist
+            names that contain a comma, bundled with the app.
           </p>
         </details>
       </section>
