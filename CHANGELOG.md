@@ -16,6 +16,7 @@
 - An artist with nothing on the Jukebox or on Global (often the uploader named in a downloaded file) gets a 404 page instead of empty sections.
 
 ### Fixed
+- Dragging Local's scroller, the small letter beside it names the songs it sits next to, not the ones at the top of the screen.
 - A Global song's artist opens their page even when searching their name wouldn't find it.
 - Artists whose name has a comma stay one artist: Earth, Wind & Fire, Tyler, The Creator, Grover Washington, Jr. and the like no longer split into two in Artists, Now Playing and ⋯ → More by.
 - Holding down an option in a switch or a row of chips (Settings, Home's genres) tints it instead of filling it, so it no longer looks chosen alongside the one that is.
