@@ -1,0 +1,7 @@
+- Local music: play songs from folders you choose on your phone, as songs, albums and artists, offline too
+- Playlists: make your own from any songs; play, reorder, rename them in Library
+- Library is a list of Liked, Recently played, Local and your playlists, or a grid of tiles
+- Liked and Local sort Newest or A–Z
+- The queue shows Shuffled and Repeat beside its title
+- Artists with a comma in their name (Earth, Wind & Fire) stay one artist
+- Many smaller fixes
