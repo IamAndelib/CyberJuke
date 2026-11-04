@@ -7,8 +7,9 @@
       from the app, the video host's image servers and Cyberspace's (Jukebox MP3 covers);
       requests go only to the paths the app calls: Cyberspace's database (its one project),
       its sign-in and token refresh, and GitHub's latest-release API (the update check).
-      Audio elements may load latex.gg MP3s (the browser build's player; on the phone the
-      native player plays them). Styles set from
+      Audio elements may load latex.gg MP3s and the app's own files (the browser build's
+      player, and the test build's local songs; on the phone the native player plays all of
+      them, and the page loads no audio itself). Styles set from
       code (style properties) are not affected. The two preconnects below only open the
       connections Home is about to use (its first query, the cover art) a little sooner:
       hosts already allowed here, nothing sent.
