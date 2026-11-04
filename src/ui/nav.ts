@@ -109,7 +109,7 @@ export interface ConfirmRequest {
 export const confirmRequest = signal<ConfirmRequest | null>(null);
 
 /** A sheet asking for a name (a new playlist's, a playlist's new one). */
-export interface NameRequest {
+interface NameRequest {
   title: string;
   /** A line under the title ("With Flying Whales"). */
   note?: string;

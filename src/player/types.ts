@@ -221,3 +221,15 @@ export function livePosition(s: PlayerState, now = performance.now()): number {
 export function nsfwAutoplayIds(upNext: readonly UpNextItem[]): string[] {
   return [...new Set(upNext.filter((u) => u.auto && u.track.nsfw).map((u) => u.track.id))];
 }
+
+/**
+ * Where the current track is in the list you started (autoplay's tracks after it not counted):
+ * "3 of 50", or "Single track". The list ends at Up next's first autoplay row: autoplay adds
+ * only once fewer than 50 list tracks are ahead, so that row is always among the 50 shown,
+ * while more autoplay tracks may wait past them.
+ */
+export function placeOf(s: PlayerState): string {
+  const firstAuto = s.upNext.findIndex((u) => u.auto);
+  const n = firstAuto >= 0 ? s.index + 1 + firstAuto : s.queue.length;
+  return n > 1 ? `${s.index + 1} of ${n}` : 'Single track';
+}

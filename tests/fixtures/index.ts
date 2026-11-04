@@ -22,7 +22,7 @@ import { stubYouTube } from './youtube';
 export { expect };
 export { ATTACHMENT_ONLY_GENRE, AUTH_USER, AUTH_USER_B, BANNED_POST, MEMBERS_POSTS, MP3_POSTS, coverUrl } from './data';
 export { FAKE_MP3_SECONDS } from './latex';
-export { musicFolder, type FakeLocalFolder, type FakePick } from './local';
+export { musicFolder, type FakeLocalFolder } from './local';
 
 interface Options {
   backendOptions: BackendOptions;

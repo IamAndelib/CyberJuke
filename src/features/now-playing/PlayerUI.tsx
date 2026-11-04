@@ -628,7 +628,7 @@ function NowPlayingContent() {
                 </h2>
                 <NpArtist track={t} />
               </div>
-              <button class="icon-btn np-add" aria-label="Add to playlist" aria-haspopup="dialog" onClick={() => addToPlaylist(t)} disabled={!hasAudio(t)} data-testid="np-add-playlist">
+              <button class="icon-btn" aria-label="Add to playlist" aria-haspopup="dialog" onClick={() => addToPlaylist(t)} disabled={!hasAudio(t)} data-testid="np-add-playlist">
                 <Icon name="playlistAdd" size={28} />
               </button>
               <NpLike track={t} />
