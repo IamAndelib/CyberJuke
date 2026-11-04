@@ -29,7 +29,7 @@ function hash(s: string): number {
  * back to search), noAlbum (an album or playlist can't be read), shelves (only these kinds), evictToken (the first artistReleases
  * call rejects UNAVAILABLE, like an evicted token), topSongPages (the songs playlist
  * gets that many pages: after the first, more() gives 10 "<Name> Rarity <k>" songs a
- * page, the last page ending with "Moonlit Rarity"; songPageDelay slows those pages).
+ * page, the last page ending with "Moonlit Rarity").
  *
  * linkedArtist: songs credited to exactly that name carry it in `artists`, with its channel
  * (as native search gives it).
@@ -161,7 +161,7 @@ const FAKE_MUSIC = `
         }
         const res = { items };
         if (Number(n) + 1 < pages) res.next = 'tok|top|' + query + '|' + (Number(n) + 1);
-        const answer = (r) => setTimeout(() => r(res), opts.songPageDelay ?? opts.delay ?? 150);
+        const answer = (r) => setTimeout(() => r(res), opts.delay ?? 150);
         return new Promise((r) => (opts.holdSongPages ? heldPages.push(() => answer(r)) : answer(r)));
       }
       if (Number(n) >= 6) return fail('UNAVAILABLE', 'unknown or expired paging token');
@@ -270,8 +270,6 @@ export interface MusicStubOptions {
   evictToken?: boolean;
   /** Pages of the artist's songs playlist (default 1); later pages hold "Rarity" songs, the last "Moonlit Rarity". */
   topSongPages?: number;
-  /** Delay of those later pages, in ms (default `delay`, else 150). */
-  songPageDelay?: number;
   /** Those later pages wait until the test calls `window.__cyberjukeReleaseSongPages()`. */
   holdSongPages?: boolean;
   /** Songs credited to exactly this name carry it in `artists`, with its channel (as native search gives it). */
