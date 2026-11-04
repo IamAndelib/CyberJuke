@@ -96,14 +96,14 @@ export function PlaylistPage({ id }: { id: string }) {
           <h2 class="album-title" data-testid="pl-title">
             {p.name}
           </h2>
-          <div class="dim small" data-testid="pl-count">
+          <div class="dim small pl-count" data-testid="pl-count">
             Playlist · {plural(tracks.length, 'song')}
           </div>
         </div>
       </div>
       {tracks.length === 0 ? (
         <EmptyState title="No songs yet" testid="pl-empty">
-          Add songs with <Icon name="playlistAdd" size={16} /> in the player or a song’s ⋯ menu.
+          Add songs with <Icon name="playlistAdd" size={16} /> in the player or a song's ⋯ menu.
         </EmptyState>
       ) : isEditing ? (
         <ul class="list" data-testid="pl-edit-list">

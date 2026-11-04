@@ -14,7 +14,7 @@ import { addFolder, localFolderList, localLoading, localOn, localScan, localGrou
 import { SkeletonRows } from '../../ui/components/TrackRow';
 import { arrowChoice } from '../../ui/arrowChoice';
 import { dayKey, groupByDay } from '../../stores/history';
-import { useChunks } from '../../ui/useChunks';
+import { takeSections, useChunks } from '../../ui/useChunks';
 import { clearHistoryWithUndo } from '../../stores/undo';
 import { Icon, type IconName } from '../../ui/icons';
 import { BackButton } from '../../ui/components/BackButton';
@@ -46,7 +46,7 @@ function confirmClear(): void {
   askConfirm({
     title: 'Clear listening history?',
     body: 'Everything under Recently played goes.',
-    confirm: `Clear ${plural(recentShown.peek().length, 'track')}`,
+    confirm: `Clear ${plural(recentShown.peek().length, 'song')}`,
     run: clearHistoryWithUndo,
   });
 }
@@ -126,7 +126,7 @@ function LayoutButton() {
 export function Library() {
   useSearchContext({ label: 'Library', tracks: () => libraryTracks.value });
   return (
-    <Screen testid="screen-library" title="Library" subtitle="On this device" scrollKey="library" right={<LayoutButton />}>
+    <Screen testid="screen-library" title="Library" subtitle="On this phone" scrollKey="library" right={<LayoutButton />}>
       <ul class={libListClass()} aria-label="Library">
         <LibItem art={<ListTile icon="heart" />} title="Liked" sub={<Count of={likedShown} />} onOpen={() => openLibraryPage('liked')} testid="lib-liked" />
         <LibItem art={<ListTile icon="clock" />} title="Recently played" sub={<Count of={recentShown} />} onOpen={() => openLibraryPage('recent')} testid="lib-recent" />
@@ -220,10 +220,13 @@ export function LikedPage() {
       ) : (
       <div data-testid="liked-list">
         {tracks.length ? (
-          <Tracks tracks={tracks} ctx={LIKED_CTX} />
+          <>
+            <Tracks tracks={tracks} ctx={LIKED_CTX} />
+            <div class="list-foot end">— end of tape —</div>
+          </>
         ) : (
           <EmptyState title="No liked songs yet">
-            Tap <Icon name="heartOutline" size={16} /> in the player, or Like in a track's ⋯ menu, to keep it here.
+            Tap <Icon name="heartOutline" size={16} /> in the player, or Like in a song's ⋯ menu, to keep it here.
             <div>
               <button class="link-btn" onClick={(e) => afterPress(e.currentTarget, () => selectTab('home'))}>
                 [Browse the Jukebox]
@@ -338,7 +341,7 @@ function AlbumCards({ albums }: { albums: LocalAlbum[] }) {
           <button
             class="shelf-btn release-btn"
             onClick={(e) => afterPress(e.currentTarget, () => openLocalPage('localAlbum', a.key))}
-            aria-label={`Open album ${a.title} by ${a.artist}`}
+            aria-label={`Open album ${a.title}${a.artist ? ` by ${a.artist}` : ''}`}
             data-testid="local-album"
           >
             <Cover url={a.cover} size="md" />
@@ -438,23 +441,27 @@ function SongsAZ({ tracks, ctx, testid, inLocal }: { tracks: Track[]; ctx: PlayC
   const list = useRef({ tracks, ctx });
   list.current = { tracks, ctx };
   const play = useCallback((i: number) => void playFrom(list.current.tracks, i, list.current.ctx), []);
+  // Grouped once per list (the tracks come sorted A–Z, so the rows keep their index), then cut
+  // to what is shown: not sorted again as each chunk comes in.
+  const sections = useMemo(() => groupAZ(tracks, (t) => t.title), [tracks]);
   let at = 0;
   return (
     <div data-testid={testid}>
-      <AZSections items={tracks.slice(0, shown)} name={(t) => t.title}>
-        {(xs) => {
-          const from = at;
-          at += xs.length;
-          return (
+      {takeSections(sections, shown).map((sec) => {
+        const from = at;
+        at += sec.items.length;
+        return (
+          <section class="az-section" key={sec.letter} data-letter={sec.letter}>
+            <AZHead letter={sec.letter} />
             <ul class="list">
-              {xs.map((t, i) => (
+              {sec.items.map((t, i) => (
                 <TrackRow key={t.id} track={t} index={from + i} inLocal={inLocal} onPlay={play} />
               ))}
             </ul>
-          );
-        }}
-      </AZSections>
-      {more && <div ref={sentinel} class="list-foot" aria-hidden="true" />}
+          </section>
+        );
+      })}
+      {more ? <div ref={sentinel} class="list-foot" aria-hidden="true" /> : <div class="list-foot end">— end of tape —</div>}
     </div>
   );
 }
@@ -495,7 +502,7 @@ function Unreachable() {
       {unreachableFolders.value.map((f) => (
         <div key={f.id} class="local-gone" role="status" data-testid="local-gone">
           <span>
-            Can’t reach “{f.name}”.{f.songs > 0 && (f.songs === 1 ? ' Its 1 song is hidden.' : ` Its ${f.songs} songs are hidden.`)}
+            Can't reach "{f.name}".{f.songs > 0 && (f.songs === 1 ? ' Its 1 song is hidden.' : ` Its ${f.songs} songs are hidden.`)}
           </span>
           <button class="link-btn" onClick={() => void addFolder(f.id)} data-testid="local-gone-again">
             [Choose it again]
@@ -534,6 +541,7 @@ export function LocalPage() {
         ) : (
           <div data-testid="local-list">
             <Tracks tracks={tracks} ctx={LOCAL_CTX} inLocal chunkKey="local" />
+            <div class="list-foot end">— end of tape —</div>
           </div>
         )}
       </>
@@ -597,7 +605,7 @@ export function LocalPage() {
 function GonePage({ testid }: { testid: string }) {
   return (
     <Screen testid={testid} title="Local" subtitle="On this phone" left={<BackButton testid="local-back" />}>
-      <EmptyState title="Not on the phone any more">Its songs aren’t in your chosen folders now.</EmptyState>
+      <EmptyState title="Not on the phone any more">Its songs aren't in your chosen folders now.</EmptyState>
     </Screen>
   );
 }
@@ -634,7 +642,7 @@ export function LocalAlbumPage({ albumKey }: { albumKey: string }) {
       </div>
       <PlayShuffle tracks={tracks} ctx={ctx} testid="album" />
       <div data-testid="local-album-list">
-        <Tracks tracks={tracks} ctx={ctx} inLocal />
+        <Tracks tracks={tracks} ctx={ctx} inLocal hideAlbum />
       </div>
       <div class="list-foot end">— end of tape —</div>
     </Screen>
@@ -682,6 +690,7 @@ export function LocalArtistPage({ artistKey }: { artistKey: string }) {
       <div data-testid="local-artist-songs">
         <Tracks tracks={tracks} ctx={ctx} inLocal />
       </div>
+      <div class="list-foot end">— end of tape —</div>
     </Screen>
   );
 }

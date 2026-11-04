@@ -140,6 +140,7 @@ export const TrackRow = memo(function TrackRow({
   onPlay,
   index,
   hideGenre,
+  hideAlbum,
   showSaves,
   inLocal,
 }: {
@@ -148,6 +149,8 @@ export const TrackRow = memo(function TrackRow({
   onPlay: (index: number) => void;
   index: number;
   hideGenre?: boolean;
+  /** On its album's own page: a local song's album isn't repeated on its row. */
+  hideAlbum?: boolean;
   /** A row of Library → Local itself: its songs need no "On phone" tag there. */
   inLocal?: boolean;
   /** Show the post's save count (Most saved). */
@@ -165,7 +168,8 @@ export const TrackRow = memo(function TrackRow({
   // The label names the row; its meta line (saves, members-only, genre, poster) describes it.
   const metaId = useId();
   const local = isLocal(track);
-  const hasMeta = local || showSaves || track.membersOnly || (track.genre && !hideGenre) || track.by;
+  const album = local && !hideAlbum && track.album;
+  const hasMeta = (local && !inLocal) || album || showSaves || track.membersOnly || (track.genre && !hideGenre) || track.by;
   return (
     <li class={'row' + (isCurrent ? ' is-current' : '') + (off ? ' off' : '')} data-testid="track-row" data-track-id={track.id}>
       <button
@@ -198,7 +202,7 @@ export const TrackRow = memo(function TrackRow({
               </span>
             )}
             {local && !inLocal && <span class="tag" data-testid="local-tag">On phone</span>}
-            {local && track.album && <span class="by">{track.album}</span>}
+            {album && <span class="by">{album}</span>}
             {track.membersOnly && <MembersTag />}
             {track.genre && !hideGenre && <span class="tag">{track.genre}</span>}
             {track.by && <span class="by">by @{track.by}</span>}

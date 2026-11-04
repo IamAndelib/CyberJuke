@@ -118,3 +118,15 @@ describe('most songs first', () => {
   });
 });
 
+
+describe('a big folder', () => {
+  it('groups 20,000 songs of one artist, half on 50 albums, in well under a second', () => {
+    const many = Array.from({ length: 20_000 }, (_, i) => song(`Voice note ${i}`, 'Unknown artist', i % 2 ? '' : `Album ${(i / 2) % 50}`, { id: `loc:${i.toString(16).padStart(16, '0')}` }));
+    const t0 = performance.now();
+    const { albums, artists } = groupLocal(many);
+    expect(performance.now() - t0).toBeLessThan(1000);
+    expect(artists[0]!.songs).toHaveLength(20_000);
+    expect(artists[0]!.albums).toHaveLength(50);
+    expect(albums).toHaveLength(51);
+  });
+});

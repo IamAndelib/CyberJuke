@@ -473,3 +473,23 @@ test('a click with no press (keyboard, TalkBack) opens Settings at once', async 
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('screen-settings')).toBeVisible();
 });
+
+test('a focused switch segment shows its ring inside, where the frame does not clip it; text fields have a border you can see', async ({ page }) => {
+  await start(page);
+  await openSettings(page);
+  const seg = page.locator('.seg-grid button.on').first();
+  // As with a keyboard: a key first, so the focus shows its ring.
+  await page.keyboard.press('Shift');
+  await seg.focus();
+  expect(await seg.evaluate((el) => el.matches(':focus-visible') && parseFloat(getComputedStyle(el).outlineOffset) < 0)).toBe(true);
+  // The field's border is the dim text colour (readable), not the faint border colour.
+  const [border, dim] = await page.locator('.field-input').first().evaluate((el) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--color-fg-dim)';
+    document.body.append(probe);
+    const dim = getComputedStyle(probe).color;
+    probe.remove();
+    return [getComputedStyle(el).borderTopColor, dim];
+  });
+  expect(border).toBe(dim);
+});

@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.playback
 
+import io.github.iamandelib.cyberjuke.net.BlockReason
 import io.github.iamandelib.cyberjuke.net.Family
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -39,6 +40,18 @@ class StreamCacheTest {
         val expire = 1_760_000_000_000L
         assertFalse(StreamUrls.isExpired(url, 0L, expire - 1))
         assertTrue(StreamUrls.isExpired(url, 0L, expire))
+    }
+
+    @Test
+    fun aPhoneClockHoursAheadGoesByTheLinksAgeInstead() {
+        // Made at a phone time 8 h after googlevideo's: its expire looks 2 h past already.
+        val resolvedAt = 1_760_000_000_000L + 2 * 3_600_000L
+        assertEquals(resolvedAt + StreamUrls.FALLBACK_TTL_MS, StreamUrls.cacheUntil(url, resolvedAt))
+        assertFalse(StreamUrls.isExpired(url, resolvedAt, resolvedAt + 5_000L))
+        assertTrue(StreamUrls.isExpired(url, resolvedAt, resolvedAt + 6 * StreamUrls.FALLBACK_TTL_MS))
+        // A fresh link refused again is then a refusal, not an old link: the back-off starts.
+        val f = TrackErrorPolicy.Facts(kind = null, httpCode = 403, urlAgeMs = 5_000L, urlExpired = StreamUrls.isExpired(url, resolvedAt, resolvedAt + 5_000L), alreadyReResolved = true)
+        assertEquals(TrackErrorPolicy.Action.Block(BlockReason.STREAM_FORBIDDEN), TrackErrorPolicy.decide(f))
     }
 
     @Test

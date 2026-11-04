@@ -620,6 +620,11 @@
 .segmented .count {
   margin-left: 4px;
 }
+/* The frame clips anything outside a segment: its ring goes inside, in the segment's own ink. */
+:is(.segmented, .seg-grid) button:focus-visible {
+  outline-color: currentColor;
+  outline-offset: -5px;
+}
 /* Back-to-top: [^] bottom-centre, same hard checkered shadow as the search button.
    A zero-height sticky dock at the end of the scroller pins it to the scrollport's
    bottom edge (the top of the mini player or tab bar), centred, so it never meets the
@@ -1475,7 +1480,8 @@ section[data-kind] > .shelf {
   min-width: 0;
   min-height: 44px;
   padding: 0 12px;
-  border: var(--border-w) solid var(--color-border);
+  /* The dim ink, not the border tone: a field's edge needs 3:1 against the page to be seen. */
+  border: var(--border-w) solid var(--color-fg-dim);
   border-radius: var(--radius);
   background: var(--color-bg);
   color: var(--color-fg);
@@ -1512,6 +1518,11 @@ section[data-kind] > .shelf {
   height: 100%;
   border: 0;
   border-radius: 0;
+}
+/* A cover's squares are one picture: no shadow or press of their own (a cover card frames it). */
+.shelf-btn .mosaic > .art {
+  box-shadow: none;
+  transform: none;
 }
 .mosaic-sm {
   width: 52px;

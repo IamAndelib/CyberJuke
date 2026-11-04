@@ -37,18 +37,24 @@ test.describe('turning it on', () => {
     await expect(page.getByTestId('lib-local')).toContainText('6 songs · on this phone');
     await openLibrary(page, 'local');
     await expect(titles(page)).toHaveText(BY_TITLE);
+    await expect(page.getByTestId('screen-local').locator('.list-foot.end')).toHaveText('— end of tape —');
     // In Local itself no "On phone" tag; the album is on the meta line.
     await expect(page.getByTestId('local-list').getByTestId('local-tag')).toHaveCount(0);
     await expect(page.getByTestId('local-list').getByTestId('track-row').first()).toContainText('Attic');
     // Albums: a grid of covers, A–Z; an album plays in track order; its artist opens the artist.
     await page.getByTestId('local-view-albums').click();
     await expect(page.getByTestId('local-albums').getByTestId('local-album')).toHaveText(['AtticAna Tape · 2001', 'BasementZed Loop · 2009', 'Unknown album1 song']);
+    // Read aloud whole: an album's artist, and none for the Unknown album.
+    await expect(page.getByTestId('local-album').first()).toHaveAttribute('aria-label', 'Open album Attic by Ana Tape');
+    await expect(page.getByTestId('local-album').last()).toHaveAttribute('aria-label', 'Open album Unknown album');
     await page.getByTestId('local-album').first().click();
     await expect(page.getByTestId('screen-local-album')).toBeVisible();
     // A tap right where the card was, this soon, is a double tap's second half (nav.ts OPEN_GUARD_MS).
     await page.waitForTimeout(350);
     const albumTitles = page.getByTestId('local-album-list').getByTestId('track-title');
     await expect(albumTitles).toHaveText(['Music song M', 'Music song G', 'Music song A']);
+    // The album's own page doesn't repeat its name on every row.
+    await expect(page.getByTestId('local-album-list').locator('.row-meta')).toHaveText(['', '', '']);
     await page.getByTestId('album-play').click();
     await expect(page.getByTestId('mini-title')).toHaveText('Music song M');
     await page.getByTestId('album-artist').click();
@@ -128,10 +134,11 @@ test.describe('a folder out of reach', () => {
     await localOn(page);
     await page.goto('/');
     await openLibrary(page, 'local');
-    await expect(page.getByTestId('local-gone')).toContainText('Can’t reach “SD card › Albums”. Its 2 songs are hidden.');
+    await expect(page.getByTestId('local-gone')).toContainText('Can\'t reach "SD card › Albums". Its 2 songs are hidden.');
     await expect(titles(page)).toHaveText(BY_TITLE);
     await openSettings(page);
-    await expect(page.getByTestId('local-folder').nth(1)).toContainText('Can’t reach this folder');
+    await expect(page.getByTestId('local-folder').nth(1)).toContainText("Can't reach this folder");
+    expect((await page.getByTestId('local-again').first().boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await page.getByTestId('tab-library').click();
     await page.getByTestId('local-gone-again').click();
     await expect(page.getByTestId('local-gone')).toHaveCount(0);
@@ -237,6 +244,10 @@ test.describe('an artist found nowhere', () => {
     await expect(nf).toContainText(`> locate "${UPLOADER}"`);
     await expect(nf).toContainText('ERR 404: ARTIST NOT FOUND');
     await expect(page.getByTestId('artist-jukebox')).toHaveCount(0);
+    // Nobody to star; TalkBack reads one plain sentence, not the printout.
+    await expect(page.getByTestId('artist-page-fav')).toHaveCount(0);
+    await expect(nf.locator('.nf-term')).toHaveAttribute('aria-hidden', 'true');
+    await expect(nf.locator('.sr-only')).toHaveText(`No artist named "${UPLOADER}" on the Jukebox or on Global.`);
   });
 });
 

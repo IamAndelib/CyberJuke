@@ -75,6 +75,7 @@ export function ArtistPage({ name: raw }: { name: string }) {
   useArtistHere(name, page.feed);
   const meta = page.snap.meta;
   const failed = page.snap.status === 'error';
+  const notFound = catalogReady && !jukebox.length && meta?.resolved === false;
 
   return (
     <Screen
@@ -85,13 +86,13 @@ export function ArtistPage({ name: raw }: { name: string }) {
       left={
         <BackButton testid="artist-back" />
       }
-      right={<ArtistFavButton name={name} />}
+      right={notFound ? undefined : <ArtistFavButton name={name} />}
       // Both halves of the page: the Jukebox's tracks and the artist's own page (a fallback
       // showing after it failed gets another try).
       onRefresh={() => Promise.all([refreshCatalog(), page.feed.refresh()]).then(() => {})}
     >
       <OfflineGate>
-        {catalogReady && !jukebox.length && meta?.resolved === false ? (
+        {notFound ? (
           <NotFound name={name} />
         ) : (
           <>
@@ -188,10 +189,11 @@ export function ArtistPage({ name: raw }: { name: string }) {
 function NotFound({ name }: { name: string }) {
   return (
     <div class="nf" role="status" data-testid="artist-404">
+      <p class="sr-only">{`No artist named "${name}" on the Jukebox or on Global.`}</p>
       <div class="nf-big" aria-hidden="true">
         404
       </div>
-      <pre class="nf-term">
+      <pre class="nf-term" aria-hidden="true">
         {'> locate '}
         <b>"{name}"</b>
         {'\n  jukebox ........ 0 tracks\n  global ......... no match\n  radio .......... dead air\n'}
