@@ -404,8 +404,26 @@
   margin-top: 10px;
   border-top: var(--border-w) solid var(--color-border);
 }
-.upnext .section-head {
-  flex-wrap: wrap;
+/* "Queue · Shuffled · Repeat queue": the modes beside the title, small; when they don't fit
+   they move together to a line under it. The count on the right always keeps its distance. */
+.upnext .upnext-head {
+  align-items: baseline;
+  gap: 16px;
+}
+.upnext-heading {
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+}
+.upnext-modes {
+  display: inline-block;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: var(--color-fg-dim);
+  white-space: nowrap;
+}
+.upnext-left {
+  flex: none;
 }
 .upnext-empty {
   padding: 4px var(--gutter) 12px;
