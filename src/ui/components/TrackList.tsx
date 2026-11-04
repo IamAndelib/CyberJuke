@@ -38,6 +38,7 @@ export function Tracks({
   ctx,
   queue,
   hideGenre,
+  hideAlbum,
   showSaves,
   inLocal,
   chunkKey = null,
@@ -46,6 +47,7 @@ export function Tracks({
   ctx: PlayContext;
   queue?: () => Track[];
   hideGenre?: boolean;
+  hideAlbum?: boolean;
   showSaves?: boolean;
   /** Library → Local's own list (see TrackRow). */
   inLocal?: boolean;
@@ -57,7 +59,7 @@ export function Tracks({
     <>
       <ul class="list" data-testid="track-list">
         {tracks.slice(0, shown).map((t, i) => (
-          <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} showSaves={showSaves} inLocal={inLocal} onPlay={play} />
+          <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} hideAlbum={hideAlbum} showSaves={showSaves} inLocal={inLocal} onPlay={play} />
         ))}
       </ul>
       {more && <div ref={sentinel} class="list-foot" aria-hidden="true" />}

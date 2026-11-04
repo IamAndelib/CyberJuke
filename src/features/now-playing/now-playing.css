@@ -687,7 +687,5 @@ button.lyr-line {
   margin: -6px var(--gutter) 0;
 }
 .upnext-save .link-btn {
-  min-height: 40px;
-  padding: 0 4px;
   margin-left: -4px;
 }

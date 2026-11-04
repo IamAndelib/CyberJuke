@@ -79,7 +79,7 @@ test('history saved by older versions moves into a file once, grouped by day; ne
   await expect(page.getByTestId('lib-recent').locator('.count')).toHaveText('3');
   // Clear counts what the tab counts (tracks), not the 4 plays behind them.
   await page.getByTestId('lib-clear').click();
-  await expect(page.getByTestId('confirm-ok')).toHaveText('Clear 3 tracks');
+  await expect(page.getByTestId('confirm-ok')).toHaveText('Clear 3 songs');
   await page.getByTestId('confirm-cancel').click();
 
   // Migrated: the old key is gone; the file holds each track once.
@@ -235,8 +235,20 @@ test('Liked keeps the newest likes first, or A–Z under letters; A–Z plays in
   const titles = page.getByTestId('liked-list').getByTestId('track-title');
   await expect(page.getByTestId('liked-count')).toHaveText('4 songs');
   await expect(titles).toHaveText(['Zebra Crossing', 'Apple Tree', 'Moon River', 'Avalanche']);
+  // The order row's last choice lines up with the Shuffle button's right edge, as rows of controls do.
+  const textRight = await page.getByTestId('liked-order-az').evaluate((el) => {
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    return Math.round(r.getBoundingClientRect().right);
+  });
+  const shuffleRight = await page.getByTestId('lib-shuffle').evaluate((el) => Math.round(el.getBoundingClientRect().right));
+  expect(Math.abs(textRight - shuffleRight)).toBeLessThanOrEqual(2);
+  // Like every list, it ends with the tape's end, in either order.
+  const end = page.getByTestId('screen-liked').locator('.list-foot.end');
+  await expect(end).toHaveText('— end of tape —');
   await page.getByTestId('liked-order-az').click();
   await expect(titles).toHaveText(['Apple Tree', 'Avalanche', 'Moon River', 'Zebra Crossing']);
+  await expect(end).toHaveText('— end of tape —');
   await expect(page.getByTestId('liked-list').getByTestId('az-head')).toHaveText(['A', 'M', 'Z']);
   await page.getByTestId('lib-play-all').click();
   await expect(page.getByTestId('mini-title')).toHaveText('Apple Tree');

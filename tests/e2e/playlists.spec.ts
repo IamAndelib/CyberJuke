@@ -102,6 +102,12 @@ test.describe('a playlist', () => {
     expect(covers).toHaveLength(2);
     expect(covers[0]).toBe(covers[1]);
     await expect(page.getByTestId('lib-playlist-name')).toHaveText(['Night drive', 'Road trip']);
+    // Every tile is one framed card with its shadow, as cover cards are elsewhere; a cover's own
+    // squares have none (it would draw a line inside the cover).
+    const shadow = (sel: string) => page.locator(sel).first().evaluate((el) => getComputedStyle(el).boxShadow);
+    expect(await shadow('.lib-grid .lib-cell > .lib-tile')).not.toBe('none');
+    expect(await shadow('.lib-grid .lib-cell > .mosaic')).not.toBe('none');
+    expect(await shadow('.lib-grid .mosaic > .art')).toBe('none');
     await page.reload();
     await page.getByTestId('tab-library').click();
     await expect(page.getByTestId('screen-library').locator('.lib-grid')).toHaveCount(2);
@@ -215,6 +221,7 @@ test.describe('adding songs', () => {
     await page.getByTestId('np-repeat').click();
     await expect(page.getByTestId('upnext-title')).toHaveText('Queue · Shuffled · Repeat queue');
     const q = await page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => { current: { id: string }; previous: { id: string }[]; upNext: { id: string }[] } }).__cyberjukeQueue());
+    expect((await page.getByTestId('upnext-save').boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await page.getByTestId('upnext-save').click();
     await expect(page.getByTestId('name-sheet')).toContainText(/With \d+ songs/);
     await page.getByTestId('name-input').fill('Saved queue');
