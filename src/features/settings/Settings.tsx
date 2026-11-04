@@ -755,6 +755,11 @@ export function Settings() {
             <A href="https://github.com/hyphen8d/signal">SIGNAL by hyphen8d (MIT)</A>: the stations Cyberspace's Jukebox
             plays as Signal Radio, bundled with the app.
           </p>
+          <p data-testid="about-musicbrainz">
+            <A href="https://musicbrainz.org">MusicBrainz</A> and <A href="https://listenbrainz.org">ListenBrainz</A>{' '}
+            (CC0): the well-known artist names with a comma, such as Earth, Wind &amp; Fire, kept whole. A fixed list bundled with
+            the app, which never contacts them.
+          </p>
         </details>
       </section>
 

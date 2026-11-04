@@ -310,6 +310,7 @@ test('Account is the first card and says "members-only shared tracks"', async ({
   await expect(about.getByText('Signing in adds members-only tracks.')).toBeVisible();
   await about.getByTestId('about-credits').locator('summary').click();
   await expect(about.getByTestId('about-signal')).toContainText('SIGNAL by hyphen8d (MIT)');
+  await expect(about.getByTestId('about-musicbrainz')).toContainText('MusicBrainz and ListenBrainz (CC0)');
 });
 
 test('Source code: the last card links to the repository and its latest release', async ({ page }) => {
