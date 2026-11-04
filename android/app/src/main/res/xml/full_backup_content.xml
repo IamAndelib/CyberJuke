@@ -8,4 +8,5 @@
     <exclude domain="sharedpref" path="last_session.xml" />
     <exclude domain="file" path="cyberjuke/" />
     <exclude domain="database" path="exoplayer_internal.db" />
+    <exclude domain="root" path="app_webview/" />
 </full-backup-content>

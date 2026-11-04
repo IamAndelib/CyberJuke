@@ -12,10 +12,15 @@ internal object Lrc {
     /** One timed line; [t] in milliseconds from the start of the track. */
     data class Line(val t: Long, val text: String)
 
-    private val TAG_RE = Regex("""^\[([^\]]*)]""")
+    private val TAG_RE = Regex("""\[([^\]]*)]""")
     private val TIME_RE = Regex("""^\s*(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\s*$""")
     private val OFFSET_RE = Regex("""^\s*offset\s*:\s*([+-]?\d+)\s*$""", RegexOption.IGNORE_CASE)
     private val WORD_TIME_RE = Regex("""<\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?>""")
+    private val SPACES = Regex("""\s+""")
+
+    /** At most this many timestamps of one line are kept, and about this many lines (LRCLIB is crowd-sourced). */
+    const val MAX_TIMES_PER_LINE = 32
+    const val MAX_LINES = 5000
 
     /**
      * Parses LRC text into lines sorted by time.
@@ -30,21 +35,25 @@ internal object Lrc {
      * - Enhanced-LRC word times (`<00:12.34>`) are removed from the text.
      * - Timed blank lines are kept with empty text (they mark pauses between verses).
      * - Lines with the same time keep their file order (stable sort).
+     * - At most [MAX_TIMES_PER_LINE] timestamps of a line and about [MAX_LINES] lines are kept;
+     *   a line is read once, front to back, however many tags it has.
      */
     fun parse(lrc: String?): List<Line> {
         if (lrc.isNullOrBlank()) return emptyList()
         var offset = 0L
         val out = ArrayList<Line>()
         for (raw in lrc.lineSequence()) {
-            var rest = raw.trimStart('﻿').trim()
+            if (out.size >= MAX_LINES) break
+            val line = raw.trimStart('﻿').trim()
+            var pos = 0
             val times = ArrayList<Long>()
             while (true) {
-                val m = TAG_RE.find(rest) ?: break
+                val m = TAG_RE.matchAt(line, pos) ?: break
                 val tag = m.groupValues[1]
                 val time = timeOf(tag)
                 if (time != null) {
-                    times.add(time)
-                    rest = rest.substring(m.value.length)
+                    if (times.size < MAX_TIMES_PER_LINE) times.add(time)
+                    pos = m.range.last + 1
                 } else {
                     if (times.isEmpty()) {
                         OFFSET_RE.find(tag)?.let { o -> o.groupValues[1].toLongOrNull()?.let { offset = it } }
@@ -53,7 +62,7 @@ internal object Lrc {
                 }
             }
             if (times.isEmpty()) continue
-            val text = rest.replace(WORD_TIME_RE, "").replace(Regex("""\s+"""), " ").trim()
+            val text = line.substring(pos).replace(WORD_TIME_RE, "").replace(SPACES, " ").trim()
             for (t in times) out.add(Line(t, text))
         }
         return out

@@ -75,7 +75,7 @@ When the preview has passed testing:
 3. If you added yourself as a required reviewer (step 2, optional), the run pauses at **Sign**: open it, click **Review deployments**, tick `release` and **Approve**. Otherwise it simply carries on.
 4. A few minutes later, **Releases** shows **CyberJuke v1.3.5** with `CyberJuke-1.3.5.apk`. That's the real app, signed with your release key.
 
-After each release, the F-Droid recipe moves to the new tag: see [`docs/fdroid/README.md`](fdroid/README.md).
+After each release, run **Actions → Reproducible build check** on the new tag (as it is, and with `debian_node: forky`); once both match, the F-Droid recipe moves to the new tag: see [`docs/fdroid/README.md`](fdroid/README.md).
 
 ## 7. Submit to F-Droid
 

@@ -81,7 +81,7 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 ## Local music
 - [ ] Settings → **Local music** → on: Android's folder picker opens at once. Back out: it stays on with no folder. On Android 7, 12 and 13+ (or what you have), choose **Music**: the row says "Looking… N songs so far", then "N songs". No storage permission is asked for, and Android's app info lists none.
 - [ ] **Add folder** with a folder inside Music: "Already in Music", nothing added. A folder under **Download** with subfolders: songs in the subfolders show too.
-- [ ] Library → **Local**: "N songs · on this phone". **Songs** lists them by title (untagged songs last, with their file name and "Unknown artist"). **Albums** shows each album's cover once; an album plays in its track order (disc 1 before disc 2), and an album credited "Various Artists" stays one album. **Artists** lists each artist once whatever the case of the tags ("TOOL", "Tool"), with their albums newest first. Songs with no album tag are one **Unknown album**, last. A file with no tags named "Artist - Title.mp3" shows under that artist with that title ("01 - Title.mp3" doesn't). The choice stays after the app restarts. Local's **+** opens the folder picker. In Now Playing, a local song's artist opens their artist page (Global); "Unknown artist" isn't a link.
+- [ ] Library → **Local**: "N songs · on this phone". **Songs** lists them newest first, or A–Z under letters (an untagged song shows its file name and "Unknown artist"); dragging the scroller in A–Z, the small letter beside it names the songs it sits next to. **Albums** shows each album's cover once; an album plays in its track order (disc 1 before disc 2), and an album credited "Various Artists" stays one album. **Artists** lists each artist once whatever the case of the tags ("TOOL", "Tool"), with their albums newest first. Songs with no album tag are one **Unknown album**, last. A file with no tags named "Artist - Title.mp3" shows under that artist with that title ("01 - Title.mp3" doesn't). The choice stays after the app restarts. Local's **+** opens the folder picker. In Now Playing, a local song's artist opens their artist page (Global); "Unknown artist" isn't a link.
 - [ ] A first look through a big folder (about 1,000 songs): note how long it takes until the count stops. Songs show as each folder is done; scrolling and playing work meanwhile.
 - [ ] Play from Local and lock the screen: it plays to the end of the list and stops there (no autoplay). The notification and lock screen show the title, artist and cover. Now Playing reads "On this phone · Music"; the artist isn't a link; ⋯ has Add to queue and Like only.
 - [ ] Like a local song: in Liked it has an "On phone" tag. Airplane mode on: it isn't dimmed, and it plays. Lyrics open for a well-known song.
@@ -91,7 +91,7 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 
 ## Browsing and gestures
 - [ ] Open a genre page and tap ★ in the top bar: the genre shows under ★ Favourites on the Genres tab. Same on an artist page.
-- [ ] Now Playing: the ♥ sits beside the title and artist; a long title scrolls without running under it.
+- [ ] Now Playing: ≡+ and ♥ sit on the artist's line; a long title has its line to itself and scrolls.
 - [ ] Open the ⋯ menu in Now Playing and drag on the menu and on the dark area above it: nothing behind it scrolls.
 - [ ] Search for a poster's @name: nothing. Search for an artist or a song: found.
 - [ ] Settings → Licenses → Full license texts opens and scrolls.
@@ -103,9 +103,12 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 - [ ] Long-press a track row: its menu opens, and releasing your finger doesn't tap anything in the menu.
 - [ ] Long titles scroll slowly in Now Playing and in the mini player.
 - [ ] Long-pressing text (headers, titles) doesn't select it.
+- [ ] Artists with a comma stay one artist: play or search "Earth, Wind & Fire" and "Tyler, The Creator", then look in Artists, Now Playing and ⋯ → More by.
+- [ ] A Global song's artist in Now Playing opens their page. A local song whose artist nobody has (a label's name in a downloaded file) opens a 404 page, with no ★.
+- [ ] Hold down a chip (Home's genres) or a Settings choice: it tints while held, and doesn't look chosen.
 - [ ] Swipe up on the mini player: Now Playing opens. Swipe Now Playing down and let go: it carries on down and closes in one motion.
 - [ ] In Now Playing, start a scroll (up or down) on the seek bar: the page scrolls and the thumb doesn't move. A sideways drag seeks; a tap seeks to that spot.
-- [ ] Unlike a track, unfavourite (★) a genre or artist, and clear history: each one offers **Undo**. Clearing history and signing out ask you first.
+- [ ] Unlike a track, unfavourite (★) a genre or artist, add a song to a playlist or take one out (⋯ → Edit songs ✕), remove a local folder, and clear history: each one offers **Undo**. Clearing history and signing out ask you first.
 - [ ] Liking a track or favouriting (★) a genre or artist shows a short "added" message with no Undo, and the star or heart fills at once, even with a long Artists list. On the Genres and Artists tabs the starred tile moves up into ★ Favourites straight away (not also left in the grid), and unstarring puts it back in its place.
 - [ ] Swipe an **Undo** message at the bottom (e.g. after unliking) left, then another right: each one goes. A short drag springs back. A swipe that starts on **Undo** doesn't undo. Right after a swipe, one tap on ♥ or a ★ works (a fast flick too).
 - [ ] Only one message shows at a time: star several genres quickly, and each new message replaces the last. Like a song in Now Playing, then scroll or tap anywhere else: the message goes at once. Its **Undo** still works.
@@ -119,6 +122,8 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 - [ ] A song's ⋯ → **Add to playlist**: the playlist you last added to comes first; one that has the song says "Already in it". **[Save queue as playlist]** under the Queue heading saves what's listed there, with shuffle and repeat on too.
 - [ ] A playlist's ⋯: **Edit songs** (↑ ↓ ✕, ✕ with Undo, [Done]), **Rename**, **Delete playlist** (asks first). Play it with the screen off: the notification says the song, and after a restart the app reopens on it.
 - [ ] Update the app over a version with playlists: they're all there. Signed in, add a members-only song to a playlist; sign out: it's gone from the playlist; sign back in: it's back.
+- [ ] Library's button at the top right shows the lists and playlists as tiles, three to a row, each framed and pressing in as a whole; again for a list. The choice stays after a restart.
+- [ ] Liked: **Newest** (as before) or **A–Z** under letters. Local: songs **Newest** or **A–Z**, albums and artists **Most songs** or **A–Z**. Each one stays as chosen after a restart, and every list ends with "— end of tape —".
 
 ## Account (if you use Cyberspace sign-in)
 - [ ] Sign in: tracks marked **[members]** appear.

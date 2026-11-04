@@ -18,7 +18,7 @@ People who keep music files on their phone can play them in CyberJuke, beside th
 - **Lyrics:** looked up on LRCLIB as for any song. Only the title, artist and length are sent.
 - **Settings:** its own "Local music" card.
 - **From the concept screenshots:**
-  - Library becomes a list (chosen with the playlist concepts): **Liked**, **Recently played** and **Local** are rows with outlined icon tiles, each opening its own page. Playlists join that list in 1.5.0;
+  - Library becomes a list (chosen with the playlist concepts): **Liked**, **Recently played** and **Local** are rows with outlined icon tiles, each opening its own page. Playlists join that list (both shipped in 1.4.0);
   - sorting is a **Title / Artist / Album** switch;
   - local songs in mixed lists carry an **On phone** tag.
 
@@ -68,7 +68,7 @@ A new card between Content and Storage.
   - rows for **Liked** ("8 songs"), **Recently played** and, while local music is on, **Local** ("19 songs · on this phone");
   - each row has an outlined square tile with its icon (heart, clock, folder), no picture texture, and a chevron;
   - a tap opens that list as its own page, with Back to Library. Liked and Recently played keep today's content; [Clear] sits in Recently played's top bar.
-  - **Trade-off until 1.5.0:** with local music off, Library is two rows, one more tap than today's switch. Playlists fill the list in 1.5.0.
+  - **Trade-off until playlists:** with local music off, Library is two rows, one more tap than today's switch. Playlists fill the list (also in 1.4.0).
 - **The Local page:**
   - Play and Shuffle, then a **Title / Artist / Album** switch. The choice is remembered in settings (`localSort`).
   - Then the usual rows: cover, title, artist, and the album on the meta line.

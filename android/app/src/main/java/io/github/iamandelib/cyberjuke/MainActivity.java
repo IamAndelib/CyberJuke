@@ -172,6 +172,8 @@ public class MainActivity extends BridgeActivity {
         settings.setAllowContentAccess(false);
         settings.setGeolocationEnabled(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
+        // The default since Android 5, stated so no later default can loosen it.
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
     }
 
     /**

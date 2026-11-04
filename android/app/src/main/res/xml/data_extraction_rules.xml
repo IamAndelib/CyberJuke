@@ -20,6 +20,8 @@
     database) and their covers (no_backup/art/).
   - Local music's folder list, song list and covers are in no_backup/local/, which Android never
     backs up either; the folders' read grants are Android's own and are never backed up.
+  - root app_webview/: the WebView's own storage (its cookies, cache index and site data); the
+    app keeps nothing there itself, and a browser profile has no place in a backup.
   The cache directory (lyrics) is never backed up by Android.
 
   disableIfNoEncryptionCapabilities: what is left (settings, recent searches) goes to the cloud
@@ -32,11 +34,13 @@
         <exclude domain="sharedpref" path="last_session.xml" />
         <exclude domain="file" path="cyberjuke/" />
         <exclude domain="database" path="exoplayer_internal.db" />
+        <exclude domain="root" path="app_webview/" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="cyberjuke_secure.xml" />
         <exclude domain="sharedpref" path="last_session.xml" />
         <exclude domain="file" path="cyberjuke/" />
         <exclude domain="database" path="exoplayer_internal.db" />
+        <exclude domain="root" path="app_webview/" />
     </device-transfer>
 </data-extraction-rules>
