@@ -638,7 +638,7 @@ export function LocalAlbumPage({ albumKey }: { albumKey: string }) {
       </div>
       <PlayShuffle tracks={tracks} ctx={ctx} testid="album" />
       <div data-testid="local-album-list">
-        <Tracks tracks={tracks} ctx={ctx} inLocal />
+        <Tracks tracks={tracks} ctx={ctx} inLocal hideAlbum />
       </div>
       <div class="list-foot end">— end of tape —</div>
     </Screen>

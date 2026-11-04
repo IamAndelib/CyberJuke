@@ -53,6 +53,8 @@ test.describe('turning it on', () => {
     await page.waitForTimeout(350);
     const albumTitles = page.getByTestId('local-album-list').getByTestId('track-title');
     await expect(albumTitles).toHaveText(['Music song M', 'Music song G', 'Music song A']);
+    // The album's own page doesn't repeat its name on every row.
+    await expect(page.getByTestId('local-album-list').locator('.row-meta')).toHaveText(['', '', '']);
     await page.getByTestId('album-play').click();
     await expect(page.getByTestId('mini-title')).toHaveText('Music song M');
     await page.getByTestId('album-artist').click();
