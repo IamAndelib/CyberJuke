@@ -205,6 +205,15 @@ test.describe('the A–Z scroller', () => {
     expect(pb.width).toBeLessThan(60);
     expect(pb.x + pb.width).toBeLessThanOrEqual(th.x);
     expect(Math.abs(pb.y + pb.height / 2 - (th.y + th.height / 2))).toBeLessThanOrEqual(4);
+    // It names the songs it sits next to: the section whose heading is the last above it.
+    const level = pb.y + pb.height / 2;
+    const beside = await screen.locator('.az-section').evaluateAll(
+      (els, y) => els.filter((e) => e.getBoundingClientRect().top <= y).at(-1)?.getAttribute('data-letter') ?? '',
+      level,
+    );
+    const top = await screen.locator('.az-section').evaluateAll((els) => els.filter((e) => e.getBoundingClientRect().top <= 140).at(-1)?.getAttribute('data-letter') ?? '');
+    expect(beside).not.toBe(top);
+    await expect(popup).toHaveText(beside);
     await page.mouse.up();
   });
 });
