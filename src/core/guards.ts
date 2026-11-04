@@ -7,6 +7,7 @@ import type { FsDocument, FsRunQueryRow, Track, TrackArtist, TrackOrigin } from 
 import type { NativeState, RepeatMode } from '../player/native';
 import type { MusicItem, MusicPage } from '../data/ytmusic';
 import type { LocalFolder, LocalFolderState, LocalSong } from '../data/local';
+import { tidy } from './text';
 
 export function isObj(x: unknown): x is Record<string, unknown> {
   return typeof x === 'object' && x !== null && !Array.isArray(x);
@@ -226,11 +227,11 @@ export function asTrack(x: unknown): Track | null {
     id: x.id,
     ytId,
     ...(mp3 && { mp3 }),
-    title: x.title,
-    artist: isStr(x.artist) ? x.artist : '',
-    genre: isStr(x.genre) ? x.genre : '',
-    by: isStr(x.by) ? x.by : '',
-    postTitle: isStr(x.postTitle) ? x.postTitle : '',
+    title: tidy(x.title),
+    artist: isStr(x.artist) ? tidy(x.artist) : '',
+    genre: isStr(x.genre) ? tidy(x.genre) : '',
+    by: isStr(x.by) ? tidy(x.by) : '',
+    postTitle: isStr(x.postTitle) ? tidy(x.postTitle) : '',
     postUrl: isStr(x.postUrl) ? x.postUrl : '',
     createdAt: isStr(x.createdAt) ? x.createdAt : '',
     nsfw: x.nsfw === true,
@@ -242,7 +243,8 @@ export function asTrack(x: unknown): Track | null {
   if (replies !== undefined) t.replies = replies;
   if (ORIGINS.includes(x.source as TrackOrigin)) t.source = x.source as TrackOrigin;
   if (x.membersOnly === true) t.membersOnly = true;
-  if (isStr(x.album) && x.album) t.album = x.album;
+  const album = isStr(x.album) ? tidy(x.album) : '';
+  if (album) t.album = album;
   const artists = parseTrackArtists(x.artists);
   if (artists.length) t.artists = artists;
   return t;
@@ -290,10 +292,10 @@ export function parseLocalSongs(x: unknown): LocalSong[] {
     if (!isObj(t) || !isStr(t.id) || !LOCAL_ID_RE.test(t.id) || !isStr(t.folder) || !t.folder) continue;
     out.push({
       id: t.id,
-      title: isStr(t.title) && t.title.trim() ? t.title : 'Untitled',
-      artist: isStr(t.artist) && t.artist.trim() ? t.artist : 'Unknown artist',
-      album: isStr(t.album) ? t.album : '',
-      albumArtist: isStr(t.albumArtist) ? t.albumArtist : '',
+      title: (isStr(t.title) && tidy(t.title)) || 'Untitled',
+      artist: (isStr(t.artist) && tidy(t.artist)) || 'Unknown artist',
+      album: isStr(t.album) ? tidy(t.album) : '',
+      albumArtist: isStr(t.albumArtist) ? tidy(t.albumArtist) : '',
       track: count(t.track),
       disc: count(t.disc),
       year: count(t.year),
