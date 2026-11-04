@@ -23,6 +23,7 @@
 - Artists whose name has a comma stay one artist: Earth, Wind & Fire, Tyler, The Creator, Grover Washington, Jr. and the like no longer split into two in Artists, Now Playing and ⋯ → More by. **Settings → About → Credits** names MusicBrainz and ListenBrainz, where the list of these names comes from.
 - Holding down an option in a switch or a row of chips (Settings, Home's genres) tints it instead of filling it, so it no longer looks chosen alongside the one that is.
 - Recently played hides your own songs while their folder is removed or local music is off, as Liked and playlists do; they come back with the folder.
+- With a keyboard, a focused switch (Settings' choices, Local's Songs | Albums | Artists) shows its focus ring; text fields' edges are easier to see in every theme.
 - A song you play from Recently played shows its title in the highlight colour at the top of the list, like a song played from anywhere else.
 
 ## [1.3.6] - 2026-10-31
