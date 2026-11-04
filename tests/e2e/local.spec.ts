@@ -138,6 +138,7 @@ test.describe('a folder out of reach', () => {
     await expect(titles(page)).toHaveText(BY_TITLE);
     await openSettings(page);
     await expect(page.getByTestId('local-folder').nth(1)).toContainText("Can't reach this folder");
+    expect((await page.getByTestId('local-again').first().boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await page.getByTestId('tab-library').click();
     await page.getByTestId('local-gone-again').click();
     await expect(page.getByTestId('local-gone')).toHaveCount(0);
