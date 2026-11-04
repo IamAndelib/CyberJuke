@@ -142,23 +142,27 @@ export const recent = computed<Track[]>(() => uniqueTracks(history.value));
 export const settings = signal<Settings>({ ...DEFAULT_SETTINGS });
 /**
  * The ids of the local songs on the phone now (stores/local keeps it). A liked local song not
- * among them (its folder removed or out of reach, local music off) is hidden from Liked but
- * kept, and comes back with its folder.
+ * among them (its folder removed or out of reach, local music off) is hidden from Liked and
+ * Recently played but kept, and comes back with its folder.
  */
 export const localHere = signal<ReadonlySet<string>>(new Set());
 /** The NSFW setting alone: a theme change doesn't touch what depends on it (the catalog, the search index). */
 export const showNsfw = computed(() => settings.value.showNsfw);
 /**
- * What Library shows with the NSFW setting applied, as the catalog does: Liked and the history
- * keep every track, so turning the setting back on brings them back.
+ * What Library shows: the NSFW setting applied, as the catalog does, and local songs only while
+ * on the phone. Liked and the history keep every track, so either coming back brings them back.
  */
-export const likedShown = computed(() => {
+const shown = computed(() => {
   const nsfw = showNsfw.value;
   const here = localHere.value;
-  return liked.value.filter((t) => (nsfw || !t.nsfw) && (!isLocal(t) || here.has(t.id)));
+  return (t: Track) => (nsfw || !t.nsfw) && (!isLocal(t) || here.has(t.id));
 });
-export const historyShown = computed(() => (showNsfw.value ? history.value : history.value.filter((e) => !e.track.nsfw)));
-export const recentShown = computed(() => (showNsfw.value ? recent.value : recent.value.filter((t) => !t.nsfw)));
+export const likedShown = computed(() => liked.value.filter(shown.value));
+export const historyShown = computed(() => {
+  const show = shown.value;
+  return history.value.filter((e) => show(e.track));
+});
+export const recentShown = computed(() => recent.value.filter(shown.value));
 /** Favorite genres, in the order they were added. */
 export const favoriteGenres = signal<string[]>([]);
 /** Favorite artists (display names), in the order they were added. Matched by artistKey. */

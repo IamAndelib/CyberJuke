@@ -143,6 +143,13 @@ describe('tracksFromDocument edge cases', () => {
     },
   });
 
+  it('tidies the text of a post: one line, a few hundred characters at most', () => {
+    const doc = withAttachments([att('https://youtu.be/aaaaaaaaaaa', { artist: 'Earth,' + ' '.repeat(50_000) + 'Wind & Fire', title: 'x'.repeat(5000) })]);
+    const [t] = tracksFromDocument(doc);
+    expect(t!.artist).toBe('Earth, Wind & Fire');
+    expect(t!.title.length).toBeLessThanOrEqual(300);
+  });
+
   it('suffixes ids with the attachment index when a post has several audio attachments', () => {
     const doc = withAttachments([
       { mapValue: { fields: { type: { stringValue: 'image' }, src: { stringValue: 'x.png' } } } },

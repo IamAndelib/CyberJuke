@@ -4,6 +4,7 @@
  * real fixtures in __fixtures__/runquery-sample.json.
  */
 import { audioIdOf, MP3_URL_RE, YT_ID_RE } from '../core/guards';
+import { tidy } from '../core/text';
 
 export interface Track {
   /** Firestore doc id, plus `-<attachmentIndex>` when the post has several audio attachments. */
@@ -258,11 +259,11 @@ export function tracksFromDocument(doc: FsDocument): Track[] {
   const f = doc.fields ?? {};
   const membersOnly = isMembersOnlyDoc(doc);
   const id = docId(doc.name);
-  const by = str(f.authorUsername);
+  const by = tidy(str(f.authorUsername));
   const slug = str(f.slug);
   const createdAt = ts(f.createdAt) || doc.createTime || '';
   const nsfw = bool(f.isNSFW);
-  const postTitle = str(f.title).trim();
+  const postTitle = tidy(str(f.title));
   const url = by && slug ? postUrl(by, slug) : SITE_ORIGIN + '/jukebox';
   const saves = int(f.bookmarksCount);
   const replies = int(f.repliesCount);
@@ -282,9 +283,9 @@ export function tracksFromDocument(doc: FsDocument): Track[] {
     out.push({
       id: audio.length > 1 ? `${id}-${index}` : id,
       ...source,
-      title: str(fields.title).trim() || UNTITLED,
-      artist: str(fields.artist).trim() || UNKNOWN_ARTIST,
-      genre: (str(fields.genre) || str(f.audioAttachmentGenre)).trim(),
+      title: tidy(str(fields.title)) || UNTITLED,
+      artist: tidy(str(fields.artist)) || UNKNOWN_ARTIST,
+      genre: tidy(str(fields.genre) || str(f.audioAttachmentGenre)),
       by,
       postTitle,
       postUrl: url,
