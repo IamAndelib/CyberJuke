@@ -263,22 +263,26 @@ export function UpNext() {
   const open = playedOpenFor.value === ctx;
   return (
     <section ref={root} class="upnext" data-testid="up-next">
-      <div class="section-head">
-        <h3 class="section-title" data-testid="upnext-title">
-          Queue{shuffle && <span class="dim"> · Shuffled</span>}
+      <div class="section-head upnext-head">
+        <h3 class="section-title upnext-heading" data-testid="upnext-title">
+          Queue
+          {(shuffle || repeat !== 'off') && (
+            <>
+              {' '}
+              <span class="upnext-modes">
+                {shuffle && <span>· Shuffled </span>}
+                {repeat !== 'off' && <span>· {repeat === 'one' ? 'Repeat song' : 'Repeat queue'}</span>}
+              </span>
+            </>
+          )}
         </h3>
-        {total > 0 && <span class="dim small">{upTo(total)} up next</span>}
+        {total > 0 && <span class="dim small upnext-left">{upTo(total)} up next</span>}
       </div>
       {current && (
         <div class="upnext-save">
           <button class="link-btn" onClick={() => saveQueue([...played.map((u) => u.track), current, ...[...sec.queued, ...sec.list, ...sec.autoplay].map((u) => u.track)])} data-testid="upnext-save">
             [Save queue as playlist]
           </button>
-        </div>
-      )}
-      {repeat !== 'off' && (
-        <div class="dim small upnext-empty" data-testid="upnext-repeat">
-          {repeat === 'one' ? 'Repeating this song.' : 'Repeating the queue.'}
         </div>
       )}
       <ol class="list compact">

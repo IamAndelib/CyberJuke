@@ -296,11 +296,11 @@ test('with repeat on, a song you tap still gets its suggestions; a list you star
   const q = await withAutoplay(page);
   expect(q.seed?.title).toBe(title);
   await openNowPlaying(page);
-  await expect(page.getByTestId('upnext-repeat')).toHaveText('Repeating the queue.');
+  await expect(page.getByTestId('upnext-title')).toHaveText('Queue · Repeat queue');
   // Repeat one goes on as repeat off does.
   await repeat.click();
   await expect(repeat).toHaveAttribute('data-mode', 'one');
-  await expect(page.getByTestId('upnext-repeat')).toHaveText('Repeating this song.');
+  await expect(page.getByTestId('upnext-title')).toHaveText('Queue · Repeat song');
   await page.getByTestId('np-close').click();
   await visible(page, 'track-play').nth(3).click();
   await expect.poll(async () => (await queueState(page)).seed?.id).not.toBe(q.seed?.id);
@@ -463,6 +463,26 @@ test('with shuffle on, the queue reads "Queue · Shuffled" and still says how ma
   await expect(page.getByTestId('upnext-title')).toHaveText('Queue');
 });
 
+test('Shuffle and Repeat both show beside "Queue", whole, and never run into the count, on a narrow phone', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  await withAutoplay(page);
+  await openNowPlaying(page);
+  await page.getByTestId('np-shuffle').click();
+  await page.getByTestId('np-repeat').click();
+  const title = page.getByTestId('upnext-title');
+  await expect(title).toHaveText('Queue · Shuffled · Repeat queue');
+  const count = page.getByTestId('up-next').locator('.section-head > .small');
+  await expect(count).toHaveText(/up next/);
+  const t = (await title.boundingBox())!;
+  const c = (await count.boundingBox())!;
+  expect(c.x - (t.x + t.width)).toBeGreaterThanOrEqual(12);
+  // Nothing is cut off: the modes wrap under "Queue" instead.
+  expect(await title.evaluate((el) => [...el.querySelectorAll('*')].every((e) => e.scrollWidth <= e.clientWidth + 1))).toBe(true);
+  await expect(page.getByTestId('upnext-repeat')).toHaveCount(0);
+});
+
 test('"Added to queue · plays next" only when it does', async ({ page }) => {
   await start(page);
   await visible(page, 'track-play').first().click();
@@ -547,7 +567,7 @@ test('the queue shows the whole list: what played folds under [+] Played, the pl
   const repeat = page.getByTestId('np-repeat');
   while ((await repeat.getAttribute('data-mode')) !== 'all') await repeat.click();
   await expect(page.getByTestId('upnext-played').first().locator('.row-title')).toHaveText(titles[0]);
-  await expect(page.getByTestId('upnext-repeat')).toHaveText('Repeating the queue.');
+  await expect(page.getByTestId('upnext-title')).toHaveText('Queue · Repeat queue');
   // A new list starts folded.
   await page.getByTestId('np-close').click();
   await page.getByTestId('tab-genres').click();
