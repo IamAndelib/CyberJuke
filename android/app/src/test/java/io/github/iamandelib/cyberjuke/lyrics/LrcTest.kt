@@ -52,6 +52,18 @@ class LrcTest {
         assertTrue(Lrc.parse("[ar:x]\nno times").isEmpty())
     }
 
+    @Test
+    fun aHugeFileParsesQuicklyAndIsCapped() {
+        // One line with 80,000 timestamps (about 800 KB), then 20,000 more lines.
+        val line = buildString { repeat(80_000) { append("[01:02.03]") }; append("x") }
+        val many = (1..20_000).joinToString("\n") { "[00:${(it % 60).toString().padStart(2, '0')}.00]line $it" }
+        val t0 = System.nanoTime()
+        val lines = Lrc.parse(line + "\n" + many)
+        assertTrue("took ${(System.nanoTime() - t0) / 1_000_000} ms", System.nanoTime() - t0 < 2_000_000_000L)
+        assertEquals(Lrc.MAX_TIMES_PER_LINE, lines.count { it.text == "x" })
+        assertTrue(lines.size <= Lrc.MAX_LINES + Lrc.MAX_TIMES_PER_LINE)
+    }
+
     private fun e(artist: String, d: Double?, synced: String? = null, plain: String? = null, instr: Boolean = false) =
         Lrc.LrclibEntry("Song", artist, d, instr, plain, synced)
 
