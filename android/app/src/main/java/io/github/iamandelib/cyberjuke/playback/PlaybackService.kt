@@ -1263,9 +1263,9 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    private fun restorePlayed(item: MediaItem, beforeId: String?) {
+    private fun restorePlayed(item: MediaItem, beforeId: String?, mine: Boolean) {
         crossfade?.settle()
-        queue.restorePlayed(item, beforeId)
+        queue.restorePlayed(item, beforeId, mine)
         queueChanged()
     }
 
@@ -1914,7 +1914,7 @@ class PlaybackService : MediaSessionService() {
                         val kind = args.getString(QueueCommands.ARG_KIND)
                         val before = BridgeLimits.checkString(args.getString(QueueCommands.ARG_BEFORE), "beforeId")
                         if (kind == QueueCommands.KIND_PLAYED) {
-                            restorePlayed(item, before)
+                            restorePlayed(item, before, args.getBoolean(QueueCommands.ARG_MINE, false))
                         } else {
                             restore(item, NativeQueue.Section.of(kind) ?: return bad, before)
                         }

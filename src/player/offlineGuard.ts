@@ -91,7 +91,7 @@ export function offlineGuard(p: Player, o: OfflinePolicy): Player {
     toggle: () => (wantsPlay(p.state.peek()) ? p.toggle() : resume(() => p.toggle())),
     playList,
     addToQueue: (tracks) => (empty() ? playList(tracks, 0) : p.addToQueue(tracks)),
-    restore: (track, kind, beforeId) => (empty() ? playList([track], 0) : p.restore(track, kind, beforeId)),
+    restore: (track, kind, beforeId, mine) => (empty() ? playList([track], 0) : p.restore(track, kind, beforeId, mine)),
     next: () => {
       const s = p.state.peek();
       return o.online() || savedAhead(s, o.saved()) ? p.next() : refused(why(s.upNext[0]?.track));

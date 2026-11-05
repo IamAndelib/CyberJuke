@@ -433,11 +433,13 @@ describe('NativePlayer: edits (K2)', () => {
     expect(fake.plugin.play).toHaveBeenCalledTimes(1);
   });
 
-  it('restore sends the track, its section and the track it goes before (K3)', async () => {
+  it('restore sends the track, its section, the track it goes before (K3) and the mark of a song you queued (rule 8)', async () => {
     const p = new NativePlayer();
     list(p);
-    await p.restore(tr('Z'), 'list', 'C');
+    await p.restore(tr('Z'), 'list', 'C', false);
     expect(fake.plugin.restore).toHaveBeenCalledWith({ track: toNative(tr('Z')), kind: 'list', beforeId: 'C' });
+    await p.restore(tr('Y'), 'played', null, true);
+    expect(fake.plugin.restore).toHaveBeenLastCalledWith({ track: toNative(tr('Y')), kind: 'played', beforeId: null, mine: true });
   });
 
   it('removeIds sends at most BRIDGE_MAX_ITEMS ids a call (K5, K6)', async () => {

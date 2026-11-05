@@ -64,7 +64,7 @@ class QueueRulesTest {
                     val before = if (s.isNull("beforeId")) null else s.getString("beforeId")
                     val kind = s.getString("kind")
                     if (kind == QueueCommands.KIND_PLAYED) {
-                        p.queue.restorePlayed(s.getString("id"), before)
+                        p.queue.restorePlayed(s.getString("id"), before, s.optBoolean("mine", false))
                     } else {
                         p.queue.restore(s.getString("id"), NativeQueue.Section.of(kind) ?: throw IllegalArgumentException("kind in $where"), before)
                     }
@@ -124,6 +124,7 @@ class QueueRulesTest {
         }
         if (s.has("list")) assertEquals("list in $where", strings(s.getJSONArray("list")), p.ids.toList())
         if (s.has("played")) assertEquals("played in $where", strings(s.getJSONArray("played")), p.played())
+        if (s.has("mine")) assertEquals("mine in $where", strings(s.getJSONArray("mine")), p.ids.filterIndexed { i, _ -> p.serials[i] != 0L })
         val (lead, list, autos) = sections(p).map { it.second }
         if (s.has("queuedIds")) assertEquals("queuedIds in $where", strings(s.getJSONArray("queuedIds")), lead)
         if (s.has("listIds")) assertEquals("listIds in $where", strings(s.getJSONArray("listIds")), list)

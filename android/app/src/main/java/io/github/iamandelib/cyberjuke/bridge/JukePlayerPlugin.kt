@@ -644,11 +644,12 @@ class JukePlayerPlugin : Plugin() {
     }
 
     /**
-     * `restore({ track, kind: 'played' | 'queued' | 'list' | 'autoplay', beforeId: string | null })`:
+     * `restore({ track, kind: 'played' | 'queued' | 'list' | 'autoplay', beforeId: string | null, mine?: true })`:
      * Undo of a removal (K3). The track goes back as `kind`, right before the first entry after
      * the current track with id `beforeId` (a queued one only before a queued one, the others
      * never before one), else at the end of its section; never at or before the current track.
-     * 'played' goes back before the played entry `beforeId`, else right before the current track.
+     * 'played' goes back before the played entry `beforeId`, else right before the current track,
+     * with the queued-by-you mark when `mine`.
      */
     @PluginMethod
     fun restore(call: PluginCall) {
@@ -664,6 +665,7 @@ class JukePlayerPlugin : Plugin() {
             putString(QueueCommands.ARG_TRACKS, arr.toString())
             putString(QueueCommands.ARG_KIND, kind)
             if (beforeId.isNotEmpty()) putString(QueueCommands.ARG_BEFORE, beforeId)
+            putBoolean(QueueCommands.ARG_MINE, call.getBoolean("mine", false) ?: false)
         }
         withController(call) { c -> sendCommand(call, c, QueueCommands.RESTORE, args) }
     }

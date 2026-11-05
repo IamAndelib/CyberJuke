@@ -72,7 +72,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             q.move(indexOf(s.id), s.to as number);
             break;
           case 'restore':
-            q.restore(t(s.id as string), s.kind as Section, (s.beforeId as string | null) ?? null);
+            q.restore(t(s.id as string), s.kind as Section, (s.beforeId as string | null) ?? null, s.mine === true);
             break;
           case 'removeRow': {
             // Up next's ✕: Undo puts it back as its row's kind, before the row that followed it.
@@ -117,6 +117,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             if ('queued' in s) expect(q.queuedCount).toBe(s.queued);
             if ('list' in s) expect(ids(q.items)).toEqual(s.list);
             if ('played' in s) expect(q.previousIndices().map((i) => q.items[i].id)).toEqual(s.played);
+            if ('mine' in s) expect(q.mineIndices().map((i) => q.items[i].id)).toEqual(s.mine);
             if ('place' in s) expect(placeOf({ ...EMPTY_STATE, queue: q.items as Track[], index: q.index, upNext: upNext() })).toBe(s.place);
             const sec = sectionsOf(upNext(), null);
             const sIds = (xs: UpItem[]) => xs.map((x) => x.track.id);

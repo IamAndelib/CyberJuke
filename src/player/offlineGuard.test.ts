@@ -201,7 +201,7 @@ describe('offlineGuard', () => {
     const { inner, p, refused, offline } = setup({}, [b.ytId]);
     offline();
     await p.addToQueue([a]);
-    await p.restore(a, 'queued', null);
+    await p.restore(a, 'queued', null, false);
     expect(refused).toHaveBeenCalledTimes(2);
     expect(refused).toHaveBeenLastCalledWith('offline');
     // Saved, it plays (the saved songs of what was added, from the first).

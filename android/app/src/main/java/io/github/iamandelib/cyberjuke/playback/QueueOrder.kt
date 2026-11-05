@@ -315,18 +315,19 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
 
     /**
      * Inserts [items] after the current item and after the earlier queued ones. Returns the
-     * list index they were inserted at.
+     * list index they were inserted at. With nothing playing, the first one plays as a list of
+     * one, without the queued-by-you mark (serial 0), and the rest are queued after it.
      */
     fun queueNext(items: List<T>): Int {
         if (items.isEmpty()) return -1
         prune()
-        val serials = items.map { nextSerial++ }
         if (host.count == 0) {
+            val serials = listOf(0L) + items.drop(1).map { nextSerial++ }
             host.insertTagged(null, items, serials)
-            pending.addAll(serials)
-            prune()
+            pending.addAll(serials.drop(1))
             return 0
         }
+        val serials = items.map { nextSerial++ }
         // Linear order: earlier queued items sit right after the current one, so the new ones
         // go after that block. With shuffle on the list position only matters once shuffle is
         // turned off again; the shuffle order is fixed up below.
@@ -536,14 +537,15 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
 
     /**
      * Undo of removing a played item: back among the played, right before the played item
-     * [beforeId] (play order), else right before the current one; a list item again.
+     * [beforeId] (play order), else right before the current one; a list item again, with the
+     * queued-by-you mark (a serial, never pending: it has played) when it had it, [mine].
      */
-    fun restorePlayed(item: T, beforeId: String?) {
+    fun restorePlayed(item: T, beforeId: String?, mine: Boolean) {
         prune()
         val cur = host.currentIndex
         if (cur !in 0 until host.count) return host.insertTagged(null, listOf(item), listOf(0L))
         val at = beforeId?.let { id -> played().firstOrNull { host.idAt(it) == id } } ?: cur
-        host.insertTagged(at, listOf(item), listOf(0L))
+        host.insertTagged(at, listOf(item), listOf(if (mine) nextSerial++ else 0L))
         hear(at)
         regain(at)
         if (!host.shuffleEnabled) return

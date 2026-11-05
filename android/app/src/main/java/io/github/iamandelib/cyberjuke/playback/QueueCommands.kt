@@ -44,7 +44,7 @@ internal object QueueCommands {
     /** Removes every item whose id is in [ARG_IDS] (K5, sign-out). */
     const val ACTION_REMOVE_IDS = "io.github.iamandelib.cyberjuke.REMOVE_IDS"
 
-    /** Undo of a removal (K3): one track in [ARG_TRACKS], [ARG_KIND], [ARG_BEFORE]. */
+    /** Undo of a removal (K3): one track in [ARG_TRACKS], [ARG_KIND], [ARG_BEFORE], [ARG_MINE]. */
     const val ACTION_RESTORE = "io.github.iamandelib.cyberjuke.RESTORE"
 
     /** The NativeTrack[] JSON. */
@@ -65,6 +65,9 @@ internal object QueueCommands {
     /** [ARG_KIND] for a played item (NativeQueue.restorePlayed); the others are NativeQueue.Section's. */
     const val KIND_PLAYED = "played"
     const val ARG_BEFORE = "beforeId"
+
+    /** [ACTION_RESTORE]: a played item queued by you keeps that mark (NativeQueue.restorePlayed). */
+    const val ARG_MINE = "mine"
     const val ARG_MS = "ms"
 
     /** SessionResult extra: the reject code for the web (see [STALE_INDEX], [TOO_LARGE]). */

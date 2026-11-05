@@ -446,11 +446,11 @@ export class NativePlayer implements Player {
     await JukePlayer.queueNext({ tracks: tracks.map(toNative) });
   }
 
-  async restore(track: Track, kind: UpNextKind, beforeId: string | null): Promise<void> {
+  async restore(track: Track, kind: UpNextKind, beforeId: string | null, mine: boolean): Promise<void> {
     if (!isPlayable(track)) return;
     if (this.s.value.index < 0) return this.playList([track], 0);
     this.remember([track]);
-    await JukePlayer.restore({ track: toNative(track), kind, beforeId });
+    await JukePlayer.restore({ track: toNative(track), kind, beforeId, ...(mine && { mine: true }) });
   }
 
   async addAutoplay(all: Track[], seedId: string): Promise<void> {

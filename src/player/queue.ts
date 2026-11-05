@@ -62,6 +62,8 @@ interface Entry<T> {
   item: T;
   /** Added by autoplay (addAuto). */
   auto?: boolean;
+  /** Queued by you (queueNext): the mark stays after it plays. */
+  mine?: true;
 }
 
 const RESTART_THRESHOLD_MS = 3000;
@@ -126,6 +128,11 @@ export class Queue<T extends Identified> {
   /** List indices of the tracks before the current one in play order, oldest first, at most `max`. */
   previousIndices(max = UP_NEXT_MAX): number[] {
     return this.played().slice(-max).map((e) => this.list.indexOf(e));
+  }
+
+  /** List indices of the tracks you queued, played or not. */
+  mineIndices(): number[] {
+    return this.list.flatMap((e, i) => (e.mine ? [i] : []));
   }
 
   /** How many of the first upNext() items were queued by the user ("Queued by you"). */
@@ -331,12 +338,13 @@ export class Queue<T extends Identified> {
   /**
    * "Add to queue": play these next, after the current track and after anything queued
    * earlier (first in, first out), in list and play order, shuffle or not. With nothing
-   * playing, the first one becomes current.
+   * playing, the first one becomes current, a list of one without the mark.
    */
   queueNext(items: T[]): void {
     if (!items.length) return;
-    const entries = items.map((i) => this.entry(i));
+    const entries = items.map((i): Entry<T> => ({ ...this.entry(i), mine: true }));
     if (!this.cur) {
+      delete entries[0].mine;
       this.list.unshift(...entries);
       this.order.unshift(...entries);
       this.cur = entries[0];
@@ -386,9 +394,10 @@ export class Queue<T extends Identified> {
    * the native queue's), so both stay ahead once shuffle is off; an autoplay one before one on the
    * way goes where that list starts. A marker's own song (or one that left the list on the way),
    * back right before the marker's song (or last, the marker gone with it), gets the marker back:
-   * it stays in its own list. With nothing playing, it is added (and plays).
+   * it stays in its own list. With nothing playing, it is added (and plays). A queued one, or
+   * one that had it (`mine`), gets the queued-by-you mark back.
    */
-  restore(item: T, kind: Section, beforeId: string | null): void {
+  restore(item: T, kind: Section, beforeId: string | null, mine = false): void {
     if (!this.cur) {
       if (kind === 'queued') this.queueNext([item]);
       else if (kind === 'autoplay') this.addAuto([item]);
@@ -408,6 +417,7 @@ export class Queue<T extends Identified> {
       else if (kind === 'list') for (let k = at; k < this.order.length; k++) if (of(this.order[k]) === 'list') at = k + 1;
     }
     const entry: Entry<T> = kind === 'autoplay' ? { ...this.entry(item), auto: true } : this.entry(item);
+    if (kind === 'queued' || mine) entry.mine = true;
     if (kind === 'queued') this.queued.add(entry);
     if (played) this.heard.add(entry);
     const follower = this.order[at];

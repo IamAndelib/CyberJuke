@@ -198,9 +198,9 @@ export interface Player {
    * Undo a remove (K3): put `track` back as `kind`, right before `beforeId` (the row that
    * followed it in Up next) if that is still ahead (a queued track only before a queued one,
    * the others never before one), else at the end of its section. Never at or before the
-   * current track.
+   * current track. `mine`: it was queued by you, and keeps that mark (rule 8).
    */
-  restore(track: Track, kind: UpNextKind, beforeId: string | null): Promise<void>;
+  restore(track: Track, kind: UpNextKind, beforeId: string | null, mine: boolean): Promise<void>;
   /** Autoplay tracks computed for `seedId`; ignored if the seed changed meanwhile. */
   addAutoplay(tracks: Track[], seedId: string): Promise<void>;
   /** The Autoplay setting (C3). Off drops the autoplay tracks still to come. */
