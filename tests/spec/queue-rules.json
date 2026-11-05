@@ -1098,6 +1098,83 @@
         { "op": "next" },
         { "op": "expect", "current": "s2", "listStart": "a", "upNext": ["t1"] }
       ]
+    },
+    {
+      "name": "removing the first suggestion: moving on happens at the next one",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
+        { "op": "remove", "id": "s1" },
+        { "op": "next" },
+        { "op": "expect", "current": "b", "listStart": "a" },
+        { "op": "next" },
+        { "op": "expect", "current": "s2", "listStart": "s2", "upNext": ["s3"] }
+      ]
+    },
+    {
+      "name": "removeIds of the first suggestions: the list on the way starts at the first that is left",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
+        { "op": "removeIds", "ids": ["s1", "s2"] },
+        { "op": "next" },
+        { "op": "expect", "current": "b", "listStart": "a" },
+        { "op": "next" },
+        { "op": "expect", "current": "s3", "listStart": "s3" }
+      ]
+    },
+    {
+      "name": "removing the first song of the current list: it starts at the next one, not back in history",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "expect", "current": "s2", "listStart": "s1" },
+        { "op": "remove", "id": "s1" },
+        { "op": "expect", "current": "s2", "listStart": "s2" }
+      ]
+    },
+    {
+      "name": "shuffled suggestions: a tap on any of them moves on to it",
+      "list": ["a", "b"],
+      "start": 0,
+      "shuffle": true,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
+        { "op": "skipTo", "id": "s1" },
+        { "op": "expect", "current": "s1", "listStart": "s1" }
+      ]
+    },
+    {
+      "name": "shuffle turned on, a tap on a suggestion moves on to it; shuffle off keeps where the list starts",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
+        { "op": "setShuffle", "on": true },
+        { "op": "skipTo", "id": "s3" },
+        { "op": "expect", "current": "s3", "listStart": "s3" },
+        { "op": "setShuffle", "on": false },
+        { "op": "expect", "current": "s3", "listStart": "s3" }
+      ]
+    },
+    {
+      "name": "shuffle turned on: a tap on the first of the suggestions moves on to it",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
+        { "op": "setShuffle", "on": true },
+        { "op": "skipTo", "id": "s1" },
+        { "op": "expect", "current": "s1", "listStart": "s1" },
+        { "op": "setShuffle", "on": false },
+        { "op": "expect", "current": "s1", "listStart": "s1" }
+      ]
     }
   ]
 }

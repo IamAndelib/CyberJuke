@@ -28,7 +28,8 @@
  *    it (Spotify, YouTube Music): more follow it once they run low;
  *  - played autoplay tracks more than KEEP_PLAYED behind the current one are dropped (a
  *    radio can run for hours), except with repeat all, which loops them, and those at or
- *    after where the current list starts;
+ *    after where the current list starts. A removed marker's song hands it to the next one;
+ *    an Undo never moves a marker;
  *  - Undo of a remove (restore) puts the track back as its own kind, before the track that
  *    followed it in Up next (a queued one only among the queued, the others never among them),
  *    never at or before the current track; a played track goes back among the played, before
@@ -295,6 +296,7 @@ export class Queue<T extends Identified> {
       this.settle();
       changed = true;
     }
+    this.unmark(new Set([e]));
     this.queued.delete(e);
     this.list.splice(index, 1);
     this.order.splice(this.order.indexOf(e), 1);
@@ -333,7 +335,7 @@ export class Queue<T extends Identified> {
     const added = this.shuffle && this.cur ? shuffled(entries, this.rand) : entries;
     this.list.push(...entries);
     this.order.push(...added);
-    if (!joinList) this.nextStart ??= added[0];
+    if (!joinList) this.nextStart ??= entries[0];
     if (!this.cur) {
       this.cur = entries[0];
       this.settle();
@@ -408,6 +410,7 @@ export class Queue<T extends Identified> {
       changed = true;
     }
     const keep = (e: Entry<T>) => !gone.has(e.item.id);
+    this.unmark(new Set(this.list.filter((e) => !keep(e))));
     for (const e of this.list) if (!keep(e)) this.queued.delete(e);
     this.list = this.list.filter(keep);
     this.order = this.order.filter(keep);
@@ -454,9 +457,16 @@ export class Queue<T extends Identified> {
     return this.order.slice(0, this.cur ? this.order.indexOf(this.cur) : 0).filter((e) => this.heard.has(e));
   }
 
-  /** Whether making `e` current moves on: it is at or past where the list on the way starts, in play order. */
+  /** Whether making `e` current moves on: it is on the way, from its first song to the end of the list (shuffle never reorders the list). */
   private movesOn(e: Entry<T>): boolean {
-    return !!this.nextStart && this.order.indexOf(e) >= this.order.indexOf(this.nextStart);
+    return !!this.nextStart && this.list.indexOf(e) >= this.list.indexOf(this.nextStart);
+  }
+
+  /** A marker's song is going: the marker moves to the next in list order that stays (none: unset). */
+  private unmark(gone: ReadonlySet<Entry<T>>): void {
+    const next = (m: Entry<T> | null) => (m && gone.has(m) ? this.list.slice(this.list.indexOf(m) + 1).find((e) => !gone.has(e)) ?? null : m);
+    this.listStart = next(this.listStart);
+    this.nextStart = next(this.nextStart);
   }
 
   /**
