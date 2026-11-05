@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { homeSettled, openLibrary, openNowPlaying, seedStorage, SETTINGS_KEY, start } from '../helpers';
+import { homeSettled, openLibrary, openNowPlaying, openSearch, seedStorage, SETTINGS_KEY, start, toListEnd } from '../helpers';
 
 /** Your own playlists: Library's Playlists section and a playlist's page (adding comes from the player, the menu and the queue). */
 
@@ -23,6 +23,7 @@ const seeded = (playlists: unknown[]) => ({ [FILE]: { version: 1, playlists } })
 const NIGHT = { id: 'pn', name: 'Night drive', created: 2, updated: 2, tracks: [tr(1), tr(2), tr(3)] };
 const EMPTY = { id: 'pe', name: 'Road trip', created: 1, updated: 1, tracks: [] };
 
+const queueState = (page: Page) => page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => { autoplay: unknown[] } }).__cyberjukeQueue());
 const titles = (page: Page) => page.getByTestId('screen-playlist').getByTestId('track-title');
 const saved = (page: Page) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? 'null'), FILE);
 
@@ -250,6 +251,23 @@ test.describe('adding songs', () => {
     const ids = (file.playlists[0].tracks as { id: string }[]).map((t) => t.id);
     expect(ids[0]).toBe(q.current.id);
     expect(ids.length).toBeGreaterThan(1);
+  });
+
+  test("after an album's suggestions start, Save queue as playlist saves the list you're in", async ({ page }) => {
+    await page.goto('/');
+    await openSearch(page);
+    await page.getByTestId('search-input').fill('Night Owl');
+    await page.getByTestId('mode-global').click();
+    await page.getByTestId('filter-albums').click();
+    await page.getByTestId('music-open').first().click();
+    await page.getByTestId('album-play').click();
+    await openNowPlaying(page);
+    await toListEnd(page);
+    const n = (await queueState(page)).autoplay.length;
+    expect(n).toBeGreaterThan(0);
+    await page.getByTestId('np-next').click();
+    await page.getByTestId('upnext-save').click();
+    await expect(page.getByTestId('name-sheet')).toContainText(`With ${n} songs`);
   });
 
   test('Save queue as playlist saves the whole list, not only the 101 songs Up next shows', async ({ page, backend }) => {

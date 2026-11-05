@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Save queue as playlist** saves the list you're in: an album, or once its suggestions are playing, those.
 - **Save queue as playlist** saves the whole queue, not only the 100 or so songs Up next shows.
 - After you delete a playlist, **Undo** brings it back where it was, with all its songs.
 - A page title too long for the top bar on a narrow phone, such as Recently played beside [Clear], is set a little smaller, so more of it shows (often all).
