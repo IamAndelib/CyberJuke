@@ -86,9 +86,7 @@ export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [
     return typeof i === 'number' && Number.isInteger(i) && i >= 0 && i < queueIds.length && queueIds[i] === id ? i : -1;
   });
   const ctx = isObj(x.context) ? x.context : null;
-  const prevIndex = (Array.isArray(x.prevIndex) ? x.prevIndex : [])
-    .filter((i): i is number => typeof i === 'number' && Number.isInteger(i) && i >= 0 && i < queueIds.length && i !== index)
-    .slice(-UP_NEXT_MAX);
+  const inQueue = (v: unknown) => (Array.isArray(v) ? v : []).filter((i): i is number => typeof i === 'number' && Number.isInteger(i) && i >= 0 && i < queueIds.length);
   const at = (v: unknown, none: number) => (typeof v === 'number' && Number.isInteger(v) && v >= none && v < queueIds.length ? v : none);
   return {
     isPlaying: x.isPlaying === true,
@@ -104,7 +102,14 @@ export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [
     // One of q/l/a per upNext entry; anything missing or unknown is the list.
     upNextKinds: upNextIds.map((_, i) => (kinds[i] === 'q' || kinds[i] === 'a' ? kinds[i] : 'l')).join(''),
     upNextIndex,
-    prevIndex,
+    prevIndex: inQueue(x.prevIndex)
+      .filter((i) => i !== index)
+      .slice(-UP_NEXT_MAX),
+    // The playing song keeps its mark; the lap is before it, its first songs.
+    mineIndex: inQueue(x.mineIndex),
+    lapIndex: inQueue(x.lapIndex)
+      .filter((i) => i !== index)
+      .slice(0, UP_NEXT_MAX),
     listStart: at(x.listStart, 0),
     nextStart: at(x.nextStart, -1),
     context: ctx ? { label: isStr(ctx.label) ? ctx.label : '', mode: ctx.mode === 'radio' ? 'radio' : 'list' } : null,

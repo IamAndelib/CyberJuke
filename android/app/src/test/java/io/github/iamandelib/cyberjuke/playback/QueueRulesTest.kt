@@ -129,6 +129,8 @@ class QueueRulesTest {
         if (s.has("played")) assertEquals("played in $where", strings(s.getJSONArray("played")), p.played())
         if (s.has("mine")) assertEquals("mine in $where", strings(s.getJSONArray("mine")), p.ids.filterIndexed { i, _ -> p.serials[i] != 0L })
         if (s.has("upNextIsKeptTop")) assertEquals("upNextIsKeptTop in $where", top, listOf(p.ids[p.current]) + up)
+        if (s.has("top")) assertEquals("top in $where", strings(s.getJSONArray("top")), p.top())
+        if (s.has("topSet")) assertEquals("topSet in $where", strings(s.getJSONArray("topSet")).sorted(), p.top().sorted())
         val (lead, list, autos) = sections(p).map { it.second }
         if (s.has("queuedIds")) assertEquals("queuedIds in $where", strings(s.getJSONArray("queuedIds")), lead)
         if (s.has("listIds")) assertEquals("listIds in $where", strings(s.getJSONArray("listIds")), list)
@@ -398,6 +400,18 @@ class QueueRulesTest {
             if (current < 0) return emptyList()
             val seq = playOrder()
             return seq.subList(0, seq.indexOf(current)).filter { uids[it] in queue.heardUids }.map { ids[it] }
+        }
+
+        /** The next lap ("From the top"): StateEncoder's walk from the first item in play order to the current one, repeat all only, without the songs you queued. */
+        fun top(): List<String> {
+            val out = ArrayList<String>()
+            if (current < 0 || repeat != "all") return out
+            var i = playOrder().first()
+            while (i >= 0 && i != current && out.size < 50) {
+                if (serials[i] == 0L) out.add(ids[i])
+                i = nextIndex(i, "off")
+            }
+            return out
         }
 
         /** Same walk as StateEncoder (to the end of the play order, whatever the repeat mode). */

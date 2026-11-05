@@ -35,7 +35,11 @@ internal object StateEncoder {
         val upNextIndex = JSArray()
         val kinds = StringBuilder()
         val previous = ArrayList<Int>()
+        val lap = ArrayList<Int>()
         val pending = QueueInfo.pendingSerials
+        fun serialAt(i: Int) = c.getMediaItemAt(i).mediaMetadata.extras?.getLong(QueueCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L
+        // The songs you queued keep their serial after they play: the "queued by you" mark (rule 8).
+        val mine = (0 until count).filter { serialAt(it) != 0L }
         val timeline = c.currentTimeline
         if (index >= 0 && !timeline.isEmpty && index < timeline.windowCount) {
             // To the end of the play order, whatever the repeat mode, as the web Queue's upNext:
@@ -65,6 +69,15 @@ internal object StateEncoder {
                 val uid = c.getMediaItemAt(j).mediaMetadata.extras?.getLong(QueueCommands.EXTRA_UID, 0L) ?: 0L
                 if (uid != 0L && uid in heard) previous.add(j)
                 j = timeline.getPreviousWindowIndex(j, repeat, shuffle)
+            }
+            // The next lap ("From the top"), repeat all only: the play order from its first item up to the
+            // current one, without the songs you queued (rule 8), the first ones.
+            if (c.repeatMode == Player.REPEAT_MODE_ALL) {
+                var k = timeline.getFirstWindowIndex(shuffle)
+                while (k != C.INDEX_UNSET && k != index && lap.size < MAX_UP_NEXT && k < count) {
+                    if (serialAt(k) == 0L) lap.add(k)
+                    k = timeline.getNextWindowIndex(k, repeat, shuffle)
+                }
             }
         }
 
@@ -100,6 +113,8 @@ internal object StateEncoder {
         state.put("upNextKinds", kinds.toString())
         state.put("upNextIndex", upNextIndex)
         state.put("prevIndex", JSArray().apply { previous.asReversed().forEach { put(it) } })
+        state.put("mineIndex", JSArray(mine))
+        state.put("lapIndex", JSArray(lap))
         // Queue indices like the above; nothing before the list start is of this list, and -1 is no autoplay on the way.
         state.put("listStart", if (count > 0) QueueInfo.listStart else 0)
         state.put("nextStart", if (count > 0) QueueInfo.nextStart else -1)

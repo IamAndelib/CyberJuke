@@ -1,5 +1,5 @@
 {
-  "about": "The queue rules, shared by the web Queue (src/player/queue.ts) and the native queue (NativeQueue, run by QueueRulesTest). Every case starts from `list` with `start` current (list index), shuffle and repeat as given, then runs `steps` in order. Ids are track ids; ids are unique within a case. Ops: setList {ids, start} (a new list: replaces the list and the autoplay tracks, keeps the queued ones); queueNext {ids}; addAuto {ids} (autoplay appends these); skipTo {id, lap} (a tap: the list index of that id; a track further ahead moves to right after the current one first, so what it jumps over stays next; lap: a tap on a 'From the top' row, which enters the next lap, so the heard songs you queued leave, as when the list loops); next (a user skip); nextAuto (the track ended by itself); prev {positionMs} (go back: moves when positionMs <= 3000, else restarts the current track); remove {id}; move {id, to} (list index); setShuffle {on}; setRepeat {mode}; restore {id, kind, beforeId, mine} (Undo of a remove: kind played puts id back among the played, right before the played track beforeId, else right before the current track, as a list track, with the queued-by-you mark when mine is true; otherwise it puts id back as a queued, list or autoplay track, right before the first track after the current one, in play order, that is beforeId (for a queued track only a queued one, for the others never a queued one); with no such track, or beforeId null, at the end of that section: queued after the queued run, list after the last list track ahead (else after the queued run), autoplay at the very end. In list order it goes right before the track that follows it in play order, or at the end; with shuffle on, a queued track goes after the queued run there and a list track before the autoplay tracks of the list you're in, so both stay ahead once shuffle is off. Never at or before the current track. It stays in its own list: the first song of the current list or of the one on the way, put back right before the song that took its place, starts that list again; with shuffle on, an autoplay track put back before one on the way goes where that list starts in list order, and starts it again if it came from it, else it ends the list you're in); removeRow {id} (Up next's ✕ on that row: it goes, and its Undo is kept: the row's own kind and the row that followed it in Up next, or null); undo (restore with what removeRow kept); removeIds {ids} (every item with one of these ids goes; if the current one goes, the next one in play order that stays becomes current, or nothing plays); dropOnTheWay (autoplay turned off: the list on the way goes, except the songs queued by you); keepTop (keeps the next lap, what 'From the top' shows: the play order from its first song to the current one, without the songs you queued). An expect step checks: current (id); played (the play order before the current track, oldest first); upNext (the whole play order after the current track); upNextStartsWith (its first ids, for shuffled cases); queued (how many leading upNext tracks are 'Queued by you'); list (list order); Up next's three sections, each row by its own kind, never by its place (as the native player sends the kinds): queuedIds (queued by you), listIds (the rest of the list, in play order), listSet (the same ids in any order, for shuffled cases), autoplayIds (autoplay, in play order), autoplaySet (the same ids in any order, for shuffled cases); mine (the ids carrying the 'queued by you' mark, in list order: every song you queued keeps it after it plays, except the one that starts playing because nothing was); upNextIsKeptTop (the current track and then Up next are exactly what keepTop kept); and place (Now Playing's 'N of M', the page's placeOf: the web runner only).",
+  "about": "The queue rules, shared by the web Queue (src/player/queue.ts) and the native queue (NativeQueue, run by QueueRulesTest). Every case starts from `list` with `start` current (list index), shuffle and repeat as given, then runs `steps` in order. Ids are track ids; ids are unique within a case. Ops: setList {ids, start} (a new list: replaces the list and the autoplay tracks, keeps the queued ones); queueNext {ids}; addAuto {ids} (autoplay appends these); skipTo {id, lap} (a tap: the list index of that id; a track further ahead moves to right after the current one first, so what it jumps over stays next; lap: a tap on a 'From the top' row, which enters the next lap, so the heard songs you queued leave, as when the list loops); next (a user skip); nextAuto (the track ended by itself); prev {positionMs} (go back: moves when positionMs <= 3000, else restarts the current track); remove {id}; move {id, to} (list index); setShuffle {on}; setRepeat {mode}; restore {id, kind, beforeId, mine} (Undo of a remove: kind played puts id back among the played, right before the played track beforeId, else right before the current track, as a list track, with the queued-by-you mark when mine is true; otherwise it puts id back as a queued, list or autoplay track, right before the first track after the current one, in play order, that is beforeId (for a queued track only a queued one, for the others never a queued one); with no such track, or beforeId null, at the end of that section: queued after the queued run, list after the last list track ahead (else after the queued run), autoplay at the very end. In list order it goes right before the track that follows it in play order, or at the end; with shuffle on, a queued track goes after the queued run there and a list track before the autoplay tracks of the list you're in, so both stay ahead once shuffle is off. Never at or before the current track. It stays in its own list: the first song of the current list or of the one on the way, put back right before the song that took its place, starts that list again; with shuffle on, an autoplay track put back before one on the way goes where that list starts in list order, and starts it again if it came from it, else it ends the list you're in); removeRow {id} (Up next's ✕ on that row: it goes, and its Undo is kept: the row's own kind and the row that followed it in Up next, or null); undo (restore with what removeRow kept); removeIds {ids} (every item with one of these ids goes; if the current one goes, the next one in play order that stays becomes current, or nothing plays); dropOnTheWay (autoplay turned off: the list on the way goes, except the songs queued by you); keepTop (keeps the next lap, what 'From the top' shows: the play order from its first song to the current one, without the songs you queued). An expect step checks: current (id); played (the play order before the current track, oldest first); upNext (the whole play order after the current track); upNextStartsWith (its first ids, for shuffled cases); queued (how many leading upNext tracks are 'Queued by you'); list (list order); Up next's three sections, each row by its own kind, never by its place (as the native player sends the kinds): queuedIds (queued by you), listIds (the rest of the list, in play order), listSet (the same ids in any order, for shuffled cases), autoplayIds (autoplay, in play order), autoplaySet (the same ids in any order, for shuffled cases); mine (the ids carrying the 'queued by you' mark, in list order: every song you queued keeps it after it plays, except the one that starts playing because nothing was); upNextIsKeptTop (the current track and then Up next are exactly what keepTop kept); top (the next lap, what 'From the top' shows: with Repeat all only, the play order from its first song up to the one before the current track, without the songs you queued); topSet (the same ids in any order, for shuffled cases); and place (Now Playing's 'N of M', the page's placeOf: the web runner only).",
   "rule": "Played is what was heard before the current track: the tracks of this list before it in play order that have been current, never the ones before where a list started or a shuffle put them. Queued tracks play right after the current track, first in first out, shuffle or not, until each one plays or is removed. A manual jump (skipTo, or prev moving back) keeps the still-queued tracks next: they move to just after the new current track, in the order they were going to play. Jumping to a queued track plays it; the others stay next. A new list replaces the list and the autoplay tracks, but the queued tracks stay next, in order. Autoplay tracks play after the list in the order added: they are the list on the way, and moving on to one of them (played on to, or tapped) makes the current list start at it or at the first of them, whichever comes first in list order, so with shuffle on the ones before it in the batch stay ahead; with shuffle on, a tap that moves on also brings the current list's unheard songs it jumped over into the new list, at its start in list order, as an unshuffled tap keeps them. Shuffle mixes what hasn't played, afresh each time it is turned on: what stays behind is exactly what Played shows, in the order it played; everything in Up next, and the list tracks before where the list started, is mixed ahead, the queued tracks first, then the list's, then the autoplay tracks, whichever is playing. New autoplay tracks then go at the end, mixed among themselves; shuffle off puts everything back in order. Repeat all loops the list you're in: turning it on drops the suggestions on the way and the songs before the current list, keeping the playing song and the queued ones; a radio's first suggestions are its list, so they stay. Repeat all never brings back a song you queued: when the list loops (a song ending or a Next goes from its last song in play order to its first, Media3's order[0]), or a tap on a 'From the top' row enters the next lap, the heard songs you queued leave the queue, except the one playing; the others keep their order. Previous, or a tap on a song you heard, walks back: they stay and play again. Autoplay adds nothing while it is on, and turning autoplay off drops only what is on the way, never the list you're in. Repeat one replays the current track when it ends and leaves Up next as it is; a user skip moves on, as with repeat off (Media3's: none at the end). Jumping to an autoplay track keeps the autoplay tracks after it; more follow them.",
   "cases": [
     {
@@ -450,6 +450,80 @@
         { "op": "expect", "current": "x", "listStart": "x", "mine": ["M"] },
         { "op": "setRepeat", "mode": "all" },
         { "op": "expect", "current": "x", "list": ["x", "y"], "mine": [] }
+      ]
+    },
+    {
+      "name": "From the top: Repeat all's next lap starts at the list's first song, also for a list started mid-way",
+      "list": ["a", "b", "c", "d", "e"],
+      "start": 2,
+      "repeat": "all",
+      "steps": [
+        { "op": "expect", "current": "c", "played": [], "top": ["a", "b"] },
+        { "op": "nextAuto" },
+        { "op": "expect", "current": "d", "top": ["a", "b", "c"] },
+        { "op": "nextAuto" },
+        { "op": "expect", "current": "e", "upNext": [], "top": ["a", "b", "c", "d"] },
+        { "op": "nextAuto" },
+        { "op": "expect", "current": "a", "top": [] },
+        { "op": "nextAuto" },
+        { "op": "expect", "current": "b", "top": ["a"] }
+      ]
+    },
+    {
+      "name": "From the top never holds a song you queued (rule 8)",
+      "list": ["a", "b", "c"],
+      "start": 0,
+      "repeat": "all",
+      "steps": [
+        { "op": "queueNext", "ids": ["M"] },
+        { "op": "nextAuto" },
+        { "op": "expect", "current": "M", "top": ["a"], "mine": ["M"] },
+        { "op": "nextAuto" },
+        { "op": "expect", "current": "b", "played": ["a", "M"], "top": ["a"], "mine": ["M"] },
+        { "op": "nextAuto" },
+        { "op": "expect", "current": "c", "top": ["a", "b"] }
+      ]
+    },
+    {
+      "name": "From the top is only for Repeat all",
+      "list": ["a", "b", "c"],
+      "start": 0,
+      "steps": [
+        { "op": "nextAuto" },
+        { "op": "nextAuto" },
+        { "op": "expect", "current": "c", "played": ["a", "b"], "top": [] },
+        { "op": "setRepeat", "mode": "all" },
+        { "op": "expect", "current": "c", "top": ["a", "b"] },
+        { "op": "setRepeat", "mode": "one" },
+        { "op": "expect", "current": "c", "top": [] }
+      ]
+    },
+    {
+      "name": "From the top, shuffled: the lap is what played, without the songs you queued",
+      "list": ["a", "b", "c"],
+      "start": 0,
+      "shuffle": true,
+      "repeat": "all",
+      "steps": [
+        { "op": "queueNext", "ids": ["M1"] },
+        { "op": "nextAuto" },
+        { "op": "nextAuto" },
+        { "op": "nextAuto" },
+        { "op": "queueNext", "ids": ["M2"] },
+        { "op": "nextAuto" },
+        { "op": "expect", "current": "M2", "upNext": [], "topSet": ["a", "b", "c"] }
+      ]
+    },
+    {
+      "name": "From the top after shuffle off follows the play order: the unheard songs moved ahead are not in it",
+      "list": ["a", "b", "c", "d"],
+      "start": 0,
+      "shuffle": true,
+      "repeat": "all",
+      "steps": [
+        { "op": "nextAuto" },
+        { "op": "setShuffle", "on": false },
+        { "op": "expect", "played": ["a"], "top": ["a"] }
       ]
     },
     {

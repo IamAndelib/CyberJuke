@@ -121,6 +121,13 @@ export interface PlayerState {
   upNext: UpNextItem[];
   /** The tracks before the current one in play order, oldest first (at most UP_NEXT_MAX): Up next shows them above it. */
   previous: UpNextItem[];
+  /** Queue indices of the songs you queued, played or not: each keeps the "queued by you" mark (rule 8). */
+  mine: number[];
+  /**
+   * The next lap ("From the top"): with repeat all, the play order from its first song up to the one before
+   * the current one, without the songs you queued (at most UP_NEXT_MAX, the first ones). Empty otherwise.
+   */
+  lap: UpNextItem[];
   /** Queue index of the current list's first song: the songs before it are history, not of this list. */
   listStart: number;
   /** Queue index of the first song of the autoplay on the way, -1 if none. */
@@ -153,6 +160,8 @@ export const EMPTY_STATE: PlayerState = {
   repeat: 'off',
   upNext: [],
   previous: [],
+  mine: [],
+  lap: [],
   listStart: 0,
   nextStart: -1,
   context: null,

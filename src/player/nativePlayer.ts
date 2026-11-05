@@ -223,8 +223,8 @@ export class NativePlayer implements Player {
     const prev = this.s.value;
     // Position ticks change nothing below: keep the same arrays and objects, so the
     // computeds built on them (upNextSections, playContext) don't change either.
-    const from = `${st.index}|${st.queueIds.join(',')}|${st.upNextIds.join(',')}|${st.upNextKinds}|${st.seedId}|${st.prevIndex?.join(',')}`;
-    let { queue, upNext, previous, seed } = prev;
+    const from = `${st.index}|${st.queueIds.join(',')}|${st.upNextIds.join(',')}|${st.upNextKinds}|${st.seedId}|${st.prevIndex?.join(',')}|${st.mineIndex?.join(',')}|${st.lapIndex?.join(',')}`;
+    let { queue, upNext, previous, mine, lap, seed } = prev;
     if (from !== this.builtFrom) {
       this.builtFrom = from;
       queue = st.queueIds.map((id) => this.resolve(id));
@@ -254,7 +254,10 @@ export class NativePlayer implements Player {
         const kind = st.upNextKinds[k];
         upNext.push({ track: queue[i], index: i, ...(kind === 'q' && { queued: true }), ...(kind === 'a' && { auto: true }) });
       });
-      previous = (st.prevIndex ?? []).map((i) => ({ track: queue[i], index: i }));
+      const rows = (xs: number[] = []) => xs.map((i) => ({ track: queue[i], index: i }));
+      previous = rows(st.prevIndex);
+      mine = st.mineIndex ?? [];
+      lap = rows(st.lapIndex);
       seed = st.seedId ? (prev.seed?.id === st.seedId ? prev.seed : this.resolve(st.seedId)) : null;
     }
     const index = st.index >= 0 && st.index < queue.length ? st.index : -1;
@@ -273,6 +276,8 @@ export class NativePlayer implements Player {
       repeat: this.modes ? prev.repeat : st.repeat,
       upNext,
       previous,
+      mine,
+      lap,
       listStart: st.listStart ?? 0,
       nextStart: st.nextStart ?? -1,
       context,
@@ -316,8 +321,10 @@ export class NativePlayer implements Player {
       durationMs: 0,
       sampledAt: performance.now(),
       upNext: queue.slice(i + 1, i + 1 + UP_NEXT_MAX).map((track, k) => ({ track, index: i + 1 + k, ...(k < queued.length && { queued: true }) })),
-      // A new list has played nothing yet (what comes before the start isn't "Played").
+      // A new list has played nothing yet (what comes before the start isn't "Played"), and no lap until native says so.
       previous: [],
+      mine: queued.map((_, k) => i + 1 + k),
+      lap: [],
       context,
       seed: tracks[i],
       currentAuto: false,
@@ -411,7 +418,7 @@ export class NativePlayer implements Player {
       if (kf >= 0 && kt >= 0) out.splice(kt, 0, ...out.splice(kf, 1));
       return out.map((u) => ({ ...u, index: map(u.index) }));
     };
-    this.show(queue, map(s.index), moved(s.upNext), moved(s.previous));
+    this.show(queue, map(s.index), moved(s.upNext), moved(s.previous), s.mine.map(map), moved(s.lap));
   }
 
   /** A remove of an Up next or Played row, shown now. */
@@ -422,12 +429,12 @@ export class NativePlayer implements Player {
     const queue = s.queue.filter((_, j) => j !== index);
     const map = (j: number) => (j > index ? j - 1 : j);
     const kept = (rows: UpNextItem[]) => rows.filter((u) => u.index !== index).map((u) => ({ ...u, index: map(u.index) }));
-    this.show(queue, map(s.index), kept(s.upNext), kept(s.previous));
+    this.show(queue, map(s.index), kept(s.upNext), kept(s.previous), s.mine.filter((j) => j !== index).map(map), kept(s.lap));
   }
 
-  private show(queue: Track[], index: number, upNext: UpNextItem[], previous: UpNextItem[]): void {
+  private show(queue: Track[], index: number, upNext: UpNextItem[], previous: UpNextItem[], mine: number[], lap: UpNextItem[]): void {
     this.builtFrom = '';
-    this.s.value = { ...this.s.value, queue, index, current: queue[index] ?? null, upNext, previous };
+    this.s.value = { ...this.s.value, queue, index, current: queue[index] ?? null, upNext, previous, mine, lap };
   }
 
   async removeIds(ids: string[]): Promise<void> {

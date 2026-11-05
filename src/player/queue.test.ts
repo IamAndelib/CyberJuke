@@ -44,6 +44,14 @@ describe('Queue: play from list', () => {
     expect(q.upNext()).toHaveLength(50);
     expect(q.upNext(3)).toHaveLength(3);
   });
+
+  it('the next lap ("From the top") keeps its first 50 songs', () => {
+    const q = new Queue();
+    q.setRepeat('all');
+    q.setList(Array.from({ length: 80 }, (_, i) => t(String(i))), 70);
+    expect(q.lapIndices()).toEqual(Array.from({ length: 50 }, (_, i) => i));
+    expect(q.lapIndices(3)).toEqual([0, 1, 2]);
+  });
 });
 
 describe('Queue: previous (Up next shows them above the current track)', () => {

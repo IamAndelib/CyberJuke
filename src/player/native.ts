@@ -40,6 +40,10 @@ export interface NativeState {
   upNextIndex: number[];
   /** The list indices of the tracks before the current one in play order, oldest first, max 50. Absent from older natives: none. */
   prevIndex?: number[];
+  /** The list indices of the songs you queued, played or not (rule 8's mark). Absent from older natives: none. */
+  mineIndex?: number[];
+  /** The list indices of the next lap ("From the top"): repeat all only, play order from its first song to before the current one, without the songs you queued, the first 50. Absent from older natives: none. */
+  lapIndex?: number[];
   /** Queue index of the current list's first song, and of the first song of the autoplay on the way (-1: none). Absent from older natives: 0 and -1. */
   listStart?: number;
   nextStart?: number;

@@ -133,6 +133,20 @@ export class Queue<T extends Identified> {
     return this.played().slice(-max).map((e) => this.list.indexOf(e));
   }
 
+  /**
+   * List indices of the next lap ("From the top"), the first `max`: with repeat all, the play order from its
+   * first song up to the one before the current, without the songs you queued (rule 8). Repeat all keeps
+   * nothing before the current list, so it is all this list's, heard or not (a list started mid-way).
+   */
+  lapIndices(max = UP_NEXT_MAX): number[] {
+    if (this.repeat !== 'all' || !this.cur) return [];
+    return this.order
+      .slice(0, this.order.indexOf(this.cur))
+      .filter((e) => !e.mine)
+      .slice(0, max)
+      .map((e) => this.list.indexOf(e));
+  }
+
   /** List indices of the tracks you queued, played or not. */
   mineIndices(): number[] {
     return this.list.flatMap((e, i) => (e.mine ? [i] : []));
