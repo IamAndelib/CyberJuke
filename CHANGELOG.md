@@ -5,6 +5,7 @@
 ### Changed
 - **Save queue as playlist** saves the whole queue, not only the 100 or so songs Up next shows.
 - After you delete a playlist, **Undo** brings it back where it was, with all its songs.
+- A playlist's ⋯ menu has clearer icons: up and down arrows for **Edit songs**, a pencil for **Rename** and a bin for **Delete playlist**.
 
 ### Fixed
 - On a genre or Most saved, pulling down to refresh while the new tracks button shows takes you to Latest from every genre, where the new songs are, as tapping the button does. Before, it refreshed that genre and nothing new appeared.
