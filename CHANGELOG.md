@@ -15,6 +15,7 @@
 - Turning Autoplay off keeps the suggestions you're already listening to; only the ones still to come after them go.
 - With Repeat all on, a single song played from a list (not a radio) just repeats; it no longer brings suggestions.
 - With Repeat all on, a song you add with **Add to queue** plays once: when the list starts over it leaves the queue, instead of coming round again in every lap. Previous, or a tap on a song you've heard, still takes you back to it.
+- **Save queue as playlist** keeps the songs you queued, also after the album repeats or its suggestions start.
 
 ### Fixed
 - After you tap a suggestion in the queue and go back with Previous, your list's songs stay under their own heading instead of under Autoplay, and Now Playing still says "3 of 8" instead of "Single track". When suggestions and your list's songs take turns, each gets its heading again.

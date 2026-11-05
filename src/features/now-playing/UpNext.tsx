@@ -1,14 +1,14 @@
 import { Fragment } from 'preact';
 import { signal } from '@preact/signals';
 import { useLayoutEffect, useRef } from 'preact/hooks';
-import { autoplayLabel, currentId, currentPlaysOffline, currentTrack, isPlaying, lapTracks, player, playContext, previousTracks, repeatMode, shuffleOn, upNextSections, type PlayContext, type UpItem, type UpNextKind } from '../../player';
+import { autoplayLabel, currentId, currentPlaysOffline, currentTrack, isPlaying, lapTracks, player, playContext, previousTracks, queuedHeard, repeatMode, saveSongs, shuffleOn, upNextSections, type PlayContext, type UpItem, type UpNextKind } from '../../player';
 import { isLocal, type Track } from '../../data/model';
 import { online } from '../../core/network';
 import { settings } from '../../stores/library';
 import { isSaved, savedOffline } from '../../stores/savedOffline';
 import { glow, glowRow, type Glow } from '../../stores/glow';
 import { toast } from '../../stores/toast';
-import { PLAYLISTS_MAX, PLAYLIST_MAX_SONGS, createPlaylist } from '../../stores/playlists';
+import { PLAYLISTS_MAX, createPlaylist } from '../../stores/playlists';
 import { askName } from '../../ui/nav';
 import { Icon } from '../../ui/icons';
 import { afterPress } from '../../ui/press';
@@ -87,17 +87,12 @@ function RowBody({ track, playing }: { track: Track; playing?: boolean }) {
 }
 
 /**
- * [Save queue as playlist]: New playlist with the list you're in (an album, or once its suggestions
- * play, those; not the ones on the way), each song once. In play order: the list's own order with
- * shuffle off; with shuffle on, the rows as they show (Up next shows at most 50 on each side of the
- * playing song), then the rest of the list.
+ * [Save queue as playlist]: New playlist with the list you're in and the songs you queued
+ * (saveSongs). `shown`: the rows as they show (at most 50 on each side of the playing song), the
+ * play order when shuffled.
  */
 function saveQueue(shown: Track[]): void {
-  const { queue, shuffle, listStart, nextStart } = player.state.peek();
-  const list = queue.slice(listStart, nextStart < 0 ? undefined : nextStart);
-  const mine = new Set(list.map((t) => t.id));
-  const seen = new Set<string>();
-  const songs = (shuffle ? [...shown.filter((t) => mine.has(t.id)), ...list] : list).filter((t) => !seen.has(t.id) && (seen.add(t.id), true)).slice(0, PLAYLIST_MAX_SONGS);
+  const songs = saveSongs({ ...player.state.peek(), shown, gone: queuedHeard() });
   askName({
     title: 'New playlist',
     note: `With ${plural(songs.length, 'song')}`,

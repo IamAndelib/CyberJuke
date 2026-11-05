@@ -23,9 +23,54 @@ const seeded = (playlists: unknown[]) => ({ [FILE]: { version: 1, playlists } })
 const NIGHT = { id: 'pn', name: 'Night drive', created: 2, updated: 2, tracks: [tr(1), tr(2), tr(3)] };
 const EMPTY = { id: 'pe', name: 'Road trip', created: 1, updated: 1, tracks: [] };
 
-const queueState = (page: Page) => page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => { autoplay: unknown[] } }).__cyberjukeQueue());
+type Queue = { current: { id: string }; list: { id: string }[]; autoplay: unknown[]; mine: string[] };
+const queueState = (page: Page) => page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => Queue }).__cyberjukeQueue());
 const titles = (page: Page) => page.getByTestId('screen-playlist').getByTestId('track-title');
 const saved = (page: Page) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? 'null'), FILE);
+
+/** The Global album "Night Owl" from its Play, in Now Playing; returns its song ids. */
+async function playNightOwl(page: Page): Promise<string[]> {
+  await openSearch(page);
+  await page.getByTestId('search-input').fill('Night Owl');
+  await page.getByTestId('mode-global').click();
+  await page.getByTestId('filter-albums').click();
+  await page.getByTestId('music-open').first().click();
+  await expect(page.getByTestId('screen-album').getByTestId('track-row')).toHaveCount(8);
+  await page.getByTestId('album-play').click();
+  await openNowPlaying(page);
+  const q = await queueState(page);
+  return [q.current.id, ...q.list.map((t) => t.id)];
+}
+
+/** ⋯ → Add to queue on these Home songs (0-based), back in Now Playing; returns the ids of the songs you queued. */
+async function queueFromHome(page: Page, rows: number[]): Promise<string[]> {
+  await page.getByTestId('np-close').click();
+  await page.getByTestId('tab-home').click();
+  for (const n of rows) {
+    await page.locator('[data-testid="track-more"]:visible').nth(n).click();
+    await page.getByTestId('menu-add-queue').click();
+    await expect(page.locator('.sheet-wrap.open')).toHaveCount(0);
+  }
+  await openNowPlaying(page);
+  return (await queueState(page)).mine;
+}
+
+/** Next, once the next song plays. */
+async function next(page: Page): Promise<void> {
+  const now = (await page.getByTestId('upnext-current').getAttribute('data-track-id'))!;
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('upnext-current')).not.toHaveAttribute('data-track-id', now);
+}
+
+/** Save queue as playlist, as "Saved"; returns the saved ids. */
+async function saveIds(page: Page, count: number): Promise<string[]> {
+  await page.getByTestId('upnext-save').click();
+  await expect(page.getByTestId('name-sheet')).toContainText(`With ${count} songs`);
+  await page.getByTestId('name-input').fill('Saved');
+  await page.getByTestId('name-ok').click();
+  await expect(page.getByTestId('toast').last()).toContainText('Saved as Saved');
+  return ((await saved(page)).playlists[0].tracks as { id: string }[]).map((t) => t.id);
+}
 
 async function openPlaylist(page: Page, name: string) {
   await page.getByTestId('tab-library').click();
@@ -325,6 +370,53 @@ test.describe('adding songs', () => {
     await expect(page.getByTestId('upnext-current')).toHaveAttribute('data-track-id', id);
     await page.getByTestId('np-shuffle').click();
     await expect(list).toHaveCount(left);
+  });
+
+  /** Night Owl with Repeat all: two Home songs queued after song 1, heard, then the loop back to song 1 takes them out of the queue. */
+  async function queuedThroughLoop(page: Page): Promise<{ album: string[]; mine: string[] }> {
+    await page.goto('/');
+    const album = await playNightOwl(page);
+    const repeat = page.getByTestId('np-repeat');
+    while ((await repeat.getAttribute('data-mode')) !== 'all') await repeat.click();
+    await next(page);
+    const mine = await queueFromHome(page, [0, 1]);
+    expect(mine).toHaveLength(2);
+    expect(album).not.toContain(mine[0]);
+    await next(page);
+    await next(page);
+    await toListEnd(page);
+    await next(page);
+    await expect(page.getByTestId('upnext-current')).toHaveAttribute('data-track-id', album[0]);
+    expect((await queueState(page)).mine).toEqual([]);
+    return { album, mine };
+  }
+
+  test('Save queue as playlist keeps the songs you queued after the album repeats: played through the loop, it saves all 10', async ({ page }) => {
+    const { album, mine } = await queuedThroughLoop(page);
+    expect(await saveIds(page, 10)).toEqual([album[0], album[1], ...mine, ...album.slice(2)]);
+  });
+
+  test('after a new album is tapped, Save queue as playlist leaves out the songs you queued and heard before it, not the one still to come', async ({ page }) => {
+    const { album } = await queuedThroughLoop(page);
+    const [later] = await queueFromHome(page, [2]);
+    await page.getByTestId('np-close').click();
+    await playNightOwl(page);
+    expect(await saveIds(page, 9)).toEqual([album[0], later, ...album.slice(1)]);
+  });
+
+  test("once an album's suggestions play, Save queue as playlist keeps the songs you queued during the album, first", async ({ page }) => {
+    await page.goto('/');
+    await playNightOwl(page);
+    await next(page);
+    const mine = await queueFromHome(page, [0, 1]);
+    await next(page);
+    await next(page);
+    await toListEnd(page);
+    await next(page);
+    const q = await queueState(page);
+    const n = q.autoplay.length + 1;
+    expect(n).toBeGreaterThan(1);
+    expect((await saveIds(page, n + 2)).slice(0, 3)).toEqual([...mine, q.current.id]);
   });
 
   test('Save queue as playlist saves the whole list, not only the 101 songs Up next shows', async ({ page, backend }) => {

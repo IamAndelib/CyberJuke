@@ -30,11 +30,13 @@ import { NativePlayer } from './nativePlayer';
 import { offlineGuard, playsOffline, type OfflineRefusal } from './offlineGuard';
 import { stationPlaying } from './radio';
 import { safePlayer } from './safePlayer';
+import type { HeardMine } from './saveSongs';
 import { nsfwAutoplayIds, placeOf, sectionsOf, wantsPlay, type PlayContext, type Player, type UpItem, type UpNextSections } from './types';
 import { WebPlayer } from './webPlayer';
 
 export * from './types';
 export { shuffleLabel } from './autoplay';
+export { saveSongs } from './saveSongs';
 
 /** A failed command's toast; during a block the banner says why, so the toast says so too. */
 function commandFailed(message: string): void {
@@ -99,8 +101,21 @@ const guarded = offlineGuard(safePlayer(Capacitor.isNativePlatform() ? new Nativ
 /** Tracks removed from Up next this session: autoplay doesn't pick them again (Spotify, YouTube Music). Undo puts one back. */
 const removed = new Set<string>();
 
+/**
+ * The songs you queued that played since you last started something yourself, in the order they
+ * played (rule 8): Save keeps them after they leave the queue (with Repeat all). Not kept across
+ * the app's restarts.
+ */
+let heardMine: HeardMine[] = [];
+
 export const player: Player = {
   ...guarded,
+  // From the app: you start something new. (The offline guard's own playList, for Add to queue
+  // on an empty queue, doesn't come this way.)
+  playList: (tracks, start, ctx) => {
+    heardMine = [];
+    return guarded.playList(tracks, start, ctx);
+  },
   remove: (index, expectId) => {
     const t = guarded.state.peek().queue[index];
     if (t && (expectId == null || t.id === expectId)) removed.add(t.id);
@@ -240,6 +255,18 @@ export const positionSample = computed<PositionSample>(() => {
   const s = state.value;
   return { positionMs: s.positionMs, durationMs: s.durationMs, sampledAt: s.sampledAt, isPlaying: s.isPlaying, isBuffering: s.isBuffering };
 });
+
+let lastCurrentId: string | null = null;
+// A song you queued, once it plays: remembered with the song before it, for Save.
+effect(() => {
+  const cur = currentTrack.value;
+  const s = state.peek();
+  if (cur && s.mine.includes(s.index) && !heardMine.some((h) => h.track.id === cur.id)) heardMine.push({ track: cur, after: lastCurrentId });
+  lastCurrentId = cur?.id ?? lastCurrentId;
+});
+
+/** The songs you queued that played since you last started something, but those you removed (Undo brings one back): Save adds those that left the queue. */
+export const queuedHeard = (): HeardMine[] => heardMine.filter((h) => !removed.has(h.track.id));
 
 let lastRecentId: string | null = null;
 // Recently played: a track once it plays (not the one the app reopens on, paused).
