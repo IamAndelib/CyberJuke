@@ -150,8 +150,9 @@ internal interface QueueHost<T> {
  * - Autoplay tracks ([addAutoplay]) play after the list in the order added; they are the list on
  *   the way, and moving on to one of them (played on to, or tapped) makes the current list start
  *   at it or at the first of them, whichever comes first in list order ([listStartIndex]; the
- *   songs before it are history; shuffled, the batch's songs before it stay ahead). A radio's
- *   first suggestions join its list instead (joinList). Repeat all loops the list you're in:
+ *   songs before it are history; shuffled, the batch's songs before it stay ahead, and a tap brings
+ *   the list's unheard songs it jumped over along, at the new list's start: [bringJumpedOver]). A
+ *   radio's first suggestions join its list instead (joinList). Repeat all loops the list you're in:
  *   turning it on drops what's on the way (it comes back once repeat is off) and the songs before
  *   the current list, keeping the playing song and the queued ones, and autoplay adds nothing
  *   while it is on (Stations.mayAutoplay). Turning autoplay off drops what's on the way too,
@@ -650,10 +651,28 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     fun skipTo(index: Int): Boolean {
         if (index !in 0 until host.count) return false
         val on = movesOn(index) // before it moves next: its place in the list is what counts
+        if (on && host.shuffleEnabled) bringJumpedOver()
         host.seekTo(if (upcoming().indexOf(index) > 0) bringNext(index) else index)
         if (on && nextStart != 0L) moveOn(host.currentIndex) // the transition may have moved on already
         val cur = host.currentIndex
         return cur in 0 until host.count && host.isAutoAt(cur)
+    }
+
+    /**
+     * Shuffled, a tap that moves on: the current list's unheard songs it jumped over come along. They
+     * go just before the list on the way, which starts at them; the play order stays as it was.
+     */
+    private fun bringJumpedOver() {
+        val way = nextStartIndex()
+        val kept = (listStartIndex() until way).filter { !isHeard(it) && host.serialAt(it) !in pending }
+        if (kept.isEmpty()) return
+        val rest = (0 until host.count).filter { it !in kept }
+        val target = (rest.take(way - kept.size) + kept + rest.drop(way - kept.size)).toIntArray()
+        val (order, moves) = host.shuffleOrder() to QueueOrder.moves(target)
+        for ((from, to) in moves) host.moveItem(from, to) // Media3 keeps the shuffle order by index: put it back by item
+        val now = IntArray(target.size).also { for (k in target.indices) it[target[k]] = k }
+        if (moves.isNotEmpty()) order?.let { o -> host.setShuffleOrder(IntArray(o.size) { now[o[it]] }) }
+        nextStart = host.uidAt(way - kept.size)
     }
 
     /** Shuffle on: [index] plays last. */
