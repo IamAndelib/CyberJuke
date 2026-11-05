@@ -410,7 +410,7 @@ export function Screen({
         <header class="topbar">
           {left && <div class="topbar-left">{left}</div>}
           <div class="topbar-titles">
-            <h1 class="topbar-title">{title}</h1>
+            <TopbarTitle>{title}</TopbarTitle>
             {subtitle && <div class="topbar-sub">{subtitle}</div>}
           </div>
           {right && <div class="topbar-right">{right}</div>}
@@ -449,5 +449,36 @@ export function Screen({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The title, a little smaller (`.fit`) when it doesn't fit its line at full size, so "Recently
+ * played" beside [Clear] shows whole on a narrow phone. Checked when its text or the bar's width
+ * changes (the bar's, which the title's size can't change, so the check never loops).
+ */
+function TopbarTitle({ children }: { children: ComponentChildren }) {
+  const ref = useRef<HTMLHeadingElement>(null);
+  const text = typeof children === 'string' ? children : null;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const bar = el?.parentElement;
+    if (!el || !bar) return;
+    let width = -1;
+    const fit = () => {
+      if (bar.clientWidth === width) return;
+      width = bar.clientWidth;
+      el.classList.remove('fit');
+      el.classList.toggle('fit', el.scrollWidth > el.clientWidth);
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, [text]);
+  return (
+    <h1 class="topbar-title" ref={ref}>
+      {children}
+    </h1>
   );
 }

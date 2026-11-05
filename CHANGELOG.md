@@ -5,6 +5,7 @@
 ### Changed
 - **Save queue as playlist** saves the whole queue, not only the 100 or so songs Up next shows.
 - After you delete a playlist, **Undo** brings it back where it was, with all its songs.
+- A page title too long for the top bar on a narrow phone, such as Recently played beside [Clear], is set a little smaller, so more of it shows (often all).
 
 ### Fixed
 - On a genre or Most saved, pulling down to refresh while the new tracks button shows takes you to Latest from every genre, where the new songs are, as tapping the button does. Before, it refreshed that genre and nothing new appeared.

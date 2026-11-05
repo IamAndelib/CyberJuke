@@ -258,3 +258,21 @@ test('Liked keeps the newest likes first, or A–Z under letters; A–Z plays in
   await page.getByTestId('liked-order-newest').click();
   await expect(titles.first()).toHaveText('Zebra Crossing');
 });
+
+test('a top bar title too long for its line is a little smaller and shows whole; a short one keeps its size', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await start(page);
+  // A song played: Recently played has its [Clear] beside the title.
+  await page.getByTestId('track-play').first().click();
+  await page.getByTestId('tab-library').click();
+  const title = () => page.locator('.screen:visible .topbar-title').first();
+  const size = () => title().evaluate((el) => getComputedStyle(el).fontSize);
+  await expect(title()).toHaveText('Library');
+  expect(await size()).toBe('22px');
+  await openLibrary(page, 'recent');
+  await expect(title()).toHaveText('Recently played');
+  await expect(page.locator('.screen:visible .topbar-right').first()).toContainText('Clear');
+  // Whole, not cut with "…", and smaller.
+  await expect.poll(() => title().evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  expect(await size()).toBe('17px');
+});
