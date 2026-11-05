@@ -749,3 +749,68 @@ test('a held queued row that starts playing while its menu is open: the menu clo
   await expect(menu).toBeHidden();
   await expect(page.getByTestId('toast').filter({ hasText: 'Removed from queue' })).toHaveCount(0);
 });
+
+test.describe('the glow on a song just moved', () => {
+  // How many rows glow at once, as often as the page can look (a frame), from now on.
+  const watchGlow = (page: Page) =>
+    page.evaluate(() => {
+      const w = window as unknown as { __glowMax: number };
+      w.__glowMax = 0;
+      const look = () => {
+        w.__glowMax = Math.max(w.__glowMax, document.querySelectorAll('[data-testid="up-next"] .row.moved').length);
+        requestAnimationFrame(look);
+      };
+      look();
+    });
+  const glowMax = (page: Page) => page.evaluate(() => (window as unknown as { __glowMax: number }).__glowMax);
+  const glowing = (page: Page) => page.locator('[data-testid="up-next"] .row.moved');
+  const autoRows = (page: Page) => page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
+  /** The glow's fade on the moved row, in ms since it started. */
+  const fadeAt = (page: Page) =>
+    page.evaluate(() => document.getAnimations().find((a) => (a as CSSAnimation).animationName === 'moved-glow')?.currentTime ?? null);
+
+  test('only the song just moved glows, at its new place, and a screen reader hears where; then it fades away', async ({ page }) => {
+    await start(page);
+    await page.getByTestId('track-play').first().click();
+    await withAutoplay(page, 10);
+    await openNowPlaying(page);
+    await expect(autoRows(page).nth(9)).toBeVisible();
+    const id = (await autoRows(page).nth(0).getAttribute('data-track-id'))!;
+    await autoRows(page).nth(0).getByTestId('upnext-down').click();
+    await expect(glowing(page)).toHaveCount(1);
+    await expect(glowing(page)).toHaveAttribute('data-track-id', id);
+    await expect(autoRows(page).nth(1)).toHaveAttribute('data-track-id', id);
+    await expect(page.getByTestId('upnext-moved')).toHaveText(/^Moved to 2 of \d+$/);
+    // The glow goes after about 1.5 s.
+    await expect(glowing(page)).toHaveCount(0, { timeout: 3000 });
+  });
+
+  test('moves in quick succession: only the latest glows, the one before stops at once, and each glow starts from the top', async ({ page }) => {
+    await start(page);
+    await page.getByTestId('track-play').first().click();
+    await withAutoplay(page, 12);
+    await openNowPlaying(page);
+    await expect(autoRows(page).nth(11)).toBeVisible();
+    await watchGlow(page);
+    // Twelve quick moves, different rows and the same row twice, up and down, no waiting between.
+    const plan: [number, 'upnext-up' | 'upnext-down'][] = [[0, 'upnext-down'], [3, 'upnext-up'], [5, 'upnext-down'], [6, 'upnext-down'], [7, 'upnext-up'], [2, 'upnext-down'], [3, 'upnext-down'], [9, 'upnext-up'], [8, 'upnext-up'], [4, 'upnext-down'], [1, 'upnext-up'], [10, 'upnext-down']];
+    let last = '';
+    for (const [row, button] of plan) {
+      last = (await autoRows(page).nth(row).getAttribute('data-track-id'))!;
+      await autoRows(page).nth(row).getByTestId(button).click();
+    }
+    await expect(glowing(page)).toHaveCount(1);
+    await expect(glowing(page)).toHaveAttribute('data-track-id', last);
+    // Never two at once, in any frame of the burst.
+    expect(await glowMax(page)).toBe(1);
+    // A glow taken over mid-fade starts over: move again 0.7 s into a fade.
+    await page.waitForTimeout(700);
+    const again = (await autoRows(page).nth(4).getAttribute('data-track-id'))!;
+    await autoRows(page).nth(4).getByTestId('upnext-down').click();
+    await expect(glowing(page)).toHaveAttribute('data-track-id', again);
+    // Under 700 ms: the fade taken over had already run that long, so this one started anew.
+    expect(await fadeAt(page)).toBeLessThan(700);
+    await expect(glowing(page)).toHaveCount(0, { timeout: 3000 });
+    expect(await glowMax(page)).toBe(1);
+  });
+});
