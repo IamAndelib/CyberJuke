@@ -652,6 +652,58 @@ test('Previous twice, then shuffle on: the album songs after the playing one all
   expect((await list.allTextContents()).map((s) => s.trim()).sort()).toEqual(titles.slice(3).sort());
 });
 
+test("after an album's suggestions start, Repeat all loops them: no album song in Played, and Next past the last goes to the first suggestion", async ({ page }) => {
+  const titles = await playAlbum(page);
+  await toListEnd(page);
+  const q0 = await withAutoplay(page, 5);
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).toHaveText(q0.autoplay[0].title);
+  await page.getByTestId('np-repeat').click();
+  await expect(page.getByTestId('np-repeat')).toHaveAttribute('data-mode', 'all');
+  // The album is behind the loop now: nothing of it is under Played (nor anywhere in the queue).
+  const q = await withAutoplay(page, 5);
+  const loop = [q.current!.title, ...q.autoplay.map((t) => t.title)];
+  await expect(page.getByTestId('np-title')).toHaveText(loop[0]);
+  const rows = page.locator('[data-testid="upnext-row"]');
+  await expect.poll(async () => (await rows.locator('.row-title').allTextContents()).some((t) => titles.includes(t.trim()))).toBe(false);
+  const fold = page.getByTestId('upnext-played-fold');
+  if ((await fold.count()) > 0) {
+    await fold.click();
+    const played = (await page.getByTestId('upnext-played').locator('.row-title').allTextContents()).map((t) => t.trim());
+    for (const t of titles) expect(played).not.toContain(t);
+  }
+  // Round the loop: the Next after the last suggestion is the first.
+  const ahead = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
+  for (let n = await ahead.count(); n > 0; n = await ahead.count()) {
+    await page.getByTestId('np-next').click();
+    await expect(ahead).toHaveCount(n - 1);
+  }
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).toHaveText(loop[0]);
+});
+
+test('turning shuffle off mid-album keeps every unheard song in Up next, in album order', async ({ page }) => {
+  const titles = await playAlbum(page);
+  const title = page.getByTestId('np-title');
+  for (let k = 1; k <= 2; k++) {
+    await page.getByTestId('np-next').click();
+    await expect(title).toHaveText(titles[k]);
+  }
+  const list = page.locator('[data-testid="upnext-row"][data-section="list"] .row-title');
+  await page.getByTestId('np-shuffle').click();
+  await expect(page.getByTestId('np-shuffle')).toHaveAttribute('aria-pressed', 'true');
+  await expect(title).toHaveText(titles[2]);
+  await expect(list).toHaveCount(5);
+  await page.getByTestId('np-next').click();
+  await page.getByTestId('np-shuffle').click();
+  await expect(page.getByTestId('np-shuffle')).toHaveAttribute('aria-pressed', 'false');
+  const now = (await title.textContent())!.trim();
+  const heard = [titles[0], titles[1], titles[2], now];
+  const unheard = titles.filter((t) => !heard.includes(t));
+  expect(unheard).toHaveLength(4);
+  await expect.poll(async () => (await list.allTextContents()).map((t) => t.trim())).toEqual(unheard);
+});
+
 test('Played is only what was heard: not the songs before the one tapped, nor what shuffle off puts behind', async ({ page }) => {
   await start(page);
   await page.getByTestId('tab-genres').click();
