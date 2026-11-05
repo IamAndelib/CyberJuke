@@ -298,13 +298,8 @@ export class Queue<T extends Identified> {
       for (const e of entries.slice(1)) this.queued.add(e);
       return;
     }
-    const at = (arr: Entry<T>[]) => {
-      let k = arr.indexOf(this.cur!) + 1;
-      while (k < arr.length && this.queued.has(arr[k])) k++;
-      return k;
-    };
-    this.list.splice(at(this.list), 0, ...entries);
-    this.order.splice(at(this.order), 0, ...entries);
+    this.list.splice(this.afterQueued(this.list), 0, ...entries);
+    this.order.splice(this.afterQueued(this.order), 0, ...entries);
     for (const e of entries) this.queued.add(e);
   }
 
@@ -338,8 +333,10 @@ export class Queue<T extends Identified> {
    * one that is `beforeId` (a queued one only before a queued one, the others never before one);
    * else at the end of its section: after the queued run, after the last list track ahead (else
    * the queued run), or at the very end. Never at or before the current track. A played one goes
-   * back before the played track `beforeId`, else right before the current one. With nothing
-   * playing, it is added (and plays).
+   * back before the played track `beforeId`, else right before the current one. In list order
+   * (what shuffle off plays) it goes before the track that follows it; shuffled, a queued one goes
+   * after the queued run there and a list one before the autoplay tracks (as the native queue's),
+   * so both stay ahead once shuffle is off. With nothing playing, it is added (and plays).
    */
   restore(item: T, kind: Section, beforeId: string | null): void {
     if (!this.cur) {
@@ -365,7 +362,11 @@ export class Queue<T extends Identified> {
     if (played) this.heard.add(entry);
     const follower = this.order[at];
     this.order.splice(at, 0, entry);
-    this.list.splice(follower ? this.list.indexOf(follower) : this.list.length, 0, entry);
+    const firstAuto = this.list.findIndex((e) => e.auto);
+    let li = follower ? this.list.indexOf(follower) : this.list.length;
+    if (this.shuffle && kind === 'queued') li = this.afterQueued(this.list);
+    if (this.shuffle && kind === 'list') li = firstAuto < 0 ? this.list.length : firstAuto;
+    this.list.splice(li, 0, entry);
   }
 
   /**
@@ -433,6 +434,13 @@ export class Queue<T extends Identified> {
     if (!this.cur) return;
     this.queued.delete(this.cur);
     this.heard.add(this.cur);
+  }
+
+  /** The index in `arr` (the list or the play order) right after the current track and the queued run after it. */
+  private afterQueued(arr: Entry<T>[]): number {
+    let k = arr.indexOf(this.cur!) + 1;
+    while (k < arr.length && this.queued.has(arr[k])) k++;
+    return k;
   }
 
   /** Move the still-queued tracks to just after the current one, keeping their play order. */
