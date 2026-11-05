@@ -33,6 +33,14 @@ async function repeatAll(page: Page): Promise<void> {
   while ((await repeat.getAttribute('data-mode')) !== 'all') await repeat.click();
 }
 
+/** Previous until the track `id` plays. */
+async function prevTo(page: Page, id: string): Promise<void> {
+  await expect(async () => {
+    await page.getByTestId('np-prev').click();
+    await expect(page.getByTestId('upnext-current')).toHaveAttribute('data-track-id', id, { timeout: 1500 });
+  }).toPass();
+}
+
 /** Next until song `k` (1-based) of `titles` plays. */
 async function nextTo(page: Page, titles: string[], k: number): Promise<void> {
   while ((await title(page).textContent())?.trim() !== titles[k - 1]) {
@@ -168,4 +176,32 @@ test('a song you queued and heard stays in Played, not "From the top"; a tap on 
   await expect(page.getByTestId('up-next').locator(`[data-track-id="${mine}"]`)).toHaveCount(0);
   await expect(page.getByTestId('upnext-played').locator('.row-title')).toHaveText([titles[0]]);
   expect((await queueState(page)).mine).toEqual([]);
+});
+
+test('a song you queued and heard, ahead again after Previous: ✕ and Undo keep it yours', async ({ page }) => {
+  const titles = await playAlbum(page);
+  const first = (await page.getByTestId('upnext-current').getAttribute('data-track-id'))!;
+  await repeatAll(page);
+  await page.getByTestId('np-close').click();
+  await page.getByTestId('tab-home').click();
+  await page.locator('[data-testid="track-more"]:visible').first().click();
+  await page.getByTestId('menu-add-queue').click();
+  await expect(page.locator('.sheet-wrap.open')).toHaveCount(0);
+  const [mine] = (await queueState(page)).mine;
+  await openNowPlaying(page);
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('upnext-current')).toHaveAttribute('data-track-id', mine);
+  await page.getByTestId('np-next').click();
+  await expect(title(page)).toHaveText(titles[1]);
+  // Previous back to song 1 (a press past a song's first seconds restarts it): the queued song is ahead again, as a song of the list.
+  await prevTo(page, mine);
+  await prevTo(page, first);
+  await expect(title(page)).toHaveText(titles[0]);
+  const row = page.locator(`[data-testid="upnext-row"][data-track-id="${mine}"]`);
+  await expect(row).toHaveAttribute('data-section', 'list');
+  await row.getByTestId('upnext-remove').click();
+  await expect(row).toHaveCount(0);
+  await removedToast(page).getByTestId('toast-action').click();
+  await expect(row).toHaveCount(1);
+  expect((await queueState(page)).mine).toEqual([mine]);
 });

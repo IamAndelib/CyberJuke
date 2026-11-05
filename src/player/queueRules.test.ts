@@ -41,7 +41,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
       };
       // Up next as the app builds it from what the player publishes.
       const upNext = () => q.upNextItems().map(({ item, ...u }) => ({ track: item as Track, ...u }));
-      let undo: [string, Section, string | null] | null = null;
+      let undo: [string, Section, string | null, boolean] | null = null;
       let top: string[] = [];
       for (const s of c.steps) {
         switch (s.op) {
@@ -80,12 +80,12 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             const rows = upNext();
             const k = rows.findIndex((u) => u.track.id === s.id);
             const { kind } = sectionsOf(rows, null).runs.find((r) => r.items.some((u) => u.index === rows[k].index))!;
-            undo = [s.id as string, kind, rows[k + 1]?.track.id ?? null];
+            undo = [s.id as string, kind, rows[k + 1]?.track.id ?? null, q.mineIndices().includes(rows[k].index)];
             q.remove(rows[k].index);
             break;
           }
           case 'undo':
-            q.restore(t(undo![0]), undo![1], undo![2]);
+            q.restore(t(undo![0]), undo![1], undo![2], undo![3]);
             break;
           case 'removeIds':
             q.removeIds(s.ids as string[]);

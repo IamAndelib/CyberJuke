@@ -110,16 +110,16 @@ const upTo = (n: number) => (n >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : n);
 
 /**
  * Removes a queue row, with Undo: back as its kind, before the row that followed it, `beforeId`
- * (K3). A "From the top" song you heard goes back among the played too, and a played one you
- * queued keeps its mark. The Undo goes once a new list or another track starts, when "back where
- * it was" no longer means anything.
+ * (K3). A "From the top" song you heard goes back among the played too, and a song you queued
+ * keeps its mark, also one that played and is ahead again after Previous (rule 8). The Undo goes
+ * once a new list or another track starts, when "back where it was" no longer means anything.
  */
 export function removeWithUndo(it: UpItem, kind: Kind, beforeId: string | null): void {
   const s = player.state.peek();
   // A row the queue has moved on from (its track playing now, or at another place) stays.
   if (s.queue[it.index]?.id !== it.track.id) return;
   const back: Kind = kind === 'top' && s.previous.some((u) => u.index === it.index) ? 'played' : kind;
-  const mine = kind === 'played' && s.mine.includes(it.index);
+  const mine = s.mine.includes(it.index);
   void player.remove(it.index, it.track.id);
   const ctx0 = playContext.peek();
   const cur0 = currentId.peek();

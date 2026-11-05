@@ -494,9 +494,11 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
      * of the current one (play order) that has id [beforeId] (a queued item only before a queued
      * one, the others never before one); with no such item, at the end of that section (a list
      * item after the last list item ahead). It never lands at or before the current item, and a
-     * queued item never lands after list items.
+     * queued item never lands after list items. A list item that had the queued-by-you mark
+     * ([mine]: it played, then Previous brought it ahead again) gets it back (a serial, never
+     * pending: it has played).
      */
-    fun restore(item: T, section: Section, beforeId: String?) {
+    fun restore(item: T, section: Section, beforeId: String?, mine: Boolean = false) {
         prune()
         if (host.count == 0) {
             when (section) {
@@ -546,10 +548,10 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
                 // Linear: [current][queued], then the list and autoplay (a tapped one among the
                 // list); the end of the list part is after its last item ahead.
                 val at = anchor ?: up.lastOrNull { sectionAt(it) == Section.LIST }?.plus(1) ?: afterQueuedRun()
-                host.insertTagged(at, listOf(item), listOf(0L))
+                host.insertTagged(at, listOf(item), listOf(if (mine) nextSerial++ else 0L))
                 regain(at)
             } else {
-                restoreShuffledListItem(item, anchor)
+                restoreShuffledListItem(item, anchor, mine)
             }
         }
     }
@@ -578,10 +580,10 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     }
 
     /** Shuffle on: the list index only matters later; the shuffle order decides when it plays. */
-    private fun restoreShuffledListItem(item: T, anchor: Int?) {
+    private fun restoreShuffledListItem(item: T, anchor: Int?, mine: Boolean) {
         // Before the first autoplay item of the list you're in (after its first song), so it stays in it.
         val at = (listStartIndex() + 1 until host.count).firstOrNull { host.isAutoAt(it) } ?: host.count
-        host.insertTagged(at, listOf(item), listOf(0L))
+        host.insertTagged(at, listOf(item), listOf(if (mine) nextSerial++ else 0L))
         regain(at)
         val order = host.shuffleOrder() ?: return
         val anchorNow = anchor?.let { if (it >= at) it + 1 else it }

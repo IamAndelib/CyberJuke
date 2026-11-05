@@ -649,8 +649,8 @@ class JukePlayerPlugin : Plugin() {
      * the current track with id `beforeId` (a queued one only before a queued one, the others
      * never before one), else at the end of its section; never at or before the current track.
      * 'played' goes back before `beforeId` among every entry before the current track, heard or not,
-     * else right before the current track, with the queued-by-you mark when `mine`; 'top' (a "From
-     * the top" row) the same, but unheard.
+     * else right before the current track; 'top' (a "From the top" row) the same, but unheard. A
+     * 'played' or 'list' track gets the queued-by-you mark back when `mine`.
      */
     @PluginMethod
     fun restore(call: PluginCall) {

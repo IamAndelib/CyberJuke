@@ -1288,14 +1288,14 @@ class PlaybackService : MediaSessionService() {
         queueChanged()
     }
 
-    private fun restore(item: MediaItem, section: NativeQueue.Section, beforeId: String?) {
+    private fun restore(item: MediaItem, section: NativeQueue.Section, beforeId: String?, mine: Boolean) {
         if (section == NativeQueue.Section.AUTO && !Stations.keepsGoing(autoplayEnabled, seedId, context?.first)) {
             Log.i(TAG, "restore: autoplay item dropped (autoplay off)")
             return
         }
         // During a fade, among the tracks after the one fading in: it takes over first.
         crossfade?.settle()
-        queue.restore(item, section, beforeId)
+        queue.restore(item, section, beforeId, mine)
         queueChanged()
     }
 
@@ -1933,10 +1933,11 @@ class PlaybackService : MediaSessionService() {
                         val item = tracks()?.singleOrNull() ?: return bad
                         val kind = args.getString(QueueCommands.ARG_KIND)
                         val before = BridgeLimits.checkString(args.getString(QueueCommands.ARG_BEFORE), "beforeId")
+                        val mine = args.getBoolean(QueueCommands.ARG_MINE, false)
                         if (kind == QueueCommands.KIND_PLAYED || kind == QueueCommands.KIND_TOP) {
-                            restorePlayed(item, before, args.getBoolean(QueueCommands.ARG_MINE, false), kind == QueueCommands.KIND_TOP)
+                            restorePlayed(item, before, mine, kind == QueueCommands.KIND_TOP)
                         } else {
-                            restore(item, NativeQueue.Section.of(kind) ?: return bad, before)
+                            restore(item, NativeQueue.Section.of(kind) ?: return bad, before, mine)
                         }
                     }
                 }

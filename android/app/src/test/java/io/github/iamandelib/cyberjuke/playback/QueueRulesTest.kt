@@ -52,7 +52,7 @@ class QueueRulesTest {
         // Like the app: the first list goes through the queue too (shuffle starts at the track).
         p.queue.setList(strings(c.getJSONArray("list")), c.optInt("start", 0))
         val steps = c.getJSONArray("steps")
-        var undo: Triple<String, String, String?>? = null
+        var undo: Undo? = null
         var top = emptyList<String>()
         for (k in 0 until steps.length()) {
             val s = steps.getJSONObject(k)
@@ -74,10 +74,10 @@ class QueueRulesTest {
                     // Up next's ✕: Undo puts it back as its row's kind, before the row that followed it.
                     val up = p.upNext()
                     val at = up.indexOf(s.getString("id"))
-                    undo = Triple(up[at], sections(p).first { up[at] in it.second }.first, up.getOrNull(at + 1))
+                    undo = Undo(up[at], sections(p).first { up[at] in it.second }.first, up.getOrNull(at + 1), p.serials[p.ids.indexOf(up[at])] != 0L)
                     p.remove(p.ids.indexOf(up[at]))
                 }
-                "undo" -> undo!!.let { (id, kind, before) -> p.queue.restore(id, NativeQueue.Section.of(kind)!!, before) }
+                "undo" -> undo!!.let { (id, kind, before, mine) -> p.queue.restore(id, NativeQueue.Section.of(kind)!!, before, mine) }
                 "removeIds" -> p.queue.removeIds(strings(s.getJSONArray("ids")).toSet())
                 "dropOnTheWay" -> p.queue.dropOnTheWay()
                 "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")), s.optBoolean("lap", false))
@@ -149,6 +149,9 @@ class QueueRulesTest {
     }
 
     private fun strings(a: JSONArray) = (0 until a.length()).map { a.getString(it) }
+
+    /** What Up next's ✕ keeps for its Undo: the row's kind, the row after it, and its queued-by-you mark. */
+    private data class Undo(val id: String, val kind: String, val before: String?, val mine: Boolean)
 
     /** Just enough ExoPlayer for the queue logic; ids are unique within a case. */
     internal class FakePlayer(private val rnd: Random) : QueueHost<String> {
