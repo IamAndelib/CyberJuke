@@ -56,13 +56,14 @@ describe('making and naming playlists', () => {
   });
 
   it('Undo of a delete brings the playlist back where it was, with its songs', () => {
-    const a = (pl.createPlaylist('A') as { id: string }).id;
-    const b = (pl.createPlaylist('B', [tr('s1'), tr('s2')]) as { id: string }).id;
-    const c = (pl.createPlaylist('C') as { id: string }).id;
+    // Library shows the newest first; distinct times so the order doesn't hang on the clock.
+    const a = (pl.createPlaylist('A', [], 1) as { id: string }).id;
+    const b = (pl.createPlaylist('B', [tr('s1'), tr('s2')], 2) as { id: string }).id;
+    const c = (pl.createPlaylist('C', [], 3) as { id: string }).id;
     const gone = pl.deletePlaylist(b)!;
-    expect(pl.playlistsShown.value.map((p) => p.id)).toEqual([a, c]);
+    expect(pl.playlistsShown.value.map((p) => p.id)).toEqual([c, a]);
     pl.restorePlaylist(gone);
-    expect(pl.playlistsShown.value.map((p) => p.id)).toEqual([a, b, c]);
+    expect(pl.playlistsShown.value.map((p) => p.id)).toEqual([c, b, a]);
     expect(pl.playlistShown(b)?.tracks.map((t) => t.id)).toEqual(['s1', 's2']);
     // A second Undo changes nothing.
     pl.restorePlaylist(gone);
