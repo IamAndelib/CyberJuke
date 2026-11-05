@@ -52,10 +52,11 @@ Home and Search start a Vibe; the Genres, Artists and album pages play their lis
    - Shuffle on mixes what hasn't played of the current list; what Played shows stays behind. The next list is mixed when it starts, and "On the way" shows it in that mixed order.
    - **Turning shuffle off never skips a song, in every list:** every song of the current list not yet heard stays ahead, in list order; Played keeps what you heard, as you heard it. (Before, an album went back to list order from the playing song's place, as Spotify does, and the unheard songs before it only came round with Repeat all.)
    - This is only about turning shuffle off. A list started mid-way (song 3 of an album tapped) still starts there, as everywhere: songs 1-2 come round with Repeat all, under "From the top".
-   - [Save queue as playlist] saves the current list: what you heard of it, the playing song and the rest of it. For an album, the album; for a Vibe batch, at most 26 songs. Duplicates dropped, at most 1000 songs.
+   - [Save queue as playlist] saves the current list: what you heard of it, the playing song and the rest of it, plus the songs you queued (rule 8). For an album, the album; for a Vibe batch, at most 26 songs. Duplicates dropped, at most 1000 songs.
 4. **Each song keeps its own label** (built: #152). A row's section comes from its own kind, never from its position; a heading shows each time the kind changes; "N of M" counts the current list's songs; Undo puts a song back as its own kind, in its own place.
 5. **Repeat all loops the current list**: an album, a Vibe batch, a Jukebox shuffle batch, a station.
-   - After its last song, Up next goes on under **"From the top"** with the next lap, from the first song up to the one before the playing song (approved concept A). Its rows have ↑ ↓ ✕, which act on the list itself; with shuffle on, ✕ only. The first ↑ and the last ↓ are off.
+   - After its last song, Up next goes on under **"From the top"** with the next lap, from the first song up to the one before the playing song (approved concept A). Its rows have ↑ ↓ ✕, which act on the list itself; with shuffle on, ✕ only. The first ↑ and the last ↓ are off. Songs you queued are never in it (rule 8).
+   - Played stays as it is: opened, it shows what you heard, so a song can show both there and under "From the top"; ↑ ↓ ✕ in either acts on the same song. "N up next" counts to the end of the list, not the next lap.
    - With shuffle on, every lap plays the same mixed order, and "From the top" shows it.
    - Nothing is on the way while it's on.
    - Media3 loops its whole queue, not part of it, so while Repeat all is on the player holds only the current list and the songs you queued: songs heard from earlier lists leave the queue (they stay in Recently played, and don't come back to Played when Repeat is off), and what was on the way goes; when Repeat is off, the next list is fetched afresh (for a station, the same next station; for a Vibe, a new batch). Jumping back at the end instead would fight gapless and crossfade.
@@ -63,6 +64,11 @@ Home and Search start a Vibe; the Genres, Artists and album pages play their lis
    - This replaces version 2's "a radio has no Repeat all" and the old single-song exception: Repeat all means one thing everywhere.
 6. **Repeat one** replays the song when it ends, and Next moves on (unchanged).
 7. **Previous walks back through what you heard,** across lists: from the first song of a new batch, Previous plays the last song heard of the batch before, and Next comes back to the new batch where you were. The list ahead stays the current list; an earlier one never becomes current again.
+8. **Songs you queue belong to no list** ("Add to queue", "Queued by you"), the same for every kind of list (Spotify's and Apple Music's queue).
+   - They play next, in the order you added them; shuffle never mixes them, so their ↑ ↓ show with shuffle on too.
+   - Each keeps its mark after it plays. It stays where it played: in Played, with ↑ ↓ ✕ and Undo, and Previous goes back to it.
+   - **Repeat all never brings one back:** "From the top" leaves it out, and when the list loops (its last song ends and its first starts again) it leaves the queue. Going back past it yourself (Previous, a tap on an earlier song) and playing on plays it again where it was, with Repeat on or off: you're walking through what you heard.
+   - **Save** saves them with the current list, in the order they played or will play: the ones still to come, the ones heard in this list, and the ones heard in earlier lists of the same chain (Vibe batches, stations), also those that left the player with Repeat all. Starting something new yourself (a tap on another album, playlist or song) starts over: songs you queued and heard before it aren't saved; the ones still to come are.
 
 ## 4. Signal Radio stations: lists that lead on
 
@@ -126,7 +132,8 @@ Order:
 1. **Labels:** rule 4, F2. Done (#152).
 2. **Shuffle:** rule 3's first part, F1, F7. Done (#154; and queued songs kept next when shuffle turns on or off, found by a fuzz).
 3. **Lists that lead on (the core):** the two markers, moving on, Repeat all keeping the current list (the single-song exception goes), turning shuffle off skipping nothing, Save acting on the current list. No visual change but Save's count.
-4. **"From the top":** rule 5's display, F3 (approved concept A).
+4. **"From the top":** rule 5's display, F3 (approved concept A), with rule 8's mark, loop and Save.
+4b. **Queued songs' ↑ ↓ with shuffle on:** rule 8's first point.
 5. **Vibe batches and "On the way":** rules 2 and 7, F4: batches of 25 fetched when a batch starts, a Home tap starting one, "On the way" in Up next (concept screenshots first).
 6. **Signal stations** (section 4) and **Shuffle the Jukebox** batches, on steps 3-5.
 7. **Up to the playing song:** the button in Up next (concept q2).
