@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { openLibrary, openNowPlaying, seedStorage, start } from '../helpers';
+import { openLibrary, openNowPlaying, seedStorage, SETTINGS_KEY, start } from '../helpers';
 
 /** Your own playlists: Library's Playlists section and a playlist's page (adding comes from the player, the menu and the queue). */
 
@@ -138,7 +138,7 @@ test.describe('a playlist', () => {
     await expect.poll(async () => (await saved(page))?.playlists?.find((p: { id: string }) => p.id === 'pn')?.tracks.map((t: { title: string }) => t.title)).toEqual(['Song 3', 'Song 1']);
   });
 
-  test('Rename takes a new name (not an empty one); Delete asks first, then the playlist goes and Back is Library', async ({ page }) => {
+  test('Rename takes a new name (not an empty one); Delete asks first, then the playlist goes with Undo, which brings it back with its songs', async ({ page }) => {
     await openPlaylist(page, 'Night drive');
     await page.getByTestId('pl-more').click();
     await page.getByTestId('pl-rename').click();
@@ -157,6 +157,11 @@ test.describe('a playlist', () => {
     await page.getByTestId('confirm-ok').click();
     await expect(page.getByTestId('screen-library')).toBeVisible();
     await expect(page.getByTestId('lib-playlist-name')).toHaveText(['Road trip']);
+    const toast = page.getByTestId('toast').filter({ hasText: 'Deleted Late night drive' });
+    await toast.getByRole('button', { name: 'Undo' }).click();
+    await expect(page.getByTestId('lib-playlist-name')).toHaveText(['Late night drive', 'Road trip']);
+    await page.getByTestId('lib-playlist').filter({ hasText: 'Late night drive' }).click();
+    await expect(titles(page)).toHaveCount(3);
   });
 
   test('Here searches the playlist; an empty one says how to add songs', async ({ page }) => {
@@ -231,6 +236,23 @@ test.describe('adding songs', () => {
     const ids = (file.playlists[0].tracks as { id: string }[]).map((t) => t.id);
     expect(ids[0]).toBe(q.current.id);
     expect(ids.length).toBeGreaterThan(1);
+  });
+
+  test('Save queue as playlist saves the whole list, not only the 101 songs Up next shows', async ({ page }) => {
+    // Autoplay off: a tap on Home plays its whole feed as a list (hundreds of songs).
+    await seedStorage(page, { ...seeded([]), [SETTINGS_KEY]: { autoplay: false } });
+    await start(page);
+    await page.getByTestId('track-play').nth(2).click();
+    await openNowPlaying(page);
+    const current = (await page.getByTestId('np-title').textContent())!.trim();
+    await page.getByTestId('upnext-save').click();
+    await page.getByTestId('name-input').fill('Everything');
+    await page.getByTestId('name-ok').click();
+    await expect(page.getByTestId('toast').last()).toContainText('Saved as Everything');
+    const tracks = (await saved(page)).playlists[0].tracks as { title: string }[];
+    expect(tracks.length).toBeGreaterThan(102);
+    // In list order: the two songs above the one tapped come first.
+    expect(tracks[2].title).toBe(current);
   });
 
   test('≡+ and ♥ are drawn on the same rows: their tops and bottoms line up', async ({ page }) => {

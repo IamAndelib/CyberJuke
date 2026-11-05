@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+- **Save queue as playlist** saves the whole queue, not only the 100 or so songs Up next shows.
+- After you delete a playlist, **Undo** brings it back where it was, with all its songs.
+
 ## [1.4.0] - 2026-11-04
 
 ### Added
