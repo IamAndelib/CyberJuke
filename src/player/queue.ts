@@ -444,10 +444,9 @@ export class Queue<T extends Identified> {
   }
 
   /** Move the still-queued tracks to just after the current one, keeping their play order. */
-  private keepQueuedNext(): void {
+  private keepQueuedNext(pending = this.order.filter((e) => this.queued.has(e))): void {
     const cur = this.cur;
     if (!cur || !this.queued.size) return;
-    const pending = this.order.filter((e) => this.queued.has(e));
     const isPending = (e: Entry<T>) => this.queued.has(e);
     this.list = this.list.filter((e) => !isPending(e));
     this.order = this.order.filter((e) => !isPending(e));
@@ -467,14 +466,17 @@ export class Queue<T extends Identified> {
    * (YouTube Music's radio shuffles).
    */
   private rebuildOrder(keepPlayed = false): void {
+    // The queued tracks, as they were going to play: they stay next, in that order, either way
+    // (the list may hold them elsewhere: an Undo while shuffled puts one back by play order).
+    const queued = this.order.filter((e) => e !== this.cur && this.queued.has(e));
     if (!this.shuffle) {
       this.order = this.list.slice();
+      this.keepQueuedNext(queued);
       return;
     }
     const cur = this.cur;
     const played = keepPlayed ? this.played() : [];
     const ahead = this.list.filter((e) => e !== cur && !this.queued.has(e) && !played.includes(e));
-    const queued = this.list.filter((e) => e !== cur && this.queued.has(e));
     this.order = [
       ...played,
       ...(cur ? [cur] : []),
