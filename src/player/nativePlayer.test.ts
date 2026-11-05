@@ -130,6 +130,17 @@ describe('NativePlayer: Up next rows (K1)', () => {
     expect(p2.state.peek().previous.map((u) => [u.track.id, u.index])).toEqual([['B', 0]]);
   });
 
+  it('shuffled, a move between two songs you queued shows at once; another waits for native', () => {
+    const p = new NativePlayer();
+    emit('state', state({ index: 0, trackId: 'A', shuffle: true, queueIds: ['A', 'C', 'X', 'Y', 'B'], upNextIds: ['Y', 'X', 'B', 'C'], upNextKinds: 'qqll', upNextIndex: [3, 2, 4, 1], mineIndex: [2, 3] }));
+    fake.plugin.moveItem.mockImplementationOnce(() => new Promise<void>(() => {}));
+    void p.move(3, 2, 'Y');
+    expect(rows(p)).toEqual([['X', 3], ['Y', 2], ['B', 4], ['C', 1]]);
+    fake.plugin.moveItem.mockImplementationOnce(() => new Promise<void>(() => {}));
+    void p.move(4, 1, 'B');
+    expect(rows(p)).toEqual([['X', 3], ['Y', 2], ['B', 4], ['C', 1]]);
+  });
+
   it('the songs you queued and the next lap come by list index; an older native sends neither', () => {
     const p = new NativePlayer();
     const at = (lapIndex: number[]) => state({ index: 2, trackId: 'C', repeat: 'all', queueIds: ['A', 'M', 'C', 'D'], upNextIds: ['D'], upNextKinds: 'l', upNextIndex: [3], mineIndex: [1], lapIndex });
