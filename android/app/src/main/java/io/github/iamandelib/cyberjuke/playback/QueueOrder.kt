@@ -668,11 +668,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     }
 
     /** Repeat all's next lap: the heard songs you queued leave, all but the playing one (rule 8). */
-    private fun dropHeardMine() {
-        val cur = host.currentIndex
-        val gone = (0 until host.count).filter { it != cur && host.serialAt(it) != 0L && isHeard(it) }
-        for (i in gone.asReversed()) host.removeAt(i)
-    }
+    private fun dropHeardMine() = drop { host.serialAt(it) != 0L && isHeard(it) }
 
     /** Removes the items [gone] picks by list index, except the playing one and the queued ones. */
     private inline fun drop(gone: (Int) -> Boolean) {
