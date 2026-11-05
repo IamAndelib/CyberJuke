@@ -418,7 +418,9 @@ export class NativePlayer implements Player {
       if (kf >= 0 && kt >= 0) out.splice(kt, 0, ...out.splice(kf, 1));
       return out.map((u) => ({ ...u, index: map(u.index) }));
     };
-    this.show(queue, map(s.index), moved(s.upNext), moved(s.previous), s.mine.map(map), moved(s.lap));
+    // The lap holds no song you queued, so a move to or from one only reorders it: unshuffled, by index.
+    const lap = s.lap.map((u) => ({ ...u, index: map(u.index) })).sort((a, b) => a.index - b.index);
+    this.show(queue, map(s.index), moved(s.upNext), moved(s.previous), s.mine.map(map).sort((a, b) => a - b), lap);
   }
 
   /** A remove of an Up next or Played row, shown now. */

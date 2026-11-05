@@ -163,6 +163,19 @@ describe('NativePlayer: Up next rows (K1)', () => {
     expect(p2.state.peek().mine).toEqual([2]);
   });
 
+  it('a Played row moved onto a song you queued keeps the next lap in play order', () => {
+    const p = new NativePlayer();
+    emit('state', state({ index: 4, trackId: 'E', repeat: 'all', queueIds: ['A', 'B', 'C', 'M', 'E'], prevIndex: [0, 1, 2, 3], mineIndex: [3], lapIndex: [0, 1, 2] }));
+    fake.plugin.moveItem.mockImplementationOnce(() => new Promise<void>(() => {}));
+    void p.move(0, 3, 'A');
+    expect(p.state.peek().lap.map((u) => [u.track.id, u.index])).toEqual([
+      ['B', 0],
+      ['C', 1],
+      ['A', 3],
+    ]);
+    expect(p.state.peek().mine).toEqual([2]);
+  });
+
   it('without indices (an older native), looks after the current track first, then from the top', () => {
     const p = new NativePlayer();
     emit('state', state({ index: 2, trackId: 'C', queueIds: ['A', 'B', 'C', 'A', 'D'], upNextIds: ['A', 'D'], upNextKinds: 'ql' }));
