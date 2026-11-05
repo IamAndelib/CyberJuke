@@ -8,6 +8,7 @@ import { OFFLINE } from '../../core/offlineText';
 import { catalog, mostSaved, type SavedRange } from '../../stores/catalog';
 import { catalogGenre, chipGenres } from '../../stores/genres';
 import { favoriteGenres, showNsfw } from '../../stores/library';
+import { freshness, refreshLatest } from '../../stores/newTracks';
 import { toast } from '../../stores/toast';
 import { updateAvailable } from '../../stores/updates';
 import { Icon } from '../../ui/icons';
@@ -214,6 +215,12 @@ function LatestOrSaved({ sort, genre, paged, queue, chunkKey }: { sort: 'latest'
   );
 }
 
+/** Latest from every genre: where the new posts the pill counts are. */
+function toLatest(): void {
+  homeSort.value = 'latest';
+  homeGenre.value = null;
+}
+
 export function Home() {
   const g = homeGenre.value;
   const sort = homeSort.value;
@@ -231,16 +238,15 @@ export function Home() {
       right={<SettingsButton />}
       scrollKey={`home:${sort}:${sort === 'saved' ? savedRange.value : ''}:${g ?? ''}`}
       onRefresh={async () => {
-        if (sort === 'saved') await refreshCatalog();
+        // New posts waiting (the pill): a pull goes where they are, Latest from every genre, as the pill does.
+        if (freshness.pending.peek() && (sort === 'saved' || g != null)) {
+          toLatest();
+          await refreshLatest();
+        } else if (sort === 'saved') await refreshCatalog();
         else await paged.refresh();
       }}
     >
-      <NewTracksPill
-        toLatest={() => {
-          homeSort.value = 'latest';
-          homeGenre.value = null;
-        }}
-      />
+      <NewTracksPill toLatest={toLatest} />
       <ShuffleHero />
       <GenreChips />
       <SortRail />

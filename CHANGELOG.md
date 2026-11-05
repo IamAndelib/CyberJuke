@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- On a genre or Most saved, pulling down to refresh while the new tracks button shows takes you to Latest from every genre, where the new songs are, as tapping the button does. Before, it refreshed that genre and nothing new appeared.
+
 ## [1.4.0] - 2026-11-04
 
 ### Added
