@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { openLibrary, openNowPlaying, seedStorage, SETTINGS_KEY, start } from '../helpers';
+import { homeSettled, openLibrary, openNowPlaying, seedStorage, SETTINGS_KEY, start } from '../helpers';
 
 /** Your own playlists: Library's Playlists section and a playlist's page (adding comes from the player, the menu and the queue). */
 
@@ -238,10 +238,12 @@ test.describe('adding songs', () => {
     expect(ids.length).toBeGreaterThan(1);
   });
 
-  test('Save queue as playlist saves the whole list, not only the 101 songs Up next shows', async ({ page }) => {
+  test('Save queue as playlist saves the whole list, not only the 101 songs Up next shows', async ({ page, backend }) => {
     // Autoplay off: a tap on Home plays its whole feed as a list (hundreds of songs).
     await seedStorage(page, { ...seeded([]), [SETTINGS_KEY]: { autoplay: false } });
     await start(page);
+    // The whole Jukebox is in (until then a tap plays the page shown, 25 songs).
+    await homeSettled(page, backend);
     await page.getByTestId('track-play').nth(2).click();
     await openNowPlaying(page);
     const current = (await page.getByTestId('np-title').textContent())!.trim();

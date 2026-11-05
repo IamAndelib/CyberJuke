@@ -23,6 +23,20 @@ type Kind = UpNextKind;
  */
 const playedOpenFor = signal<PlayContext | null | undefined>(undefined);
 
+/**
+ * The song just moved with ↑ or ↓: a faint glow on its row at its new place, fading out. Only
+ * the latest move glows: a new one takes it over at once, and a moved row is always drawn anew
+ * (rows are keyed by place), so its fade starts over.
+ */
+const movedGlow = signal<{ id: string; to: number } | null>(null);
+const MOVED_GLOW_MS = 1500;
+let glowTimer: ReturnType<typeof setTimeout> | undefined;
+function glowMoved(id: string, to: number): void {
+  clearTimeout(glowTimer);
+  movedGlow.value = { id, to };
+  glowTimer = setTimeout(() => (movedGlow.value = null), MOVED_GLOW_MS);
+}
+
 /** After a removal the rows shift up: taps on the buttons column are ignored this long (M2). */
 const REMOVE_GUARD_MS = 300;
 
@@ -170,6 +184,7 @@ export function UpNext() {
     afterPress(b, () => {
       if (guarded()) return;
       keepFocus(b, { id: it.track.id, kind, index: to.index, button });
+      glowMoved(it.track.id, to.index);
       void player.move(it.index, to.index, it.track.id);
     });
 
@@ -183,7 +198,7 @@ export function UpNext() {
       return (
         <li
           key={`${it.track.id}:${it.index}`}
-          class={'row' + (kind === 'list' ? '' : ` ${kind}`) + offClass(it.track)}
+          class={'row' + (kind === 'list' ? '' : ` ${kind}`) + offClass(it.track) + (it === glowing?.item ? ' moved' : '')}
           data-testid={kind === 'played' ? 'upnext-played' : 'upnext-row'}
           data-track-id={it.track.id}
           data-index={it.index}
@@ -266,6 +281,7 @@ export function UpNext() {
   const current = currentTrack.value;
   const played = previousTracks.value;
   const open = playedOpenFor.value === ctx;
+  const glowing = movedRow(movedGlow.value, [open ? played : [], sec.queued, sec.list, sec.autoplay]);
   return (
     <section ref={root} class="upnext" data-testid="up-next">
       <div class="section-head upnext-head">
@@ -322,9 +338,24 @@ export function UpNext() {
         {section('list', from, sec.list)}
         {section('autoplay', autoplayLabel.value, sec.autoplay)}
       </ol>
+      {/* A screen reader hears where the moved song went, as the glow shows it. */}
+      <p class="sr-only" aria-live="polite" data-testid="upnext-moved">
+        {glowing ? `Moved to ${glowing.place} of ${glowing.of}` : ''}
+      </p>
       {total === 0 && repeat !== 'all' && (
         <div class="dim small upnext-empty">{`${settings.value.autoplay ? 'Nothing queued.' : 'Autoplay is off.'} ⋯ → Add to queue plays a track next.`}</div>
       )}
     </section>
   );
+}
+
+/** The row the glow is on: the moved song where it is now (the copy nearest its target), with its place in its part. */
+function movedRow(g: { id: string; to: number } | null, parts: UpItem[][]): { item: UpItem; place: number; of: number } | null {
+  if (!g) return null;
+  let best: { item: UpItem; place: number; of: number } | null = null;
+  for (const part of parts)
+    part.forEach((item, k) => {
+      if (item.track.id === g.id && (!best || Math.abs(item.index - g.to) < Math.abs(best.item.index - g.to))) best = { item, place: k + 1, of: part.length };
+    });
+  return best;
 }

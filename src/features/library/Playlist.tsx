@@ -153,7 +153,7 @@ export function PlaylistMenu() {
                 }}
                 data-testid="pl-edit"
               >
-                <Icon name="up" size={20} /> Edit songs
+                <Icon name="reorder" size={20} /> Edit songs
               </button>
             )}
             <button
@@ -164,7 +164,7 @@ export function PlaylistMenu() {
               }}
               data-testid="pl-rename"
             >
-              <Icon name="note" size={20} /> Rename
+              <Icon name="pencil" size={20} /> Rename
             </button>
             <button
               class="sheet-item"
@@ -184,7 +184,7 @@ export function PlaylistMenu() {
               }}
               data-testid="pl-delete"
             >
-              <Icon name="close" size={20} /> Delete playlist
+              <Icon name="bin" size={20} /> Delete playlist
             </button>
             <SheetCancel onClose={close} />
           </>
