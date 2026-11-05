@@ -70,7 +70,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             q.remove(indexOf(s.id));
             break;
           case 'move':
-            q.move(indexOf(s.id), s.to as number);
+            q.move(indexOf(s.id), s.toId != null ? indexOf(s.toId) : (s.to as number));
             break;
           case 'restore':
             q.restore(t(s.id as string), s.kind as Section, (s.beforeId as string | null) ?? null, s.mine === true);

@@ -11,6 +11,7 @@
 - A page title too long for the top bar on a narrow phone, such as Recently played beside [Clear], is set a little smaller, so more of it shows (often all).
 - A playlist's ⋯ menu has clearer icons: up and down arrows for **Edit songs**, a pencil for **Rename** and a bin for **Delete playlist**.
 - After ↑ or ↓ in the queue, or **Undo** in the queue, Liked or a playlist, the song glows faintly at its place for a moment, so you can see where it went; a screen reader says it ("Moved to 3 of 25", "Back at 3 of 25").
+- With shuffle on, songs you queued can still be moved with ↑ ↓: shuffle never mixes them, so they play in the order you set.
 - Once a list's suggestions are playing, Repeat all loops them, the list you're in now, instead of jumping back to the list before.
 - Turning Autoplay off keeps the suggestions you're already listening to; only the ones still to come after them go.
 - With Repeat all on, a single song played from a list (not a radio) just repeats; it no longer brings suggestions.

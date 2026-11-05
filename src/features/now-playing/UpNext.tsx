@@ -214,8 +214,8 @@ export function UpNext() {
             <RowBody track={it.track} />
           </button>
           <div class="upnext-actions">
-            {/* Reorder within each section (with shuffle on the order is random, so no arrows). */}
-            {!shuffle ? (
+            {/* Reorder within each section. With shuffle on the order is random, so no arrows, but songs you queued keep theirs: shuffle never mixes them (rule 8). */}
+            {!shuffle || kind === 'queued' ? (
               <>
                 <button
                   class="icon-btn"

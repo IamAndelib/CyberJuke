@@ -405,7 +405,10 @@ export class NativePlayer implements Player {
   private showMoved(from: number, to: number, expectId?: string): void {
     const s = this.s.value;
     const n = s.queue.length;
-    if (s.shuffle || from === to || from < 0 || to < 0 || from >= n || to >= n) return;
+    if (from === to || from < 0 || to < 0 || from >= n || to >= n) return;
+    // Shuffled, only a move between two songs you queued changes play order (rule 8): shown the same way.
+    const queued = (j: number) => s.upNext.some((u) => u.index === j && u.queued);
+    if (s.shuffle && !(queued(from) && queued(to))) return;
     if (expectId != null && s.queue[from].id !== expectId) return;
     const queue = s.queue.slice();
     queue.splice(to, 0, ...queue.splice(from, 1));
@@ -419,7 +422,8 @@ export class NativePlayer implements Player {
       return out.map((u) => ({ ...u, index: map(u.index) }));
     };
     // The lap holds no song you queued, so a move to or from one only reorders it: unshuffled, by index.
-    const lap = s.lap.map((u) => ({ ...u, index: map(u.index) })).sort((a, b) => a.index - b.index);
+    const lapMoved = s.lap.map((u) => ({ ...u, index: map(u.index) }));
+    const lap = s.shuffle ? lapMoved : lapMoved.sort((a, b) => a.index - b.index);
     this.show(queue, map(s.index), moved(s.upNext), moved(s.previous), s.mine.map(map).sort((a, b) => a - b), lap);
   }
 
