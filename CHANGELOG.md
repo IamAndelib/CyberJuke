@@ -10,6 +10,7 @@
 - A playlist's ⋯ menu has clearer icons: up and down arrows for **Edit songs**, a pencil for **Rename** and a bin for **Delete playlist**.
 - After ↑ or ↓ in the queue, or **Undo** in the queue, Liked or a playlist, the song glows faintly at its place for a moment, so you can see where it went; a screen reader says it ("Moved to 3 of 25", "Back at 3 of 25").
 - Once a list's suggestions are playing, Repeat all loops them, the list you're in now, instead of jumping back to the list before.
+- Turning Autoplay off keeps the suggestions you're already listening to; only the ones still to come after them go.
 
 ### Fixed
 - After you tap a suggestion in the queue and go back with Previous, your list's songs stay under their own heading instead of under Autoplay, and Now Playing still says "3 of 8" instead of "Single track". When suggestions and your list's songs take turns, each gets its heading again.

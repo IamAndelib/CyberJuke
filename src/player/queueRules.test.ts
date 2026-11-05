@@ -89,6 +89,9 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
           case 'removeIds':
             q.removeIds(s.ids as string[]);
             break;
+          case 'dropOnTheWay':
+            q.dropOnTheWay();
+            break;
           case 'setShuffle':
             q.setShuffle(s.on as boolean);
             break;

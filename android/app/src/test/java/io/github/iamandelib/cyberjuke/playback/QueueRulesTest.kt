@@ -78,6 +78,7 @@ class QueueRulesTest {
                 }
                 "undo" -> undo!!.let { (id, kind, before) -> p.queue.restore(id, NativeQueue.Section.of(kind)!!, before) }
                 "removeIds" -> p.queue.removeIds(strings(s.getJSONArray("ids")).toSet())
+                "dropOnTheWay" -> p.queue.dropOnTheWay()
                 "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")))
                 "next" -> p.next()
                 "nextAuto" -> p.nextAuto()
