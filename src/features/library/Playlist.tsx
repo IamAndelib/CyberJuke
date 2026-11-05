@@ -2,6 +2,7 @@ import { signal } from '@preact/signals';
 import { useEffect, useRef } from 'preact/hooks';
 import type { Track } from '../../data/model';
 import { deletePlaylist, moveInPlaylist, playlistShown, renamePlaylist, restorePlaylist } from '../../stores/playlists';
+import { glow } from '../../stores/glow';
 import { toast } from '../../stores/toast';
 import { removeFromPlaylistWithUndo } from '../../stores/undo';
 import { Art } from '../../ui/components/Art';
@@ -21,8 +22,9 @@ const editing = signal<string | null>(null);
 
 /** A song's row while editing: its art and names, then ↑ ↓ ✕ (Up next's buttons). */
 function EditRow({ id, track, first, last }: { id: string; track: Track; first: boolean; last: boolean }) {
+  const g = glow.value;
   return (
-    <li class="row pl-edit-row" data-testid="pl-edit-row">
+    <li class={'row pl-edit-row' + (g?.scope === `playlist:${id}` && g.id === track.id ? ' moved' : '')} data-testid="pl-edit-row" data-track-id={track.id}>
       <div class="row-main">
         <div class="row-art">
           <Art track={track} size="sm" />
@@ -114,7 +116,7 @@ export function PlaylistPage({ id }: { id: string }) {
         <>
           <PlayShuffle tracks={tracks} ctx={ctx} testid="pl" />
           <div data-testid="pl-list">
-            <Tracks tracks={tracks} ctx={ctx} chunkKey={`playlist:${id}`} />
+            <Tracks tracks={tracks} ctx={ctx} glow={`playlist:${id}`} chunkKey={`playlist:${id}`} />
           </div>
           <div class="list-foot end">— end of tape —</div>
         </>

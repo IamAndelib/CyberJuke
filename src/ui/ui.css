@@ -182,6 +182,28 @@
   padding-right: 4px;
   position: relative;
 }
+/* A row just moved with ↑ or ↓, or put back by Undo (stores/glow): a faint glow, fading out. */
+.row.moved::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--color-accent) 45%, transparent);
+  animation: row-glow 1.5s ease-out forwards;
+}
+@keyframes row-glow {
+  to {
+    opacity: 0;
+  }
+}
+/* No fade with reduced motion: it shows a moment, then goes. */
+@media (prefers-reduced-motion: reduce) {
+  .row.moved::after {
+    animation: row-glow 1.5s steps(1, end) forwards;
+  }
+}
 .row-main {
   flex: 1;
   min-width: 0;

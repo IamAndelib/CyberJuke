@@ -7,7 +7,7 @@
 - After you delete a playlist, **Undo** brings it back where it was, with all its songs.
 - A page title too long for the top bar on a narrow phone, such as Recently played beside [Clear], is set a little smaller, so more of it shows (often all).
 - A playlist's ⋯ menu has clearer icons: up and down arrows for **Edit songs**, a pencil for **Rename** and a bin for **Delete playlist**.
-- After ↑ or ↓ in the queue, the moved song glows faintly at its new place for a moment, so you can see where it went; a screen reader says it ("Moved to 3 of 25").
+- After ↑ or ↓ in the queue, or **Undo** in the queue, Liked or a playlist, the song glows faintly at its place for a moment, so you can see where it went; a screen reader says it ("Moved to 3 of 25", "Back at 3 of 25").
 
 ### Fixed
 - On a genre or Most saved, pulling down to refresh while the new tracks button shows takes you to Latest from every genre, where the new songs are, as tapping the button does. Before, it refreshed that genre and nothing new appeared.

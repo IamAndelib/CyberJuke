@@ -164,6 +164,20 @@ test.describe('a playlist', () => {
     await expect(titles(page)).toHaveCount(3);
   });
 
+  test('Undo after ✕ in Edit songs: the song comes back in its place and glows for a moment', async ({ page }) => {
+    await openPlaylist(page, 'Night drive');
+    await page.getByTestId('pl-more').click();
+    await page.getByTestId('pl-edit').click();
+    const rows = page.getByTestId('pl-edit-row');
+    await rows.nth(1).getByTestId('pl-remove').click();
+    await expect(titles(page)).toHaveText(['Song 1', 'Song 3']);
+    await page.getByTestId('toast').last().getByRole('button', { name: 'Undo' }).click();
+    await expect(titles(page)).toHaveText(['Song 1', 'Song 2', 'Song 3']);
+    await expect(page.locator('[data-testid="pl-edit-row"].moved')).toHaveCount(1);
+    await expect(rows.nth(1)).toHaveClass(/\bmoved\b/);
+    await expect(page.locator('[data-testid="pl-edit-row"].moved')).toHaveCount(0, { timeout: 3000 });
+  });
+
   test('Here searches the playlist; an empty one says how to add songs', async ({ page }) => {
     await openPlaylist(page, 'Road trip');
     await expect(page.getByTestId('pl-empty')).toContainText('Add songs with');

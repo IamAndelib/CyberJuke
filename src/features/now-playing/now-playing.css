@@ -635,28 +635,6 @@ button.lyr-line {
 }
 
 /* M2: Up, Down and Remove are 44x48 side by side, so the title gets the room (44px is still a comfortable target). */
-/* Just moved with ↑ or ↓ (UpNext movedGlow): a faint glow at its new place, fading out. */
-.upnext .row.moved::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: var(--radius);
-  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--color-accent) 45%, transparent);
-  animation: moved-glow 1.5s ease-out forwards;
-}
-@keyframes moved-glow {
-  to {
-    opacity: 0;
-  }
-}
-/* No fade with reduced motion: it shows a moment, then goes. */
-@media (prefers-reduced-motion: reduce) {
-  .upnext .row.moved::after {
-    animation: moved-glow 1.5s steps(1, end) forwards;
-  }
-}
 .upnext-actions {
   display: flex;
   flex: none;
