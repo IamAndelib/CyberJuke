@@ -130,6 +130,52 @@ describe('NativePlayer: Up next rows (K1)', () => {
     expect(p2.state.peek().previous.map((u) => [u.track.id, u.index])).toEqual([['B', 0]]);
   });
 
+  it('the songs you queued and the next lap come by list index; an older native sends neither', () => {
+    const p = new NativePlayer();
+    const at = (lapIndex: number[]) => state({ index: 2, trackId: 'C', repeat: 'all', queueIds: ['A', 'M', 'C', 'D'], upNextIds: ['D'], upNextKinds: 'l', upNextIndex: [3], mineIndex: [1], lapIndex });
+    const lap = () => p.state.peek().lap.map((u) => [u.track.id, u.index]);
+    emit('state', at([0]));
+    expect(p.state.peek().mine).toEqual([1]);
+    expect(lap()).toEqual([['A', 0]]);
+    // Only the lap changed (a ✕ there).
+    emit('state', at([]));
+    expect(lap()).toEqual([]);
+    emit('state', state({ index: 2, trackId: 'C', queueIds: ['A', 'M', 'C', 'D'], upNextIds: ['D'], upNextKinds: 'l', upNextIndex: [3] }));
+    expect(p.state.peek()).toMatchObject({ mine: [], lap: [] });
+  });
+
+  it('a row moved or removed shows at once in the next lap, and the songs you queued keep their mark', async () => {
+    const at = state({ index: 2, trackId: 'C', repeat: 'all', queueIds: ['A', 'B', 'C', 'M'], upNextIds: ['M'], upNextKinds: 'q', upNextIndex: [3], mineIndex: [3], lapIndex: [0, 1] });
+    const p = new NativePlayer();
+    emit('state', at);
+    fake.plugin.moveItem.mockImplementationOnce(() => new Promise<void>(() => {}));
+    void p.move(1, 0, 'B');
+    expect(p.state.peek().lap.map((u) => [u.track.id, u.index])).toEqual([
+      ['B', 0],
+      ['A', 1],
+    ]);
+    expect(p.state.peek().mine).toEqual([3]);
+    const p2 = new NativePlayer();
+    emit('state', at);
+    fake.plugin.removeItem.mockImplementationOnce(() => new Promise<void>(() => {}));
+    void p2.remove(0, 'A');
+    expect(p2.state.peek().lap.map((u) => [u.track.id, u.index])).toEqual([['B', 0]]);
+    expect(p2.state.peek().mine).toEqual([2]);
+  });
+
+  it('a Played row moved onto a song you queued keeps the next lap in play order', () => {
+    const p = new NativePlayer();
+    emit('state', state({ index: 4, trackId: 'E', repeat: 'all', queueIds: ['A', 'B', 'C', 'M', 'E'], prevIndex: [0, 1, 2, 3], mineIndex: [3], lapIndex: [0, 1, 2] }));
+    fake.plugin.moveItem.mockImplementationOnce(() => new Promise<void>(() => {}));
+    void p.move(0, 3, 'A');
+    expect(p.state.peek().lap.map((u) => [u.track.id, u.index])).toEqual([
+      ['B', 0],
+      ['C', 1],
+      ['A', 3],
+    ]);
+    expect(p.state.peek().mine).toEqual([2]);
+  });
+
   it('without indices (an older native), looks after the current track first, then from the top', () => {
     const p = new NativePlayer();
     emit('state', state({ index: 2, trackId: 'C', queueIds: ['A', 'B', 'C', 'A', 'D'], upNextIds: ['A', 'D'], upNextKinds: 'ql' }));
@@ -426,6 +472,7 @@ describe('NativePlayer: edits (K2)', () => {
     const p = new NativePlayer();
     list(p);
     await p.skipTo(2, 'C');
+    expect(fake.plugin.skipToIndex).toHaveBeenCalledWith({ index: 2, expectId: 'C' });
     expect(fake.plugin.play).toHaveBeenCalledTimes(1);
     expect(fake.plugin.skipToIndex.mock.invocationCallOrder[0]).toBeLessThan(fake.plugin.play.mock.invocationCallOrder[0]);
     fake.plugin.skipToIndex.mockRejectedValueOnce(Object.assign(new Error('STALE_INDEX'), { code: 'STALE_INDEX' }));
@@ -433,11 +480,20 @@ describe('NativePlayer: edits (K2)', () => {
     expect(fake.plugin.play).toHaveBeenCalledTimes(1);
   });
 
-  it('restore sends the track, its section and the track it goes before (K3)', async () => {
+  it('a tap on a "From the top" row says so: the heard songs you queued leave first (rule 8)', async () => {
     const p = new NativePlayer();
     list(p);
-    await p.restore(tr('Z'), 'list', 'C');
+    await p.skipTo(0, 'A', true);
+    expect(fake.plugin.skipToIndex).toHaveBeenCalledWith({ index: 0, expectId: 'A', lap: true });
+  });
+
+  it('restore sends the track, its section, the track it goes before (K3) and the mark of a song you queued (rule 8)', async () => {
+    const p = new NativePlayer();
+    list(p);
+    await p.restore(tr('Z'), 'list', 'C', false);
     expect(fake.plugin.restore).toHaveBeenCalledWith({ track: toNative(tr('Z')), kind: 'list', beforeId: 'C' });
+    await p.restore(tr('Y'), 'played', null, true);
+    expect(fake.plugin.restore).toHaveBeenLastCalledWith({ track: toNative(tr('Y')), kind: 'played', beforeId: null, mine: true });
   });
 
   it('removeIds sends at most BRIDGE_MAX_ITEMS ids a call (K5, K6)', async () => {
@@ -462,6 +518,15 @@ describe('NativePlayer: starting a list', () => {
     await p.playList([tr('A'), tr('bad', { ytId: 'nope' })], 1, { label: 'Liked', mode: 'list' });
     expect(fake.plugin.setQueue).toHaveBeenCalledTimes(1);
     expect(toasts.value.map((t) => t.text)).toContain("Can't play this track");
+  });
+
+  it('shows at once the songs you queued still next, with their mark, and no next lap yet', async () => {
+    const p = new NativePlayer();
+    emit('state', state({ index: 1, trackId: 'B', repeat: 'all', queueIds: ['A', 'B', 'M', 'H'], upNextIds: ['M'], upNextKinds: 'q', upNextIndex: [2], mineIndex: [2, 3], lapIndex: [0] }));
+    fake.plugin.setQueue.mockImplementationOnce(() => new Promise<void>(() => {}));
+    void p.playList([tr('C'), tr('D'), tr('E')], 1, { label: 'Liked', mode: 'list' });
+    expect(p.state.value.queue.map((t) => t.id)).toEqual(['C', 'D', 'M', 'E']);
+    expect(p.state.value).toMatchObject({ mine: [2], lap: [] });
   });
 
   it('when native skips the start track, its events are trusted again at once', async () => {

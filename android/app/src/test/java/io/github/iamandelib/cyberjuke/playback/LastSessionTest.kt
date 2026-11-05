@@ -268,6 +268,22 @@ class LastSessionTest {
     }
 
     @Test
+    fun theQueuedByYouMarkComesBack() {
+        // Rule 8: a song you queued keeps the mark after it played, and after a restart too.
+        val s = LastSession.of(listOf(entry(0).copy(mine = true, heard = true), entry(1)), 0, 0L, 0L, false, null, 0, null, null)!!
+        val back = LastSession.decode(s.encode())!!
+        assertEquals(s, back)
+        assertEquals(listOf(true, false), back.entries.map { it.mine })
+        // Still version 2: an older app reads the file and ignores the mark.
+        val o = JSONObject(s.encode())
+        assertEquals(2, o.getInt("v"))
+        // A file from before the mark has none.
+        val tracks = o.getJSONArray("tracks")
+        for (i in 0 until tracks.length()) tracks.getJSONObject(i).remove("m")
+        assertEquals(listOf(false, false), LastSession.decode(o.toString())!!.entries.map { it.mine })
+    }
+
+    @Test
     fun aShuffledFileFromBeforeHeardMarksWhatPlayedInItsOrder() {
         // Play order 3, 0, 4 (current), 1, 2: 3 and 0 played; 1 and 2 are still to come.
         val s = LastSession.of((0 until 5).map { entry(it) }, 4, 0L, 0L, true, intArrayOf(3, 0, 4, 1, 2), 0, null, null)!!

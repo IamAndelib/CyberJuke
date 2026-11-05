@@ -6,8 +6,8 @@ import { UP_NEXT_MAX } from '../core/guards';
 
 export type { RepeatMode };
 
-/** The queue's sections (what played, then Up next's three), which is also what Undo of a remove puts a track back into. */
-export type UpNextKind = 'played' | 'queued' | 'list' | 'autoplay';
+/** The queue's sections (what played, Up next's three, then "From the top", the next lap), which is also what Undo of a remove puts a track back into. */
+export type UpNextKind = 'played' | 'queued' | 'list' | 'autoplay' | 'top';
 
 export interface UpNextItem {
   track: Track;
@@ -38,7 +38,7 @@ export interface UpItem {
   index: number;
 }
 
-export type UpRowKind = Exclude<UpNextKind, 'played'>;
+export type UpRowKind = Exclude<UpNextKind, 'played' | 'top'>;
 
 /** Up next's rows in play order, a run each time the kind changes: Up next shows a heading over each. */
 export interface UpRun {
@@ -121,6 +121,13 @@ export interface PlayerState {
   upNext: UpNextItem[];
   /** The tracks before the current one in play order, oldest first (at most UP_NEXT_MAX): Up next shows them above it. */
   previous: UpNextItem[];
+  /** Queue indices of the songs you queued, played or not: each keeps the "queued by you" mark (rule 8). */
+  mine: number[];
+  /**
+   * The next lap ("From the top"): with repeat all, the play order from its first song up to the one before
+   * the current one, without the songs you queued (at most UP_NEXT_MAX, the first ones). Empty otherwise.
+   */
+  lap: UpNextItem[];
   /** Queue index of the current list's first song: the songs before it are history, not of this list. */
   listStart: number;
   /** Queue index of the first song of the autoplay on the way, -1 if none. */
@@ -153,6 +160,8 @@ export const EMPTY_STATE: PlayerState = {
   repeat: 'off',
   upNext: [],
   previous: [],
+  mine: [],
+  lap: [],
   listStart: 0,
   nextStart: -1,
   context: null,
@@ -180,9 +189,10 @@ export interface Player {
   /**
    * Index commands (K2) take the id the caller sees at that index (for move, at `from`):
    * when the list changed meanwhile and it is something else, nothing happens (the
-   * state is refreshed, no error).
+   * state is refreshed, no error). `lap`: a "From the top" row, which enters the next lap, so
+   * the heard songs you queued leave first (rule 8).
    */
-  skipTo(index: number, expectId?: string): Promise<void>;
+  skipTo(index: number, expectId?: string, lap?: boolean): Promise<void>;
   setShuffle(enabled: boolean): Promise<void>;
   setRepeat(mode: RepeatMode): Promise<void>;
   move(from: number, to: number, expectId?: string): Promise<void>;
@@ -198,9 +208,10 @@ export interface Player {
    * Undo a remove (K3): put `track` back as `kind`, right before `beforeId` (the row that
    * followed it in Up next) if that is still ahead (a queued track only before a queued one,
    * the others never before one), else at the end of its section. Never at or before the
-   * current track.
+   * current track. `played` and `top` go back behind it, before `beforeId` (see Queue.restore).
+   * `mine`: it was queued by you, and keeps that mark (rule 8).
    */
-  restore(track: Track, kind: UpNextKind, beforeId: string | null): Promise<void>;
+  restore(track: Track, kind: UpNextKind, beforeId: string | null, mine: boolean): Promise<void>;
   /** Autoplay tracks computed for `seedId`; ignored if the seed changed meanwhile. */
   addAutoplay(tracks: Track[], seedId: string): Promise<void>;
   /** The Autoplay setting (C3). Off drops the autoplay tracks still to come. */

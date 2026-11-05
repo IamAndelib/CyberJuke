@@ -31,6 +31,8 @@ describe('parseNativeState', () => {
       upNextKinds: 'qa',
       upNextIndex: [0, 2],
       prevIndex: [2],
+      mineIndex: [0, 1],
+      lapIndex: [0],
       listStart: 1,
       nextStart: 2,
       context: { label: 'Liked', mode: 'list' },
@@ -71,6 +73,18 @@ describe('parseNativeState', () => {
     expect(parseNativeState({ index: 0, queueIds: ['A', 'B'], upNextIds: ['B'] })?.upNextIndex).toEqual([-1]);
   });
 
+  it('keeps the indices of the songs you queued and of the next lap only when in range; the lap never holds the current one', () => {
+    const st = parseNativeState({ index: 1, queueIds: ['A', 'B', 'C'], mineIndex: [1, 2, 3, -1, 0.5, 'x'], lapIndex: [0, 1, 7, 'x', 2] });
+    // The playing song keeps its mark.
+    expect(st?.mineIndex).toEqual([1, 2]);
+    expect(st?.lapIndex).toEqual([0, 2]);
+    // The lap's first 50.
+    const queueIds = Array.from({ length: 60 }, (_, i) => `t${i}`);
+    expect(parseNativeState({ index: 59, queueIds, lapIndex: queueIds.map((_, i) => i) })?.lapIndex).toEqual(queueIds.slice(0, 50).map((_, i) => i));
+    // An older native sends neither.
+    expect(parseNativeState({ index: 0, queueIds: ['A'] })).toMatchObject({ mineIndex: [], lapIndex: [] });
+  });
+
   it('reads where the current list and the autoplay on the way start; an older native sends neither', () => {
     const q = ['A', 'B', 'C', 'D'];
     expect(parseNativeState({ index: 2, queueIds: q, listStart: 1, nextStart: 3 })).toMatchObject({ listStart: 1, nextStart: 3 });
@@ -100,6 +114,8 @@ describe('parseNativeState', () => {
       upNextKinds: '',
       upNextIndex: [],
       prevIndex: [],
+      mineIndex: [],
+      lapIndex: [],
       listStart: 0,
       nextStart: -1,
       context: null,

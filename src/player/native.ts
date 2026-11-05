@@ -40,6 +40,10 @@ export interface NativeState {
   upNextIndex: number[];
   /** The list indices of the tracks before the current one in play order, oldest first, max 50. Absent from older natives: none. */
   prevIndex?: number[];
+  /** The list indices of the songs you queued, played or not (rule 8's mark). Absent from older natives: none. */
+  mineIndex?: number[];
+  /** The list indices of the next lap ("From the top"): repeat all only, play order from its first song to before the current one, without the songs you queued, the first 50. Absent from older natives: none. */
+  lapIndex?: number[];
   /** Queue index of the current list's first song, and of the first song of the autoplay on the way (-1: none). Absent from older natives: 0 and -1. */
   listStart?: number;
   nextStart?: number;
@@ -95,9 +99,11 @@ interface JukePlayerPlugin {
   queueNext(o: { tracks: NativeTrack[] }): Promise<void>;
   /**
    * K3: Undo of a remove, back in its section before `beforeId` (else at the section's end), never at or
-   * before the current track; 'played' goes back before the played track `beforeId`, else right before the current one.
+   * before the current track; 'played' goes back before `beforeId` among every track before the current one, heard or
+   * not, else right before the current one; 'top' (a "From the top" row) the same, but unheard. A 'played' or 'list'
+   * track gets the queued-by-you mark back when `mine` (rule 8).
    */
-  restore(o: { track: NativeTrack; kind: 'played' | 'queued' | 'list' | 'autoplay'; beforeId: string | null }): Promise<void>;
+  restore(o: { track: NativeTrack; kind: 'played' | 'queued' | 'list' | 'autoplay' | 'top'; beforeId: string | null; mine?: true }): Promise<void>;
   /** K5: remove every item with one of these ids (at most BRIDGE_MAX_ITEMS); the current one skips to the next that stays, or stops. */
   removeIds(o: { ids: string[] }): Promise<void>;
   removeItem(o: { index: number; expectId?: string }): Promise<void>;
@@ -116,9 +122,10 @@ interface JukePlayerPlugin {
   /**
    * A tap in Up next: it plays, also when paused (the caller sends play). A track further ahead
    * moves next first, so what it jumps over stays; queued tracks stay next; on an autoplay
-   * track the radio continues from it.
+   * track the radio continues from it. `lap`: a "From the top" row, which enters the next lap:
+   * the heard songs you queued leave first.
    */
-  skipToIndex(o: { index: number; expectId?: string }): Promise<void>;
+  skipToIndex(o: { index: number; expectId?: string; lap?: boolean }): Promise<void>;
   setShuffle(o: { enabled: boolean }): Promise<void>;
   setRepeat(o: { mode: RepeatMode }): Promise<void>;
   /**

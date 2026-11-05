@@ -192,6 +192,8 @@ export class WebPlayer implements Player {
       repeat: this.q.repeat,
       upNext: this.q.upNextItems().map(({ item, ...u }) => ({ track: item, ...u })),
       previous: this.q.previousIndices().map((i) => ({ track: items[i], index: i })),
+      mine: this.q.mineIndices(),
+      lap: this.q.lapIndices().map((i) => ({ track: items[i], index: i })),
       listStart: this.q.listStartIndex,
       nextStart: this.q.nextStartIndex,
       context: this.context,
@@ -445,10 +447,10 @@ export class WebPlayer implements Player {
     return expectId == null || this.q.items[index]?.id === expectId;
   }
 
-  async skipTo(index: number, expectId?: string): Promise<void> {
+  async skipTo(index: number, expectId?: string, lap = false): Promise<void> {
     if (!this.holds(index, expectId)) return this.publish();
     const auto = this.q.isAuto(index);
-    if (!this.q.skipTo(index)) return;
+    if (!this.q.skipTo(index, lap)) return;
     // A tapped autoplay track: the radio continues from it.
     if (auto) this.seed = this.q.current;
     await this.loadCurrent(true, true);
@@ -493,11 +495,11 @@ export class WebPlayer implements Player {
     if (wasEmpty) await this.loadCurrent(true, true);
   }
 
-  async restore(track: Track, kind: UpNextKind, beforeId: string | null): Promise<void> {
+  async restore(track: Track, kind: UpNextKind, beforeId: string | null, mine: boolean): Promise<void> {
     if (!this.q.current) return this.playList([track], 0);
     // Autoplay rows don't come back while autoplay is off (they'd be dropped).
     if (kind === 'autoplay' && !this.keepsGoing(this.seed?.id)) return;
-    this.q.restore(track, kind, beforeId);
+    this.q.restore(track, kind, beforeId, mine);
     this.publish();
   }
 

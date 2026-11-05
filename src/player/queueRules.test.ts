@@ -41,7 +41,8 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
       };
       // Up next as the app builds it from what the player publishes.
       const upNext = () => q.upNextItems().map(({ item, ...u }) => ({ track: item as Track, ...u }));
-      let undo: [string, Section, string | null] | null = null;
+      let undo: [string, Section, string | null, boolean] | null = null;
+      let top: string[] = [];
       for (const s of c.steps) {
         switch (s.op) {
           case 'setList':
@@ -54,7 +55,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             q.addAuto((s.ids as string[]).map(t), s.joinList === true);
             break;
           case 'skipTo':
-            q.skipTo(indexOf(s.id));
+            q.skipTo(indexOf(s.id), s.lap === true);
             break;
           case 'next':
             q.next(false);
@@ -72,23 +73,29 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             q.move(indexOf(s.id), s.to as number);
             break;
           case 'restore':
-            q.restore(t(s.id as string), s.kind as Section, (s.beforeId as string | null) ?? null);
+            q.restore(t(s.id as string), s.kind as Section, (s.beforeId as string | null) ?? null, s.mine === true);
             break;
           case 'removeRow': {
             // Up next's ✕: Undo puts it back as its row's kind, before the row that followed it.
             const rows = upNext();
             const k = rows.findIndex((u) => u.track.id === s.id);
             const { kind } = sectionsOf(rows, null).runs.find((r) => r.items.some((u) => u.index === rows[k].index))!;
-            undo = [s.id as string, kind, rows[k + 1]?.track.id ?? null];
+            undo = [s.id as string, kind, rows[k + 1]?.track.id ?? null, q.mineIndices().includes(rows[k].index)];
             q.remove(rows[k].index);
             break;
           }
           case 'undo':
-            q.restore(t(undo![0]), undo![1], undo![2]);
+            q.restore(t(undo![0]), undo![1], undo![2], undo![3]);
             break;
           case 'removeIds':
             q.removeIds(s.ids as string[]);
             break;
+          case 'keepTop': {
+            // The next lap ("From the top"): the play order from its first song to the current one, without the songs you queued.
+            const mine = new Set(q.mineIndices());
+            top = [...q.previousIndices(), q.index].filter((i) => !mine.has(i)).map((i) => q.items[i].id);
+            break;
+          }
           case 'dropOnTheWay':
             q.dropOnTheWay();
             break;
@@ -117,6 +124,11 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             if ('queued' in s) expect(q.queuedCount).toBe(s.queued);
             if ('list' in s) expect(ids(q.items)).toEqual(s.list);
             if ('played' in s) expect(q.previousIndices().map((i) => q.items[i].id)).toEqual(s.played);
+            if ('mine' in s) expect(q.mineIndices().map((i) => q.items[i].id)).toEqual(s.mine);
+            if ('upNextIsKeptTop' in s) expect([q.current?.id, ...ids(q.upNext())]).toEqual(top);
+            const lap = () => q.lapIndices().map((i) => q.items[i].id);
+            if ('top' in s) expect(lap()).toEqual(s.top);
+            if ('topSet' in s) expect(lap().sort()).toEqual((s.topSet as string[]).slice().sort());
             if ('place' in s) expect(placeOf({ ...EMPTY_STATE, queue: q.items as Track[], index: q.index, upNext: upNext() })).toBe(s.place);
             const sec = sectionsOf(upNext(), null);
             const sIds = (xs: UpItem[]) => xs.map((x) => x.track.id);

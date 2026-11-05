@@ -222,6 +222,24 @@ class QueueOpsTest {
     }
 
     @Test
+    fun aRestoredSessionKeepsTheQueuedByYouMark() {
+        // After Previous, m (queued by you, heard) is ahead again; q was queued since and waits.
+        val p = FakePlayer(Random(1))
+        val ids = listOf("a", "q", "m", "b")
+        val sections = listOf(Section.LIST, Section.QUEUED, Section.LIST, Section.LIST)
+        p.queue.restoreSession(ids, sections, 0, 0L, null, listOf(true, false, true, false), mine = listOf(false, true, true, false))
+        assertEquals(listOf("q", "m"), p.ids.filterIndexed { i, _ -> p.serials[i] != 0L })
+        // Only q is still queued: m has played, so it stays a list song (R2).
+        assertEquals(setOf(p.serials[1]), p.queue.pendingSerials)
+        assertEquals(listOf("q", "m", "b"), p.upNext())
+        // The current song keeps its mark too.
+        val c = FakePlayer(Random(1))
+        c.queue.restoreSession(listOf("m", "a"), listOf(Section.LIST, Section.LIST), 0, 0L, null, mine = listOf(true, false))
+        assertNotEquals(0L, c.serials[0])
+        assertTrue(c.queue.pendingSerials.isEmpty())
+    }
+
+    @Test
     fun aRadiosFirstBatchJoinsItsListUnderRepeatAll() {
         val p = player(listOf("a"))
         p.repeat = "all"

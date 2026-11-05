@@ -1,14 +1,14 @@
 import { Fragment } from 'preact';
 import { signal } from '@preact/signals';
 import { useLayoutEffect, useRef } from 'preact/hooks';
-import { autoplayLabel, currentId, currentPlaysOffline, currentTrack, isPlaying, player, playContext, previousTracks, repeatMode, shuffleOn, upNextSections, type PlayContext, type UpItem, type UpNextKind } from '../../player';
+import { autoplayLabel, currentId, currentPlaysOffline, currentTrack, isPlaying, lapTracks, player, playContext, previousTracks, queuedHeard, repeatMode, saveSongs, shuffleOn, upNextSections, type PlayContext, type UpItem, type UpNextKind } from '../../player';
 import { isLocal, type Track } from '../../data/model';
 import { online } from '../../core/network';
 import { settings } from '../../stores/library';
 import { isSaved, savedOffline } from '../../stores/savedOffline';
 import { glow, glowRow, type Glow } from '../../stores/glow';
 import { toast } from '../../stores/toast';
-import { PLAYLISTS_MAX, PLAYLIST_MAX_SONGS, createPlaylist } from '../../stores/playlists';
+import { PLAYLISTS_MAX, createPlaylist } from '../../stores/playlists';
 import { askName } from '../../ui/nav';
 import { Icon } from '../../ui/icons';
 import { afterPress } from '../../ui/press';
@@ -87,17 +87,12 @@ function RowBody({ track, playing }: { track: Track; playing?: boolean }) {
 }
 
 /**
- * [Save queue as playlist]: New playlist with the list you're in (an album, or once its suggestions
- * play, those; not the ones on the way), each song once. In play order: the list's own order with
- * shuffle off; with shuffle on, the rows as they show (Up next shows at most 50 on each side of the
- * playing song), then the rest of the list.
+ * [Save queue as playlist]: New playlist with the list you're in and the songs you queued
+ * (saveSongs). `shown`: the rows as they show (at most 50 on each side of the playing song), the
+ * play order when shuffled.
  */
 function saveQueue(shown: Track[]): void {
-  const { queue, shuffle, listStart, nextStart } = player.state.peek();
-  const list = queue.slice(listStart, nextStart < 0 ? undefined : nextStart);
-  const mine = new Set(list.map((t) => t.id));
-  const seen = new Set<string>();
-  const songs = (shuffle ? [...shown.filter((t) => mine.has(t.id)), ...list] : list).filter((t) => !seen.has(t.id) && (seen.add(t.id), true)).slice(0, PLAYLIST_MAX_SONGS);
+  const songs = saveSongs({ ...player.state.peek(), shown, gone: queuedHeard() });
   askName({
     title: 'New playlist',
     note: `With ${plural(songs.length, 'song')}`,
@@ -115,23 +110,30 @@ const upTo = (n: number) => (n >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : n);
 
 /**
  * Removes a queue row, with Undo: back as its kind, before the row that followed it, `beforeId`
- * (K3). The Undo goes once a new list or another track starts, when "back where it was" no
- * longer means anything.
+ * (K3). A "From the top" song you heard goes back among the played too, and a song you queued
+ * keeps its mark, also one that played and is ahead again after Previous (rule 8). The Undo goes
+ * once a new list or another track starts, when "back where it was" no longer means anything.
  */
 export function removeWithUndo(it: UpItem, kind: Kind, beforeId: string | null): void {
+  const s = player.state.peek();
   // A row the queue has moved on from (its track playing now, or at another place) stays.
-  if (player.state.peek().queue[it.index]?.id !== it.track.id) return;
+  if (s.queue[it.index]?.id !== it.track.id) return;
+  const back: Kind = kind === 'top' && s.previous.some((u) => u.index === it.index) ? 'played' : kind;
+  const mine = s.mine.includes(it.index);
   void player.remove(it.index, it.track.id);
   const ctx0 = playContext.peek();
   const cur0 = currentId.peek();
   toast('Removed from queue', undefined, {
     label: 'Undo',
     // The glow starts once the song is back, so a slow restore doesn't eat into it.
-    run: () => void player.restore(it.track, kind, beforeId).then(() => glowRow('queue', it.track.id)),
+    run: () => void player.restore(it.track, back, beforeId, mine).then(() => glowRow(glowScope(kind), it.track.id)),
     stale: () => playContext.value !== ctx0 || currentId.value !== cur0,
     ...(it.track.membersOnly && { membersOnly: true }),
   });
 }
+
+/** The glow's scope: "From the top" apart, as Played can show the same songs at the same places. */
+const glowScope = (kind: Kind) => (kind === 'top' ? 'queue:top' : 'queue');
 
 /** Offline, a row that can't play is dimmed, as in every list (TrackRow). */
 const offClass = (t: Track) => (!online.value && !isSaved(t, savedOffline.value) ? ' off' : '');
@@ -141,9 +143,10 @@ const offClass = (t: Track) => (!online.value && !isSaved(t, savedOffline.value)
  * comes first, folded under "[+] Played · N" (a tap on one plays from there), then the playing
  * track, marked as in every list, then Up next, each song under its own kind's heading (AP1),
  * one each time the kind changes: queued by you, the rest of the list ("Next from: <source>"),
- * autoplay ("Autoplay · similar to <seed>"). Up and Down move a track under its heading, and the
- * last played one's Down past the playing track, to hear it again; Remove (every row but the
- * playing one) offers Undo.
+ * autoplay ("Autoplay · similar to <seed>"); with Repeat all, then the next lap, under "From the
+ * top" (a tap on one there starts it). Up and Down move a track under its heading, and the last
+ * played one's Down past the playing track, to hear it again; Remove (every row but the playing
+ * one) offers Undo.
  */
 export function UpNext() {
   const sec = upNextSections.value;
@@ -176,7 +179,7 @@ export function UpNext() {
     afterPress(b, () => {
       if (guarded()) return;
       keepFocus(b, { id: it.track.id, kind, index: to.index, button });
-      glowRow('queue', it.track.id, to.index);
+      glowRow(glowScope(kind), it.track.id, to.index);
       void player.move(it.index, to.index, it.track.id);
     });
 
@@ -190,7 +193,8 @@ export function UpNext() {
       const down = items[k + 1] ?? past;
       return (
         <li
-          key={`${it.track.id}:${it.index}`}
+          // With the kind: Played and "From the top" can show one song at once.
+          key={`${kind}:${it.track.id}:${it.index}`}
           class={'row' + (kind === 'list' ? '' : ` ${kind}`) + offClass(it.track) + (it === glowing?.item ? ' moved' : '')}
           data-testid={kind === 'played' ? 'upnext-played' : 'upnext-row'}
           data-track-id={it.track.id}
@@ -203,8 +207,9 @@ export function UpNext() {
             // Offline and not saved: a screen reader hears it can't play, as the dimmed row shows.
             aria-disabled={offClass(it.track) ? true : undefined}
             {...longPress(it.track, kind === 'queued' ? it : null)}
-            onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id))}
-            aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', autoplay' }[kind]}`}
+            // A "From the top" row enters the next lap (the songs you queued and heard leave).
+            onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id, kind === 'top'))}
+            aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', autoplay', top: ', from the top' }[kind]}`}
           >
             <RowBody track={it.track} />
           </button>
@@ -264,8 +269,11 @@ export function UpNext() {
   const current = currentTrack.value;
   const played = previousTracks.value;
   const open = playedOpenFor.value === ctx;
+  // The next lap: native may send it a moment after Repeat changes.
+  const lap = repeat === 'all' ? lapTracks.value : [];
   const g = glow.value;
-  const glowing = movedRow(g?.scope === 'queue' ? g : null, [open ? played : [], ...sec.runs.map((r) => r.items)]);
+  const parts = g?.scope === 'queue' ? [open ? played : [], ...sec.runs.map((r) => r.items)] : g?.scope === 'queue:top' ? [lap] : null;
+  const glowing = g && parts && movedRow(g, parts);
   return (
     <section ref={root} class="upnext" data-testid="up-next">
       <div class="section-head upnext-head">
@@ -326,6 +334,14 @@ export function UpNext() {
             {rows(r.kind, r.items, undefined, sec.runs[k + 1]?.items[0])}
           </Fragment>
         ))}
+        {lap.length > 0 && (
+          <>
+            <li class="upnext-label" data-testid="upnext-top-label" aria-hidden="true">
+              From the top
+            </li>
+            {rows('top', lap)}
+          </>
+        )}
       </ol>
       {/* A screen reader hears where the song went (moved, or put back by Undo), as the glow shows it. */}
       <p class="sr-only" aria-live="polite" data-testid="upnext-moved">
@@ -339,8 +355,7 @@ export function UpNext() {
 }
 
 /** The row the glow is on: the moved song where it is now (the copy nearest its target), with its place in its part. */
-function movedRow(g: Glow | null, parts: UpItem[][]): { item: UpItem; place: number; of: number } | null {
-  if (!g) return null;
+function movedRow(g: Glow, parts: UpItem[][]): { item: UpItem; place: number; of: number } | null {
   let best: { item: UpItem; place: number; of: number } | null = null;
   for (const part of parts)
     part.forEach((item, k) => {

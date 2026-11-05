@@ -95,7 +95,7 @@ import kotlin.math.roundToInt
  * - skipToIndex, removeItem and moveItem take an optional `expectId` (K2: the id the caller
  *   sees at `index` / `from`); if the item there has another id the call rejects with code
  *   STALE_INDEX and nothing changes. Checked in the service, on the player itself.
- * - restore({ track, kind: 'played' | 'queued' | 'list' | 'autoplay', beforeId }) (K3): Undo of a
+ * - restore({ track, kind: 'played' | 'top' | 'queued' | 'list' | 'autoplay', beforeId }) (K3): Undo of a
  *   removal, see [io.github.iamandelib.cyberjuke.playback.NativeQueue.restore] and restorePlayed.
  * - removeIds({ ids }) (K5): removes every item with one of these ids; if the current one
  *   goes, the next one that stays plays, or playback pauses when none is left.
@@ -644,11 +644,13 @@ class JukePlayerPlugin : Plugin() {
     }
 
     /**
-     * `restore({ track, kind: 'played' | 'queued' | 'list' | 'autoplay', beforeId: string | null })`:
+     * `restore({ track, kind: 'played' | 'queued' | 'list' | 'autoplay' | 'top', beforeId: string | null, mine?: true })`:
      * Undo of a removal (K3). The track goes back as `kind`, right before the first entry after
      * the current track with id `beforeId` (a queued one only before a queued one, the others
      * never before one), else at the end of its section; never at or before the current track.
-     * 'played' goes back before the played entry `beforeId`, else right before the current track.
+     * 'played' goes back before `beforeId` among every entry before the current track, heard or not,
+     * else right before the current track; 'top' (a "From the top" row) the same, but unheard. A
+     * 'played' or 'list' track gets the queued-by-you mark back when `mine`.
      */
     @PluginMethod
     fun restore(call: PluginCall) {
@@ -656,14 +658,15 @@ class JukePlayerPlugin : Plugin() {
         val arr = JSONArray().put(track)
         parseTracksOrReject(call, arr) ?: return
         val kind = call.getString("kind")
-        if (kind != QueueCommands.KIND_PLAYED && NativeQueue.Section.of(kind) == null) {
-            return call.reject("kind must be 'played', 'queued', 'list' or 'autoplay'")
+        if (kind != QueueCommands.KIND_PLAYED && kind != QueueCommands.KIND_TOP && NativeQueue.Section.of(kind) == null) {
+            return call.reject("kind must be 'played', 'queued', 'list', 'autoplay' or 'top'")
         }
         val beforeId = stringArg(call, call.getString("beforeId"), "beforeId") ?: return
         val args = Bundle().apply {
             putString(QueueCommands.ARG_TRACKS, arr.toString())
             putString(QueueCommands.ARG_KIND, kind)
             if (beforeId.isNotEmpty()) putString(QueueCommands.ARG_BEFORE, beforeId)
+            putBoolean(QueueCommands.ARG_MINE, call.getBoolean("mine", false) ?: false)
         }
         withController(call) { c -> sendCommand(call, c, QueueCommands.RESTORE, args) }
     }
@@ -755,7 +758,7 @@ class JukePlayerPlugin : Plugin() {
         }
     }
 
-    /** `skipToIndex({ index, expectId? })`; the service checks `expectId` (K2). */
+    /** `skipToIndex({ index, expectId?, lap? })`; the service checks `expectId` (K2). `lap`: a "From the top" row. */
     @PluginMethod
     fun skipToIndex(call: PluginCall) {
         val index = call.intArg("index") ?: return call.reject("index is required")
@@ -768,6 +771,7 @@ class JukePlayerPlugin : Plugin() {
                 val args = Bundle().apply {
                     putInt(QueueCommands.ARG_INDEX, index)
                     putExpect(expectId)
+                    putBoolean(QueueCommands.ARG_LAP, call.getBoolean("lap", false) ?: false)
                 }
                 sendCommand(call, c, QueueCommands.SKIP_TO, args) {
                     if (it.playbackState == Player.STATE_IDLE && !blocked(it)) it.prepare()
