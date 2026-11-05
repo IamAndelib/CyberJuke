@@ -95,7 +95,7 @@ import kotlin.math.roundToInt
  * - skipToIndex, removeItem and moveItem take an optional `expectId` (K2: the id the caller
  *   sees at `index` / `from`); if the item there has another id the call rejects with code
  *   STALE_INDEX and nothing changes. Checked in the service, on the player itself.
- * - restore({ track, kind: 'played' | 'queued' | 'list' | 'autoplay', beforeId }) (K3): Undo of a
+ * - restore({ track, kind: 'played' | 'top' | 'queued' | 'list' | 'autoplay', beforeId }) (K3): Undo of a
  *   removal, see [io.github.iamandelib.cyberjuke.playback.NativeQueue.restore] and restorePlayed.
  * - removeIds({ ids }) (K5): removes every item with one of these ids; if the current one
  *   goes, the next one that stays plays, or playback pauses when none is left.
