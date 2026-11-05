@@ -1,7 +1,8 @@
 import { signal } from '@preact/signals';
 import { useEffect, useRef } from 'preact/hooks';
 import type { Track } from '../../data/model';
-import { deletePlaylist, moveInPlaylist, playlistShown, renamePlaylist } from '../../stores/playlists';
+import { deletePlaylist, moveInPlaylist, playlistShown, renamePlaylist, restorePlaylist } from '../../stores/playlists';
+import { toast } from '../../stores/toast';
 import { removeFromPlaylistWithUndo } from '../../stores/undo';
 import { Art } from '../../ui/components/Art';
 import { BackButton } from '../../ui/components/BackButton';
@@ -169,13 +170,15 @@ export function PlaylistMenu() {
               class="sheet-item"
               onClick={() => {
                 close();
+                // A big step: it asks first, and Undo can still bring it back.
                 askConfirm({
                   title: `Delete ${r.name}?`,
                   ...(r.tracks.length > 0 && { body: `Its ${plural(r.tracks.length, 'song')} stay wherever else they are: Liked, other playlists, the Jukebox.` }),
                   confirm: 'Delete playlist',
                   run: () => {
-                    deletePlaylist(r.id);
+                    const gone = deletePlaylist(r.id);
                     popPage();
+                    if (gone) toast(`Deleted ${r.name}`, undefined, { label: 'Undo', run: () => restorePlaylist(gone) });
                   },
                 });
               }}
