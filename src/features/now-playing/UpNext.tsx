@@ -123,7 +123,8 @@ export function removeWithUndo(it: UpItem, kind: Kind, beforeId: string | null):
   const cur0 = currentId.peek();
   toast('Removed from queue', undefined, {
     label: 'Undo',
-    run: () => (glowRow('queue', it.track.id), void player.restore(it.track, kind, beforeId)),
+    // The glow starts once the song is back, so a slow restore doesn't eat into it.
+    run: () => void player.restore(it.track, kind, beforeId).then(() => glowRow('queue', it.track.id)),
     stale: () => playContext.value !== ctx0 || currentId.value !== cur0,
     ...(it.track.membersOnly && { membersOnly: true }),
   });
