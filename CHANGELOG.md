@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **Save queue as playlist** saves the whole queue, not only the 100 or so songs Up next shows.
+
 ## [1.4.0] - 2026-11-04
 
 ### Added

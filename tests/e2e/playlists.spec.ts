@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { openLibrary, openNowPlaying, seedStorage, start } from '../helpers';
+import { openLibrary, openNowPlaying, seedStorage, SETTINGS_KEY, start } from '../helpers';
 
 /** Your own playlists: Library's Playlists section and a playlist's page (adding comes from the player, the menu and the queue). */
 
@@ -231,6 +231,23 @@ test.describe('adding songs', () => {
     const ids = (file.playlists[0].tracks as { id: string }[]).map((t) => t.id);
     expect(ids[0]).toBe(q.current.id);
     expect(ids.length).toBeGreaterThan(1);
+  });
+
+  test('Save queue as playlist saves the whole list, not only the 101 songs Up next shows', async ({ page }) => {
+    // Autoplay off: a tap on Home plays its whole feed as a list (hundreds of songs).
+    await seedStorage(page, { ...seeded([]), [SETTINGS_KEY]: { autoplay: false } });
+    await start(page);
+    await page.getByTestId('track-play').nth(2).click();
+    await openNowPlaying(page);
+    const current = (await page.getByTestId('np-title').textContent())!.trim();
+    await page.getByTestId('upnext-save').click();
+    await page.getByTestId('name-input').fill('Everything');
+    await page.getByTestId('name-ok').click();
+    await expect(page.getByTestId('toast').last()).toContainText('Saved as Everything');
+    const tracks = (await saved(page)).playlists[0].tracks as { title: string }[];
+    expect(tracks.length).toBeGreaterThan(102);
+    // In list order: the two songs above the one tapped come first.
+    expect(tracks[2].title).toBe(current);
   });
 
   test('≡+ and ♥ are drawn on the same rows: their tops and bottoms line up', async ({ page }) => {
