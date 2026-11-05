@@ -41,9 +41,12 @@ export function Tracks({
   hideAlbum,
   showSaves,
   inLocal,
+  glow,
   chunkKey = null,
 }: {
   tracks: Track[];
+  /** The list's name for the glow on a song Undo puts back (TrackRow). */
+  glow?: string;
   ctx: PlayContext;
   queue?: () => Track[];
   hideGenre?: boolean;
@@ -59,7 +62,7 @@ export function Tracks({
     <>
       <ul class="list" data-testid="track-list">
         {tracks.slice(0, shown).map((t, i) => (
-          <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} hideAlbum={hideAlbum} showSaves={showSaves} inLocal={inLocal} onPlay={play} />
+          <TrackRow key={t.id} track={t} index={i} hideGenre={hideGenre} hideAlbum={hideAlbum} showSaves={showSaves} inLocal={inLocal} glow={glow} onPlay={play} />
         ))}
       </ul>
       {more && <div ref={sentinel} class="list-foot" aria-hidden="true" />}

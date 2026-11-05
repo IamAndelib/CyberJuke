@@ -21,6 +21,7 @@ import {
   toggleLike,
   unlike,
 } from './library';
+import { glowRow } from './glow';
 import { toast } from './toast';
 import { PLAYLISTS_MAX, PLAYLIST_MAX_SONGS, addToPlaylist, createPlaylist, playlists, removeFromPlaylist, restoreToPlaylist } from './playlists';
 
@@ -42,7 +43,7 @@ export function toggleLikeWithUndo(track: Track): boolean {
     return true;
   }
   const r = unlike(track.id);
-  if (r) toast('Removed from Liked songs', undefined, { label: UNDO, run: () => restoreLike(r), ...(r.item.membersOnly && { membersOnly: true }) });
+  if (r) toast('Removed from Liked songs', undefined, { label: UNDO, run: () => (restoreLike(r), glowRow('liked', r.item.id)), ...(r.item.membersOnly && { membersOnly: true }) });
   return false;
 }
 
@@ -108,5 +109,5 @@ export function createWithSongWithUndo(name: string, track: Track): string | nul
 export function removeFromPlaylistWithUndo(id: string, trackId: string): void {
   const name = playlistName(id);
   const r = removeFromPlaylist(id, trackId);
-  if (r) toast(`Removed from ${name}`, undefined, { label: UNDO, run: () => restoreToPlaylist(id, r), ...(r.item.membersOnly && { membersOnly: true }) });
+  if (r) toast(`Removed from ${name}`, undefined, { label: UNDO, run: () => (restoreToPlaylist(id, r), glowRow(`playlist:${id}`, r.item.id)), ...(r.item.membersOnly && { membersOnly: true }) });
 }

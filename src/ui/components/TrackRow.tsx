@@ -4,6 +4,7 @@ import { useId } from 'preact/hooks';
 import { isLocal, type Track } from '../../data/model';
 import { online } from '../../core/network';
 import { currentId, currentPlaysOffline, isPlaying, player, type UpItem } from '../../player';
+import { glow } from '../../stores/glow';
 import { isSaved, savedOffline } from '../../stores/savedOffline';
 import { Icon } from '../icons';
 import { nowPlayingOpen, openMenu } from '../nav';
@@ -143,8 +144,11 @@ export const TrackRow = memo(function TrackRow({
   hideAlbum,
   showSaves,
   inLocal,
+  glow: scope,
 }: {
   track: Track;
+  /** The list it's in, for the glow on a song Undo puts back (stores/glow); none: never glows. */
+  glow?: string;
   /** Plays the list from row `index`. */
   onPlay: (index: number) => void;
   index: number;
@@ -160,6 +164,8 @@ export const TrackRow = memo(function TrackRow({
   // and only the current row follows play/pause.
   const current = useComputed(() => currentId.value === track.id);
   const isCurrent = current.value;
+  // Only the row that starts or stops glowing re-renders.
+  const lit = useComputed(() => scope != null && glow.value?.scope === scope && glow.value.id === track.id).value;
   // Offline only saved liked songs play, in any list, and the current track while it plays or
   // has audio loaded (not the one the app reopened on, unless saved): other rows are dimmed, and
   // a tap says why (the player refuses it). Only the current row follows the player's state.
@@ -171,7 +177,7 @@ export const TrackRow = memo(function TrackRow({
   const album = local && !hideAlbum && track.album;
   const hasMeta = (local && !inLocal) || album || showSaves || track.membersOnly || (track.genre && !hideGenre) || track.by;
   return (
-    <li class={'row' + (isCurrent ? ' is-current' : '') + (off ? ' off' : '')} data-testid="track-row" data-track-id={track.id}>
+    <li class={'row' + (isCurrent ? ' is-current' : '') + (off ? ' off' : '') + (lit ? ' moved' : '')} data-testid="track-row" data-track-id={track.id}>
       <button
         class="row-main"
         aria-disabled={off || undefined}

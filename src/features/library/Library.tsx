@@ -216,12 +216,12 @@ export function LikedPage() {
         </>
       )}
       {tracks.length > 0 && az ? (
-        <SongsAZ tracks={tracks} ctx={LIKED_CTX} testid="liked-list" />
+        <SongsAZ tracks={tracks} ctx={LIKED_CTX} testid="liked-list" glow="liked" />
       ) : (
       <div data-testid="liked-list">
         {tracks.length ? (
           <>
-            <Tracks tracks={tracks} ctx={LIKED_CTX} />
+            <Tracks tracks={tracks} ctx={LIKED_CTX} glow="liked" />
             <div class="list-foot end">— end of tape —</div>
           </>
         ) : (
@@ -436,7 +436,7 @@ function AZSections<T>({ items, name, unknown = () => false, children }: { items
 }
 
 /** Songs A–Z under letters; a tap plays them all in this order. Rendered in chunks, the rest in idle time (the scroller reaches all of them). */
-function SongsAZ({ tracks, ctx, testid, inLocal }: { tracks: Track[]; ctx: PlayContext; testid: string; inLocal?: boolean }) {
+function SongsAZ({ tracks, ctx, testid, inLocal, glow }: { tracks: Track[]; ctx: PlayContext; testid: string; inLocal?: boolean; glow?: string }) {
   const { shown, sentinel, more } = useChunks(tracks.length, `${testid}:az`, undefined, { fill: true });
   const list = useRef({ tracks, ctx });
   list.current = { tracks, ctx };
@@ -455,7 +455,7 @@ function SongsAZ({ tracks, ctx, testid, inLocal }: { tracks: Track[]; ctx: PlayC
             <AZHead letter={sec.letter} />
             <ul class="list">
               {sec.items.map((t, i) => (
-                <TrackRow key={t.id} track={t} index={from + i} inLocal={inLocal} onPlay={play} />
+                <TrackRow key={t.id} track={t} index={from + i} inLocal={inLocal} glow={glow} onPlay={play} />
               ))}
             </ul>
           </section>
