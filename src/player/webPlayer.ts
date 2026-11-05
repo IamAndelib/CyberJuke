@@ -208,7 +208,7 @@ export class WebPlayer implements Player {
   /** AP4, inline: with 5 tracks or fewer to go, ask for more (once per state). */
   private checkLow(): void {
     const seed = this.seed;
-    if (!seed || !this.keepsGoing(seed.id) || !mayAutoplay(this.q.repeat, this.q.length) || !this.q.current) {
+    if (!seed || !this.keepsGoing(seed.id) || !mayAutoplay(this.q.repeat) || !this.q.current) {
       this.lowKey = null;
       return;
     }
@@ -495,7 +495,7 @@ export class WebPlayer implements Player {
   }
 
   async addAutoplay(tracks: Track[], seedId: string): Promise<void> {
-    if (!tracks.length || !this.keepsGoing(seedId) || !mayAutoplay(this.q.repeat, this.q.length) || this.seed?.id !== seedId) return;
+    if (!tracks.length || !this.keepsGoing(seedId) || !mayAutoplay(this.q.repeat) || this.seed?.id !== seedId) return;
     const wasEmpty = !this.q.current;
     this.q.addAuto(tracks);
     this.publish();
@@ -505,7 +505,7 @@ export class WebPlayer implements Player {
   async setAutoplay(enabled: boolean): Promise<void> {
     this.autoplayOn = enabled;
     // A station's next rounds stay: it plays on whatever the setting.
-    if (!enabled && !stationPlaying(this.context, this.seed?.id)) this.q.dropAuto();
+    if (!enabled && !stationPlaying(this.context, this.seed?.id)) this.q.dropOnTheWay();
     this.publish();
   }
 

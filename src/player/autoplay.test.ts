@@ -291,14 +291,14 @@ describe('autoplay', () => {
     expect([...added[0][0]].sort()).toEqual(['r0', 'r1', 'r2', 'r3']);
   });
 
-  it('with repeat all, a single song still gets its first batch: its radio, for repeat to loop', async () => {
+  it('with repeat all, nothing is added, not even for a single song: it loops the list you are in', async () => {
     const seed = track('c0', { artist: 'A0' });
     const { ap, added } = setup({ current: seed, seed, queue: [seed], repeat: 'all' });
     await ap.fill({ left: 0, seedId: 'c0' });
-    expect(added[0][0]).toHaveLength(AUTOPLAY_FIRST);
+    expect(added).toHaveLength(0);
   });
 
-  it('repeat one adds as repeat off does; repeat all with more lined up and an old seed get nothing', async () => {
+  it('repeat one adds as repeat off does; an old seed gets nothing', async () => {
     const seed = track('c0');
     const one = setup({ current: seed, seed, queue: [seed, track('c1')], repeat: 'one' });
     await one.ap.fill({ left: 1, seedId: 'c0' });

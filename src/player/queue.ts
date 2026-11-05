@@ -20,12 +20,13 @@
  *  - autoplay tracks (addAuto) play after the list, in the order added; they are the list on
  *    the way, and moving on to one of them (played on to, or tapped) makes the current list
  *    start there (listStartIndex; the songs before it are history). A radio's first suggestions
- *    join its list instead (joinList). Repeat all loops
- *    what you started: a list's autoplay tracks still to come go (they come back once
- *    repeat is off), but a single song's are its radio, the loop itself, and stay. Repeat
- *    one leaves them: it replays the track when it ends, and a skip moves on as with repeat
- *    off (none at the end, as Media3's). Jumping to an autoplay track keeps the ones after
- *    it (Spotify, YouTube Music): more follow it once they run low;
+ *    join its list instead (joinList). Repeat all loops the list you're in: turning it on drops
+ *    what's on the way (it comes back once repeat is off) and the songs before the current list,
+ *    keeping the playing song and the queued ones, and autoplay adds nothing while it is on
+ *    (mayAutoplay). Turning autoplay off drops what's on the way too, never the list you're in.
+ *    Repeat one leaves them: it replays the track when it ends, and a skip moves on as with
+ *    repeat off (none at the end, as Media3's). Jumping to an autoplay track keeps the ones
+ *    after it (Spotify, YouTube Music): more follow it once they run low;
  *  - played autoplay tracks more than KEEP_PLAYED behind the current one are dropped (a
  *    radio can run for hours), except with repeat all, which loops them, and those at or
  *    after where the current list starts. A removed marker's song hands it to the next one;
@@ -266,10 +267,12 @@ export class Queue<T extends Identified> {
     this.rebuildOrder(true);
   }
 
-  /** Repeat all loops what you started: a list's autoplay tracks to come go; a single song's are its radio and stay. */
+  /** Repeat all loops the list you're in: what's on the way and the history before it go (not the playing song or the queued ones). */
   setRepeat(mode: RepeatMode): void {
     this.repeat = mode;
-    if (mode === 'all' && this.list.filter((e) => !e.auto).length > 1) this.dropAuto();
+    if (mode !== 'all') return;
+    this.dropOnTheWay();
+    this.drop((i) => i < this.listStartIndex);
   }
 
   // ---- editing -------------------------------------------------------------------
@@ -349,15 +352,11 @@ export class Queue<T extends Identified> {
     }
   }
 
-  /** Remove the autoplay tracks still to come. Returns how many went. */
-  dropAuto(): number {
-    const p = this.cur ? this.order.indexOf(this.cur) : -1;
-    const gone = new Set(this.order.slice(p + 1).filter((e) => e.auto));
-    if (!gone.size) return 0;
-    this.list = this.list.filter((e) => !gone.has(e));
-    this.order = this.order.filter((e) => !gone.has(e));
-    if (this.nextStart && gone.has(this.nextStart)) this.nextStart = null;
-    return gone.size;
+  /** Remove the list on the way (its songs that aren't queued): autoplay off, or repeat all. */
+  dropOnTheWay(): void {
+    const way = this.nextStartIndex;
+    if (way >= 0) this.drop((i) => i >= way);
+    this.nextStart = null;
   }
 
   /**
@@ -457,6 +456,13 @@ export class Queue<T extends Identified> {
     if (!old.size) return;
     this.list = this.list.filter((e) => !old.has(e));
     this.order = this.order.filter((e) => !old.has(e));
+  }
+
+  /** Remove the entries `gone` picks by list index, except the playing one and the queued ones. */
+  private drop(gone: (i: number) => boolean): void {
+    const out = new Set(this.list.filter((e, i) => e !== this.cur && !this.queued.has(e) && gone(i)));
+    this.list = this.list.filter((e) => !out.has(e));
+    this.order = this.order.filter((e) => !out.has(e));
   }
 
   /** The tracks before the current one in play order that were heard: what Played shows. */

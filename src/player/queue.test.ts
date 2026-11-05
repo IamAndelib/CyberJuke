@@ -447,7 +447,7 @@ describe('Queue: editing', () => {
   it('with repeat on, nothing is trimmed: a long loop keeps all its tracks lap after lap', () => {
     const q = new Queue();
     q.setList([t('a')], 0);
-    q.addAuto(Array.from({ length: KEEP_PLAYED + 20 }, (_, i) => t(`s${i}`)));
+    q.addAuto(Array.from({ length: KEEP_PLAYED + 20 }, (_, i) => t(`s${i}`)), true);
     q.setRepeat('all');
     for (let i = 0; i < 3 * (KEEP_PLAYED + 21); i++) q.next(true);
     expect(q.current?.id).toBe('a');

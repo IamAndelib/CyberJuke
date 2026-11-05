@@ -9,7 +9,7 @@
  *  - a Signal Radio station playing: its next round (player/radio), all its tracks again;
  *  - Home's Shuffle (its label, shuffleLabel): more random songs from the same pool.
  * Offline, only songs saved on the phone (playable). Nothing while autoplay is off (the setting,
- * C3), but for a station, or with repeat all but for a single song (mayAutoplay).
+ * C3), but for a station, or with repeat all (mayAutoplay).
  */
 import { whenIdle } from '../core/idle';
 import { shuffled } from '../core/shuffle';
@@ -93,7 +93,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       starved = e;
       return;
     }
-    if (!mayAutoplay(s.repeat, s.queue.length)) return;
+    if (!mayAutoplay(s.repeat)) return;
     // A local list ends like an album: nothing from the Jukebox or Global after a song of the phone's own.
     if (isLocal(seed)) return;
     if (e.seedId && e.seedId !== seed.id) return; // a signal for an older seed
