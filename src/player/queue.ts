@@ -31,7 +31,7 @@
  *  - played autoplay tracks more than KEEP_PLAYED behind the current one are dropped (a
  *    radio can run for hours), except with repeat all, which loops them, and those at or
  *    after where the current list starts. A removed marker's song hands it to the next one;
- *    an Undo never moves a marker;
+ *    an Undo puts a song back in its own list: a marker's own song gets the marker back;
  *  - Undo of a remove (restore) puts the track back as its own kind, before the track that
  *    followed it in Up next (a queued one only among the queued, the others never among them),
  *    never at or before the current track; a played track goes back among the played, before
@@ -80,6 +80,9 @@ export class Queue<T extends Identified> {
   /** Where the current list starts (null: its first song) and where the one on the way does (null: none). */
   private listStart: Entry<T> | null = null;
   private nextStart: Entry<T> | null = null;
+  /** The ids of the songs the markers last left because they were removed (until moving on): an Undo of one gives it its marker back. */
+  private listLeft: string | null = null;
+  private nextLeft: string | null = null;
   private nextKey = 1;
   shuffle = false;
   repeat: RepeatMode = 'off';
@@ -180,6 +183,7 @@ export class Queue<T extends Identified> {
     const i = clamp(startIndex, 0, this.list.length - 1);
     this.heard = new Set();
     this.listStart = this.nextStart = null;
+    this.listLeft = this.nextLeft = null;
     this.cur = this.list[i];
     this.settle();
     this.list.splice(i + 1, 0, ...kept);
@@ -367,8 +371,10 @@ export class Queue<T extends Identified> {
    * the queued run), or at the very end. Never at or before the current track. A played one goes
    * back before the played track `beforeId`, else right before the current one. In list order
    * (what shuffle off plays) it goes before the track that follows it; shuffled, a queued one goes
-   * after the queued run there and a list one before the autoplay tracks (as the native queue's),
-   * so both stay ahead once shuffle is off. With nothing playing, it is added (and plays).
+   * after the queued run there and a list one before the autoplay tracks of the list you're in (as
+   * the native queue's), so both stay ahead once shuffle is off. A marker's own song, back right
+   * before the marker's song (or last, the marker gone with it), gets the marker back: it stays in
+   * its own list. With nothing playing, it is added (and plays).
    */
   restore(item: T, kind: Section, beforeId: string | null): void {
     if (!this.cur) {
@@ -394,11 +400,16 @@ export class Queue<T extends Identified> {
     if (played) this.heard.add(entry);
     const follower = this.order[at];
     this.order.splice(at, 0, entry);
-    const firstAuto = this.list.findIndex((e) => e.auto);
+    const firstAuto = this.list.findIndex((e, i) => e.auto && i > this.listStartIndex);
     let li = follower ? this.list.indexOf(follower) : this.list.length;
     if (this.shuffle && kind === 'queued') li = this.afterQueued(this.list);
     if (this.shuffle && kind === 'list') li = firstAuto < 0 ? this.list.length : firstAuto;
     this.list.splice(li, 0, entry);
+    if (kind === 'queued') return;
+    // A marker's own song back right before the marker's song now (or last, the marker gone with it) takes it back.
+    const after = this.list[li + 1] ?? null;
+    if (after === this.listStart && item.id === this.listLeft) this.listStart = entry;
+    if (after === this.nextStart && item.id === this.nextLeft) this.nextStart = entry;
   }
 
   /**
@@ -443,6 +454,7 @@ export class Queue<T extends Identified> {
     this.order = [];
     this.cur = null;
     this.listStart = this.nextStart = null;
+    this.listLeft = this.nextLeft = null;
   }
 
   // ---- internals -----------------------------------------------------------------
@@ -482,6 +494,8 @@ export class Queue<T extends Identified> {
 
   /** A marker's song is going: the marker moves to the next in list order that stays (none: unset). */
   private unmark(gone: ReadonlySet<Entry<T>>): void {
+    if (this.listStart && gone.has(this.listStart)) this.listLeft = this.listStart.item.id;
+    if (this.nextStart && gone.has(this.nextStart)) this.nextLeft = this.nextStart.item.id;
     const next = (m: Entry<T> | null) => (m && gone.has(m) ? this.list.slice(this.list.indexOf(m) + 1).find((e) => !gone.has(e)) ?? null : m);
     this.listStart = next(this.listStart);
     this.nextStart = next(this.nextStart);
@@ -494,7 +508,7 @@ export class Queue<T extends Identified> {
    */
   private settle(on = this.cur !== null && this.movesOn(this.cur)): void {
     if (!this.cur) return;
-    if (on) [this.listStart, this.nextStart] = [this.list.indexOf(this.nextStart!) < this.list.indexOf(this.cur) ? this.nextStart : this.cur, null];
+    if (on) [this.listStart, this.nextStart, this.listLeft, this.nextLeft] = [this.list.indexOf(this.nextStart!) < this.list.indexOf(this.cur) ? this.nextStart : this.cur, null, null, null];
     this.queued.delete(this.cur);
     this.heard.add(this.cur);
   }

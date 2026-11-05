@@ -149,14 +149,16 @@ internal interface QueueHost<T> {
  *   next, in order (P1).
  * - Autoplay tracks ([addAutoplay]) play after the list in the order added; they are the list on
  *   the way, and moving on to one of them (played on to, or tapped) makes the current list start
- *   at it or at the first of them, whichever comes first in list order ([listStartIndex]; the songs
- *   before it are history; shuffled, the batch's songs before it stay ahead). A radio's first suggestions join
- *   its list instead (joinList). Repeat all loops the list you're in: turning it on
- *   drops what's on the way (it comes back once repeat is off) and the songs before the current
- *   list, keeping the playing song and the queued ones, and autoplay adds nothing while it is on
- *   (Stations.mayAutoplay). Turning autoplay off drops what's on the way too, never the list
- *   you're in. A jump ahead ([skipTo]) keeps what it jumps over
- *   next, and the autoplay tracks after it. The played trim leaves the current list alone. A removed marker's song hands it to the next one that stays; an Undo never moves one.
+ *   at it or at the first of them, whichever comes first in list order ([listStartIndex]; the
+ *   songs before it are history; shuffled, the batch's songs before it stay ahead). A radio's
+ *   first suggestions join its list instead (joinList). Repeat all loops the list you're in:
+ *   turning it on drops what's on the way (it comes back once repeat is off) and the songs before
+ *   the current list, keeping the playing song and the queued ones, and autoplay adds nothing
+ *   while it is on (Stations.mayAutoplay). Turning autoplay off drops what's on the way too,
+ *   never the list you're in. A jump ahead ([skipTo]) keeps what it jumps over next, and the
+ *   autoplay tracks after it. The played trim leaves the current list alone. A removed marker's
+ *   song hands it to the next one that stays; an Undo puts a song back in its own list: a
+ *   marker's own song gets the marker back ([regain]).
  * - Played is what was heard ([heardUids]) before the current track in play order. Shuffle turned
  *   on mixes what hasn't played: what Played shows stays behind, in the order it played, and
  *   everything else is mixed ahead (Up next, and the list items before where the list started),
@@ -180,12 +182,15 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     /**
      * Where the current list starts and where the one on the way does, by uid (0: unset, so the
      * list starts at its first song and nothing is on the way). Removals happen outside the
-     * queue (PlaybackService), so [lastUids] remembers the list order to hand a gone marker to
-     * the next song that stays ([onPlaylistChanged]).
+     * queue (PlaybackService), so [last] remembers the list order (uid, id) to hand a gone marker
+     * to the next song that stays ([onPlaylistChanged]); [listLeft] and [nextLeft] are the ids of
+     * the songs they left, so an Undo of one gives it its marker back ([regain]).
      */
     private var listStart = 0L
     private var nextStart = 0L
-    private var lastUids = emptyList<Long>()
+    private var last = emptyList<Pair<Long, String>>()
+    private var listLeft: String? = null
+    private var nextLeft: String? = null
 
     /** List index of the current list's first song. */
     fun listStartIndex(): Int = indexOfUid(listStart).coerceAtLeast(0)
@@ -205,16 +210,31 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     private fun moveOn(index: Int) {
         listStart = host.uidAt(nextStartIndex().takeIf { it in 0 until index } ?: index)
         nextStart = 0L
+        listLeft = null // the lists they left are history now
+        nextLeft = null
     }
 
     /** A marker's song went: it moves to the next one in list order that stays (none: unset). */
     private fun reanchor() {
-        val live = (0 until host.count).map(host::uidAt)
-        val stays = live.toHashSet()
-        fun marker(m: Long) = if (m == 0L || m in stays) m else lastUids.dropWhile { it != m }.drop(1).firstOrNull { it in stays } ?: 0L
-        listStart = marker(listStart)
-        nextStart = marker(nextStart)
-        lastUids = live
+        val live = (0 until host.count).map { host.uidAt(it) to host.idAt(it) }
+        val stays = live.mapTo(HashSet()) { it.first }
+        fun marker(m: Long, left: (String) -> Unit): Long {
+            if (m == 0L || m in stays) return m
+            val k = last.indexOfFirst { it.first == m }
+            if (k < 0) return 0L
+            left(last[k].second)
+            return last.drop(k + 1).firstOrNull { it.first in stays }?.first ?: 0L
+        }
+        listStart = marker(listStart) { listLeft = it }
+        nextStart = marker(nextStart) { nextLeft = it }
+        last = live
+    }
+
+    /** An Undo put a song back at [at]: a marker's own song, right before the marker's song now (or last, the marker gone with it), takes it back. */
+    private fun regain(at: Int) {
+        val after = if (at + 1 < host.count) host.uidAt(at + 1) else 0L
+        if (after == listStart && host.idAt(at) == listLeft) listStart = host.uidAt(at)
+        if (after == nextStart && host.idAt(at) == nextLeft) nextStart = host.uidAt(at)
     }
 
     private fun isHeard(index: Int): Boolean = host.uidAt(index).let { it != 0L && it in heard }
@@ -323,6 +343,8 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         pending.retainAll(keptSerials.toHashSet())
         listStart = 0L
         nextStart = 0L
+        listLeft = null
+        nextLeft = null
         if (items.isEmpty()) {
             pending.clear()
             host.setItems(emptyList(), emptyList(), 0, 0L)
@@ -356,6 +378,8 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         this.heard.clear()
         this.listStart = 0L
         this.nextStart = 0L
+        listLeft = null
+        nextLeft = null
         if (items.isEmpty()) {
             host.setItems(emptyList(), emptyList(), 0, 0L)
             return
@@ -485,6 +509,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
                 // The list index is the place in list order; with shuffle on, right before the
                 // anchor, else at the very end.
                 host.insertAuto(anchor, listOf(item))
+                regain(anchor ?: (host.count - 1))
                 if (anchor != null) placeAhead(listOf(anchor), anchor + 1) else placeLast(host.count - 1)
                 enforceShuffleOrder()
             }
@@ -493,6 +518,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
                 // list); the end of the list part is after its last item ahead.
                 val at = anchor ?: up.lastOrNull { sectionAt(it) == Section.LIST }?.plus(1) ?: afterQueuedRun()
                 host.insertTagged(at, listOf(item), listOf(0L))
+                regain(at)
             } else {
                 restoreShuffledListItem(item, anchor)
             }
@@ -510,6 +536,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         val at = beforeId?.let { id -> played().firstOrNull { host.idAt(it) == id } } ?: cur
         host.insertTagged(at, listOf(item), listOf(0L))
         hear(at)
+        regain(at)
         if (!host.shuffleEnabled) return
         // Inserted at a random place in the shuffle order (Media3's): right before what follows it.
         val order = host.shuffleOrder()?.toMutableList() ?: return
@@ -520,8 +547,10 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
 
     /** Shuffle on: the list index only matters later; the shuffle order decides when it plays. */
     private fun restoreShuffledListItem(item: T, anchor: Int?) {
-        val at = (0 until host.count).firstOrNull { host.isAutoAt(it) } ?: host.count
+        // Before the first autoplay item of the list you're in (after its first song), so it stays in it.
+        val at = (listStartIndex() + 1 until host.count).firstOrNull { host.isAutoAt(it) } ?: host.count
         host.insertTagged(at, listOf(item), listOf(0L))
+        regain(at)
         val order = host.shuffleOrder() ?: return
         val anchorNow = anchor?.let { if (it >= at) it + 1 else it }
         val rest = order.filter { it != at }.toMutableList()
