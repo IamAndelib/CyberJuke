@@ -1,6 +1,6 @@
 # The queue: list, shuffle, repeat and autoplay (1.4.1): design
 
-Status: approved by the maintainer on 5 Nov 2026 ("go ahead with the queue rules"); version 2, below, approved the same day ("approve the doc"): radios, Repeat all, Signal stations and Shuffle the Jukebox.
+Status: approved by the maintainer on 5 Nov 2026 ("go ahead with the queue rules"); version 2 approved the same day ("approve the doc"); version 3, below, the same day: everything is a list, and some lists lead on to the next: radios, Repeat all, Signal stations and Shuffle the Jukebox.
 Main at writing: 0aa6e69 (1.4.0 + #147, #148); version 2 at 02d7ec3 (rules 4 and 3 built: #152, #154).
 
 ## 1. Why
@@ -26,50 +26,42 @@ Its findings, verified in the code:
 | F6 | A radio with one song queued: Repeat all drops its suggestions | the "more than one list song" check counts queued songs | bug, both |
 | F7 | Web player only: Undo while shuffled, then shuffle off, can put a song behind the current one | `restore` uses list order before the next row in play order | bug, web |
 
-## 2. What you play: a list or a radio
+## 2. Everything is a list
 
-Every way of starting music is one of two kinds. The kind is set when it starts; changing a setting halfway doesn't change it.
+Nothing in the queue is endless any more. Everything you play is a list, and some lists lead on to the next one:
 
-**A list** has an end, so it has a top to come back to:
-- an album, a playlist, Liked, Recently played, an artist, a genre's page;
-- Home, Most saved, Search or Global with Autoplay off: the feed from the tapped song on, as it shows;
-- a Signal Radio station: a list that leads on to the next station (section 4).
+| You play | The list | When it ends (Repeat off) |
+|---|---|---|
+| An album, a playlist, Liked, Recently played, an artist, a genre's page | its songs | a Vibe follows (with Vibe on), else it stops |
+| A song tapped on Home (All or a genre, Latest or Most saved), in Search or in Global | a **Vibe batch**: the tapped song and 24 like it | the next Vibe batch |
+| The same with Vibe off | the feed from the tapped song on, as it shows | it stops |
+| Shuffle the Jukebox (all, or one genre) | a batch of 25 random songs from its pool | the next random batch, whatever the Vibe setting |
+| A Signal Radio station | its 32-50 songs | the next station (section 4), whatever the Vibe setting |
 
-**A radio** has no end, so it has no top:
-- a song tapped on Home (All or a genre, Latest or Most saved), in Search or in Global, with Autoplay on: that song, then endless suggestions. Home and Search start a Vibe; the Genres, Artists and album pages play lists;
-- **Shuffle the Jukebox** (all of it, or one genre): endless random songs, also with Autoplay off. It is one of the app's own features: the shuffle itself goes on, it isn't a suggestion.
+Home and Search start a Vibe; the Genres, Artists and album pages play their lists.
 
 ## 3. The rules
 
-1. **The list always comes first.** Suggestions play only after a list, shuffle or not. Nothing but ✕ (or sign-out) takes a list song out.
-2. **Suggestions come after a list, and never end.**
-   - With Autoplay on and Repeat off, they show at the end of Up next, under "Autoplay · similar to …", fetched once the app is idle after the list starts.
-   - They come in **batches of 25**. Up next shows the batch, with a line under it: "More like these when they run out." The next batch is fetched when 5 songs are left (as InnerTune and Metrolist refill), not when the last one starts, so the player always has the next song ready: for gapless and crossfade, on a slow connection, and when Android closes the app's screen with the phone locked (the app's side picks Jukebox songs).
-   - Nothing loads because you scrolled: the queue changes only when the music needs it, so Save queue as playlist saves what's on screen.
-   - New batches always go at the end.
-   - With Autoplay off, or Repeat all on, none are shown or added.
-3. **Shuffle mixes what hasn't played** (built: #154).
-   - What stays behind is exactly what Played shows; everything in Up next, plus list songs before the start, is mixed ahead.
-   - The list is mixed first, then the suggestions among themselves. New suggestions while shuffled go at the end, mixed among themselves.
-   - Shuffle off restores list order.
-4. **Each song keeps its own label** (built: #152). A row's section comes from its own kind (queued by you, list, autoplay), never from its position; a heading shows each time the kind changes; "N of M" counts list songs only; Undo puts a song back as its own kind, in its own place.
-5. **Repeat all on a list loops the list, and Up next shows it.**
-   - After the list's last song, Up next goes on with the next lap under **"From the top"**: from the first song up to the one before the playing song (approved concept A). Its rows have ↑ ↓ ✕, which act on the list itself, so a move changes every lap from then on; with shuffle on, ✕ only, as everywhere. The first ↑ and the last ↓ are off.
-   - With shuffle on, every lap plays the same mixed order (Media3's documented default), and "From the top" shows it.
-   - No suggestions while it's on: those waiting come back when Repeat is off (Apple Music hides Autoplay under Repeat).
-6. **A radio has no Repeat all.**
-   - The repeat button goes Off → Repeat song → Off. The notification, lock screen, headphones and car do the same: a request for Repeat all gives Repeat song, so cycling there still works.
-   - Starting a radio while Repeat all is on turns repeat off; Repeat song stays.
-   - To loop what a radio found: Save queue as playlist, then play the playlist with Repeat all.
-   - This replaces the old exception "a single song's suggestions are its radio, the loop itself". Repeat all now always means one thing: loop the list.
-7. **Repeat one** replays the song when it ends, and Next moves on (unchanged).
-8. **Shuffle the Jukebox is endless.**
-   - Up next shows its songs as one list, "Next from: Jukebox shuffle" (or "Jukebox shuffle · rock"), not as a list plus suggestions.
-   - In batches of 25, the next one fetched when 5 are left, as in rule 2.
-   - New songs are random picks from the same pool (the whole Jukebox or the genre) not yet in the queue; once the pool is used up, a fresh shuffle of all of it, never starting with the song just played.
-   - It ignores the Autoplay setting. Repeat as on any radio (rule 6).
-
-**Save queue as playlist** (unchanged): with shuffle off, the whole queue in list order (Played, playing, Up next); with shuffle on, the order shown, then the rest. Duplicates dropped, at most 1000 songs. With suggestions, it saves what's in the queue then: suggestions heard more than 50 songs ago are no longer in it (the queue drops them to stay light).
+1. **The list comes first.** A Vibe plays only after a list, shuffle or not. Nothing but ✕ (or sign-out) takes a list song out.
+2. **The current list and what's on the way.**
+   - Up next shows the rest of the current list. Below it, under **"On the way"**, the next list (a Vibe batch, a Jukebox shuffle batch, the next station) shows one more song each time a song of the current list finishes, so about 25 songs always follow the playing one.
+   - "On the way" rows look like any row but have no ↑ ↓ ✕; a tap on one starts that list from it, and the songs it jumped over play right after it (as a tap ahead does today).
+   - The next list is fetched in full as soon as the current one starts, so the player always has it: for gapless and crossfade, on a slow connection, and when Android closes the app's screen with the phone locked (the app's side picks Jukebox songs). Nothing loads because you scrolled.
+   - With Vibe off, a list that ends has nothing on the way.
+3. **Shuffle, reorder, ✕ and Save act on the current list.**
+   - Shuffle on mixes what hasn't played of the current list; what Played shows stays behind. The next list is mixed when it starts, and "On the way" shows it in that mixed order.
+   - **Shuffle off never skips a song, in every list:** every song of the current list not yet heard stays ahead, in list order; Played keeps what you heard, as you heard it. (Before, an album went back to list order from the playing song's place, as Spotify does, and the unheard songs before it only came round with Repeat all.)
+   - [Save queue as playlist] saves the current list: what you heard of it, the playing song and the rest of it. For an album, the album; for a Vibe batch, at most 26 songs. Duplicates dropped, at most 1000 songs.
+4. **Each song keeps its own label** (built: #152). A row's section comes from its own kind, never from its position; a heading shows each time the kind changes; "N of M" counts the current list's songs; Undo puts a song back as its own kind, in its own place.
+5. **Repeat all loops the current list**: an album, a Vibe batch, a Jukebox shuffle batch, a station.
+   - After its last song, Up next goes on under **"From the top"** with the next lap, from the first song up to the one before the playing song (approved concept A). Its rows have ↑ ↓ ✕, which act on the list itself; with shuffle on, ✕ only. The first ↑ and the last ↓ are off.
+   - With shuffle on, every lap plays the same mixed order, and "From the top" shows it.
+   - Nothing is on the way while it's on.
+   - Media3 loops its whole queue, not part of it, so while Repeat all is on the player holds only the current list and the songs you queued: songs heard from earlier lists leave the queue (they stay in Recently played, and don't come back to Played when Repeat is off), and the next list is set aside and comes back when Repeat is off. Jumping back at the end instead would fight gapless and crossfade.
+   - So with Repeat all on, Previous on the list's first song goes to its last song, as on any player: the list is a loop. Played shows only this list's songs meanwhile.
+   - This replaces version 2's "a radio has no Repeat all" and the old single-song exception: Repeat all means one thing everywhere.
+6. **Repeat one** replays the song when it ends, and Next moves on (unchanged).
+7. **Previous walks back through what you heard,** across lists: from the first song of a new batch, Previous plays the last song heard of the batch before, and Next comes back to the new batch where you were. The list ahead stays the current list; an earlier one never becomes current again.
 
 ## 4. Signal Radio stations: lists that lead on
 
@@ -81,17 +73,16 @@ Each station is a list of 32-50 songs. When it ends, the next station follows, t
 | Repeat all | Stays on this station: it loops, with "From the top". | Stays on this station, mixed. |
 | Repeat song | Repeats the song. | Repeats the song. |
 
-- **Always going:** stations ignore the Autoplay setting (as now) and never end, so suggestions never follow them.
-- **Robust in the background:** the next station is queued in full as soon as the current one starts (30-50 songs, an hour or two ahead), so playback goes on when Android closes the app's screen with the phone locked. Up next shows it under "Next from: Signal Radio · <station>".
+- **Always going:** stations ignore the Vibe setting (as now) and never end, so no Vibe follows them.
+- The next station is on the way (rule 2): fetched in full when the current one starts, an hour or two ahead.
 - **Labels follow the song:** "Playing from", the Radio tab's on-air mark and "N of M" (within its station) change when the next station's first song plays.
 - **Repeat all already on** when a station is tapped: it loops that station, as any list.
-- **Shuffle turned on or off mid-station:** rule 3, within the queue as it is.
 - **Offline:** unsaved songs are dimmed as everywhere, and Next skips to the next saved one, across stations; with none saved, "No carrier", as now.
 
 ## 5. Also looked at
 
 - **F5 (native removes an upcoming song that fails to pre-load):** not changed. In Media3 1.11 a pre-loading period's error is held (loading stops) and only thrown once that period becomes the playing one, and `handleIoException` tags every source error with the playing period. So `perVideoFailure` takes its skip-in-place branch; the removal branch doesn't look reachable from a load error, and no failing test shows it. The private-DNS report is more likely F3 (Up next ending at the last song, S1 playing next unseen), which rule 5 makes visible.
-- **F6 (a radio with a song queued lost its suggestions under Repeat all):** fixed in #155, which rule 6 makes moot: a radio has no Repeat all. #155 is closed unmerged.
+- **F6 (a radio with a song queued lost its suggestions under Repeat all):** fixed in #155, which version 3 makes moot: Repeat all loops the current list (a Vibe batch included) with the songs you queued, and drops nothing. #155 is closed unmerged.
 
 **Sources:**
 - YouTube Music: an Autoplay preview always at the end of the queue.
@@ -106,7 +97,7 @@ Each station is a list of 32-50 songs. When it ends, the next station follows, t
 
 ## 5a. Vibe (after the queue rules)
 
-Autoplay is renamed **Vibe**: the same feature, with wording in Settings and Up next that says what it does (shown as a concept first). One change to how it picks:
+Autoplay is renamed **Vibe** (this doc says Vibe throughout): the same feature, with wording in Settings and Up next that says what it does (shown as a concept first). One change to how it picks:
 - **No repeats within a session.** Today a Jukebox suggestion skips the queue and the last 50 songs heard. Vibe skips every song heard since the current list or radio started, read from Recently played (which keeps up to 1000 songs or 3 days, with when each played; no new store, and it survives a restart). New Cyberspace posts are unheard, so they come up as usual.
 - When every match has been heard (a small genre, or offline with a few saved songs), it falls back to skipping the last 50, as today, so it never goes quiet.
 - Cost: one filter of at most 1000 entries per refill (about every 20 songs), on the app's side only; the phone's player doesn't change.
@@ -117,18 +108,20 @@ Autoplay is renamed **Vibe**: the same feature, with wording in Settings and Up 
 ## 6. How it's built
 
 Each step ships as its own PR:
-- the web side (`src/player/queue.ts`, `webPlayer.ts`, `autoplay.ts`, `radio.ts`, `types.ts`, `UpNext.tsx`, `PlayerUI.tsx`, `ui/playAll.ts`, `features/home/Home.tsx`) and the native side (`QueueOrder.kt`, `NativeQueue`, `PlaybackService.kt`, `StateEncoder`, `Stations.kt`, `ModeButtons`) change together;
-- the shared spec `tests/spec/queue-rules.json` gets the case first, failing on both runners (Vitest `queueRules.test.ts`, JVM `QueueRulesTest.kt`), then the fix.
+- the web side (`src/player/queue.ts`, `webPlayer.ts`, `autoplay.ts`, `radio.ts`, `types.ts`, `UpNext.tsx`, `PlayerUI.tsx`, `ui/playAll.ts`, `features/home/Home.tsx`) and the native side (`QueueOrder.kt`, `NativeQueue`, `PlaybackService.kt`, `StateEncoder`, `LastSession.kt`, `Stations.kt`) change together;
+- the shared spec `tests/spec/queue-rules.json` gets the case first, failing on both runners (Vitest `queueRules.test.ts`, JVM `QueueRulesTest.kt`), then the fix;
+- UI changes get concept screenshots first.
 
 Order:
 1. **Labels:** rule 4, F2. Done (#152).
-2. **Shuffle:** rule 3, F1, F7. Done (#154).
-3. **Radios:** rule 6 and section 2: Repeat on a radio (app, notification, other controllers), the single-song exception removed. #155 closed.
-4. **Repeat all:** rule 5, F3: "From the top" with ↑ ↓ ✕.
-5. **Signal stations:** section 4.
-6. **Shuffle the Jukebox:** rule 8.
-7. **Suggestions:** rules 1 and 2, F4: from the list's start, appended in order, in batches of 25 with the next fetched at 5 left (replaces concept q1's loading as you scroll), with the button back up to the playing song (concept q2).
-8. **Vibe:** section 5a: the rename (wording concept first), then session memory.
+2. **Shuffle:** rule 3's first part, F1, F7. Done (#154).
+3. **Lists in the queue:** each song carries the number of the list it belongs to, on both sides, in what the phone sends the app and in the saved session; shuffle mixes the current list only, and shuffle off never skips a song (rule 3). No UI change.
+4. **Repeat all loops the current list:** rule 5, F3: the player holds only it, "From the top" with ↑ ↓ ✕. The single-song exception goes.
+5. **Vibe batches and "On the way":** rules 2, 3 (Save) and 7, F4: batches of 25 fetched when a batch starts, a Home tap starting one (concept screenshots of "On the way" first).
+6. **Signal stations:** section 4, on steps 3-5.
+7. **Shuffle the Jukebox:** batches of 25 random songs, on step 5.
+8. **Up to the playing song:** the button in Up next (concept q2).
+9. **Vibe:** section 5a: the rename (wording concept first), session memory, a Home genre staying in its genre first.
 
 Each PR needs:
 - `npm run check`;
@@ -139,7 +132,7 @@ Each PR needs:
 
 TESTING.md gets phone checks for:
 - Repeat all from a mid-list start, with a private DNS on;
-- shuffle after Previous;
-- the repeat button on a Home song (Off, Repeat song), also from the notification;
-- a station played to its end, with the screen locked, shuffle off and on;
-- a long session's suggestions.
+- shuffle after Previous, and shuffle off mid-list (no song skipped);
+- a Vibe from a Home song past its first batch, with the screen locked;
+- Previous from the first song of a new batch;
+- a station played to its end, with the screen locked, shuffle off and on.
