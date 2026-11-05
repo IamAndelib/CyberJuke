@@ -1024,6 +1024,80 @@
         { "op": "restore", "id": "z", "kind": "list", "beforeId": null },
         { "op": "expect", "current": "a", "upNextStartsWith": ["s2"], "listSet": ["b", "c", "d", "z"], "autoplayIds": ["s2", "s1"] }
       ]
+    },
+    {
+      "name": "playing on into the suggestions moves on: the current list starts at the first of them",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
+        { "op": "expect", "listStart": "a" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "expect", "current": "s1", "listStart": "s1", "upNext": ["s2", "s3"] }
+      ]
+    },
+    {
+      "name": "a tap on a suggestion moves on from it; the ones it jumped over play next",
+      "list": ["a"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
+        { "op": "skipTo", "id": "s3" },
+        { "op": "expect", "current": "s3", "listStart": "s3", "upNext": ["s1", "s2"] }
+      ]
+    },
+    {
+      "name": "Previous from the first song of the new list plays the last one heard; Next comes back, and the new list stays current",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2"] },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "prev", "positionMs": 0 },
+        { "op": "expect", "current": "b", "listStart": "s1", "upNext": ["s1", "s2"] },
+        { "op": "next" },
+        { "op": "expect", "current": "s1", "listStart": "s1" }
+      ]
+    },
+    {
+      "name": "suggestions added after moving on are on the way, after the current list",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2", "s3"] },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "addAuto", "ids": ["t1", "t2"] },
+        { "op": "expect", "current": "s1", "listStart": "s1", "upNext": ["s2", "s3", "t1", "t2"] }
+      ]
+    },
+    {
+      "name": "a new list starts from its first song",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1"] },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "expect", "listStart": "s1" },
+        { "op": "setList", "ids": ["x", "y"], "start": 1 },
+        { "op": "expect", "current": "y", "listStart": "x" }
+      ]
+    },
+    {
+      "name": "a radio's first suggestions join its list",
+      "list": ["a"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["s1", "s2"], "joinList": true },
+        { "op": "expect", "listStart": "a" },
+        { "op": "addAuto", "ids": ["t1"] },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "expect", "current": "s2", "listStart": "a", "upNext": ["t1"] }
+      ]
     }
   ]
 }

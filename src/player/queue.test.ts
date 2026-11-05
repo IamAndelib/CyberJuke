@@ -413,13 +413,22 @@ describe('Queue: editing', () => {
     const q = new Queue();
     q.setList([t('a'), t('b')], 0);
     const autos = Array.from({ length: KEEP_PLAYED + 20 }, (_, i) => t(`s${i}`));
-    q.addAuto(autos);
+    q.addAuto(autos, true);
     for (let i = 0; i < KEEP_PLAYED + 10; i++) q.next(true);
     expect(q.current?.id).toBe(`s${KEEP_PLAYED + 8}`);
     // The list tracks stay (they're within the oldest); only played autoplay tracks went.
     expect(ids(q.items).slice(0, 3)).toEqual(['a', 'b', 's8']);
     expect(q.index).toBe(KEEP_PLAYED + 2);
     expect(q.upNext()).toHaveLength(11);
+  });
+
+  it('the trim leaves the current list: songs from where it starts stay, however far behind', () => {
+    const q = new Queue();
+    q.setList([t('a'), t('b')], 0);
+    q.addAuto(Array.from({ length: KEEP_PLAYED + 20 }, (_, i) => t(`s${i}`)));
+    for (let i = 0; i < KEEP_PLAYED + 10; i++) q.next(true);
+    expect(ids(q.items).slice(0, 3)).toEqual(['a', 'b', 's0']);
+    expect(q.listStartIndex).toBe(2);
   });
 
   it('with repeat on, nothing is trimmed: a long loop keeps all its tracks lap after lap', () => {

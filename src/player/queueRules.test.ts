@@ -51,7 +51,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             q.queueNext((s.ids as string[]).map(t));
             break;
           case 'addAuto':
-            q.addAuto((s.ids as string[]).map(t));
+            q.addAuto((s.ids as string[]).map(t), s.joinList === true);
             break;
           case 'skipTo':
             q.skipTo(indexOf(s.id));
@@ -102,6 +102,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
               const want = s.upNextStartsWith as string[];
               expect(ids(q.upNext()).slice(0, want.length)).toEqual(want);
             }
+            if ('listStart' in s) expect(q.items[q.listStartIndex]?.id).toBe(s.listStart);
             if ('queued' in s) expect(q.queuedCount).toBe(s.queued);
             if ('list' in s) expect(ids(q.items)).toEqual(s.list);
             if ('played' in s) expect(q.previousIndices().map((i) => q.items[i].id)).toEqual(s.played);
