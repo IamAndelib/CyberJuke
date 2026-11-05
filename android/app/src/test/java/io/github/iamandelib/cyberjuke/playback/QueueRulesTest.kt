@@ -59,7 +59,7 @@ class QueueRulesTest {
             when (s.getString("op")) {
                 "setList" -> p.queue.setList(strings(s.getJSONArray("ids")), s.optInt("start", 0))
                 "queueNext" -> p.queue.queueNext(strings(s.getJSONArray("ids")))
-                "addAuto" -> p.queue.addAutoplay(strings(s.getJSONArray("ids")))
+                "addAuto" -> p.queue.addAutoplay(strings(s.getJSONArray("ids")), s.optBoolean("joinList", false))
                 "restore" -> {
                     val before = if (s.isNull("beforeId")) null else s.getString("beforeId")
                     val kind = s.getString("kind")
@@ -106,6 +106,7 @@ class QueueRulesTest {
             val want = strings(s.getJSONArray("upNextStartsWith"))
             assertEquals("upNextStartsWith in $where (got $up)", want, up.take(want.size))
         }
+        if (s.has("listStart")) assertEquals("listStart in $where", s.getString("listStart"), p.ids[p.queue.listStartIndex()])
         if (s.has("queued")) {
             val pending = p.queue.pendingSerials
             val queued = up.takeWhile { p.serials[p.ids.indexOf(it)] in pending }.size

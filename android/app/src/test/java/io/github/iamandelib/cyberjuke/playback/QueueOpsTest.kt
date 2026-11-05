@@ -174,7 +174,7 @@ class QueueOpsTest {
     @Test
     fun playedAutoplayItemsAreTrimmedToTheLastFifty() {
         val p = player(listOf("a", "b"))
-        p.queue.addAutoplay((1..80).map { "s$it" })
+        p.queue.addAutoplay((1..80).map { "s$it" }, joinList = true)
         repeat(1 + 61) { p.nextAuto() } // b, then s1..s61: 60 autoplay items played
         assertEquals("s61", p.ids[p.current])
         assertEquals(10, p.queue.trimPlayedAuto(50))
@@ -183,5 +183,29 @@ class QueueOpsTest {
         assertEquals(listOf("a", "b") + (11..80).map { "s$it" }, p.ids.toList())
         assertEquals(0, p.queue.trimPlayedAuto(50))
         assertEquals((62..80).map { "s$it" }, p.upNext())
+    }
+
+    @Test
+    fun theTrimLeavesTheCurrentList() {
+        val p = player(listOf("a", "b"))
+        p.queue.addAutoplay((1..80).map { "s$it" })
+        repeat(1 + 61) { p.nextAuto() }
+        assertEquals(0, p.queue.trimPlayedAuto(50))
+        assertEquals(2, p.queue.listStartIndex())
+        assertEquals(listOf("a", "b") + (1..80).map { "s$it" }, p.ids.toList())
+    }
+
+    @Test
+    fun aRemovedMarkerPassesToTheNextSongThatStays() {
+        val p = player(listOf("a", "b"))
+        p.queue.addAutoplay(listOf("s1", "s2", "s3"))
+        p.remove(p.ids.indexOf("s1"))
+        assertEquals("s2", p.ids[p.queue.nextStartIndex()])
+        p.remove(p.ids.indexOf("s3"))
+        p.remove(p.ids.indexOf("s2"))
+        assertEquals(-1, p.queue.nextStartIndex())
+        p.queue.addAutoplay(listOf("t1"))
+        p.queue.dropUpcomingAuto()
+        assertEquals(-1, p.queue.nextStartIndex())
     }
 }
