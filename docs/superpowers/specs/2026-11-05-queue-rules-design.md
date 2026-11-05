@@ -1,6 +1,6 @@
 # The queue: list, shuffle, repeat and autoplay (1.4.1): design
 
-Status: approved by the maintainer on 5 Nov 2026 ("go ahead with the queue rules"), revised the same day (version 2, below): radios, Repeat all, Signal stations and Shuffle the Jukebox.
+Status: approved by the maintainer on 5 Nov 2026 ("go ahead with the queue rules"); version 2, below, approved the same day ("approve the doc"): radios, Repeat all, Signal stations and Shuffle the Jukebox.
 Main at writing: 0aa6e69 (1.4.0 + #147, #148); version 2 at 02d7ec3 (rules 4 and 3 built: #152, #154).
 
 ## 1. Why
@@ -104,6 +104,15 @@ Each station is a list of 32-50 songs. When it ends, the next station follows, t
 - Auxio and SimpMusic `BetterShuffleOrder.cloneAndInsert`: added items as one block.
 - Media3 `Timeline.getNextWindowIndex`: repeat all goes to the first item.
 
+## 5a. Vibe (after the queue rules)
+
+Autoplay is renamed **Vibe**: the same feature, with wording in Settings and Up next that says what it does (shown as a concept first). One change to how it picks:
+- **No repeats within a session.** Today a Jukebox suggestion skips the queue and the last 50 songs heard. Vibe skips every song heard since the current list or radio started, read from Recently played (which keeps up to 1000 songs or 3 days, with when each played; no new store, and it survives a restart). New Cyberspace posts are unheard, so they come up as usual.
+- When every match has been heard (a small genre, or offline with a few saved songs), it falls back to skipping the last 50, as today, so it never goes quiet.
+- Cost: one filter of at most 1000 entries per refill (about every 20 songs), on the app's side only; the phone's player doesn't change.
+- **Not doing:** continuing with Global songs once the Jukebox is used up. Nobody can realistically hear all of it, and it would send Jukebox sessions to YouTube Music, which they never do today.
+- A song played from Global keeps continuing with YouTube Music's radio for it, as now.
+
 ## 6. How it's built
 
 Each step ships as its own PR:
@@ -118,6 +127,7 @@ Order:
 5. **Signal stations:** section 4.
 6. **Shuffle the Jukebox:** rule 8.
 7. **Suggestions:** rules 1 and 2, F4: from the list's start, appended in order, endless loading in Up next (concept q1), with the button back up to the playing song (concept q2).
+8. **Vibe:** section 5a: the rename (wording concept first), then session memory.
 
 Each PR needs:
 - `npm run check`;
