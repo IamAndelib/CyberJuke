@@ -263,7 +263,9 @@ test.describe('adding songs', () => {
     await page.getByTestId('album-play').click();
     await openNowPlaying(page);
     await toListEnd(page);
+    const last = (await page.getByTestId('np-title').textContent())!;
     await page.getByTestId('np-next').click();
+    await expect(page.getByTestId('np-title')).not.toHaveText(last);
     // Read what the list is once we are in it, not before (a refill in between could change it).
     const n = (await queueState(page)).autoplay.length + 1; // the song playing is the list's first
     expect(n).toBeGreaterThan(1);
