@@ -29,11 +29,12 @@
  *    followed it in Up next (a queued one only among the queued, the others never among them),
  *    never at or before the current track; a played track goes back among the played, before
  *    the one that followed it, else right before the current;
- *  - "played" is what was heard: the tracks of this list that have been current (a list
- *    started mid-way hasn't played the ones before it). Shuffle turned on mixes every track
- *    not heard yet, the list's ahead of the autoplay ones, and new autoplay tracks join in at
- *    random places; the heard ones stay behind, in the order they played. Off puts the list
- *    order back.
+ *  - "played" is what was heard before the current track: the tracks of this list before it in
+ *    play order that have been current (a list started mid-way hasn't played the ones before
+ *    it). Shuffle turned on mixes what hasn't played: what Played shows stays behind, in the
+ *    order it played, and everything else is mixed ahead (Up next, and the list tracks before
+ *    where the list started), the list's ahead of the autoplay ones; new autoplay tracks go at
+ *    the end, mixed among themselves. Off puts the list order back.
  *
  * Up next labels each track by its own kind, never by its place: queued by you, the
  * list, autoplay (sectionsOf in ./types).
@@ -67,7 +68,7 @@ export class Queue<T extends Identified> {
   private cur: Entry<T> | null = null;
   /** Entries added with queueNext() that haven't become current yet. */
   private queued = new Set<Entry<T>>();
-  /** Entries of this list that have been current: heard ("Played" shows them). */
+  /** Entries of this list that have been current: heard ("Played" shows the ones before the current one). */
   private heard = new Set<Entry<T>>();
   private nextKey = 1;
   shuffle = false;
@@ -109,12 +110,7 @@ export class Queue<T extends Identified> {
 
   /** List indices of the tracks before the current one in play order, oldest first, at most `max`. */
   previousIndices(max = UP_NEXT_MAX): number[] {
-    const p = this.cur ? this.order.indexOf(this.cur) : 0;
-    return this.order
-      .slice(0, p)
-      .filter((e) => this.heard.has(e))
-      .slice(-max)
-      .map((e) => this.list.indexOf(e));
+    return this.played().slice(-max).map((e) => this.list.indexOf(e));
   }
 
   /** How many of the first upNext() items were queued by the user ("Queued by you"). */
@@ -302,32 +298,20 @@ export class Queue<T extends Identified> {
       for (const e of entries.slice(1)) this.queued.add(e);
       return;
     }
-    const at = (arr: Entry<T>[]) => {
-      let k = arr.indexOf(this.cur!) + 1;
-      while (k < arr.length && this.queued.has(arr[k])) k++;
-      return k;
-    };
-    this.list.splice(at(this.list), 0, ...entries);
-    this.order.splice(at(this.order), 0, ...entries);
+    this.list.splice(this.afterQueued(this.list), 0, ...entries);
+    this.order.splice(this.afterQueued(this.order), 0, ...entries);
     for (const e of entries) this.queued.add(e);
   }
 
   /**
    * Autoplay: append tracks after everything else, in list and play order (with shuffle on,
-   * at random places among the autoplay tracks still to come). With nothing playing, the
-   * first one becomes current.
+   * mixed among themselves). With nothing playing, the first one becomes current.
    */
   addAuto(items: T[]): void {
     if (!items.length) return;
     const entries = items.map((i) => ({ ...this.entry(i), auto: true }));
     this.list.push(...entries);
-    if (this.shuffle && this.cur) {
-      // Shuffled: each goes in at a random place among the autoplay tracks still to come.
-      const p = this.order.indexOf(this.cur);
-      let start = p + 1;
-      for (let k = p + 1; k < this.order.length; k++) if (!this.order[k].auto) start = k + 1;
-      for (const e of entries) this.order.splice(start + Math.floor(this.rand() * (this.order.length - start + 1)), 0, e);
-    } else this.order.push(...entries);
+    this.order.push(...(this.shuffle && this.cur ? shuffled(entries, this.rand) : entries));
     if (!this.cur) {
       this.cur = entries[0];
       this.settle();
@@ -349,8 +333,10 @@ export class Queue<T extends Identified> {
    * one that is `beforeId` (a queued one only before a queued one, the others never before one);
    * else at the end of its section: after the queued run, after the last list track ahead (else
    * the queued run), or at the very end. Never at or before the current track. A played one goes
-   * back before the played track `beforeId`, else right before the current one. With nothing
-   * playing, it is added (and plays).
+   * back before the played track `beforeId`, else right before the current one. In list order
+   * (what shuffle off plays) it goes before the track that follows it; shuffled, a queued one goes
+   * after the queued run there and a list one before the autoplay tracks (as the native queue's),
+   * so both stay ahead once shuffle is off. With nothing playing, it is added (and plays).
    */
   restore(item: T, kind: Section, beforeId: string | null): void {
     if (!this.cur) {
@@ -376,7 +362,11 @@ export class Queue<T extends Identified> {
     if (played) this.heard.add(entry);
     const follower = this.order[at];
     this.order.splice(at, 0, entry);
-    this.list.splice(follower ? this.list.indexOf(follower) : this.list.length, 0, entry);
+    const firstAuto = this.list.findIndex((e) => e.auto);
+    let li = follower ? this.list.indexOf(follower) : this.list.length;
+    if (this.shuffle && kind === 'queued') li = this.afterQueued(this.list);
+    if (this.shuffle && kind === 'list') li = firstAuto < 0 ? this.list.length : firstAuto;
+    this.list.splice(li, 0, entry);
   }
 
   /**
@@ -434,11 +424,23 @@ export class Queue<T extends Identified> {
     this.order = this.order.filter((e) => !old.has(e));
   }
 
+  /** The tracks before the current one in play order that were heard: what Played shows. */
+  private played(): Entry<T>[] {
+    return this.order.slice(0, this.cur ? this.order.indexOf(this.cur) : 0).filter((e) => this.heard.has(e));
+  }
+
   /** The current entry changed: it is heard, and a queued track that starts playing is no longer "queued". */
   private settle(): void {
     if (!this.cur) return;
     this.queued.delete(this.cur);
     this.heard.add(this.cur);
+  }
+
+  /** The index in `arr` (the list or the play order) right after the current track and the queued run after it. */
+  private afterQueued(arr: Entry<T>[]): number {
+    let k = arr.indexOf(this.cur!) + 1;
+    while (k < arr.length && this.queued.has(arr[k])) k++;
+    return k;
   }
 
   /** Move the still-queued tracks to just after the current one, keeping their play order. */
@@ -458,9 +460,9 @@ export class Queue<T extends Identified> {
   }
 
   /**
-   * Shuffle on. [keepPlayed] (turned on): the tracks heard stay behind the current one, in the
-   * order they played, and all the others are mixed ahead (Spotify, YouTube Music), also the
-   * ones before where the list started; a new list has the rest all ahead. Queued tracks play
+   * Shuffle on. [keepPlayed] (turned on): what Played shows stays behind the current one, in the
+   * order it played, and all the others are mixed ahead (Spotify, YouTube Music): Up next, also
+   * the ones before where the list started; a new list has the rest all ahead. Queued tracks play
    * next, in the order added; then the list, mixed; then the autoplay tracks, mixed too
    * (YouTube Music's radio shuffles).
    */
@@ -470,7 +472,7 @@ export class Queue<T extends Identified> {
       return;
     }
     const cur = this.cur;
-    const played = keepPlayed && cur ? this.order.filter((e) => e !== cur && this.heard.has(e) && !this.queued.has(e)) : [];
+    const played = keepPlayed ? this.played() : [];
     const ahead = this.list.filter((e) => e !== cur && !this.queued.has(e) && !played.includes(e));
     const queued = this.list.filter((e) => e !== cur && this.queued.has(e));
     this.order = [
