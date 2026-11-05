@@ -91,9 +91,15 @@ export const AUTOPLAY_RESERVE = UP_NEXT_MAX;
 
 /**
  * Autoplay may add to the queue unless repeat all is on: it loops the list you're in, so nothing
- * comes after it (Stations.mayAutoplay, the same rule).
+ * comes after it (Stations.mayAutoplay, the same rule), but for a radio's first batch (firstBatchOfRadio).
  */
 export const mayAutoplay = (repeat: RepeatMode): boolean => repeat !== 'all';
+
+/**
+ * A radio's first batch: the tapped song alone in a radio context, nothing on the way. It joins the
+ * list (it is the loop), so repeat all lets it in (Radios.firstBatch, the same rule).
+ */
+export const firstBatchOfRadio = (context: PlayContext | null, count: number): boolean => context?.mode === 'radio' && count === 1;
 
 export interface PlayerState {
   /** Full queue in list order. */

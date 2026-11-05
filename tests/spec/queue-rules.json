@@ -505,7 +505,7 @@
       ]
     },
     {
-      "name": "with repeat all, jumping to an radio's suggestion keeps the ones after it (the loop)",
+      "name": "with repeat all, jumping to a radio's suggestion keeps the ones after it (the loop)",
       "list": ["a"],
       "start": 0,
       "repeat": "all",

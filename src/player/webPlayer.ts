@@ -18,7 +18,7 @@ import { Queue } from './queue';
 import { stationPlaying } from './radio';
 import type { RepeatMode } from './native';
 import type { CrossfadeMs, Ipv4Mode, Quality } from '../stores/library';
-import { AUTOPLAY_LOW, EMPTY_STATE, mayAutoplay, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
+import { AUTOPLAY_LOW, EMPTY_STATE, firstBatchOfRadio, mayAutoplay, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
 
 /* Minimal typings for the parts of the IFrame API we use. */
 interface YTPlayer {
@@ -205,10 +205,15 @@ export class WebPlayer implements Player {
     return this.autoplayOn || !!stationPlaying(this.context, seedId);
   }
 
+  /** Autoplay may add: not under repeat all, but a radio's first batch (its loop) always. */
+  private mayAdd(): boolean {
+    return mayAutoplay(this.q.repeat) || firstBatchOfRadio(this.context, this.q.length);
+  }
+
   /** AP4, inline: with 5 tracks or fewer to go, ask for more (once per state). */
   private checkLow(): void {
     const seed = this.seed;
-    if (!seed || !this.keepsGoing(seed.id) || !mayAutoplay(this.q.repeat) || !this.q.current) {
+    if (!seed || !this.keepsGoing(seed.id) || !this.mayAdd() || !this.q.current) {
       this.lowKey = null;
       return;
     }
@@ -495,9 +500,9 @@ export class WebPlayer implements Player {
   }
 
   async addAutoplay(tracks: Track[], seedId: string): Promise<void> {
-    if (!tracks.length || !this.keepsGoing(seedId) || !mayAutoplay(this.q.repeat) || this.seed?.id !== seedId) return;
+    if (!tracks.length || !this.keepsGoing(seedId) || !this.mayAdd() || this.seed?.id !== seedId) return;
     const wasEmpty = !this.q.current;
-    this.q.addAuto(tracks);
+    this.q.addAuto(tracks, firstBatchOfRadio(this.context, this.q.length));
     this.publish();
     if (wasEmpty) await this.loadCurrent(true, true);
   }

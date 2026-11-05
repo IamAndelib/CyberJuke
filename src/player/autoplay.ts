@@ -9,14 +9,14 @@
  *  - a Signal Radio station playing: its next round (player/radio), all its tracks again;
  *  - Home's Shuffle (its label, shuffleLabel): more random songs from the same pool.
  * Offline, only songs saved on the phone (playable). Nothing while autoplay is off (the setting,
- * C3), but for a station, or with repeat all (mayAutoplay).
+ * C3), but for a station, or with repeat all but for a radio's first batch (mayAutoplay).
  */
 import { whenIdle } from '../core/idle';
 import { shuffled } from '../core/shuffle';
 import { audioKey, isGlobal, isLocal, type Track } from '../data/model';
 import { similarTracks } from '../data/similar';
 import { stationPlaying, stationQueue } from './radio';
-import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, AUTOPLAY_RESERVE, mayAutoplay, type Player, type QueueLow } from './types';
+import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, AUTOPLAY_RESERVE, firstBatchOfRadio, mayAutoplay, type Player, type QueueLow } from './types';
 
 /** How long a batch just added counts as ahead even before the player's state shows it (native's lags the call). */
 const BATCH_LAG_MS = 5000;
@@ -93,7 +93,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       starved = e;
       return;
     }
-    if (!mayAutoplay(s.repeat)) return;
+    if (!mayAutoplay(s.repeat) && !firstBatchOfRadio(s.context, s.queue.length)) return;
     // A local list ends like an album: nothing from the Jukebox or Global after a song of the phone's own.
     if (isLocal(seed)) return;
     if (e.seedId && e.seedId !== seed.id) return; // a signal for an older seed
