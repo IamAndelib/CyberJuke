@@ -40,3 +40,16 @@ describe('a radio under repeat all', () => {
     expect(ids(p)).toEqual(['a', 'b']);
   });
 });
+
+describe('the list you are in', () => {
+  it('starts where the suggestions begin once you move on into them, and the next batch after', async () => {
+    const p = await started('off', 'list');
+    await p.addAutoplay([t('s1'), t('s2')], 'a');
+    await p.next();
+    await p.next();
+    await p.setRepeat('off'); // the mocked load publishes nothing; this does
+    expect(p.state.peek()).toMatchObject({ listStart: 2, nextStart: -1 });
+    await p.addAutoplay([t('s3')], 'a');
+    expect(p.state.peek()).toMatchObject({ listStart: 2, nextStart: 4 });
+  });
+});

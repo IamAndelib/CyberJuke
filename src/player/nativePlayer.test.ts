@@ -105,6 +105,14 @@ describe('NativePlayer: Up next rows (K1)', () => {
     expect(p.state.peek().previous).toEqual([]);
   });
 
+  it('carries where the list and the autoplay on the way start', () => {
+    const p = new NativePlayer();
+    emit('state', state({ index: 1, trackId: 'B', queueIds: ['A', 'B', 'C'], listStart: 1, nextStart: 2 }));
+    expect(p.state.peek()).toMatchObject({ listStart: 1, nextStart: 2 });
+    emit('state', state({ index: 1, trackId: 'B', queueIds: ['A', 'B', 'C'] }));
+    expect(p.state.peek()).toMatchObject({ listStart: 0, nextStart: -1 });
+  });
+
   it('a played row moved or removed shows at once, as the rows ahead do', async () => {
     const p = new NativePlayer();
     emit('state', state({ index: 2, trackId: 'C', queueIds: ['A', 'B', 'C', 'D'], upNextIds: ['D'], upNextKinds: 'l', upNextIndex: [3], prevIndex: [0, 1] }));

@@ -31,6 +31,8 @@ describe('parseNativeState', () => {
       upNextKinds: 'qa',
       upNextIndex: [0, 2],
       prevIndex: [2],
+      listStart: 1,
+      nextStart: 2,
       context: { label: 'Liked', mode: 'list' },
       seedId: 'b',
       currentAuto: true,
@@ -69,6 +71,13 @@ describe('parseNativeState', () => {
     expect(parseNativeState({ index: 0, queueIds: ['A', 'B'], upNextIds: ['B'] })?.upNextIndex).toEqual([-1]);
   });
 
+  it('reads where the current list and the autoplay on the way start; an older native sends neither', () => {
+    const q = ['A', 'B', 'C', 'D'];
+    expect(parseNativeState({ index: 2, queueIds: q, listStart: 1, nextStart: 3 })).toMatchObject({ listStart: 1, nextStart: 3 });
+    expect(parseNativeState({ index: 2, queueIds: q })).toMatchObject({ listStart: 0, nextStart: -1 });
+    for (const junk of [-1, 4, 1.5, '1', null]) expect(parseNativeState({ index: 2, queueIds: q, listStart: junk, nextStart: junk })).toMatchObject({ listStart: 0, nextStart: -1 });
+  });
+
   it('keeps the previous list when the event says it is unchanged', () => {
     const st = parseNativeState({ isPlaying: false, index: 0, trackId: 'a', queueIdsUnchanged: true, upNextIds: ['b'] }, ['a', 'b']);
     expect(st?.queueIds).toEqual(['a', 'b']);
@@ -91,6 +100,8 @@ describe('parseNativeState', () => {
       upNextKinds: '',
       upNextIndex: [],
       prevIndex: [],
+      listStart: 0,
+      nextStart: -1,
       context: null,
       seedId: null,
       currentAuto: false,

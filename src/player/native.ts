@@ -40,6 +40,9 @@ export interface NativeState {
   upNextIndex: number[];
   /** The list indices of the tracks before the current one in play order, oldest first, max 50. Absent from older natives: none. */
   prevIndex?: number[];
+  /** Queue index of the current list's first song, and of the first song of the autoplay on the way (-1: none). Absent from older natives: 0 and -1. */
+  listStart?: number;
+  nextStart?: number;
   /** The context the current list was started with (C2), null before the first. */
   context: { label: string; mode: 'radio' | 'list' } | null;
   /** The track autoplay follows (the started track, or the autoplay track tapped). */
