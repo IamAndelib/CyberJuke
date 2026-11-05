@@ -98,6 +98,14 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
           case 'expect': {
             if ('current' in s) expect(q.current?.id ?? null).toBe(s.current);
             if ('upNext' in s) expect(ids(q.upNext())).toEqual(s.upNext);
+            if ('upNextBlocks' in s) {
+              // Each block's songs in any order (a shuffled block); the blocks in order.
+              const blocks = s.upNextBlocks as string[][];
+              let at = 0;
+              const up = ids(q.upNext());
+              for (const b of blocks) expect(up.slice(at, (at += b.length)).sort()).toEqual(b.slice().sort());
+              expect(up.length).toBe(at);
+            }
             if ('upNextStartsWith' in s) {
               const want = s.upNextStartsWith as string[];
               expect(ids(q.upNext()).slice(0, want.length)).toEqual(want);

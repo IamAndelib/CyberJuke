@@ -261,6 +261,7 @@ export class Queue<T extends Identified> {
   // ---- modes ---------------------------------------------------------------------
 
   setShuffle(on: boolean): void {
+    if (on === this.shuffle) return;
     this.shuffle = on;
     this.rebuildOrder(true);
   }
@@ -273,12 +274,18 @@ export class Queue<T extends Identified> {
 
   // ---- editing -------------------------------------------------------------------
 
-  /** Move an item in list order. Play order follows list order unless shuffled. */
+  /**
+   * Move an item in list order, to where the item at `to` was. Unshuffled, it moves the same way in
+   * play order (which differs from list order after shuffle was turned off).
+   */
   move(from: number, to: number): void {
     if (!inRange(from, this.list) || !inRange(to, this.list) || from === to) return;
+    const target = this.list[to];
     const [e] = this.list.splice(from, 1);
     this.list.splice(to, 0, e);
-    if (!this.shuffle) this.order = this.list.slice();
+    if (this.shuffle) return;
+    this.order.splice(this.order.indexOf(e), 1);
+    this.order.splice(this.order.indexOf(target) + (from < to ? 1 : 0), 0, e);
   }
 
   /**
@@ -503,30 +510,38 @@ export class Queue<T extends Identified> {
   }
 
   /**
-   * Shuffle on. [keepPlayed] (turned on): what Played shows stays behind the current one, in the
-   * order it played, and all the others are mixed ahead (Spotify, YouTube Music): Up next, also
-   * the ones before where the list started; a new list has the rest all ahead. Queued tracks play
-   * next, in the order added; then the list, mixed; then the autoplay tracks, mixed too
-   * (YouTube Music's radio shuffles).
+   * Shuffle on. [keepPlayed] (shuffle turned on or off): what Played shows stays behind the current
+   * one, in the order it played, and all the others are mixed ahead (Spotify, YouTube Music): Up
+   * next, also the ones before where the list started. Queued tracks play next, in the order added;
+   * then the current list, mixed; then what's on the way, mixed on its own (YouTube Music's radio
+   * shuffles). Shuffle off puts the list order back, but the current list's unheard songs before
+   * the current one go right after the queued run, in list order: turning shuffle off skips none.
    */
   private rebuildOrder(keepPlayed = false): void {
     // The queued tracks, as they were going to play: they stay next, in that order, either way
     // (the list may hold them elsewhere: an Undo while shuffled puts one back by play order).
     const queued = this.order.filter((e) => e !== this.cur && this.queued.has(e));
+    const cur = this.cur;
     if (!this.shuffle) {
       this.order = this.list.slice();
       this.keepQueuedNext(queued);
+      const unheard = keepPlayed && cur ? this.list.slice(this.listStartIndex, this.list.indexOf(cur)).filter((e) => !this.heard.has(e) && !this.queued.has(e)) : [];
+      if (unheard.length) {
+        this.order = this.order.filter((e) => !unheard.includes(e));
+        this.order.splice(this.afterQueued(this.order), 0, ...unheard);
+      }
       return;
     }
-    const cur = this.cur;
     const played = keepPlayed ? this.played() : [];
     const ahead = this.list.filter((e) => e !== cur && !this.queued.has(e) && !played.includes(e));
+    // Blocks by list index: the songs before where the list started, the current list, what's on the way.
+    const [start, way] = [this.listStartIndex, this.nextStartIndex];
+    const block = (e: Entry<T>) => (way >= 0 && this.list.indexOf(e) >= way ? 2 : this.list.indexOf(e) >= start ? 1 : 0);
     this.order = [
       ...played,
       ...(cur ? [cur] : []),
       ...queued,
-      ...shuffled(ahead.filter((e) => !e.auto), this.rand),
-      ...shuffled(ahead.filter((e) => e.auto), this.rand),
+      ...[0, 1, 2].flatMap((b) => shuffled(ahead.filter((e) => block(e) === b), this.rand)),
     ];
   }
 

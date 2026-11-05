@@ -220,7 +220,7 @@ describe('Queue: shuffle', () => {
     expect(ids(q.upNext()).sort()).toEqual(['a', 'b', 'c', 'd']);
   });
 
-  it('turning shuffle off resumes list order after the current track', () => {
+  it('turning shuffle off keeps every unheard song ahead, in list order', () => {
     const q = new Queue(seeded(9));
     q.setList(abc(), 0);
     q.setShuffle(true);
@@ -228,7 +228,20 @@ describe('Queue: shuffle', () => {
     const cur = q.current!.id;
     q.setShuffle(false);
     expect(q.current?.id).toBe(cur);
-    expect(ids(q.upNext())).toEqual(ids(q.items).slice(q.index + 1));
+    const heard = q.previousIndices().map((i) => q.items[i].id).concat(cur);
+    expect(ids(q.upNext())).toEqual(ids(q.items).filter((id) => !heard.includes(id)));
+  });
+
+  it('after shuffle off, moving a row in Up next swaps it with its neighbour and loses no song', () => {
+    const q = new Queue(seeded(9));
+    q.setList(abc(), 0);
+    q.setShuffle(true);
+    q.next();
+    q.setShuffle(false);
+    const up = q.upNextItems();
+    const [x, y] = [up[0], up[1]];
+    q.move(x.index, y.index);
+    expect(ids(q.upNext())).toEqual([y.item.id, x.item.id, ...up.slice(2).map((u) => u.item.id)]);
   });
 });
 
