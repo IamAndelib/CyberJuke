@@ -185,6 +185,49 @@ test('Album Play plays the album, then continues into autoplay at the end', asyn
   await expect(page.getByTestId('np-title')).toHaveText(q.autoplay[0].title);
 });
 
+test('a tapped suggestion, then Previous: the album songs stay under the album, "3 of 8" stays right, and Undo puts each song back', async ({ page }) => {
+  await page.goto('/');
+  await openSearch(page);
+  await page.getByTestId('search-input').fill('Night Owl');
+  await page.getByTestId('mode-global').click();
+  await page.getByTestId('filter-albums').click();
+  await page.getByTestId('music-open').first().click();
+  const album = page.getByTestId('screen-album');
+  await expect(album.getByTestId('track-row')).toHaveCount(8);
+  const titles = (await album.getByTestId('track-title').allTextContents()).map((s) => s.trim());
+  await album.getByTestId('album-play').click();
+  await openNowPlaying(page);
+  // At the third song five are left: suggestions line up after the album.
+  await page.getByTestId('np-next').click();
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).toHaveText(titles[2]);
+  const q = await withAutoplay(page, 5);
+  await expect(page.getByTestId('np-from')).toContainText('3 of 8');
+  // A tap on the first suggestion plays it; Previous (twice: the first restarts it) goes back.
+  await page.locator('[data-testid="upnext-row"][data-section="autoplay"] .row-main').first().click();
+  await expect(page.getByTestId('np-title')).toHaveText(q.autoplay[0].title);
+  await page.getByTestId('np-prev').click();
+  await page.getByTestId('np-prev').click();
+  await expect(page.getByTestId('np-title')).toHaveText(titles[2]);
+  // The suggestion is next, under its own heading; the album's songs after it stay the album's.
+  const rows = page.getByTestId('upnext-row');
+  await expect(rows.first()).toHaveAttribute('data-track-id', q.autoplay[0].id);
+  await expect(rows.first()).toHaveAttribute('data-section', 'autoplay');
+  await expect(page.locator('[data-testid="upnext-row"][data-section="list"] .row-title')).toHaveText(titles.slice(3));
+  await expect(page.getByTestId('upnext-list-label')).toHaveCount(1);
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveCount(2);
+  await expect(page.getByTestId('np-from')).toContainText('3 of 8');
+  // ✕ then Undo, on the suggestion and on the album's last song: each comes back as it was, where it was.
+  const order = await rows.evaluateAll((els) => els.map((el) => `${el.getAttribute('data-track-id')}:${el.getAttribute('data-section')}`));
+  for (const row of [rows.first(), page.locator('[data-testid="upnext-row"][data-section="list"]').last()]) {
+    await page.waitForTimeout(350); // past the double-tap guard
+    await row.getByTestId('upnext-remove').click();
+    await expect(rows).toHaveCount(order.length - 1);
+    await page.getByTestId('toast').filter({ hasText: 'Removed from queue' }).getByTestId('toast-action').click();
+    await expect.poll(() => rows.evaluateAll((els) => els.map((el) => `${el.getAttribute('data-track-id')}:${el.getAttribute('data-section')}`))).toEqual(order);
+  }
+});
+
 test('a Global result starts a Global radio; tapping an autoplay track continues from it', async ({ page }) => {
   await page.goto('/');
   await openSearch(page);

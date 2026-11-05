@@ -25,17 +25,18 @@
  *    it (Spotify, YouTube Music): more follow it once they run low;
  *  - played autoplay tracks more than KEEP_PLAYED behind the current one are dropped (a
  *    radio can run for hours), except with repeat all, which loops them;
- *  - Undo of a remove (restore) puts the track back in its section, before the track
- *    that followed it there, never at or before the current track; a played track goes
- *    back among the played, before the one that followed it, else right before the current;
+ *  - Undo of a remove (restore) puts the track back as its own kind, before the track that
+ *    followed it in Up next (a queued one only among the queued, the others never among them),
+ *    never at or before the current track; a played track goes back among the played, before
+ *    the one that followed it, else right before the current;
  *  - "played" is what was heard: the tracks of this list that have been current (a list
  *    started mid-way hasn't played the ones before it). Shuffle turned on mixes every track
  *    not heard yet, the list's ahead of the autoplay ones, and new autoplay tracks join in at
  *    random places; the heard ones stay behind, in the order they played. Off puts the list
  *    order back.
  *
- * Up next is three sections, in play order: queued by you, the rest of the list,
- * autoplay (sectionsOf in ./types).
+ * Up next labels each track by its own kind, never by its place: queued by you, the
+ * list, autoplay (sectionsOf in ./types).
  */
 import { UP_NEXT_MAX } from '../core/guards';
 import { shuffled } from '../core/shuffle';
@@ -344,11 +345,12 @@ export class Queue<T extends Identified> {
   }
 
   /**
-   * Undo of a remove: put `item` back in its section of Up next, right before the
-   * first track after the current one that is `beforeId` and in that section; else
-   * at the end of that section. Never at or before the current track; a queued track
-   * never after list tracks. A played one goes back before the played track `beforeId`,
-   * else right before the current one. With nothing playing, it is added (and plays).
+   * Undo of a remove: put `item` back as `kind`, right before the first track after the current
+   * one that is `beforeId` (a queued one only before a queued one, the others never before one);
+   * else at the end of its section: after the queued run, after the last list track ahead (else
+   * the queued run), or at the very end. Never at or before the current track. A played one goes
+   * back before the played track `beforeId`, else right before the current one. With nothing
+   * playing, it is added (and plays).
    */
   restore(item: T, kind: Section, beforeId: string | null): void {
     if (!this.cur) {
@@ -361,14 +363,13 @@ export class Queue<T extends Identified> {
     const p = this.order.indexOf(this.cur);
     const played = kind === 'played';
     let at = -1;
-    if (beforeId != null) at = this.order.findIndex((e, k) => (played ? k < p : k > p && of(e) === kind) && e.item.id === beforeId);
+    if (beforeId != null) at = this.order.findIndex((e, k) => (played ? k < p : k > p && (of(e) === 'queued') === (kind === 'queued')) && e.item.id === beforeId);
     if (at < 0 && played) at = p;
     if (at < 0) {
       // The end of the section: after its last track ahead, else where it would start.
       at = p + 1 + this.queuedCount;
-      // List tracks end where autoplay starts.
-      if (kind === 'list') while (at < this.order.length && !this.order[at].auto) at++;
-      else if (kind === 'autoplay') at = this.order.length;
+      if (kind === 'autoplay') at = this.order.length;
+      else if (kind === 'list') for (let k = at; k < this.order.length; k++) if (of(this.order[k]) === 'list') at = k + 1;
     }
     const entry: Entry<T> = kind === 'autoplay' ? { ...this.entry(item), auto: true } : this.entry(item);
     if (kind === 'queued') this.queued.add(entry);

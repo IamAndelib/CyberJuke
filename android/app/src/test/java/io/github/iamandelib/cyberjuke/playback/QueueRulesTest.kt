@@ -49,6 +49,7 @@ class QueueRulesTest {
         // Like the app: the first list goes through the queue too (shuffle starts at the track).
         p.queue.setList(strings(c.getJSONArray("list")), c.optInt("start", 0))
         val steps = c.getJSONArray("steps")
+        var undo: Triple<String, String, String?>? = null
         for (k in 0 until steps.length()) {
             val s = steps.getJSONObject(k)
             val where = "'$name' (seed $seed) step $k ${s.getString("op")}"
@@ -65,6 +66,14 @@ class QueueRulesTest {
                         p.queue.restore(s.getString("id"), NativeQueue.Section.of(kind) ?: throw IllegalArgumentException("kind in $where"), before)
                     }
                 }
+                "removeRow" -> {
+                    // Up next's ✕: Undo puts it back as its row's kind, before the row that followed it.
+                    val up = p.upNext()
+                    val at = up.indexOf(s.getString("id"))
+                    undo = Triple(up[at], sections(p).first { up[at] in it.second }.first, up.getOrNull(at + 1))
+                    p.remove(p.ids.indexOf(up[at]))
+                }
+                "undo" -> undo!!.let { (id, kind, before) -> p.queue.restore(id, NativeQueue.Section.of(kind)!!, before) }
                 "removeIds" -> p.queue.removeIds(strings(s.getJSONArray("ids")).toSet())
                 "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")))
                 "next" -> p.next()
@@ -101,17 +110,21 @@ class QueueRulesTest {
         }
         if (s.has("list")) assertEquals("list in $where", strings(s.getJSONArray("list")), p.ids.toList())
         if (s.has("played")) assertEquals("played in $where", strings(s.getJSONArray("played")), p.played())
-        // Up next's sections (the page's sectionsOf): the leading queued run, the list, then from
-        // the first autoplay row on, autoplay.
-        val lead = up.takeWhile { p.serials[p.ids.indexOf(it)] in p.queue.pendingSerials }
-        val after = up.drop(lead.size)
-        val list = after.takeWhile { !p.auto[p.ids.indexOf(it)] }
-        val autos = after.drop(list.size)
+        val (lead, list, autos) = sections(p).map { it.second }
         if (s.has("queuedIds")) assertEquals("queuedIds in $where", strings(s.getJSONArray("queuedIds")), lead)
         if (s.has("listIds")) assertEquals("listIds in $where", strings(s.getJSONArray("listIds")), list)
         if (s.has("listSet")) assertEquals("listSet in $where", strings(s.getJSONArray("listSet")).sorted(), list.sorted())
         if (s.has("autoplayIds")) assertEquals("autoplayIds in $where", strings(s.getJSONArray("autoplayIds")), autos)
         if (s.has("autoplaySet")) assertEquals("autoplaySet in $where", strings(s.getJSONArray("autoplaySet")).sorted(), autos.sorted())
+    }
+
+    /** Up next's sections (the page's sectionsOf): each row by the kind StateEncoder sends for it, in play order. */
+    private fun sections(p: FakePlayer): List<Pair<String, List<String>>> {
+        val kinds = p.upNext().groupBy {
+            val i = p.ids.indexOf(it)
+            if (p.serials[i] in p.queue.pendingSerials) "queued" else if (p.auto[i]) "autoplay" else "list"
+        }
+        return listOf("queued", "list", "autoplay").map { it to kinds[it].orEmpty() }
     }
 
     private fun strings(a: JSONArray) = (0 until a.length()).map { a.getString(it) }

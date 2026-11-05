@@ -4,7 +4,7 @@ import rules from '../../tests/spec/queue-rules.json';
 import { Queue } from './queue';
 import type { RepeatMode } from './native';
 import type { Track } from '../data/model';
-import { sectionsOf, type UpItem, type UpNextKind as Section } from './types';
+import { EMPTY_STATE, placeOf, sectionsOf, type UpItem, type UpNextKind as Section } from './types';
 
 type Step = { op: string; [k: string]: unknown };
 interface Case {
@@ -39,6 +39,9 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
         expect(i, `${String(id)} in list`).toBeGreaterThanOrEqual(0);
         return i;
       };
+      // Up next as the app builds it from what the player publishes.
+      const upNext = () => q.upNextItems().map(({ item, ...u }) => ({ track: item as Track, ...u }));
+      let undo: [string, Section, string | null] | null = null;
       for (const s of c.steps) {
         switch (s.op) {
           case 'setList':
@@ -71,6 +74,18 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
           case 'restore':
             q.restore(t(s.id as string), s.kind as Section, (s.beforeId as string | null) ?? null);
             break;
+          case 'removeRow': {
+            // Up next's ✕: Undo puts it back as its row's kind, before the row that followed it.
+            const rows = upNext();
+            const k = rows.findIndex((u) => u.track.id === s.id);
+            const { kind } = sectionsOf(rows, null).runs.find((r) => r.items.some((u) => u.index === rows[k].index))!;
+            undo = [s.id as string, kind, rows[k + 1]?.track.id ?? null];
+            q.remove(rows[k].index);
+            break;
+          }
+          case 'undo':
+            q.restore(t(undo![0]), undo![1], undo![2]);
+            break;
           case 'removeIds':
             q.removeIds(s.ids as string[]);
             break;
@@ -90,8 +105,8 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             if ('queued' in s) expect(q.queuedCount).toBe(s.queued);
             if ('list' in s) expect(ids(q.items)).toEqual(s.list);
             if ('played' in s) expect(q.previousIndices().map((i) => q.items[i].id)).toEqual(s.played);
-            // Sections as the app builds them from what the player publishes.
-            const sec = sectionsOf(q.upNextItems().map(({ item, ...u }) => ({ track: item as Track, ...u })), null);
+            if ('place' in s) expect(placeOf({ ...EMPTY_STATE, queue: q.items as Track[], index: q.index, upNext: upNext() })).toBe(s.place);
+            const sec = sectionsOf(upNext(), null);
             const sIds = (xs: UpItem[]) => xs.map((x) => x.track.id);
             if ('queuedIds' in s) expect(sIds(sec.queued)).toEqual(s.queuedIds);
             if ('listIds' in s) expect(sIds(sec.list)).toEqual(s.listIds);
