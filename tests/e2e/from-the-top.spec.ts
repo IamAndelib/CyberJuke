@@ -54,11 +54,14 @@ test('Repeat all at song 5 of 8: after the album, "From the top" shows songs 1�
   expect(label).toEqual(['list', 'top']);
   await expect(top(page).first().getByTestId('upnext-up')).toBeDisabled();
   await expect(top(page).last().getByTestId('upnext-down')).toBeDisabled();
+  // A screen reader hears where a row is.
+  await expect(top(page).first().locator('.row-main')).toHaveAccessibleName(`Play ${titles[0]}, from the top`);
   // "N up next" counts to the end of the list.
   await expect(page.getByTestId('up-next').locator('.upnext-left')).toHaveText('3 up next');
   // ↓ on the first: the next lap starts with song 2.
   await top(page).first().getByTestId('upnext-down').click();
   await expect(topTitles(page)).toHaveText([titles[1], titles[0], titles[2], titles[3]]);
+  await expect(page.getByTestId('upnext-moved')).toHaveText('Moved to 2 of 4');
   await top(page).nth(1).getByTestId('upnext-up').click();
   await expect(topTitles(page)).toHaveText(titles.slice(0, 4));
 });
@@ -92,6 +95,7 @@ test('✕ on a "From the top" song you heard, then Undo: back in its place, and 
   await expect(topTitles(page)).toHaveText([titles[0], titles[2], titles[3]]);
   await removedToast(page).getByTestId('toast-action').click();
   await expect(topTitles(page)).toHaveText(titles.slice(0, 4));
+  await expect(page.getByTestId('upnext-moved')).toHaveText('Back at 2 of 4');
   await page.getByTestId('upnext-played-fold').click();
   await expect(page.getByTestId('upnext-played').locator('.row-title')).toHaveText(titles.slice(0, 4));
 });
