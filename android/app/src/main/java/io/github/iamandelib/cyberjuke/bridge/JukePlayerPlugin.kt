@@ -529,7 +529,7 @@ class JukePlayerPlugin : Plugin() {
     /**
      * `addAutoplay({ tracks, seedId })`: Jukebox autoplay picks (after a `queueLow`) for the seed
      * they were computed for; dropped if the seed changed meanwhile or autoplay may not add now
-     * (off, or repeat all on a list: Stations.mayAutoplay).
+     * (off, or repeat all: Stations.mayAutoplay).
      */
     @PluginMethod
     fun addAutoplay(call: PluginCall) {

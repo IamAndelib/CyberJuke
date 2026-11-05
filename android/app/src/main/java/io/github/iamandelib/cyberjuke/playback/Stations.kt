@@ -24,9 +24,8 @@ internal object Stations {
         autoplayEnabled || (seedId?.startsWith(PREFIX) == true && contextLabel?.startsWith(LABEL) == true)
 
     /**
-     * Autoplay may add to a list of [count] items: but with repeat all, which loops what you
-     * started; then only a single song gets its first batch, its radio, for repeat to loop (web
-     * player/types.ts mayAutoplay, the same rule).
+     * Autoplay may add unless repeat all is on: it loops the list you're in, so nothing comes after
+     * it (web player/types.ts mayAutoplay, the same rule), but for a radio's first batch ([Radios.firstBatch]).
      */
-    fun mayAutoplay(repeatMode: Int, count: Int): Boolean = repeatMode != Player.REPEAT_MODE_ALL || count == 1
+    fun mayAutoplay(repeatMode: Int): Boolean = repeatMode != Player.REPEAT_MODE_ALL
 }

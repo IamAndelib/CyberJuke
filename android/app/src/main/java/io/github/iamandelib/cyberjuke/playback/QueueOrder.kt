@@ -150,9 +150,11 @@ internal interface QueueHost<T> {
  * - Autoplay tracks ([addAutoplay]) play after the list in the order added; they are the list on
  *   the way, and moving on to one of them (played on to, or tapped) makes the current list start
  *   there ([listStartIndex]; the songs before it are history). A radio's first suggestions join
- *   its list instead (joinList). Repeat all loops what you started: a list's autoplay tracks
- *   still to come go, a single song's stay (its radio). A jump ahead ([skipTo]) keeps what it
- *   jumps over next, and the autoplay tracks after it. The played trim leaves the current list
+ *   its list instead (joinList). Repeat all loops the list you're in: turning it on
+ *   drops what's on the way (it comes back once repeat is off) and the songs before the current
+ *   list, keeping the playing song and the queued ones, and autoplay adds nothing while it is on
+ *   (Stations.mayAutoplay). Turning autoplay off drops what's on the way too, never the list
+ *   you're in. A jump ahead ([skipTo]) keeps what it jumps over next, and the autoplay tracks after it. The played trim leaves the current list
  *   alone. A removed marker's song hands it to the next one that stays; an Undo never moves one.
  * - Played is what was heard ([heardUids]) before the current track in play order. Shuffle turned
  *   on mixes what hasn't played: what Played shows stays behind, in the order it played, and
@@ -587,20 +589,24 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     /** Items still to come (after the current one in play order). */
     fun ahead(): Int = upcoming().size
 
-    /** Removes the autoplay items still to come; returns how many went. */
-    fun dropUpcomingAuto(): Int {
-        val gone = upcoming().filter { host.isAutoAt(it) }.sortedDescending()
-        if (gone.any { host.uidAt(it) == nextStart }) nextStart = 0L // dropped, not handed on
-        for (i in gone) host.removeAt(i)
-        return gone.size
+    /** Removes the list on the way (its items that aren't queued): autoplay off, or repeat all. */
+    fun dropOnTheWay() {
+        val way = nextStartIndex()
+        if (way >= 0) drop { it >= way }
+        nextStart = 0L
     }
 
-    /**
-     * Repeat all loops what you started: a list's autoplay items still to come go (they come back
-     * once repeat is off); a single song's are its radio, the loop itself, and stay.
-     */
+    /** Repeat all loops the list you're in: what's on the way and the history before it go (not the playing item or the queued ones). */
     fun onRepeatModeChanged(repeatAll: Boolean) {
-        if (repeatAll && (0 until host.count).count { !host.isAutoAt(it) } > 1) dropUpcomingAuto()
+        if (!repeatAll) return
+        dropOnTheWay()
+        drop { it < listStartIndex() }
+    }
+
+    /** Removes the items [gone] picks by list index, except the playing one and the queued ones. */
+    private inline fun drop(gone: (Int) -> Boolean) {
+        val out = (0 until host.count).filter { it != host.currentIndex && host.serialAt(it) !in pending && gone(it) }
+        for (i in out.asReversed()) host.removeAt(i)
     }
 
     /**

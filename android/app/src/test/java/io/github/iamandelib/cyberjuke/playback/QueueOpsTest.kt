@@ -205,7 +205,7 @@ class QueueOpsTest {
         p.remove(p.ids.indexOf("s2"))
         assertEquals(-1, p.queue.nextStartIndex())
         p.queue.addAutoplay(listOf("t1"))
-        p.queue.dropUpcomingAuto()
+        p.queue.dropOnTheWay()
         assertEquals(-1, p.queue.nextStartIndex())
     }
 }

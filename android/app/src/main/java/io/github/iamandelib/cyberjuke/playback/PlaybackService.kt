@@ -209,7 +209,7 @@ class PlaybackService : MediaSessionService() {
 
             override fun addRadioItems(items: List<MediaItem>): Boolean {
                 val p = player ?: return false
-                if (!autoplayEnabled || !Stations.mayAutoplay(p.repeatMode, p.mediaItemCount)) return false
+                if (!autoplayEnabled || !(Stations.mayAutoplay(p.repeatMode) || Radios.firstBatch(context?.second, p.mediaItemCount))) return false
                 queue.addAutoplay(items)
                 queueChanged()
                 return true
@@ -1096,7 +1096,7 @@ class PlaybackService : MediaSessionService() {
             updateModeButtons()
         }
 
-        /** Repeat all loops what you started ([NativeQueue.onRepeatModeChanged]); off again, autoplay fills up. */
+        /** Repeat all loops the list you're in ([NativeQueue.onRepeatModeChanged]); off again, autoplay fills up. */
         override fun onRepeatModeChanged(repeatMode: Int) {
             queue.onRepeatModeChanged(repeatMode == Player.REPEAT_MODE_ALL)
             lowKey = null
@@ -1197,11 +1197,11 @@ class PlaybackService : MediaSessionService() {
 
     private fun addAutoplay(items: List<MediaItem>, forSeed: String?) {
         val p = player ?: return
-        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || forSeed != seedId || !Stations.mayAutoplay(p.repeatMode, p.mediaItemCount)) {
+        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || forSeed != seedId || !(Stations.mayAutoplay(p.repeatMode) || Radios.firstBatch(context?.second, p.mediaItemCount))) {
             Log.i(TAG, "addAutoplay: ${items.size} item(s) dropped (stale or autoplay off)")
             return
         }
-        queue.addAutoplay(items)
+        queue.addAutoplay(items, joinList = Radios.firstBatch(context?.second, p.mediaItemCount))
         Log.i(TAG, "addAutoplay: ${items.size} item(s), ${queue.ahead()} ahead")
         queueChanged()
     }
@@ -1214,7 +1214,7 @@ class PlaybackService : MediaSessionService() {
         if (!enabled) {
             radio.stop()
             // A station's next rounds stay (Stations.keepsGoing).
-            if (!Stations.keepsGoing(false, seedId, context?.first)) queue.dropUpcomingAuto()
+            if (!Stations.keepsGoing(false, seedId, context?.first)) queue.dropOnTheWay()
         }
         queueChanged()
     }
@@ -1336,13 +1336,13 @@ class PlaybackService : MediaSessionService() {
     /**
      * AP4: with 5 items or fewer to go (any kind, as InnerTune's "load more"), get more. A Global radio is refilled here;
      * Jukebox picks come from the web side (`queueLow`). Nothing with autoplay off, or with repeat
-     * all but for a single song ([Stations.mayAutoplay]).
+     * all but for a radio's first batch ([Stations.mayAutoplay]).
      */
     private fun checkLow() {
         val p = player ?: return
         // Nothing loading (a restored session before its first Play): no requests for more yet.
         val idle = p.playbackState == Player.STATE_IDLE && !p.playWhenReady
-        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || !Stations.mayAutoplay(p.repeatMode, p.mediaItemCount) || p.mediaItemCount == 0 || seedId == null || idle) {
+        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || !(Stations.mayAutoplay(p.repeatMode) || Radios.firstBatch(context?.second, p.mediaItemCount)) || p.mediaItemCount == 0 || seedId == null || idle) {
             lowKey = null
             QueueInfo.clearLow()
             return
