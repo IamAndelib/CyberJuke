@@ -648,9 +648,9 @@ class JukePlayerPlugin : Plugin() {
      * Undo of a removal (K3). The track goes back as `kind`, right before the first entry after
      * the current track with id `beforeId` (a queued one only before a queued one, the others
      * never before one), else at the end of its section; never at or before the current track.
-     * 'played' goes back before the played entry `beforeId`, else right before the current track,
-     * with the queued-by-you mark when `mine`; 'top' (a "From the top" row) the same, but before `beforeId`
-     * among every entry before the current track, and unheard.
+     * 'played' goes back before `beforeId` among every entry before the current track, heard or not,
+     * else right before the current track, with the queued-by-you mark when `mine`; 'top' (a "From
+     * the top" row) the same, but unheard.
      */
     @PluginMethod
     fun restore(call: PluginCall) {

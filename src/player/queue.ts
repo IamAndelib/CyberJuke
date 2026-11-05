@@ -37,8 +37,8 @@
  *  - Undo of a remove (restore) puts the track back as its own kind, before the track that
  *    followed it in Up next (a queued one only among the queued, the others never among them),
  *    never at or before the current track; a played track goes back among the played, before
- *    the one that followed it, else right before the current; a "From the top" one the same,
- *    but among everything before the current, heard or not, and it stays unheard;
+ *    the one that followed it among everything before the current, heard or not, else right
+ *    before the current; a "From the top" one the same, but it stays unheard;
  *  - "played" is what was heard before the current track: the tracks of this list before it in
  *    play order that have been current (a list started mid-way hasn't played the ones before
  *    it). Shuffle turned on mixes what hasn't played: what Played shows stays behind, in the
@@ -410,9 +410,8 @@ export class Queue<T extends Identified> {
    * one that is `beforeId` (a queued one only before a queued one, the others never before one);
    * else at the end of its section: after the queued run, after the last list track ahead (else
    * the queued run), or at the very end. Never at or before the current track. A played one goes
-   * back before the played track `beforeId`, else right before the current one; a "From the top"
-   * one (`top`) the same, but before `beforeId` among every track before the current one, and
-   * unheard. In list order (what shuffle off plays) it goes before the track that follows it;
+   * back before `beforeId` among every track before the current one, heard or not, else right
+   * before the current one; a "From the top" one (`top`) the same, but unheard. In list order (what shuffle off plays) it goes before the track that follows it;
    * shuffled, a queued one goes after the queued run there and a list one before the autoplay
    * tracks of the list you're in (as the native queue's), so both stay ahead once shuffle is off;
    * an autoplay one before one on the way goes where that list starts. A marker's own song (or

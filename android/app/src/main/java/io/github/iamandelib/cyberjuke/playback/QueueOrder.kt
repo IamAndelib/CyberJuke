@@ -555,17 +555,17 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     }
 
     /**
-     * Undo of removing a played item: back among the played, right before the played item
-     * [beforeId] (play order), else right before the current one; a list item again, with the
+     * Undo of removing a played item: back among the played, right before [beforeId] among every
+     * item before the current one (play order), heard or not (a "From the top" lap moved by hand,
+     * a list started mid-way), else right before the current one; a list item again, with the
      * queued-by-you mark (a serial, never pending: it has played) when it had it, [mine]. A "From
-     * the top" item ([top]) the same, but before [beforeId] among every item before the current
-     * one, heard or not (a list started mid-way), and unheard.
+     * the top" item ([top]) the same, but unheard.
      */
     fun restorePlayed(item: T, beforeId: String?, mine: Boolean, top: Boolean = false) {
         prune()
         val cur = host.currentIndex
         if (cur !in 0 until host.count) return host.insertTagged(null, listOf(item), listOf(0L))
-        val at = beforeId?.let { id -> (if (top) behind() else played()).firstOrNull { host.idAt(it) == id } } ?: cur
+        val at = beforeId?.let { id -> behind().firstOrNull { host.idAt(it) == id } } ?: cur
         host.insertTagged(at, listOf(item), listOf(if (mine) nextSerial++ else 0L))
         if (!top) hear(at)
         regain(at)
