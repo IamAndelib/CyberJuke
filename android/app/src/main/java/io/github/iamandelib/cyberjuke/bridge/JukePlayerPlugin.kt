@@ -644,12 +644,13 @@ class JukePlayerPlugin : Plugin() {
     }
 
     /**
-     * `restore({ track, kind: 'played' | 'queued' | 'list' | 'autoplay', beforeId: string | null, mine?: true })`:
+     * `restore({ track, kind: 'played' | 'queued' | 'list' | 'autoplay' | 'top', beforeId: string | null, mine?: true })`:
      * Undo of a removal (K3). The track goes back as `kind`, right before the first entry after
      * the current track with id `beforeId` (a queued one only before a queued one, the others
      * never before one), else at the end of its section; never at or before the current track.
      * 'played' goes back before the played entry `beforeId`, else right before the current track,
-     * with the queued-by-you mark when `mine`.
+     * with the queued-by-you mark when `mine`; 'top' (a "From the top" row) the same, but before `beforeId`
+     * among every entry before the current track, and unheard.
      */
     @PluginMethod
     fun restore(call: PluginCall) {
@@ -657,8 +658,8 @@ class JukePlayerPlugin : Plugin() {
         val arr = JSONArray().put(track)
         parseTracksOrReject(call, arr) ?: return
         val kind = call.getString("kind")
-        if (kind != QueueCommands.KIND_PLAYED && NativeQueue.Section.of(kind) == null) {
-            return call.reject("kind must be 'played', 'queued', 'list' or 'autoplay'")
+        if (kind != QueueCommands.KIND_PLAYED && kind != QueueCommands.KIND_TOP && NativeQueue.Section.of(kind) == null) {
+            return call.reject("kind must be 'played', 'queued', 'list', 'autoplay' or 'top'")
         }
         val beforeId = stringArg(call, call.getString("beforeId"), "beforeId") ?: return
         val args = Bundle().apply {

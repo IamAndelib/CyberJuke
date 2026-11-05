@@ -204,7 +204,7 @@ export function UpNext() {
             aria-disabled={offClass(it.track) ? true : undefined}
             {...longPress(it.track, kind === 'queued' ? it : null)}
             onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id))}
-            aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', autoplay' }[kind]}`}
+            aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', autoplay', top: '' }[kind]}`}
           >
             <RowBody track={it.track} />
           </button>

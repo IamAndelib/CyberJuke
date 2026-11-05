@@ -6,8 +6,8 @@ import { UP_NEXT_MAX } from '../core/guards';
 
 export type { RepeatMode };
 
-/** The queue's sections (what played, then Up next's three), which is also what Undo of a remove puts a track back into. */
-export type UpNextKind = 'played' | 'queued' | 'list' | 'autoplay';
+/** The queue's sections (what played, Up next's three, then "From the top", the next lap), which is also what Undo of a remove puts a track back into. */
+export type UpNextKind = 'played' | 'queued' | 'list' | 'autoplay' | 'top';
 
 export interface UpNextItem {
   track: Track;
@@ -38,7 +38,7 @@ export interface UpItem {
   index: number;
 }
 
-export type UpRowKind = Exclude<UpNextKind, 'played'>;
+export type UpRowKind = Exclude<UpNextKind, 'played' | 'top'>;
 
 /** Up next's rows in play order, a run each time the kind changes: Up next shows a heading over each. */
 export interface UpRun {
@@ -208,7 +208,8 @@ export interface Player {
    * Undo a remove (K3): put `track` back as `kind`, right before `beforeId` (the row that
    * followed it in Up next) if that is still ahead (a queued track only before a queued one,
    * the others never before one), else at the end of its section. Never at or before the
-   * current track. `mine`: it was queued by you, and keeps that mark (rule 8).
+   * current track. `played` and `top` go back behind it, before `beforeId` (see Queue.restore).
+   * `mine`: it was queued by you, and keeps that mark (rule 8).
    */
   restore(track: Track, kind: UpNextKind, beforeId: string | null, mine: boolean): Promise<void>;
   /** Autoplay tracks computed for `seedId`; ignored if the seed changed meanwhile. */

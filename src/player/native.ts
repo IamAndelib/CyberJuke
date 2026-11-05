@@ -100,9 +100,10 @@ interface JukePlayerPlugin {
   /**
    * K3: Undo of a remove, back in its section before `beforeId` (else at the section's end), never at or
    * before the current track; 'played' goes back before the played track `beforeId`, else right before the current one,
-   * with the queued-by-you mark when `mine` (rule 8).
+   * with the queued-by-you mark when `mine` (rule 8); 'top' (a "From the top" row) the same, but before `beforeId` among
+   * every track before the current one, and unheard.
    */
-  restore(o: { track: NativeTrack; kind: 'played' | 'queued' | 'list' | 'autoplay'; beforeId: string | null; mine?: true }): Promise<void>;
+  restore(o: { track: NativeTrack; kind: 'played' | 'queued' | 'list' | 'autoplay' | 'top'; beforeId: string | null; mine?: true }): Promise<void>;
   /** K5: remove every item with one of these ids (at most BRIDGE_MAX_ITEMS); the current one skips to the next that stays, or stops. */
   removeIds(o: { ids: string[] }): Promise<void>;
   removeItem(o: { index: number; expectId?: string }): Promise<void>;

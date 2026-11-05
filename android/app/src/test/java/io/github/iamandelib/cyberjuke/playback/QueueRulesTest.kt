@@ -64,8 +64,8 @@ class QueueRulesTest {
                 "restore" -> {
                     val before = if (s.isNull("beforeId")) null else s.getString("beforeId")
                     val kind = s.getString("kind")
-                    if (kind == QueueCommands.KIND_PLAYED) {
-                        p.queue.restorePlayed(s.getString("id"), before, s.optBoolean("mine", false))
+                    if (kind == QueueCommands.KIND_PLAYED || kind == QueueCommands.KIND_TOP) {
+                        p.queue.restorePlayed(s.getString("id"), before, s.optBoolean("mine", false), kind == QueueCommands.KIND_TOP)
                     } else {
                         p.queue.restore(s.getString("id"), NativeQueue.Section.of(kind) ?: throw IllegalArgumentException("kind in $where"), before)
                     }

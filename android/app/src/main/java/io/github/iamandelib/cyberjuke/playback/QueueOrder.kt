@@ -557,15 +557,17 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     /**
      * Undo of removing a played item: back among the played, right before the played item
      * [beforeId] (play order), else right before the current one; a list item again, with the
-     * queued-by-you mark (a serial, never pending: it has played) when it had it, [mine].
+     * queued-by-you mark (a serial, never pending: it has played) when it had it, [mine]. A "From
+     * the top" item ([top]) the same, but before [beforeId] among every item before the current
+     * one, heard or not (a list started mid-way), and unheard.
      */
-    fun restorePlayed(item: T, beforeId: String?, mine: Boolean) {
+    fun restorePlayed(item: T, beforeId: String?, mine: Boolean, top: Boolean = false) {
         prune()
         val cur = host.currentIndex
         if (cur !in 0 until host.count) return host.insertTagged(null, listOf(item), listOf(0L))
-        val at = beforeId?.let { id -> played().firstOrNull { host.idAt(it) == id } } ?: cur
+        val at = beforeId?.let { id -> (if (top) behind() else played()).firstOrNull { host.idAt(it) == id } } ?: cur
         host.insertTagged(at, listOf(item), listOf(if (mine) nextSerial++ else 0L))
-        hear(at)
+        if (!top) hear(at)
         regain(at)
         if (!host.shuffleEnabled) return
         // Inserted at a random place in the shuffle order (Media3's): right before what follows it.
@@ -756,15 +758,18 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     }
 
     /** List indices before the current item in play order that were heard (oldest first). */
-    private fun played(): List<Int> {
+    private fun played(): List<Int> = behind().filter(::isHeard)
+
+    /** List indices before the current item in play order, heard or not (oldest first). */
+    private fun behind(): List<Int> {
         val n = host.count
         val cur = host.currentIndex
         if (n == 0 || cur !in 0 until n) return emptyList()
         if (host.shuffleEnabled) {
             val order = host.shuffleOrder()
-            if (order != null) return order.toList().subList(0, order.indexOf(cur)).filter(::isHeard)
+            if (order != null) return order.toList().subList(0, order.indexOf(cur))
         }
-        return (0 until cur).filter(::isHeard)
+        return (0 until cur).toList()
     }
 
     /** Index by serial for the pending items, in [pending] order, excluding the current item. */

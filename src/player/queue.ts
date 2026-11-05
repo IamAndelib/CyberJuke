@@ -37,7 +37,8 @@
  *  - Undo of a remove (restore) puts the track back as its own kind, before the track that
  *    followed it in Up next (a queued one only among the queued, the others never among them),
  *    never at or before the current track; a played track goes back among the played, before
- *    the one that followed it, else right before the current;
+ *    the one that followed it, else right before the current; a "From the top" one the same,
+ *    but among everything before the current, heard or not, and it stays unheard;
  *  - "played" is what was heard before the current track: the tracks of this list before it in
  *    play order that have been current (a list started mid-way hasn't played the ones before
  *    it). Shuffle turned on mixes what hasn't played: what Played shows stays behind, in the
@@ -409,14 +410,15 @@ export class Queue<T extends Identified> {
    * one that is `beforeId` (a queued one only before a queued one, the others never before one);
    * else at the end of its section: after the queued run, after the last list track ahead (else
    * the queued run), or at the very end. Never at or before the current track. A played one goes
-   * back before the played track `beforeId`, else right before the current one. In list order
-   * (what shuffle off plays) it goes before the track that follows it; shuffled, a queued one goes
-   * after the queued run there and a list one before the autoplay tracks of the list you're in (as
-   * the native queue's), so both stay ahead once shuffle is off; an autoplay one before one on the
-   * way goes where that list starts. A marker's own song (or one that left the list on the way),
-   * back right before the marker's song (or last, the marker gone with it), gets the marker back:
-   * it stays in its own list. With nothing playing, it is added (and plays). A queued one, or
-   * one that had it (`mine`), gets the queued-by-you mark back.
+   * back before the played track `beforeId`, else right before the current one; a "From the top"
+   * one (`top`) the same, but before `beforeId` among every track before the current one, and
+   * unheard. In list order (what shuffle off plays) it goes before the track that follows it;
+   * shuffled, a queued one goes after the queued run there and a list one before the autoplay
+   * tracks of the list you're in (as the native queue's), so both stay ahead once shuffle is off;
+   * an autoplay one before one on the way goes where that list starts. A marker's own song (or
+   * one that left the list on the way), back right before the marker's song (or last, the marker
+   * gone with it), gets the marker back: it stays in its own list. With nothing playing, it is
+   * added (and plays). A queued one, or one that had it (`mine`), gets the queued-by-you mark back.
    */
   restore(item: T, kind: Section, beforeId: string | null, mine = false): void {
     if (!this.cur) {
@@ -427,10 +429,10 @@ export class Queue<T extends Identified> {
     }
     const of = (e: Entry<T>): Section => (this.queued.has(e) ? 'queued' : e.auto ? 'autoplay' : 'list');
     const p = this.order.indexOf(this.cur);
-    const played = kind === 'played';
+    const behind = kind === 'played' || kind === 'top';
     let at = -1;
-    if (beforeId != null) at = this.order.findIndex((e, k) => (played ? k < p : k > p && (of(e) === 'queued') === (kind === 'queued')) && e.item.id === beforeId);
-    if (at < 0 && played) at = p;
+    if (beforeId != null) at = this.order.findIndex((e, k) => (behind ? k < p : k > p && (of(e) === 'queued') === (kind === 'queued')) && e.item.id === beforeId);
+    if (at < 0 && behind) at = p;
     if (at < 0) {
       // The end of the section: after its last track ahead, else where it would start.
       at = p + 1 + this.queuedCount;
@@ -440,7 +442,7 @@ export class Queue<T extends Identified> {
     const entry: Entry<T> = kind === 'autoplay' ? { ...this.entry(item), auto: true } : this.entry(item);
     if (kind === 'queued' || mine) entry.mine = true;
     if (kind === 'queued') this.queued.add(entry);
-    if (played) this.heard.add(entry);
+    if (kind === 'played') this.heard.add(entry);
     const follower = this.order[at];
     this.order.splice(at, 0, entry);
     const firstAuto = this.list.findIndex((e, i) => e.auto && i > this.listStartIndex);

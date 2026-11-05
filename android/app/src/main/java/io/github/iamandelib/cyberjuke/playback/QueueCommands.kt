@@ -64,6 +64,9 @@ internal object QueueCommands {
 
     /** [ARG_KIND] for a played item (NativeQueue.restorePlayed); the others are NativeQueue.Section's. */
     const val KIND_PLAYED = "played"
+
+    /** [ARG_KIND] for a "From the top" item (NativeQueue.restorePlayed with `top`). */
+    const val KIND_TOP = "top"
     const val ARG_BEFORE = "beforeId"
 
     /** [ACTION_RESTORE]: a played item queued by you keeps that mark (NativeQueue.restorePlayed). */
