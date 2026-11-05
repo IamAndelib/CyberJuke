@@ -50,6 +50,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Too long for its line at full size (Screen.tsx TopbarTitle): a little smaller, still one line. */
+.topbar-title.fit {
+  font-size: 17px;
+  letter-spacing: 0;
+}
 .topbar-sub {
   font-size: 12px;
   color: var(--color-fg-dim);
