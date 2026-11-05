@@ -208,4 +208,19 @@ class QueueOpsTest {
         p.queue.dropOnTheWay()
         assertEquals(-1, p.queue.nextStartIndex())
     }
+
+    @Test
+    fun aRadiosFirstBatchJoinsItsListUnderRepeatAll() {
+        val p = player(listOf("a"))
+        p.repeat = "all"
+        p.queue.onRepeatModeChanged(true)
+        p.queue.addAutoplay(listOf("s1", "s2"), joinList = true)
+        assertEquals(-1, p.queue.nextStartIndex())
+        assertEquals(0, p.queue.listStartIndex())
+        assertEquals(listOf("a", "s1", "s2"), p.ids)
+        // Without joinList it would be on the way (the bug this guards: a gate that let it in without it).
+        val q = player(listOf("a"))
+        q.queue.addAutoplay(listOf("s1", "s2"))
+        assertEquals(1, q.queue.nextStartIndex())
+    }
 }

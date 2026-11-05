@@ -154,8 +154,8 @@ internal interface QueueHost<T> {
  *   drops what's on the way (it comes back once repeat is off) and the songs before the current
  *   list, keeping the playing song and the queued ones, and autoplay adds nothing while it is on
  *   (Stations.mayAutoplay). Turning autoplay off drops what's on the way too, never the list
- *   you're in. A jump ahead ([skipTo]) keeps what it jumps over next, and the autoplay tracks after it. The played trim leaves the current list
- *   alone. A removed marker's song hands it to the next one that stays; an Undo never moves one.
+ *   you're in. A jump ahead ([skipTo]) keeps what it jumps over
+ *   next, and the autoplay tracks after it. The played trim leaves the current list alone. A removed marker's song hands it to the next one that stays; an Undo never moves one.
  * - Played is what was heard ([heardUids]) before the current track in play order. Shuffle turned
  *   on mixes what hasn't played: what Played shows stays behind, in the order it played, and
  *   everything else is mixed ahead (Up next, and the list items before where the list started),

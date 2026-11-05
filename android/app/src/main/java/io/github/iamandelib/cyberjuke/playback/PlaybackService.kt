@@ -209,8 +209,8 @@ class PlaybackService : MediaSessionService() {
 
             override fun addRadioItems(items: List<MediaItem>): Boolean {
                 val p = player ?: return false
-                if (!autoplayEnabled || !(Stations.mayAutoplay(p.repeatMode) || Radios.firstBatch(context?.second, p.mediaItemCount))) return false
-                queue.addAutoplay(items)
+                if (!autoplayEnabled || !(Stations.mayAutoplay(p.repeatMode) || radioFirstBatch())) return false
+                queue.addAutoplay(items, joinList = radioFirstBatch())
                 queueChanged()
                 return true
             }
@@ -1195,13 +1195,16 @@ class PlaybackService : MediaSessionService() {
         queueChanged()
     }
 
+    /** The list is a radio's tapped song alone: its first batch joins it ([Radios.firstBatch]). */
+    private fun radioFirstBatch() = Radios.firstBatch(context?.second, player?.mediaItemCount ?: 0)
+
     private fun addAutoplay(items: List<MediaItem>, forSeed: String?) {
         val p = player ?: return
-        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || forSeed != seedId || !(Stations.mayAutoplay(p.repeatMode) || Radios.firstBatch(context?.second, p.mediaItemCount))) {
+        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || forSeed != seedId || !(Stations.mayAutoplay(p.repeatMode) || radioFirstBatch())) {
             Log.i(TAG, "addAutoplay: ${items.size} item(s) dropped (stale or autoplay off)")
             return
         }
-        queue.addAutoplay(items, joinList = Radios.firstBatch(context?.second, p.mediaItemCount))
+        queue.addAutoplay(items, joinList = radioFirstBatch())
         Log.i(TAG, "addAutoplay: ${items.size} item(s), ${queue.ahead()} ahead")
         queueChanged()
     }
@@ -1342,7 +1345,7 @@ class PlaybackService : MediaSessionService() {
         val p = player ?: return
         // Nothing loading (a restored session before its first Play): no requests for more yet.
         val idle = p.playbackState == Player.STATE_IDLE && !p.playWhenReady
-        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || !(Stations.mayAutoplay(p.repeatMode) || Radios.firstBatch(context?.second, p.mediaItemCount)) || p.mediaItemCount == 0 || seedId == null || idle) {
+        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || !(Stations.mayAutoplay(p.repeatMode) || radioFirstBatch()) || p.mediaItemCount == 0 || seedId == null || idle) {
             lowKey = null
             QueueInfo.clearLow()
             return
