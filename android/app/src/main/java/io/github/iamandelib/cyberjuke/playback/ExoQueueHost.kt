@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
@@ -23,6 +24,7 @@ internal class ExoQueueHost(private val player: () -> ExoPlayer) : QueueHost<Med
     override val count: Int get() = p.mediaItemCount
     override val currentIndex: Int get() = if (p.mediaItemCount == 0) -1 else p.currentMediaItemIndex
     override val shuffleEnabled: Boolean get() = p.shuffleModeEnabled
+    override val repeatAll: Boolean get() = p.repeatMode == Player.REPEAT_MODE_ALL
 
     override fun serialAt(index: Int): Long =
         p.getMediaItemAt(index).mediaMetadata.extras?.getLong(QueueCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L

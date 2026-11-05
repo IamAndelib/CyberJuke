@@ -55,9 +55,9 @@ describe('offlineGuard', () => {
     await p.toggle();
     await p.next();
     await p.prev();
-    await p.skipTo(1, 'b');
+    await p.skipTo(1, 'b', true);
     expect(inner.playList).toHaveBeenCalledWith([track], 0, undefined);
-    expect(inner.skipTo).toHaveBeenCalledWith(1, 'b');
+    expect(inner.skipTo).toHaveBeenCalledWith(1, 'b', true);
     for (const c of [inner.play, inner.toggle, inner.next, inner.prev]) expect(c).toHaveBeenCalledTimes(1);
     expect(refused).not.toHaveBeenCalled();
   });
@@ -219,7 +219,7 @@ describe('offlineGuard', () => {
     await p.prev();
     await p.skipTo(2, c.id);
     expect(inner.prev).toHaveBeenCalledTimes(1);
-    expect(inner.skipTo).toHaveBeenCalledWith(2, c.id);
+    expect(inner.skipTo).toHaveBeenCalledWith(2, c.id, undefined);
     // b isn't saved: a tap on it is refused.
     await p.skipTo(1, b.id);
     expect(inner.skipTo).toHaveBeenCalledTimes(1);

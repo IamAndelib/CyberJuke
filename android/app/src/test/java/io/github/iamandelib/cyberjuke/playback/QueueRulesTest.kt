@@ -53,6 +53,7 @@ class QueueRulesTest {
         p.queue.setList(strings(c.getJSONArray("list")), c.optInt("start", 0))
         val steps = c.getJSONArray("steps")
         var undo: Triple<String, String, String?>? = null
+        var top = emptyList<String>()
         for (k in 0 until steps.length()) {
             val s = steps.getJSONObject(k)
             val where = "'$name' (seed $seed) step $k ${s.getString("op")}"
@@ -79,7 +80,9 @@ class QueueRulesTest {
                 "undo" -> undo!!.let { (id, kind, before) -> p.queue.restore(id, NativeQueue.Section.of(kind)!!, before) }
                 "removeIds" -> p.queue.removeIds(strings(s.getJSONArray("ids")).toSet())
                 "dropOnTheWay" -> p.queue.dropOnTheWay()
-                "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")))
+                "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")), s.optBoolean("lap", false))
+                // The next lap ("From the top"): the play order from its first song to the current one, without the songs you queued.
+                "keepTop" -> top = (p.played() + p.ids[p.current]).filter { p.serials[p.ids.indexOf(it)] == 0L }
                 "next" -> p.next()
                 "nextAuto" -> p.nextAuto()
                 "prev" -> p.prev(s.optLong("positionMs", 0L))
@@ -90,13 +93,13 @@ class QueueRulesTest {
                     p.repeat = s.getString("mode")
                     p.queue.onRepeatModeChanged(p.repeat == "all")
                 }
-                "expect" -> expect(p, s, where)
+                "expect" -> expect(p, s, where, top)
                 else -> throw IllegalArgumentException("unknown op in $where")
             }
         }
     }
 
-    private fun expect(p: FakePlayer, s: JSONObject, where: String) {
+    private fun expect(p: FakePlayer, s: JSONObject, where: String, top: List<String>) {
         val up = p.upNext()
         if (s.has("current")) {
             val want = if (s.isNull("current")) null else s.getString("current")
@@ -125,6 +128,7 @@ class QueueRulesTest {
         if (s.has("list")) assertEquals("list in $where", strings(s.getJSONArray("list")), p.ids.toList())
         if (s.has("played")) assertEquals("played in $where", strings(s.getJSONArray("played")), p.played())
         if (s.has("mine")) assertEquals("mine in $where", strings(s.getJSONArray("mine")), p.ids.filterIndexed { i, _ -> p.serials[i] != 0L })
+        if (s.has("upNextIsKeptTop")) assertEquals("upNextIsKeptTop in $where", top, listOf(p.ids[p.current]) + up)
         val (lead, list, autos) = sections(p).map { it.second }
         if (s.has("queuedIds")) assertEquals("queuedIds in $where", strings(s.getJSONArray("queuedIds")), lead)
         if (s.has("listIds")) assertEquals("listIds in $where", strings(s.getJSONArray("listIds")), list)
@@ -182,12 +186,14 @@ class QueueRulesTest {
             queue.onPlaylistChanged()
             onTimeline?.invoke()
         }
-        private val transition: () -> Unit = { queue.onTransition() }
+        /** The current item changed; [forward]: a Next or a song's end (PlaybackService: a forward move). */
+        private fun transition(forward: Boolean = false): () -> Unit = { queue.onTransition(forward) }
 
         // ---- QueueHost ----
         override val count get() = ids.size
         override val currentIndex get() = current
         override val shuffleEnabled get() = shuffle
+        override val repeatAll get() = repeat == "all"
         override fun serialAt(index: Int) = serials[index]
         override fun uidAt(index: Int) = uids[index]
         private fun newUids(n: Int) = List(n) { nextUid++ }
@@ -223,7 +229,7 @@ class QueueRulesTest {
             orderInsert(pos, items.size)
             if (current < 0) {
                 current = 0
-                emit(timelineChanged, transition)
+                emit(timelineChanged, transition())
                 return
             }
             if (pos <= current) current += items.size
@@ -245,7 +251,7 @@ class QueueRulesTest {
             items.indices.forEach { this.auto.add(auto.getOrElse(it) { false }) }
             order = ArrayList((items.indices).toList().shuffled(rnd))
             current = if (items.isEmpty()) -1 else start.coerceIn(0, items.size - 1)
-            emit(timelineChanged, transition)
+            emit(timelineChanged, transition())
         }
 
         override fun insertAuto(at: Int?, items: List<String>) {
@@ -257,7 +263,7 @@ class QueueRulesTest {
             orderInsert(pos, items.size)
             if (current < 0) {
                 current = 0
-                emit(timelineChanged, transition)
+                emit(timelineChanged, transition())
                 return
             }
             if (pos <= current) current += items.size
@@ -292,7 +298,7 @@ class QueueRulesTest {
             uids.removeAt(index)
             orderRemove(index)
             if (playing) current = if (next >= 0) next else index.coerceAtMost(ids.size - 1)
-            if (playing && current != index) emit(timelineChanged, transition) else emit(timelineChanged)
+            if (playing && current != index) emit(timelineChanged, transition()) else emit(timelineChanged)
         }
 
         // ---- ExoPlayer shuffle order bookkeeping (DefaultShuffleOrder) ----
@@ -307,12 +313,15 @@ class QueueRulesTest {
         }
 
         // ---- player operations ----
-        override fun seekTo(index: Int) {
+        override fun seekTo(index: Int) = moveTo(index, forward = false)
+
+        /** Player.seekTo; [forward]: a Next (PlaybackService tells the queue it moved forward). */
+        private fun moveTo(index: Int, forward: Boolean) {
             require(index in ids.indices)
             if (index == current) return
             current = index
             ended = false
-            emit(transition)
+            emit(transition(forward))
         }
 
         private fun playOrder(): List<Int> = if (shuffle) order else ids.indices.toList()
@@ -343,12 +352,12 @@ class QueueRulesTest {
         /** JukePlayerPlugin.skipToNext: Media3's (repeat one as off). */
         fun next() {
             val n = nextIndex(current, navRepeat)
-            if (n >= 0) seekTo(n)
+            if (n >= 0) moveTo(n, forward = true)
         }
 
         fun nextAuto() {
             if (repeat == "one") {
-                emit(transition) // MEDIA_ITEM_TRANSITION_REASON_REPEAT
+                emit(transition()) // MEDIA_ITEM_TRANSITION_REASON_REPEAT
                 return
             }
             val n = nextIndex(current, repeat)
@@ -357,7 +366,7 @@ class QueueRulesTest {
                 return
             }
             current = n
-            emit(transition)
+            emit(transition(forward = true))
         }
 
         fun prev(positionMs: Long) {
@@ -375,7 +384,7 @@ class QueueRulesTest {
             val changed = index == current
             if (index < current) current--
             if (current >= ids.size) current = ids.size - 1
-            if (changed) emit(timelineChanged, transition) else emit(timelineChanged)
+            if (changed) emit(timelineChanged, transition()) else emit(timelineChanged)
         }
 
         fun toggleShuffle(on: Boolean) {

@@ -757,7 +757,7 @@ class JukePlayerPlugin : Plugin() {
         }
     }
 
-    /** `skipToIndex({ index, expectId? })`; the service checks `expectId` (K2). */
+    /** `skipToIndex({ index, expectId?, lap? })`; the service checks `expectId` (K2). `lap`: a "From the top" row. */
     @PluginMethod
     fun skipToIndex(call: PluginCall) {
         val index = call.intArg("index") ?: return call.reject("index is required")
@@ -770,6 +770,7 @@ class JukePlayerPlugin : Plugin() {
                 val args = Bundle().apply {
                     putInt(QueueCommands.ARG_INDEX, index)
                     putExpect(expectId)
+                    putBoolean(QueueCommands.ARG_LAP, call.getBoolean("lap", false) ?: false)
                 }
                 sendCommand(call, c, QueueCommands.SKIP_TO, args) {
                     if (it.playbackState == Player.STATE_IDLE && !blocked(it)) it.prepare()

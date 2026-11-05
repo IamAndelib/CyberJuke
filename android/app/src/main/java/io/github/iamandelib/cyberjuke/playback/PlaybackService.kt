@@ -140,6 +140,9 @@ class PlaybackService : MediaSessionService() {
     /** onDestroy has begun: nothing waits for the handler any more. */
     private var destroying = false
 
+    /** The next transition moves on ([movingOn]): Media3 reports it as a seek, like a tap or Previous. */
+    private var forwardAsked = false
+
     /** The Crossfade setting, in ms (0 = Off), as the load-ahead needs it ([LoadAhead.wanted]). */
     private var crossfadeMs = 0
 
@@ -715,11 +718,11 @@ class PlaybackService : MediaSessionService() {
      */
     private inner class SessionPlayer(p: ExoPlayer) : ForwardingPlayer(p) {
         override fun seekToNext() {
-            if (!takeNext() && !nextSaved()) super.seekToNext()
+            movingOn(this) { if (!takeNext() && !nextSaved()) super.seekToNext() }
         }
 
         override fun seekToNextMediaItem() {
-            if (!takeNext() && !nextSaved()) super.seekToNextMediaItem()
+            movingOn(this) { if (!takeNext() && !nextSaved()) super.seekToNextMediaItem() }
         }
 
         private fun takeNext() = crossfade?.takeNext(repeatOne = repeatMode == Player.REPEAT_MODE_ONE) == true
@@ -728,6 +731,19 @@ class PlaybackService : MediaSessionService() {
             seekToDefaultPosition(offlineNext() ?: return false)
             return true
         }
+    }
+
+    /**
+     * [move] moves [p] on (Next, an error skip, an offline skip): its transition is forward, which
+     * the queue needs to tell Repeat all's loop from a jump back (NativeQueue.onTransition). That
+     * transition takes the flag; when [move] changed nothing, it goes here. Inside a listener
+     * callback Media3 delivers the transition after it, but the player's current item has changed already.
+     */
+    private inline fun movingOn(p: Player, move: () -> Unit) {
+        val from = p.currentMediaItem
+        forwardAsked = true
+        move()
+        if (p.currentMediaItem === from) forwardAsked = false
     }
 
     /**
@@ -793,7 +809,8 @@ class PlaybackService : MediaSessionService() {
         updateLoadAhead()
         // The new player moved to its track with nobody listening: a track change's bookkeeping
         // (the queue, autoplay, the saved session, prefetch, Auto quality) runs now, as for a
-        // jump: its start isn't a rebuffer, nor a track's own end to judge.
+        // jump: its start isn't a rebuffer, nor a track's own end to judge. It moved on, though.
+        forwardAsked = true
         listener.onMediaItemTransition(next.currentMediaItem, Player.MEDIA_ITEM_TRANSITION_REASON_SEEK)
     }
 
@@ -1020,7 +1037,9 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            queue.onTransition()
+            // A Next, a tap and Previous all come as a seek: forwardAsked says it moved on (Repeat all's loop).
+            queue.onTransition(forward = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || forwardAsked)
+            forwardAsked = false
             // Not in repeat all's loop: it would lose its songs lap after lap.
             val trimmed = if (player?.repeatMode != Player.REPEAT_MODE_ALL) queue.trimPlayedAuto(QueueCommands.KEEP_PLAYED_AUTO) else 0
             if (trimmed > 0) Log.i(TAG, "Trimmed $trimmed played autoplay item(s)")
@@ -1052,7 +1071,7 @@ class PlaybackService : MediaSessionService() {
             if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && p != null && !AudioCache.online &&
                 JukeUris.audioIdOf(mediaItem) !in AudioCache.savedLiked && !JukeUris.isLocal(mediaItem)
             ) {
-                p.offlineNext()?.let { p.seekToDefaultPosition(it) }
+                p.offlineNext()?.let { movingOn(p) { p.seekToDefaultPosition(it) } }
             }
             StreamResolver.releaseFormats()
             governQuality(mediaItem)
@@ -1084,7 +1103,7 @@ class PlaybackService : MediaSessionService() {
                 SystemClock.elapsedRealtime() - endedAt < CONTINUE_AFTER_END_MS
             ) {
                 Log.i(TAG, "Items added after the end: continuing")
-                p.seekToNextMediaItem()
+                movingOn(p) { p.seekToNextMediaItem() }
             }
         }
 
@@ -1238,10 +1257,10 @@ class PlaybackService : MediaSessionService() {
         updateLoadAhead()
     }
 
-    /** A tap in Up next: on an autoplay item the radio continues from it. */
-    private fun skipTo(p: ExoPlayer, index: Int) {
+    /** A tap in Up next: on an autoplay item the radio continues from it; [lap]: on a "From the top" row (NativeQueue.skipTo). */
+    private fun skipTo(p: ExoPlayer, index: Int, lap: Boolean) {
         resetFailures()
-        if (queue.skipTo(index)) reseed(p.currentMediaItem) else queueChanged()
+        if (queue.skipTo(index, lap)) reseed(p.currentMediaItem) else queueChanged()
     }
 
     private fun resetFailures() {
@@ -1593,7 +1612,7 @@ class PlaybackService : MediaSessionService() {
                 val saved = if (action.network && index == p.currentMediaItemIndex && offlineSkips < p.mediaItemCount) p.offlineNext() else null
                 if (saved != null) {
                     offlineSkips++
-                    p.seekToDefaultPosition(saved)
+                    movingOn(p) { p.seekToDefaultPosition(saved) }
                     p.prepare()
                     PlayerBus.emitTrackError(trackId, message, true, network = true)
                     return
@@ -1739,7 +1758,7 @@ class PlaybackService : MediaSessionService() {
             index == p.currentMediaItemIndex -> {
                 // Normal case (ExoPlayer reports load errors for the playing item): skip it and
                 // keep the list unchanged, so indices on the web side stay valid.
-                p.seekToNextMediaItem()
+                movingOn(p) { p.seekToNextMediaItem() }
                 p.prepare()
                 PlayerBus.emitTrackError(trackId, message, true)
             }
@@ -1888,7 +1907,7 @@ class PlaybackService : MediaSessionService() {
                         val index = args.getInt(QueueCommands.ARG_INDEX, -1)
                         if (index !in 0 until p.mediaItemCount) return bad
                         if (!matches(index)) return stale
-                        skipTo(p, index)
+                        skipTo(p, index, args.getBoolean(QueueCommands.ARG_LAP, false))
                     }
                     QueueCommands.ACTION_REMOVE -> {
                         val index = args.getInt(QueueCommands.ARG_INDEX, -1)

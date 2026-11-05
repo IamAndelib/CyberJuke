@@ -96,6 +96,9 @@ internal interface QueueHost<T> {
     val currentIndex: Int
     val shuffleEnabled: Boolean
 
+    /** Repeat all is on (Player.REPEAT_MODE_ALL). */
+    val repeatAll: Boolean
+
     /** The "Add to queue" serial of the item at [index], 0 if it was not user-queued. */
     fun serialAt(index: Int): Long
 
@@ -165,6 +168,8 @@ internal interface QueueHost<T> {
  *   on mixes what hasn't played: what Played shows stays behind, in the order it played, and
  *   everything else is mixed ahead (Up next, and the list items before where the list started),
  *   the list ahead of the autoplay tracks. New autoplay tracks go at the end, mixed among themselves.
+ * - Repeat all never brings back a song you queued (rule 8): when the list loops, or a tap on a
+ *   "From the top" row enters the next lap, the heard ones leave ([onTransition], [skipTo]).
  *
  * Pending items are tracked by serial (not mediaId), so the same track queued twice stays two
  * entries. [pending]'s iteration order is their play order. Not thread-safe: call it on the
@@ -279,10 +284,22 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         if (movesOn(cur)) moveOn(cur)
     }
 
-    /** The current item changed (any reason): keep the pending ones right after it. */
-    fun onTransition() {
+    /** The uid of the item current at the last transition (0: none). */
+    private var lastUid = 0L
+
+    /**
+     * The current item changed (any reason): keep the pending ones right after it. [forward]: it
+     * moved on (a song's end, Next, an error skip, the crossfade's hand-over). Forward to an item
+     * before the last one in play order with Repeat all on is the loop: the heard songs you queued
+     * leave (rule 8). Previous and a tap walk back, so they stay.
+     */
+    fun onTransition(forward: Boolean) {
         if (replacing) return
+        val cur = playPos(host.currentIndex)
+        val looped = forward && host.repeatAll && cur >= 0 && cur < playPos(indexOfUid(lastUid))
         hearCurrent()
+        if (looped) dropHeardMine()
+        lastUid = if (host.currentIndex in 0 until host.count) host.uidAt(host.currentIndex) else 0L
         prune()
         if (host.shuffleEnabled) enforceShuffleOrder() else enforceLinearOrder()
     }
@@ -650,6 +667,13 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         drop { it < listStartIndex() }
     }
 
+    /** Repeat all's next lap: the heard songs you queued leave, all but the playing one (rule 8). */
+    private fun dropHeardMine() {
+        val cur = host.currentIndex
+        val gone = (0 until host.count).filter { it != cur && host.serialAt(it) != 0L && isHeard(it) }
+        for (i in gone.asReversed()) host.removeAt(i)
+    }
+
     /** Removes the items [gone] picks by list index, except the playing one and the queued ones. */
     private inline fun drop(gone: (Int) -> Boolean) {
         val out = (0 until host.count).filter { it != host.currentIndex && host.serialAt(it) !in pending && gone(it) }
@@ -658,15 +682,18 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
 
     /**
      * A user jump to [index]. An item further ahead plays now and what it jumps over stays next
-     * (YouTube Music): it moves to right after the current one first. Returns true when it is an
-     * autoplay item: more follow from it, after the autoplay items still after it, which stay.
+     * (YouTube Music): it moves to right after the current one first. [lap]: a tap on a "From the
+     * top" row enters the next lap, so the heard songs you queued leave, as at the loop. Returns
+     * true when it is an autoplay item: more follow from it, after the autoplay items still after
+     * it, which stay.
      */
-    fun skipTo(index: Int): Boolean {
+    fun skipTo(index: Int, lap: Boolean = false): Boolean {
         if (index !in 0 until host.count) return false
         val on = movesOn(index) // before it moves next: its place in the list is what counts
         if (on && host.shuffleEnabled) bringJumpedOver()
         host.seekTo(if (upcoming().indexOf(index) > 0) bringNext(index) else index)
         if (on && nextStart != 0L) moveOn(host.currentIndex) // the transition may have moved on already
+        if (lap) dropHeardMine()
         val cur = host.currentIndex
         return cur in 0 until host.count && host.isAutoAt(cur)
     }
@@ -709,6 +736,12 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         order.add(order.indexOf(cur) + 1, index)
         host.setShuffleOrder(order.toIntArray())
         return index
+    }
+
+    /** [index]'s place in the play order, -1 for none. */
+    private fun playPos(index: Int): Int {
+        if (index !in 0 until host.count) return -1
+        return if (host.shuffleEnabled) host.shuffleOrder()?.indexOf(index) ?: index else index
     }
 
     /** List indices after the current item, in play order (repeat off). */

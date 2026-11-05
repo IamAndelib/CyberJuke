@@ -361,9 +361,9 @@ export class NativePlayer implements Player {
   }
 
   /** A tapped row plays, paused or not, as on the web; play() waits out a back-off (a stale index plays nothing). */
-  skipTo = (index: number, expectId?: string) =>
+  skipTo = (index: number, expectId?: string, lap = false) =>
     this.edit(async () => {
-      await JukePlayer.skipToIndex({ index, ...(expectId != null && { expectId }) });
+      await JukePlayer.skipToIndex({ index, ...(expectId != null && { expectId }), ...(lap && { lap }) });
       await JukePlayer.play();
     });
   setShuffle = (enabled: boolean) => this.setMode({ shuffle: enabled }, () => JukePlayer.setShuffle({ enabled }));

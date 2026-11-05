@@ -30,8 +30,8 @@ internal object QueueCommands {
     const val ACTION_SET_GAPLESS = "io.github.iamandelib.cyberjuke.SET_GAPLESS"
 
     /**
-     * A tap in Up next: [ARG_INDEX] (and [ARG_EXPECT]). On an autoplay item the radio continues
-     * from it.
+     * A tap in Up next: [ARG_INDEX] (and [ARG_EXPECT], [ARG_LAP]). On an autoplay item the radio
+     * continues from it.
      */
     const val ACTION_SKIP_TO = "io.github.iamandelib.cyberjuke.SKIP_TO"
 
@@ -68,6 +68,9 @@ internal object QueueCommands {
 
     /** [ACTION_RESTORE]: a played item queued by you keeps that mark (NativeQueue.restorePlayed). */
     const val ARG_MINE = "mine"
+
+    /** [ACTION_SKIP_TO]: a "From the top" row, which enters the next lap (NativeQueue.skipTo). */
+    const val ARG_LAP = "lap"
     const val ARG_MS = "ms"
 
     /** SessionResult extra: the reject code for the web (see [STALE_INDEX], [TOO_LARGE]). */

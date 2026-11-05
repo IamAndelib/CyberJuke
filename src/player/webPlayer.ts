@@ -445,10 +445,10 @@ export class WebPlayer implements Player {
     return expectId == null || this.q.items[index]?.id === expectId;
   }
 
-  async skipTo(index: number, expectId?: string): Promise<void> {
+  async skipTo(index: number, expectId?: string, lap = false): Promise<void> {
     if (!this.holds(index, expectId)) return this.publish();
     const auto = this.q.isAuto(index);
-    if (!this.q.skipTo(index)) return;
+    if (!this.q.skipTo(index, lap)) return;
     // A tapped autoplay track: the radio continues from it.
     if (auto) this.seed = this.q.current;
     await this.loadCurrent(true, true);

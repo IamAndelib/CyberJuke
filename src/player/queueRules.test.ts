@@ -42,6 +42,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
       // Up next as the app builds it from what the player publishes.
       const upNext = () => q.upNextItems().map(({ item, ...u }) => ({ track: item as Track, ...u }));
       let undo: [string, Section, string | null] | null = null;
+      let top: string[] = [];
       for (const s of c.steps) {
         switch (s.op) {
           case 'setList':
@@ -54,7 +55,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             q.addAuto((s.ids as string[]).map(t), s.joinList === true);
             break;
           case 'skipTo':
-            q.skipTo(indexOf(s.id));
+            q.skipTo(indexOf(s.id), s.lap === true);
             break;
           case 'next':
             q.next(false);
@@ -89,6 +90,12 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
           case 'removeIds':
             q.removeIds(s.ids as string[]);
             break;
+          case 'keepTop': {
+            // The next lap ("From the top"): the play order from its first song to the current one, without the songs you queued.
+            const mine = new Set(q.mineIndices());
+            top = [...q.previousIndices(), q.index].filter((i) => !mine.has(i)).map((i) => q.items[i].id);
+            break;
+          }
           case 'dropOnTheWay':
             q.dropOnTheWay();
             break;
@@ -118,6 +125,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             if ('list' in s) expect(ids(q.items)).toEqual(s.list);
             if ('played' in s) expect(q.previousIndices().map((i) => q.items[i].id)).toEqual(s.played);
             if ('mine' in s) expect(q.mineIndices().map((i) => q.items[i].id)).toEqual(s.mine);
+            if ('upNextIsKeptTop' in s) expect([q.current?.id, ...ids(q.upNext())]).toEqual(top);
             if ('place' in s) expect(placeOf({ ...EMPTY_STATE, queue: q.items as Track[], index: q.index, upNext: upNext() })).toBe(s.place);
             const sec = sectionsOf(upNext(), null);
             const sIds = (xs: UpItem[]) => xs.map((x) => x.track.id);

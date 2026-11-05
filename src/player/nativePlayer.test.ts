@@ -426,11 +426,19 @@ describe('NativePlayer: edits (K2)', () => {
     const p = new NativePlayer();
     list(p);
     await p.skipTo(2, 'C');
+    expect(fake.plugin.skipToIndex).toHaveBeenCalledWith({ index: 2, expectId: 'C' });
     expect(fake.plugin.play).toHaveBeenCalledTimes(1);
     expect(fake.plugin.skipToIndex.mock.invocationCallOrder[0]).toBeLessThan(fake.plugin.play.mock.invocationCallOrder[0]);
     fake.plugin.skipToIndex.mockRejectedValueOnce(Object.assign(new Error('STALE_INDEX'), { code: 'STALE_INDEX' }));
     await p.skipTo(2, 'C');
     expect(fake.plugin.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('a tap on a "From the top" row says so: the heard songs you queued leave first (rule 8)', async () => {
+    const p = new NativePlayer();
+    list(p);
+    await p.skipTo(0, 'A', true);
+    expect(fake.plugin.skipToIndex).toHaveBeenCalledWith({ index: 0, expectId: 'A', lap: true });
   });
 
   it('restore sends the track, its section, the track it goes before (K3) and the mark of a song you queued (rule 8)', async () => {

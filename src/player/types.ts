@@ -180,9 +180,10 @@ export interface Player {
   /**
    * Index commands (K2) take the id the caller sees at that index (for move, at `from`):
    * when the list changed meanwhile and it is something else, nothing happens (the
-   * state is refreshed, no error).
+   * state is refreshed, no error). `lap`: a "From the top" row, which enters the next lap, so
+   * the heard songs you queued leave first (rule 8).
    */
-  skipTo(index: number, expectId?: string): Promise<void>;
+  skipTo(index: number, expectId?: string, lap?: boolean): Promise<void>;
   setShuffle(enabled: boolean): Promise<void>;
   setRepeat(mode: RepeatMode): Promise<void>;
   move(from: number, to: number, expectId?: string): Promise<void>;

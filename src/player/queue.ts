@@ -43,7 +43,10 @@
  *    it). Shuffle turned on mixes what hasn't played: what Played shows stays behind, in the
  *    order it played, and everything else is mixed ahead (Up next, and the list tracks before
  *    where the list started), the list's ahead of the autoplay ones; new autoplay tracks go at
- *    the end, mixed among themselves. Off puts the list order back.
+ *    the end, mixed among themselves. Off puts the list order back;
+ *  - Repeat all never brings back a song you queued (rule 8): when the list loops (next() from its
+ *    last song to order[0], as Media3's), or a tap on a "From the top" row enters the next lap
+ *    (skipTo's `lap`), the heard ones leave, all but the playing one. Previous walks back: they stay.
  *
  * Up next labels each track by its own kind, never by its place: queued by you, the
  * list, autoplay (sectionsOf in ./types).
@@ -205,7 +208,8 @@ export class Queue<T extends Identified> {
   /**
    * Advance. `auto` is true when the current track ended by itself (repeat-one then
    * replays it); a user "next" moves on, as Media3's: at the end of the queue only with
-   * repeat all, to its start. Returns the new current track, or null when there is none.
+   * repeat all, to its start, where the heard songs you queued leave (rule 8). Returns the
+   * new current track, or null when there is none.
    */
   next(auto = false): T | null {
     if (!this.cur) return null;
@@ -220,6 +224,7 @@ export class Queue<T extends Identified> {
     if (this.repeat === 'all') {
       this.cur = this.order[0];
       this.settle();
+      this.dropHeardMine();
       return this.cur.item;
     }
     return null;
@@ -252,9 +257,10 @@ export class Queue<T extends Identified> {
    * Jump to a list index. A track further ahead plays now and what it jumps over stays in Up
    * next (YouTube Music): it moves to right after the current one first. Tracks still queued
    * stay next (see the rule above); so do the autoplay tracks after an autoplay track jumped to. Shuffled, a
-   * jump that moves on brings the current list's unheard songs along (the rule above).
+   * jump that moves on brings the current list's unheard songs along (the rule above). `lap`: a tap
+   * on a "From the top" row enters the next lap, so the heard songs you queued leave, as at the loop.
    */
-  skipTo(index: number): T | null {
+  skipTo(index: number, lap = false): T | null {
     const e = this.list[index];
     if (!e) return null;
     const on = this.movesOn(e);
@@ -276,6 +282,7 @@ export class Queue<T extends Identified> {
     }
     this.cur = e;
     this.settle(on);
+    if (lap) this.dropHeardMine();
     this.keepQueuedNext();
     this.trimPlayed();
     return e.item;
@@ -504,6 +511,14 @@ export class Queue<T extends Identified> {
     const out = new Set(this.list.filter((e, i) => e !== this.cur && !this.queued.has(e) && gone(i)));
     this.list = this.list.filter((e) => !out.has(e));
     this.order = this.order.filter((e) => !out.has(e));
+  }
+
+  /** Repeat all's next lap: the heard songs you queued leave, all but the playing one (rule 8). */
+  private dropHeardMine(): void {
+    const gone = new Set(this.list.filter((e) => e.mine && e !== this.cur && this.heard.has(e)));
+    this.unmark(gone);
+    this.list = this.list.filter((e) => !gone.has(e));
+    this.order = this.order.filter((e) => !gone.has(e));
   }
 
   /** The tracks before the current one in play order that were heard: what Played shows. */

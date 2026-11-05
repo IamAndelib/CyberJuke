@@ -97,6 +97,6 @@ export function offlineGuard(p: Player, o: OfflinePolicy): Player {
       return o.online() || savedAhead(s, o.saved()) ? p.next() : refused(why(s.upNext[0]?.track));
     },
     prev: () => onto(behind(), () => p.prev()),
-    skipTo: (index, expectId) => onto(p.state.peek().queue[index], () => p.skipTo(index, expectId)),
+    skipTo: (index, expectId, lap) => onto(p.state.peek().queue[index], () => p.skipTo(index, expectId, lap)),
   };
 }
