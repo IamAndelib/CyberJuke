@@ -38,6 +38,10 @@ internal data class LastSession(
     val savedAtMs: Long = 0L,
     /** Where [entries] start in the player's whole list (a long list keeps a window of it). */
     val offset: Int = 0,
+    /** Where the list you're in starts, as an index in [entries] (what came before it is history). */
+    val listStart: Int = 0,
+    /** Where what comes on after the list starts, as an index in [entries]; -1: nothing. */
+    val nextStart: Int = -1,
 ) {
     /** One track: the NativeTrack fields and its part of Up next. */
     data class Entry(
@@ -110,6 +114,8 @@ internal data class LastSession(
             seedId?.let { put("seedId", it) }
             put("savedAtMs", savedAtMs)
             put("offset", offset)
+            put("listStart", listStart)
+            put("nextStart", nextStart)
         }.toString()
     }
 
@@ -141,12 +147,16 @@ internal data class LastSession(
         entries == other.entries && index == other.index && positionMs == other.positionMs &&
         durationMs == other.durationMs && shuffle == other.shuffle &&
         (order?.contentEquals(other.order) ?: (other.order == null)) && repeat == other.repeat &&
-        context == other.context && seedId == other.seedId && savedAtMs == other.savedAtMs && offset == other.offset
+        context == other.context && seedId == other.seedId && savedAtMs == other.savedAtMs && offset == other.offset &&
+        listStart == other.listStart && nextStart == other.nextStart
 
-    override fun hashCode(): Int = listOf(entries, index, positionMs, durationMs, shuffle, order?.contentHashCode(), repeat, context, seedId, savedAtMs, offset).hashCode()
+    override fun hashCode(): Int = listOf(entries, index, positionMs, durationMs, shuffle, order?.contentHashCode(), repeat, context, seedId, savedAtMs, offset, listStart, nextStart).hashCode()
 
     companion object {
-        private const val VERSION = 1
+        private const val VERSION = 2
+
+        /** Version 1 (no list markers) is still read: see [decode]. */
+        private const val VERSION_1 = 1
 
         /** The position preference: where in the list playback is, and when that was. */
         fun positionPref(index: Int, id: String, positionMs: Long, durationMs: Long, savedAtMs: Long): String =
@@ -161,6 +171,9 @@ internal data class LastSession(
         /**
          * A session of the whole list: [MAX_ENTRIES] around [index] at most (the shuffle order
          * keeps the ones in the window, in its order). Null when there is nothing to keep.
+         * [listStart] and [nextStart] are indices in [entries] (the whole list), saved as indices
+         * in the window: one before it is clamped to its first entry, and a [nextStart] after it
+         * is -1 (nothing of what follows was kept). [nextStart] -1 stays -1.
          */
         fun of(
             entries: List<Entry>,
@@ -173,6 +186,8 @@ internal data class LastSession(
             context: Pair<String, String>?,
             seedId: String?,
             savedAtMs: Long = 0L,
+            listStart: Int = 0,
+            nextStart: Int = -1,
         ): LastSession? {
             if (entries.isEmpty() || index !in entries.indices) return null
             var lo = 0
@@ -195,18 +210,22 @@ internal data class LastSession(
                 seedId = seedId,
                 savedAtMs = savedAtMs,
                 offset = lo,
+                listStart = (listStart - lo).coerceIn(0, hi - lo - 1),
+                nextStart = if (nextStart < 0 || nextStart >= hi) -1 else (nextStart - lo).coerceAtLeast(0),
             )
         }
 
         /**
          * Null for anything that isn't a session this version wrote, or one with a track it
          * can't play (neither a [validYtId] nor a Jukebox MP3 link): a broken file is dropped,
-         * never half restored. (A session with an MP3 is still version 1: older builds, which
-         * can't play one, drop it as such.)
+         * never half restored. A version 1 file (no markers) reads as the list starting at 0 and
+         * what follows at the first autoplay entry, or -1. (Older builds drop a session with an
+         * MP3 or a version they don't know, as invalid.)
          */
         fun decode(text: String, validYtId: (String) -> Boolean = SessionPolicy::isValidYtId): LastSession? = try {
             val o = JSONObject(text)
-            if (o.optInt("v") != VERSION) return null
+            val version = o.optInt("v")
+            if (version != VERSION && version != VERSION_1) return null
             val arr = o.getJSONArray("tracks")
             if (arr.length() == 0 || arr.length() > MAX_ENTRIES) return null
             // Saved before "heard" was (no "h"): what was before the current one, as Played showed then.
@@ -255,6 +274,9 @@ internal data class LastSession(
                 val upTo = if (shuffle && order != null) order.take(order.indexOf(index) + 1).toSet() else (0..index).toSet()
                 entries.mapIndexed { i, e -> e.copy(heard = i in upTo) }
             }
+            val auto = heard.indexOfFirst { it.section == NativeQueue.Section.AUTO }
+            val listStart = if (version == VERSION) o.optInt("listStart", 0).takeIf { it in heard.indices } ?: 0 else 0
+            val nextStart = if (version == VERSION) o.optInt("nextStart", -1).takeIf { it in heard.indices } ?: -1 else auto
             val label = o.str("label")
             val mode = o.str("mode")
             LastSession(
@@ -269,6 +291,8 @@ internal data class LastSession(
                 seedId = o.str("seedId"),
                 savedAtMs = o.optLong("savedAtMs", 0L),
                 offset = o.optInt("offset", 0).coerceAtLeast(0),
+                listStart = listStart,
+                nextStart = nextStart,
             )
         } catch (e: Exception) { // not JSON, or a field of the wrong type
             null

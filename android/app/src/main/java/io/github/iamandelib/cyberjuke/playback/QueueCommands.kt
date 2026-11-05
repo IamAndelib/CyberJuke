@@ -121,6 +121,13 @@ internal object QueueInfo {
     @Volatile
     var heardUids: Set<Long> = emptySet()
 
+    /** Where the list you're in starts in the queue, and where what comes on after it does (-1: nothing): [NativeQueue.listStartIndex], [NativeQueue.nextStartIndex]. */
+    @Volatile
+    var listStart: Int = 0
+
+    @Volatile
+    var nextStart: Int = -1
+
     /** The play context of the current list (C2); null before the first list. */
     @Volatile
     var context: Pair<String, String>? = null

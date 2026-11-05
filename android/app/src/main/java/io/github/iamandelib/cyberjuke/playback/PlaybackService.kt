@@ -1285,6 +1285,8 @@ class PlaybackService : MediaSessionService() {
         updateLoadAhead()
         QueueInfo.pendingSerials = queue.pendingSerials.toSet()
         QueueInfo.heardUids = queue.heardUids.toSet()
+        QueueInfo.listStart = queue.listStartIndex()
+        QueueInfo.nextStart = queue.nextStartIndex()
         QueueInfo.context = context
         QueueInfo.seedId = seedId
         handler.removeCallbacks(lowCheck)
@@ -1382,7 +1384,7 @@ class PlaybackService : MediaSessionService() {
         }
         p.repeatMode = s.repeat
         p.shuffleModeEnabled = s.shuffle
-        queue.restoreSession(items, s.entries.map { it.section }, s.index, s.positionMs, s.order, s.entries.map { it.heard })
+        queue.restoreSession(items, s.entries.map { it.section }, s.index, s.positionMs, s.order, s.entries.map { it.heard }, s.listStart, s.nextStart)
         context = s.context
         radio.reseedFromId(s.seedId)
         seedId = s.seedId
@@ -1457,6 +1459,7 @@ class PlaybackService : MediaSessionService() {
         return LastSession.of(
             entries, p.currentMediaItemIndex, positionOf(p), durationOf(p), p.shuffleModeEnabled,
             queueHost.shuffleOrder(), p.repeatMode, context, seedId, System.currentTimeMillis(),
+            queue.listStartIndex(), queue.nextStartIndex(),
         )
     }
 
