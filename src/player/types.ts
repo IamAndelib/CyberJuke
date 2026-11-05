@@ -183,9 +183,10 @@ export interface Player {
    */
   addToQueue(tracks: Track[]): Promise<void>;
   /**
-   * Undo a remove (K3): put `track` back in its section, right before `beforeId` (the
-   * track that followed it there) if that is still ahead in the section, else at the
-   * end of the section. Never at or before the current track.
+   * Undo a remove (K3): put `track` back as `kind`, right before `beforeId` (the row that
+   * followed it in Up next) if that is still ahead (a queued track only before a queued one,
+   * the others never before one), else at the end of its section. Never at or before the
+   * current track.
    */
   restore(track: Track, kind: UpNextKind, beforeId: string | null): Promise<void>;
   /** Autoplay tracks computed for `seedId`; ignored if the seed changed meanwhile. */

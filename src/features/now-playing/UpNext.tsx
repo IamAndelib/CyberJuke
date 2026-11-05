@@ -124,9 +124,9 @@ function saveQueue(shown: Track[]): void {
 const upTo = (n: number) => (n >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : n);
 
 /**
- * Removes a queue row, with Undo: back next to the row that followed it, `beforeId` (K3). The
- * Undo goes once a new list or another track starts, when "back where it was" no longer means
- * anything.
+ * Removes a queue row, with Undo: back as its kind, before the row that followed it, `beforeId`
+ * (K3). The Undo goes once a new list or another track starts, when "back where it was" no
+ * longer means anything.
  */
 export function removeWithUndo(it: UpItem, kind: Kind, beforeId: string | null): void {
   // A row the queue has moved on from (its track playing now, or at another place) stays.
@@ -190,10 +190,11 @@ export function UpNext() {
     });
 
   /**
-   * A section's rows. Played ones too, whose last ↓ moves it past the playing track (`past`:
-   * the row it then follows), to play next after anything queued by you: to hear it again.
+   * A heading's rows (`after`: the row under the next heading). Played ones too, whose last ↓
+   * moves it past the playing track (`past`: the row it then follows), to play next after
+   * anything queued by you: to hear it again.
    */
-  const rows = (kind: Kind, items: UpItem[], past?: UpItem) =>
+  const rows = (kind: Kind, items: UpItem[], past?: UpItem, after?: UpItem) =>
     items.map((it, k) => {
       const down = items[k + 1] ?? past;
       return (
@@ -254,7 +255,7 @@ export function UpNext() {
                 const other = rows[at + 1] ?? rows[at - 1];
                 const to = near ? { id: near.track.id, kind } : other && { id: other.dataset.trackId!, kind: other.dataset.section as Kind };
                 afterPress(b, () => {
-                  if (remove(it, kind, items[k + 1]?.track.id ?? null)) keepFocus(b, to ? { ...to, index: null, button: 'remove', gone: [it.track.id, it.index] } : null);
+                  if (remove(it, kind, (items[k + 1] ?? after)?.track.id ?? null)) keepFocus(b, to ? { ...to, index: null, button: 'remove', gone: [it.track.id, it.index] } : null);
                 });
               }}
               data-role="remove"
@@ -330,7 +331,7 @@ export function UpNext() {
             <li class={'upnext-label' + (r.kind === 'autoplay' ? ' auto' : '')} data-testid={`upnext-${r.kind}-label`} aria-hidden="true">
               {titles[r.kind]}
             </li>
-            {rows(r.kind, r.items)}
+            {rows(r.kind, r.items, undefined, sec.runs[k + 1]?.items[0])}
           </Fragment>
         ))}
       </ol>

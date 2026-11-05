@@ -41,6 +41,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
       };
       // Up next as the app builds it from what the player publishes.
       const upNext = () => q.upNextItems().map(({ item, ...u }) => ({ track: item as Track, ...u }));
+      let undo: [string, Section, string | null] | null = null;
       for (const s of c.steps) {
         switch (s.op) {
           case 'setList':
@@ -72,6 +73,18 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             break;
           case 'restore':
             q.restore(t(s.id as string), s.kind as Section, (s.beforeId as string | null) ?? null);
+            break;
+          case 'removeRow': {
+            // Up next's ✕: Undo puts it back as its row's kind, before the row that followed it.
+            const rows = upNext();
+            const k = rows.findIndex((u) => u.track.id === s.id);
+            const { kind } = sectionsOf(rows, null).runs.find((r) => r.items.some((u) => u.index === rows[k].index))!;
+            undo = [s.id as string, kind, rows[k + 1]?.track.id ?? null];
+            q.remove(rows[k].index);
+            break;
+          }
+          case 'undo':
+            q.restore(t(undo![0]), undo![1], undo![2]);
             break;
           case 'removeIds':
             q.removeIds(s.ids as string[]);

@@ -49,6 +49,7 @@ class QueueRulesTest {
         // Like the app: the first list goes through the queue too (shuffle starts at the track).
         p.queue.setList(strings(c.getJSONArray("list")), c.optInt("start", 0))
         val steps = c.getJSONArray("steps")
+        var undo: Triple<String, String, String?>? = null
         for (k in 0 until steps.length()) {
             val s = steps.getJSONObject(k)
             val where = "'$name' (seed $seed) step $k ${s.getString("op")}"
@@ -65,6 +66,14 @@ class QueueRulesTest {
                         p.queue.restore(s.getString("id"), NativeQueue.Section.of(kind) ?: throw IllegalArgumentException("kind in $where"), before)
                     }
                 }
+                "removeRow" -> {
+                    // Up next's ✕: Undo puts it back as its row's kind, before the row that followed it.
+                    val up = p.upNext()
+                    val at = up.indexOf(s.getString("id"))
+                    undo = Triple(up[at], sections(p).first { up[at] in it.second }.first, up.getOrNull(at + 1))
+                    p.remove(p.ids.indexOf(up[at]))
+                }
+                "undo" -> undo!!.let { (id, kind, before) -> p.queue.restore(id, NativeQueue.Section.of(kind)!!, before) }
                 "removeIds" -> p.queue.removeIds(strings(s.getJSONArray("ids")).toSet())
                 "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")))
                 "next" -> p.next()

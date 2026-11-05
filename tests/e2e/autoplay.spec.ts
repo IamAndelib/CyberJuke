@@ -185,7 +185,7 @@ test('Album Play plays the album, then continues into autoplay at the end', asyn
   await expect(page.getByTestId('np-title')).toHaveText(q.autoplay[0].title);
 });
 
-test('a tapped suggestion, then Previous: the album songs stay under the album, and "3 of 8" stays right', async ({ page }) => {
+test('a tapped suggestion, then Previous: the album songs stay under the album, "3 of 8" stays right, and Undo puts each song back', async ({ page }) => {
   await page.goto('/');
   await openSearch(page);
   await page.getByTestId('search-input').fill('Night Owl');
@@ -217,6 +217,15 @@ test('a tapped suggestion, then Previous: the album songs stay under the album, 
   await expect(page.getByTestId('upnext-list-label')).toHaveCount(1);
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveCount(2);
   await expect(page.getByTestId('np-from')).toContainText('3 of 8');
+  // ✕ then Undo, on the suggestion and on the album's last song: each comes back as it was, where it was.
+  const order = await rows.evaluateAll((els) => els.map((el) => `${el.getAttribute('data-track-id')}:${el.getAttribute('data-section')}`));
+  for (const row of [rows.first(), page.locator('[data-testid="upnext-row"][data-section="list"]').last()]) {
+    await page.waitForTimeout(350); // past the double-tap guard
+    await row.getByTestId('upnext-remove').click();
+    await expect(rows).toHaveCount(order.length - 1);
+    await page.getByTestId('toast').filter({ hasText: 'Removed from queue' }).getByTestId('toast-action').click();
+    await expect.poll(() => rows.evaluateAll((els) => els.map((el) => `${el.getAttribute('data-track-id')}:${el.getAttribute('data-section')}`))).toEqual(order);
+  }
 });
 
 test('a Global result starts a Global radio; tapping an autoplay track continues from it', async ({ page }) => {

@@ -381,10 +381,11 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     }
 
     /**
-     * Undo of a removal (K3): puts [item] back in [section], right before the first item ahead
-     * of the current one (play order) that has id [beforeId] and sits in the same section; with
-     * no such item, at the end of that section. It never lands at or before the current item,
-     * and a queued item never lands after list items.
+     * Undo of a removal (K3): puts [item] back as [section], right before the first item ahead
+     * of the current one (play order) that has id [beforeId] (a queued item only before a queued
+     * one, the others never before one); with no such item, at the end of that section (a list
+     * item after the last list item ahead). It never lands at or before the current item, and a
+     * queued item never lands after list items.
      */
     fun restore(item: T, section: Section, beforeId: String?) {
         prune()
@@ -404,7 +405,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
             host.isAutoAt(i) -> Section.AUTO
             else -> Section.LIST
         }
-        val anchor = beforeId?.let { id -> up.firstOrNull { sectionAt(it) == section && host.idAt(it) == id } }
+        val anchor = beforeId?.let { id -> up.firstOrNull { (sectionAt(it) == Section.QUEUED) == (section == Section.QUEUED) && host.idAt(it) == id } }
         when (section) {
             Section.QUEUED -> {
                 val serial = nextSerial++
@@ -430,9 +431,9 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
                 enforceShuffleOrder()
             }
             Section.LIST -> if (!host.shuffleEnabled) {
-                // Linear: [current][queued][list][autoplay]; the end of the list part is the first
-                // autoplay item ahead (or the end).
-                val at = anchor ?: up.firstOrNull { sectionAt(it) == Section.AUTO } ?: host.count
+                // Linear: [current][queued], then the list and autoplay (a tapped one among the
+                // list); the end of the list part is after its last item ahead.
+                val at = anchor ?: up.lastOrNull { sectionAt(it) == Section.LIST }?.plus(1) ?: afterQueuedRun()
                 host.insertTagged(at, listOf(item), listOf(0L))
             } else {
                 restoreShuffledListItem(item, anchor)
@@ -472,12 +473,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
             // After the last list item ahead, else right after the current item's queued run.
             val pend = pendingIndices().toHashSet()
             var lastList = -1
-            for (k in curPos + 1 until rest.size) {
-                val i = rest[k]
-                if (i in pend) continue
-                if (host.isAutoAt(i)) break
-                lastList = k
-            }
+            for (k in curPos + 1 until rest.size) if (rest[k] !in pend && !host.isAutoAt(rest[k])) lastList = k
             if (lastList >= 0) {
                 lastList + 1
             } else {
