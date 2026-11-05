@@ -87,7 +87,7 @@ class QueueRulesTest {
                 "nextAuto" -> p.nextAuto()
                 "prev" -> p.prev(s.optLong("positionMs", 0L))
                 "remove" -> p.remove(p.ids.indexOf(s.getString("id")))
-                "move" -> p.moveItem(p.ids.indexOf(s.getString("id")), s.getInt("to"))
+                "move" -> p.queue.move(p.ids.indexOf(s.getString("id")), if (s.has("toId")) p.ids.indexOf(s.getString("toId")) else s.getInt("to"))
                 "setShuffle" -> p.toggleShuffle(s.getBoolean("on"))
                 "setRepeat" -> {
                     p.repeat = s.getString("mode")
@@ -220,8 +220,7 @@ class QueueRulesTest {
                 current in to until from -> current + 1
                 else -> current
             }
-            orderRemove(from)
-            orderInsert(to, 1)
+            // Media3 keeps the shuffle order by index (ExoPlayerImpl.moveMediaItems), so the songs moved past change places in it.
             emit(timelineChanged)
         }
 

@@ -145,9 +145,10 @@ internal interface QueueHost<T> {
 /**
  * The queue rules shared by web and native (tests/spec/queue-rules.json):
  * - "Add to queue" (play next, FIFO): queued tracks play right after the current track, first in
- *   first out, shuffle or not, until each one plays or is removed. A manual jump keeps the
- *   still-queued tracks next: they move to just after the new current track, in the order they
- *   were going to play. Jumping to a queued track plays it; the others stay next.
+ *   first out (or as moved with ↑ ↓, [move]), shuffle or not, until each one plays or is removed.
+ *   A manual jump keeps the still-queued tracks next: they move to just after the new current
+ *   track, in the order they were going to play. Jumping to a queued track plays it; the others
+ *   stay next.
  * - A new list ([setList]) replaces the list and the autoplay tracks; the queued tracks stay
  *   next, in order (P1).
  * - Autoplay tracks ([addAutoplay]) play after the list in the order added; they are the list on
@@ -696,6 +697,30 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         if (lap) dropHeardMine()
         val cur = host.currentIndex
         return cur in 0 until host.count && host.isAutoAt(cur)
+    }
+
+    /**
+     * Up next's ↑ ↓: moves the item at [from] to where the item at [to] is. With shuffle off the list
+     * order is the play order ([onPlaylistChanged]). Shuffled, every other song keeps its place in play
+     * order, and a song you queued moved past another one plays in its new place, as shuffle never mixes
+     * them (rule 8): before or after it in play order, as the list may hold them elsewhere (a jump back
+     * leaves them where they were).
+     */
+    fun move(from: Int, to: Int) {
+        val order = if (host.shuffleEnabled) host.shuffleOrder() else null
+        val (s, t) = host.serialAt(from) to host.serialAt(to)
+        if (host.shuffleEnabled && s in pending && t in pending) {
+            val queued = pending.toMutableList()
+            val down = queued.indexOf(s) < queued.indexOf(t)
+            queued.remove(s)
+            queued.add(queued.indexOf(t) + if (down) 1 else 0, s)
+            pending.clear()
+            pending.addAll(queued)
+        }
+        host.moveItem(from, to)
+        // Media3 keeps the shuffle order by index: put it back by item.
+        val now = { i: Int -> if (i == from) to else if (i in from..to) i - 1 else if (i in to..from) i + 1 else i }
+        order?.let { o -> host.setShuffleOrder(IntArray(o.size) { now(o[it]) }) }
     }
 
     /**

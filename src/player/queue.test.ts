@@ -341,6 +341,35 @@ describe('Queue: editing', () => {
     expect(q.queuedCount).toBe(2);
   });
 
+  it('shuffled, moving a song you queued leaves the list songs in their mixed order (natively too: QueueOpsTest)', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const q = new Queue(seeded(seed));
+      q.setList(abc(), 0);
+      q.setShuffle(true);
+      q.queueNext([t('x'), t('y'), t('z')]);
+      const rest = ids(q.upNext()).slice(3);
+      q.move(3, 1);
+      q.move(2, 3);
+      expect(ids(q.upNext())).toEqual(['z', 'y', 'x', ...rest]);
+    }
+  });
+
+  it('shuffled, a song you queued moved past list songs and a played one leaves them in place (natively too)', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const q = new Queue(seeded(seed));
+      q.setShuffle(true);
+      q.setList(abc(), 4);
+      q.queueNext([t('X')]);
+      q.skipTo(0);
+      q.queueNext([t('Y')]);
+      const heard = () => q.previousIndices().map((i) => q.items[i].id);
+      const [played, rest] = [heard(), ids(q.upNext()).slice(2)];
+      q.move(q.items.findIndex((x) => x.id === 'X'), q.items.findIndex((x) => x.id === 'Y'));
+      expect(ids(q.upNext())).toEqual(['Y', 'X', ...rest]);
+      expect(heard()).toEqual(played);
+    }
+  });
+
   it('removing a queued track forgets it; a new list keeps the rest (P1)', () => {
     const q = new Queue();
     q.setList(abc(), 0);

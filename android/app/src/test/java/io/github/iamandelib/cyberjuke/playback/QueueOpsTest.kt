@@ -141,6 +141,33 @@ class QueueOpsTest {
     }
 
     @Test
+    fun shuffledMovingASongYouQueuedLeavesTheListSongsInTheirMixedOrder() {
+        for (seed in 0L until 20L) {
+            val p = player(listOf("a", "b", "c", "d", "e"), shuffle = true, seed = seed)
+            p.queue.queueNext(listOf("x", "y", "z"))
+            val rest = p.upNext().drop(3)
+            p.queue.move(3, 1)
+            p.queue.move(2, 3)
+            assertEquals("seed $seed", listOf("z", "y", "x") + rest, p.upNext())
+        }
+    }
+
+    @Test
+    fun shuffledMovingASongYouQueuedPastListSongsLeavesThemAndPlayedInPlace() {
+        for (seed in 0L until 30L) {
+            // A jump back leaves X where it was in the list, so the move goes past list songs and the played one.
+            val p = player(listOf("a", "b", "c", "d", "e"), start = 4, shuffle = true, seed = seed)
+            p.queue.queueNext(listOf("X"))
+            p.queue.skipTo(p.ids.indexOf("a"))
+            p.queue.queueNext(listOf("Y"))
+            val (played, rest) = p.played() to p.upNext().drop(2)
+            p.queue.move(p.ids.indexOf("X"), p.ids.indexOf("Y"))
+            assertEquals("seed $seed", listOf("Y", "X") + rest, p.upNext())
+            assertEquals("seed $seed", played, p.played())
+        }
+    }
+
+    @Test
     fun aRestoreWithAStaleAnchorBehindTheCurrentTrackGoesAhead() {
         val p = player(listOf("a", "b", "c"), start = 2)
         p.queue.restore("z", Section.LIST, "a") // "a" already played

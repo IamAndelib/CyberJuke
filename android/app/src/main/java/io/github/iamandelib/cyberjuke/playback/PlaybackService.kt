@@ -1921,7 +1921,7 @@ class PlaybackService : MediaSessionService() {
                         val n = p.mediaItemCount
                         if (from !in 0 until n || to !in 0 until n) return bad
                         if (!matches(from)) return stale
-                        if (from != to) p.moveMediaItem(from, to)
+                        if (from != to) queue.move(from, to)
                     }
                     QueueCommands.ACTION_REMOVE_IDS -> {
                         val ids = args.getStringArrayList(QueueCommands.ARG_IDS) ?: return bad

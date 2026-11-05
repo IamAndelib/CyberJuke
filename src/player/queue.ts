@@ -9,8 +9,8 @@
  *
  * The rules (shared with the native queue; the cases both must pass are in
  * tests/spec/queue-rules.json):
- *  - queued tracks play right after the current track, first in first out, shuffle
- *    or not, until each one plays or is removed;
+ *  - queued tracks play right after the current track, first in first out (or as moved
+ *    with ↑ ↓), shuffle or not, until each one plays or is removed;
  *  - a manual jump (skipTo, or prev moving back) to a track that isn't one of them
  *    keeps them next: they move to just after the new current track, in the order
  *    they were going to play. Jumping to one of them plays it; the others stay next.
@@ -322,17 +322,20 @@ export class Queue<T extends Identified> {
   // ---- editing -------------------------------------------------------------------
 
   /**
-   * Move an item in list order, to where the item at `to` was. Unshuffled, it moves the same way in
-   * play order (which differs from list order after shuffle was turned off).
+   * Move an item in list order, to where the item at `to` was. Unshuffled, it moves past that item in
+   * play order too, before or after it as it was (play order differs from list order after shuffle
+   * was turned off, or an Undo). Shuffled, only a song you queued moved past another one does, as
+   * shuffle never mixes them (rule 8).
    */
   move(from: number, to: number): void {
     if (!inRange(from, this.list) || !inRange(to, this.list) || from === to) return;
     const target = this.list[to];
     const [e] = this.list.splice(from, 1);
     this.list.splice(to, 0, e);
-    if (this.shuffle) return;
+    if (this.shuffle && !(this.queued.has(e) && this.queued.has(target))) return;
+    const down = this.order.indexOf(e) < this.order.indexOf(target);
     this.order.splice(this.order.indexOf(e), 1);
-    this.order.splice(this.order.indexOf(target) + (from < to ? 1 : 0), 0, e);
+    this.order.splice(this.order.indexOf(target) + (down ? 1 : 0), 0, e);
   }
 
   /**
