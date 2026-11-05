@@ -276,3 +276,23 @@ test('a top bar title too long for its line is a little smaller and shows whole;
   await expect.poll(() => title().evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   expect(await size()).toBe('17px');
 });
+
+test('Undo after unliking a song in Liked: it comes back in its place and glows for a moment', async ({ page }) => {
+  await seedStorage(page, { 'CapacitorStorage.liked': [tr('s1', 'Seed One'), tr('s2', 'Seed Two'), tr('s3', 'Seed Three')] });
+  await page.goto('/');
+  await openLibrary(page, 'liked');
+  const list = page.getByTestId('screen-liked');
+  const rows = list.getByTestId('track-row');
+  await expect(rows).toHaveCount(3);
+  const id = (await rows.nth(1).getAttribute('data-track-id'))!;
+  await rows.nth(1).getByTestId('track-more').click();
+  await page.getByTestId('menu-like').click();
+  await expect(rows).toHaveCount(2);
+  await expect(list.locator('.row.moved')).toHaveCount(0);
+  await page.getByTestId('toast').filter({ hasText: 'Removed from Liked' }).getByTestId('toast-action').click();
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(1)).toHaveAttribute('data-track-id', id);
+  await expect(list.locator('.row.moved')).toHaveCount(1);
+  await expect(rows.nth(1)).toHaveClass(/\bmoved\b/);
+  await expect(list.locator('.row.moved')).toHaveCount(0, { timeout: 3000 });
+});

@@ -6,6 +6,7 @@ import { isLocal, type Track } from '../../data/model';
 import { online } from '../../core/network';
 import { settings } from '../../stores/library';
 import { isSaved, savedOffline } from '../../stores/savedOffline';
+import { glow, glowRow, type Glow } from '../../stores/glow';
 import { toast } from '../../stores/toast';
 import { PLAYLISTS_MAX, PLAYLIST_MAX_SONGS, createPlaylist } from '../../stores/playlists';
 import { askName } from '../../ui/nav';
@@ -23,20 +24,6 @@ type Kind = UpNextKind;
  * changes), folded again when a new list starts. Folded by default, as history is elsewhere.
  */
 const playedOpenFor = signal<PlayContext | null | undefined>(undefined);
-
-/**
- * The song just moved with ↑ or ↓: a faint glow on its row at its new place, fading out. Only
- * the latest move glows: a new one takes it over at once, and a moved row is always drawn anew
- * (rows are keyed by place), so its fade starts over.
- */
-const movedGlow = signal<{ id: string; to: number } | null>(null);
-const MOVED_GLOW_MS = 1500;
-let glowTimer: ReturnType<typeof setTimeout> | undefined;
-function glowMoved(id: string, to: number): void {
-  clearTimeout(glowTimer);
-  movedGlow.value = { id, to };
-  glowTimer = setTimeout(() => (movedGlow.value = null), MOVED_GLOW_MS);
-}
 
 /** After a removal the rows shift up: taps on the buttons column are ignored this long (M2). */
 const REMOVE_GUARD_MS = 300;
@@ -136,7 +123,8 @@ export function removeWithUndo(it: UpItem, kind: Kind, beforeId: string | null):
   const cur0 = currentId.peek();
   toast('Removed from queue', undefined, {
     label: 'Undo',
-    run: () => void player.restore(it.track, kind, beforeId),
+    // The glow starts once the song is back, so a slow restore doesn't eat into it.
+    run: () => void player.restore(it.track, kind, beforeId).then(() => glowRow('queue', it.track.id)),
     stale: () => playContext.value !== ctx0 || currentId.value !== cur0,
     ...(it.track.membersOnly && { membersOnly: true }),
   });
@@ -185,7 +173,7 @@ export function UpNext() {
     afterPress(b, () => {
       if (guarded()) return;
       keepFocus(b, { id: it.track.id, kind, index: to.index, button });
-      glowMoved(it.track.id, to.index);
+      glowRow('queue', it.track.id, to.index);
       void player.move(it.index, to.index, it.track.id);
     });
 
@@ -273,7 +261,8 @@ export function UpNext() {
   const current = currentTrack.value;
   const played = previousTracks.value;
   const open = playedOpenFor.value === ctx;
-  const glowing = movedRow(movedGlow.value, [open ? played : [], ...sec.runs.map((r) => r.items)]);
+  const g = glow.value;
+  const glowing = movedRow(g?.scope === 'queue' ? g : null, [open ? played : [], ...sec.runs.map((r) => r.items)]);
   return (
     <section ref={root} class="upnext" data-testid="up-next">
       <div class="section-head upnext-head">
@@ -335,9 +324,9 @@ export function UpNext() {
           </Fragment>
         ))}
       </ol>
-      {/* A screen reader hears where the moved song went, as the glow shows it. */}
+      {/* A screen reader hears where the song went (moved, or put back by Undo), as the glow shows it. */}
       <p class="sr-only" aria-live="polite" data-testid="upnext-moved">
-        {glowing ? `Moved to ${glowing.place} of ${glowing.of}` : ''}
+        {glowing ? `${g?.to == null ? 'Back at' : 'Moved to'} ${glowing.place} of ${glowing.of}` : ''}
       </p>
       {total === 0 && repeat !== 'all' && (
         <div class="dim small upnext-empty">{`${settings.value.autoplay ? 'Nothing queued.' : 'Autoplay is off.'} ⋯ → Add to queue plays a track next.`}</div>
@@ -347,12 +336,14 @@ export function UpNext() {
 }
 
 /** The row the glow is on: the moved song where it is now (the copy nearest its target), with its place in its part. */
-function movedRow(g: { id: string; to: number } | null, parts: UpItem[][]): { item: UpItem; place: number; of: number } | null {
+function movedRow(g: Glow | null, parts: UpItem[][]): { item: UpItem; place: number; of: number } | null {
   if (!g) return null;
   let best: { item: UpItem; place: number; of: number } | null = null;
   for (const part of parts)
     part.forEach((item, k) => {
-      if (item.track.id === g.id && (!best || Math.abs(item.index - g.to) < Math.abs(best.item.index - g.to))) best = { item, place: k + 1, of: part.length };
+      // Without a place (an Undo), the first copy.
+      const far = (u: UpItem) => (g.to == null ? 0 : Math.abs(u.index - g.to));
+      if (item.track.id === g.id && (!best || far(item) < far(best.item))) best = { item, place: k + 1, of: part.length };
     });
   return best;
 }
