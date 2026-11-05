@@ -209,7 +209,7 @@ export class WebPlayer implements Player {
 
   /** Autoplay may add: not under repeat all, but a radio's first batch (its loop) always. */
   private mayAdd(): boolean {
-    return mayAutoplay(this.q.repeat) || firstBatchOfRadio(this.context, this.q.length);
+    return mayAutoplay(this.q.repeat) || firstBatchOfRadio(this.context, this.q.length, this.q.queuedCount);
   }
 
   /** AP4, inline: with 5 tracks or fewer to go, ask for more (once per state). */
@@ -504,7 +504,7 @@ export class WebPlayer implements Player {
   async addAutoplay(tracks: Track[], seedId: string): Promise<void> {
     if (!tracks.length || !this.keepsGoing(seedId) || !this.mayAdd() || this.seed?.id !== seedId) return;
     const wasEmpty = !this.q.current;
-    this.q.addAuto(tracks, firstBatchOfRadio(this.context, this.q.length));
+    this.q.addAuto(tracks, firstBatchOfRadio(this.context, this.q.length, this.q.queuedCount));
     this.publish();
     if (wasEmpty) await this.loadCurrent(true, true);
   }

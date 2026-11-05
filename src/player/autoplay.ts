@@ -93,7 +93,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       starved = e;
       return;
     }
-    if (!mayAutoplay(s.repeat) && !firstBatchOfRadio(s.context, s.queue.length)) return;
+    if (!mayAutoplay(s.repeat) && !firstBatchOfRadio(s.context, s.queue.length, s.upNext.filter((u) => u.queued).length)) return;
     // A local list ends like an album: nothing from the Jukebox or Global after a song of the phone's own.
     if (isLocal(seed)) return;
     if (e.seedId && e.seedId !== seed.id) return; // a signal for an older seed

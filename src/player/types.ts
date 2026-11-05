@@ -96,10 +96,11 @@ export const AUTOPLAY_RESERVE = UP_NEXT_MAX;
 export const mayAutoplay = (repeat: RepeatMode): boolean => repeat !== 'all';
 
 /**
- * A radio's first batch: the tapped song alone in a radio context, nothing on the way. It joins the
- * list (it is the loop), so repeat all lets it in (Radios.firstBatch, the same rule).
+ * A radio's first batch: the tapped song alone in a radio context (`count` songs, `queued` of them queued
+ * by you, which stay next), nothing on the way. It joins the list (it is the loop), so repeat all lets it
+ * in (Radios.firstBatch, the same rule).
  */
-export const firstBatchOfRadio = (context: PlayContext | null, count: number): boolean => context?.mode === 'radio' && count === 1;
+export const firstBatchOfRadio = (context: PlayContext | null, count: number, queued: number): boolean => context?.mode === 'radio' && count - queued === 1;
 
 export interface PlayerState {
   /** Full queue in list order. */

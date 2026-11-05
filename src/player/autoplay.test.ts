@@ -298,6 +298,14 @@ describe('autoplay', () => {
     expect(added).toHaveLength(0);
   });
 
+  it("with repeat all, a radio's first batch still comes, with a song you queued before the tap", async () => {
+    const seed = track('c0', { artist: 'A0' });
+    const q = track('q0');
+    const { ap, added } = setup({ current: seed, seed, queue: [seed, q], upNext: [{ track: q, index: 1, queued: true }], repeat: 'all', context: { label: 'Home · Latest', mode: 'radio' } });
+    await ap.fill({ left: 1, seedId: 'c0' });
+    expect(added).toHaveLength(1);
+  });
+
   it('repeat one adds as repeat off does; an old seed gets nothing', async () => {
     const seed = track('c0');
     const one = setup({ current: seed, seed, queue: [seed, track('c1')], repeat: 'one' });

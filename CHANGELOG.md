@@ -17,6 +17,7 @@
 - Turning shuffle on no longer moves songs you haven't heard into Played: after Previous, on a second Repeat all lap, or after tapping a played song, everything still to come stays in Up next and gets mixed. Suggestions that arrive while shuffled go after the ones already there.
 - On a genre or Most saved, pulling down to refresh while the new tracks button shows takes you to Latest from every genre, where the new songs are, as tapping the button does. Before, it refreshed that genre and nothing new appeared.
 - Turning shuffle off no longer skips songs: every song of the list you haven't heard stays in Up next, in the list's order.
+- A song you tap on Home or in Search while songs you queued are waiting gets its suggestions with Repeat all on too, and Repeat all keeps them in its loop.
 
 ## [1.4.0] - 2026-11-04
 

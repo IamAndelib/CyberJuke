@@ -1196,7 +1196,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     /** The list is a radio's tapped song alone: its first batch joins it ([Radios.firstBatch]). */
-    private fun radioFirstBatch() = Radios.firstBatch(context?.second, player?.mediaItemCount ?: 0)
+    private fun radioFirstBatch() = Radios.firstBatch(context?.second, player?.mediaItemCount ?: 0, queue.pendingSerials.size)
 
     private fun addAutoplay(items: List<MediaItem>, forSeed: String?) {
         val p = player ?: return

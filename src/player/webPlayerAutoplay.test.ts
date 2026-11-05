@@ -24,7 +24,7 @@ describe('a radio under repeat all', () => {
     expect(ids(p)).toEqual(['a', 's1', 's2']);
     await p.addAutoplay([t('s3')], 'a');
     expect(ids(p)).toEqual(['a', 's1', 's2']);
-    expect(firstBatchOfRadio({ label: 'x', mode: 'list' }, 1)).toBe(false);
+    expect(firstBatchOfRadio({ label: 'x', mode: 'list' }, 1, 0)).toBe(false);
   });
 
   it('with repeat off, later batches are added too', async () => {
@@ -32,6 +32,18 @@ describe('a radio under repeat all', () => {
     await p.addAutoplay([t('s1')], 'a');
     await p.addAutoplay([t('s2')], 'a');
     expect(ids(p)).toEqual(['a', 's1', 's2']);
+  });
+
+  it('a song queued before the tap: the first batch still joins the list, with repeat all on before or after it', async () => {
+    for (const before of [true, false]) {
+      const p = await started('off', 'list');
+      await p.addToQueue([t('Q')]);
+      await p.playList([t('h')], 0, radio('Home · Latest'));
+      if (before) await p.setRepeat('all');
+      await p.addAutoplay([t('s1'), t('s2')], 'h');
+      await p.setRepeat('all');
+      expect(ids(p), `repeat all ${before ? 'before' : 'after'}`).toEqual(['h', 'Q', 's1', 's2']);
+    }
   });
 
   it('a list gets nothing under repeat all', async () => {
