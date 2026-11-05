@@ -444,6 +444,18 @@ describe('Queue: editing', () => {
     expect(q.listStartIndex).toBe(2);
   });
 
+  it('shuffled, the trim leaves the current list too: it starts at its first song in list order, whichever played first', () => {
+    for (let seed = 1; seed <= 10; seed++) {
+      const q = new Queue(seeded(seed));
+      q.setList([t('a'), t('b')], 0);
+      q.setShuffle(true);
+      q.addAuto(Array.from({ length: KEEP_PLAYED + 20 }, (_, i) => t(`s${i}`)));
+      for (let i = 0; i < KEEP_PLAYED + 10; i++) q.next(true);
+      expect(q.length, `seed ${seed}`).toBe(KEEP_PLAYED + 22);
+      expect(q.items[q.listStartIndex].id, `seed ${seed}`).toBe('s0');
+    }
+  });
+
   it('with repeat on, nothing is trimmed: a long loop keeps all its tracks lap after lap', () => {
     const q = new Queue();
     q.setList([t('a')], 0);

@@ -196,6 +196,18 @@ class QueueOpsTest {
     }
 
     @Test
+    fun shuffledTheTrimLeavesTheCurrentListToo() {
+        for (seed in 0L until 10L) {
+            val p = player(listOf("a", "b"), shuffle = true, seed = seed)
+            p.queue.addAutoplay((1..80).map { "s$it" })
+            repeat(1 + 61) { p.nextAuto() }
+            // The list starts at its first song in list order, whichever played first, and keeps all of it.
+            assertEquals("seed $seed", "s1", p.ids[p.queue.listStartIndex()])
+            assertEquals("seed $seed", 0, p.queue.trimPlayedAuto(50))
+        }
+    }
+
+    @Test
     fun aRemovedMarkerPassesToTheNextSongThatStays() {
         val p = player(listOf("a", "b"))
         p.queue.addAutoplay(listOf("s1", "s2", "s3"))

@@ -271,6 +271,31 @@ test.describe('adding songs', () => {
     await expect(page.getByTestId('name-sheet')).toContainText(`With ${n} songs`);
   });
 
+  test('with shuffle on, a tap on the last of the suggestions moves on to all of them: Save queue as playlist saves every one', async ({ page }) => {
+    await page.goto('/');
+    await openSearch(page);
+    await page.getByTestId('search-input').fill('Night Owl');
+    await page.getByTestId('mode-global').click();
+    await page.getByTestId('filter-albums').click();
+    await page.getByTestId('music-open').first().click();
+    await page.getByTestId('album-play').click();
+    await openNowPlaying(page);
+    await toListEnd(page);
+    const autos = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
+    await expect(autos.first()).toBeVisible();
+    const n = await autos.count();
+    expect(n).toBeGreaterThan(1);
+    await page.getByTestId('np-shuffle').click();
+    // The batch's last song in list order (shuffled, it plays anywhere in the batch).
+    const last = Math.max(...(await autos.evaluateAll((rows) => rows.map((r) => Number(r.getAttribute('data-index'))))));
+    const row = page.locator(`[data-testid="upnext-row"][data-index="${last}"]`);
+    const id = (await row.getAttribute('data-track-id'))!;
+    await row.locator('.row-main').click();
+    await expect(page.getByTestId('upnext-current')).toHaveAttribute('data-track-id', id);
+    await page.getByTestId('upnext-save').click();
+    await expect(page.getByTestId('name-sheet')).toContainText(`With ${n} songs`);
+  });
+
   test('Save queue as playlist saves the whole list, not only the 101 songs Up next shows', async ({ page, backend }) => {
     // Autoplay off: a tap on Home plays its whole feed as a list (hundreds of songs).
     await seedStorage(page, { ...seeded([]), [SETTINGS_KEY]: { autoplay: false } });

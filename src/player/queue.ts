@@ -18,8 +18,9 @@
  *  - a new list (setList) replaces the list and the autoplay tracks, but the queued
  *    tracks stay next, in order (P1);
  *  - autoplay tracks (addAuto) play after the list, in the order added; they are the list on
- *    the way, and moving on to one of them (played on to, or tapped) makes the current list
- *    start there (listStartIndex; the songs before it are history). A radio's first suggestions
+ *    the way, and moving on to one of them (played on to, or tapped) makes the current list start
+ *    at it or at the first of them, whichever comes first in list order (listStartIndex; the songs
+ *    before it are history; shuffled, the batch's songs before it stay ahead). A radio's first suggestions
  *    join its list instead (joinList). Repeat all loops the list you're in: turning it on drops
  *    what's on the way (it comes back once repeat is off) and the songs before the current list,
  *    keeping the playing song and the queued ones, and autoplay adds nothing while it is on
@@ -446,13 +447,17 @@ export class Queue<T extends Identified> {
 
   // ---- internals -----------------------------------------------------------------
 
-  /** Drop played autoplay tracks more than KEEP_PLAYED behind the current one in play order (not in repeat all's loop). */
+  /**
+   * Drop played autoplay tracks more than KEEP_PLAYED behind the current one in play order (not in repeat
+   * all's loop), but none of the current list: those before where it starts in list order (shuffled, its
+   * songs play in any order).
+   */
   private trimPlayed(): void {
     if (this.repeat === 'all') return;
     const p = this.cur ? this.order.indexOf(this.cur) : -1;
     if (p <= KEEP_PLAYED) return;
-    const start = this.listStart ? this.order.indexOf(this.listStart) : -1;
-    const old = new Set(this.order.slice(0, start < 0 ? p - KEEP_PLAYED : Math.min(p - KEEP_PLAYED, start)).filter((e) => e.auto));
+    const start = this.listStart ? this.listStartIndex : Infinity;
+    const old = new Set(this.order.slice(0, p - KEEP_PLAYED).filter((e) => e.auto && this.list.indexOf(e) < start));
     if (!old.size) return;
     this.list = this.list.filter((e) => !old.has(e));
     this.order = this.order.filter((e) => !old.has(e));
@@ -484,11 +489,12 @@ export class Queue<T extends Identified> {
 
   /**
    * The current entry changed: it is heard, a queued track that starts playing is no longer "queued",
-   * and moving on makes it the start of the current list (`on`: skipTo works that out before it reorders).
+   * and moving on starts the current list at it or at the first song on the way, whichever comes first
+   * in list order (shuffled, that keeps the batch's songs before it ahead; `on`: skipTo works it out before it reorders).
    */
   private settle(on = this.cur !== null && this.movesOn(this.cur)): void {
     if (!this.cur) return;
-    if (on) [this.listStart, this.nextStart] = [this.cur, null];
+    if (on) [this.listStart, this.nextStart] = [this.list.indexOf(this.nextStart!) < this.list.indexOf(this.cur) ? this.nextStart : this.cur, null];
     this.queued.delete(this.cur);
     this.heard.add(this.cur);
   }
