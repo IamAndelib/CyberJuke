@@ -808,9 +808,10 @@ test.describe('the glow on a song just moved', () => {
   const glowMax = (page: Page) => page.evaluate(() => (window as unknown as { __glowMax: number }).__glowMax);
   const glowing = (page: Page) => page.locator('[data-testid="up-next"] .row.moved');
   const autoRows = (page: Page) => page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
-  /** The glow's fade on the moved row, in ms since it started. */
-  const fadeAt = (page: Page) =>
-    page.evaluate(() => document.getAnimations().find((a) => (a as CSSAnimation).animationName === 'row-glow')?.currentTime ?? null);
+  /** The page's clock now, and when the glow's fade on the moved row started, on the same clock. */
+  const now = (page: Page) => page.evaluate(() => document.timeline.currentTime as number);
+  const fadeStart = (page: Page) =>
+    page.evaluate(() => document.getAnimations().find((a) => (a as CSSAnimation).animationName === 'row-glow')?.startTime ?? null);
 
   test('only the song just moved glows, at its new place, and a screen reader hears where; then it fades away', async ({ page }) => {
     await start(page);
@@ -849,10 +850,12 @@ test.describe('the glow on a song just moved', () => {
     // A glow taken over mid-fade starts over: move again 0.7 s into a fade.
     await page.waitForTimeout(700);
     const again = (await autoRows(page).nth(4).getAttribute('data-track-id'))!;
+    const before = await now(page);
     await autoRows(page).nth(4).getByTestId('upnext-down').click();
     await expect(glowing(page)).toHaveAttribute('data-track-id', again);
-    // Under 700 ms: the fade taken over had already run that long, so this one started anew.
-    expect(await fadeAt(page)).toBeLessThan(700);
+    // The fade started after the move, not 0.7 s before it: it started anew, however slow the machine.
+    // (Its start time is null until its first frame.)
+    await expect.poll(() => fadeStart(page)).toBeGreaterThanOrEqual(before);
     await expect(glowing(page)).toHaveCount(0, { timeout: 3000 });
     expect(await glowMax(page)).toBe(1);
   });
