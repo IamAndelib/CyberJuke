@@ -116,6 +116,11 @@ export const player: Player = {
     heardMine = [];
     return guarded.playList(tracks, start, ctx);
   },
+  // A song you queue yourself is wanted again: autoplay may pick it, and Save keeps it.
+  addToQueue: (tracks) => {
+    for (const t of tracks) removed.delete(t.id);
+    return guarded.addToQueue(tracks);
+  },
   remove: (index, expectId) => {
     const t = guarded.state.peek().queue[index];
     if (t && (expectId == null || t.id === expectId)) removed.add(t.id);

@@ -391,6 +391,25 @@ test.describe('adding songs', () => {
     return { album, mine };
   }
 
+  test('a song you removed and then queued again is saved like any song you queued', async ({ page }) => {
+    await page.goto('/');
+    const album = await playNightOwl(page);
+    const repeat = page.getByTestId('np-repeat');
+    while ((await repeat.getAttribute('data-mode')) !== 'all') await repeat.click();
+    await next(page);
+    const [first] = await queueFromHome(page, [0]);
+    await page.locator(`[data-testid="upnext-row"][data-section="queued"][data-track-id="${first}"]`).getByTestId('upnext-remove').click();
+    await expect(page.locator('[data-section="queued"]')).toHaveCount(0);
+    const mine = await queueFromHome(page, [0, 1]);
+    expect(mine[0]).toBe(first);
+    await next(page);
+    await next(page);
+    await toListEnd(page);
+    await next(page);
+    await expect(page.getByTestId('upnext-current')).toHaveAttribute('data-track-id', album[0]);
+    expect(await saveIds(page, 10)).toEqual([album[0], album[1], ...mine, ...album.slice(2)]);
+  });
+
   test('Save queue as playlist keeps the songs you queued after the album repeats: played through the loop, it saves all 10', async ({ page }) => {
     const { album, mine } = await queuedThroughLoop(page);
     expect(await saveIds(page, 10)).toEqual([album[0], album[1], ...mine, ...album.slice(2)]);
