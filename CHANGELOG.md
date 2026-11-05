@@ -13,6 +13,7 @@
 - After you tap a suggestion in the queue and go back with Previous, your list's songs stay under their own heading instead of under Autoplay, and Now Playing still says "3 of 8" instead of "Single track". When suggestions and your list's songs take turns, each gets its heading again.
 - **Undo** after ✕ in the queue puts a song back as what it was and where it was: one of your list's songs stays in your list, even with Autoplay off, and a suggestion goes back to its place instead of the end.
 - Turning shuffle on no longer moves songs you haven't heard into Played: after Previous, on a second Repeat all lap, or after tapping a played song, everything still to come stays in Up next and gets mixed. Suggestions that arrive while shuffled go after the ones already there.
+- A song you tapped keeps its suggestions when you turn on **Repeat all** after adding a song to the queue. Before, the queued song made it count as a list, so the suggestions went and only the two songs looped.
 - On a genre or Most saved, pulling down to refresh while the new tracks button shows takes you to Latest from every genre, where the new songs are, as tapping the button does. Before, it refreshed that genre and nothing new appeared.
 
 ## [1.4.0] - 2026-11-04

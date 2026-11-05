@@ -150,7 +150,7 @@ internal interface QueueHost<T> {
  * - A new list ([setList]) replaces the list and the autoplay tracks; the queued tracks stay
  *   next, in order (P1).
  * - Autoplay tracks ([addAutoplay]) play after the list in the order added. Repeat all loops what
- *   you started: a list's autoplay tracks still to come go, a single song's stay (its radio). A
+ *   you started: a list's autoplay tracks still to come go, a single song's stay (its radio, also with items queued by you). A
  *   jump ahead ([skipTo]) keeps what it jumps over next, and the autoplay tracks after it.
  * - Played is what was heard ([heardUids]) before the current track in play order. Shuffle turned
  *   on mixes what hasn't played: what Played shows stays behind, in the order it played, and
@@ -536,10 +536,12 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
 
     /**
      * Repeat all loops what you started: a list's autoplay items still to come go (they come back
-     * once repeat is off); a single song's are its radio, the loop itself, and stay.
+     * once repeat is off); a single song's are its radio, the loop itself, and stay, also with
+     * items queued by you.
      */
     fun onRepeatModeChanged(repeatAll: Boolean) {
-        if (repeatAll && (0 until host.count).count { !host.isAutoAt(it) } > 1) dropUpcomingAuto()
+        val queued = pendingIndices().toHashSet()
+        if (repeatAll && (0 until host.count).count { !host.isAutoAt(it) && it !in queued } > 1) dropUpcomingAuto()
     }
 
     /**

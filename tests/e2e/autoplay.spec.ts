@@ -331,6 +331,23 @@ test('repeat keeps the songs lined up: Repeat all and one move on with Next, and
   expect((await queueState(page)).autoplay.map((t) => t.id)).toEqual(autoplay.slice(2).map((t) => t.id));
 });
 
+test('a tapped song with a song queued by you keeps its suggestions when Repeat all goes on', async ({ page }) => {
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  const { autoplay } = await withAutoplay(page);
+  await queueRow(page, 3);
+  await openNowPlaying(page);
+  await expect(page.locator('[data-testid="upnext-row"][data-section="queued"]')).toHaveCount(1);
+  const repeat = page.getByTestId('np-repeat');
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'all');
+  // The song is still a radio: its suggestions stay, after the queued one.
+  await expectStable(async () => (await queueState(page)).autoplay.length, 400);
+  expect((await queueState(page)).autoplay.map((t) => t.id)).toEqual(autoplay.map((t) => t.id));
+  await expect(page.locator('[data-testid="upnext-row"][data-section="queued"]')).toHaveCount(1);
+  await expect(page.locator('[data-testid="upnext-row"][data-section="autoplay"]')).toHaveCount(autoplay.length);
+});
+
 test('with repeat on, a song you tap still gets its suggestions; a list you start loops by itself', async ({ page }) => {
   await start(page);
   await visible(page, 'track-play').first().click();

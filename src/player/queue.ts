@@ -19,10 +19,11 @@
  *    tracks stay next, in order (P1);
  *  - autoplay tracks (addAuto) play after the list, in the order added. Repeat all loops
  *    what you started: a list's autoplay tracks still to come go (they come back once
- *    repeat is off), but a single song's are its radio, the loop itself, and stay. Repeat
- *    one leaves them: it replays the track when it ends, and a skip moves on as with repeat
- *    off (none at the end, as Media3's). Jumping to an autoplay track keeps the ones after
- *    it (Spotify, YouTube Music): more follow it once they run low;
+ *    repeat is off), but a single song's are its radio, the loop itself, and stay (also
+ *    with tracks queued by you). Repeat one leaves them: it replays the track when it ends,
+ *    and a skip moves on as with repeat off (none at the end, as Media3's). Jumping to an
+ *    autoplay track keeps the ones after it (Spotify, YouTube Music): more follow it once
+ *    they run low;
  *  - played autoplay tracks more than KEEP_PLAYED behind the current one are dropped (a
  *    radio can run for hours), except with repeat all, which loops them;
  *  - Undo of a remove (restore) puts the track back as its own kind, before the track that
@@ -245,10 +246,10 @@ export class Queue<T extends Identified> {
     this.rebuildOrder(true);
   }
 
-  /** Repeat all loops what you started: a list's autoplay tracks to come go; a single song's are its radio and stay. */
+  /** Repeat all loops what you started: a list's autoplay tracks to come go; a single song's are its radio and stay, also with tracks queued by you. */
   setRepeat(mode: RepeatMode): void {
     this.repeat = mode;
-    if (mode === 'all' && this.list.filter((e) => !e.auto).length > 1) this.dropAuto();
+    if (mode === 'all' && this.list.filter((e) => !e.auto && !this.queued.has(e)).length > 1) this.dropAuto();
   }
 
   // ---- editing -------------------------------------------------------------------
