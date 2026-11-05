@@ -89,6 +89,7 @@ export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [
   const prevIndex = (Array.isArray(x.prevIndex) ? x.prevIndex : [])
     .filter((i): i is number => typeof i === 'number' && Number.isInteger(i) && i >= 0 && i < queueIds.length && i !== index)
     .slice(-UP_NEXT_MAX);
+  const at = (v: unknown, none: number) => (typeof v === 'number' && Number.isInteger(v) && v >= none && v < queueIds.length ? v : none);
   return {
     isPlaying: x.isPlaying === true,
     isBuffering: x.isBuffering === true,
@@ -104,6 +105,8 @@ export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [
     upNextKinds: upNextIds.map((_, i) => (kinds[i] === 'q' || kinds[i] === 'a' ? kinds[i] : 'l')).join(''),
     upNextIndex,
     prevIndex,
+    listStart: at(x.listStart, 0),
+    nextStart: at(x.nextStart, -1),
     context: ctx ? { label: isStr(ctx.label) ? ctx.label : '', mode: ctx.mode === 'radio' ? 'radio' : 'list' } : null,
     seedId: isStr(x.seedId) && x.seedId ? x.seedId : null,
     currentAuto: x.currentAuto === true,

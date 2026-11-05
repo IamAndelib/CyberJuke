@@ -40,6 +40,9 @@ export interface NativeState {
   upNextIndex: number[];
   /** The list indices of the tracks before the current one in play order, oldest first, max 50. Absent from older natives: none. */
   prevIndex?: number[];
+  /** Queue index of the current list's first song, and of the first song of the autoplay on the way (-1: none). Absent from older natives: 0 and -1. */
+  listStart?: number;
+  nextStart?: number;
   /** The context the current list was started with (C2), null before the first. */
   context: { label: string; mode: 'radio' | 'list' } | null;
   /** The track autoplay follows (the started track, or the autoplay track tapped). */
@@ -80,7 +83,7 @@ interface JukePlayerPlugin {
   /** A new list. Tracks queued with queueNext stay next (P1); autoplay starts over from the start track (a Global one gets its radio natively). */
   setQueue(o: { tracks: NativeTrack[]; startIndex: number; positionMs?: number; playWhenReady: boolean; context?: { label: string; mode: 'radio' | 'list' } }): Promise<void>;
   /**
-   * Jukebox autoplay picks for `seedId` (after queueLow); dropped if the seed changed, autoplay is off, or repeat all is on but for a single song (mayAutoplay).
+   * Jukebox autoplay picks for `seedId` (after queueLow); dropped if the seed changed, autoplay is off, or repeat all is on but for a radio's first batch (mayAutoplay).
    * A station the Radio tab started (a `sig:…` seed in a list labelled `Signal Radio · <CALLSIGN>`) is not autoplay:
    * queueLow and its next rounds come whatever the Autoplay setting (setAutoplay(false) keeps them too). A station's
    * track in any other list (Liked, Recently played) is just a track.

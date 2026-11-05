@@ -100,6 +100,9 @@ internal object StateEncoder {
         state.put("upNextKinds", kinds.toString())
         state.put("upNextIndex", upNextIndex)
         state.put("prevIndex", JSArray().apply { previous.asReversed().forEach { put(it) } })
+        // Queue indices like the above; nothing before the list start is of this list, and -1 is no autoplay on the way.
+        state.put("listStart", if (count > 0) QueueInfo.listStart else 0)
+        state.put("nextStart", if (count > 0) QueueInfo.nextStart else -1)
         val ctx = QueueInfo.context
         if (ctx != null && count > 0) {
             val o = JSObject()

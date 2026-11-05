@@ -51,7 +51,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             q.queueNext((s.ids as string[]).map(t));
             break;
           case 'addAuto':
-            q.addAuto((s.ids as string[]).map(t));
+            q.addAuto((s.ids as string[]).map(t), s.joinList === true);
             break;
           case 'skipTo':
             q.skipTo(indexOf(s.id));
@@ -89,6 +89,9 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
           case 'removeIds':
             q.removeIds(s.ids as string[]);
             break;
+          case 'dropOnTheWay':
+            q.dropOnTheWay();
+            break;
           case 'setShuffle':
             q.setShuffle(s.on as boolean);
             break;
@@ -98,10 +101,19 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
           case 'expect': {
             if ('current' in s) expect(q.current?.id ?? null).toBe(s.current);
             if ('upNext' in s) expect(ids(q.upNext())).toEqual(s.upNext);
+            if ('upNextBlocks' in s) {
+              // Each block's songs in any order (a shuffled block); the blocks in order.
+              const blocks = s.upNextBlocks as string[][];
+              let at = 0;
+              const up = ids(q.upNext());
+              for (const b of blocks) expect(up.slice(at, (at += b.length)).sort()).toEqual(b.slice().sort());
+              expect(up.length).toBe(at);
+            }
             if ('upNextStartsWith' in s) {
               const want = s.upNextStartsWith as string[];
               expect(ids(q.upNext()).slice(0, want.length)).toEqual(want);
             }
+            if ('listStart' in s) expect(q.items[q.listStartIndex]?.id).toBe(s.listStart);
             if ('queued' in s) expect(q.queuedCount).toBe(s.queued);
             if ('list' in s) expect(ids(q.items)).toEqual(s.list);
             if ('played' in s) expect(q.previousIndices().map((i) => q.items[i].id)).toEqual(s.played);

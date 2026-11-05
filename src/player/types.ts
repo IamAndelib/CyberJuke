@@ -90,11 +90,17 @@ export const AUTOPLAY_MORE = 20;
 export const AUTOPLAY_RESERVE = UP_NEXT_MAX;
 
 /**
- * Autoplay may add to a queue of `count` tracks: but with repeat all, which loops what you
- * started; then only a single song gets its first batch, its radio, for repeat to loop
- * (Stations.mayAutoplay, the same rule).
+ * Autoplay may add to the queue unless repeat all is on: it loops the list you're in, so nothing
+ * comes after it (Stations.mayAutoplay, the same rule), but for a radio's first batch (firstBatchOfRadio).
  */
-export const mayAutoplay = (repeat: RepeatMode, count: number): boolean => repeat !== 'all' || count === 1;
+export const mayAutoplay = (repeat: RepeatMode): boolean => repeat !== 'all';
+
+/**
+ * A radio's first batch: the tapped song alone in a radio context (`count` songs, `queued` of them queued
+ * by you, which stay next), nothing on the way. It joins the list (it is the loop), so repeat all lets it
+ * in (Radios.firstBatch, the same rule).
+ */
+export const firstBatchOfRadio = (context: PlayContext | null, count: number, queued: number): boolean => context?.mode === 'radio' && count - queued === 1;
 
 export interface PlayerState {
   /** Full queue in list order. */
@@ -115,6 +121,10 @@ export interface PlayerState {
   upNext: UpNextItem[];
   /** The tracks before the current one in play order, oldest first (at most UP_NEXT_MAX): Up next shows them above it. */
   previous: UpNextItem[];
+  /** Queue index of the current list's first song: the songs before it are history, not of this list. */
+  listStart: number;
+  /** Queue index of the first song of the autoplay on the way, -1 if none. */
+  nextStart: number;
   /** The context of the current list (same object until it changes); null before the first. */
   context: PlayContext | null;
   /** The track autoplay follows: the started track, or the autoplay track tapped. */
@@ -143,6 +153,8 @@ export const EMPTY_STATE: PlayerState = {
   repeat: 'off',
   upNext: [],
   previous: [],
+  listStart: 0,
+  nextStart: -1,
   context: null,
   seed: null,
   currentAuto: false,

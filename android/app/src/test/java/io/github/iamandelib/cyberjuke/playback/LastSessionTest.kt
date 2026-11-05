@@ -162,11 +162,49 @@ class LastSessionTest {
     }
 
     @Test
+    fun theListMarkersRoundTrip() {
+        val s = LastSession.of((0 until 6).map { entry(it) }, 3, 0L, 0L, false, null, 0, null, null, listStart = 2, nextStart = 5)!!
+        val back = LastSession.decode(s.encode())!!
+        assertEquals(2 to 5, back.listStart to back.nextStart)
+        assertEquals(s, back)
+        val none = LastSession.decode(session(3, 0).encode())!!
+        assertEquals(0 to -1, none.listStart to none.nextStart)
+    }
+
+    @Test
+    fun aVersion1FileHasNoMarkersSoTheListStartsAtZeroAndAutoplayAtItsFirstEntry() {
+        val old = JSONObject(session(6, 2).encode()).put("v", 1)
+        old.remove("listStart")
+        old.remove("nextStart")
+        val back = LastSession.decode(old.toString())!!
+        assertEquals(0 to 5, back.listStart to back.nextStart) // session(): the last entry is autoplay
+        val noAuto = JSONObject(old.toString())
+        noAuto.getJSONArray("tracks").getJSONObject(5).put("k", "l")
+        assertEquals(-1, LastSession.decode(noAuto.toString())!!.nextStart)
+        // A marker that points nowhere in a version 2 file is read as none.
+        val bad = JSONObject(session(3, 0).encode()).put("listStart", 9).put("nextStart", 9)
+        assertEquals(0 to -1, LastSession.decode(bad.toString())!!.let { it.listStart to it.nextStart })
+    }
+
+    @Test
+    fun markersOutsideTheSavedWindowAreClamped() {
+        val all = (0 until 1000).map { entry(it) }
+        // Window 400..899 around 500: the list start before it is its first entry, autoplay after it is none.
+        val s = LastSession.of(all, 500, 0L, 0L, false, null, 0, null, null, listStart = 10, nextStart = 950)!!
+        assertEquals(400, s.offset)
+        assertEquals(0 to -1, s.listStart to s.nextStart)
+        // Inside it, they are window indices; autoplay before it starts at the first entry.
+        val inside = LastSession.of(all, 500, 0L, 0L, false, null, 0, null, null, listStart = 450, nextStart = 600)!!
+        assertEquals(50 to 200, inside.listStart to inside.nextStart)
+        assertEquals(0, LastSession.of(all, 500, 0L, 0L, false, null, 0, null, null, listStart = 300, nextStart = 350)!!.nextStart)
+    }
+
+    @Test
     fun anythingBrokenIsDroppedNotHalfRestored() {
         val good = JSONObject(session(3, 0).encode())
         assertNull(LastSession.decode("not json"))
         assertNull(LastSession.decode("{}"))
-        assertNull(LastSession.decode(JSONObject(good.toString()).put("v", 2).toString()))
+        assertNull(LastSession.decode(JSONObject(good.toString()).put("v", 3).toString()))
         assertNull(LastSession.decode(JSONObject(good.toString()).put("index", 3).toString()))
         val badTrack = JSONObject(good.toString())
         badTrack.getJSONArray("tracks").getJSONObject(1).put("ytId", "https://evil")

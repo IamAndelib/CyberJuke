@@ -220,7 +220,7 @@ describe('Queue: shuffle', () => {
     expect(ids(q.upNext()).sort()).toEqual(['a', 'b', 'c', 'd']);
   });
 
-  it('turning shuffle off resumes list order after the current track', () => {
+  it('turning shuffle off keeps every unheard song ahead, in list order', () => {
     const q = new Queue(seeded(9));
     q.setList(abc(), 0);
     q.setShuffle(true);
@@ -228,7 +228,20 @@ describe('Queue: shuffle', () => {
     const cur = q.current!.id;
     q.setShuffle(false);
     expect(q.current?.id).toBe(cur);
-    expect(ids(q.upNext())).toEqual(ids(q.items).slice(q.index + 1));
+    const heard = q.previousIndices().map((i) => q.items[i].id).concat(cur);
+    expect(ids(q.upNext())).toEqual(ids(q.items).filter((id) => !heard.includes(id)));
+  });
+
+  it('after shuffle off, moving a row in Up next swaps it with its neighbour and loses no song', () => {
+    const q = new Queue(seeded(9));
+    q.setList(abc(), 0);
+    q.setShuffle(true);
+    q.next();
+    q.setShuffle(false);
+    const up = q.upNextItems();
+    const [x, y] = [up[0], up[1]];
+    q.move(x.index, y.index);
+    expect(ids(q.upNext())).toEqual([y.item.id, x.item.id, ...up.slice(2).map((u) => u.item.id)]);
   });
 });
 
@@ -413,7 +426,7 @@ describe('Queue: editing', () => {
     const q = new Queue();
     q.setList([t('a'), t('b')], 0);
     const autos = Array.from({ length: KEEP_PLAYED + 20 }, (_, i) => t(`s${i}`));
-    q.addAuto(autos);
+    q.addAuto(autos, true);
     for (let i = 0; i < KEEP_PLAYED + 10; i++) q.next(true);
     expect(q.current?.id).toBe(`s${KEEP_PLAYED + 8}`);
     // The list tracks stay (they're within the oldest); only played autoplay tracks went.
@@ -422,10 +435,31 @@ describe('Queue: editing', () => {
     expect(q.upNext()).toHaveLength(11);
   });
 
+  it('the trim leaves the current list: songs from where it starts stay, however far behind', () => {
+    const q = new Queue();
+    q.setList([t('a'), t('b')], 0);
+    q.addAuto(Array.from({ length: KEEP_PLAYED + 20 }, (_, i) => t(`s${i}`)));
+    for (let i = 0; i < KEEP_PLAYED + 10; i++) q.next(true);
+    expect(ids(q.items).slice(0, 3)).toEqual(['a', 'b', 's0']);
+    expect(q.listStartIndex).toBe(2);
+  });
+
+  it('shuffled, the trim leaves the current list too: it starts at its first song in list order, whichever played first', () => {
+    for (let seed = 1; seed <= 10; seed++) {
+      const q = new Queue(seeded(seed));
+      q.setList([t('a'), t('b')], 0);
+      q.setShuffle(true);
+      q.addAuto(Array.from({ length: KEEP_PLAYED + 20 }, (_, i) => t(`s${i}`)));
+      for (let i = 0; i < KEEP_PLAYED + 10; i++) q.next(true);
+      expect(q.length, `seed ${seed}`).toBe(KEEP_PLAYED + 22);
+      expect(q.items[q.listStartIndex].id, `seed ${seed}`).toBe('s0');
+    }
+  });
+
   it('with repeat on, nothing is trimmed: a long loop keeps all its tracks lap after lap', () => {
     const q = new Queue();
     q.setList([t('a')], 0);
-    q.addAuto(Array.from({ length: KEEP_PLAYED + 20 }, (_, i) => t(`s${i}`)));
+    q.addAuto(Array.from({ length: KEEP_PLAYED + 20 }, (_, i) => t(`s${i}`)), true);
     q.setRepeat('all');
     for (let i = 0; i < 3 * (KEEP_PLAYED + 21); i++) q.next(true);
     expect(q.current?.id).toBe('a');

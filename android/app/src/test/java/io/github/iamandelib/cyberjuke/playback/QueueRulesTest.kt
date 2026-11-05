@@ -59,7 +59,7 @@ class QueueRulesTest {
             when (s.getString("op")) {
                 "setList" -> p.queue.setList(strings(s.getJSONArray("ids")), s.optInt("start", 0))
                 "queueNext" -> p.queue.queueNext(strings(s.getJSONArray("ids")))
-                "addAuto" -> p.queue.addAutoplay(strings(s.getJSONArray("ids")))
+                "addAuto" -> p.queue.addAutoplay(strings(s.getJSONArray("ids")), s.optBoolean("joinList", false))
                 "restore" -> {
                     val before = if (s.isNull("beforeId")) null else s.getString("beforeId")
                     val kind = s.getString("kind")
@@ -78,6 +78,7 @@ class QueueRulesTest {
                 }
                 "undo" -> undo!!.let { (id, kind, before) -> p.queue.restore(id, NativeQueue.Section.of(kind)!!, before) }
                 "removeIds" -> p.queue.removeIds(strings(s.getJSONArray("ids")).toSet())
+                "dropOnTheWay" -> p.queue.dropOnTheWay()
                 "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")))
                 "next" -> p.next()
                 "nextAuto" -> p.nextAuto()
@@ -102,10 +103,20 @@ class QueueRulesTest {
             assertEquals("current in $where", want, p.ids.getOrNull(p.current))
         }
         if (s.has("upNext")) assertEquals("upNext in $where", strings(s.getJSONArray("upNext")), up)
+        if (s.has("upNextBlocks")) {
+            // Each block's songs in any order (a shuffled block); the blocks in order.
+            var at = 0
+            for (b in s.getJSONArray("upNextBlocks").let { a -> (0 until a.length()).map { strings(a.getJSONArray(it)) } }) {
+                assertEquals("upNextBlocks in $where (got $up)", b.sorted(), up.drop(at).take(b.size).sorted())
+                at += b.size
+            }
+            assertEquals("upNextBlocks length in $where (got $up)", at, up.size)
+        }
         if (s.has("upNextStartsWith")) {
             val want = strings(s.getJSONArray("upNextStartsWith"))
             assertEquals("upNextStartsWith in $where (got $up)", want, up.take(want.size))
         }
+        if (s.has("listStart")) assertEquals("listStart in $where", s.getString("listStart"), p.ids[p.queue.listStartIndex()])
         if (s.has("queued")) {
             val pending = p.queue.pendingSerials
             val queued = up.takeWhile { p.serials[p.ids.indexOf(it)] in pending }.size

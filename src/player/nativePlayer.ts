@@ -273,6 +273,8 @@ export class NativePlayer implements Player {
       repeat: this.modes ? prev.repeat : st.repeat,
       upNext,
       previous,
+      listStart: st.listStart ?? 0,
+      nextStart: st.nextStart ?? -1,
       context,
       seed,
       currentAuto: st.currentAuto === true,

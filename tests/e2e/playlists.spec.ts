@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { homeSettled, openLibrary, openNowPlaying, seedStorage, SETTINGS_KEY, start } from '../helpers';
+import { homeSettled, openLibrary, openNowPlaying, openSearch, seedStorage, SETTINGS_KEY, start, toListEnd } from '../helpers';
 
 /** Your own playlists: Library's Playlists section and a playlist's page (adding comes from the player, the menu and the queue). */
 
@@ -23,6 +23,7 @@ const seeded = (playlists: unknown[]) => ({ [FILE]: { version: 1, playlists } })
 const NIGHT = { id: 'pn', name: 'Night drive', created: 2, updated: 2, tracks: [tr(1), tr(2), tr(3)] };
 const EMPTY = { id: 'pe', name: 'Road trip', created: 1, updated: 1, tracks: [] };
 
+const queueState = (page: Page) => page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => { autoplay: unknown[] } }).__cyberjukeQueue());
 const titles = (page: Page) => page.getByTestId('screen-playlist').getByTestId('track-title');
 const saved = (page: Page) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? 'null'), FILE);
 
@@ -250,6 +251,80 @@ test.describe('adding songs', () => {
     const ids = (file.playlists[0].tracks as { id: string }[]).map((t) => t.id);
     expect(ids[0]).toBe(q.current.id);
     expect(ids.length).toBeGreaterThan(1);
+  });
+
+  test("after an album's suggestions start, Save queue as playlist saves the list you're in", async ({ page }) => {
+    await page.goto('/');
+    await openSearch(page);
+    await page.getByTestId('search-input').fill('Night Owl');
+    await page.getByTestId('mode-global').click();
+    await page.getByTestId('filter-albums').click();
+    await page.getByTestId('music-open').first().click();
+    await page.getByTestId('album-play').click();
+    await openNowPlaying(page);
+    await toListEnd(page);
+    const last = (await page.getByTestId('np-title').textContent())!;
+    await page.getByTestId('np-next').click();
+    await expect(page.getByTestId('np-title')).not.toHaveText(last);
+    // Read what the list is once we are in it, not before (a refill in between could change it).
+    const n = (await queueState(page)).autoplay.length + 1; // the song playing is the list's first
+    expect(n).toBeGreaterThan(1);
+    await page.getByTestId('upnext-save').click();
+    await expect(page.getByTestId('name-sheet')).toContainText(`With ${n} songs`);
+  });
+
+  test('with shuffle on, a tap on the last of the suggestions moves on to all of them: Save queue as playlist saves every one', async ({ page }) => {
+    await page.goto('/');
+    await openSearch(page);
+    await page.getByTestId('search-input').fill('Night Owl');
+    await page.getByTestId('mode-global').click();
+    await page.getByTestId('filter-albums').click();
+    await page.getByTestId('music-open').first().click();
+    await page.getByTestId('album-play').click();
+    await openNowPlaying(page);
+    await toListEnd(page);
+    const autos = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
+    await expect(autos.first()).toBeVisible();
+    const n = await autos.count();
+    expect(n).toBeGreaterThan(1);
+    await page.getByTestId('np-shuffle').click();
+    // The batch's last song in list order (shuffled, it plays anywhere in the batch).
+    const last = Math.max(...(await autos.evaluateAll((rows) => rows.map((r) => Number(r.getAttribute('data-index'))))));
+    const row = page.locator(`[data-testid="upnext-row"][data-index="${last}"]`);
+    const id = (await row.getAttribute('data-track-id'))!;
+    await row.locator('.row-main').click();
+    await expect(page.getByTestId('upnext-current')).toHaveAttribute('data-track-id', id);
+    await page.getByTestId('upnext-save').click();
+    await expect(page.getByTestId('name-sheet')).toContainText(`With ${n} songs`);
+  });
+
+  test("with shuffle on, a tap on a suggestion keeps the album's songs it jumped over: shuffle off still has them in Up next", async ({ page }) => {
+    await page.goto('/');
+    await openSearch(page);
+    await page.getByTestId('search-input').fill('Night Owl');
+    await page.getByTestId('mode-global').click();
+    await page.getByTestId('filter-albums').click();
+    await page.getByTestId('music-open').first().click();
+    await page.getByTestId('album-play').click();
+    await openNowPlaying(page);
+    const autos = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
+    const list = page.locator('[data-testid="upnext-row"][data-section="list"]');
+    // Next until the suggestions come, with some of the album still ahead.
+    while (!(await autos.count())) {
+      const title = (await page.getByTestId('np-title').textContent())!;
+      await page.getByTestId('np-next').click();
+      await expect(page.getByTestId('np-title')).not.toHaveText(title);
+    }
+    const left = await list.count();
+    expect(left).toBeGreaterThan(0);
+    await page.getByTestId('np-shuffle').click();
+    const last = Math.max(...(await autos.evaluateAll((rows) => rows.map((r) => Number(r.getAttribute('data-index'))))));
+    const row = page.locator(`[data-testid="upnext-row"][data-index="${last}"]`);
+    const id = (await row.getAttribute('data-track-id'))!;
+    await row.locator('.row-main').click();
+    await expect(page.getByTestId('upnext-current')).toHaveAttribute('data-track-id', id);
+    await page.getByTestId('np-shuffle').click();
+    await expect(list).toHaveCount(left);
   });
 
   test('Save queue as playlist saves the whole list, not only the 101 songs Up next shows', async ({ page, backend }) => {

@@ -3,17 +3,22 @@
 ## [Unreleased]
 
 ### Changed
-- **Save queue as playlist** saves the whole queue, not only the 100 or so songs Up next shows.
+- **Save queue as playlist** saves the whole list you're in, not only the 100 or so songs Up next shows: an album, or once its suggestions are playing, those.
 - After you delete a playlist, **Undo** brings it back where it was, with all its songs.
 - A page title too long for the top bar on a narrow phone, such as Recently played beside [Clear], is set a little smaller, so more of it shows (often all).
 - A playlist's ⋯ menu has clearer icons: up and down arrows for **Edit songs**, a pencil for **Rename** and a bin for **Delete playlist**.
 - After ↑ or ↓ in the queue, or **Undo** in the queue, Liked or a playlist, the song glows faintly at its place for a moment, so you can see where it went; a screen reader says it ("Moved to 3 of 25", "Back at 3 of 25").
+- Once a list's suggestions are playing, Repeat all loops them, the list you're in now, instead of jumping back to the list before.
+- Turning Autoplay off keeps the suggestions you're already listening to; only the ones still to come after them go.
+- With Repeat all on, a single song played from a list (not a radio) just repeats; it no longer brings suggestions.
 
 ### Fixed
 - After you tap a suggestion in the queue and go back with Previous, your list's songs stay under their own heading instead of under Autoplay, and Now Playing still says "3 of 8" instead of "Single track". When suggestions and your list's songs take turns, each gets its heading again.
 - **Undo** after ✕ in the queue puts a song back as what it was and where it was: one of your list's songs stays in your list, even with Autoplay off, and a suggestion goes back to its place instead of the end.
 - Turning shuffle on no longer moves songs you haven't heard into Played: after Previous, on a second Repeat all lap, or after tapping a played song, everything still to come stays in Up next and gets mixed. Suggestions that arrive while shuffled go after the ones already there.
 - On a genre or Most saved, pulling down to refresh while the new tracks button shows takes you to Latest from every genre, where the new songs are, as tapping the button does. Before, it refreshed that genre and nothing new appeared.
+- Turning shuffle off no longer skips songs: every song of the list you haven't heard stays in Up next, in the list's order.
+- A song you tap on Home or in Search while songs you queued are waiting gets its suggestions with Repeat all on too, and Repeat all keeps them in its loop.
 
 ## [1.4.0] - 2026-11-04
 
