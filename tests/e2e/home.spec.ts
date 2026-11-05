@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { box, isFeedQuery, openNowPlaying, openSettings, seedStorage, setOffline, start, toastsGone, toListEnd, waitForTracks } from '../helpers';
+import { box, isFeedQuery, openNowPlaying, openSettings, seedStorage, setOffline, start, toastsGone, toListEnd, touchDrag, waitForTracks } from '../helpers';
 
 /** Home: the Latest feed, genre chips, Most saved, the new-tracks pill and the CI autoplay hook. */
 
@@ -192,6 +192,36 @@ test('the new-tracks pill on Most saved or a genre chip shows Latest from every 
   await expect(page.getByTestId('chip-all')).toHaveAttribute('aria-pressed', 'true');
   await waitForTracks(page);
   await expect.poll(() => home.evaluate((el) => el.scrollTop)).toBeLessThan(5);
+});
+
+test('pulling to refresh on a genre chip while new posts are waiting shows Latest from every genre, as the pill does', async ({ page }) => {
+  const future = Date.now() + 3600_000;
+  await page.route(/firestore\.googleapis\.com\/.*:runQuery/, async (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fallback();
+    const q = JSON.parse(route.request().postData() ?? '{}').structuredQuery;
+    if (q.select?.fields?.[0]?.fieldPath === 'createdAt' && q.limit === 25) {
+      const rows = [{ document: { name: 'projects/p/databases/(default)/documents/posts/new0', fields: { createdAt: { timestampValue: new Date(future).toISOString() }, isNSFW: { booleanValue: false } } }, readTime: new Date().toISOString() }];
+      return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(rows) });
+    }
+    return route.fallback();
+  });
+  await start(page);
+  const chip = page.getByTestId('genre-chip').first();
+  await chip.click();
+  await expect(chip).toHaveAttribute('aria-pressed', 'true');
+  // Nothing new yet: a pull refreshes the genre and stays on it.
+  await touchDrag(page, 200, 320, 720, 400);
+  await expect(page.getByTestId('ptr')).not.toHaveAttribute('aria-busy', 'true');
+  await expect(chip).toHaveAttribute('aria-pressed', 'true');
+  await page.evaluate(() => (window as unknown as { __cyberjukeFreshness: { check(): Promise<void> } }).__cyberjukeFreshness.check());
+  const pill = page.getByTestId('new-tracks-pill');
+  await expect(pill).toHaveText(/1 new track/);
+  // New posts are waiting, likely in another genre: the pull goes where they are.
+  await touchDrag(page, 200, 320, 720, 400);
+  await expect(page.getByTestId('chip-all')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('sort-latest')).toHaveAttribute('aria-selected', 'true');
+  await expect(pill).toHaveCount(0);
+  await waitForTracks(page);
 });
 
 test('a song picture still on its way leaves a dark box, not a bright square (dark theme)', async ({ page }) => {
