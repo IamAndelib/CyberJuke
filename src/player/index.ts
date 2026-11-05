@@ -153,12 +153,12 @@ export const canSkipNext = computed(() => state.value.upNext.length > 0 || state
 /** The context the current list was started with (C2); null before the first. Changes only with the list. */
 export const playContext = computed<PlayContext | null>(() => state.value.context);
 
-const NO_SECTIONS: UpNextSections = { queued: [], list: [], autoplay: [], seed: null };
+const NO_SECTIONS: UpNextSections = { queued: [], list: [], autoplay: [], runs: [], seed: null };
 let lastSections = NO_SECTIONS;
 
 /**
- * Up next as its three sections (C2): queued by you, the rest of the list, autoplay; and
- * the track autoplay follows. The same object until one of them changes (never on a
+ * Up next as its sections (C2, sectionsOf): queued by you, the rest of the list, autoplay; and
+ * the track autoplay follows. The same object until a row or the seed changes (never on a
  * position tick).
  */
 export const upNextSections = computed<UpNextSections>(() => {
@@ -196,7 +196,7 @@ function sameItems(a: UpItem[], b: UpItem[]): boolean {
 }
 
 function sameSections(a: UpNextSections, b: UpNextSections): boolean {
-  return a.seed === b.seed && sameItems(a.queued, b.queued) && sameItems(a.list, b.list) && sameItems(a.autoplay, b.autoplay);
+  return a.seed === b.seed && a.runs.length === b.runs.length && a.runs.every((r, k) => r.kind === b.runs[k].kind && sameItems(r.items, b.runs[k].items));
 }
 
 // e2e: what Up next holds, with the fields similarity works on.

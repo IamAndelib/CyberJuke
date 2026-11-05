@@ -645,10 +645,10 @@ class JukePlayerPlugin : Plugin() {
 
     /**
      * `restore({ track, kind: 'played' | 'queued' | 'list' | 'autoplay', beforeId: string | null })`:
-     * Undo of a removal (K3). The track goes back into its section of Up next, right before the
-     * first entry after the current track with id `beforeId` in that section, else at the end
-     * of that section; never at or before the current track. 'played' goes back before the
-     * played entry `beforeId`, else right before the current track.
+     * Undo of a removal (K3). The track goes back as `kind`, right before the first entry after
+     * the current track with id `beforeId` (a queued one only before a queued one, the others
+     * never before one), else at the end of its section; never at or before the current track.
+     * 'played' goes back before the played entry `beforeId`, else right before the current track.
      */
     @PluginMethod
     fun restore(call: PluginCall) {
