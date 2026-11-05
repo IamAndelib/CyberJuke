@@ -372,6 +372,7 @@ export class Queue<T extends Identified> {
     const way = this.nextStartIndex;
     if (way >= 0) this.drop((i) => i >= way);
     this.nextStart = null;
+    this.nextLeft = null;
   }
 
   /**

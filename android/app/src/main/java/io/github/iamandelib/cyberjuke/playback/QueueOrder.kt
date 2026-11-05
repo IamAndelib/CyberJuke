@@ -636,6 +636,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         val way = nextStartIndex()
         if (way >= 0) drop { it >= way }
         nextStart = 0L
+        nextLeft = null
     }
 
     /** Repeat all loops the list you're in: what's on the way and the history before it go (not the playing item or the queued ones). */

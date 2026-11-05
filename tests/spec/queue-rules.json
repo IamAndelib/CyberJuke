@@ -1268,6 +1268,34 @@
       ]
     },
     {
+      "name": "Undo of a suggestion after the list on the way was dropped: it comes back as a suggestion, and the list you're in still starts where it did",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["t1", "t2", "t3"] },
+        { "op": "remove", "id": "t2" },
+        { "op": "dropOnTheWay" },
+        { "op": "restore", "id": "t2", "kind": "autoplay", "beforeId": "t3" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "expect", "current": "t2", "listStart": "a" }
+      ]
+    },
+    {
+      "name": "Undo of a suggestion after repeat all dropped the list on the way: the list you're in still starts where it did",
+      "list": ["a", "b"],
+      "start": 0,
+      "steps": [
+        { "op": "addAuto", "ids": ["t1", "t2", "t3"] },
+        { "op": "remove", "id": "t2" },
+        { "op": "setRepeat", "mode": "all" },
+        { "op": "restore", "id": "t2", "kind": "autoplay", "beforeId": "t3" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "expect", "current": "t2", "listStart": "a" }
+      ]
+    },
+    {
       "name": "shuffled suggestions: a tap on any of them moves on to it, and the list's songs it jumped over come along",
       "list": ["a", "b"],
       "start": 0,
