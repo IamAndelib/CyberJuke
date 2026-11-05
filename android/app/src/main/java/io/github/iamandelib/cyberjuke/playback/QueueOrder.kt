@@ -718,7 +718,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
             pending.addAll(queued)
         }
         host.moveItem(from, to)
-        // Media3 keeps the shuffle order by index: put it back by item.
+        // Media3 keeps the shuffle order by index on a move (ShuffleOrder.cloneAndMove leaves it as it is): put it back by item.
         val now = { i: Int -> if (i == from) to else if (i in from..to) i - 1 else if (i in to..from) i + 1 else i }
         order?.let { o -> host.setShuffleOrder(IntArray(o.size) { now(o[it]) }) }
     }

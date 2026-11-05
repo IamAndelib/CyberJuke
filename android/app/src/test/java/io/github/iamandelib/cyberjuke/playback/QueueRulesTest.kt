@@ -220,7 +220,7 @@ class QueueRulesTest {
                 current in to until from -> current + 1
                 else -> current
             }
-            // Media3 keeps the shuffle order by index (ExoPlayerImpl.moveMediaItems), so the songs moved past change places in it.
+            // Media3 keeps the shuffle order by index (ShuffleOrder.cloneAndMove leaves it as it is), so the songs moved past change places in it.
             emit(timelineChanged)
         }
 
