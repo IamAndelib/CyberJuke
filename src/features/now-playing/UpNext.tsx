@@ -84,10 +84,15 @@ function RowBody({ track, playing }: { track: Track; playing?: boolean }) {
   );
 }
 
-/** [Save queue as playlist]: New playlist with the queue as it shows (played, playing, up next), each song once. */
-function saveQueue(tracks: Track[]): void {
+/**
+ * [Save queue as playlist]: New playlist with the whole queue, each song once. In play order: the
+ * list's own order with shuffle off; with shuffle on, the rows as they show (Up next shows at most
+ * 50 on each side of the playing song), then the rest of the list.
+ */
+function saveQueue(shown: Track[]): void {
+  const { queue, shuffle } = player.state.peek();
   const seen = new Set<string>();
-  const songs = tracks.filter((t) => !seen.has(t.id) && (seen.add(t.id), true)).slice(0, PLAYLIST_MAX_SONGS);
+  const songs = (shuffle ? [...shown, ...queue] : queue).filter((t) => !seen.has(t.id) && (seen.add(t.id), true)).slice(0, PLAYLIST_MAX_SONGS);
   askName({
     title: 'New playlist',
     note: `With ${plural(songs.length, 'song')}`,

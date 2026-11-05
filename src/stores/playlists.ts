@@ -210,8 +210,21 @@ export function renamePlaylist(id: string, name: string): boolean {
   return true;
 }
 
-export function deletePlaylist(id: string): void {
-  if (!find(id)) return;
-  playlists.value = playlists.peek().filter((p) => p.id !== id);
+/** Deletes playlist [id]; returns what Undo needs. */
+export function deletePlaylist(id: string): Removed<Playlist> | null {
+  const list = playlists.peek();
+  const i = list.findIndex((p) => p.id === id);
+  if (i < 0) return null;
+  const r = removedFrom(list, i, (p) => p.id);
+  playlists.value = list.filter((p) => p.id !== id);
+  save();
+  return r;
+}
+
+/** Undo of a delete: the playlist comes back where it was, songs and all (once, and only if there's room). */
+export function restorePlaylist(r: Removed<Playlist>): void {
+  const list = playlists.peek();
+  if (list.some((p) => p.id === r.item.id) || list.length >= PLAYLISTS_MAX) return;
+  playlists.value = putBack(list, r, (p) => p.id);
   save();
 }

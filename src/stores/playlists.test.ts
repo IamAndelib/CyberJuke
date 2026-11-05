@@ -55,6 +55,20 @@ describe('making and naming playlists', () => {
     expect(pl.playlistsShown.value.map((p) => p.id)).toEqual([a]);
   });
 
+  it('Undo of a delete brings the playlist back where it was, with its songs', () => {
+    const a = (pl.createPlaylist('A') as { id: string }).id;
+    const b = (pl.createPlaylist('B', [tr('s1'), tr('s2')]) as { id: string }).id;
+    const c = (pl.createPlaylist('C') as { id: string }).id;
+    const gone = pl.deletePlaylist(b)!;
+    expect(pl.playlistsShown.value.map((p) => p.id)).toEqual([a, c]);
+    pl.restorePlaylist(gone);
+    expect(pl.playlistsShown.value.map((p) => p.id)).toEqual([a, b, c]);
+    expect(pl.playlistShown(b)?.tracks.map((t) => t.id)).toEqual(['s1', 's2']);
+    // A second Undo changes nothing.
+    pl.restorePlaylist(gone);
+    expect(pl.playlistsShown.value).toHaveLength(3);
+  });
+
   it('stops at the most playlists there can be', () => {
     for (let i = 0; i < pl.PLAYLISTS_MAX; i++) pl.createPlaylist(`P${i}`);
     expect(pl.createPlaylist('one more').result).toBe('full');
