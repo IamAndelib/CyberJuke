@@ -102,6 +102,15 @@ class QueueRulesTest {
             assertEquals("current in $where", want, p.ids.getOrNull(p.current))
         }
         if (s.has("upNext")) assertEquals("upNext in $where", strings(s.getJSONArray("upNext")), up)
+        if (s.has("upNextBlocks")) {
+            // Each block's songs in any order (a shuffled block); the blocks in order.
+            var at = 0
+            for (b in s.getJSONArray("upNextBlocks").let { a -> (0 until a.length()).map { strings(a.getJSONArray(it)) } }) {
+                assertEquals("upNextBlocks in $where (got $up)", b.sorted(), up.drop(at).take(b.size).sorted())
+                at += b.size
+            }
+            assertEquals("upNextBlocks length in $where (got $up)", at, up.size)
+        }
         if (s.has("upNextStartsWith")) {
             val want = strings(s.getJSONArray("upNextStartsWith"))
             assertEquals("upNextStartsWith in $where (got $up)", want, up.take(want.size))
