@@ -66,6 +66,8 @@ internal data class LastSession(
         val local: Boolean = false,
         /** A Global song's credited artists ([TrackExtras.Extra.artists]): its artist page opens by channel. */
         val artists: List<YtMusic.Credit> = emptyList(),
+        /** Queued by you (rule 8): the mark stays after it played. Older files have none ("m"). */
+        val mine: Boolean = false,
     ) {
         /** The NativeTrack JSON that [JukeTracks.toMediaItem] takes. */
         fun toNativeTrack(): JSONObject = JSONObject().apply {
@@ -95,7 +97,7 @@ internal data class LastSession(
                         NativeQueue.Section.AUTO -> "a"
                         NativeQueue.Section.LIST -> "l"
                     },
-                ).put("h", e.heard),
+                ).put("h", e.heard).put("m", e.mine),
             )
         }
         return JSONObject().apply {
@@ -260,6 +262,7 @@ internal data class LastSession(
                     artists = MusicText.creditsOf(t.optJSONArray("artists")),
                     heard = t.optBoolean("h", false),
                     local = local,
+                    mine = t.optBoolean("m", false),
                 )
             }
             val index = o.getInt("index")

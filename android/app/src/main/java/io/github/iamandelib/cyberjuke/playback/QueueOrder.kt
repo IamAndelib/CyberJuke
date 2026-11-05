@@ -378,9 +378,10 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
      * current at [positionMs], and the shuffle play [order] it had comes back when it still fits
      * (shuffle on). The queued items stay next, in the order they were going to play; the
      * [heard] ones (one flag per item, or none) are heard again; [listStart] and [nextStart] are
-     * the list indices of the markers (0, -1: unset).
+     * the list indices of the markers (0, -1: unset). The [mine] ones (one flag per item, or none)
+     * keep the queued-by-you mark, a serial, without waiting again.
      */
-    fun restoreSession(items: List<T>, sections: List<Section>, start: Int, positionMs: Long, order: IntArray?, heard: List<Boolean> = emptyList(), listStart: Int = 0, nextStart: Int = -1) {
+    fun restoreSession(items: List<T>, sections: List<Section>, start: Int, positionMs: Long, order: IntArray?, heard: List<Boolean> = emptyList(), listStart: Int = 0, nextStart: Int = -1, mine: List<Boolean> = emptyList()) {
         require(sections.size == items.size) { "one section per item" }
         pending.clear()
         this.heard.clear()
@@ -393,7 +394,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
             return
         }
         val s = start.coerceIn(0, items.size - 1)
-        val serials = sections.mapIndexed { i, sec -> if (sec == Section.QUEUED && i != s) nextSerial++ else 0L }
+        val serials = sections.mapIndexed { i, sec -> if ((sec == Section.QUEUED && i != s) || mine.getOrElse(i) { false }) nextSerial++ else 0L }
         host.setItems(items, serials, s, positionMs, sections.map { it == Section.AUTO })
         this.listStart = if (listStart in 1 until items.size) host.uidAt(listStart) else 0L
         this.nextStart = if (nextStart in items.indices) host.uidAt(nextStart) else 0L
@@ -402,7 +403,8 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         if (host.shuffleEnabled && order != null && QueueOrder.isPermutation(order, items.size)) {
             host.setShuffleOrder(order)
         }
-        for (i in upcoming()) host.serialAt(i).takeIf { it != 0L }?.let { pending.add(it) }
+        // Only the queued ones wait: a song you queued that played and is ahead again (Previous) is a list song.
+        for (i in upcoming()) if (sections[i] == Section.QUEUED) pending.add(host.serialAt(i))
         if (host.shuffleEnabled) enforceShuffleOrder() else enforceLinearOrder()
     }
 

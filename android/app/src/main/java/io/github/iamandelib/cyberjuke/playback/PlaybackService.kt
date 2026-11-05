@@ -1384,7 +1384,7 @@ class PlaybackService : MediaSessionService() {
         }
         p.repeatMode = s.repeat
         p.shuffleModeEnabled = s.shuffle
-        queue.restoreSession(items, s.entries.map { it.section }, s.index, s.positionMs, s.order, s.entries.map { it.heard }, s.listStart, s.nextStart)
+        queue.restoreSession(items, s.entries.map { it.section }, s.index, s.positionMs, s.order, s.entries.map { it.heard }, s.listStart, s.nextStart, s.entries.map { it.mine })
         context = s.context
         radio.reseedFromId(s.seedId)
         seedId = s.seedId
@@ -1448,6 +1448,7 @@ class PlaybackService : MediaSessionService() {
                     album = item.mediaMetadata.albumTitle?.toString(),
                     artists = extra?.artists ?: emptyList(),
                     heard = (extras?.getLong(QueueCommands.EXTRA_UID, 0L) ?: 0L).let { it != 0L && it in heard },
+                    mine = serial != 0L,
                     section = when {
                         serial != 0L && serial in pending -> NativeQueue.Section.QUEUED
                         extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) == true -> NativeQueue.Section.AUTO
