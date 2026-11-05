@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- With Repeat all on, Up next goes on under "From the top" with the songs that play next time round, and you can reorder or remove them there.
+
 ### Changed
 - **Save queue as playlist** saves the whole list you're in, not only the 100 or so songs Up next shows: an album, or once its suggestions are playing, those.
 - After you delete a playlist, **Undo** brings it back where it was, with all its songs.
