@@ -32,12 +32,11 @@ Every way of starting music is one of two kinds. The kind is set when it starts;
 
 **A list** has an end, so it has a top to come back to:
 - an album, a playlist, Liked, Recently played, an artist, a genre's page;
-- Home with a **genre** chosen (Metal, say): the genre's list from the tapped song on, as its own page plays it;
 - Home, Most saved, Search or Global with Autoplay off: the feed from the tapped song on, as it shows;
 - a Signal Radio station: a list that leads on to the next station (section 4).
 
 **A radio** has no end, so it has no top:
-- a song tapped on Home with **All** chosen (Latest or Most saved), in Search or in Global, with Autoplay on: that song, then endless suggestions;
+- a song tapped on Home (All or a genre, Latest or Most saved), in Search or in Global, with Autoplay on: that song, then endless suggestions. Home and Search start a Vibe; the Genres, Artists and album pages play lists;
 - **Shuffle the Jukebox** (all of it, or one genre): endless random songs, also with Autoplay off. It is one of the app's own features: the shuffle itself goes on, it isn't a suggestion.
 
 ## 3. The rules
@@ -45,7 +44,8 @@ Every way of starting music is one of two kinds. The kind is set when it starts;
 1. **The list always comes first.** Suggestions play only after a list, shuffle or not. Nothing but ✕ (or sign-out) takes a list song out.
 2. **Suggestions come after a list, and never end.**
    - With Autoplay on and Repeat off, they show at the end of Up next, under "Autoplay · similar to …", fetched once the app is idle after the list starts.
-   - Scrolling near the bottom loads more, with "Loading more…" as Home's feed shows it. The player also tops up by itself, so it never runs dry while you just listen.
+   - They come in **batches of 25**. Up next shows the batch, with a line under it: "More like these when they run out." The next batch is fetched when 5 songs are left (as InnerTune and Metrolist refill), not when the last one starts, so the player always has the next song ready: for gapless and crossfade, on a slow connection, and when Android closes the app's screen with the phone locked (the app's side picks Jukebox songs).
+   - Nothing loads because you scrolled: the queue changes only when the music needs it, so Save queue as playlist saves what's on screen.
    - New batches always go at the end.
    - With Autoplay off, or Repeat all on, none are shown or added.
 3. **Shuffle mixes what hasn't played** (built: #154).
@@ -65,7 +65,7 @@ Every way of starting music is one of two kinds. The kind is set when it starts;
 7. **Repeat one** replays the song when it ends, and Next moves on (unchanged).
 8. **Shuffle the Jukebox is endless.**
    - Up next shows its songs as one list, "Next from: Jukebox shuffle" (or "Jukebox shuffle · rock"), not as a list plus suggestions.
-   - Scrolling near the bottom loads more, as in rule 2; the player tops up by itself too.
+   - In batches of 25, the next one fetched when 5 are left, as in rule 2.
    - New songs are random picks from the same pool (the whole Jukebox or the genre) not yet in the queue; once the pool is used up, a fresh shuffle of all of it, never starting with the song just played.
    - It ignores the Autoplay setting. Repeat as on any radio (rule 6).
 
@@ -112,6 +112,7 @@ Autoplay is renamed **Vibe**: the same feature, with wording in Settings and Up 
 - Cost: one filter of at most 1000 entries per refill (about every 20 songs), on the app's side only; the phone's player doesn't change.
 - **Not doing:** continuing with Global songs once the Jukebox is used up. Nobody can realistically hear all of it, and it would send Jukebox sessions to YouTube Music, which they never do today.
 - A song played from Global keeps continuing with YouTube Music's radio for it, as now.
+- **A genre chosen on Home keeps the Vibe in that genre first:** it picks from that genre while it has unheard songs, then widens to the genre's family (metal to metalcore, hard rock), then to popular Jukebox songs.
 
 ## 6. How it's built
 
@@ -122,11 +123,11 @@ Each step ships as its own PR:
 Order:
 1. **Labels:** rule 4, F2. Done (#152).
 2. **Shuffle:** rule 3, F1, F7. Done (#154).
-3. **Radios:** rule 6 and section 2: Repeat on a radio (app, notification, other controllers), Home with a genre plays as a list, the single-song exception removed. #155 closed.
+3. **Radios:** rule 6 and section 2: Repeat on a radio (app, notification, other controllers), the single-song exception removed. #155 closed.
 4. **Repeat all:** rule 5, F3: "From the top" with ↑ ↓ ✕.
 5. **Signal stations:** section 4.
 6. **Shuffle the Jukebox:** rule 8.
-7. **Suggestions:** rules 1 and 2, F4: from the list's start, appended in order, endless loading in Up next (concept q1), with the button back up to the playing song (concept q2).
+7. **Suggestions:** rules 1 and 2, F4: from the list's start, appended in order, in batches of 25 with the next fetched at 5 left (replaces concept q1's loading as you scroll), with the button back up to the playing song (concept q2).
 8. **Vibe:** section 5a: the rename (wording concept first), then session memory.
 
 Each PR needs:
