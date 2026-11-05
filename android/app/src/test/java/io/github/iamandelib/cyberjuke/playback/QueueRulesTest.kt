@@ -25,8 +25,11 @@ class QueueRulesTest {
         assertTrue(cases.length() > 0)
         for (i in 0 until cases.length()) {
             val c = cases.getJSONObject(i)
-            // Shuffled cases only check the leading ids; run them with several seeds.
-            val seeds = if (c.optBoolean("shuffle", false)) 0L until 25L else 0L until 1L
+            // Shuffled cases (shuffle on at the start or turned on later) only check sets and
+            // leading ids; run them with several seeds.
+            val steps = c.getJSONArray("steps")
+            val shuffles = c.optBoolean("shuffle", false) || (0 until steps.length()).any { steps.getJSONObject(it).getString("op") == "setShuffle" }
+            val seeds = if (shuffles) 0L until 25L else 0L until 1L
             for (seed in seeds) runCase(c, seed)
         }
     }

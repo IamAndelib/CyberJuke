@@ -53,6 +53,22 @@ async function queueRow(page: Page, i: number) {
   await expect(page.locator('.sheet-wrap.open')).toHaveCount(0);
 }
 
+/** Plays the Global album "Night Owl" (8 songs) and opens Now Playing; returns its titles. */
+async function playAlbum(page: Page): Promise<string[]> {
+  await page.goto('/');
+  await openSearch(page);
+  await page.getByTestId('search-input').fill('Night Owl');
+  await page.getByTestId('mode-global').click();
+  await page.getByTestId('filter-albums').click();
+  await page.getByTestId('music-open').first().click();
+  const album = page.getByTestId('screen-album');
+  await expect(album.getByTestId('track-row')).toHaveCount(8);
+  const titles = (await album.getByTestId('track-title').allTextContents()).map((s) => s.trim());
+  await album.getByTestId('album-play').click();
+  await openNowPlaying(page);
+  return titles;
+}
+
 test('a Home row starts a radio: Up next is similar Jukebox tracks', async ({ page }) => {
   await start(page);
   // The most used genre, so the catalog has plenty alike (a rare genre widens sooner).
@@ -186,17 +202,7 @@ test('Album Play plays the album, then continues into autoplay at the end', asyn
 });
 
 test('a tapped suggestion, then Previous: the album songs stay under the album, "3 of 8" stays right, and Undo puts each song back', async ({ page }) => {
-  await page.goto('/');
-  await openSearch(page);
-  await page.getByTestId('search-input').fill('Night Owl');
-  await page.getByTestId('mode-global').click();
-  await page.getByTestId('filter-albums').click();
-  await page.getByTestId('music-open').first().click();
-  const album = page.getByTestId('screen-album');
-  await expect(album.getByTestId('track-row')).toHaveCount(8);
-  const titles = (await album.getByTestId('track-title').allTextContents()).map((s) => s.trim());
-  await album.getByTestId('album-play').click();
-  await openNowPlaying(page);
+  const titles = await playAlbum(page);
   // At the third song five are left: suggestions line up after the album.
   await page.getByTestId('np-next').click();
   await page.getByTestId('np-next').click();
@@ -619,6 +625,31 @@ test('the queue shows the whole list: what played folds under [+] Played, the pl
   await openNowPlaying(page);
   await next.click();
   await expect(page.getByTestId('upnext-played-fold')).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('Previous twice, then shuffle on: the album songs after the playing one all stay in Up next, none moves into Played', async ({ page }) => {
+  const titles = await playAlbum(page);
+  const title = page.getByTestId('np-title');
+  for (let k = 1; k <= 4; k++) {
+    await page.getByTestId('np-next').click();
+    await expect(title).toHaveText(titles[k]);
+  }
+  // Back to the third song (a Previous past a song's first seconds restarts it first).
+  for (const k of [3, 2]) {
+    await expect(async () => {
+      await page.getByTestId('np-prev').click();
+      await expect(title).toHaveText(titles[k], { timeout: 1000 });
+    }).toPass();
+  }
+  const list = page.locator('[data-testid="upnext-row"][data-section="list"] .row-title');
+  await expect(list).toHaveText(titles.slice(3));
+  await page.getByTestId('np-shuffle').click();
+  await expect(page.getByTestId('np-shuffle')).toHaveAttribute('aria-pressed', 'true');
+  await expect(title).toHaveText(titles[2]);
+  await expect(page.getByTestId('upnext-played-fold')).toHaveText('Played · 2');
+  await page.getByTestId('upnext-played-fold').click();
+  await expect(page.getByTestId('upnext-played').locator('.row-title')).toHaveText(titles.slice(0, 2));
+  expect((await list.allTextContents()).map((s) => s.trim()).sort()).toEqual(titles.slice(3).sort());
 });
 
 test('Played is only what was heard: not the songs before the one tapped, nor what shuffle off puts behind', async ({ page }) => {

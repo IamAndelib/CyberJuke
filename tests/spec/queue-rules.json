@@ -1,6 +1,6 @@
 {
   "about": "The queue rules, shared by the web Queue (src/player/queue.ts) and the native queue (NativeQueue, run by QueueRulesTest). Every case starts from `list` with `start` current (list index), shuffle and repeat as given, then runs `steps` in order. Ids are track ids; ids are unique within a case. Ops: setList {ids, start} (a new list: replaces the list and the autoplay tracks, keeps the queued ones); queueNext {ids}; addAuto {ids} (autoplay appends these); skipTo {id} (a tap: the list index of that id; a track further ahead moves to right after the current one first, so what it jumps over stays next); next (a user skip); nextAuto (the track ended by itself); prev {positionMs} (go back: moves when positionMs <= 3000, else restarts the current track); remove {id}; move {id, to} (list index); setShuffle {on}; setRepeat {mode}; restore {id, kind, beforeId} (Undo of a remove: kind played puts id back among the played, right before the played track beforeId, else right before the current track, as a list track; otherwise it puts id back as a queued, list or autoplay track, right before the first track after the current one, in play order, that is beforeId (for a queued track only a queued one, for the others never a queued one); with no such track, or beforeId null, at the end of that section: queued after the queued run, list after the last list track ahead (else after the queued run), autoplay at the very end. In list order it goes right before the track that follows it in play order, or at the end. Never at or before the current track); removeRow {id} (Up next's ✕ on that row: it goes, and its Undo is kept: the row's own kind and the row that followed it in Up next, or null); undo (restore with what removeRow kept); removeIds {ids} (every item with one of these ids goes; if the current one goes, the next one in play order that stays becomes current, or nothing plays). An expect step checks: current (id); played (the play order before the current track, oldest first); upNext (the whole play order after the current track); upNextStartsWith (its first ids, for shuffled cases); queued (how many leading upNext tracks are 'Queued by you'); list (list order); Up next's three sections, each row by its own kind, never by its place (as the native player sends the kinds): queuedIds (queued by you), listIds (the rest of the list, in play order), listSet (the same ids in any order, for shuffled cases), autoplayIds (autoplay, in play order), autoplaySet (the same ids in any order, for shuffled cases); and place (Now Playing's 'N of M', the page's placeOf: the web runner only).",
-  "rule": "Played is what was heard: the tracks of this list that have been current, never the ones before where a list started or a shuffle put them. Queued tracks play right after the current track, first in first out, shuffle or not, until each one plays or is removed. A manual jump (skipTo, or prev moving back) keeps the still-queued tracks next: they move to just after the new current track, in the order they were going to play. Jumping to a queued track plays it; the others stay next. A new list replaces the list and the autoplay tracks, but the queued tracks stay next, in order. Autoplay tracks play after the list in the order added. Shuffle mixes every track not heard yet, afresh each time it is turned on: the list's first, then the autoplay tracks, whichever is playing; the heard ones stay behind, in the order they played. New autoplay tracks then go in at random places among those still to come; shuffle off puts everything back in order. Repeat all loops what you started: a list's autoplay tracks still to come go when it is turned on, but a single song's are its radio, the loop itself, and stay. Repeat one replays the current track when it ends and leaves Up next as it is; a user skip moves on, as with repeat off (Media3's: none at the end). Jumping to an autoplay track keeps the autoplay tracks after it; more follow them.",
+  "rule": "Played is what was heard before the current track: the tracks of this list before it in play order that have been current, never the ones before where a list started or a shuffle put them. Queued tracks play right after the current track, first in first out, shuffle or not, until each one plays or is removed. A manual jump (skipTo, or prev moving back) keeps the still-queued tracks next: they move to just after the new current track, in the order they were going to play. Jumping to a queued track plays it; the others stay next. A new list replaces the list and the autoplay tracks, but the queued tracks stay next, in order. Autoplay tracks play after the list in the order added. Shuffle mixes what hasn't played, afresh each time it is turned on: what stays behind is exactly what Played shows, in the order it played; everything in Up next, and the list tracks before where the list started, is mixed ahead, the queued tracks first, then the list's, then the autoplay tracks, whichever is playing. New autoplay tracks then go at the end, mixed among themselves; shuffle off puts everything back in order. Repeat all loops what you started: a list's autoplay tracks still to come go when it is turned on, but a single song's are its radio, the loop itself, and stay. Repeat one replays the current track when it ends and leaves Up next as it is; a user skip moves on, as with repeat off (Media3's: none at the end). Jumping to an autoplay track keeps the autoplay tracks after it; more follow them.",
   "cases": [
     {
       "name": "queued tracks play next, first in first out",
@@ -738,6 +738,85 @@
       ]
     },
     {
+      "name": "Previous twice, then shuffle on: the songs still ahead stay in Up next and get mixed, none moves into Played",
+      "list": ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"],
+      "start": 0,
+      "steps": [
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "addAuto", "ids": ["A1", "A2", "A3", "A4"] },
+        { "op": "prev" },
+        { "op": "prev" },
+        { "op": "expect", "current": "S4", "played": ["S1", "S2", "S3"], "listIds": ["S5", "S6", "S7", "S8"] },
+        { "op": "setShuffle", "on": true },
+        { "op": "expect", "current": "S4", "played": ["S1", "S2", "S3"], "listSet": ["S5", "S6", "S7", "S8"], "autoplaySet": ["A1", "A2", "A3", "A4"] },
+        { "op": "setShuffle", "on": false },
+        { "op": "expect", "current": "S4", "played": ["S1", "S2", "S3"], "listIds": ["S5", "S6", "S7", "S8"], "autoplayIds": ["A1", "A2", "A3", "A4"] }
+      ]
+    },
+    {
+      "name": "repeat all, on the second lap: shuffle on mixes the whole lap ahead, none of it moves into Played",
+      "list": ["S1", "S2", "S3", "S4", "S5"],
+      "start": 0,
+      "repeat": "all",
+      "steps": [
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "expect", "current": "S1", "played": [], "upNext": ["S2", "S3", "S4", "S5"] },
+        { "op": "setShuffle", "on": true },
+        { "op": "expect", "current": "S1", "played": [], "listSet": ["S2", "S3", "S4", "S5"] }
+      ]
+    },
+    {
+      "name": "a played song tapped, then shuffle on: the songs after it stay in Up next and get mixed",
+      "list": ["S1", "S2", "S3", "S4", "S5", "S6"],
+      "start": 0,
+      "steps": [
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "skipTo", "id": "S2" },
+        { "op": "expect", "current": "S2", "played": ["S1"], "upNext": ["S3", "S4", "S5", "S6"] },
+        { "op": "setShuffle", "on": true },
+        { "op": "expect", "current": "S2", "played": ["S1"], "listSet": ["S3", "S4", "S5", "S6"] }
+      ]
+    },
+    {
+      "name": "shuffle on in a list started at S3: S1 and S2 are mixed ahead too, the list before the suggestions; what played stays behind",
+      "list": ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"],
+      "start": 2,
+      "steps": [
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "addAuto", "ids": ["A1", "A2", "A3", "A4", "A5", "A6"] },
+        { "op": "setShuffle", "on": true },
+        { "op": "expect", "played": ["S3", "S4"], "listSet": ["S1", "S2", "S6", "S7", "S8"], "autoplaySet": ["A1", "A2", "A3", "A4", "A5", "A6"] },
+        { "op": "setShuffle", "on": false },
+        { "op": "expect", "played": ["S3", "S4"], "listIds": ["S6", "S7", "S8"] }
+      ]
+    },
+    {
+      "name": "with shuffle on, new suggestions go after the ones already to come, mixed among themselves",
+      "list": ["a"],
+      "start": 0,
+      "shuffle": true,
+      "steps": [
+        { "op": "addAuto", "ids": ["A1", "A2", "A3"] },
+        { "op": "addAuto", "ids": ["B1", "B2", "B3"] },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "expect", "autoplaySet": ["B1", "B2", "B3"] }
+      ]
+    },
+    {
       "name": "a radio (one song, then suggestions) shuffles its suggestions; new ones mix in; a tap keeps what it jumps over",
       "list": ["a"],
       "start": 0,
@@ -793,7 +872,7 @@
       ]
     },
     {
-      "name": "shuffle on keeps the suggestions heard behind, as played",
+      "name": "a radio's song tapped again after two suggestions: shuffle on mixes them ahead with the rest, as Up next showed them",
       "list": ["a"],
       "start": 0,
       "steps": [
@@ -801,8 +880,9 @@
         { "op": "next" },
         { "op": "next" },
         { "op": "skipTo", "id": "a" },
+        { "op": "expect", "current": "a", "played": [], "upNext": ["s1", "s2", "s3", "s4"] },
         { "op": "setShuffle", "on": true },
-        { "op": "expect", "current": "a", "played": ["s1", "s2"], "autoplaySet": ["s3", "s4"] }
+        { "op": "expect", "current": "a", "played": [], "autoplaySet": ["s1", "s2", "s3", "s4"] }
       ]
     },
     {
