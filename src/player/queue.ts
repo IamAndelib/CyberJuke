@@ -34,8 +34,8 @@
  *    random places; the heard ones stay behind, in the order they played. Off puts the list
  *    order back.
  *
- * Up next is three sections, in play order: queued by you, the rest of the list,
- * autoplay (sectionsOf in ./types).
+ * Up next labels each track by its own kind, never by its place: queued by you, the
+ * list, autoplay (sectionsOf in ./types).
  */
 import { UP_NEXT_MAX } from '../core/guards';
 import { shuffled } from '../core/shuffle';

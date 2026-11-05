@@ -101,17 +101,21 @@ class QueueRulesTest {
         }
         if (s.has("list")) assertEquals("list in $where", strings(s.getJSONArray("list")), p.ids.toList())
         if (s.has("played")) assertEquals("played in $where", strings(s.getJSONArray("played")), p.played())
-        // Up next's sections (the page's sectionsOf): the leading queued run, the list, then from
-        // the first autoplay row on, autoplay.
-        val lead = up.takeWhile { p.serials[p.ids.indexOf(it)] in p.queue.pendingSerials }
-        val after = up.drop(lead.size)
-        val list = after.takeWhile { !p.auto[p.ids.indexOf(it)] }
-        val autos = after.drop(list.size)
+        val (lead, list, autos) = sections(p).map { it.second }
         if (s.has("queuedIds")) assertEquals("queuedIds in $where", strings(s.getJSONArray("queuedIds")), lead)
         if (s.has("listIds")) assertEquals("listIds in $where", strings(s.getJSONArray("listIds")), list)
         if (s.has("listSet")) assertEquals("listSet in $where", strings(s.getJSONArray("listSet")).sorted(), list.sorted())
         if (s.has("autoplayIds")) assertEquals("autoplayIds in $where", strings(s.getJSONArray("autoplayIds")), autos)
         if (s.has("autoplaySet")) assertEquals("autoplaySet in $where", strings(s.getJSONArray("autoplaySet")).sorted(), autos.sorted())
+    }
+
+    /** Up next's sections (the page's sectionsOf): each row by the kind StateEncoder sends for it, in play order. */
+    private fun sections(p: FakePlayer): List<Pair<String, List<String>>> {
+        val kinds = p.upNext().groupBy {
+            val i = p.ids.indexOf(it)
+            if (p.serials[i] in p.queue.pendingSerials) "queued" else if (p.auto[i]) "autoplay" else "list"
+        }
+        return listOf("queued", "list", "autoplay").map { it to kinds[it].orEmpty() }
     }
 
     private fun strings(a: JSONArray) = (0 until a.length()).map { a.getString(it) }

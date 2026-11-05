@@ -4,7 +4,7 @@ import rules from '../../tests/spec/queue-rules.json';
 import { Queue } from './queue';
 import type { RepeatMode } from './native';
 import type { Track } from '../data/model';
-import { sectionsOf, type UpItem, type UpNextKind as Section } from './types';
+import { EMPTY_STATE, placeOf, sectionsOf, type UpItem, type UpNextKind as Section } from './types';
 
 type Step = { op: string; [k: string]: unknown };
 interface Case {
@@ -39,6 +39,8 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
         expect(i, `${String(id)} in list`).toBeGreaterThanOrEqual(0);
         return i;
       };
+      // Up next as the app builds it from what the player publishes.
+      const upNext = () => q.upNextItems().map(({ item, ...u }) => ({ track: item as Track, ...u }));
       for (const s of c.steps) {
         switch (s.op) {
           case 'setList':
@@ -90,8 +92,8 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             if ('queued' in s) expect(q.queuedCount).toBe(s.queued);
             if ('list' in s) expect(ids(q.items)).toEqual(s.list);
             if ('played' in s) expect(q.previousIndices().map((i) => q.items[i].id)).toEqual(s.played);
-            // Sections as the app builds them from what the player publishes.
-            const sec = sectionsOf(q.upNextItems().map(({ item, ...u }) => ({ track: item as Track, ...u })), null);
+            if ('place' in s) expect(placeOf({ ...EMPTY_STATE, queue: q.items as Track[], index: q.index, upNext: upNext() })).toBe(s.place);
+            const sec = sectionsOf(upNext(), null);
             const sIds = (xs: UpItem[]) => xs.map((x) => x.track.id);
             if ('queuedIds' in s) expect(sIds(sec.queued)).toEqual(s.queuedIds);
             if ('listIds' in s) expect(sIds(sec.list)).toEqual(s.listIds);

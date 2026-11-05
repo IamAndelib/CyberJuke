@@ -1,3 +1,4 @@
+import { Fragment } from 'preact';
 import { signal } from '@preact/signals';
 import { useLayoutEffect, useRef } from 'preact/hooks';
 import { autoplayLabel, currentId, currentPlaysOffline, currentTrack, isPlaying, player, playContext, previousTracks, repeatMode, shuffleOn, upNextSections, type PlayContext, type UpItem, type UpNextKind } from '../../player';
@@ -147,11 +148,11 @@ const offClass = (t: Track) => (!online.value && !isSaved(t, savedOffline.value)
 /**
  * Now Playing → Queue: the whole list, top to bottom as it plays (Spotify's Queue). What played
  * comes first, folded under "[+] Played · N" (a tap on one plays from there), then the playing
- * track, marked as in every list, then three
- * sections (AP1): queued by you, the rest of the list ("Next from: <source>"), then autoplay
- * ("Autoplay · similar to <seed>"). Up and Down move a track within its section, and the last
- * played one's Down past the playing track, to hear it again; Remove (every row but the playing
- * one) offers Undo.
+ * track, marked as in every list, then Up next, each song under its own kind's heading (AP1),
+ * one each time the kind changes: queued by you, the rest of the list ("Next from: <source>"),
+ * autoplay ("Autoplay · similar to <seed>"). Up and Down move a track under its heading, and the
+ * last played one's Down past the playing track, to hear it again; Remove (every row but the
+ * playing one) offers Undo.
  */
 export function UpNext() {
   const sec = upNextSections.value;
@@ -266,22 +267,12 @@ export function UpNext() {
       );
     });
 
-  const section = (kind: Kind, title: string, items: UpItem[]) =>
-    items.length > 0 && (
-      <>
-        <li class={'upnext-label' + (kind === 'autoplay' ? ' auto' : '')} data-testid={`upnext-${kind}-label`} aria-hidden="true">
-          {title}
-        </li>
-        {rows(kind, items)}
-      </>
-    );
-
-  const from = ctx?.label ? `Next from: ${ctx.label}` : 'Next from the list';
+  const titles = { queued: 'Queued by you', list: ctx?.label ? `Next from: ${ctx.label}` : 'Next from the list', autoplay: autoplayLabel.value };
   const repeat = repeatMode.value;
   const current = currentTrack.value;
   const played = previousTracks.value;
   const open = playedOpenFor.value === ctx;
-  const glowing = movedRow(movedGlow.value, [open ? played : [], sec.queued, sec.list, sec.autoplay]);
+  const glowing = movedRow(movedGlow.value, [open ? played : [], ...sec.runs.map((r) => r.items)]);
   return (
     <section ref={root} class="upnext" data-testid="up-next">
       <div class="section-head upnext-head">
@@ -301,7 +292,7 @@ export function UpNext() {
       </div>
       {current && (
         <div class="upnext-save">
-          <button class="link-btn" onClick={() => saveQueue([...played.map((u) => u.track), current, ...[...sec.queued, ...sec.list, ...sec.autoplay].map((u) => u.track)])} data-testid="upnext-save">
+          <button class="link-btn" onClick={() => saveQueue([...played.map((u) => u.track), current, ...sec.runs.flatMap((r) => r.items.map((u) => u.track))])} data-testid="upnext-save">
             [Save queue as playlist]
           </button>
         </div>
@@ -334,9 +325,14 @@ export function UpNext() {
             </li>
           </>
         )}
-        {section('queued', 'Queued by you', sec.queued)}
-        {section('list', from, sec.list)}
-        {section('autoplay', autoplayLabel.value, sec.autoplay)}
+        {sec.runs.map((r, k) => (
+          <Fragment key={k}>
+            <li class={'upnext-label' + (r.kind === 'autoplay' ? ' auto' : '')} data-testid={`upnext-${r.kind}-label`} aria-hidden="true">
+              {titles[r.kind]}
+            </li>
+            {rows(r.kind, r.items)}
+          </Fragment>
+        ))}
       </ol>
       {/* A screen reader hears where the moved song went, as the glow shows it. */}
       <p class="sr-only" aria-live="polite" data-testid="upnext-moved">

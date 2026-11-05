@@ -9,6 +9,7 @@
 - After ↑ or ↓ in the queue, the moved song glows faintly at its new place for a moment, so you can see where it went; a screen reader says it ("Moved to 3 of 25").
 
 ### Fixed
+- After you tap a suggestion in the queue and go back with Previous, your list's songs stay under their own heading instead of under Autoplay, and Now Playing still says "3 of 8" instead of "Single track". When suggestions and your list's songs take turns, each gets its heading again.
 - On a genre or Most saved, pulling down to refresh while the new tracks button shows takes you to Latest from every genre, where the new songs are, as tapping the button does. Before, it refreshed that genre and nothing new appeared.
 
 ## [1.4.0] - 2026-11-04

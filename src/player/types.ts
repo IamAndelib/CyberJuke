@@ -38,20 +38,36 @@ export interface UpItem {
   index: number;
 }
 
-/** Up next as its three sections, in play order (C2), and the track autoplay follows. */
+export type UpRowKind = Exclude<UpNextKind, 'played'>;
+
+/** Up next's rows in play order, a run each time the kind changes: Up next shows a heading over each. */
+export interface UpRun {
+  kind: UpRowKind;
+  items: UpItem[];
+}
+
+/**
+ * Up next's three sections (C2): each row by its own kind, never by its place (a tapped
+ * suggestion, moved next, stays a suggestion and the list after it stays the list), each in
+ * play order; the same rows as `runs`; and the track autoplay follows.
+ */
 export interface UpNextSections {
   queued: UpItem[];
   list: UpItem[];
   autoplay: UpItem[];
+  runs: UpRun[];
   seed: Track | null;
 }
 
-/** Up next's three sections, in play order: from the first autoplay row on, all is autoplay. */
 export function sectionsOf(upNext: UpNextItem[], seed: UpNextSections['seed']): UpNextSections {
-  const out: UpNextSections = { queued: [], list: [], autoplay: [], seed };
+  const out: UpNextSections = { queued: [], list: [], autoplay: [], runs: [], seed };
   for (const u of upNext) {
     const item: UpItem = { track: u.track, index: u.index };
-    (u.queued ? out.queued : u.auto || out.autoplay.length ? out.autoplay : out.list).push(item);
+    const kind = u.queued ? 'queued' : u.auto ? 'autoplay' : 'list';
+    out[kind].push(item);
+    const run = out.runs.at(-1);
+    if (run?.kind === kind) run.items.push(item);
+    else out.runs.push({ kind, items: [item] });
   }
   return out;
 }
@@ -223,13 +239,12 @@ export function nsfwAutoplayIds(upNext: readonly UpNextItem[]): string[] {
 }
 
 /**
- * Where the current track is in the list you started (autoplay's tracks after it not counted):
- * "3 of 50", or "Single track". The list ends at Up next's first autoplay row: autoplay adds
- * only once fewer than 50 list tracks are ahead, so that row is always among the 50 shown,
- * while more autoplay tracks may wait past them.
+ * Where the current track is in the list you started (autoplay's tracks ahead not counted):
+ * "3 of 50", or "Single track". Once an autoplay row is in Up next, every list track ahead is
+ * too (autoplay adds only once fewer than 50 are ahead), while more autoplay tracks may wait
+ * past the 50 shown, and a tapped one may sit among the list's.
  */
 export function placeOf(s: PlayerState): string {
-  const firstAuto = s.upNext.findIndex((u) => u.auto);
-  const n = firstAuto >= 0 ? s.index + 1 + firstAuto : s.queue.length;
+  const n = s.upNext.some((u) => u.auto) ? s.index + 1 + s.upNext.filter((u) => !u.auto).length : s.queue.length;
   return n > 1 ? `${s.index + 1} of ${n}` : 'Single track';
 }
