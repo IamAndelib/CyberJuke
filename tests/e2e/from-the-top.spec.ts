@@ -128,6 +128,37 @@ test('with shuffle on, "From the top" has ✕ only, in the order Played shows', 
   await expect(topTitles(page)).toHaveText(played);
 });
 
+test('with shuffle on, songs you queued keep ↑ ↓ and play in the order you set; the list has ✕ only', async ({ page }) => {
+  await playAlbum(page);
+  await page.getByTestId('np-shuffle').click();
+  await expect(page.getByTestId('np-shuffle')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('np-close').click();
+  await page.getByTestId('tab-home').click();
+  for (const n of [0, 1, 2]) {
+    await page.locator('[data-testid="track-more"]:visible').nth(n).click();
+    await page.getByTestId('menu-add-queue').click();
+    await expect(page.locator('.sheet-wrap.open')).toHaveCount(0);
+  }
+  const mine = (await queueState(page)).mine;
+  await openNowPlaying(page);
+  const queued = page.locator('[data-testid="upnext-row"][data-section="queued"]');
+  const order = () => queued.evaluateAll((rows) => rows.map((r) => r.getAttribute('data-track-id')));
+  await expect.poll(order).toEqual(mine);
+  await expect(queued.getByTestId('upnext-up')).toHaveCount(3);
+  await expect(queued.first().getByTestId('upnext-up')).toBeDisabled();
+  await expect(queued.last().getByTestId('upnext-down')).toBeDisabled();
+  const list = page.locator('[data-testid="upnext-row"][data-section="list"]');
+  await expect(list.first().getByTestId('upnext-remove')).toBeVisible();
+  await expect(list.getByTestId('upnext-up')).toHaveCount(0);
+  await expect(list.getByTestId('upnext-down')).toHaveCount(0);
+  // ↓ on the first swaps the first two, and Next plays the new first one.
+  await queued.first().getByTestId('upnext-down').click();
+  await expect.poll(order).toEqual([mine[1], mine[0], mine[2]]);
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('upnext-current')).toHaveAttribute('data-track-id', mine[1]);
+  await expect.poll(order).toEqual([mine[0], mine[2]]);
+});
+
 test('Repeat off or Repeat song: no "From the top"', async ({ page }) => {
   const titles = await playAlbum(page);
   await nextTo(page, titles, 5);

@@ -14,6 +14,7 @@
 - Once a list's suggestions are playing, Repeat all loops them, the list you're in now, instead of jumping back to the list before.
 - Turning Autoplay off keeps the suggestions you're already listening to; only the ones still to come after them go.
 - With Repeat all on, a single song played from a list (not a radio) just repeats; it no longer brings suggestions.
+- With shuffle on, songs you queued can still be moved with ↑ ↓: shuffle never mixes them, so they play in the order you set.
 - With Repeat all on, a song you add with **Add to queue** plays once: when the list starts over it leaves the queue, instead of coming round again in every lap. Previous, or a tap on a song in Played, still takes you back to it.
 
 ### Fixed
