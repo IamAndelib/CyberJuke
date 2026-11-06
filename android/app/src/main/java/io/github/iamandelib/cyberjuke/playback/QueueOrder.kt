@@ -848,7 +848,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
      * (YouTube Music): it moves to right after the current one first. A jump that moves on, shuffle
      * or not, brings along only the current list's unheard songs it jumped over; the others stay
      * behind it, in Played (A2). Shuffled, from a song before the current list (Previous took you there) to one
-     * of it, the earlier lists' songs it jumps over stay behind it too. [lap]: a tap on a "From the top" row enters
+     * of it, the earlier lists' heard songs it jumps over stay behind it too. [lap]: a tap on a "From the top" row enters
      * the next lap, so the heard songs you queued leave, as at the loop. Returns true when it is an autoplay item: more
      * follow from it, after the autoplay items still after it, which stay.
      */
@@ -860,10 +860,10 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         // From a song before the current list (Previous took you there) to one of it.
         val back = host.currentIndex in 0 until start && index >= start
         // Moving on, what it jumps over that comes along: the list on the way's and the current list's unheard (this lap); not the heard ones nor earlier lists'.
-        // Shuffled, back into the current list, the earlier lists' songs it jumps over stay behind it too (unshuffled they join the list it starts there).
+        // Shuffled, back into the current list, the earlier lists' heard songs it jumps over stay behind it too (unshuffled they join the list it starts there).
         val jumped = if (on || back && host.shuffleEnabled) up.take(up.indexOf(index).coerceAtLeast(0)).filter { host.serialAt(it) !in pending } else emptyList()
         val comes = { i: Int -> i >= way || i >= start && host.uidAt(i) !in this.lap }
-        val to = if (up.indexOf(index) > 0) bringNext(index, jumped.filter { if (on) !comes(it) else it < start }) else index
+        val to = if (up.indexOf(index) > 0) bringNext(index, jumped.filter { if (on) !comes(it) else it < start && isHeard(it) }) else index
         // Shuffled, the list's order is untouched so far: the current list's songs that come along move.
         if (on && host.shuffleEnabled) bringJumpedOver(jumped.filter { it < way && comes(it) }.sorted())
         // From a song before the current list (Previous took you there), a song of it moves before its first one: it starts there now.
