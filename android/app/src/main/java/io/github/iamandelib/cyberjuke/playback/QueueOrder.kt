@@ -143,8 +143,9 @@ internal interface QueueHost<T> {
  *   the list's unheard songs it jumped over along, at the new list's start: [bringJumpedOver]). A
  *   radio's first suggestions join its list instead (joinList). Repeat all loops the list you're in:
  *   turning it on drops what's on the way (it comes back once repeat is off) and the songs before
- *   the current list, keeping the playing song and the queued ones, and autoplay adds nothing
- *   while it is on (Stations.mayAutoplay). Turning autoplay off drops what's on the way too,
+ *   the current list, heard or not, keeping the playing song and the queued ones (one before it you
+ *   went back to leaves once another plays, [onTransition]), and autoplay adds nothing while it is
+ *   on (Stations.mayAutoplay). Turning autoplay off drops what's on the way too,
  *   never the list you're in. A jump ahead ([skipTo]) keeps what it jumps over next, and the
  *   autoplay tracks after it. The played trim leaves the current list alone. A removed marker's
  *   song hands it to the next one that stays; an Undo puts a song back in its own list: a
@@ -157,7 +158,8 @@ internal interface QueueHost<T> {
  *   Off puts the mixed ones back in list order, the others where they are ([rearranged]). New
  *   autoplay tracks go at the end, mixed among themselves.
  * - Repeat all never brings back a song you queued (rule 8): when the list loops, or a tap on a
- *   "From the top" row enters the next lap, the heard ones leave ([onTransition], [skipTo]).
+ *   "From the top" row enters the next lap, the heard ones leave ([onTransition], [skipTo]), and the
+ *   loop starts at the first song that stays ([startLap]).
  *
  * Pending items are tracked by serial (not mediaId), so the same track queued twice stays two
  * entries. [pending]'s iteration order is their play order. Not thread-safe: call it on the
@@ -282,14 +284,18 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
      * The current item changed (any reason): keep the pending ones right after it. [forward]: it
      * moved on (a song's end, Next, an error skip, the crossfade's hand-over). Forward to an item
      * before the last one in play order with Repeat all on is the loop: the heard songs you queued
-     * leave (rule 8). Previous and a tap walk back, so they stay.
+     * leave (rule 8), and the lap starts at its first song that stays ([startLap]). Previous and a
+     * tap walk back, so they stay. With Repeat all, a song from before the current list (Previous
+     * took you back to it) leaves once another plays, unless you queued it (it leaves at the loop).
      */
     fun onTransition(forward: Boolean) {
         if (replacing) return
         val cur = playPos(host.currentIndex)
         val looped = forward && host.repeatAll && cur >= 0 && cur < playPos(indexOfUid(lastUid))
+        if (looped) startLap()
         hearCurrent()
         if (looped) dropHeardMine()
+        if (host.repeatAll) listStartIndex().let { start -> drop { it < start && host.serialAt(it) == 0L } }
         lastUid = if (host.currentIndex in 0 until host.count) host.uidAt(host.currentIndex) else 0L
         prune()
         if (host.shuffleEnabled) enforceShuffleOrder() else enforceLinearOrder()
@@ -686,6 +692,16 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         drop { it < listStartIndex() }
     }
 
+    /**
+     * The loop: Media3 goes to the first item in play order, which may be a heard song you queued
+     * (it leaves, [dropHeardMine]). Then the first one that stays plays: that one loop isn't gapless.
+     */
+    private fun startLap() {
+        val order = (if (host.shuffleEnabled) host.shuffleOrder() else null) ?: IntArray(host.count) { it }
+        fun stays(i: Int) = host.serialAt(i) == 0L || !isHeard(i)
+        if (!stays(host.currentIndex)) order.firstOrNull(::stays)?.let(host::seekTo)
+    }
+
     /** Repeat all's next lap: the heard songs you queued leave, all but the playing one (rule 8), and only the playing one is heard this lap. */
     private fun dropHeardMine() {
         drop { host.serialAt(it) != 0L && isHeard(it) }
@@ -710,7 +726,11 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         if (index !in 0 until host.count) return false
         val on = movesOn(index) // before it moves next: its place in the list is what counts
         if (on && host.shuffleEnabled) bringJumpedOver()
-        host.seekTo(if (upcoming().indexOf(index) > 0) bringNext(index) else index)
+        val inList = index >= listStartIndex()
+        val to = if (upcoming().indexOf(index) > 0) bringNext(index) else index
+        // From a song before the current list (Previous took you there), a song of it moves before its first one: it starts there now.
+        if (inList && to < listStartIndex()) listStart = host.uidAt(to)
+        host.seekTo(to)
         if (on && nextStart != 0L) moveOn(host.currentIndex) // the transition may have moved on already
         if (lap) dropHeardMine()
         val cur = host.currentIndex

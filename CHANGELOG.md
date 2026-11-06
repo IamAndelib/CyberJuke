@@ -12,10 +12,10 @@
 - A playlist's ⋯ menu has clearer icons: up and down arrows for **Edit songs**, a pencil for **Rename** and a bin for **Delete playlist**.
 - After ↑ or ↓ in the queue, or **Undo** in the queue, Liked or a playlist, the song glows faintly at its place for a moment, so you can see where it went; a screen reader says it ("Moved to 3 of 25", "Back at 3 of 25").
 - With shuffle on, songs you queued can still be moved with ↑ ↓: shuffle never mixes them, so they play in the order you set.
-- Once a list's suggestions are playing, Repeat all loops them, the list you're in now, instead of jumping back to the list before.
+- Once a list's suggestions are playing, Repeat all loops them, the list you're in now, instead of jumping back to the list before. A song of the list before that you went back to with Previous plays once, then leaves the loop.
 - Turning Autoplay off keeps the suggestions you're already listening to; only the ones still to come after them go.
 - With Repeat all on, a single song played from a list (not a radio) just repeats; it no longer brings suggestions.
-- With Repeat all on, a song you add with **Add to queue** plays once: when the list starts over it leaves the queue, instead of coming round again in every lap. Previous, or a tap on a song in Played, still takes you back to it.
+- With Repeat all on, a song you add with **Add to queue** plays once: when the list starts over it leaves the queue, instead of coming round again in every lap, and the next lap starts at the list's first song, never at it. Previous, or a tap on a song in Played, still takes you back to it.
 
 ### Fixed
 - After you tap a suggestion in the queue and go back with Previous, your list's songs stay under their own heading instead of under Autoplay, and Now Playing still says "3 of 8" instead of "Single track". When suggestions and your list's songs take turns, each gets its heading again.

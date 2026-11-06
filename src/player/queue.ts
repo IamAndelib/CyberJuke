@@ -23,9 +23,9 @@
  *    before it are history; shuffled, the batch's songs before it stay ahead, and a tap brings the
  *    list's unheard songs it jumped over along, at the new list's start, as an unshuffled tap). A
  *    radio's first suggestions join its list instead (joinList). Repeat all loops the list you're in: turning it on drops
- *    what's on the way (it comes back once repeat is off) and the songs before the current list,
- *    keeping the playing song and the queued ones, and autoplay adds nothing while it is on
- *    (mayAutoplay). Turning autoplay off drops what's on the way too, never the list you're in.
+ *    what's on the way (it comes back once repeat is off) and the songs before the current list, heard or not,
+ *    keeping the playing song and the queued ones (one before it you went back to leaves once another plays,
+ *    settle), and autoplay adds nothing while it is on (mayAutoplay). Turning autoplay off drops what's on the way too, never the list you're in.
  *    Repeat one leaves them: it replays the track when it ends, and a skip moves on as with
  *    repeat off (none at the end, as Media3's). Jumping to an autoplay track keeps the ones
  *    after it (Spotify, YouTube Music): more follow it once they run low;
@@ -47,8 +47,8 @@
  *    the way, mixed on its own; new autoplay tracks go at the end, mixed among themselves. Off
  *    puts the mixed ones back in list order, the others where they are (rebuildOrder);
  *  - Repeat all never brings back a song you queued (rule 8): when the list loops (next() from its
- *    last song to order[0], as Media3's), or a tap on a "From the top" row enters the next lap
- *    (skipTo's `lap`), the heard ones leave, all but the playing one. Previous walks back: they stay.
+ *    last song to the first in play order that isn't a heard one of them), or a tap on a "From the top"
+ *    row enters the next lap (skipTo's `lap`), the heard ones leave, all but the playing one. Previous walks back: they stay.
  *
  * Up next labels each track by its own kind, never by its place: queued by you, the
  * list, autoplay (sectionsOf in ./types).
@@ -227,7 +227,7 @@ export class Queue<T extends Identified> {
   /**
    * Advance. `auto` is true when the current track ended by itself (repeat-one then
    * replays it); a user "next" moves on, as Media3's: at the end of the queue only with
-   * repeat all, to its start, where the heard songs you queued leave (rule 8). Returns the
+   * repeat all, to its first song that isn't a heard one you queued, and those leave (rule 8). Returns the
    * new current track, or null when there is none.
    */
   next(auto = false): T | null {
@@ -241,7 +241,8 @@ export class Queue<T extends Identified> {
       return this.cur.item;
     }
     if (this.repeat === 'all') {
-      this.cur = this.order[0];
+      // The lap starts at its first song that stays: never at a heard song you queued (rule 8).
+      this.cur = this.order.find((e) => !e.mine || !this.heard.has(e)) ?? this.order[0];
       this.settle();
       this.dropHeardMine();
       return this.cur.item;
@@ -289,8 +290,16 @@ export class Queue<T extends Identified> {
         arr.splice(arr.indexOf(e), 1);
         arr.splice(arr.indexOf(this.cur!) + 1, 0, e);
       };
+      const [start, back] = [this.listStartIndex, this.list.indexOf(this.cur!) < this.listStartIndex];
+      const inList = this.list.indexOf(e) >= start;
       at(this.order);
-      if (!this.shuffle) at(this.list);
+      if (!this.shuffle) {
+        at(this.list);
+        // The current list keeps its songs: from a song before it (Previous took you there), one of it moved before its
+        // first song starts it; its first song moved after the playing one (list order apart from play order) hands it on.
+        if (back && inList) this.listStart = e;
+        else if (!back && e === this.listStart) this.listStart = this.list[start];
+      }
     }
     // Shuffled, the list's unheard songs it jumped over come along: they go just before the list on the way, which starts at them.
     const kept = on && this.shuffle ? this.list.slice(this.listStartIndex, this.nextStartIndex).filter((x) => !this.heard.has(x) && !this.queued.has(x)) : [];
@@ -359,8 +368,9 @@ export class Queue<T extends Identified> {
     }
     this.unmark(new Set([e]));
     this.queued.delete(e);
-    this.list.splice(index, 1);
-    this.order.splice(this.order.indexOf(e), 1);
+    // By entry: settle may have dropped songs before it, or it (repeat all).
+    this.list = this.list.filter((x) => x !== e);
+    this.order = this.order.filter((x) => x !== e);
     return changed;
   }
 
@@ -569,12 +579,16 @@ export class Queue<T extends Identified> {
    * The current entry changed: it is heard, a queued track that starts playing is no longer "queued",
    * and moving on starts the current list at it or at the first song on the way, whichever comes first
    * in list order (shuffled, that keeps the batch's songs before it ahead; `on`: skipTo works it out before it reorders).
+   * With repeat all, a song from before the current list (Previous took you back to it) leaves once another plays,
+   * unless you queued it (it leaves at the loop, rule 8).
    */
   private settle(on = this.cur !== null && this.movesOn(this.cur)): void {
     if (!this.cur) return;
     if (on) [this.listStart, this.nextStart, this.listLeft, this.nextLeft] = [this.list.indexOf(this.nextStart!) < this.list.indexOf(this.cur) ? this.nextStart : this.cur, null, null, null];
     this.queued.delete(this.cur);
     this.hear(this.cur);
+    const start = this.listStartIndex;
+    if (this.repeat === 'all') this.drop((i) => i < start && !this.list[i].mine);
   }
 
   private hear(e: Entry<T>): void {
