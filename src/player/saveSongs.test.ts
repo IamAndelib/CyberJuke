@@ -5,12 +5,20 @@ import { saveSongs } from './saveSongs';
 
 const t = (id: string) => ({ id }) as Track;
 const ids = (xs: Track[]) => xs.map((x) => x.id);
-const base = { listStart: 0, nextStart: -1, shuffle: false, shown: [] as Track[], mine: [] as number[], gone: [] };
+const base = { index: 0, listStart: 0, nextStart: -1, shuffle: false, shown: [] as Track[], mine: [] as number[], gone: [] };
 
 describe('saveSongs', () => {
   it('saves the current list, not the history before it nor the list on the way', () => {
     const queue = ['h1', 'a', 'b', 'c', 'n1'].map(t);
-    expect(ids(saveSongs({ ...base, queue, listStart: 1, nextStart: 4 }))).toEqual(['a', 'b', 'c']);
+    expect(ids(saveSongs({ ...base, queue, index: 2, listStart: 1, nextStart: 4 }))).toEqual(['a', 'b', 'c']);
+  });
+
+  it('keeps the playing song after Previous into the list before (S3)', () => {
+    const queue = ['a', 'b', 's1', 's2'].map(t);
+    expect(ids(saveSongs({ ...base, queue, index: 1, listStart: 2 }))).toEqual(['b', 's1', 's2']);
+    expect(ids(saveSongs({ ...base, queue, index: 1, listStart: 2, mine: [0] }))).toEqual(['a', 'b', 's1', 's2']);
+    const shown = ['a', 'b', 's2', 's1'].map(t);
+    expect(ids(saveSongs({ ...base, queue, index: 1, listStart: 2, mine: [0], shuffle: true, shown }))).toEqual(['a', 'b', 's2', 's1']);
   });
 
   it('shuffled, saves the list in play order: the rows as they show, then the rest', () => {
@@ -20,9 +28,9 @@ describe('saveSongs', () => {
 
   it('puts the songs you queued and heard in earlier lists of the chain first, in play order', () => {
     const queue = ['a1', 'm1', 'a2', 'm2', 'b1', 'b2'].map(t);
-    expect(ids(saveSongs({ ...base, queue, listStart: 4, mine: [1, 3] }))).toEqual(['m1', 'm2', 'b1', 'b2']);
+    expect(ids(saveSongs({ ...base, queue, index: 4, listStart: 4, mine: [1, 3] }))).toEqual(['m1', 'm2', 'b1', 'b2']);
     const shown = ['a2', 'm2', 'a1', 'm1', 'b2'].map(t);
-    expect(ids(saveSongs({ ...base, queue, listStart: 4, mine: [1, 3], shuffle: true, shown }))).toEqual(['m2', 'm1', 'b2', 'b1']);
+    expect(ids(saveSongs({ ...base, queue, index: 5, listStart: 4, mine: [1, 3], shuffle: true, shown }))).toEqual(['m2', 'm1', 'b2', 'b1']);
   });
 
   it('puts a song you queued that left the queue right after the song it followed, else at the end', () => {

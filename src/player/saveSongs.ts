@@ -11,16 +11,17 @@ export interface HeardMine {
 /**
  * What [Save queue as playlist] saves (queue rules 3 and 8), each song once, at most
  * PLAYLIST_MAX_SONGS, in the order they played or will play: the songs you queued and heard in
- * earlier lists of the chain, the current list (not what's on the way), then the ones you queued
+ * earlier lists of the chain, the playing song (also after Previous into the list before: S3), the
+ * current list (not what's on the way), then the ones you queued
  * that left the queue since (`gone`), each right after the song it followed, else at the end.
  * Shuffled, play order is the rows as they show (`shown`), then the rest in list order.
  */
-export function saveSongs({ queue, listStart, nextStart, shuffle, mine, shown, gone }: Pick<PlayerState, 'queue' | 'listStart' | 'nextStart' | 'shuffle' | 'mine'> & { shown: Track[]; gone: HeardMine[] }): Track[] {
+export function saveSongs({ queue, index, listStart, nextStart, shuffle, mine, shown, gone }: Pick<PlayerState, 'queue' | 'index' | 'listStart' | 'nextStart' | 'shuffle' | 'mine'> & { shown: Track[]; gone: HeardMine[] }): Track[] {
   const inPlayOrder = (xs: Track[]) => {
     const ids = new Set(xs.map((t) => t.id));
     return shuffle ? [...shown.filter((t) => ids.has(t.id)), ...xs] : xs;
   };
-  const before = mine.filter((i) => i < listStart).map((i) => queue[i]);
+  const before = queue.filter((_, i) => i < listStart && (i === index || mine.includes(i)));
   const seen = new Set<string>();
   const songs = [...inPlayOrder(before), ...inPlayOrder(queue.slice(listStart, nextStart < 0 ? undefined : nextStart))].filter((t) => !seen.has(t.id) && (seen.add(t.id), true));
   const inQueue = new Set(queue.map((t) => t.id));
