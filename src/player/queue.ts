@@ -482,9 +482,10 @@ export class Queue<T extends Identified> {
    * before the current one; a "From the top" one (`top`) the same, but unheard. In list order (what shuffle off
    * plays) it goes before the track that follows it; shuffled, a queued one goes after the queued run there and
    * a list one before the autoplay tracks of the list you're in (as the native queue's), so both stay ahead once
-   * shuffle is off; an autoplay one before one on the way goes where that list starts. A marker's own song (or
-   * one that left the list on the way), back right before the marker's song (or last, the marker gone with it),
-   * gets the marker back: it stays in its own list. With nothing playing, it is added (and plays). It keeps its
+   * shuffle is off; an autoplay one before one on the way goes where that list starts. A marker's own song (one on
+   * the way: that list's), back right before the marker's song (past the songs you queued: S14; or last, the marker
+   * gone with it), gets the marker back: it stays in its own list; shuffled, so does a played one of the current list
+   * back right before its first song. With nothing playing, it is added (and plays). It keeps its
    * tag (`auto`), its heard state (`heard`) and its queued-by-you mark (`mine`, or a queued one).
    */
   restore(item: T, undo: Undo): void {
@@ -534,10 +535,14 @@ export class Queue<T extends Identified> {
     if (undo.earlier && kind !== 'queued') li = Math.min(li, this.listStartIndex);
     this.list.splice(li, 0, entry);
     if (kind === 'queued') return;
-    // A marker's own song back right before the marker's song now (or last, the marker gone with it) takes it back.
-    const after = this.list[li + 1] ?? null;
-    if (after === this.listStart && item.id === this.listLeft) this.listStart = entry;
-    if (after === this.nextStart && item.id === this.nextLeft) this.nextStart = entry;
+    // A marker's own song back right before the marker's song now (the songs you queued between don't count: S14), or last,
+    // the marker gone with it, takes it back: an on-the-way one the list on the way's, the others the current list's, which,
+    // shuffled, a played song of it right before its first song takes too (its songs play in any order).
+    const rest = this.list.slice(li + 1);
+    const after = rest.find((e) => !e.mine) ?? rest[0] ?? null;
+    if (kind === 'autoplay') {
+      if (after === this.nextStart && item.id === this.nextLeft) this.nextStart = entry;
+    } else if (after === this.listStart && (item.id === this.listLeft || (this.shuffle && behind && !undo.earlier && after))) this.listStart = entry;
   }
 
   /**

@@ -459,6 +459,17 @@ describe('Queue: editing', () => {
     expect(ids(q.upNext())).toEqual(['x2', 'x3', 'x3', 'x2', 'x1']);
   });
 
+  it("Undo of the list's copy of a song gives the list on the way no marker back, though the copy on the way that held it went too (F10)", () => {
+    const q = new Queue();
+    q.setList([t('x1'), t('x2'), t('x3')], 0);
+    q.addAuto([t('x3'), t('x2'), t('x1')]); // the next round: the same songs
+    q.remove(3); // ✕ on the next round's x3, the first on the way: the next round's x2 starts it now
+    q.remove(2); // ✕ on the list's x3
+    q.restore(t('x3'), { kind: 'list', before: { id: 'x2', index: 2 } });
+    expect(ids(q.items)).toEqual(['x1', 'x2', 'x3', 'x2', 'x1']);
+    expect(q.nextStartIndex).toBe(3);
+  });
+
   it('removeIds drops every copy; the current one moves on to the next that stays', () => {
     const q = new Queue();
     q.setList([t('a'), t('m'), t('b'), t('m2')], 1);

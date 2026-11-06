@@ -148,6 +148,18 @@ class QueueOpsTest {
         assertTrue(p.auto[3] && p.queue.nextStartIndex() == 3)
     }
 
+    /** The list's copy of a song back gives the list on the way no marker back, though the copy on the way that held it went too (F10). */
+    @Test
+    fun restoreOfTheListsCopyLeavesTheListOnTheWayAlone() {
+        val p = player(listOf("x1", "x2", "x3"))
+        p.queue.addAutoplay(listOf("x3", "x2", "x1"))
+        p.remove(3) // the next round's x3, the first on the way: its x2 starts it now
+        p.remove(2) // the list's x3
+        p.queue.restore("x3", Section.LIST, "x2", beforeIndex = 2)
+        assertEquals(listOf("x1", "x2", "x3", "x2", "x1"), p.ids.toList())
+        assertEquals(3, p.queue.nextStartIndex())
+    }
+
     @Test
     fun shuffledAutoplayRestoreWithoutAnAnchorGoesLast() {
         for (seed in 0L until 20L) {

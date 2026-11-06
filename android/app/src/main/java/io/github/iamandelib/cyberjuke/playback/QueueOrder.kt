@@ -286,13 +286,19 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     private fun firstAt(i: Int): Long = host.uidAt((i until host.count).firstOrNull { host.serialAt(it) == 0L } ?: i)
 
     /**
-     * An Undo put a song back at [at]: a marker's own song (or one that left the list on the way), right
-     * before the marker's song now (or last, the marker gone with it), takes it back.
+     * An Undo put a song back at [at]: a marker's own song, right before the marker's song now (the songs you queued
+     * between don't count: S14), or last, the marker gone with it, takes it back: one on the way ([way]) the list on the
+     * way's, the others the current list's, which, shuffled, a played song of it right before its first song takes too
+     * ([ours]: its songs play in any order).
      */
-    private fun regain(at: Int) {
-        val after = if (at + 1 < host.count) host.uidAt(at + 1) else 0L
-        if (after == listStart && host.idAt(at) == listLeft) listStart = host.uidAt(at)
-        if (after == nextStart && host.idAt(at) == nextLeft) nextStart = host.uidAt(at)
+    private fun regain(at: Int, way: Boolean = false, ours: Boolean = false) {
+        val rest = at + 1 until host.count
+        val after = (rest.firstOrNull { host.serialAt(it) == 0L } ?: rest.firstOrNull())?.let(host::uidAt) ?: 0L
+        if (way) {
+            if (after == nextStart && host.idAt(at) == nextLeft) nextStart = host.uidAt(at)
+        } else if (after == listStart && (host.idAt(at) == listLeft || ours && host.shuffleEnabled && after != 0L)) {
+            listStart = host.uidAt(at)
+        }
     }
 
     private fun isHeard(index: Int): Boolean = host.uidAt(index).let { it != 0L && it in heard }
@@ -631,7 +637,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
                 // starts: it takes it back if it left it ([regain]), else it ends yours.
                 val at = anchor?.let { a -> nextStartIndex().takeIf { host.shuffleEnabled && it in 0..a } ?: a }
                 host.insertAuto(at, listOf(item))
-                regain(at ?: (host.count - 1))
+                regain(at ?: (host.count - 1), way = true)
                 if (at != null) placeAhead(listOf(at), anchor + 1) else placeLast(host.count - 1)
                 enforceShuffleOrder()
             }
@@ -682,7 +688,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         val at = if (earlier) minOf(next, listStartIndex()) else next
         insert(at, item, mine, auto)
         if (!top) hear(at)
-        regain(at)
+        regain(at, ours = !earlier)
         if (!host.shuffleEnabled) return
         // Inserted at a random place in the shuffle order (Media3's): right before what follows it.
         val order = host.shuffleOrder()?.toMutableList() ?: return
