@@ -112,7 +112,7 @@ interface JukePlayerPlugin {
    * same, but unheard. `beforeIndex`: that song's list index, matched with its id first (a station's next round repeats
    * ids). A 'played' or 'list' track gets the queued-by-you mark back when `mine` (rule 8), the autoplay tag when
    * `auto`, is heard again when `heard`, and goes back into an earlier list (before the current list's marker) when
-   * `earlier`. Older natives ignore the last five: by id, as a list song, unheard, by the song after it.
+   * `earlier`. Older natives ignore the last four: by id, as a list song, unheard, by the song after it.
    */
   restore(o: { track: NativeTrack; kind: 'played' | 'queued' | 'list' | 'autoplay' | 'top'; beforeId: string | null; beforeIndex?: number; mine?: true; auto?: true; heard?: true; earlier?: true }): Promise<void>;
   /** K5: remove every item with one of these ids (at most BRIDGE_MAX_ITEMS); the current one skips to the next that stays, or stops. */
