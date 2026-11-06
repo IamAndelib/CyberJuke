@@ -113,7 +113,8 @@ test('a station plays on past its rounds, and its tracks are kept like any other
   await playOn(page, 60 * (FAKE_TRACK_MS + 200));
   // On the station's later rounds, Now Playing says so, as Up next does.
   await expect(page.getByTestId('np-from')).toHaveText('More from THE CRYPT');
-  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from THE CRYPT');
+  // The first heading: the next round, on the way, has its own (S7).
+  await expect(page.getByTestId('upnext-autoplay-label').first()).toHaveText('More from THE CRYPT');
   const q = await queueState(page);
   expect(q.autoplay).toHaveLength(96 - 61);
   expect(q.context?.label).toBe('Signal Radio · THE CRYPT');
