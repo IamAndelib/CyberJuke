@@ -141,8 +141,8 @@ internal interface QueueHost<T> {
  *   at it or at the first of them, whichever comes first in list order ([listStartIndex]; the
  *   songs before it are history; shuffled, the batch's songs before it stay ahead; a tap, shuffle or
  *   not, brings the list's unheard songs it jumped over along, at the new list's start, and leaves the
- *   heard ones behind it: [skipTo], A2). A
- *   radio's first suggestions join its list instead (joinList). Repeat all loops the list you're in:
+ *   heard ones behind it: [skipTo], A2). A radio's first suggestions join its list instead
+ *   (joinList). Repeat all loops the list you're in:
  *   turning it on drops what's on the way (it comes back once repeat is off) and the songs before
  *   the current list, heard or not, keeping the playing song and the queued ones (the playing one, if
  *   you went back to it, leaves once another plays: [visit]), and autoplay adds nothing while it is

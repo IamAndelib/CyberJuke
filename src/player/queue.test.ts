@@ -284,15 +284,15 @@ describe('Queue: editing', () => {
     expect(q.remove(42)).toBe(false);
   });
 
-  it('removing the current item moves to the next, or the previous at the end', () => {
+  it("removing the current item moves to the next, or at the end to the first in play order, which waits (Media3's)", () => {
     const q = new Queue();
     q.setList(abc(), 2);
     expect(q.remove(2)).toBe(true);
     expect(q.current?.id).toBe('d');
     q.skipTo(3);
     expect(q.current?.id).toBe('e');
-    expect(q.remove(3)).toBe(true);
-    expect(q.current?.id).toBe('d');
+    expect(q.remove(3)).toBe('stopped');
+    expect(q.current?.id).toBe('a');
   });
 
   it('removing the last item empties the queue', () => {

@@ -67,14 +67,16 @@ describe('the list you are in', () => {
 });
 
 describe('signing out', () => {
-  it('taking the last song in play order while it plays: the one before it is current, paused (S11)', async () => {
-    const p = new WebPlayer();
-    const inner = p as unknown as { loadCurrent(autoplay: boolean): Promise<void>; publish(s: { isPlaying: boolean }): void };
-    vi.spyOn(inner, 'loadCurrent').mockImplementation(async (autoplay) => inner.publish({ isPlaying: autoplay }));
-    await p.playList([t('a'), t('b')], 1, { label: 'Liked', mode: 'list' });
-    expect(p.state.peek().isPlaying).toBe(true);
-    await p.removeIds(['b']);
-    expect(p.state.peek().current?.id).toBe('a');
-    expect(p.state.peek().isPlaying).toBe(false);
+  it("taking the last song in play order while it plays: the first song is current, paused, as Media3's (S11); ✕ the same", async () => {
+    for (const out of ['removeIds', 'remove'] as const) {
+      const p = new WebPlayer();
+      const inner = p as unknown as { loadCurrent(autoplay: boolean): Promise<void>; publish(s: { isPlaying: boolean }): void };
+      vi.spyOn(inner, 'loadCurrent').mockImplementation(async (autoplay) => inner.publish({ isPlaying: autoplay }));
+      await p.playList([t('a'), t('b'), t('c')], 2, { label: 'Liked', mode: 'list' });
+      expect(p.state.peek().isPlaying).toBe(true);
+      await (out === 'remove' ? p.remove(2, 'c') : p.removeIds(['c']));
+      expect(p.state.peek().current?.id, out).toBe('a');
+      expect(p.state.peek().isPlaying, out).toBe(false);
+    }
   });
 });

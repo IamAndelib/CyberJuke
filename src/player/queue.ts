@@ -21,9 +21,10 @@
  *  - autoplay tracks (addAuto) play after the list, in the order added; they are the list on
  *    the way, and moving on to one of them (played on to, or tapped) makes the current list start
  *    at it or at the first of them, whichever comes first in list order (listStartIndex; the songs
- *    before it are history; shuffled, the batch's songs before it stay ahead; a tap, shuffle or not, brings the
- *    list's unheard songs it jumped over along, at the new list's start, and leaves the heard ones behind it: A2). A
- *    radio's first suggestions join its list instead (joinList). Repeat all loops the list you're in: turning it on drops
+ *    before it are history; shuffled, the batch's songs before it stay ahead; a tap, shuffle or not,
+ *    brings the list's unheard songs it jumped over along, at the new list's start, and leaves the
+ *    heard ones behind it: A2). A radio's first suggestions join its list instead (joinList). Repeat
+ *    all loops the list you're in: turning it on drops
  *    what's on the way (it comes back once repeat is off) and the songs before the current list, heard or not,
  *    keeping the playing song and the queued ones (the playing one, if you went back to it, leaves once another
  *    plays: `visit`), and autoplay adds nothing while it is on (mayAutoplay). Turning autoplay off drops what's on the way too, never the list you're in.
@@ -376,19 +377,19 @@ export class Queue<T extends Identified> {
   }
 
   /**
-   * Remove the item at a list index. If it was current, the next track in play
-   * order (or the previous one, at the end) becomes current. Returns true when the
-   * current track changed.
+   * Remove the item at a list index. If it was current, the next track in play order becomes current;
+   * at the end, the first one in play order, which then waits (`'stopped'`, as Media3's: S11). Returns
+   * whether the current track changed.
    */
-  remove(index: number): boolean {
+  remove(index: number): boolean | 'stopped' {
     if (!inRange(index, this.list)) return false;
     const e = this.list[index];
-    let changed = false;
+    let changed: boolean | 'stopped' = false;
     if (e === this.cur) {
-      const p = this.order.indexOf(e);
-      this.cur = this.order[p + 1] ?? this.order[p - 1] ?? null;
+      const next = this.order[this.order.indexOf(e) + 1];
+      this.cur = next ?? this.order.find((x) => x !== e) ?? null;
       this.settle();
-      changed = true;
+      changed = next ? true : 'stopped';
     }
     this.unmark(new Set([e]));
     this.queued.delete(e);
@@ -514,8 +515,8 @@ export class Queue<T extends Identified> {
   /**
    * Remove every item with one of these ids (signing out drops members-only tracks).
    * When the current one goes, the next one in play order that stays becomes current; with none,
-   * the one before it, which then waits (`'stopped'`, as Media3's: S11), else nothing plays.
-   * Returns whether the current track changed.
+   * the first one in play order that stays, which then waits (`'stopped'`, as Media3's: S11), else
+   * nothing plays. Returns whether the current track changed.
    */
   removeIds(ids: Iterable<string>): boolean | 'stopped' {
     const gone = new Set(ids);
@@ -525,7 +526,7 @@ export class Queue<T extends Identified> {
     if (this.cur && !keep(this.cur)) {
       const p = this.order.indexOf(this.cur);
       const next = this.order.slice(p + 1).find(keep);
-      this.cur = next ?? this.order.slice(0, p).reverse().find(keep) ?? null;
+      this.cur = next ?? this.order.find(keep) ?? null;
       this.settle();
       changed = next ? true : 'stopped';
     }

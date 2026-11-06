@@ -413,16 +413,21 @@ class QueueRulesTest {
             if (p >= 0 && positionMs <= 3000L) seekTo(p) // else: restart the current track
         }
 
+        /**
+         * Media3's removal: the playing item removed hands on to the next one in play order, else to the first one in
+         * play order, ended (ExoPlayerImpl.getPeriodPositionUsAfterTimelineChanged: getFirstWindowIndex(shuffle)).
+         */
         fun remove(index: Int) {
             require(index in ids.indices)
+            val changed = index == current
+            val seq = playOrder()
+            val next = if (changed) seq.getOrNull(seq.indexOf(index) + 1) ?: seq.firstOrNull { it != index } ?: -1 else current
             ids.removeAt(index)
             serials.removeAt(index)
             auto.removeAt(index)
             uids.removeAt(index)
             orderRemove(index)
-            val changed = index == current
-            if (index < current) current--
-            if (current >= ids.size) current = ids.size - 1
+            current = if (next > index) next - 1 else next
             if (changed) emit(timelineChanged, transition()) else emit(timelineChanged)
         }
 
