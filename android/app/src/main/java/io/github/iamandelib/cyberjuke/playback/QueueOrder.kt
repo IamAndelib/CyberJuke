@@ -639,7 +639,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
                 // Linear: [current][queued], then the list and autoplay (a tapped one among the
                 // list); the end of the list part is after its last item ahead, and before what's on the way.
                 val end = anchor ?: if (auto) host.count else up.lastOrNull { sectionAt(it) == Section.LIST }?.plus(1) ?: afterQueuedRun()
-                val at = nextStartIndex().takeIf { it >= 0 }?.coerceAtMost(end) ?: end
+                val at = (nextStartIndex().takeIf { it >= 0 }?.coerceAtMost(end) ?: end).let { if (earlier) minOf(it, listStartIndex()) else it }
                 insert(at, item, mine, auto)
                 if (heard) hear(at)
                 regain(at)

@@ -477,7 +477,7 @@ export class Queue<T extends Identified> {
    * else at the end of its section: after the queued run, after the last list track ahead (else the
    * queued run), or at the very end (a suggestion). Never at or before the current track, and a list song (`list`, its
    * suggestions too) never at or past the start of what's on the way, in play order and in list order (S6),
-   * and one of an earlier list (`earlier`) never after the current list's marker in list order.
+   * and one of an earlier list (`earlier`) never after the current list's marker in list order (nor, unshuffled, in play order).
    * A played one goes back before that song among every track before the current one, heard or not, else right
    * before the current one; a "From the top" one (`top`) the same, but unheard. In list order (what shuffle off
    * plays) it goes before the track that follows it; shuffled, a queued one goes after the queued run there and
@@ -513,6 +513,8 @@ export class Queue<T extends Identified> {
     const way = this.nextStartIndex;
     const onWay = kind === 'list' && way >= 0 ? this.order.findIndex((e, k) => k > p && this.list.indexOf(e) >= way) : -1;
     if (onWay >= 0) at = Math.min(at, onWay);
+    // Unshuffled, one of an earlier list goes back before the current list's marker in play order as in list order (S13).
+    if (undo.earlier && kind !== 'queued' && !this.shuffle && this.listStart) at = Math.min(at, this.order.indexOf(this.listStart));
     const entry: Entry<T> = auto ? { ...this.entry(item), auto: true } : this.entry(item);
     if (kind === 'queued' || undo.mine) {
       entry.mine = true;
