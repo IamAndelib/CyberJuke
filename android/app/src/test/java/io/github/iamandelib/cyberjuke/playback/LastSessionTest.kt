@@ -291,6 +291,10 @@ class LastSessionTest {
         val back = LastSession.decode(s.encode())!!
         assertEquals(s, back)
         assertEquals(memory, back.heardMine)
+        // A record of a song it can't play is left out; the session still comes back.
+        val bad = JSONObject(s.encode())
+        bad.getJSONArray("hm").put(entry(9).copy(ytId = "short").toNativeTrack().put("after", "t8"))
+        assertEquals(memory, LastSession.decode(bad.toString())!!.heardMine)
         // Still version 2, and a file from before the memory has none.
         val o = JSONObject(s.encode())
         assertEquals(2, o.getInt("v"))
