@@ -284,6 +284,29 @@ class LastSessionTest {
     }
 
     @Test
+    fun saveMemoryOfTheSongsYouQueuedComesBack() {
+        // Rule 8: the songs you queued that played, also those Repeat all took out of the queue, with the song before each.
+        val memory = listOf(LastSession.Heard(entry(7), "t0"), LastSession.Heard(entry(8).copy(ytId = "", mp3 = "https://latex.gg/share/IZq8cMcx.mp3"), null))
+        val s = LastSession.of(listOf(entry(0), entry(1)), 1, 0L, 0L, false, null, 2, null, null, heardMine = memory)!!
+        val back = LastSession.decode(s.encode())!!
+        assertEquals(s, back)
+        assertEquals(memory, back.heardMine)
+        // A record of a song it can't play is left out; the session still comes back.
+        val bad = JSONObject(s.encode())
+        bad.getJSONArray("hm").put(entry(9).copy(ytId = "short").toNativeTrack().put("after", "t8"))
+        assertEquals(memory, LastSession.decode(bad.toString())!!.heardMine)
+        // Still version 2, and a file from before the memory has none.
+        val o = JSONObject(s.encode())
+        assertEquals(2, o.getInt("v"))
+        o.remove("hm")
+        assertEquals(emptyList<LastSession.Heard>(), LastSession.decode(o.toString())!!.heardMine)
+        // The player keeps it: what Save reads after a restart.
+        val p = QueueRulesTest.FakePlayer(java.util.Random(1))
+        p.queue.restoreSession(back.entries.map { it.id }, back.entries.map { it.section }, back.index, 0L, null, heardMine = back.heardMine.map { NativeQueue.Heard(it.entry.id, it.entry.id, it.after) })
+        assertEquals(listOf("t7" to "t0", "t8" to null), p.queue.heardMine.map { it.id to it.after })
+    }
+
+    @Test
     fun aShuffledFileFromBeforeHeardMarksWhatPlayedInItsOrder() {
         // Play order 3, 0, 4 (current), 1, 2: 3 and 0 played; 1 and 2 are still to come.
         val s = LastSession.of((0 until 5).map { entry(it) }, 4, 0L, 0L, true, intArrayOf(3, 0, 4, 1, 2), 0, null, null)!!

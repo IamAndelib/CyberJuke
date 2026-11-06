@@ -201,6 +201,67 @@ test('Album Play plays the album, then continues into autoplay at the end', asyn
   await expect(page.getByTestId('np-title')).toHaveText(q.autoplay[0].title);
 });
 
+test("↑ ↓ never cross the line between two lists: a radio's own suggestions and the batch on the way, an earlier list and the one you're in (S7)", async ({ page }) => {
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  await withAutoplay(page);
+  // In the background a reserve lines up: the next batch, on the way, after the radio's own suggestions.
+  await setVisibility(page, 'hidden');
+  await withAutoplay(page, 40);
+  await setVisibility(page, 'visible');
+  await openNowPlaying(page);
+  const line = page.getByTestId('upnext-autoplay-label').nth(1);
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveCount(2);
+  await expect(line.locator('xpath=preceding-sibling::li[1]').getByTestId('upnext-down')).toBeDisabled();
+  await expect(line.locator('xpath=preceding-sibling::li[1]').getByTestId('upnext-up')).toBeEnabled();
+  await expect(line.locator('xpath=following-sibling::li[1]').getByTestId('upnext-up')).toBeDisabled();
+  await expect(line.locator('xpath=following-sibling::li[1]').getByTestId('upnext-down')).toBeEnabled();
+  // A tap on the first one on the way moves on: the radio's songs are an earlier list now, and Played's last can't go past the playing one into this one.
+  await line.locator('xpath=following-sibling::li[1]').locator('.row-main').click();
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveCount(1);
+  await page.getByTestId('upnext-played-fold').click();
+  const played = page.getByTestId('upnext-played');
+  await expect(played.last().getByTestId('upnext-down')).toBeDisabled();
+  await expect(played.last().getByTestId('upnext-remove')).toBeEnabled();
+});
+
+test('"N of M" counts the album, not a song you queued, which shows where it plays from alone (A3)', async ({ page }) => {
+  const titles = await playAlbum(page);
+  const from = page.getByTestId('np-from');
+  await expect(from).toContainText('1 of 8 · ');
+  await page.getByTestId('np-close').click();
+  await page.getByTestId('tab-home').click();
+  await queueRow(page, 0);
+  await openNowPlaying(page);
+  await expect(from).toContainText('1 of 8 · ');
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).not.toHaveText(titles[0]);
+  await expect(from).toContainText('Playing from');
+  await expect(from).not.toContainText(' of ');
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).toHaveText(titles[1]);
+  await expect(from).toContainText('2 of 8 · ');
+});
+
+test('after Previous, a tapped suggestion leaves the songs you went back over in Played; the unheard ones come after it (A2)', async ({ page }) => {
+  const titles = await playAlbum(page);
+  for (let k = 1; k <= 3; k++) {
+    await page.getByTestId('np-next').click();
+    await expect(page.getByTestId('np-title')).toHaveText(titles[k]);
+  }
+  const q = await withAutoplay(page, 5);
+  // Previous until song 2 (each first restarts the song).
+  await expect(async () => {
+    await page.getByTestId('np-prev').click();
+    await expect(page.getByTestId('np-title')).toHaveText(titles[1], { timeout: 1500 });
+  }).toPass();
+  await page.locator('[data-testid="upnext-row"][data-section="autoplay"] .row-main').first().click();
+  await expect(page.getByTestId('np-title')).toHaveText(q.autoplay[0].title);
+  await expect(page.locator('[data-testid="upnext-row"][data-section="list"] .row-title')).toHaveText(titles.slice(4));
+  await page.getByTestId('upnext-played-fold').click();
+  await expect(page.getByTestId('upnext-played').locator('.row-title')).toHaveText(titles.slice(0, 4));
+});
+
 test('a tapped suggestion, then Previous: the album songs stay under the album, "3 of 8" stays right, and Undo puts each song back', async ({ page }) => {
   const titles = await playAlbum(page);
   // At the third song five are left: suggestions line up after the album.
@@ -627,7 +688,7 @@ test('the queue shows the whole list: what played folds under [+] Played, the pl
   await expect(page.getByTestId('upnext-played-fold')).toHaveAttribute('aria-expanded', 'false');
 });
 
-test('Previous twice, then shuffle on: the album songs after the playing one all stay in Up next, none moves into Played', async ({ page }) => {
+test('Previous twice, then shuffle on: the album songs after the playing one all stay in Up next, the two you went back over next, none moves into Played', async ({ page }) => {
   const titles = await playAlbum(page);
   const title = page.getByTestId('np-title');
   for (let k = 1; k <= 4; k++) {
@@ -649,7 +710,9 @@ test('Previous twice, then shuffle on: the album songs after the playing one all
   await expect(page.getByTestId('upnext-played-fold')).toHaveText('Played · 2');
   await page.getByTestId('upnext-played-fold').click();
   await expect(page.getByTestId('upnext-played').locator('.row-title')).toHaveText(titles.slice(0, 2));
-  expect((await list.allTextContents()).map((s) => s.trim()).sort()).toEqual(titles.slice(3).sort());
+  const after = (await list.allTextContents()).map((s) => s.trim());
+  expect(after.slice(0, 2)).toEqual(titles.slice(3, 5));
+  expect(after.sort()).toEqual(titles.slice(3).sort());
 });
 
 test("after an album's suggestions start, Repeat all loops them: no album song in Played, and Next past the last goes to the first suggestion", async ({ page }) => {

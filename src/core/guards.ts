@@ -4,7 +4,7 @@
  * returns well-typed data or drops what doesn't fit; none of them throw.
  */
 import type { FsDocument, FsRunQueryRow, Track, TrackArtist, TrackOrigin } from '../data/model';
-import type { NativeState, RepeatMode } from '../player/native';
+import type { NativeState, NativeTrack, RepeatMode } from '../player/native';
 import type { MusicItem, MusicPage } from '../data/ytmusic';
 import type { LocalFolder, LocalFolderState, LocalSong } from '../data/local';
 import { tidy } from './text';
@@ -58,6 +58,8 @@ export function audioIdOf(t: Pick<Track, 'ytId' | 'mp3'> | null | undefined): st
 
 /** Up next lists at most this many tracks (native sends as many: StateEncoder.MAX_UP_NEXT). */
 export const UP_NEXT_MAX = 50;
+/** The most songs Save's memory keeps (the oldest go first), on both players (NativeQueue.HEARD_MINE_MAX). */
+export const HEARD_MINE_MAX = 200;
 
 /** An https URL (what the app loads images and links from). */
 export const isHttpsUrl = (x: unknown): x is string => isStr(x) && x.startsWith('https://');
@@ -72,7 +74,7 @@ const REPEAT: readonly RepeatMode[] = ['off', 'all', 'one'];
  * `upNextIndex` with one list index per upNext id (-1 when native sent none, or one
  * that doesn't hold that id). Null when it isn't a state object at all.
  */
-export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = []): NativeState | null {
+export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [], prevHeardMine: NonNullable<NativeState['heardMine']> = []): NativeState | null {
   if (!isObj(x)) return null;
   const unchanged = x.queueIdsUnchanged === true && !Array.isArray(x.queueIds);
   const queueIds = unchanged ? prevQueueIds.slice() : strings(x.queueIds);
@@ -110,6 +112,14 @@ export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [
     lapIndex: inQueue(x.lapIndex)
       .filter((i) => i !== index)
       .slice(0, UP_NEXT_MAX),
+    heardIndex: inQueue(x.heardIndex),
+    autoIndex: inQueue(x.autoIndex),
+    heardMine:
+      x.heardMineUnchanged === true && !Array.isArray(x.heardMine)
+        ? prevHeardMine.slice()
+        : (Array.isArray(x.heardMine) ? x.heardMine : [])
+            .flatMap((h) => (isObj(h) && isObj(h.track) ? [{ track: h.track as unknown as NativeTrack, after: isStr(h.after) ? h.after : null }] : []))
+            .slice(-HEARD_MINE_MAX),
     listStart: at(x.listStart, 0),
     nextStart: at(x.nextStart, -1),
     context: ctx ? { label: isStr(ctx.label) ? ctx.label : '', mode: ctx.mode === 'radio' ? 'radio' : 'list' } : null,

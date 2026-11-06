@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { homeSettled, openLibrary, openNowPlaying, openSearch, seedStorage, SETTINGS_KEY, start, toListEnd } from '../helpers';
+import { homeSettled, openLibrary, openNowPlaying, openSearch, seedStorage, setOffline, SETTINGS_KEY, start, toListEnd } from '../helpers';
 
 /** Your own playlists: Library's Playlists section and a playlist's page (adding comes from the player, the menu and the queue). */
 
@@ -421,6 +421,19 @@ test.describe('adding songs', () => {
     await page.getByTestId('np-close').click();
     await playNightOwl(page);
     expect(await saveIds(page, 9)).toEqual([album[0], later, ...album.slice(1)]);
+  });
+
+  test('a tap refused offline starts nothing: Save queue as playlist still keeps the songs you queued that left with the loop', async ({ page, backend }) => {
+    const { album, mine } = await queuedThroughLoop(page);
+    await page.getByTestId('np-close').click();
+    await page.getByTestId('tab-home').click();
+    await setOffline(page, backend, true);
+    await page.getByTestId('track-play').first().click({ force: true });
+    await expect(page.getByTestId('toast').last()).toHaveText('No carrier. Connect to play.');
+    await setOffline(page, backend, false);
+    await openNowPlaying(page);
+    await expect(page.getByTestId('upnext-current')).toHaveAttribute('data-track-id', album[0]);
+    expect(await saveIds(page, 10)).toEqual([album[0], album[1], ...mine, ...album.slice(2)]);
   });
 
   test("once an album's suggestions play, Save queue as playlist keeps the songs you queued during the album, first", async ({ page }) => {

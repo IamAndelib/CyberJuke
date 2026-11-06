@@ -13,7 +13,7 @@ import { logError } from '../core/log';
 import { trackErrorText } from './errorText';
 import { stationTrack } from './radio';
 import { BRIDGE_MAX_ITEMS, BRIDGE_MAX_STRING, JukePlayer, STALE_INDEX, type NativeState, type NativeTrack, type RepeatMode } from './native';
-import { EMPTY_STATE, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextItem, type UpNextKind } from './types';
+import { EMPTY_STATE, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type Undo, type UpNextItem } from './types';
 
 /** K6: text native would refuse as too long is cut (a link that long is dropped). */
 const clip = (s: string) => (s.length > BRIDGE_MAX_STRING ? s.slice(0, BRIDGE_MAX_STRING) : s);
@@ -104,6 +104,8 @@ export class NativePlayer implements Player {
   private described = new Map<string, Track>();
   /** The last full list native sent (events with queueIdsUnchanged omit it). */
   private lastQueueIds: string[] = [];
+  /** Save's memory as native last sent it (events with heardMineUnchanged omit it). */
+  private lastHeardMine: NonNullable<NativeState['heardMine']> = [];
   /** The last state applied, re-applied when native describes new tracks. */
   private last: NativeState | null = null;
   /** Up next as last built, and what it was built from: reused while nothing changed (ticks). */
@@ -174,9 +176,10 @@ export class NativePlayer implements Player {
   }
 
   private onState(raw: unknown): void {
-    const st = parseNativeState(raw, this.lastQueueIds);
+    const st = parseNativeState(raw, this.lastQueueIds, this.lastHeardMine);
     if (!st) return;
     this.lastQueueIds = st.queueIds;
+    this.lastHeardMine = st.heardMine ?? [];
     // May describe the list from before an edit in flight; resynced once they're answered.
     if (this.edits > 0) return;
     if (this.expect) {
@@ -223,8 +226,8 @@ export class NativePlayer implements Player {
     const prev = this.s.value;
     // Position ticks change nothing below: keep the same arrays and objects, so the
     // computeds built on them (upNextSections, playContext) don't change either.
-    const from = `${st.index}|${st.queueIds.join(',')}|${st.upNextIds.join(',')}|${st.upNextKinds}|${st.seedId}|${st.prevIndex?.join(',')}|${st.mineIndex?.join(',')}|${st.lapIndex?.join(',')}`;
-    let { queue, upNext, previous, mine, lap, seed } = prev;
+    const from = `${st.index}|${st.queueIds.join(',')}|${st.upNextIds.join(',')}|${st.upNextKinds}|${st.seedId}|${st.prevIndex?.join(',')}|${st.mineIndex?.join(',')}|${st.lapIndex?.join(',')}|${st.heardIndex?.join(',')}|${st.autoIndex?.join(',')}|${st.heardMine?.map((h) => `${h.track.id}>${h.after}`).join(',')}`;
+    let { queue, upNext, previous, mine, lap, heardMine, seed } = prev;
     if (from !== this.builtFrom) {
       this.builtFrom = from;
       queue = st.queueIds.map((id) => this.resolve(id));
@@ -252,12 +255,19 @@ export class NativePlayer implements Player {
         if (i < 0) return;
         used.add(i);
         const kind = st.upNextKinds[k];
-        upNext.push({ track: queue[i], index: i, ...(kind === 'q' && { queued: true }), ...(kind === 'a' && { auto: true }) });
+        upNext.push({ track: queue[i], index: i, ...(kind === 'q' && { queued: true }), ...(kind === 'a' && { auto: true }), ...(st.heardIndex?.includes(i) && { heard: true }) });
       });
-      const rows = (xs: number[] = []) => xs.map((i) => ({ track: queue[i], index: i }));
+      const rows = (xs: number[] = []) => xs.map((i) => ({ track: queue[i], index: i, ...(st.autoIndex?.includes(i) && { auto: true }) }));
       previous = rows(st.prevIndex);
       mine = st.mineIndex ?? [];
       lap = rows(st.lapIndex);
+      // The songs you queued that left the queue too: as the page knows them, else as native describes them.
+      heardMine = (st.heardMine ?? []).flatMap(({ track, after }) => {
+        const t = fromNative(track);
+        if (!t) return [];
+        const known = this.resolve(t.id);
+        return [{ track: hasAudio(known) ? known : t, after }];
+      });
       seed = st.seedId ? (prev.seed?.id === st.seedId ? prev.seed : this.resolve(st.seedId)) : null;
     }
     const index = st.index >= 0 && st.index < queue.length ? st.index : -1;
@@ -278,6 +288,7 @@ export class NativePlayer implements Player {
       previous,
       mine,
       lap,
+      heardMine,
       listStart: st.listStart ?? 0,
       nextStart: st.nextStart ?? -1,
       context,
@@ -325,6 +336,8 @@ export class NativePlayer implements Player {
       previous: [],
       mine: queued.map((_, k) => i + 1 + k),
       lap: [],
+      // Native starts Save's memory over with the new list.
+      heardMine: [],
       context,
       seed: tracks[i],
       currentAuto: false,
@@ -446,6 +459,8 @@ export class NativePlayer implements Player {
   async removeIds(ids: string[]): Promise<void> {
     const unique = [...new Set(ids)];
     for (let k = 0; k < unique.length; k += BRIDGE_MAX_ITEMS) await JukePlayer.removeIds({ ids: unique.slice(k, k + BRIDGE_MAX_ITEMS) });
+    // Ids only in Save's memory change nothing native reports by itself.
+    this.resync();
   }
 
   async addToQueue(all: Track[]): Promise<void> {
@@ -459,11 +474,11 @@ export class NativePlayer implements Player {
     await JukePlayer.queueNext({ tracks: tracks.map(toNative) });
   }
 
-  async restore(track: Track, kind: UpNextKind, beforeId: string | null, mine: boolean): Promise<void> {
+  async restore(track: Track, { kind, before, mine, auto, heard, earlier }: Undo): Promise<void> {
     if (!isPlayable(track)) return;
     if (this.s.value.index < 0) return this.playList([track], 0);
     this.remember([track]);
-    await JukePlayer.restore({ track: toNative(track), kind, beforeId, ...(mine && { mine: true }) });
+    await JukePlayer.restore({ track: toNative(track), kind, beforeId: before?.id ?? null, ...(before && { beforeIndex: before.index }), ...(mine && { mine }), ...(auto && { auto }), ...(heard && { heard }), ...(earlier && { earlier }) });
   }
 
   async addAutoplay(all: Track[], seedId: string): Promise<void> {

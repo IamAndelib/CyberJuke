@@ -49,6 +49,49 @@ class QueueOpsTest {
         }
     }
 
+    /** A crossfade fades into where the loop lands (PlaybackService.fadeTarget): past a heard song you queued first in play order (S5). */
+    @Test
+    fun theLoopLandsPastAHeardSongYouQueued() {
+        val p = player(listOf("a", "b", "c"))
+        p.queue.queueNext(listOf("M"))
+        p.next()
+        p.next()
+        p.remove(p.ids.indexOf("a"))
+        val (m, b, c) = listOf("M", "b", "c").map { p.ids.indexOf(it) }
+        assertEquals("Repeat off: no loop", m, p.queue.landing(m))
+        p.repeat = "all"
+        p.queue.onRepeatModeChanged(true)
+        assertEquals("ahead: where it is", c, p.queue.landing(c))
+        p.next()
+        assertEquals("the loop: the first song that stays", b, p.queue.landing(m))
+        assertEquals("the loop onto a song that stays: there", b, p.queue.landing(b))
+        assertEquals("none", -1, p.queue.landing(-1))
+        // Media3's own loop onto M: the queue moves on to b itself, and says so (PlaybackService leaves the rest to that move).
+        p.current = m
+        assertTrue(p.queue.onTransition(forward = true))
+        assertEquals("b", p.ids[p.current])
+        assertEquals(listOf("b", "c"), p.ids)
+        p.current = p.ids.indexOf("c")
+        assertFalse(p.queue.onTransition(forward = true))
+    }
+
+    @Test
+    fun aCrossfadeIntoTheLoopOntoThePlayingSongStillLoops() {
+        // Only the playing song stays at the loop: the fade lands on it, and the hand-over's move onto it is the loop.
+        val p = player(listOf("a", "c"))
+        p.queue.queueNext(listOf("M"))
+        p.next()
+        p.next()
+        p.remove(p.ids.indexOf("a"))
+        p.repeat = "all"
+        p.queue.onRepeatModeChanged(true)
+        val c = p.ids.indexOf("c")
+        assertEquals(c, p.queue.landing(p.ids.indexOf("M")))
+        p.current = c
+        p.queue.onTransition(forward = true)
+        assertEquals(listOf("c"), p.ids)
+    }
+
     @Test
     fun aRefreshedLinkKeepsTheSongPlayingWithShuffleOff() {
         val p = player(listOf("a", "b", "c", "d"), start = 1)
@@ -91,6 +134,30 @@ class QueueOpsTest {
             assertEquals("seed $seed: $last", "y", last[last.size - 3])
             assertEquals("seed $seed: $last", setOf("s1", "s2"), last.takeLast(2).toSet())
         }
+    }
+
+    /** A station's next round repeats ids: Undo goes back before the song that followed it, by its index, not before another copy (S10). */
+    @Test
+    fun restoreGoesBeforeTheSongThatFollowedItNotAnotherCopy() {
+        val p = player(listOf("x1", "x2", "x3"))
+        p.queue.addAutoplay(listOf("x3", "x2", "x1"))
+        val way = p.queue.nextStartIndex()
+        p.remove(way) // the next round's x2 followed it, and now has its index
+        p.queue.restore("x3", Section.AUTO, "x2", beforeIndex = way)
+        assertEquals(listOf("x2", "x3", "x3", "x2", "x1"), p.upNext())
+        assertTrue(p.auto[3] && p.queue.nextStartIndex() == 3)
+    }
+
+    /** The list's copy of a song back gives the list on the way no marker back, though the copy on the way that held it went too (F10). */
+    @Test
+    fun restoreOfTheListsCopyLeavesTheListOnTheWayAlone() {
+        val p = player(listOf("x1", "x2", "x3"))
+        p.queue.addAutoplay(listOf("x3", "x2", "x1"))
+        p.remove(3) // the next round's x3, the first on the way: its x2 starts it now
+        p.remove(2) // the list's x3
+        p.queue.restore("x3", Section.LIST, "x2", beforeIndex = 2)
+        assertEquals(listOf("x1", "x2", "x3", "x2", "x1"), p.ids.toList())
+        assertEquals(3, p.queue.nextStartIndex())
     }
 
     @Test

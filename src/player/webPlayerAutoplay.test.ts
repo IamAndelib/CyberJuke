@@ -65,3 +65,18 @@ describe('the list you are in', () => {
     expect(p.state.peek()).toMatchObject({ listStart: 2, nextStart: 4 });
   });
 });
+
+describe('signing out', () => {
+  it("taking the last song in play order while it plays: the first song is current, paused, as Media3's (S11); ✕ the same", async () => {
+    for (const out of ['removeIds', 'remove'] as const) {
+      const p = new WebPlayer();
+      const inner = p as unknown as { loadCurrent(autoplay: boolean): Promise<void>; publish(s: { isPlaying: boolean }): void };
+      vi.spyOn(inner, 'loadCurrent').mockImplementation(async (autoplay) => inner.publish({ isPlaying: autoplay }));
+      await p.playList([t('a'), t('b'), t('c')], 2, { label: 'Liked', mode: 'list' });
+      expect(p.state.peek().isPlaying).toBe(true);
+      await (out === 'remove' ? p.remove(2, 'c') : p.removeIds(['c']));
+      expect(p.state.peek().current?.id, out).toBe('a');
+      expect(p.state.peek().isPlaying, out).toBe(false);
+    }
+  });
+});

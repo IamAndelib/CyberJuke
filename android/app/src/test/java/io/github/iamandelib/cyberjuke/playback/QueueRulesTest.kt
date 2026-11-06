@@ -61,23 +61,16 @@ class QueueRulesTest {
                 "setList" -> p.queue.setList(strings(s.getJSONArray("ids")), s.optInt("start", 0))
                 "queueNext" -> p.queue.queueNext(strings(s.getJSONArray("ids")))
                 "addAuto" -> p.queue.addAutoplay(strings(s.getJSONArray("ids")), s.optBoolean("joinList", false))
-                "restore" -> {
-                    val before = if (s.isNull("beforeId")) null else s.getString("beforeId")
-                    val kind = s.getString("kind")
-                    if (kind == QueueCommands.KIND_PLAYED || kind == QueueCommands.KIND_TOP) {
-                        p.queue.restorePlayed(s.getString("id"), before, s.optBoolean("mine", false), kind == QueueCommands.KIND_TOP)
-                    } else {
-                        p.queue.restore(s.getString("id"), NativeQueue.Section.of(kind) ?: throw IllegalArgumentException("kind in $where"), before)
-                    }
-                }
+                "restore" -> restore(
+                    p,
+                    Undo(s.getString("id"), s.getString("kind"), if (s.isNull("beforeId")) null else s.getString("beforeId"), s.optInt("beforeIndex", -1), s.optBoolean("mine", false), s.optBoolean("auto", false), s.optBoolean("heard", false), s.optBoolean("earlier", false)),
+                    where,
+                )
                 "removeRow" -> {
-                    // Up next's ✕: Undo puts it back as its row's kind, before the row that followed it.
-                    val up = p.upNext()
-                    val at = up.indexOf(s.getString("id"))
-                    undo = Undo(up[at], sections(p).first { up[at] in it.second }.first, up.getOrNull(at + 1), p.serials[p.ids.indexOf(up[at])] != 0L)
-                    p.remove(p.ids.indexOf(up[at]))
+                    undo = undoOf(p, s.getString("id"), s.optString("from"))
+                    p.queue.remove(p.ids.indexOf(s.getString("id")))
                 }
-                "undo" -> undo!!.let { (id, kind, before, mine) -> p.queue.restore(id, NativeQueue.Section.of(kind)!!, before, mine) }
+                "undo" -> restore(p, undo!!, where)
                 "removeIds" -> p.queue.removeIds(strings(s.getJSONArray("ids")).toSet())
                 "dropOnTheWay" -> p.queue.dropOnTheWay()
                 "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")), s.optBoolean("lap", false))
@@ -86,7 +79,7 @@ class QueueRulesTest {
                 "next" -> p.next()
                 "nextAuto" -> p.nextAuto()
                 "prev" -> p.prev(s.optLong("positionMs", 0L))
-                "remove" -> p.remove(p.ids.indexOf(s.getString("id")))
+                "remove" -> p.queue.remove(p.ids.withIndex().filter { it.value == s.getString("id") }[s.optInt("nth", 0)].index)
                 "move" -> p.queue.move(p.ids.indexOf(s.getString("id")), if (s.has("toId")) p.ids.indexOf(s.getString("toId")) else s.getInt("to"))
                 "setShuffle" -> p.toggleShuffle(s.getBoolean("on"))
                 "setRepeat" -> {
@@ -128,6 +121,10 @@ class QueueRulesTest {
         if (s.has("list")) assertEquals("list in $where", strings(s.getJSONArray("list")), p.ids.toList())
         if (s.has("played")) assertEquals("played in $where", strings(s.getJSONArray("played")), p.played())
         if (s.has("mine")) assertEquals("mine in $where", strings(s.getJSONArray("mine")), p.ids.filterIndexed { i, _ -> p.serials[i] != 0L })
+        if (s.has("heardMine")) {
+            val want = s.getJSONArray("heardMine").let { a -> (0 until a.length()).map { strings(a.getJSONArray(it)) } }
+            assertEquals("heardMine in $where", want, p.queue.heardMine.map { listOf(it.id, it.after) })
+        }
         if (s.has("upNextIsKeptTop")) assertEquals("upNextIsKeptTop in $where", top, listOf(p.ids[p.current]) + up)
         if (s.has("top")) assertEquals("top in $where", strings(s.getJSONArray("top")), p.top())
         if (s.has("topSet")) assertEquals("topSet in $where", strings(s.getJSONArray("topSet")).sorted(), p.top().sorted())
@@ -150,8 +147,50 @@ class QueueRulesTest {
 
     private fun strings(a: JSONArray) = (0 until a.length()).map { a.getString(it) }
 
-    /** What Up next's ✕ keeps for its Undo: the row's kind, the row after it, and its queued-by-you mark. */
-    private data class Undo(val id: String, val kind: String, val before: String?, val mine: Boolean)
+    /** What a row's ✕ keeps for its Undo (the page's Undo): its kind, the song after it in play order and that one's index once it is gone, its mark, tag and heard state, and whether it is of an earlier list. */
+    private data class Undo(val id: String, val kind: String, val before: String?, val beforeIndex: Int, val mine: Boolean, val auto: Boolean, val heard: Boolean, val earlier: Boolean)
+
+    /** PlaybackService's ACTION_RESTORE. */
+    private fun restore(p: FakePlayer, u: Undo, where: String) {
+        if (u.kind == QueueCommands.KIND_PLAYED || u.kind == QueueCommands.KIND_TOP) {
+            p.queue.restorePlayed(u.id, u.before, u.mine, u.kind == QueueCommands.KIND_TOP, u.beforeIndex, u.auto, u.earlier)
+        } else {
+            p.queue.restore(u.id, NativeQueue.Section.of(u.kind) ?: throw IllegalArgumentException("kind in $where"), u.before, u.mine, u.beforeIndex, u.auto, u.heard, u.earlier)
+        }
+    }
+
+    /**
+     * ✕ on the row of [id] in Up next (or in Played, or "From the top": [from]), as the page's undoOf keeps its
+     * Undo from the state StateEncoder sends: a suggestion of the list you're in goes back into it, and a
+     * Played or "From the top" row before the song after it in play order, heard or not.
+     */
+    private fun undoOf(p: FakePlayer, id: String, from: String): Undo {
+        val (played, lap, up) = Triple(p.played(), p.top(), p.upNext())
+        val rows = when (from) {
+            "played" -> played
+            "top" -> lap
+            else -> up
+        }
+        val i = p.ids.indexOf(id)
+        val heard = from == "played" || id in played || p.uids[i] in p.queue.lapUids
+        val next = if (from == "played" || from == "top") behindAfter(p, played, lap, id) else rows.getOrNull(rows.indexOf(id) + 1)
+        val way = p.queue.nextStartIndex()
+        val kind = when {
+            from == "top" && heard -> "played"
+            from.isNotEmpty() -> from
+            else -> sections(p).first { id in it.second }.first.let { if (it == "autoplay" && !(way >= 0 && i >= way)) "list" else it }
+        }
+        val at = next?.let { p.ids.indexOf(it) }?.let { if (it > i) it - 1 else it } ?: -1
+        return Undo(id, kind, next, at, p.serials[i] != 0L, p.auto[i], heard, i < p.queue.listStartIndex())
+    }
+
+    /** The song after [id] in play order behind the current one: Played shows the heard ones, "From the top" all but the songs you queued (the page's behindAfter). */
+    private fun behindAfter(f: FakePlayer, played: List<String>, lap: List<String>, id: String): String? {
+        fun after(rows: List<String>) = rows.indexOf(id).takeIf { it >= 0 }?.let { rows.getOrNull(it + 1) }
+        val (p, l) = after(played) to after(lap)
+        if (p != null && l != null && !f.shuffle) return if (f.ids.indexOf(p) < f.ids.indexOf(l)) p else l
+        return if (p != null && p !in lap) p else l ?: p
+    }
 
     /** Just enough ExoPlayer for the queue logic; ids are unique within a case. */
     internal class FakePlayer(private val rnd: Random) : QueueHost<String> {
@@ -378,16 +417,21 @@ class QueueRulesTest {
             if (p >= 0 && positionMs <= 3000L) seekTo(p) // else: restart the current track
         }
 
+        /**
+         * Media3's removal: the playing item removed hands on to the next one in play order, else to the first one in
+         * play order, ended (ExoPlayerImpl.getPeriodPositionUsAfterTimelineChanged: getFirstWindowIndex(shuffle)).
+         */
         fun remove(index: Int) {
             require(index in ids.indices)
+            val changed = index == current
+            val seq = playOrder()
+            val next = if (changed) seq.getOrNull(seq.indexOf(index) + 1) ?: seq.firstOrNull { it != index } ?: -1 else current
             ids.removeAt(index)
             serials.removeAt(index)
             auto.removeAt(index)
             uids.removeAt(index)
             orderRemove(index)
-            val changed = index == current
-            if (index < current) current--
-            if (current >= ids.size) current = ids.size - 1
+            current = if (next > index) next - 1 else next
             if (changed) emit(timelineChanged, transition()) else emit(timelineChanged)
         }
 

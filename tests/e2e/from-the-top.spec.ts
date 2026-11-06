@@ -95,6 +95,19 @@ test('an album started at song 3: "From the top" shows songs 1–2; ✕ and Undo
   await expect(page.getByTestId('upnext-played-fold')).toHaveCount(0);
 });
 
+test('✕, then Repeat changed with the Undo still showing: the Undo goes, as "where it was" changed', async ({ page }) => {
+  const titles = await playAlbum(page);
+  await page.locator('[data-testid="upnext-row"][data-section="list"]').first().getByTestId('upnext-remove').click();
+  await expect(removedToast(page).getByTestId('toast-action')).toBeVisible();
+  // Not a tap on the page, which dismisses the toast: a key here, the notification's Repeat on a phone.
+  await page.getByTestId('np-repeat').press('Enter');
+  await expect(page.getByTestId('np-repeat')).toHaveAttribute('data-mode', 'all');
+  // At once, while the toast still shows (it stays 4 s).
+  await expect(removedToast(page).getByTestId('toast-action')).toHaveCount(0, { timeout: 1000 });
+  await expect(removedToast(page)).toBeVisible({ timeout: 100 });
+  await expect(page.locator('[data-testid="upnext-row"][data-section="list"] .row-title').first()).toHaveText(titles[2]);
+});
+
 test('✕ on a "From the top" song you heard, then Undo: back in its place, and still in Played', async ({ page }) => {
   const titles = await playAlbum(page);
   await repeatAll(page);

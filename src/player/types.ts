@@ -15,8 +15,10 @@ export interface UpNextItem {
   index: number;
   /** Added with "Add to queue" and not played yet (shown under "Queued by you"). */
   queued?: boolean;
-  /** Added by autoplay (shown under "Autoplay"). */
+  /** Added by autoplay (shown under "Autoplay"; Played and "From the top" rows carry it too). */
   auto?: boolean;
+  /** Heard in this lap: an Up next row Previous walked back over. */
+  heard?: boolean;
 }
 
 /**
@@ -40,7 +42,7 @@ export interface UpItem {
 
 export type UpRowKind = Exclude<UpNextKind, 'played' | 'top'>;
 
-/** Up next's rows in play order, a run each time the kind changes: Up next shows a heading over each. */
+/** Up next's rows in play order, a run each time the kind changes or the list on the way starts: Up next shows a heading over each. */
 export interface UpRun {
   kind: UpRowKind;
   items: UpItem[];
@@ -49,7 +51,8 @@ export interface UpRun {
 /**
  * Up next's three sections (C2): each row by its own kind, never by its place (a tapped
  * suggestion, moved next, stays a suggestion and the list after it stays the list), each in
- * play order; the same rows as `runs`; and the track autoplay follows.
+ * play order; the same rows as `runs`, which also break where the list on the way starts (queue index
+ * `nextStart`, -1 for none), so ↑ ↓ never cross that line (S7, D15); and the track autoplay follows.
  */
 export interface UpNextSections {
   queued: UpItem[];
@@ -59,17 +62,69 @@ export interface UpNextSections {
   seed: Track | null;
 }
 
-export function sectionsOf(upNext: UpNextItem[], seed: UpNextSections['seed']): UpNextSections {
+export function sectionsOf(upNext: UpNextItem[], seed: UpNextSections['seed'], nextStart: number): UpNextSections {
   const out: UpNextSections = { queued: [], list: [], autoplay: [], runs: [], seed };
+  const onWay = (u: UpItem) => nextStart >= 0 && u.index >= nextStart;
   for (const u of upNext) {
     const item: UpItem = { track: u.track, index: u.index };
     const kind = u.queued ? 'queued' : u.auto ? 'autoplay' : 'list';
     out[kind].push(item);
     const run = out.runs.at(-1);
-    if (run?.kind === kind) run.items.push(item);
+    if (run?.kind === kind && onWay(run.items[0]) === onWay(item)) run.items.push(item);
     else out.runs.push({ kind, items: [item] });
   }
   return out;
+}
+
+/** What Undo of a removed queue row needs to put the same song back, as it was, where it was (K3; undoOf). */
+export interface Undo {
+  /** Back among what played (`played`), unheard behind the current one (`top`), or into an Up next section (`list`: the list you're in, its suggestions too). */
+  kind: UpNextKind;
+  /** The song after it in play order, heard or not, and its queue index once this one is gone: matched by both, by the id alone if the index has moved on. */
+  before: { id: string; index: number } | null;
+  /** Queued by you (rule 8's mark), added by autoplay, heard. */
+  mine?: true;
+  auto?: true;
+  heard?: true;
+  /** Of an earlier list (before the current list's marker): it goes back into that one. */
+  earlier?: true;
+}
+
+/**
+ * The Undo of ✕ on a row `kind` shows (Up next's, Played or "From the top"), from the state before it goes:
+ * its own kind, tag, mark and heard state, its own list, and the song after it in play order. A suggestion
+ * of the list you're in goes back into it, before what's on the way (S6); a "From the top" song you heard,
+ * among the played.
+ */
+export function undoOf(s: Pick<PlayerState, 'upNext' | 'previous' | 'lap' | 'mine' | 'listStart' | 'nextStart' | 'shuffle'>, it: UpItem, kind: UpNextKind): Undo {
+  const rows = kind === 'played' ? s.previous : kind === 'top' ? s.lap : s.upNext;
+  const k = rows.findIndex((u) => u.index === it.index);
+  const heard = kind === 'played' || s.previous.some((u) => u.index === it.index) || rows[k]?.heard === true;
+  const next = kind === 'played' || kind === 'top' ? behindAfter(s.previous, s.lap, it.index, s.shuffle) : rows[k + 1];
+  const onWay = s.nextStart >= 0 && it.index >= s.nextStart;
+  return {
+    kind: kind === 'top' && heard ? 'played' : kind === 'autoplay' && !onWay ? 'list' : kind,
+    before: next ? { id: next.track.id, index: next.index - (next.index > it.index ? 1 : 0) } : null,
+    ...(s.mine.includes(it.index) && { mine: true }),
+    ...(rows[k]?.auto && { auto: true }),
+    ...(heard && { heard: true }),
+    ...(it.index < s.listStart && { earlier: true }),
+  };
+}
+
+/**
+ * The song after queue index `index` in play order, behind the current one, heard or not: Played shows the
+ * heard ones, "From the top" (Repeat all) all but the songs you queued. Unshuffled the nearer one in list
+ * order comes first; shuffled, a Played row comes first only when it isn't one of From the top's.
+ */
+function behindAfter(previous: UpNextItem[], lap: UpNextItem[], index: number, shuffle: boolean): UpNextItem | undefined {
+  const after = (rows: UpNextItem[]) => {
+    const k = rows.findIndex((u) => u.index === index);
+    return k < 0 ? undefined : rows[k + 1];
+  };
+  const [p, l] = [after(previous), after(lap)];
+  if (p && l && !shuffle) return p.index < l.index ? p : l;
+  return p && !lap.some((u) => u.index === p.index) ? p : (l ?? p);
 }
 
 /** Autoplay is running low: `left` tracks to go after the current one. */
@@ -102,6 +157,12 @@ export const mayAutoplay = (repeat: RepeatMode): boolean => repeat !== 'all';
  */
 export const firstBatchOfRadio = (context: PlayContext | null, count: number, queued: number): boolean => context?.mode === 'radio' && count - queued === 1;
 
+/** A song you queued that played, and the id of the song that played before it (null: none). */
+export interface HeardMine {
+  track: Track;
+  after: string | null;
+}
+
 export interface PlayerState {
   /** Full queue in list order. */
   queue: Track[];
@@ -128,6 +189,8 @@ export interface PlayerState {
    * the current one, without the songs you queued (at most UP_NEXT_MAX, the first ones). Empty otherwise.
    */
   lap: UpNextItem[];
+  /** Save's memory (rule 8): the songs you queued that played since you last started something, also those that left the queue, but those removed with ✕. */
+  heardMine: HeardMine[];
   /** Queue index of the current list's first song: the songs before it are history, not of this list. */
   listStart: number;
   /** Queue index of the first song of the autoplay on the way, -1 if none. */
@@ -162,6 +225,7 @@ export const EMPTY_STATE: PlayerState = {
   previous: [],
   mine: [],
   lap: [],
+  heardMine: [],
   listStart: 0,
   nextStart: -1,
   context: null,
@@ -205,13 +269,12 @@ export interface Player {
    */
   addToQueue(tracks: Track[]): Promise<void>;
   /**
-   * Undo a remove (K3): put `track` back as `kind`, right before `beforeId` (the row that
-   * followed it in Up next) if that is still ahead (a queued track only before a queued one,
-   * the others never before one), else at the end of its section. Never at or before the
-   * current track. `played` and `top` go back behind it, before `beforeId` (see Queue.restore).
-   * `mine`: it was queued by you, and keeps that mark (rule 8).
+   * Undo a remove (K3): put `track` back as it was, where it was (`undo`, from undoOf): as its kind, right
+   * before the song that followed it if that is still ahead (a queued track only before a queued one,
+   * the others never before one), else at the end of its section. Never at or before the current track;
+   * a list song never on the way. `played` and `top` go back behind it (see Queue.restore).
    */
-  restore(track: Track, kind: UpNextKind, beforeId: string | null, mine: boolean): Promise<void>;
+  restore(track: Track, undo: Undo): Promise<void>;
   /** Autoplay tracks computed for `seedId`; ignored if the seed changed meanwhile. */
   addAutoplay(tracks: Track[], seedId: string): Promise<void>;
   /** The Autoplay setting (C3). Off drops the autoplay tracks still to come. */
@@ -263,12 +326,17 @@ export function nsfwAutoplayIds(upNext: readonly UpNextItem[]): string[] {
 }
 
 /**
- * Where the current track is in the list you started (autoplay's tracks ahead not counted):
- * "3 of 50", or "Single track". Once an autoplay row is in Up next, every list track ahead is
- * too (autoplay adds only once fewer than 50 are ahead), while more autoplay tracks may wait
- * past the 50 shown, and a tapped one may sit among the list's.
+ * Now Playing's "N of M" (rule 4): the playing song's place in the current list, and that list's songs (a
+ * radio's first batch included; not what's on the way, nor the songs you queued: A3, S12). A song you queued
+ * belongs to no list: no place (''). After Previous into the list before, its place in the list you started,
+ * also counting that list's songs that came along into the current one (Up next's list rows).
  */
-export function placeOf(s: PlayerState): string {
-  const n = s.upNext.some((u) => u.auto) ? s.index + 1 + s.upNext.filter((u) => !u.auto).length : s.queue.length;
-  return n > 1 ? `${s.index + 1} of ${n}` : 'Single track';
+export function placeOf(s: Pick<PlayerState, 'queue' | 'index' | 'upNext' | 'listStart' | 'nextStart' | 'mine'>): string {
+  const mine = new Set(s.mine);
+  if (s.index < 0 || mine.has(s.index)) return '';
+  const count = (from: number, to: number) => s.queue.slice(from, to).filter((_, k) => !mine.has(from + k)).length;
+  const back = s.index < s.listStart;
+  const n = count(back ? 0 : s.listStart, s.index + 1);
+  const m = back ? n + s.upNext.filter((u) => !u.auto && !mine.has(u.index)).length : count(s.listStart, s.nextStart < 0 ? s.queue.length : s.nextStart);
+  return m > 1 ? `${n} of ${m}` : 'Single track';
 }

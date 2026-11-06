@@ -2,6 +2,7 @@ package io.github.iamandelib.cyberjuke.playback
 
 import android.os.Bundle
 import androidx.media3.session.SessionCommand
+import org.json.JSONObject
 import java.util.concurrent.CopyOnWriteArraySet
 
 /**
@@ -44,7 +45,7 @@ internal object QueueCommands {
     /** Removes every item whose id is in [ARG_IDS] (K5, sign-out). */
     const val ACTION_REMOVE_IDS = "io.github.iamandelib.cyberjuke.REMOVE_IDS"
 
-    /** Undo of a removal (K3): one track in [ARG_TRACKS], [ARG_KIND], [ARG_BEFORE], [ARG_MINE]. */
+    /** Undo of a removal (K3): one track in [ARG_TRACKS], [ARG_KIND], [ARG_BEFORE], [ARG_BEFORE_INDEX], [ARG_MINE], [ARG_AUTO], [ARG_HEARD], [ARG_EARLIER]. */
     const val ACTION_RESTORE = "io.github.iamandelib.cyberjuke.RESTORE"
 
     /** The NativeTrack[] JSON. */
@@ -69,8 +70,16 @@ internal object QueueCommands {
     const val KIND_TOP = "top"
     const val ARG_BEFORE = "beforeId"
 
+    /** [ACTION_RESTORE]: the list index of [ARG_BEFORE]'s item, matched with its id first (-1: by id only). */
+    const val ARG_BEFORE_INDEX = "beforeIndex"
+
     /** [ACTION_RESTORE]: a played item queued by you keeps that mark (NativeQueue.restorePlayed). */
     const val ARG_MINE = "mine"
+
+    /** [ACTION_RESTORE]: it was added by autoplay, and keeps that tag; it was heard, and is again; it is of an earlier list, and goes back into it. */
+    const val ARG_AUTO = "auto"
+    const val ARG_HEARD = "heard"
+    const val ARG_EARLIER = "earlier"
 
     /** [ACTION_SKIP_TO]: a "From the top" row, which enters the next lap (NativeQueue.skipTo). */
     const val ARG_LAP = "lap"
@@ -130,12 +139,20 @@ internal object QueueInfo {
     @Volatile
     var heardUids: Set<Long> = emptySet()
 
+    /** The uids heard in this lap ([NativeQueue.lapUids]): the Up next ones are the songs Previous walked back over. */
+    @Volatile
+    var lapUids: Set<Long> = emptySet()
+
     /** Where the list you're in starts in the queue, and where what comes on after it does (-1: nothing): [NativeQueue.listStartIndex], [NativeQueue.nextStartIndex]. */
     @Volatile
     var listStart: Int = 0
 
     @Volatile
     var nextStart: Int = -1
+
+    /** Save's memory ([NativeQueue.heardMine]): each song you queued that played, as a NativeTrack, and the id of the song before it. */
+    @Volatile
+    var heardMine: List<Pair<JSONObject, String?>> = emptyList()
 
     /** The play context of the current list (C2); null before the first list. */
     @Volatile

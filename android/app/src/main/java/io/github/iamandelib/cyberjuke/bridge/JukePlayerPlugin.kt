@@ -95,8 +95,8 @@ import kotlin.math.roundToInt
  * - skipToIndex, removeItem and moveItem take an optional `expectId` (K2: the id the caller
  *   sees at `index` / `from`); if the item there has another id the call rejects with code
  *   STALE_INDEX and nothing changes. Checked in the service, on the player itself.
- * - restore({ track, kind: 'played' | 'top' | 'queued' | 'list' | 'autoplay', beforeId }) (K3): Undo of a
- *   removal, see [io.github.iamandelib.cyberjuke.playback.NativeQueue.restore] and restorePlayed.
+ * - restore({ track, kind: 'played' | 'top' | 'queued' | 'list' | 'autoplay', beforeId, beforeIndex?, mine?, auto?, heard?, earlier? })
+ *   (K3): Undo of a removal, see [io.github.iamandelib.cyberjuke.playback.NativeQueue.restore] and restorePlayed.
  * - removeIds({ ids }) (K5): removes every item with one of these ids; if the current one
  *   goes, the next one that stays plays, or playback pauses when none is left.
  * - Size caps (K6): more than 2000 tracks or ids, or a string over 2000 characters, rejects
@@ -113,7 +113,8 @@ import kotlin.math.roundToInt
  * - state: NativeState. Sent on every player event and once a second while playing and the
  *   app is in the foreground (no ticks in the background). `queueIds` is only included when
  *   the list changed since the last event; otherwise it is left out and
- *   `queueIdsUnchanged: true` is set. getState() always includes it.
+ *   `queueIdsUnchanged: true` is set. `heardMine` likewise, with `heardMineUnchanged: true`.
+ *   getState() always includes both.
  * - blocked { until: epoch ms, reason: 'BOT_CHECK' | 'RATE_LIMIT' | 'STREAM_FORBIDDEN' }: YouTube
  *   is backing us off (see [NetBlock]); sent when a back-off starts or is extended, and again
  *   when play()/setQueue is refused during one. unblocked {}: the back-off ran out or was lifted
@@ -143,6 +144,9 @@ class JukePlayerPlugin : Plugin() {
     /** The list changed since `queueIds` was last sent (or the web needs it again). */
     private var queueDirty = true
     private var lastQueueIds: List<String>? = null
+
+    /** Save's memory as last sent ([QueueInfo.heardMine], a new list whenever it changes); null: send it again. */
+    private var lastHeardMine: List<Pair<JSONObject, String?>>? = null
 
     /** A `blocked` event was sent and no `unblocked` since. */
     private var announcedBlock = false
@@ -332,6 +336,7 @@ class JukePlayerPlugin : Plugin() {
             // Background events may have been throttled by the WebView: send everything once.
             queueDirty = true
             lastQueueIds = null
+            lastHeardMine = null
             announcedTracks.clear()
             announceTracks(c)
             emitState(c)
@@ -353,6 +358,7 @@ class JukePlayerPlugin : Plugin() {
                 if (event == "state") {
                     queueDirty = true
                     lastQueueIds = null
+                    lastHeardMine = null
                 }
                 announcedTracks.clear()
                 controller?.let { announceTracks(it) }
@@ -428,6 +434,7 @@ class JukePlayerPlugin : Plugin() {
             maybePlayCiTone(c)
             queueDirty = true
             lastQueueIds = null
+            lastHeardMine = null
             // Tracks the page may not know (Global, a restored session) before the state that
             // names them: on a cold start the page listened before the controller was here.
             announceTracks(c)
@@ -644,13 +651,15 @@ class JukePlayerPlugin : Plugin() {
     }
 
     /**
-     * `restore({ track, kind: 'played' | 'queued' | 'list' | 'autoplay' | 'top', beforeId: string | null, mine?: true })`:
+     * `restore({ track, kind: 'played' | 'queued' | 'list' | 'autoplay' | 'top', beforeId: string | null, beforeIndex?: number, mine?: true, auto?: true, heard?: true, earlier?: true })`:
      * Undo of a removal (K3). The track goes back as `kind`, right before the first entry after
-     * the current track with id `beforeId` (a queued one only before a queued one, the others
-     * never before one), else at the end of its section; never at or before the current track.
-     * 'played' goes back before `beforeId` among every entry before the current track, heard or not,
-     * else right before the current track; 'top' (a "From the top" row) the same, but unheard. A
-     * 'played' or 'list' track gets the queued-by-you mark back when `mine`.
+     * the current track that is the one at `beforeIndex` if it has id `beforeId`, else the first with that id
+     * (a queued one only before a queued one, the others never before one), else at the end of its section;
+     * never at or before the current track, and a 'list' one never on the way. 'played' goes back before that
+     * entry among every entry before the current track, heard or not, else right before the current track;
+     * 'top' (a "From the top" row) the same, but unheard. A 'played' or 'list' track gets the queued-by-you
+     * mark back when `mine`, the autoplay tag when `auto`, is heard again when `heard`, and goes back into an
+     * earlier list (before the current list's marker) when `earlier`.
      */
     @PluginMethod
     fun restore(call: PluginCall) {
@@ -666,7 +675,11 @@ class JukePlayerPlugin : Plugin() {
             putString(QueueCommands.ARG_TRACKS, arr.toString())
             putString(QueueCommands.ARG_KIND, kind)
             if (beforeId.isNotEmpty()) putString(QueueCommands.ARG_BEFORE, beforeId)
+            putInt(QueueCommands.ARG_BEFORE_INDEX, call.intArg("beforeIndex") ?: -1)
             putBoolean(QueueCommands.ARG_MINE, call.getBoolean("mine", false) ?: false)
+            putBoolean(QueueCommands.ARG_AUTO, call.getBoolean("auto", false) ?: false)
+            putBoolean(QueueCommands.ARG_HEARD, call.getBoolean("heard", false) ?: false)
+            putBoolean(QueueCommands.ARG_EARLIER, call.getBoolean("earlier", false) ?: false)
         }
         withController(call) { c -> sendCommand(call, c, QueueCommands.RESTORE, args) }
     }
@@ -1189,7 +1202,7 @@ class JukePlayerPlugin : Plugin() {
     /**
      * Main thread only. Shape matches NativeState in the TS contract ([StateEncoder]). Unless
      * [fullQueue], `queueIds` is replaced by `queueIdsUnchanged: true` when the list did not
-     * change since it was last sent (P1: no 1s re-send of a long list).
+     * change since it was last sent (P1: no 1s re-send of a long list); `heardMine` the same way.
      */
     private fun buildState(c: MediaController, fullQueue: Boolean): JSObject {
         var queueIds: List<String>? = null
@@ -1199,7 +1212,10 @@ class JukePlayerPlugin : Plugin() {
             if (fullQueue || ids != lastQueueIds) queueIds = ids
             if (!fullQueue) lastQueueIds = ids
         }
-        return StateEncoder.encode(c, queueIds)
+        val memory = QueueInfo.heardMine
+        val heardMine = memory.takeIf { fullQueue || it !== lastHeardMine }
+        if (!fullQueue) lastHeardMine = memory
+        return StateEncoder.encode(c, queueIds, heardMine)
     }
 
     /** Describes the tracks the web can't look up (Global, a restored session) to it, once each. */

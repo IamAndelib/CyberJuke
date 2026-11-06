@@ -12,18 +12,23 @@
 - A playlist's ⋯ menu has clearer icons: up and down arrows for **Edit songs**, a pencil for **Rename** and a bin for **Delete playlist**.
 - After ↑ or ↓ in the queue, or **Undo** in the queue, Liked or a playlist, the song glows faintly at its place for a moment, so you can see where it went; a screen reader says it ("Moved to 3 of 25", "Back at 3 of 25").
 - With shuffle on, songs you queued can still be moved with ↑ ↓: shuffle never mixes them, so they play in the order you set.
-- Once a list's suggestions are playing, Repeat all loops them, the list you're in now, instead of jumping back to the list before.
+- Once a list's suggestions are playing, Repeat all loops them, the list you're in now, instead of jumping back to the list before. A song of the list before that you went back to with Previous plays once, then leaves the loop.
 - Turning Autoplay off keeps the suggestions you're already listening to; only the ones still to come after them go.
 - With Repeat all on, a single song played from a list (not a radio) just repeats; it no longer brings suggestions.
-- With Repeat all on, a song you add with **Add to queue** plays once: when the list starts over it leaves the queue, instead of coming round again in every lap. Previous, or a tap on a song in Played, still takes you back to it.
+- With Repeat all on, a song you add with **Add to queue** plays once: when the list starts over it leaves the queue, instead of coming round again in every lap, and the next lap starts at the list's first song, never at it. Previous, or a tap on a song in Played, still takes you back to it.
+- A played song of the list before can no longer be moved with ↓ into the list you're in; tap it to hear it again.
+- After Previous, a tap on a suggestion in the queue leaves the songs you went back over in Played instead of playing them again; the list's songs you haven't heard yet still come after it, shuffle on or off.
 
 ### Fixed
 - After you tap a suggestion in the queue and go back with Previous, your list's songs stay under their own heading instead of under Autoplay, and Now Playing still says "3 of 8" instead of "Single track". When suggestions and your list's songs take turns, each gets its heading again.
-- **Undo** after ✕ in the queue puts a song back as what it was and where it was: one of your list's songs stays in your list, even with Autoplay off, and a suggestion goes back to its place instead of the end.
-- Turning shuffle on no longer moves songs you haven't heard into Played: after Previous, on a second Repeat all lap, or after tapping a played song, everything still to come stays in Up next and gets mixed. Suggestions that arrive while shuffled go after the ones already there.
+- **Undo** after ✕ in the queue puts back the same song, as what it was and where it was: one of your list's songs stays in your list, even with Autoplay off, and never lands among the suggestions after it, shuffle on or off; a suggestion goes back to its place instead of the end, and stays a suggestion also from Played; a song you heard stays heard, and a song of the list before stays in that list. It goes back right where it was, also next to songs you haven't heard yet in Played or From the top, and by the right copy when a radio's next round repeats songs. Once you change Repeat, the Undo goes, as Repeat all keeps only the list you're in.
+- Turning shuffle on no longer moves songs you haven't heard into Played: everything still to come stays in Up next. After Previous, or a tap on a played song, the songs you went back over stay next, in the order you heard them, and the rest gets mixed; on a second Repeat all lap the whole lap ahead is mixed. Shuffle mixes only the list you're in: once an album's suggestions play, the album's songs you never played no longer come back into Up next. Suggestions that arrive while shuffled go after the ones already there.
 - On a genre or Most saved, pulling down to refresh while the new tracks button shows takes you to Latest from every genre, where the new songs are, as tapping the button does. Before, it refreshed that genre and nothing new appeared.
-- Turning shuffle off no longer skips songs: every song of the list you haven't heard stays in Up next, in the list's order.
+- Turning shuffle off no longer skips songs: every song of the list you haven't heard stays in Up next, in the list's order. The songs you heard stay in Played, in the order you heard them, instead of coming up again.
 - A song you tap on Home or in Search while songs you queued are waiting gets its suggestions with Repeat all on too, and Repeat all keeps those suggestions in its loop.
+- In the queue, ↑ ↓ keep a song in its own list. Where a radio's suggestions end and the next ones on the way begin, a new heading starts, and moving a song past the end of one no longer puts it in the other, where Repeat all or turning Autoplay off then dropped it or kept it by mistake.
+- Now Playing's "3 of 8" counts only the list's songs, not the ones you queued; while one of yours plays, it shows just where the music comes from.
+- Removing the first song of the list you're in no longer lets a song you queued take its place as the list's start, which could leave the list's other songs out of Repeat all's loop.
 
 ## [1.4.0] - 2026-11-04
 

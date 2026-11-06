@@ -30,7 +30,6 @@ import { NativePlayer } from './nativePlayer';
 import { offlineGuard, playsOffline, type OfflineRefusal } from './offlineGuard';
 import { stationPlaying } from './radio';
 import { safePlayer } from './safePlayer';
-import type { HeardMine } from './saveSongs';
 import { nsfwAutoplayIds, placeOf, sectionsOf, wantsPlay, type PlayContext, type Player, type UpItem, type UpNextSections } from './types';
 import { WebPlayer } from './webPlayer';
 
@@ -101,22 +100,9 @@ const guarded = offlineGuard(safePlayer(Capacitor.isNativePlatform() ? new Nativ
 /** Tracks removed from Up next this session: autoplay doesn't pick them again (Spotify, YouTube Music). Undo puts one back. */
 const removed = new Set<string>();
 
-/**
- * The songs you queued that played since you last started something yourself, in the order they
- * played (rule 8): Save keeps them after they leave the queue (with Repeat all). Not kept across
- * the app's restarts.
- */
-let heardMine: HeardMine[] = [];
-
 export const player: Player = {
   ...guarded,
-  // From the app: you start something new. (The offline guard's own playList, for Add to queue
-  // on an empty queue, doesn't come this way.)
-  playList: (tracks, start, ctx) => {
-    heardMine = [];
-    return guarded.playList(tracks, start, ctx);
-  },
-  // A song you queue yourself is wanted again: autoplay may pick it, and Save keeps it.
+  // A song you queue yourself is wanted again: autoplay may pick it.
   addToQueue: (tracks) => {
     for (const t of tracks) removed.delete(t.id);
     return guarded.addToQueue(tracks);
@@ -126,9 +112,9 @@ export const player: Player = {
     if (t && (expectId == null || t.id === expectId)) removed.add(t.id);
     return guarded.remove(index, expectId);
   },
-  restore: (track, kind, beforeId, mine) => {
+  restore: (track, undo) => {
     removed.delete(track.id);
-    return guarded.restore(track, kind, beforeId, mine);
+    return guarded.restore(track, undo);
   },
 };
 
@@ -165,7 +151,7 @@ export const shuffleOn = computed(() => state.value.shuffle);
 export const repeatMode = computed(() => state.value.repeat);
 /** The current track's length (0 until known). */
 export const durationMs = computed(() => state.value.durationMs);
-/** Where the current track is in the list you started (placeOf). */
+/** Where the current track is in the current list ("3 of 8", placeOf). */
 export const queuePlace = computed(() => placeOf(state.value));
 /** "Next" does something: a track after this one, or repeat wraps around. */
 export const canSkipNext = computed(() => state.value.upNext.length > 0 || state.value.repeat === 'all');
@@ -177,13 +163,13 @@ const NO_SECTIONS: UpNextSections = { queued: [], list: [], autoplay: [], runs: 
 let lastSections = NO_SECTIONS;
 
 /**
- * Up next as its sections (C2, sectionsOf): queued by you, the rest of the list, autoplay; and
- * the track autoplay follows. The same object until a row or the seed changes (never on a
- * position tick).
+ * Up next as its sections (C2, sectionsOf): queued by you, the rest of the list, autoplay, its runs
+ * broken where the list on the way starts; and the track autoplay follows. The same object until a
+ * row or the seed changes (never on a position tick).
  */
 export const upNextSections = computed<UpNextSections>(() => {
   const s = state.value;
-  const next = sectionsOf(s.upNext, s.seed);
+  const next = sectionsOf(s.upNext, s.seed, s.nextStart);
   if (sameSections(lastSections, next)) return lastSections;
   return (lastSections = next);
 });
@@ -260,18 +246,6 @@ export const positionSample = computed<PositionSample>(() => {
   const s = state.value;
   return { positionMs: s.positionMs, durationMs: s.durationMs, sampledAt: s.sampledAt, isPlaying: s.isPlaying, isBuffering: s.isBuffering };
 });
-
-let lastCurrentId: string | null = null;
-// A song you queued, once it plays: remembered with the song before it, for Save.
-effect(() => {
-  const cur = currentTrack.value;
-  const s = state.peek();
-  if (cur && s.mine.includes(s.index) && !heardMine.some((h) => h.track.id === cur.id)) heardMine.push({ track: cur, after: lastCurrentId });
-  lastCurrentId = cur?.id ?? lastCurrentId;
-});
-
-/** The songs you queued that played since you last started something, but those you removed (Undo brings one back): Save adds those that left the queue. */
-export const queuedHeard = (): HeardMine[] => heardMine.filter((h) => !removed.has(h.track.id));
 
 let lastRecentId: string | null = null;
 // Recently played: a track once it plays (not the one the app reopens on, paused).
@@ -350,9 +324,12 @@ export function startPlayerPrefs(): void {
   });
 }
 
-/** Signed out: members-only tracks leave the queue (K5, S8). */
+/** The queue and Save's memory of the songs you queued (rule 8, kept with the phone's session): what a purge goes through. */
+const purgeable = () => [...state.peek().queue, ...state.peek().heardMine.map((h) => h.track)];
+
+/** Signed out: members-only tracks leave the queue and Save's memory (K5, S8). */
 function dropMembersFromQueue(): Promise<void> {
-  const ids = [...new Set(state.peek().queue.filter((t) => t.membersOnly).map((t) => t.id))];
+  const ids = [...new Set(purgeable().filter((t) => t.membersOnly).map((t) => t.id))];
   return ids.length ? player.removeIds(ids) : Promise.resolve();
 }
 
@@ -362,18 +339,19 @@ function dropNsfwAutoplay(): Promise<void> {
   return ids.length ? player.removeIds(ids) : Promise.resolve();
 }
 
-/** Local music turned off: its songs leave the queue (they can't play any more). */
+/** Local music turned off: its songs leave the queue and Save's memory (they can't play any more). */
 function dropLocalFromQueue(): Promise<void> {
-  const ids = [...new Set(state.peek().queue.filter(isLocal).map((t) => t.id))];
+  const ids = [...new Set(purgeable().filter(isLocal).map((t) => t.id))];
   return ids.length ? player.removeIds(ids) : Promise.resolve();
 }
 
 let purging = false;
 
-/** The queue holds a members-only track (recomputed only when the list itself changes). */
+/** The queue or Save's memory holds a members-only (or local) track (recomputed only when the list itself changes). */
 const queueList = computed(() => state.value.queue);
-const queuedMembersOnly = computed(() => queueList.value.some((t) => t.membersOnly));
-const queuedLocal = computed(() => queueList.value.some(isLocal));
+const heardList = computed(() => state.value.heardMine);
+const queuedMembersOnly = computed(() => queueList.value.some((t) => t.membersOnly) || heardList.value.some((h) => h.track.membersOnly));
+const queuedLocal = computed(() => queueList.value.some(isLocal) || heardList.value.some((h) => isLocal(h.track)));
 const localMusic = computed(() => settings.value.localMusic);
 
 /** Follow sign-outs and the NSFW setting for the queue (call once at startup). */
