@@ -356,13 +356,14 @@ export class Queue<T extends Identified> {
   move(from: number, to: number): void {
     if (!inRange(from, this.list) || !inRange(to, this.list) || from === to) return;
     const [e, target] = [this.list[from], this.list[to]];
+    // Among the songs you queued, which belong to no list: no line to cross, and the markers keep their songs.
     const mineOnly = this.queued.has(e) && this.queued.has(target);
     const [start, way] = [this.listStartIndex, this.nextStartIndex];
     if (!mineOnly && [start, way].some((c) => c > 0 && from >= c !== to >= c)) return;
     this.list.splice(from, 1);
     this.list.splice(to, 0, e);
     if (!mineOnly && this.listStart) this.listStart = this.firstAt(start);
-    if (!mineOnly && this.nextStart) this.nextStart = this.firstAt(way);
+    if (!mineOnly && way >= 0) this.nextStart = this.firstAt(way);
     if (this.shuffle && !mineOnly) return;
     const down = this.order.indexOf(e) < this.order.indexOf(target);
     this.order.splice(this.order.indexOf(e), 1);
@@ -596,12 +597,16 @@ export class Queue<T extends Identified> {
     return !!this.nextStart && this.list.indexOf(e) >= this.list.indexOf(this.nextStart);
   }
 
-  /** A marker's song is going: the marker moves to the next in list order that stays and isn't yours (S14; none: unset). */
+  /** A marker's song is going: the marker moves to the next in list order that stays and isn't yours (S14), else the next that stays (none: unset). */
   private unmark(gone: ReadonlySet<Entry<T>>): void {
     if (this.listStart && gone.has(this.listStart)) this.listLeft = this.listStart.item.id;
     const left = this.nextStart && this.list.slice(this.nextStartIndex).find((e) => gone.has(e));
     if (left) this.nextLeft = left.item.id;
-    const next = (m: Entry<T> | null) => (m && gone.has(m) ? this.list.slice(this.list.indexOf(m) + 1).find((e) => !gone.has(e) && !e.mine) ?? null : m);
+    const next = (m: Entry<T> | null) => {
+      if (!m || !gone.has(m)) return m;
+      const after = this.list.slice(this.list.indexOf(m) + 1).filter((e) => !gone.has(e));
+      return after.find((e) => !e.mine) ?? after[0] ?? null;
+    };
     this.listStart = next(this.listStart);
     this.nextStart = next(this.nextStart);
   }

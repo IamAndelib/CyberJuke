@@ -219,7 +219,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         nextLeft = null
     }
 
-    /** A marker's song went: it moves to the next one in list order that stays and isn't yours (S14; none: unset). */
+    /** A marker's song went: it moves to the next one in list order that stays and isn't yours (S14), else the next that stays (none: unset). */
     private fun reanchor() {
         val live = (0 until host.count).map { host.uidAt(it) to host.idAt(it) }
         val stays = live.mapTo(HashSet()) { it.first }
@@ -229,7 +229,8 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
             val k = last.indexOfFirst { it.first == m }
             if (k < 0) return 0L
             left(last[k].second)
-            return last.drop(k + 1).firstOrNull { it.first in stays && it.first !in mine }?.first ?: 0L
+            val after = last.drop(k + 1).filter { it.first in stays }
+            return (after.firstOrNull { it.first !in mine } ?: after.firstOrNull())?.first ?: 0L
         }
         last.dropWhile { nextStart == 0L || it.first != nextStart }.firstOrNull { it.first !in stays }?.let { nextLeft = it.second }
         listStart = marker(listStart) { listLeft = it }
@@ -814,6 +815,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
      */
     fun move(from: Int, to: Int) {
         val (s, t) = host.serialAt(from) to host.serialAt(to)
+        // Among the songs you queued, which belong to no list: no line to cross, and the markers keep their songs.
         val mineOnly = s in pending && t in pending
         val (start, way) = listStartIndex() to nextStartIndex()
         if (!mineOnly && listOf(start, way).any { it > 0 && (from >= it) != (to >= it) }) return
