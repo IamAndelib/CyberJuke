@@ -39,7 +39,8 @@ internal object StateEncoder {
         // The Up next entries Previous walked back over (heard in this lap: Repeat all's next lap is all to come): an Undo keeps it.
         val heardAhead = ArrayList<Int>()
         val pending = QueueInfo.pendingSerials
-        val (heard, lap) = QueueInfo.heardUids to QueueInfo.lapUids
+        val heard = QueueInfo.heardUids
+        val lapHeard = QueueInfo.lapUids
         fun serialAt(i: Int) = c.getMediaItemAt(i).mediaMetadata.extras?.getLong(QueueCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L
         fun uidAt(i: Int) = c.getMediaItemAt(i).mediaMetadata.extras?.getLong(QueueCommands.EXTRA_UID, 0L) ?: 0L
         fun heardAt(i: Int, uids: Set<Long> = heard) = uidAt(i).let { it != 0L && it in uids }
@@ -65,7 +66,7 @@ internal object StateEncoder {
                         else -> 'l'
                     },
                 )
-                if (heardAt(i, lap)) heardAhead.add(i)
+                if (heardAt(i, lapHeard)) heardAhead.add(i)
                 i = timeline.getNextWindowIndex(i, repeat, shuffle)
             }
             // The heard tracks before it in play order ("Played"), nearest first, then sent oldest
