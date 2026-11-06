@@ -1316,6 +1316,7 @@ class PlaybackService : MediaSessionService() {
         QueueInfo.lapUids = queue.lapUids.toSet()
         QueueInfo.listStart = queue.listStartIndex()
         QueueInfo.nextStart = queue.nextStartIndex()
+        QueueInfo.heardMine = heardMine().map { it.entry.toNativeTrack() to it.after }
         QueueInfo.context = context
         QueueInfo.seedId = seedId
         handler.removeCallbacks(lowCheck)
@@ -1404,8 +1405,9 @@ class PlaybackService : MediaSessionService() {
         val p = player ?: return
         if (p.mediaItemCount > 0) return
         val s = lastSession.load(::isRestorable) ?: return
-        val items = try {
-            s.entries.mapIndexed { i, e -> restoredItem(e, if (i == s.index) s.durationMs else 0L) }
+        val (items, memory) = try {
+            s.entries.mapIndexed { i, e -> restoredItem(e, if (i == s.index) s.durationMs else 0L) } to
+                s.heardMine.map { NativeQueue.Heard(it.entry.id, restoredItem(it.entry, 0L), it.after) }
         } catch (e: IllegalArgumentException) {
             Log.w(TAG, "Last session not restorable: ${e.javaClass.simpleName}")
             lastSession.clear()
@@ -1413,7 +1415,7 @@ class PlaybackService : MediaSessionService() {
         }
         p.repeatMode = s.repeat
         p.shuffleModeEnabled = s.shuffle
-        queue.restoreSession(items, s.entries.map { it.section }, s.index, s.positionMs, s.order, s.entries.map { it.heard }, s.listStart, s.nextStart, s.entries.map { it.mine })
+        queue.restoreSession(items, s.entries.map { it.section }, s.index, s.positionMs, s.order, s.entries.map { it.heard }, s.listStart, s.nextStart, s.entries.map { it.mine }, memory)
         context = s.context
         radio.reseedFromId(s.seedId)
         seedId = s.seedId
@@ -1451,45 +1453,46 @@ class PlaybackService : MediaSessionService() {
     private fun sessionOf(p: ExoPlayer): LastSession? {
         val n = p.mediaItemCount
         if (n == 0) return null
-        val pending = queue.pendingSerials
-        val heard = queue.heardUids
         val entries = ArrayList<LastSession.Entry>(n)
-        for (i in 0 until n) {
-            val item = p.getMediaItemAt(i)
-            val extras = item.mediaMetadata.extras
-            val serial = extras?.getLong(QueueCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L
-            val extra = TrackExtras.get(item.mediaId)
-            val ytId = JukeUris.ytIdOf(item)
-            val local = ytId == null && JukeUris.isLocal(item)
-            val mp3 = if (ytId == null && !local) JukeUris.mp3UrlOf(item) ?: return null else null
-            entries.add(
-                LastSession.Entry(
-                    id = item.mediaId,
-                    ytId = ytId ?: "",
-                    mp3 = mp3,
-                    local = local,
-                    title = item.mediaMetadata.title?.toString(),
-                    artist = item.mediaMetadata.artist?.toString(),
-                    artworkUrl = item.mediaMetadata.artworkUri?.toString(),
-                    by = extra?.by,
-                    postUrl = extra?.postUrl,
-                    membersOnly = extra?.membersOnly == true,
-                    album = item.mediaMetadata.albumTitle?.toString(),
-                    artists = extra?.artists ?: emptyList(),
-                    heard = (extras?.getLong(QueueCommands.EXTRA_UID, 0L) ?: 0L).let { it != 0L && it in heard },
-                    mine = serial != 0L,
-                    section = when {
-                        serial != 0L && serial in pending -> NativeQueue.Section.QUEUED
-                        extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) == true -> NativeQueue.Section.AUTO
-                        else -> NativeQueue.Section.LIST
-                    },
-                ),
-            )
-        }
+        for (i in 0 until n) entries.add(entryOf(p.getMediaItemAt(i)) ?: return null)
         return LastSession.of(
             entries, p.currentMediaItemIndex, positionOf(p), durationOf(p), p.shuffleModeEnabled,
             queueHost.shuffleOrder(), p.repeatMode, context, seedId, System.currentTimeMillis(),
-            queue.listStartIndex(), queue.nextStartIndex(),
+            queue.listStartIndex(), queue.nextStartIndex(), heardMine(),
+        )
+    }
+
+    /** Save's memory ([NativeQueue.heardMine]) as the session keeps it. */
+    private fun heardMine(): List<LastSession.Heard> = queue.heardMine.mapNotNull { h -> entryOf(h.item)?.let { LastSession.Heard(it, h.after) } }
+
+    /** [item] as the session keeps it, with its part of Up next; null for an MP3 without its link. */
+    private fun entryOf(item: MediaItem): LastSession.Entry? {
+        val extras = item.mediaMetadata.extras
+        val serial = extras?.getLong(QueueCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L
+        val extra = TrackExtras.get(item.mediaId)
+        val ytId = JukeUris.ytIdOf(item)
+        val local = ytId == null && JukeUris.isLocal(item)
+        val mp3 = if (ytId == null && !local) JukeUris.mp3UrlOf(item) ?: return null else null
+        return LastSession.Entry(
+            id = item.mediaId,
+            ytId = ytId ?: "",
+            mp3 = mp3,
+            local = local,
+            title = item.mediaMetadata.title?.toString(),
+            artist = item.mediaMetadata.artist?.toString(),
+            artworkUrl = item.mediaMetadata.artworkUri?.toString(),
+            by = extra?.by,
+            postUrl = extra?.postUrl,
+            membersOnly = extra?.membersOnly == true,
+            album = item.mediaMetadata.albumTitle?.toString(),
+            artists = extra?.artists ?: emptyList(),
+            heard = (extras?.getLong(QueueCommands.EXTRA_UID, 0L) ?: 0L).let { it != 0L && it in queue.heardUids },
+            mine = serial != 0L,
+            section = when {
+                serial != 0L && serial in queue.pendingSerials -> NativeQueue.Section.QUEUED
+                extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) == true -> NativeQueue.Section.AUTO
+                else -> NativeQueue.Section.LIST
+            },
         )
     }
 
@@ -1923,7 +1926,7 @@ class PlaybackService : MediaSessionService() {
                         val index = args.getInt(QueueCommands.ARG_INDEX, -1)
                         if (index !in 0 until p.mediaItemCount) return bad
                         if (!matches(index)) return stale
-                        p.removeMediaItem(index)
+                        queue.remove(index)
                     }
                     QueueCommands.ACTION_MOVE -> {
                         val from = args.getInt(QueueCommands.ARG_FROM, -1)

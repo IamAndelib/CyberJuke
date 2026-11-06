@@ -129,6 +129,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             if ('list' in s) expect(ids(q.items)).toEqual(s.list);
             if ('played' in s) expect(q.previousIndices().map((i) => q.items[i].id)).toEqual(s.played);
             if ('mine' in s) expect(q.mineIndices().map((i) => q.items[i].id)).toEqual(s.mine);
+            if ('heardMine' in s) expect(q.heardMine.map((h) => [h.item.id, h.after])).toEqual(s.heardMine);
             if ('upNextIsKeptTop' in s) expect([q.current?.id, ...ids(q.upNext())]).toEqual(top);
             const lap = () => q.lapIndices().map((i) => q.items[i].id);
             if ('top' in s) expect(lap()).toEqual(s.top);

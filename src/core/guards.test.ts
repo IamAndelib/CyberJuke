@@ -35,6 +35,7 @@ describe('parseNativeState', () => {
       lapIndex: [0],
       heardIndex: [2],
       autoIndex: [0, 2],
+      heardMine: [{ track: { id: 'q', ytId: 'abcdefghijk', title: 'Q', artist: 'X' }, after: 'b' }],
       listStart: 1,
       nextStart: 2,
       context: { label: 'Liked', mode: 'list' },
@@ -96,6 +97,15 @@ describe('parseNativeState', () => {
     for (const junk of [-1, 4, 1.5, '1', null]) expect(parseNativeState({ index: 2, queueIds: q, listStart: junk, nextStart: junk })).toMatchObject({ listStart: 0, nextStart: -1 });
   });
 
+  it("reads Save's memory: each record with a track and the id before it (or null), the last 200; an older native sends none", () => {
+    const track = { id: 'Q', ytId: 'abcdefghijk', title: 'Q', artist: 'X' };
+    const heardMine = [{ track, after: 'A' }, { track, after: 7 }, { after: 'A' }, 'x', null];
+    expect(parseNativeState({ index: 0, queueIds: ['A'], heardMine })?.heardMine).toEqual([{ track, after: 'A' }, { track, after: null }]);
+    const many = Array.from({ length: 205 }, (_, i) => ({ track: { ...track, id: `q${i}` }, after: null }));
+    expect(parseNativeState({ index: 0, queueIds: ['A'], heardMine: many })?.heardMine?.map((h) => h.track.id)).toEqual(many.slice(5).map((h) => h.track.id));
+    expect(parseNativeState({ index: 0, queueIds: ['A'] })?.heardMine).toEqual([]);
+  });
+
   it('keeps the previous list when the event says it is unchanged', () => {
     const st = parseNativeState({ isPlaying: false, index: 0, trackId: 'a', queueIdsUnchanged: true, upNextIds: ['b'] }, ['a', 'b']);
     expect(st?.queueIds).toEqual(['a', 'b']);
@@ -122,6 +132,7 @@ describe('parseNativeState', () => {
       lapIndex: [],
       heardIndex: [],
       autoIndex: [],
+      heardMine: [],
       listStart: 0,
       nextStart: -1,
       context: null,

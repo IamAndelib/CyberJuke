@@ -42,7 +42,12 @@ internal data class LastSession(
     val listStart: Int = 0,
     /** Where what comes on after the list starts, as an index in [entries]; -1: nothing. */
     val nextStart: Int = -1,
+    /** Save's memory ([NativeQueue.heardMine]): the songs you queued that played, back after a restart too. Older files have none ("hm"). */
+    val heardMine: List<Heard> = emptyList(),
 ) {
+    /** A song you queued that played ([NativeQueue.Heard]), and the id of the song before it. */
+    data class Heard(val entry: Entry, val after: String?)
+
     /** One track: the NativeTrack fields and its part of Up next. */
     data class Entry(
         val id: String,
@@ -118,6 +123,7 @@ internal data class LastSession(
             put("offset", offset)
             put("listStart", listStart)
             put("nextStart", nextStart)
+            if (heardMine.isNotEmpty()) put("hm", JSONArray(heardMine.map { it.entry.toNativeTrack().put("after", it.after ?: JSONObject.NULL) }))
         }.toString()
     }
 
@@ -150,9 +156,9 @@ internal data class LastSession(
         durationMs == other.durationMs && shuffle == other.shuffle &&
         (order?.contentEquals(other.order) ?: (other.order == null)) && repeat == other.repeat &&
         context == other.context && seedId == other.seedId && savedAtMs == other.savedAtMs && offset == other.offset &&
-        listStart == other.listStart && nextStart == other.nextStart
+        listStart == other.listStart && nextStart == other.nextStart && heardMine == other.heardMine
 
-    override fun hashCode(): Int = listOf(entries, index, positionMs, durationMs, shuffle, order?.contentHashCode(), repeat, context, seedId, savedAtMs, offset, listStart, nextStart).hashCode()
+    override fun hashCode(): Int = listOf(entries, index, positionMs, durationMs, shuffle, order?.contentHashCode(), repeat, context, seedId, savedAtMs, offset, listStart, nextStart, heardMine).hashCode()
 
     companion object {
         private const val VERSION = 2
@@ -190,6 +196,7 @@ internal data class LastSession(
             savedAtMs: Long = 0L,
             listStart: Int = 0,
             nextStart: Int = -1,
+            heardMine: List<Heard> = emptyList(),
         ): LastSession? {
             if (entries.isEmpty() || index !in entries.indices) return null
             var lo = 0
@@ -214,6 +221,7 @@ internal data class LastSession(
                 offset = lo,
                 listStart = (listStart - lo).coerceIn(0, hi - lo - 1),
                 nextStart = if (nextStart < 0 || nextStart >= hi) -1 else (nextStart - lo).coerceAtLeast(0),
+                heardMine = heardMine,
             )
         }
 
@@ -232,39 +240,7 @@ internal data class LastSession(
             if (arr.length() == 0 || arr.length() > MAX_ENTRIES) return null
             // Saved before "heard" was (no "h"): what was before the current one, as Played showed then.
             val legacy = (0 until arr.length()).none { arr.getJSONObject(it).has("h") }
-            val entries = (0 until arr.length()).map { i ->
-                val t = arr.getJSONObject(i)
-                val ytId = t.str("ytId")
-                val mp3 = t.str("mp3")
-                // A local song: its own id, nothing else to play it by.
-                val local = ytId == null && mp3 == null && t.optBoolean("local", false) && LocalRules.isId(t.optString("id"))
-                when {
-                    ytId != null -> if (!validYtId(ytId)) return null
-                    local -> Unit
-                    !SessionPolicy.isValidMp3Url(mp3) -> return null
-                }
-                Entry(
-                    id = t.str("id") ?: return null,
-                    ytId = ytId ?: "",
-                    mp3 = mp3.takeIf { ytId == null },
-                    title = t.str("title"),
-                    artist = t.str("artist"),
-                    artworkUrl = t.str("artworkUrl"),
-                    by = t.str("by"),
-                    postUrl = t.str("postUrl"),
-                    section = when (t.optString("k")) {
-                        "q" -> NativeQueue.Section.QUEUED
-                        "a" -> NativeQueue.Section.AUTO
-                        else -> NativeQueue.Section.LIST
-                    },
-                    membersOnly = t.optBoolean("membersOnly", false),
-                    album = t.str("album"),
-                    artists = MusicText.creditsOf(t.optJSONArray("artists")),
-                    heard = t.optBoolean("h", false),
-                    local = local,
-                    mine = t.optBoolean("m", false),
-                )
-            }
+            val entries = (0 until arr.length()).map { i -> entryOf(arr.getJSONObject(i), validYtId) ?: return null }
             val index = o.getInt("index")
             if (index !in entries.indices) return null
             val order = o.optJSONArray("order")?.let { a -> IntArray(a.length()) { a.getInt(it) } }
@@ -296,9 +272,45 @@ internal data class LastSession(
                 offset = o.optInt("offset", 0).coerceAtLeast(0),
                 listStart = listStart,
                 nextStart = nextStart,
+                // A song in it that can't play is left out of it.
+                heardMine = o.optJSONArray("hm")?.let { a -> (0 until a.length()).mapNotNull { k -> a.getJSONObject(k).let { t -> entryOf(t, validYtId)?.let { Heard(it, t.str("after")) } } } }.orEmpty(),
             )
         } catch (e: Exception) { // not JSON, or a field of the wrong type
             null
+        }
+
+        /** One saved track, or null for one it can't play (neither a [validYtId] nor a Jukebox MP3 link, nor a local song). */
+        private fun entryOf(t: JSONObject, validYtId: (String) -> Boolean): Entry? {
+            val ytId = t.str("ytId")
+            val mp3 = t.str("mp3")
+            // A local song: its own id, nothing else to play it by.
+            val local = ytId == null && mp3 == null && t.optBoolean("local", false) && LocalRules.isId(t.optString("id"))
+            when {
+                ytId != null -> if (!validYtId(ytId)) return null
+                local -> Unit
+                !SessionPolicy.isValidMp3Url(mp3) -> return null
+            }
+            return Entry(
+                id = t.str("id") ?: return null,
+                ytId = ytId ?: "",
+                mp3 = mp3.takeIf { ytId == null },
+                title = t.str("title"),
+                artist = t.str("artist"),
+                artworkUrl = t.str("artworkUrl"),
+                by = t.str("by"),
+                postUrl = t.str("postUrl"),
+                section = when (t.optString("k")) {
+                    "q" -> NativeQueue.Section.QUEUED
+                    "a" -> NativeQueue.Section.AUTO
+                    else -> NativeQueue.Section.LIST
+                },
+                membersOnly = t.optBoolean("membersOnly", false),
+                album = t.str("album"),
+                artists = MusicText.creditsOf(t.optJSONArray("artists")),
+                heard = t.optBoolean("h", false),
+                local = local,
+                mine = t.optBoolean("m", false),
+            )
         }
 
         private fun JSONObject.str(key: String): String? {

@@ -68,7 +68,7 @@ class QueueRulesTest {
                 )
                 "removeRow" -> {
                     undo = undoOf(p, s.getString("id"), s.optString("from"))
-                    p.remove(p.ids.indexOf(s.getString("id")))
+                    p.queue.remove(p.ids.indexOf(s.getString("id")))
                 }
                 "undo" -> restore(p, undo!!, where)
                 "removeIds" -> p.queue.removeIds(strings(s.getJSONArray("ids")).toSet())
@@ -79,7 +79,7 @@ class QueueRulesTest {
                 "next" -> p.next()
                 "nextAuto" -> p.nextAuto()
                 "prev" -> p.prev(s.optLong("positionMs", 0L))
-                "remove" -> p.remove(p.ids.indexOf(s.getString("id")))
+                "remove" -> p.queue.remove(p.ids.indexOf(s.getString("id")))
                 "move" -> p.queue.move(p.ids.indexOf(s.getString("id")), if (s.has("toId")) p.ids.indexOf(s.getString("toId")) else s.getInt("to"))
                 "setShuffle" -> p.toggleShuffle(s.getBoolean("on"))
                 "setRepeat" -> {
@@ -121,6 +121,10 @@ class QueueRulesTest {
         if (s.has("list")) assertEquals("list in $where", strings(s.getJSONArray("list")), p.ids.toList())
         if (s.has("played")) assertEquals("played in $where", strings(s.getJSONArray("played")), p.played())
         if (s.has("mine")) assertEquals("mine in $where", strings(s.getJSONArray("mine")), p.ids.filterIndexed { i, _ -> p.serials[i] != 0L })
+        if (s.has("heardMine")) {
+            val want = s.getJSONArray("heardMine").let { a -> (0 until a.length()).map { strings(a.getJSONArray(it)) } }
+            assertEquals("heardMine in $where", want, p.queue.heardMine.map { listOf(it.id, it.after) })
+        }
         if (s.has("upNextIsKeptTop")) assertEquals("upNextIsKeptTop in $where", top, listOf(p.ids[p.current]) + up)
         if (s.has("top")) assertEquals("top in $where", strings(s.getJSONArray("top")), p.top())
         if (s.has("topSet")) assertEquals("topSet in $where", strings(s.getJSONArray("topSet")).sorted(), p.top().sorted())

@@ -127,6 +127,8 @@ internal object StateEncoder {
         // Queue indices like the above; nothing before the list start is of this list, and -1 is no autoplay on the way.
         state.put("listStart", if (count > 0) QueueInfo.listStart else 0)
         state.put("nextStart", if (count > 0) QueueInfo.nextStart else -1)
+        // Save's memory: the songs you queued that played, also those that left the queue (rule 8), each with the song before it.
+        state.put("heardMine", JSArray(QueueInfo.heardMine.map { (track, after) -> JSONObject().put("track", track).put("after", after ?: JSONObject.NULL) }))
         val ctx = QueueInfo.context
         if (ctx != null && count > 0) {
             val o = JSObject()

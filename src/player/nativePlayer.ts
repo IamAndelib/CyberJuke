@@ -223,8 +223,8 @@ export class NativePlayer implements Player {
     const prev = this.s.value;
     // Position ticks change nothing below: keep the same arrays and objects, so the
     // computeds built on them (upNextSections, playContext) don't change either.
-    const from = `${st.index}|${st.queueIds.join(',')}|${st.upNextIds.join(',')}|${st.upNextKinds}|${st.seedId}|${st.prevIndex?.join(',')}|${st.mineIndex?.join(',')}|${st.lapIndex?.join(',')}|${st.heardIndex?.join(',')}|${st.autoIndex?.join(',')}`;
-    let { queue, upNext, previous, mine, lap, seed } = prev;
+    const from = `${st.index}|${st.queueIds.join(',')}|${st.upNextIds.join(',')}|${st.upNextKinds}|${st.seedId}|${st.prevIndex?.join(',')}|${st.mineIndex?.join(',')}|${st.lapIndex?.join(',')}|${st.heardIndex?.join(',')}|${st.autoIndex?.join(',')}|${st.heardMine?.map((h) => `${h.track.id}>${h.after}`).join(',')}`;
+    let { queue, upNext, previous, mine, lap, heardMine, seed } = prev;
     if (from !== this.builtFrom) {
       this.builtFrom = from;
       queue = st.queueIds.map((id) => this.resolve(id));
@@ -258,6 +258,13 @@ export class NativePlayer implements Player {
       previous = rows(st.prevIndex);
       mine = st.mineIndex ?? [];
       lap = rows(st.lapIndex);
+      // The songs you queued that left the queue too: as the page knows them, else as native describes them.
+      heardMine = (st.heardMine ?? []).flatMap(({ track, after }) => {
+        const t = fromNative(track);
+        if (!t) return [];
+        const known = this.resolve(t.id);
+        return [{ track: hasAudio(known) ? known : t, after }];
+      });
       seed = st.seedId ? (prev.seed?.id === st.seedId ? prev.seed : this.resolve(st.seedId)) : null;
     }
     const index = st.index >= 0 && st.index < queue.length ? st.index : -1;
@@ -278,6 +285,7 @@ export class NativePlayer implements Player {
       previous,
       mine,
       lap,
+      heardMine,
       listStart: st.listStart ?? 0,
       nextStart: st.nextStart ?? -1,
       context,
@@ -325,6 +333,8 @@ export class NativePlayer implements Player {
       previous: [],
       mine: queued.map((_, k) => i + 1 + k),
       lap: [],
+      // Native starts Save's memory over with the new list.
+      heardMine: [],
       context,
       seed: tracks[i],
       currentAuto: false,
@@ -446,6 +456,8 @@ export class NativePlayer implements Player {
   async removeIds(ids: string[]): Promise<void> {
     const unique = [...new Set(ids)];
     for (let k = 0; k < unique.length; k += BRIDGE_MAX_ITEMS) await JukePlayer.removeIds({ ids: unique.slice(k, k + BRIDGE_MAX_ITEMS) });
+    // Ids only in Save's memory change nothing native reports by itself.
+    this.resync();
   }
 
   async addToQueue(all: Track[]): Promise<void> {

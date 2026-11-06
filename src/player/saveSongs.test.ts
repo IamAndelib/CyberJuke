@@ -5,7 +5,7 @@ import { saveSongs } from './saveSongs';
 
 const t = (id: string) => ({ id }) as Track;
 const ids = (xs: Track[]) => xs.map((x) => x.id);
-const base = { index: 0, listStart: 0, nextStart: -1, shuffle: false, shown: [] as Track[], mine: [] as number[], gone: [] };
+const base = { index: 0, listStart: 0, nextStart: -1, shuffle: false, shown: [] as Track[], mine: [] as number[], heardMine: [] };
 
 describe('saveSongs', () => {
   it('saves the current list, not the history before it nor the list on the way', () => {
@@ -35,24 +35,24 @@ describe('saveSongs', () => {
 
   it('puts a song you queued that left the queue right after the song it followed, else at the end', () => {
     const queue = ['a', 'b', 'c'].map(t);
-    const gone = [
+    const heardMine = [
       { track: t('m1'), after: 'a' },
       { track: t('m2'), after: 'm1' },
       { track: t('m3'), after: 'x' },
       { track: t('m4'), after: 'a' },
     ];
     // m4 followed a in a later lap: after what a led to before.
-    expect(ids(saveSongs({ ...base, queue, gone }))).toEqual(['a', 'm1', 'm2', 'm4', 'b', 'c', 'm3']);
+    expect(ids(saveSongs({ ...base, queue, heardMine }))).toEqual(['a', 'm1', 'm2', 'm4', 'b', 'c', 'm3']);
   });
 
   it('leaves out a remembered song still in the queue, and saves each song once', () => {
     const queue = ['a', 'm1', 'b', 'a'].map(t);
-    const gone = [
+    const heardMine = [
       { track: t('m1'), after: 'a' },
       { track: t('m2'), after: 'b' },
       { track: t('m2'), after: 'a' },
     ];
-    expect(ids(saveSongs({ ...base, queue, mine: [1], gone }))).toEqual(['a', 'm1', 'b', 'm2']);
+    expect(ids(saveSongs({ ...base, queue, mine: [1], heardMine }))).toEqual(['a', 'm1', 'b', 'm2']);
   });
 
   it('saves at most PLAYLIST_MAX_SONGS', () => {

@@ -196,6 +196,7 @@ export class WebPlayer implements Player {
       previous: this.q.previousIndices().map(row),
       mine: this.q.mineIndices(),
       lap: this.q.lapIndices().map(row),
+      heardMine: this.q.heardMine.map(({ item, after }) => ({ track: item, after })),
       listStart: this.q.listStartIndex,
       nextStart: this.q.nextStartIndex,
       context: this.context,

@@ -2,6 +2,7 @@ package io.github.iamandelib.cyberjuke.playback
 
 import android.os.Bundle
 import androidx.media3.session.SessionCommand
+import org.json.JSONObject
 import java.util.concurrent.CopyOnWriteArraySet
 
 /**
@@ -148,6 +149,10 @@ internal object QueueInfo {
 
     @Volatile
     var nextStart: Int = -1
+
+    /** Save's memory ([NativeQueue.heardMine]): each song you queued that played, as a NativeTrack, and the id of the song before it. */
+    @Volatile
+    var heardMine: List<Pair<JSONObject, String?>> = emptyList()
 
     /** The play context of the current list (C2); null before the first list. */
     @Volatile

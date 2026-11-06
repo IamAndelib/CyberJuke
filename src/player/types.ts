@@ -157,6 +157,12 @@ export const mayAutoplay = (repeat: RepeatMode): boolean => repeat !== 'all';
  */
 export const firstBatchOfRadio = (context: PlayContext | null, count: number, queued: number): boolean => context?.mode === 'radio' && count - queued === 1;
 
+/** A song you queued that played, and the id of the song that played before it (null: none). */
+export interface HeardMine {
+  track: Track;
+  after: string | null;
+}
+
 export interface PlayerState {
   /** Full queue in list order. */
   queue: Track[];
@@ -183,6 +189,8 @@ export interface PlayerState {
    * the current one, without the songs you queued (at most UP_NEXT_MAX, the first ones). Empty otherwise.
    */
   lap: UpNextItem[];
+  /** Save's memory (rule 8): the songs you queued that played since you last started something, also those that left the queue, but those removed with ✕. */
+  heardMine: HeardMine[];
   /** Queue index of the current list's first song: the songs before it are history, not of this list. */
   listStart: number;
   /** Queue index of the first song of the autoplay on the way, -1 if none. */
@@ -217,6 +225,7 @@ export const EMPTY_STATE: PlayerState = {
   previous: [],
   mine: [],
   lap: [],
+  heardMine: [],
   listStart: 0,
   nextStart: -1,
   context: null,

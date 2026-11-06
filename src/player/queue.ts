@@ -52,11 +52,14 @@
  *  - Repeat all never brings back a song you queued (rule 8): when the list loops (next() from its
  *    last song to the first in play order that isn't a heard one of them), or a tap on a "From the top"
  *    row enters the next lap (skipTo's `lap`), the heard ones leave, all but the playing one. Previous walks back: they stay.
+ *  - Save's memory (heardMine, rule 8): each song you queued as it first plays, with the song current before it, kept
+ *    when Repeat all takes it out of the queue; a new list (setList) starts it over, ✕ forgets one and its Undo brings it back,
+ *    and removeIds forgets those ids (signing out: members-only songs).
  *
  * Up next labels each track by its own kind, never by its place: queued by you, the
  * list, autoplay (sectionsOf in ./types).
  */
-import { UP_NEXT_MAX } from '../core/guards';
+import { HEARD_MINE_MAX, UP_NEXT_MAX } from '../core/guards';
 import { shuffled } from '../core/shuffle';
 import type { RepeatMode } from './native';
 import type { Undo, UpNextKind as Section } from './types';
@@ -72,6 +75,12 @@ interface Entry<T> {
   auto?: boolean;
   /** Queued by you (queueNext): the mark stays after it plays. */
   mine?: true;
+}
+
+/** A song you queued that played, and the id of the song that played before it (null: none). */
+interface Heard<T> {
+  item: T;
+  after: string | null;
 }
 
 const RESTART_THRESHOLD_MS = 3000;
@@ -99,6 +108,11 @@ export class Queue<T extends Identified> {
   /** The ids of the song the current list's marker last left and of the last one that left the list on the way (until moving on): an Undo of one stays in its list. */
   private listLeft: string | null = null;
   private nextLeft: string | null = null;
+  /** The songs you queued as each first played since the list started (heardMine), by id; [forgotten]: those removed with ✕. */
+  private memory: Heard<T>[] = [];
+  private forgotten = new Set<string>();
+  /** The id of the song current before this one. */
+  private lastId: string | null = null;
   private nextKey = 1;
   shuffle = false;
   repeat: RepeatMode = 'off';
@@ -156,6 +170,11 @@ export class Queue<T extends Identified> {
       .map((e) => this.list.indexOf(e));
   }
 
+  /** Save's memory (rule 8): the songs you queued that played since this list started, but those removed with ✕ (an Undo brings one back). */
+  get heardMine(): Heard<T>[] {
+    return this.memory.filter((h) => !this.forgotten.has(h.item.id));
+  }
+
   /** List indices of the tracks you queued, played or not. */
   mineIndices(): number[] {
     return this.list.flatMap((e, i) => (e.mine ? [i] : []));
@@ -210,6 +229,8 @@ export class Queue<T extends Identified> {
    * An empty list clears everything.
    */
   setList(items: T[], startIndex = 0): T | null {
+    this.memory = [];
+    this.forgotten.clear();
     if (!items.length) {
       this.clear();
       return null;
@@ -384,6 +405,7 @@ export class Queue<T extends Identified> {
   remove(index: number): boolean | 'stopped' {
     if (!inRange(index, this.list)) return false;
     const e = this.list[index];
+    if (e.mine) this.forgotten.add(e.item.id);
     let changed: boolean | 'stopped' = false;
     if (e === this.cur) {
       const next = this.order[this.order.indexOf(e) + 1];
@@ -491,7 +513,10 @@ export class Queue<T extends Identified> {
     const onWay = kind === 'list' && way >= 0 ? this.order.findIndex((e, k) => k > p && this.list.indexOf(e) >= way) : -1;
     if (onWay >= 0) at = Math.min(at, onWay);
     const entry: Entry<T> = auto ? { ...this.entry(item), auto: true } : this.entry(item);
-    if (kind === 'queued' || undo.mine) entry.mine = true;
+    if (kind === 'queued' || undo.mine) {
+      entry.mine = true;
+      this.forgotten.delete(item.id);
+    }
     if (kind === 'queued') this.queued.add(entry);
     if (kind === 'played' || undo.heard) this.hear(entry);
     const follower = this.order[at];
@@ -520,6 +545,8 @@ export class Queue<T extends Identified> {
    */
   removeIds(ids: Iterable<string>): boolean | 'stopped' {
     const gone = new Set(ids);
+    // Save's memory forgets them too, also those no longer in the queue.
+    for (const id of gone) this.forgotten.add(id);
     if (!this.list.some((e) => gone.has(e.item.id))) return false;
     const keep = (e: Entry<T>) => !gone.has(e.item.id);
     let changed: boolean | 'stopped' = false;
@@ -630,6 +657,7 @@ export class Queue<T extends Identified> {
     if (on) [this.listStart, this.nextStart, this.listLeft, this.nextLeft] = [this.list.indexOf(this.nextStart!) < this.list.indexOf(this.cur) ? this.nextStart : this.cur, null, null, null];
     this.queued.delete(this.cur);
     this.hear(this.cur);
+    this.remember(this.cur);
     const visit = this.visit;
     if (visit && visit !== this.cur) {
       this.visit = null;
@@ -640,6 +668,17 @@ export class Queue<T extends Identified> {
   /** A marker at list index `i`: the first song from there that isn't yours, as the songs you queue belong to no list (rule 8, S14). */
   private firstAt(i: number): Entry<T> {
     return this.list.slice(i).find((e) => !e.mine) ?? this.list[i];
+  }
+
+  /** A song you queued plays: Save remembers it (again, if removed), with the song before it, once. */
+  private remember(e: Entry<T>): void {
+    const id = e.item.id;
+    if (e.mine) {
+      this.forgotten.delete(id);
+      if (!this.memory.some((h) => h.item.id === id)) this.memory.push({ item: e.item, after: this.lastId });
+      if (this.memory.length > HEARD_MINE_MAX) this.memory.shift();
+    }
+    this.lastId = id;
   }
 
   private hear(e: Entry<T>): void {

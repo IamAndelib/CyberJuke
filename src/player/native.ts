@@ -48,6 +48,8 @@ export interface NativeState {
   heardIndex?: number[];
   /** The list indices of the prevIndex and lapIndex entries added by autoplay, for an Undo. Absent from older natives: none. */
   autoIndex?: number[];
+  /** Save's memory (rule 8): the songs you queued that played since the list started, also those that left the queue, each with the id of the song before it; at most 200. Absent from older natives: none. */
+  heardMine?: { track: NativeTrack; after: string | null }[];
   /** Queue index of the current list's first song, and of the first song of the autoplay on the way (-1: none). Absent from older natives: 0 and -1. */
   listStart?: number;
   nextStart?: number;

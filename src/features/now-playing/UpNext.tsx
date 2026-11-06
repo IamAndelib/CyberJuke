@@ -1,7 +1,7 @@
 import { Fragment } from 'preact';
 import { signal } from '@preact/signals';
 import { useLayoutEffect, useRef } from 'preact/hooks';
-import { autoplayLabel, currentId, currentPlaysOffline, currentTrack, isPlaying, lapTracks, player, playContext, previousTracks, queuedHeard, repeatMode, saveSongs, shuffleOn, undoOf, upNextSections, type PlayContext, type UpItem, type UpNextKind } from '../../player';
+import { autoplayLabel, currentId, currentPlaysOffline, currentTrack, isPlaying, lapTracks, player, playContext, previousTracks, repeatMode, saveSongs, shuffleOn, undoOf, upNextSections, type PlayContext, type UpItem, type UpNextKind } from '../../player';
 import { isLocal, type Track } from '../../data/model';
 import { online } from '../../core/network';
 import { settings } from '../../stores/library';
@@ -92,7 +92,7 @@ function RowBody({ track, playing }: { track: Track; playing?: boolean }) {
  * play order when shuffled.
  */
 function saveQueue(shown: Track[]): void {
-  const songs = saveSongs({ ...player.state.peek(), shown, gone: queuedHeard() });
+  const songs = saveSongs({ ...player.state.peek(), shown });
   askName({
     title: 'New playlist',
     note: `With ${plural(songs.length, 'song')}`,

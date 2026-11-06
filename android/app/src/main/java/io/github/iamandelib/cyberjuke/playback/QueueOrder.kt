@@ -161,6 +161,9 @@ internal interface QueueHost<T> {
  * - Repeat all never brings back a song you queued (rule 8): when the list loops, or a tap on a
  *   "From the top" row enters the next lap, the heard ones leave ([onTransition], [skipTo]), and the
  *   loop starts at the first song that stays ([startLap]).
+ * - Save's memory ([heardMine], rule 8): each song you queued as it first plays, with the song current before it,
+ *   kept when Repeat all takes it out of the queue; a new list ([setList]) starts it over, ✕ ([remove]) forgets one
+ *   and its Undo brings it back, and [removeIds] forgets those ids (signing out: members-only songs).
  *
  * Pending items are tracked by serial (not mediaId), so the same track queued twice stays two
  * entries. [pending]'s iteration order is their play order. Not thread-safe: call it on the
@@ -197,6 +200,45 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
 
     /** Repeat all turned on while a song before the current list played (Previous took you back to it), by uid: it leaves once another plays (0: none). */
     private var visit = 0L
+
+    /** A song you queued ([id], [item]) that played, and the id of the song current before it (null: none). */
+    data class Heard<T>(val id: String, val item: T, val after: String?)
+
+    /** The songs you queued as each first played since the list started ([heardMine]); [forgotten]: the ids removed with ✕. */
+    private val memory = ArrayList<Heard<T>>()
+    private val forgotten = HashSet<String>()
+
+    /** The id of the item current before this one (null: none). */
+    private var lastId: String? = null
+
+    /**
+     * Save's memory (rule 8): the songs you queued that played since this list started, in the order they first
+     * played, also those Repeat all took out of the queue; not those removed with ✕ (an Undo brings one back).
+     * Saved with the session ([restoreSession]).
+     */
+    val heardMine: List<Heard<T>> get() = memory.filter { it.id !in forgotten }
+
+    /** ✕ on the item at [index]: it goes, and a song you queued leaves Save's memory too ([heardMine]). */
+    fun remove(index: Int) {
+        if (host.serialAt(index) != 0L) forgotten.add(host.idAt(index))
+        host.removeAt(index)
+    }
+
+    /** A song you queued is current: Save remembers it (again, if removed), with the song before it, once. */
+    private fun remember(index: Int) {
+        val id = host.idAt(index)
+        if (host.serialAt(index) != 0L) {
+            forgotten.remove(id)
+            if (memory.none { it.id == id }) memory.add(Heard(id, host.itemAt(index), lastId))
+            if (memory.size > HEARD_MINE_MAX) memory.removeAt(0)
+        }
+        lastId = id
+    }
+
+    /** An Undo put back a song you queued at [at]: Save remembers it again. */
+    private fun unforget(at: Int) {
+        if (at in 0 until host.count) forgotten.remove(host.idAt(at))
+    }
 
     /** List index of the current list's first song. */
     fun listStartIndex(): Int = indexOfUid(listStart).coerceAtLeast(0)
@@ -284,6 +326,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         val cur = host.currentIndex
         if (cur !in 0 until host.count) return
         hear(cur)
+        remember(cur)
         if (movesOn(cur)) moveOn(cur)
     }
 
@@ -374,6 +417,8 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
      */
     fun setList(items: List<T>, start: Int, positionMs: Long = 0L) {
         prune()
+        memory.clear()
+        forgotten.clear()
         val keptIdx = pendingIndices()
         val kept = keptIdx.map { host.itemAt(it) }
         val keptSerials = keptIdx.map { host.serialAt(it) }
@@ -410,11 +455,14 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
      * (shuffle on). The queued items stay next, in the order they were going to play; the
      * [heard] ones (one flag per item, or none) are heard again; [listStart] and [nextStart] are
      * the list indices of the markers (0, -1: unset). The [mine] ones (one flag per item, or none)
-     * keep the queued-by-you mark, a serial, without waiting again.
+     * keep the queued-by-you mark, a serial, without waiting again. Save's memory comes back as [heardMine].
      */
-    fun restoreSession(items: List<T>, sections: List<Section>, start: Int, positionMs: Long, order: IntArray?, heard: List<Boolean> = emptyList(), listStart: Int = 0, nextStart: Int = -1, mine: List<Boolean> = emptyList()) {
+    fun restoreSession(items: List<T>, sections: List<Section>, start: Int, positionMs: Long, order: IntArray?, heard: List<Boolean> = emptyList(), listStart: Int = 0, nextStart: Int = -1, mine: List<Boolean> = emptyList(), heardMine: List<Heard<T>> = emptyList()) {
         require(sections.size == items.size) { "one section per item" }
         pending.clear()
+        memory.clear()
+        memory.addAll(heardMine.takeLast(HEARD_MINE_MAX))
+        forgotten.clear()
         this.heard.clear()
         lap.clear()
         visit = 0L
@@ -573,6 +621,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
                 pending.clear()
                 pending.addAll(order)
                 host.insertTagged(at, listOf(item), listOf(serial))
+                unforget(at)
                 if (host.shuffleEnabled) enforceShuffleOrder() else enforceLinearOrder()
             }
             Section.AUTO -> {
@@ -610,8 +659,10 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     }
 
     /** Inserts [item] at [at]: an autoplay item ([auto]), else a list one, with the queued-by-you mark if [mine]. */
-    private fun insert(at: Int, item: T, mine: Boolean, auto: Boolean) =
+    private fun insert(at: Int, item: T, mine: Boolean, auto: Boolean) {
         if (auto) host.insertAuto(at, listOf(item)) else host.insertTagged(at, listOf(item), listOf(if (mine) nextSerial++ else 0L))
+        if (mine) unforget(at)
+    }
 
     /**
      * Undo of removing a played item: back among the played, right before the song that followed it
@@ -691,6 +742,8 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
      * pauses).
      */
     fun removeIds(ids: Set<String>): Removal {
+        // Save's memory forgets them too, also those no longer in the queue.
+        forgotten.addAll(ids)
         if (ids.isEmpty() || host.count == 0) return Removal(0, false)
         prune()
         var stopped = false
@@ -976,5 +1029,10 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         val linear = IntArray(n) { it }
         val desired = QueueOrder.placeNext(linear, host.currentIndex, pendingIndices())
         for ((from, to) in QueueOrder.moves(desired)) host.moveItem(from, to)
+    }
+
+    companion object {
+        /** The most songs Save's memory keeps ([heardMine]; the oldest go first), as the web Queue's. */
+        const val HEARD_MINE_MAX = 200
     }
 }
