@@ -295,7 +295,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     fun onTransition(forward: Boolean): Boolean {
         if (replacing) return false
         val cur = playPos(host.currentIndex)
-        val looped = forward && host.repeatAll && cur >= 0 && cur < playPos(indexOfUid(lastUid))
+        val looped = forward && host.repeatAll && cur >= 0 && cur <= playPos(indexOfUid(lastUid))
         val movedOn = looped && startLap()
         hearCurrent()
         if (looped) dropHeardMine()

@@ -76,6 +76,23 @@ class QueueOpsTest {
     }
 
     @Test
+    fun aCrossfadeIntoTheLoopOntoThePlayingSongStillLoops() {
+        // Only the playing song stays at the loop: the fade lands on it, and the hand-over's move onto it is the loop.
+        val p = player(listOf("a", "c"))
+        p.queue.queueNext(listOf("M"))
+        p.next()
+        p.next()
+        p.remove(p.ids.indexOf("a"))
+        p.repeat = "all"
+        p.queue.onRepeatModeChanged(true)
+        val c = p.ids.indexOf("c")
+        assertEquals(c, p.queue.landing(p.ids.indexOf("M")))
+        p.current = c
+        p.queue.onTransition(forward = true)
+        assertEquals(listOf("c"), p.ids)
+    }
+
+    @Test
     fun aRefreshedLinkKeepsTheSongPlayingWithShuffleOff() {
         val p = player(listOf("a", "b", "c", "d"), start = 1)
         p.queue.replace(1, "b")
