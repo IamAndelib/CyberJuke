@@ -468,7 +468,7 @@ describe('Queue: editing', () => {
     expect(ids(q.items)).toEqual(['a', 'b']);
     expect(q.queuedCount).toBe(0);
     expect(q.removeIds(['nope'])).toBe(false);
-    expect(q.removeIds(['a', 'b'])).toBe(true);
+    expect(q.removeIds(['a', 'b'])).toBe('stopped'); // none stays: nothing plays
     expect(q.current).toBeNull();
     expect(q.length).toBe(0);
   });

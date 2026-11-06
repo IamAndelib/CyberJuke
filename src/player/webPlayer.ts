@@ -484,7 +484,8 @@ export class WebPlayer implements Player {
     if (TEST_HOOKS) window.__cyberjukePlayerCalls?.push(['removeIds', ids]);
     const changed = this.q.removeIds(ids);
     this.publish();
-    if (changed) await this.loadCurrent(this.s.value.isPlaying, true);
+    // With nothing after it, the one before it waits, paused (PlaybackService's removeIds).
+    if (changed) await this.loadCurrent(changed !== 'stopped' && this.s.value.isPlaying, true);
   }
 
   async addToQueue(tracks: Track[]): Promise<void> {

@@ -508,20 +508,22 @@ export class Queue<T extends Identified> {
 
   /**
    * Remove every item with one of these ids (signing out drops members-only tracks).
-   * When the current one goes, the next one in play order that stays becomes current
-   * (none: nothing plays). Returns true when the current track changed.
+   * When the current one goes, the next one in play order that stays becomes current; with none,
+   * the one before it, which then waits (`'stopped'`, as Media3's: S11), else nothing plays.
+   * Returns whether the current track changed.
    */
-  removeIds(ids: Iterable<string>): boolean {
+  removeIds(ids: Iterable<string>): boolean | 'stopped' {
     const gone = new Set(ids);
     if (!this.list.some((e) => gone.has(e.item.id))) return false;
-    let changed = false;
-    if (this.cur && gone.has(this.cur.item.id)) {
-      const p = this.order.indexOf(this.cur);
-      this.cur = this.order.slice(p + 1).find((e) => !gone.has(e.item.id)) ?? null;
-      this.settle();
-      changed = true;
-    }
     const keep = (e: Entry<T>) => !gone.has(e.item.id);
+    let changed: boolean | 'stopped' = false;
+    if (this.cur && !keep(this.cur)) {
+      const p = this.order.indexOf(this.cur);
+      const next = this.order.slice(p + 1).find(keep);
+      this.cur = next ?? this.order.slice(0, p).reverse().find(keep) ?? null;
+      this.settle();
+      changed = next ? true : 'stopped';
+    }
     this.unmark(new Set(this.list.filter((e) => !keep(e))));
     for (const e of this.list) if (!keep(e)) this.queued.delete(e);
     this.list = this.list.filter(keep);
