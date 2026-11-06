@@ -36,12 +36,13 @@ internal object StateEncoder {
         val kinds = StringBuilder()
         val previous = ArrayList<Int>()
         val lap = ArrayList<Int>()
-        // The Up next entries heard already (Previous walked back over them): an Undo keeps it.
+        // The Up next entries Previous walked back over (heard in this lap: Repeat all's next lap is all to come): an Undo keeps it.
         val heardAhead = ArrayList<Int>()
         val pending = QueueInfo.pendingSerials
-        val heard = QueueInfo.heardUids
+        val (heard, lap) = QueueInfo.heardUids to QueueInfo.lapUids
         fun serialAt(i: Int) = c.getMediaItemAt(i).mediaMetadata.extras?.getLong(QueueCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L
-        fun heardAt(i: Int) = (c.getMediaItemAt(i).mediaMetadata.extras?.getLong(QueueCommands.EXTRA_UID, 0L) ?: 0L).let { it != 0L && it in heard }
+        fun uidAt(i: Int) = c.getMediaItemAt(i).mediaMetadata.extras?.getLong(QueueCommands.EXTRA_UID, 0L) ?: 0L
+        fun heardAt(i: Int, uids: Set<Long> = heard) = uidAt(i).let { it != 0L && it in uids }
         fun autoAt(i: Int) = c.getMediaItemAt(i).mediaMetadata.extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) == true
         // The songs you queued keep their serial after they play: the "queued by you" mark (rule 8).
         val mine = (0 until count).filter { serialAt(it) != 0L }
@@ -64,7 +65,7 @@ internal object StateEncoder {
                         else -> 'l'
                     },
                 )
-                if (heardAt(i)) heardAhead.add(i)
+                if (heardAt(i, lap)) heardAhead.add(i)
                 i = timeline.getNextWindowIndex(i, repeat, shuffle)
             }
             // The heard tracks before it in play order ("Played"), nearest first, then sent oldest

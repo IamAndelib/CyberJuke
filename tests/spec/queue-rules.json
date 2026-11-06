@@ -2279,6 +2279,65 @@
       ]
     },
     {
+      "name": "Undo of the last suggestion ahead, after Previous back over list songs: it goes back after them, last",
+      "list": ["a1", "a2", "a3", "a4"],
+      "start": 0,
+      "steps": [
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "addAuto", "ids": ["t1", "t2"] },
+        { "op": "next" },
+        { "op": "remove", "id": "t2" },
+        { "op": "prev" },
+        { "op": "prev" },
+        { "op": "expect", "current": "a3", "upNext": ["a4", "t1"] },
+        { "op": "removeRow", "id": "t1" },
+        { "op": "undo" },
+        { "op": "expect", "current": "a3", "upNext": ["a4", "t1"] }
+      ]
+    },
+    {
+      "name": "Undo of the last suggestion ahead, after Previous back over list songs, shuffled: it goes back after them, last",
+      "list": ["a1", "a2", "a3", "a4"],
+      "start": 0,
+      "steps": [
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "addAuto", "ids": ["t1", "t2"] },
+        { "op": "next" },
+        { "op": "remove", "id": "t2" },
+        { "op": "prev" },
+        { "op": "prev" },
+        { "op": "setShuffle", "on": true },
+        { "op": "expect", "current": "a3", "upNext": ["a4", "t1"] },
+        { "op": "removeRow", "id": "t1" },
+        { "op": "undo" },
+        { "op": "expect", "current": "a3", "upNext": ["a4", "t1"] }
+      ]
+    },
+    {
+      "name": "Repeat all, next lap: Undo of an Up next song keeps it still to come, so shuffle on and off keeps list order",
+      "list": ["a", "b", "c", "d", "e"],
+      "start": 0,
+      "repeat": "all",
+      "steps": [
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "next" },
+        { "op": "expect", "current": "a", "upNext": ["b", "c", "d", "e"] },
+        { "op": "removeRow", "id": "d" },
+        { "op": "undo" },
+        { "op": "expect", "upNext": ["b", "c", "d", "e"] },
+        { "op": "setShuffle", "on": true },
+        { "op": "setShuffle", "on": false },
+        { "op": "expect", "upNext": ["b", "c", "d", "e"] }
+      ]
+    },
+    {
       "name": "a list started mid-way still starts there",
       "list": ["a", "b", "c", "d", "e"],
       "start": 2,

@@ -168,8 +168,8 @@ class QueueRulesTest {
             else -> up
         }
         val i = p.ids.indexOf(id)
-        val heard = from == "played" || id in played || p.uids[i] in p.queue.heardUids
-        val next = if (from == "played" || from == "top") behindAfter(played, lap, id) else rows.getOrNull(rows.indexOf(id) + 1)
+        val heard = from == "played" || id in played || p.uids[i] in p.queue.lapUids
+        val next = if (from == "played" || from == "top") behindAfter(p, played, lap, id) else rows.getOrNull(rows.indexOf(id) + 1)
         val way = p.queue.nextStartIndex()
         val kind = when {
             from == "top" && heard -> "played"
@@ -180,10 +180,11 @@ class QueueRulesTest {
         return Undo(id, kind, next, at, p.serials[i] != 0L, p.auto[i], heard, i < p.queue.listStartIndex())
     }
 
-    /** The song after [id] in play order behind the current one: Played shows the heard ones, "From the top" all but the songs you queued. */
-    private fun behindAfter(played: List<String>, lap: List<String>, id: String): String? {
+    /** The song after [id] in play order behind the current one: Played shows the heard ones, "From the top" all but the songs you queued (the page's behindAfter). */
+    private fun behindAfter(f: FakePlayer, played: List<String>, lap: List<String>, id: String): String? {
         fun after(rows: List<String>) = rows.indexOf(id).takeIf { it >= 0 }?.let { rows.getOrNull(it + 1) }
         val (p, l) = after(played) to after(lap)
+        if (p != null && l != null && !f.shuffle) return if (f.ids.indexOf(p) < f.ids.indexOf(l)) p else l
         return if (p != null && p !in lap) p else l ?: p
     }
 

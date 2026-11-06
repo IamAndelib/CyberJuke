@@ -138,6 +138,10 @@ internal object QueueInfo {
     @Volatile
     var heardUids: Set<Long> = emptySet()
 
+    /** The uids heard in this lap ([NativeQueue.lapUids]): the Up next ones are the songs Previous walked back over. */
+    @Volatile
+    var lapUids: Set<Long> = emptySet()
+
     /** Where the list you're in starts in the queue, and where what comes on after it does (-1: nothing): [NativeQueue.listStartIndex], [NativeQueue.nextStartIndex]. */
     @Volatile
     var listStart: Int = 0

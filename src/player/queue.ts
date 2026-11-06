@@ -190,13 +190,13 @@ export class Queue<T extends Identified> {
   /**
    * Up next (at most `max` tracks), in play order, as the player publishes it: each with its
    * list index, `queued` for the leading run queued by the user, `auto` for autoplay, `heard`
-   * for one Previous walked back over.
+   * for one Previous walked back over (heard in this lap: Repeat all's next lap is all to come).
    */
   upNextItems(max = UP_NEXT_MAX): { item: T; index: number; queued?: true; auto?: true; heard?: true }[] {
     const n = this.queuedCount;
     return this.upNextIndices(max).map((index, k) => {
       const e = this.list[index];
-      return { item: e.item, index, ...(k < n ? { queued: true as const } : e.auto && { auto: true as const }), ...(this.heard.has(e) && { heard: true as const }) };
+      return { item: e.item, index, ...(k < n ? { queued: true as const } : e.auto && { auto: true as const }), ...(this.lap.has(e) && { heard: true as const }) };
     });
   }
 
@@ -437,8 +437,8 @@ export class Queue<T extends Identified> {
    * Undo of a remove: put `item` back as it was (`undo`: undoOf), as its kind, right before the first track
    * after the current one that is the song that followed it (by entry: its list index, if the id there still
    * matches, else the first with its id; a queued one only before a queued one, the others never before one);
-   * else at the end of its section: after the queued run, after the last track ahead of its own tag (else the
-   * queued run), or at the very end. Never at or before the current track, and a list song (`list`, its
+   * else at the end of its section: after the queued run, after the last list track ahead (else the
+   * queued run), or at the very end (a suggestion). Never at or before the current track, and a list song (`list`, its
    * suggestions too) never at or past the start of what's on the way, in play order and in list order (S6),
    * and one of an earlier list (`earlier`) never after the current list's marker in list order.
    * A played one goes back before that song among every track before the current one, heard or not, else right
@@ -468,10 +468,10 @@ export class Queue<T extends Identified> {
     let at = before ? this.order.findIndex((e, k) => (named ? e === named : e.item.id === before.id) && fits(e, k)) : -1;
     if (at < 0 && behind) at = p;
     if (at < 0) {
-      // The end of the section: after its last track ahead, else where it would start.
+      // The end of the section: after its last track ahead, else where it would start; a suggestion at the very end (a list one then before what's on the way).
       at = p + 1 + this.queuedCount;
-      if (kind === 'autoplay') at = this.order.length;
-      else if (kind === 'list') for (let k = at; k < this.order.length; k++) if (of(this.order[k]) === (auto ? 'autoplay' : 'list')) at = k + 1;
+      if (auto) at = this.order.length;
+      else if (kind === 'list') for (let k = at; k < this.order.length; k++) if (of(this.order[k]) === 'list') at = k + 1;
     }
     const way = this.nextStartIndex;
     const onWay = kind === 'list' && way >= 0 ? this.order.findIndex((e, k) => k > p && this.list.indexOf(e) >= way) : -1;

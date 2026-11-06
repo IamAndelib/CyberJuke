@@ -178,6 +178,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
 
     /** The uids heard in this lap: all of them until Repeat all starts the list over ([dropHeardMine]; a restored session's too). */
     private val lap = HashSet<Long>()
+    val lapUids: Set<Long> get() = lap
 
     /**
      * Where the current list starts and where the one on the way does, by uid (0: unset, so the
@@ -525,7 +526,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
      * of the current one (play order) that is the song that followed it: the item at [beforeIndex] if it
      * still has id [beforeId] (a station's next round repeats ids), else the first with that id (a queued
      * item only before a queued one, the others never before one); with no such item, at the end of that
-     * section (a list item after the last item ahead of its own tag). It never lands at or before the
+     * section (a list item after the last list item ahead, its suggestion last). It never lands at or before the
      * current item, a queued item never lands after list items, and a list item (its suggestions too,
      * [auto]) never at or past the start of what's on the way (S6). It keeps the queued-by-you mark
      * ([mine]: it played, then Previous brought it ahead again; a serial, never pending: it has played),
@@ -581,8 +582,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
             Section.LIST -> if (!host.shuffleEnabled) {
                 // Linear: [current][queued], then the list and autoplay (a tapped one among the
                 // list); the end of the list part is after its last item ahead, and before what's on the way.
-                val tag = if (auto) Section.AUTO else Section.LIST
-                val end = anchor ?: up.lastOrNull { sectionAt(it) == tag }?.plus(1) ?: afterQueuedRun()
+                val end = anchor ?: if (auto) host.count else up.lastOrNull { sectionAt(it) == Section.LIST }?.plus(1) ?: afterQueuedRun()
                 val at = nextStartIndex().takeIf { it >= 0 }?.coerceAtMost(end) ?: end
                 insert(at, item, mine, auto)
                 if (heard) hear(at)
@@ -629,13 +629,13 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         // Inserted at a random place in the shuffle order (Media3's): right before what follows it.
         val order = host.shuffleOrder()?.toMutableList() ?: return
         order.remove(at)
-        order.add(order.indexOf(if (next >= at) next + 1 else next), at)
+        order.add(order.indexOf(next + 1), at)
         host.setShuffleOrder(QueueOrder.placeNext(order.toIntArray(), host.currentIndex, pendingIndices()))
     }
 
     /**
      * Shuffle on: the list index only matters later; the shuffle order decides when it plays: before
-     * [anchor], else after the last list item ahead (of its own tag), else after the queued run; never
+     * [anchor], else after the last list item ahead, else after the queued run (a suggestion: last); never
      * at or past the first item on the way.
      */
     private fun restoreShuffledListItem(item: T, anchor: Int?, mine: Boolean, auto: Boolean, heard: Boolean, earlier: Boolean) {
@@ -651,10 +651,10 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         val curPos = rest.indexOf(cur)
         val pend = pendingIndices().toHashSet()
         val way = nextStartIndex()
-        val pos = anchorNow?.let { rest.indexOf(it) }?.takeIf { it > curPos } ?: run {
+        val pos = anchorNow?.let { rest.indexOf(it) }?.takeIf { it > curPos } ?: if (auto) rest.size else run {
             // After the last list item ahead, else right after the current item's queued run.
             var lastList = -1
-            for (k in curPos + 1 until rest.size) if (rest[k] !in pend && host.isAutoAt(rest[k]) == auto) lastList = k
+            for (k in curPos + 1 until rest.size) if (rest[k] !in pend && !host.isAutoAt(rest[k])) lastList = k
             if (lastList >= 0) {
                 lastList + 1
             } else {

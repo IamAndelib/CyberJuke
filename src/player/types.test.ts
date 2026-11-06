@@ -36,15 +36,16 @@ describe('placeOf', () => {
 
 describe('undoOf', () => {
   const u = (id: string, index: number, more: Partial<UpNextItem> = {}): UpNextItem => ({ track: t(id, false), index, ...more });
-  const none = { upNext: [], previous: [], lap: [], mine: [], listStart: 0, nextStart: -1 };
+  const none = { upNext: [], previous: [], lap: [], mine: [], listStart: 0, nextStart: -1, shuffle: false };
 
   it('anchors a Played row on the song after it in play order, heard or not, at its index once it is gone (S9)', () => {
     // Repeat all, Previous from a to c: Played shows a, From the top a and b.
     const s = { ...none, previous: [u('a', 0)], lap: [u('a', 0), u('b', 1)] };
     expect(undoOf(s, u('a', 0), 'played')).toEqual({ kind: 'played', before: { id: 'b', index: 0 }, heard: true });
-    // A song you queued and heard is only in Played: it comes first when it is the next Played row.
-    const m = { ...none, previous: [u('a', 0), u('M', 1)], lap: [u('a', 0), u('b', 2)], mine: [1] };
-    expect(undoOf(m, u('a', 0), 'played').before).toEqual({ id: 'M', index: 0 });
+    // A song you queued and heard is only in Played: unshuffled the nearer in list order comes first, shuffled the Played row.
+    const m = { ...none, previous: [u('a', 0), u('M', 2)], lap: [u('a', 0), u('b', 1)], mine: [2] };
+    expect(undoOf(m, u('a', 0), 'played').before).toEqual({ id: 'b', index: 0 });
+    expect(undoOf({ ...m, shuffle: true }, u('a', 0), 'played').before).toEqual({ id: 'M', index: 1 });
     // The next Played row is in From the top too: an unheard song before it comes first.
     const n = { ...none, previous: [u('a', 0), u('c', 2)], lap: [u('a', 0), u('b', 1), u('c', 2)] };
     expect(undoOf(n, u('a', 0), 'played').before?.id).toBe('b');

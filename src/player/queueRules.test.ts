@@ -80,7 +80,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
           }
           case 'removeRow': {
             // ✕ on a row of Up next (or of Played, or "From the top": `from`), as UpNext.removeWithUndo keeps its Undo.
-            const st = { upNext: upNext(), previous: rows(q.previousIndices()), lap: rows(q.lapIndices()), mine: q.mineIndices(), listStart: q.listStartIndex, nextStart: q.nextStartIndex };
+            const st = { upNext: upNext(), previous: rows(q.previousIndices()), lap: rows(q.lapIndices()), mine: q.mineIndices(), listStart: q.listStartIndex, nextStart: q.nextStartIndex, shuffle: q.shuffle };
             const from = s.from === 'played' ? st.previous : s.from === 'top' ? st.lap : st.upNext;
             const row = from.find((u) => u.track.id === s.id)!;
             const kind = s.from ? (s.from as Section) : sectionsOf(st.upNext, null).runs.find((r) => r.items.some((u) => u.index === row.index))!.kind;

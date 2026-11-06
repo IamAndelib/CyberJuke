@@ -44,7 +44,7 @@ export interface NativeState {
   mineIndex?: number[];
   /** The list indices of the next lap ("From the top"): repeat all only, play order from its first song to before the current one, without the songs you queued, the first 50. Absent from older natives: none. */
   lapIndex?: number[];
-  /** The list indices of the upNextIndex entries heard already (Previous walked back over them), for an Undo. Absent from older natives: none. */
+  /** The list indices of the upNextIndex entries heard in this lap (Previous walked back over them), for an Undo. Absent from older natives: none. */
   heardIndex?: number[];
   /** The list indices of the prevIndex and lapIndex entries added by autoplay, for an Undo. Absent from older natives: none. */
   autoIndex?: number[];

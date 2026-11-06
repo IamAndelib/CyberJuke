@@ -17,7 +17,7 @@ export interface UpNextItem {
   queued?: boolean;
   /** Added by autoplay (shown under "Autoplay"; Played and "From the top" rows carry it too). */
   auto?: boolean;
-  /** Heard already: an Up next row Previous walked back over. */
+  /** Heard in this lap: an Up next row Previous walked back over. */
   heard?: boolean;
 }
 
@@ -94,11 +94,11 @@ export interface Undo {
  * of the list you're in goes back into it, before what's on the way (S6); a "From the top" song you heard,
  * among the played.
  */
-export function undoOf(s: Pick<PlayerState, 'upNext' | 'previous' | 'lap' | 'mine' | 'listStart' | 'nextStart'>, it: UpItem, kind: UpNextKind): Undo {
+export function undoOf(s: Pick<PlayerState, 'upNext' | 'previous' | 'lap' | 'mine' | 'listStart' | 'nextStart' | 'shuffle'>, it: UpItem, kind: UpNextKind): Undo {
   const rows = kind === 'played' ? s.previous : kind === 'top' ? s.lap : s.upNext;
   const k = rows.findIndex((u) => u.index === it.index);
   const heard = kind === 'played' || s.previous.some((u) => u.index === it.index) || rows[k]?.heard === true;
-  const next = kind === 'played' || kind === 'top' ? behindAfter(s.previous, s.lap, it.index) : rows[k + 1];
+  const next = kind === 'played' || kind === 'top' ? behindAfter(s.previous, s.lap, it.index, s.shuffle) : rows[k + 1];
   const onWay = s.nextStart >= 0 && it.index >= s.nextStart;
   return {
     kind: kind === 'top' && heard ? 'played' : kind === 'autoplay' && !onWay ? 'list' : kind,
@@ -112,15 +112,16 @@ export function undoOf(s: Pick<PlayerState, 'upNext' | 'previous' | 'lap' | 'min
 
 /**
  * The song after queue index `index` in play order, behind the current one, heard or not: Played shows the
- * heard ones, "From the top" (Repeat all) all but the songs you queued, so a Played row comes first only
- * when it is one of those.
+ * heard ones, "From the top" (Repeat all) all but the songs you queued. Unshuffled the nearer one in list
+ * order comes first; shuffled, a Played row comes first only when it isn't one of From the top's.
  */
-function behindAfter(previous: UpNextItem[], lap: UpNextItem[], index: number): UpNextItem | undefined {
+function behindAfter(previous: UpNextItem[], lap: UpNextItem[], index: number, shuffle: boolean): UpNextItem | undefined {
   const after = (rows: UpNextItem[]) => {
     const k = rows.findIndex((u) => u.index === index);
     return k < 0 ? undefined : rows[k + 1];
   };
   const [p, l] = [after(previous), after(lap)];
+  if (p && l && !shuffle) return p.index < l.index ? p : l;
   return p && !lap.some((u) => u.index === p.index) ? p : (l ?? p);
 }
 

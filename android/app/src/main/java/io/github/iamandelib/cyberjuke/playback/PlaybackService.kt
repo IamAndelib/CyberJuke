@@ -1313,6 +1313,7 @@ class PlaybackService : MediaSessionService() {
         updateLoadAhead()
         QueueInfo.pendingSerials = queue.pendingSerials.toSet()
         QueueInfo.heardUids = queue.heardUids.toSet()
+        QueueInfo.lapUids = queue.lapUids.toSet()
         QueueInfo.listStart = queue.listStartIndex()
         QueueInfo.nextStart = queue.nextStartIndex()
         QueueInfo.context = context
