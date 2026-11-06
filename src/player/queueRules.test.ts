@@ -83,7 +83,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             const st = { upNext: upNext(), previous: rows(q.previousIndices()), lap: rows(q.lapIndices()), mine: q.mineIndices(), listStart: q.listStartIndex, nextStart: q.nextStartIndex, shuffle: q.shuffle };
             const from = s.from === 'played' ? st.previous : s.from === 'top' ? st.lap : st.upNext;
             const row = from.find((u) => u.track.id === s.id)!;
-            const kind = s.from ? (s.from as Section) : sectionsOf(st.upNext, null).runs.find((r) => r.items.some((u) => u.index === row.index))!.kind;
+            const kind = s.from ? (s.from as Section) : sectionsOf(st.upNext, null, st.nextStart).runs.find((r) => r.items.some((u) => u.index === row.index))!.kind;
             undo = [s.id as string, undoOf(st, row, kind)];
             q.remove(row.index);
             break;
@@ -134,7 +134,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             if ('top' in s) expect(lap()).toEqual(s.top);
             if ('topSet' in s) expect(lap().sort()).toEqual((s.topSet as string[]).slice().sort());
             if ('place' in s) expect(placeOf({ ...EMPTY_STATE, queue: q.items as Track[], index: q.index, upNext: upNext() })).toBe(s.place);
-            const sec = sectionsOf(upNext(), null);
+            const sec = sectionsOf(upNext(), null, q.nextStartIndex);
             const sIds = (xs: UpItem[]) => xs.map((x) => x.track.id);
             if ('queuedIds' in s) expect(sIds(sec.queued)).toEqual(s.queuedIds);
             if ('listIds' in s) expect(sIds(sec.list)).toEqual(s.listIds);

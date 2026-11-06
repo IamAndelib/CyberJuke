@@ -24,6 +24,8 @@
 - On a genre or Most saved, pulling down to refresh while the new tracks button shows takes you to Latest from every genre, where the new songs are, as tapping the button does. Before, it refreshed that genre and nothing new appeared.
 - Turning shuffle off no longer skips songs: every song of the list you haven't heard stays in Up next, in the list's order. The songs you heard stay in Played, in the order you heard them, instead of coming up again.
 - A song you tap on Home or in Search while songs you queued are waiting gets its suggestions with Repeat all on too, and Repeat all keeps those suggestions in its loop.
+- In the queue, ↑ ↓ keep a song in its own list. A radio's suggestions and the next ones on the way each get their heading, and moving a song past the end of one no longer puts it in the other, where Repeat all or turning Autoplay off then dropped it or kept it by mistake. A played song of the list before can't be moved into the list you're in; tap it to hear it again.
+- Removing the first song of the list you're in no longer lets a song you queued take its place as the list's start, which could leave the list's other songs out of Repeat all's loop.
 
 ## [1.4.0] - 2026-11-04
 

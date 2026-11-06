@@ -177,13 +177,13 @@ const NO_SECTIONS: UpNextSections = { queued: [], list: [], autoplay: [], runs: 
 let lastSections = NO_SECTIONS;
 
 /**
- * Up next as its sections (C2, sectionsOf): queued by you, the rest of the list, autoplay; and
- * the track autoplay follows. The same object until a row or the seed changes (never on a
- * position tick).
+ * Up next as its sections (C2, sectionsOf): queued by you, the rest of the list, autoplay, its runs
+ * broken where the list on the way starts; and the track autoplay follows. The same object until a
+ * row or the seed changes (never on a position tick).
  */
 export const upNextSections = computed<UpNextSections>(() => {
   const s = state.value;
-  const next = sectionsOf(s.upNext, s.seed);
+  const next = sectionsOf(s.upNext, s.seed, s.nextStart);
   if (sameSections(lastSections, next)) return lastSections;
   return (lastSections = next);
 });

@@ -31,7 +31,7 @@
  *    after it (Spotify, YouTube Music): more follow it once they run low;
  *  - played autoplay tracks more than KEEP_PLAYED behind the current one are dropped (a
  *    radio can run for hours), except with repeat all, which loops them, and those at or
- *    after where the current list starts. A removed marker's song hands it to the next one;
+ *    after where the current list starts. A removed marker's song hands it to the next one that isn't yours;
  *    an Undo puts a song back in its own list: a marker's own song gets the marker back, and shuffled,
  *    a suggestion back before one on the way goes where that list starts (starting it if it left it);
  *  - Undo of a remove (restore) puts the same song back as it was (its kind, tag, heard state and
@@ -349,14 +349,21 @@ export class Queue<T extends Identified> {
    * Move an item in list order, to where the item at `to` was. Unshuffled, it moves past that item in
    * play order too, before or after it as it was (play order differs from list order after shuffle
    * was turned off, or an Undo). Shuffled, only a song you queued moved past another one does, as
-   * shuffle never mixes them (rule 8).
+   * shuffle never mixes them (rule 8). Never across the line between two lists (S7): with its two ends on
+   * different sides of a marker it does nothing (but among the songs you queued, which belong to no list),
+   * and each line stays at its place in the list.
    */
   move(from: number, to: number): void {
     if (!inRange(from, this.list) || !inRange(to, this.list) || from === to) return;
-    const target = this.list[to];
-    const [e] = this.list.splice(from, 1);
+    const [e, target] = [this.list[from], this.list[to]];
+    const mineOnly = this.queued.has(e) && this.queued.has(target);
+    const [start, way] = [this.listStartIndex, this.nextStartIndex];
+    if (!mineOnly && [start, way].some((c) => c > 0 && from >= c !== to >= c)) return;
+    this.list.splice(from, 1);
     this.list.splice(to, 0, e);
-    if (this.shuffle && !(this.queued.has(e) && this.queued.has(target))) return;
+    if (!mineOnly && this.listStart) this.listStart = this.firstAt(start);
+    if (!mineOnly && this.nextStart) this.nextStart = this.firstAt(way);
+    if (this.shuffle && !mineOnly) return;
     const down = this.order.indexOf(e) < this.order.indexOf(target);
     this.order.splice(this.order.indexOf(e), 1);
     this.order.splice(this.order.indexOf(target) + (down ? 1 : 0), 0, e);
@@ -589,12 +596,12 @@ export class Queue<T extends Identified> {
     return !!this.nextStart && this.list.indexOf(e) >= this.list.indexOf(this.nextStart);
   }
 
-  /** A marker's song is going: the marker moves to the next in list order that stays (none: unset). */
+  /** A marker's song is going: the marker moves to the next in list order that stays and isn't yours (S14; none: unset). */
   private unmark(gone: ReadonlySet<Entry<T>>): void {
     if (this.listStart && gone.has(this.listStart)) this.listLeft = this.listStart.item.id;
     const left = this.nextStart && this.list.slice(this.nextStartIndex).find((e) => gone.has(e));
     if (left) this.nextLeft = left.item.id;
-    const next = (m: Entry<T> | null) => (m && gone.has(m) ? this.list.slice(this.list.indexOf(m) + 1).find((e) => !gone.has(e)) ?? null : m);
+    const next = (m: Entry<T> | null) => (m && gone.has(m) ? this.list.slice(this.list.indexOf(m) + 1).find((e) => !gone.has(e) && !e.mine) ?? null : m);
     this.listStart = next(this.listStart);
     this.nextStart = next(this.nextStart);
   }
@@ -615,6 +622,11 @@ export class Queue<T extends Identified> {
       this.visit = null;
       this.drop((i) => this.list[i] === visit);
     }
+  }
+
+  /** A marker at list index `i`: the first song from there that isn't yours, as the songs you queue belong to no list (rule 8, S14). */
+  private firstAt(i: number): Entry<T> {
+    return this.list.slice(i).find((e) => !e.mine) ?? this.list[i];
   }
 
   private hear(e: Entry<T>): void {

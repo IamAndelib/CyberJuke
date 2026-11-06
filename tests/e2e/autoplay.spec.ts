@@ -201,6 +201,30 @@ test('Album Play plays the album, then continues into autoplay at the end', asyn
   await expect(page.getByTestId('np-title')).toHaveText(q.autoplay[0].title);
 });
 
+test("↑ ↓ never cross the line between two lists: a radio's own suggestions and the batch on the way, an earlier list and the one you're in (S7)", async ({ page }) => {
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  await withAutoplay(page);
+  // In the background a reserve lines up: the next batch, on the way, after the radio's own suggestions.
+  await setVisibility(page, 'hidden');
+  await withAutoplay(page, 40);
+  await setVisibility(page, 'visible');
+  await openNowPlaying(page);
+  const line = page.getByTestId('upnext-autoplay-label').nth(1);
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveCount(2);
+  await expect(line.locator('xpath=preceding-sibling::li[1]').getByTestId('upnext-down')).toBeDisabled();
+  await expect(line.locator('xpath=preceding-sibling::li[1]').getByTestId('upnext-up')).toBeEnabled();
+  await expect(line.locator('xpath=following-sibling::li[1]').getByTestId('upnext-up')).toBeDisabled();
+  await expect(line.locator('xpath=following-sibling::li[1]').getByTestId('upnext-down')).toBeEnabled();
+  // A tap on the first one on the way moves on: the radio's songs are an earlier list now, and Played's last can't go past the playing one into this one.
+  await line.locator('xpath=following-sibling::li[1]').locator('.row-main').click();
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveCount(1);
+  await page.getByTestId('upnext-played-fold').click();
+  const played = page.getByTestId('upnext-played');
+  await expect(played.last().getByTestId('upnext-down')).toBeDisabled();
+  await expect(played.last().getByTestId('upnext-remove')).toBeEnabled();
+});
+
 test('a tapped suggestion, then Previous: the album songs stay under the album, "3 of 8" stays right, and Undo puts each song back', async ({ page }) => {
   const titles = await playAlbum(page);
   // At the third song five are left: suggestions line up after the album.

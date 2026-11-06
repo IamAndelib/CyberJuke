@@ -182,12 +182,17 @@ export function UpNext() {
       void player.move(it.index, to.index, it.track.id);
     });
 
+  // peek: the line moves only with the rows, which change with it (not every tick).
+  const listStart = player.state.peek().listStart;
   /**
    * A heading's rows. Played ones too, whose last ↓ moves it past the playing track (`past`: the row
-   * it then follows), to play next after anything queued by you: to hear it again.
+   * it then follows), to play next after anything queued by you: to hear it again. ↑ ↓ stay on their
+   * side of the current list's start, as a heading ends where the list on the way starts (S7); the
+   * songs you queued belong to no list.
    */
   const rows = (kind: Kind, items: UpItem[], past?: UpItem) =>
     items.map((it, k) => {
+      const apart = (b?: UpItem) => !b || (kind !== 'queued' && b.index < listStart !== it.index < listStart);
       const down = items[k + 1] ?? past;
       return (
         <li
@@ -218,7 +223,7 @@ export function UpNext() {
                 <button
                   class="icon-btn"
                   aria-label={`Move ${it.track.title} up`}
-                  disabled={k === 0}
+                  disabled={apart(items[k - 1])}
                   onClick={(e) => move(e.currentTarget, it, kind, items[k - 1], 'up')}
                   data-role="up"
                   data-testid="upnext-up"
@@ -228,7 +233,7 @@ export function UpNext() {
                 <button
                   class="icon-btn"
                   aria-label={`Move ${it.track.title} down`}
-                  disabled={!down}
+                  disabled={apart(down)}
                   onClick={(e) => down && move(e.currentTarget, it, down === past ? 'list' : kind, down, 'down')}
                   data-role="down"
                   data-testid="upnext-down"
