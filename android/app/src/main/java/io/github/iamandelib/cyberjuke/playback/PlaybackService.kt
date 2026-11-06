@@ -180,6 +180,9 @@ class PlaybackService : MediaSessionService() {
 
     /** The list changed since it was last saved. */
     private var sessionDirty = false
+
+    /** Save's memory as [queueChanged] last published it ([QueueInfo.heardMine]). */
+    private var publishedHeardMine: List<LastSession.Heard>? = null
     private val savePositionTick = object : Runnable {
         override fun run() {
             savePosition()
@@ -1158,8 +1161,8 @@ class PlaybackService : MediaSessionService() {
             schedulePrefetch()
             return
         }
-        val next = p.nextMediaItemIndex
-        if (next == C.INDEX_UNSET) return
+        // Where moving on lands: Repeat all's loop skips a heard song you queued (NativeQueue.landing).
+        val next = p.nextMediaItemIndex.takeIf { it != C.INDEX_UNSET }?.let { queue.landing(it) } ?: return
         val ytId = JukeUris.ytIdOf(p.getMediaItemAt(next)) ?: return
         if (ytId == LaunchOptions.CI_TONE) return
         val key = "${p.currentMediaItem?.mediaId}>$ytId"
@@ -1316,7 +1319,12 @@ class PlaybackService : MediaSessionService() {
         QueueInfo.lapUids = queue.lapUids.toSet()
         QueueInfo.listStart = queue.listStartIndex()
         QueueInfo.nextStart = queue.nextStartIndex()
-        QueueInfo.heardMine = heardMine().map { it.entry.toNativeTrack() to it.after }
+        // A new list only when it changed: the plugin sends it again on a new list (up to HEARD_MINE_MAX songs).
+        val memory = heardMine()
+        if (memory != publishedHeardMine) {
+            publishedHeardMine = memory
+            QueueInfo.heardMine = memory.map { it.entry.toNativeTrack() to it.after }
+        }
         QueueInfo.context = context
         QueueInfo.seedId = seedId
         handler.removeCallbacks(lowCheck)
