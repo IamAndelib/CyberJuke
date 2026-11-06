@@ -113,7 +113,8 @@ import kotlin.math.roundToInt
  * - state: NativeState. Sent on every player event and once a second while playing and the
  *   app is in the foreground (no ticks in the background). `queueIds` is only included when
  *   the list changed since the last event; otherwise it is left out and
- *   `queueIdsUnchanged: true` is set. getState() always includes it.
+ *   `queueIdsUnchanged: true` is set. `heardMine` likewise, with `heardMineUnchanged: true`.
+ *   getState() always includes both.
  * - blocked { until: epoch ms, reason: 'BOT_CHECK' | 'RATE_LIMIT' | 'STREAM_FORBIDDEN' }: YouTube
  *   is backing us off (see [NetBlock]); sent when a back-off starts or is extended, and again
  *   when play()/setQueue is refused during one. unblocked {}: the back-off ran out or was lifted
@@ -143,6 +144,9 @@ class JukePlayerPlugin : Plugin() {
     /** The list changed since `queueIds` was last sent (or the web needs it again). */
     private var queueDirty = true
     private var lastQueueIds: List<String>? = null
+
+    /** Save's memory as last sent ([QueueInfo.heardMine], a new list whenever it changes); null: send it again. */
+    private var lastHeardMine: List<Pair<JSONObject, String?>>? = null
 
     /** A `blocked` event was sent and no `unblocked` since. */
     private var announcedBlock = false
@@ -332,6 +336,7 @@ class JukePlayerPlugin : Plugin() {
             // Background events may have been throttled by the WebView: send everything once.
             queueDirty = true
             lastQueueIds = null
+            lastHeardMine = null
             announcedTracks.clear()
             announceTracks(c)
             emitState(c)
@@ -353,6 +358,7 @@ class JukePlayerPlugin : Plugin() {
                 if (event == "state") {
                     queueDirty = true
                     lastQueueIds = null
+                    lastHeardMine = null
                 }
                 announcedTracks.clear()
                 controller?.let { announceTracks(it) }
@@ -428,6 +434,7 @@ class JukePlayerPlugin : Plugin() {
             maybePlayCiTone(c)
             queueDirty = true
             lastQueueIds = null
+            lastHeardMine = null
             // Tracks the page may not know (Global, a restored session) before the state that
             // names them: on a cold start the page listened before the controller was here.
             announceTracks(c)
@@ -1195,7 +1202,7 @@ class JukePlayerPlugin : Plugin() {
     /**
      * Main thread only. Shape matches NativeState in the TS contract ([StateEncoder]). Unless
      * [fullQueue], `queueIds` is replaced by `queueIdsUnchanged: true` when the list did not
-     * change since it was last sent (P1: no 1s re-send of a long list).
+     * change since it was last sent (P1: no 1s re-send of a long list); `heardMine` the same way.
      */
     private fun buildState(c: MediaController, fullQueue: Boolean): JSObject {
         var queueIds: List<String>? = null
@@ -1205,7 +1212,10 @@ class JukePlayerPlugin : Plugin() {
             if (fullQueue || ids != lastQueueIds) queueIds = ids
             if (!fullQueue) lastQueueIds = ids
         }
-        return StateEncoder.encode(c, queueIds)
+        val memory = QueueInfo.heardMine
+        val heardMine = memory.takeIf { fullQueue || it !== lastHeardMine }
+        if (!fullQueue) lastHeardMine = memory
+        return StateEncoder.encode(c, queueIds, heardMine)
     }
 
     /** Describes the tracks the web can't look up (Global, a restored session) to it, once each. */

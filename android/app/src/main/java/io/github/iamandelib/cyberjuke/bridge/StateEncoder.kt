@@ -27,8 +27,8 @@ internal object StateEncoder {
         return ids
     }
 
-    /** The state; [queueIds] null sends `queueIdsUnchanged: true` instead of the list. */
-    fun encode(c: Player, queueIds: List<String>?): JSObject {
+    /** The state; [queueIds] null sends `queueIdsUnchanged: true` instead of the list, and [heardMine] null `heardMineUnchanged: true`. */
+    fun encode(c: Player, queueIds: List<String>?, heardMine: List<Pair<JSONObject, String?>>?): JSObject {
         val count = c.mediaItemCount
         val index = if (count == 0) -1 else c.currentMediaItemIndex
         val upNext = ArrayList<String>()
@@ -128,7 +128,11 @@ internal object StateEncoder {
         state.put("listStart", if (count > 0) QueueInfo.listStart else 0)
         state.put("nextStart", if (count > 0) QueueInfo.nextStart else -1)
         // Save's memory: the songs you queued that played, also those that left the queue (rule 8), each with the song before it.
-        state.put("heardMine", JSArray(QueueInfo.heardMine.map { (track, after) -> JSONObject().put("track", track).put("after", after ?: JSONObject.NULL) }))
+        if (heardMine != null) {
+            state.put("heardMine", JSArray((if (count > 0) heardMine else emptyList()).map { (track, after) -> JSONObject().put("track", track).put("after", after ?: JSONObject.NULL) }))
+        } else {
+            state.put("heardMineUnchanged", true)
+        }
         val ctx = QueueInfo.context
         if (ctx != null && count > 0) {
             val o = JSObject()

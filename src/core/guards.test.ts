@@ -104,6 +104,10 @@ describe('parseNativeState', () => {
     const many = Array.from({ length: 205 }, (_, i) => ({ track: { ...track, id: `q${i}` }, after: null }));
     expect(parseNativeState({ index: 0, queueIds: ['A'], heardMine: many })?.heardMine?.map((h) => h.track.id)).toEqual(many.slice(5).map((h) => h.track.id));
     expect(parseNativeState({ index: 0, queueIds: ['A'] })?.heardMine).toEqual([]);
+    // Unchanged since the last event: the previous one is kept (a list sent with it wins).
+    const prev = [{ track: { ...track, artworkUrl: '' }, after: 'A' }];
+    expect(parseNativeState({ index: 0, queueIds: ['A'], heardMineUnchanged: true }, [], prev)?.heardMine).toEqual(prev);
+    expect(parseNativeState({ index: 0, queueIds: ['A'], heardMineUnchanged: true, heardMine: [] }, [], prev)?.heardMine).toEqual([]);
   });
 
   it('keeps the previous list when the event says it is unchanged', () => {

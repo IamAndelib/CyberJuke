@@ -104,6 +104,8 @@ export class NativePlayer implements Player {
   private described = new Map<string, Track>();
   /** The last full list native sent (events with queueIdsUnchanged omit it). */
   private lastQueueIds: string[] = [];
+  /** Save's memory as native last sent it (events with heardMineUnchanged omit it). */
+  private lastHeardMine: NonNullable<NativeState['heardMine']> = [];
   /** The last state applied, re-applied when native describes new tracks. */
   private last: NativeState | null = null;
   /** Up next as last built, and what it was built from: reused while nothing changed (ticks). */
@@ -174,9 +176,10 @@ export class NativePlayer implements Player {
   }
 
   private onState(raw: unknown): void {
-    const st = parseNativeState(raw, this.lastQueueIds);
+    const st = parseNativeState(raw, this.lastQueueIds, this.lastHeardMine);
     if (!st) return;
     this.lastQueueIds = st.queueIds;
+    this.lastHeardMine = st.heardMine ?? [];
     // May describe the list from before an edit in flight; resynced once they're answered.
     if (this.edits > 0) return;
     if (this.expect) {

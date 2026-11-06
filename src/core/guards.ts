@@ -74,7 +74,7 @@ const REPEAT: readonly RepeatMode[] = ['off', 'all', 'one'];
  * `upNextIndex` with one list index per upNext id (-1 when native sent none, or one
  * that doesn't hold that id). Null when it isn't a state object at all.
  */
-export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = []): NativeState | null {
+export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [], prevHeardMine: NonNullable<NativeState['heardMine']> = []): NativeState | null {
   if (!isObj(x)) return null;
   const unchanged = x.queueIdsUnchanged === true && !Array.isArray(x.queueIds);
   const queueIds = unchanged ? prevQueueIds.slice() : strings(x.queueIds);
@@ -114,9 +114,12 @@ export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [
       .slice(0, UP_NEXT_MAX),
     heardIndex: inQueue(x.heardIndex),
     autoIndex: inQueue(x.autoIndex),
-    heardMine: (Array.isArray(x.heardMine) ? x.heardMine : [])
-      .flatMap((h) => (isObj(h) && isObj(h.track) ? [{ track: h.track as unknown as NativeTrack, after: isStr(h.after) ? h.after : null }] : []))
-      .slice(-HEARD_MINE_MAX),
+    heardMine:
+      x.heardMineUnchanged === true && !Array.isArray(x.heardMine)
+        ? prevHeardMine.slice()
+        : (Array.isArray(x.heardMine) ? x.heardMine : [])
+            .flatMap((h) => (isObj(h) && isObj(h.track) ? [{ track: h.track as unknown as NativeTrack, after: isStr(h.after) ? h.after : null }] : []))
+            .slice(-HEARD_MINE_MAX),
     listStart: at(x.listStart, 0),
     nextStart: at(x.nextStart, -1),
     context: ctx ? { label: isStr(ctx.label) ? ctx.label : '', mode: ctx.mode === 'radio' ? 'radio' : 'list' } : null,

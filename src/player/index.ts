@@ -349,9 +349,9 @@ let purging = false;
 
 /** The queue or Save's memory holds a members-only (or local) track (recomputed only when the list itself changes). */
 const queueList = computed(() => state.value.queue);
-const heardList = computed(() => state.value.heardMine.map((h) => h.track));
-const queuedMembersOnly = computed(() => queueList.value.some((t) => t.membersOnly) || heardList.value.some((t) => t.membersOnly));
-const queuedLocal = computed(() => queueList.value.some(isLocal) || heardList.value.some(isLocal));
+const heardList = computed(() => state.value.heardMine);
+const queuedMembersOnly = computed(() => queueList.value.some((t) => t.membersOnly) || heardList.value.some((h) => h.track.membersOnly));
+const queuedLocal = computed(() => queueList.value.some(isLocal) || heardList.value.some((h) => isLocal(h.track)));
 const localMusic = computed(() => settings.value.localMusic);
 
 /** Follow sign-outs and the NSFW setting for the queue (call once at startup). */

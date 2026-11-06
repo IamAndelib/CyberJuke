@@ -167,6 +167,9 @@ describe('NativePlayer: Up next rows (K1)', () => {
     ];
     emit('state', state({ queueIds: ['A'], heardMine }));
     expect(memory()).toEqual([['Q', 'Title Q', 'A'], ['G', 'Gone', null]]);
+    // A tick: native sends it only when it changed.
+    emit('state', state({ queueIds: ['A'], positionMs: 1000, heardMineUnchanged: true }));
+    expect(memory()).toEqual([['Q', 'Title Q', 'A'], ['G', 'Gone', null]]);
     emit('state', state({ queueIds: ['A'] }));
     expect(memory()).toEqual([]);
     emit('state', state({ queueIds: ['A'], heardMine }));

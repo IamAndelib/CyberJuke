@@ -50,6 +50,8 @@ export interface NativeState {
   autoIndex?: number[];
   /** Save's memory (rule 8): the songs you queued that played since the list started, also those that left the queue, each with the id of the song before it; at most 200. Absent from older natives: none. */
   heardMine?: { track: NativeTrack; after: string | null }[];
+  /** True when the memory didn't change since the last event: heardMine is then omitted, keep the previous one. */
+  heardMineUnchanged?: boolean;
   /** Queue index of the current list's first song, and of the first song of the autoplay on the way (-1: none). Absent from older natives: 0 and -1. */
   listStart?: number;
   nextStart?: number;
