@@ -101,8 +101,9 @@ import kotlin.math.roundToInt
  *   goes, the next one that stays plays, or playback pauses when none is left.
  * - Size caps (K6): more than 2000 tracks or ids, or a string over 2000 characters, rejects
  *   with code TOO_LARGE.
- * - queueLow { left, seedId }: `left` (<= 5) tracks are still to go: the web side
- *   computes more and sends them with addAutoplay({ tracks, seedId }).
+ * - queueLow { left, seedId }: nothing is on the way (as a list starts): the web side computes
+ *   the next list and sends it with addAutoplay({ tracks, seedId }). `left` (tracks still to go
+ *   after the current one) is informational only.
  * - tracks { tracks: NativeTrack[] }: the Global tracks in the queue (the web side can't look
  *   them up anywhere: radio items the service added itself, and after a WebView reload also the
  *   albums and playlists the user started), so it can show them; sent again after a resume or a
@@ -364,7 +365,7 @@ class JukePlayerPlugin : Plugin() {
                 controller?.let { announceTracks(it) }
             }
         }
-        // A reloaded page: the "running low" it missed, so autoplay goes on.
+        // A reloaded page: the "nothing on the way" it missed, so autoplay goes on.
         if (event == "queueLow") QueueInfo.lastLow?.let { (left, seed) -> queueLowListener.onQueueLow(left, seed) }
     }
 
@@ -535,8 +536,8 @@ class JukePlayerPlugin : Plugin() {
 
     /**
      * `addAutoplay({ tracks, seedId })`: Jukebox autoplay picks (after a `queueLow`) for the seed
-     * they were computed for; dropped if the seed changed meanwhile or autoplay may not add now
-     * (off, or repeat all: Stations.mayAutoplay).
+     * they were computed for; dropped if the seed changed meanwhile, autoplay may not add now
+     * (off, or repeat all: Stations.mayAutoplay), or a list is on the way already.
      */
     @PluginMethod
     fun addAutoplay(call: PluginCall) {

@@ -612,7 +612,7 @@ describe('NativePlayer: starting a list', () => {
   });
 });
 
-describe('NativePlayer: running low', () => {
+describe('NativePlayer: nothing on the way (queueLow)', () => {
   it('a listener added after the signal (autoplay starts late on a reloaded page) still hears it', async () => {
     const p = new NativePlayer();
     emit('queueLow', { left: 2, seedId: 'A' });

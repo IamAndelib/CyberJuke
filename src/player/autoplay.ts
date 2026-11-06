@@ -1,8 +1,10 @@
 /**
- * Autoplay (AP4): when a list is about to end, more follows it, 20-25 tracks at a time.
+ * Autoplay (AP4): a list leads on to the next, a batch of VIBE_BATCH (25) tracks on the way (rule 2).
  *
- * The player says when it runs low (5 tracks or fewer to go, whatever they are, as InnerTune's
- * and Metrolist's "load more" do: native's `queueLow` event, the web player inline) and this adds more once the app is idle, one refill at a time:
+ * The player says when nothing is on the way (as the current list starts: an album, a batch moved on
+ * to, Repeat all or Vibe turned off and on again; native's `queueLow` event, the web player inline), so
+ * the next list is there in full long before it plays, also with the screen locked, as Metrolist fetches
+ * at album start. This adds it once the app is idle, one at a time:
  *  - a Jukebox seed: similar Jukebox tracks from the cached catalog (data/similar);
  *  - a Global seed: YouTube Music's radio for it (web player only; natively the playback
  *    service runs Global radios itself, so they refill with the screen off);
@@ -16,9 +18,9 @@ import { shuffled } from '../core/shuffle';
 import { audioKey, isGlobal, isLocal, type Track } from '../data/model';
 import { similarTracks } from '../data/similar';
 import { stationPlaying, stationQueue } from './radio';
-import { AUTOPLAY_FIRST, AUTOPLAY_LOW, AUTOPLAY_MORE, AUTOPLAY_RESERVE, firstBatchOfRadio, mayAutoplay, type Player, type QueueLow } from './types';
+import { VIBE_BATCH, firstBatchOfRadio, mayAutoplay, type Player, type QueueLow } from './types';
 
-/** How long a batch just added counts as ahead even before the player's state shows it (native's lags the call). */
+/** How long a signal waits for the player's state to show the batch just added (native's lags the call). */
 const BATCH_LAG_MS = 5000;
 
 const SHUFFLE = 'Jukebox shuffle';
@@ -60,8 +62,8 @@ export interface AutoplayDeps {
 }
 
 export interface Autoplay {
-  /** Add more after a low signal (also what the player's onQueueLow calls): with `want` tracks or fewer left. */
-  fill(e: QueueLow, want?: number): Promise<void>;
+  /** Add the next list after the player's signal (also what its onQueueLow calls), unless one is on the way. */
+  fill(e: QueueLow): Promise<void>;
   /** The catalog has loaded and the player has its state: answer a signal that came before (the player won't send it again). */
   ready(): void;
   stop(): void;
@@ -85,28 +87,34 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
    * signal it missed): nothing to pick from yet, so it waits for `ready`.
    */
   let starved: QueueLow | null = null;
+  /** A signal from before the state showed the last batch: looked at again once the state changes. */
+  let lagged: QueueLow | null = null;
 
-  async function run(e: QueueLow, want: number): Promise<void> {
+  async function run(e: QueueLow): Promise<void> {
     const s = player.state.peek();
     const seed = s.seed ?? s.current;
     if (!seed || !s.current) {
       starved = e;
       return;
     }
-    if (!mayAutoplay(s.repeat) && !firstBatchOfRadio(s.context, s.queue.length, s.upNext.filter((u) => u.queued).length)) return;
+    const first = firstBatchOfRadio(s.context, s.queue.length, s.upNext.filter((u) => u.queued).length);
+    if (!mayAutoplay(s.repeat) && !first) return;
     // A local list ends like an album: nothing from the Jukebox or Global after a song of the phone's own.
     if (isLocal(seed)) return;
     if (e.seedId && e.seedId !== seed.id) return; // a signal for an older seed
+    // A batch never repeats a song already in the queue (D8), nor one removed from Up next.
     const inQueue = new Set([...s.queue.flatMap((t) => [t.id, audioKey(t)]), ...(deps.removed?.() ?? [])]);
-    // The signal may be older than the last refill (one that came in during it): count
-    // again. A batch the state doesn't show yet is ahead too, and not picked again. (A
-    // station's round holds tracks already in the queue: its ids say nothing about that.)
+    // The signal may be older than the state with the last batch (native's lags the call): wait
+    // for it, or a radio's first batch would come twice. (A station's round holds tracks already
+    // in the queue: its ids say nothing about that.)
     if (batch && (batch.seedId !== seed.id || now() - batch.at > BATCH_LAG_MS || (batch.queue && batch.queue !== s.queue) || (!batch.round && batch.ids.some((id) => inQueue.has(id))))) batch = null;
-    const lagging = batch?.ids ?? [];
-    for (const id of lagging) inQueue.add(id);
-    const left = Math.max(e.left, s.upNext.length) + lagging.length;
-    if (left > want) return;
-    const count = Math.max(left <= 0 ? AUTOPLAY_FIRST : AUTOPLAY_MORE, want - left);
+    if (batch) {
+      lagged = e;
+      return;
+    }
+    // One list on the way at a time: the next is fetched when it starts.
+    if (s.nextStart >= 0) return;
+    const count = first ? VIBE_BATCH - 1 : VIBE_BATCH;
     const add = async (tracks: Track[], round = false) => {
       const b: NonNullable<typeof batch> = { seedId: seed.id, ids: tracks.map((t) => t.id), at: now(), ...(round && { round }) };
       batch = b;
@@ -170,22 +178,21 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
   }
 
   /** A signal that came in during a refill: handled right after it (the latest only). */
-  let again: [QueueLow, number] | null = null;
+  let again: QueueLow | null = null;
 
-  /** Add more if `want` tracks or fewer are left (AUTOPLAY_LOW, or the background's AUTOPLAY_RESERVE). */
-  function fill(e: QueueLow, want = AUTOPLAY_LOW): Promise<void> {
+  function fill(e: QueueLow): Promise<void> {
     // One refill at a time.
     if (inflight) {
-      again = [e, want];
+      again = e;
       return inflight;
     }
-    const p = run(e, want)
+    const p = run(e)
       .catch((err) => deps.log?.('autoplay', err))
       .finally(() => {
         if (inflight === p) inflight = null;
         const next = again;
         again = null;
-        if (next) void fill(...next);
+        if (next) void fill(next);
       });
     inflight = p;
     return p;
@@ -208,35 +215,21 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     if (hidden()) void fill(e);
     else idle = whenIdle(() => void fill(e), 1000, 50);
   });
-  // Going to the background: a reserve ahead. Only this page picks Jukebox tracks, and it may
-  // be gone before the list runs low (the app swiped away, its renderer killed by Android);
-  // native plays on through what is queued. (Global radios refill natively, stations too.)
-  // Not for a page that is unloading (a reload): pagehide comes just before its visibilitychange.
-  let leaving = false;
-  const left = (e: Event) => (leaving = e.type === 'pagehide');
-  const reserve = () => {
-    if (leaving) return;
-    const s = player.state.peek();
-    const seed = s.seed ?? s.current;
-    // (Up next holds at most UP_NEXT_MAX = AUTOPLAY_RESERVE: a full one may have more behind it.)
-    if (hidden() && seed && s.upNext.length < AUTOPLAY_RESERVE) void fill({ left: s.upNext.length, seedId: seed.id }, AUTOPLAY_RESERVE);
-  };
-  if (typeof document !== 'undefined') {
-    document.addEventListener('visibilitychange', reserve);
-    globalThis.addEventListener?.('pagehide', left);
-    globalThis.addEventListener?.('pageshow', left);
-  }
+  // The state caught up with the last batch: a signal that waited for it goes ahead. (No reserve
+  // in the background: the player holds the current list and the one on the way, and asks again
+  // as that one starts; Global radios refill natively, with the page asleep or gone.)
+  const unwatch = player.state.subscribe(() => {
+    const e = lagged;
+    lagged = null;
+    if (e) void fill(e);
+  });
   return {
     fill,
     ready,
     stop: () => {
       idle();
       off();
-      if (typeof document !== 'undefined') {
-        document.removeEventListener('visibilitychange', reserve);
-        globalThis.removeEventListener?.('pagehide', left);
-        globalThis.removeEventListener?.('pageshow', left);
-      }
+      unwatch();
     },
   };
 }

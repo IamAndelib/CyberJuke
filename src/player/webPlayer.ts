@@ -18,7 +18,7 @@ import { Queue } from './queue';
 import { stationPlaying } from './radio';
 import type { RepeatMode } from './native';
 import type { CrossfadeMs, Ipv4Mode, Quality } from '../stores/library';
-import { AUTOPLAY_LOW, EMPTY_STATE, firstBatchOfRadio, mayAutoplay, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type Undo } from './types';
+import { EMPTY_STATE, firstBatchOfRadio, mayAutoplay, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type Undo } from './types';
 
 /* Minimal typings for the parts of the IFrame API we use. */
 interface YTPlayer {
@@ -217,22 +217,17 @@ export class WebPlayer implements Player {
     return mayAutoplay(this.q.repeat) || firstBatchOfRadio(this.context, this.q.length, this.q.queuedCount);
   }
 
-  /** AP4, inline: with 5 tracks or fewer to go, ask for more (once per state). */
+  /** Rule 2, inline: with nothing on the way, ask for the next list (once per list and length: native's checkLow). */
   private checkLow(): void {
     const seed = this.seed;
-    if (!seed || !this.keepsGoing(seed.id) || !this.mayAdd() || !this.q.current) {
+    if (!seed || !this.keepsGoing(seed.id) || !this.mayAdd() || !this.q.current || this.q.nextStartIndex >= 0) {
       this.lowKey = null;
       return;
     }
-    const left = this.q.ahead;
-    if (left > AUTOPLAY_LOW) {
-      this.lowKey = null;
-      return;
-    }
-    const key = `${seed.id}|${left}|${this.q.index}|${this.q.length}`;
+    const key = `${seed.id}|${this.q.listStartIndex}|${this.q.length}`;
     if (key === this.lowKey) return;
     this.lowKey = key;
-    const ev: QueueLow = { left, seedId: seed.id };
+    const ev: QueueLow = { left: this.q.ahead, seedId: seed.id };
     queueMicrotask(() => {
       for (const cb of this.lowListeners) cb(ev);
     });
@@ -508,8 +503,9 @@ export class WebPlayer implements Player {
     this.publish();
   }
 
+  /** A batch for the list on the way; dropped while one is there already (a late signal's; a radio's first batch never is). */
   async addAutoplay(tracks: Track[], seedId: string): Promise<void> {
-    if (!tracks.length || !this.keepsGoing(seedId) || !this.mayAdd() || this.seed?.id !== seedId) return;
+    if (!tracks.length || !this.keepsGoing(seedId) || !this.mayAdd() || this.seed?.id !== seedId || this.q.nextStartIndex >= 0) return;
     const wasEmpty = !this.q.current;
     this.q.addAuto(tracks, firstBatchOfRadio(this.context, this.q.length, this.q.queuedCount));
     this.publish();

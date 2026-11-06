@@ -111,7 +111,7 @@ export class NativePlayer implements Player {
   /** Up next as last built, and what it was built from: reused while nothing changed (ticks). */
   private builtFrom = '';
   private lowListeners = new Set<(e: QueueLow) => void>();
-  /** The last "running low" from native. */
+  /** The last `queueLow` from native (nothing on the way). */
   private lastLow: QueueLow | null = null;
   /**
    * After playList: the track native should report next. Events still describing the

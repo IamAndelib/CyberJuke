@@ -60,7 +60,7 @@ test.describe('README highlights', () => {
     await settle(page);
     await shot(page, 'media-02-now-playing');
     await page.getByTestId('up-next').evaluate((el) => el.scrollIntoView({ block: 'start' }));
-    await expect(page.getByTestId('upnext-autoplay-label')).toBeVisible();
+    await expect(page.getByTestId('upnext-autoplay-label').first()).toBeVisible();
     await settle(page);
     await shot(page, 'media-03-up-next');
 

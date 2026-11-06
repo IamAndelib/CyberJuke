@@ -230,6 +230,9 @@ exposeForTests('__cyberjukeQueue', () => {
     autoplay: items(sec.autoplay),
     top: s.lap.map((u) => u.track.id),
     mine: s.mine.map((i) => s.queue[i].id),
+    // Where the list on the way starts in the queue (-1: none), and the queue's length.
+    nextStart: s.nextStart,
+    length: s.queue.length,
   };
 });
 
@@ -260,7 +263,7 @@ effect(() => {
 /** The Autoplay setting (C3); on unless turned off. */
 let autoplay: Autoplay | null = null;
 
-/** Start autoplay (AP4): it answers the player's "running low" signals. Once. */
+/** Start autoplay (AP4): it answers the player's signals that nothing is on the way (queueLow). Once. */
 function startAutoplay(): Autoplay {
   autoplay ??= createAutoplay({
     player,

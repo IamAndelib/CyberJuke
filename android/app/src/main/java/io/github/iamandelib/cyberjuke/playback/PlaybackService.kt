@@ -215,7 +215,8 @@ class PlaybackService : MediaSessionService() {
 
             override fun addRadioItems(items: List<MediaItem>): Boolean {
                 val p = player ?: return false
-                if (!autoplayEnabled || !(Stations.mayAutoplay(p.repeatMode) || radioFirstBatch())) return false
+                // A page is a batch, whatever its size; one on the way already (a late page) is enough.
+                if (!autoplayEnabled || !(Stations.mayAutoplay(p.repeatMode) || radioFirstBatch()) || queue.nextStartIndex() >= 0) return false
                 queue.addAutoplay(items, joinList = radioFirstBatch())
                 queueChanged()
                 return true
@@ -1229,10 +1230,11 @@ class PlaybackService : MediaSessionService() {
     /** The list is a radio's tapped song alone: its first batch joins it ([Radios.firstBatch]). */
     private fun radioFirstBatch() = Radios.firstBatch(context?.second, player?.mediaItemCount ?: 0, queue.pendingSerials.size)
 
+    /** A batch for the list on the way; dropped while one is there already (a late signal's: a radio's first batch never is). */
     private fun addAutoplay(items: List<MediaItem>, forSeed: String?) {
         val p = player ?: return
-        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || forSeed != seedId || !(Stations.mayAutoplay(p.repeatMode) || radioFirstBatch())) {
-            Log.i(TAG, "addAutoplay: ${items.size} item(s) dropped (stale or autoplay off)")
+        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || forSeed != seedId || !(Stations.mayAutoplay(p.repeatMode) || radioFirstBatch()) || queue.nextStartIndex() >= 0) {
+            Log.i(TAG, "addAutoplay: ${items.size} item(s) dropped (stale, autoplay off or one on the way)")
             return
         }
         queue.addAutoplay(items, joinList = radioFirstBatch())
@@ -1377,29 +1379,25 @@ class PlaybackService : MediaSessionService() {
     }
 
     /**
-     * AP4: with 5 items or fewer to go (any kind, as InnerTune's "load more"), get more. A Global radio is refilled here;
-     * Jukebox picks come from the web side (`queueLow`). Nothing with autoplay off, or with repeat
-     * all but for a radio's first batch ([Stations.mayAutoplay]).
+     * Rule 2: with nothing on the way, get the next list ([Radios.needsNext]), as the current one starts. A
+     * Global radio is refilled here, a page at a time; Jukebox picks come from the web side (`queueLow`).
+     * Once per list and length: a radio's first batch joins its list, then the next comes on the way.
      */
     private fun checkLow() {
         val p = player ?: return
         // Nothing loading (a restored session before its first Play): no requests for more yet.
         val idle = p.playbackState == Player.STATE_IDLE && !p.playWhenReady
-        if (!Stations.keepsGoing(autoplayEnabled, seedId, context?.first) || !(Stations.mayAutoplay(p.repeatMode) || radioFirstBatch()) || p.mediaItemCount == 0 || seedId == null || idle) {
+        val keepsGoing = Stations.keepsGoing(autoplayEnabled, seedId, context?.first)
+        val mayAdd = Stations.mayAutoplay(p.repeatMode) || radioFirstBatch()
+        if (seedId == null || !Radios.needsNext(keepsGoing, mayAdd, queue.nextStartIndex(), p.mediaItemCount, idle)) {
             lowKey = null
             QueueInfo.clearLow()
             return
         }
-        val left = queue.ahead()
-        if (left > QueueCommands.LOW) {
-            lowKey = null
-            QueueInfo.clearLow()
-            return
-        }
-        val key = "$seedId|$left|${p.currentMediaItemIndex}|${p.mediaItemCount}"
+        val key = "$seedId|${queue.listStartIndex()}|${p.mediaItemCount}"
         if (key == lowKey) return
         lowKey = key
-        if (radio.active) radio.refill() else QueueInfo.emitQueueLow(left, seedId)
+        if (radio.active) radio.refill() else QueueInfo.emitQueueLow(queue.ahead(), seedId)
     }
 
     // ---- the last session ---------------------------------------------------------------------

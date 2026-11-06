@@ -30,7 +30,7 @@
  *    plays: `visit`), and autoplay adds nothing while it is on (mayAutoplay). Turning autoplay off drops what's on the way too, never the list you're in.
  *    Repeat one leaves them: it replays the track when it ends, and a skip moves on as with
  *    repeat off (none at the end, as Media3's). Jumping to an autoplay track keeps the ones
- *    after it (Spotify, YouTube Music): more follow it once they run low;
+ *    after it (Spotify, YouTube Music): the next batch follows once nothing is on the way;
  *  - played autoplay tracks more than KEEP_PLAYED behind the current one are dropped (a
  *    radio can run for hours), except with repeat all, which loops them, and those at or
  *    after where the current list starts. A removed marker's song hands it to the next one that isn't yours;

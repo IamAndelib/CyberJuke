@@ -14,4 +14,17 @@ class RadiosTest {
         assertEquals(true, Radios.firstBatch("radio", 3, 2))
         assertEquals(false, Radios.firstBatch("radio", 3, 1))
     }
+
+    @Test
+    fun theNextListIsAskedForTheMomentNothingIsOnTheWay() {
+        // As a list starts (an album, a batch moved on to), not when it nears its end: however many are left.
+        assertEquals(true, Radios.needsNext(keepsGoing = true, mayAdd = true, nextStart = -1, count = 12, idle = false))
+        // A list on the way already: nothing more until it starts.
+        assertEquals(false, Radios.needsNext(keepsGoing = true, mayAdd = true, nextStart = 12, count = 37, idle = false))
+        // Vibe off (and no station), Repeat all (but a radio's first batch), an empty player, a restored session before its first Play.
+        assertEquals(false, Radios.needsNext(keepsGoing = false, mayAdd = true, nextStart = -1, count = 12, idle = false))
+        assertEquals(false, Radios.needsNext(keepsGoing = true, mayAdd = false, nextStart = -1, count = 12, idle = false))
+        assertEquals(false, Radios.needsNext(keepsGoing = true, mayAdd = true, nextStart = -1, count = 0, idle = false))
+        assertEquals(false, Radios.needsNext(keepsGoing = true, mayAdd = true, nextStart = -1, count = 12, idle = true))
+    }
 }

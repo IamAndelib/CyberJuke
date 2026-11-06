@@ -6,6 +6,7 @@
 - With Repeat all on, Up next goes on under "From the top" with the songs that play next time round, and you can reorder or remove them there.
 
 ### Changed
+- Suggestions come in batches of 25, and the next batch is fetched as soon as the one before starts, so it's always there in time, also with the screen locked: an album shows what follows it from its start, and a song you tap on Home or in Search plays with 24 like it and the next 25 lined up. Going to the background no longer adds 50 at once.
 - **Save queue as playlist** saves the whole list you're in, not only the 100 or so songs Up next shows: an album, or once its suggestions are playing, those. It keeps the songs you queued, also after the album repeats or its suggestions start.
 - After you delete a playlist, **Undo** brings it back where it was, with all its songs.
 - A page title too long for the top bar on a narrow phone, such as Recently played beside [Clear], is set a little smaller, so more of it shows (often all).

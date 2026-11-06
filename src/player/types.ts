@@ -2,7 +2,6 @@ import type { ReadonlySignal } from '@preact/signals';
 import type { Track } from '../data/model';
 import type { CrossfadeMs, Ipv4Mode, Quality } from '../stores/library';
 import type { RepeatMode } from './native';
-import { UP_NEXT_MAX } from '../core/guards';
 
 export type { RepeatMode };
 
@@ -127,22 +126,21 @@ function behindAfter(previous: UpNextItem[], lap: UpNextItem[], index: number, s
   return p && !lap.some((u) => u.index === p.index) ? p : (l ?? p);
 }
 
-/** Autoplay is running low: `left` tracks to go after the current one. */
+/**
+ * The player needs the next list: nothing is on the way (`nextStart` -1) while the list keeps going
+ * (rule 2: fetched as soon as the current list starts). Native's `queueLow` event keeps its old name;
+ * `left` (tracks to go after the current one) only says how far off the end is, nothing acts on it.
+ */
 export interface QueueLow {
   left: number;
   seedId: string | null;
 }
 
-/** Tracks left (any kind) when autoplay adds more (AP4). */
-export const AUTOPLAY_LOW = 5;
-/** Autoplay tracks added after a list or a single song, and on each refill. */
-export const AUTOPLAY_FIRST = 25;
-export const AUTOPLAY_MORE = 20;
 /**
- * Tracks kept ahead once the app goes to the background (about three hours): Jukebox picks come
- * from the page, which Android may close meanwhile (the app swiped away, its renderer killed).
+ * A Vibe batch: the songs a list on the way brings (rule 2). A Home or Search tap's first batch is
+ * one fewer, joined to the tapped song (firstBatchOfRadio), so that list is 25 too.
  */
-export const AUTOPLAY_RESERVE = UP_NEXT_MAX;
+export const VIBE_BATCH = 25;
 
 /**
  * Autoplay may add to the queue unless repeat all is on: it loops the list you're in, so nothing

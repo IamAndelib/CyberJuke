@@ -661,6 +661,8 @@ test('in Now Playing an Undo message sits at the bottom, and Up next scrolls cle
   await page.getByTestId('track-play').first().click();
   await openNowPlaying(page);
   const rows = page.getByTestId('upnext-row');
+  // The radio's suggestions, then the next batch on the way: all of Up next is there.
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => { nextStart: number } }).__cyberjukeQueue().nextStart)).toBeGreaterThanOrEqual(0);
   await expect(rows.nth(3)).toBeVisible();
   await rows.first().getByTestId('upnext-remove').click();
   const toast = page.getByTestId('toast');
@@ -669,7 +671,13 @@ test('in Now Playing an Undo message sits at the bottom, and Up next scrolls cle
   const vh = page.viewportSize()!.height;
   expect(vh - (t.y + t.height)).toBeLessThanOrEqual(30);
   // At the end of Up next, the last row's buttons are all above the message.
-  await page.locator('.np-scroll').evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  // (Again until it stays there: rows off screen skip layout, so their height is a guess until shown.)
+  const scroll = page.locator('.np-scroll');
+  await expect.poll(() => scroll.evaluate(async (el) => {
+    el.scrollTo(0, el.scrollHeight);
+    await new Promise(requestAnimationFrame);
+    return el.scrollHeight - el.clientHeight - el.scrollTop;
+  })).toBeLessThanOrEqual(1);
   const last = rows.last();
   for (const id of ['upnext-up', 'upnext-down', 'upnext-remove']) {
     const b = await box(last.getByTestId(id));
