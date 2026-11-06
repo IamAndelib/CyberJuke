@@ -1291,20 +1291,20 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    private fun restorePlayed(item: MediaItem, beforeId: String?, mine: Boolean, top: Boolean) {
+    private fun restorePlayed(item: MediaItem, beforeId: String?, beforeIndex: Int, mine: Boolean, top: Boolean, auto: Boolean, earlier: Boolean) {
         crossfade?.settle()
-        queue.restorePlayed(item, beforeId, mine, top)
+        queue.restorePlayed(item, beforeId, mine, top, beforeIndex, auto, earlier)
         queueChanged()
     }
 
-    private fun restore(item: MediaItem, section: NativeQueue.Section, beforeId: String?, mine: Boolean) {
+    private fun restore(item: MediaItem, section: NativeQueue.Section, beforeId: String?, beforeIndex: Int, mine: Boolean, auto: Boolean, heard: Boolean, earlier: Boolean) {
         if (section == NativeQueue.Section.AUTO && !Stations.keepsGoing(autoplayEnabled, seedId, context?.first)) {
             Log.i(TAG, "restore: autoplay item dropped (autoplay off)")
             return
         }
         // During a fade, among the tracks after the one fading in: it takes over first.
         crossfade?.settle()
-        queue.restore(item, section, beforeId, mine)
+        queue.restore(item, section, beforeId, mine, beforeIndex, auto, heard, earlier)
         queueChanged()
     }
 
@@ -1942,11 +1942,14 @@ class PlaybackService : MediaSessionService() {
                         val item = tracks()?.singleOrNull() ?: return bad
                         val kind = args.getString(QueueCommands.ARG_KIND)
                         val before = BridgeLimits.checkString(args.getString(QueueCommands.ARG_BEFORE), "beforeId")
+                        val at = args.getInt(QueueCommands.ARG_BEFORE_INDEX, -1)
                         val mine = args.getBoolean(QueueCommands.ARG_MINE, false)
+                        val auto = args.getBoolean(QueueCommands.ARG_AUTO, false)
+                        val earlier = args.getBoolean(QueueCommands.ARG_EARLIER, false)
                         if (kind == QueueCommands.KIND_PLAYED || kind == QueueCommands.KIND_TOP) {
-                            restorePlayed(item, before, mine, kind == QueueCommands.KIND_TOP)
+                            restorePlayed(item, before, at, mine, kind == QueueCommands.KIND_TOP, auto, earlier)
                         } else {
-                            restore(item, NativeQueue.Section.of(kind) ?: return bad, before, mine)
+                            restore(item, NativeQueue.Section.of(kind) ?: return bad, before, at, mine, auto, args.getBoolean(QueueCommands.ARG_HEARD, false), earlier)
                         }
                     }
                 }

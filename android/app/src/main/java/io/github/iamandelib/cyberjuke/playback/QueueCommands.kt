@@ -44,7 +44,7 @@ internal object QueueCommands {
     /** Removes every item whose id is in [ARG_IDS] (K5, sign-out). */
     const val ACTION_REMOVE_IDS = "io.github.iamandelib.cyberjuke.REMOVE_IDS"
 
-    /** Undo of a removal (K3): one track in [ARG_TRACKS], [ARG_KIND], [ARG_BEFORE], [ARG_MINE]. */
+    /** Undo of a removal (K3): one track in [ARG_TRACKS], [ARG_KIND], [ARG_BEFORE], [ARG_BEFORE_INDEX], [ARG_MINE], [ARG_AUTO], [ARG_HEARD], [ARG_EARLIER]. */
     const val ACTION_RESTORE = "io.github.iamandelib.cyberjuke.RESTORE"
 
     /** The NativeTrack[] JSON. */
@@ -69,8 +69,16 @@ internal object QueueCommands {
     const val KIND_TOP = "top"
     const val ARG_BEFORE = "beforeId"
 
+    /** [ACTION_RESTORE]: the list index of [ARG_BEFORE]'s item, matched with its id first (-1: by id only). */
+    const val ARG_BEFORE_INDEX = "beforeIndex"
+
     /** [ACTION_RESTORE]: a played item queued by you keeps that mark (NativeQueue.restorePlayed). */
     const val ARG_MINE = "mine"
+
+    /** [ACTION_RESTORE]: it was added by autoplay, and keeps that tag; it was heard, and is again; it is of an earlier list, and goes back into it. */
+    const val ARG_AUTO = "auto"
+    const val ARG_HEARD = "heard"
+    const val ARG_EARLIER = "earlier"
 
     /** [ACTION_SKIP_TO]: a "From the top" row, which enters the next lap (NativeQueue.skipTo). */
     const val ARG_LAP = "lap"

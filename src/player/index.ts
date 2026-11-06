@@ -126,9 +126,9 @@ export const player: Player = {
     if (t && (expectId == null || t.id === expectId)) removed.add(t.id);
     return guarded.remove(index, expectId);
   },
-  restore: (track, kind, beforeId, mine) => {
+  restore: (track, undo) => {
     removed.delete(track.id);
-    return guarded.restore(track, kind, beforeId, mine);
+    return guarded.restore(track, undo);
   },
 };
 

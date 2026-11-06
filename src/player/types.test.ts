@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Track } from '../data/model';
-import { EMPTY_STATE, nsfwAutoplayIds, placeOf, type PlayerState, type UpNextItem } from './types';
+import { EMPTY_STATE, nsfwAutoplayIds, placeOf, undoOf, type PlayerState, type UpNextItem } from './types';
 
 const t = (id: string, nsfw: boolean) => ({ id, nsfw }) as Track;
 
@@ -31,5 +31,35 @@ describe('placeOf', () => {
     expect(placeOf(at(tracks(12, 'l'), [], 3))).toBe('4 of 12');
     expect(placeOf(at(tracks(80, 'l'), [], 0))).toBe('1 of 80');
     expect(placeOf(at(tracks(1, 'l'), tracks(30, 'a'), 0))).toBe('Single track');
+  });
+});
+
+describe('undoOf', () => {
+  const u = (id: string, index: number, more: Partial<UpNextItem> = {}): UpNextItem => ({ track: t(id, false), index, ...more });
+  const none = { upNext: [], previous: [], lap: [], mine: [], listStart: 0, nextStart: -1 };
+
+  it('anchors a Played row on the song after it in play order, heard or not, at its index once it is gone (S9)', () => {
+    // Repeat all, Previous from a to c: Played shows a, From the top a and b.
+    const s = { ...none, previous: [u('a', 0)], lap: [u('a', 0), u('b', 1)] };
+    expect(undoOf(s, u('a', 0), 'played')).toEqual({ kind: 'played', before: { id: 'b', index: 0 }, heard: true });
+    // A song you queued and heard is only in Played: it comes first when it is the next Played row.
+    const m = { ...none, previous: [u('a', 0), u('M', 1)], lap: [u('a', 0), u('b', 2)], mine: [1] };
+    expect(undoOf(m, u('a', 0), 'played').before).toEqual({ id: 'M', index: 0 });
+    // The next Played row is in From the top too: an unheard song before it comes first.
+    const n = { ...none, previous: [u('a', 0), u('c', 2)], lap: [u('a', 0), u('b', 1), u('c', 2)] };
+    expect(undoOf(n, u('a', 0), 'played').before?.id).toBe('b');
+    // A From the top row you heard goes back among the played, with its tag.
+    expect(undoOf({ ...s, previous: [u('a', 0, { auto: true })], lap: [u('a', 0, { auto: true }), u('b', 1)] }, u('a', 0), 'top')).toEqual({ kind: 'played', before: { id: 'b', index: 0 }, auto: true, heard: true });
+    expect(undoOf(s, u('b', 1), 'top')).toEqual({ kind: 'top', before: null });
+    // A song of an earlier list (before the current list's marker) goes back into that one.
+    expect(undoOf({ ...s, listStart: 1 }, u('a', 0), 'played').earlier).toBe(true);
+    expect(undoOf({ ...s, listStart: 1 }, u('b', 1), 'top').earlier).toBeUndefined();
+  });
+
+  it("keeps an Up next row's kind, tag, heard state and mark; a suggestion of the list you're in goes back into it (S6, S8, S15)", () => {
+    const s = { ...none, upNext: [u('b', 1, { heard: true }), u('s1', 2, { auto: true }), u('t1', 3, { auto: true })], mine: [1], nextStart: 3 };
+    expect(undoOf(s, u('b', 1), 'list')).toEqual({ kind: 'list', before: { id: 's1', index: 1 }, mine: true, heard: true });
+    expect(undoOf(s, u('s1', 2), 'autoplay')).toEqual({ kind: 'list', before: { id: 't1', index: 2 }, auto: true });
+    expect(undoOf(s, u('t1', 3), 'autoplay')).toEqual({ kind: 'autoplay', before: null, auto: true });
   });
 });

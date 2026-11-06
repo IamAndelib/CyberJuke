@@ -1,7 +1,7 @@
 import { Fragment } from 'preact';
 import { signal } from '@preact/signals';
 import { useLayoutEffect, useRef } from 'preact/hooks';
-import { autoplayLabel, currentId, currentPlaysOffline, currentTrack, isPlaying, lapTracks, player, playContext, previousTracks, queuedHeard, repeatMode, saveSongs, shuffleOn, upNextSections, type PlayContext, type UpItem, type UpNextKind } from '../../player';
+import { autoplayLabel, currentId, currentPlaysOffline, currentTrack, isPlaying, lapTracks, player, playContext, previousTracks, queuedHeard, repeatMode, saveSongs, shuffleOn, undoOf, upNextSections, type PlayContext, type UpItem, type UpNextKind } from '../../player';
 import { isLocal, type Track } from '../../data/model';
 import { online } from '../../core/network';
 import { settings } from '../../stores/library';
@@ -109,24 +109,23 @@ function saveQueue(shown: Track[]): void {
 const upTo = (n: number) => (n >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : n);
 
 /**
- * Removes a queue row, with Undo: back as its kind, before the row that followed it, `beforeId`
- * (K3). A "From the top" song you heard goes back among the played too, and a song you queued
- * keeps its mark, also one that played and is ahead again after Previous (rule 8). The Undo goes
- * once a new list or another track starts, when "back where it was" no longer means anything.
+ * Removes a queue row, with Undo: the same song back, as it was, where it was (K3, undoOf): its kind,
+ * autoplay tag, heard state and queued-by-you mark (rule 8), before the song that followed it in play
+ * order. The Undo goes once a new list or another track starts, when "back where it was" no longer
+ * means anything.
  */
-export function removeWithUndo(it: UpItem, kind: Kind, beforeId: string | null): void {
+export function removeWithUndo(it: UpItem, kind: Kind): void {
   const s = player.state.peek();
   // A row the queue has moved on from (its track playing now, or at another place) stays.
   if (s.queue[it.index]?.id !== it.track.id) return;
-  const back: Kind = kind === 'top' && s.previous.some((u) => u.index === it.index) ? 'played' : kind;
-  const mine = s.mine.includes(it.index);
+  const undo = undoOf(s, it, kind);
   void player.remove(it.index, it.track.id);
   const ctx0 = playContext.peek();
   const cur0 = currentId.peek();
   toast('Removed from queue', undefined, {
     label: 'Undo',
     // The glow starts once the song is back, so a slow restore doesn't eat into it.
-    run: () => void player.restore(it.track, back, beforeId, mine).then(() => glowRow(glowScope(kind), it.track.id)),
+    run: () => void player.restore(it.track, undo).then(() => glowRow(glowScope(kind), it.track.id)),
     stale: () => playContext.value !== ctx0 || currentId.value !== cur0,
     ...(it.track.membersOnly && { membersOnly: true }),
   });
@@ -168,10 +167,10 @@ export function UpNext() {
     if (document.activeElement === b && r) refocus.current = { ...r, until: performance.now() + REFOCUS_MS };
   };
 
-  const remove = (it: UpItem, kind: Kind, beforeId: string | null) => {
+  const remove = (it: UpItem, kind: Kind) => {
     if (guarded()) return false;
     guardUntil.current = performance.now() + REMOVE_GUARD_MS;
-    removeWithUndo(it, kind, beforeId);
+    removeWithUndo(it, kind);
     return true;
   };
   // The row moves or goes, and a tap on it plays it: each shows its press first (afterPress).
@@ -184,11 +183,10 @@ export function UpNext() {
     });
 
   /**
-   * A heading's rows (`after`: the row under the next heading). Played ones too, whose last ↓
-   * moves it past the playing track (`past`: the row it then follows), to play next after
-   * anything queued by you: to hear it again.
+   * A heading's rows. Played ones too, whose last ↓ moves it past the playing track (`past`: the row
+   * it then follows), to play next after anything queued by you: to hear it again.
    */
-  const rows = (kind: Kind, items: UpItem[], past?: UpItem, after?: UpItem) =>
+  const rows = (kind: Kind, items: UpItem[], past?: UpItem) =>
     items.map((it, k) => {
       const down = items[k + 1] ?? past;
       return (
@@ -251,7 +249,7 @@ export function UpNext() {
                 const other = rows[at + 1] ?? rows[at - 1];
                 const to = near ? { id: near.track.id, kind } : other && { id: other.dataset.trackId!, kind: other.dataset.section as Kind };
                 afterPress(b, () => {
-                  if (remove(it, kind, (items[k + 1] ?? after)?.track.id ?? null)) keepFocus(b, to ? { ...to, index: null, button: 'remove', gone: [it.track.id, it.index] } : null);
+                  if (remove(it, kind)) keepFocus(b, to ? { ...to, index: null, button: 'remove', gone: [it.track.id, it.index] } : null);
                 });
               }}
               data-role="remove"
@@ -331,7 +329,7 @@ export function UpNext() {
             <li class={'upnext-label' + (r.kind === 'autoplay' ? ' auto' : '')} data-testid={`upnext-${r.kind}-label`} aria-hidden="true">
               {titles[r.kind]}
             </li>
-            {rows(r.kind, r.items, undefined, sec.runs[k + 1]?.items[0])}
+            {rows(r.kind, r.items)}
           </Fragment>
         ))}
         {lap.length > 0 && (

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { KEEP_PLAYED, Queue } from './queue';
+import type { Undo, UpNextKind } from './types';
 
 const t = (id: string) => ({ id });
 const ids = (xs: { id: string }[]) => xs.map((x) => x.id);
 const abc = () => ['a', 'b', 'c', 'd', 'e'].map(t);
+/** An Undo by kind and the id of the song after it (no index: matched by id). */
+const back = (kind: UpNextKind, id: string | null): Undo => ({ kind, before: id == null ? null : { id, index: -1 } });
 
 /** Deterministic PRNG so shuffles are reproducible. */
 function seeded(seed = 42) {
@@ -386,14 +389,14 @@ describe('Queue: editing', () => {
     q.setList(abc(), 0);
     q.addAuto([t('s1')]);
     q.remove(2);
-    q.restore(t('c'), 'list', 'd');
+    q.restore(t('c'), back('list', 'd'));
     expect(ids(q.upNext())).toEqual(['b', 'c', 'd', 'e', 's1']);
     expect(ids(q.items)).toEqual(['a', 'b', 'c', 'd', 'e', 's1']);
     const r = new Queue(seeded(3));
     r.setList(abc(), 0);
     r.setShuffle(true);
     r.addAuto([t('s1')]);
-    r.restore(t('z'), 'list', null);
+    r.restore(t('z'), back('list', null));
     expect(ids(r.upNext()).at(-1)).toBe('s1');
     expect(ids(r.upNext()).at(-2)).toBe('z');
   });
@@ -404,7 +407,7 @@ describe('Queue: editing', () => {
     q.queueNext([t('Q1')]);
     q.remove(2); // B
     q.queueNext([t('Q2')]);
-    q.restore(t('B'), 'list', 'C');
+    q.restore(t('B'), back('list', 'C'));
     expect(ids(q.upNext())).toEqual(['Q1', 'Q2', 'B', 'C']);
     expect(q.queuedCount).toBe(2);
   });
@@ -414,7 +417,7 @@ describe('Queue: editing', () => {
     q.setList([t('A'), t('B'), t('C'), t('D')], 0);
     q.remove(1); // B, followed by C
     q.next(true); // A ended: C plays
-    q.restore(t('B'), 'list', 'C');
+    q.restore(t('B'), back('list', 'C'));
     expect(q.current?.id).toBe('C');
     expect(ids(q.upNext())).toEqual(['D', 'B']);
   });
@@ -424,11 +427,11 @@ describe('Queue: editing', () => {
     q.setList(abc(), 0);
     q.queueNext([t('x'), t('y'), t('z')]);
     q.remove(2); // y
-    q.restore(t('y'), 'queued', 'z');
+    q.restore(t('y'), back('queued', 'z'));
     expect(ids(q.upNext())).toEqual(['x', 'y', 'z', 'b', 'c', 'd', 'e']);
     expect(q.queuedCount).toBe(3);
     q.remove(3); // z, the last queued
-    q.restore(t('z'), 'queued', 'gone');
+    q.restore(t('z'), back('queued', 'gone'));
     expect(ids(q.upNext())).toEqual(['x', 'y', 'z', 'b', 'c', 'd', 'e']);
     expect(q.queuedCount).toBe(3);
   });
@@ -438,11 +441,22 @@ describe('Queue: editing', () => {
     q.setList([t('a'), t('b')], 0);
     q.addAuto([t('s1'), t('s2'), t('s3')]);
     q.remove(3); // s2
-    q.restore(t('s2'), 'autoplay', 's3');
+    q.restore(t('s2'), back('autoplay', 's3'));
     expect(q.upNextItems().filter((x) => x.auto).map((x) => x.item.id)).toEqual(['s1', 's2', 's3']);
     q.remove(4); // s3
-    q.restore(t('s3'), 'autoplay', null);
+    q.restore(t('s3'), back('autoplay', null));
     expect(q.upNextItems().filter((x) => x.auto).map((x) => x.item.id)).toEqual(['s1', 's2', 's3']);
+  });
+
+  it("restore goes back before the song that followed it, not another copy of it: a station's next round repeats ids (S10)", () => {
+    const q = new Queue();
+    q.setList([t('x1'), t('x2'), t('x3')], 0);
+    q.addAuto([t('x3'), t('x2'), t('x1')]); // the next round: the same songs
+    const way = q.nextStartIndex;
+    q.remove(way); // ✕ on the next round's x3; the next round's x2 followed it, and now has its index
+    q.restore(t('x3'), { kind: 'autoplay', before: { id: 'x2', index: way } });
+    expect(q.items.findIndex((x, i) => x.id === 'x3' && q.isAuto(i))).toBeGreaterThanOrEqual(q.nextStartIndex);
+    expect(ids(q.upNext())).toEqual(['x2', 'x3', 'x3', 'x2', 'x1']);
   });
 
   it('removeIds drops every copy; the current one moves on to the next that stays', () => {

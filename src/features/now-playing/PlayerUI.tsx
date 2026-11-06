@@ -835,7 +835,7 @@ export function TrackMenu() {
               <button
                 class="sheet-item"
                 onClick={() => {
-                  if (k >= 0) removeWithUndo(live[k], 'queued', live[k + 1]?.track.id ?? null);
+                  if (k >= 0) removeWithUndo(live[k], 'queued');
                   close();
                 }}
                 data-testid="menu-remove-queue"

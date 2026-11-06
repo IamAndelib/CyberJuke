@@ -13,7 +13,7 @@ import { logError } from '../core/log';
 import { trackErrorText } from './errorText';
 import { stationTrack } from './radio';
 import { BRIDGE_MAX_ITEMS, BRIDGE_MAX_STRING, JukePlayer, STALE_INDEX, type NativeState, type NativeTrack, type RepeatMode } from './native';
-import { EMPTY_STATE, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextItem, type UpNextKind } from './types';
+import { EMPTY_STATE, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type Undo, type UpNextItem } from './types';
 
 /** K6: text native would refuse as too long is cut (a link that long is dropped). */
 const clip = (s: string) => (s.length > BRIDGE_MAX_STRING ? s.slice(0, BRIDGE_MAX_STRING) : s);
@@ -223,7 +223,7 @@ export class NativePlayer implements Player {
     const prev = this.s.value;
     // Position ticks change nothing below: keep the same arrays and objects, so the
     // computeds built on them (upNextSections, playContext) don't change either.
-    const from = `${st.index}|${st.queueIds.join(',')}|${st.upNextIds.join(',')}|${st.upNextKinds}|${st.seedId}|${st.prevIndex?.join(',')}|${st.mineIndex?.join(',')}|${st.lapIndex?.join(',')}`;
+    const from = `${st.index}|${st.queueIds.join(',')}|${st.upNextIds.join(',')}|${st.upNextKinds}|${st.seedId}|${st.prevIndex?.join(',')}|${st.mineIndex?.join(',')}|${st.lapIndex?.join(',')}|${st.heardIndex?.join(',')}|${st.autoIndex?.join(',')}`;
     let { queue, upNext, previous, mine, lap, seed } = prev;
     if (from !== this.builtFrom) {
       this.builtFrom = from;
@@ -252,9 +252,9 @@ export class NativePlayer implements Player {
         if (i < 0) return;
         used.add(i);
         const kind = st.upNextKinds[k];
-        upNext.push({ track: queue[i], index: i, ...(kind === 'q' && { queued: true }), ...(kind === 'a' && { auto: true }) });
+        upNext.push({ track: queue[i], index: i, ...(kind === 'q' && { queued: true }), ...(kind === 'a' && { auto: true }), ...(st.heardIndex?.includes(i) && { heard: true }) });
       });
-      const rows = (xs: number[] = []) => xs.map((i) => ({ track: queue[i], index: i }));
+      const rows = (xs: number[] = []) => xs.map((i) => ({ track: queue[i], index: i, ...(st.autoIndex?.includes(i) && { auto: true }) }));
       previous = rows(st.prevIndex);
       mine = st.mineIndex ?? [];
       lap = rows(st.lapIndex);
@@ -459,11 +459,11 @@ export class NativePlayer implements Player {
     await JukePlayer.queueNext({ tracks: tracks.map(toNative) });
   }
 
-  async restore(track: Track, kind: UpNextKind, beforeId: string | null, mine: boolean): Promise<void> {
+  async restore(track: Track, { kind, before, mine, auto, heard, earlier }: Undo): Promise<void> {
     if (!isPlayable(track)) return;
     if (this.s.value.index < 0) return this.playList([track], 0);
     this.remember([track]);
-    await JukePlayer.restore({ track: toNative(track), kind, beforeId, ...(mine && { mine: true }) });
+    await JukePlayer.restore({ track: toNative(track), kind, beforeId: before?.id ?? null, ...(before && { beforeIndex: before.index }), ...(mine && { mine }), ...(auto && { auto }), ...(heard && { heard }), ...(earlier && { earlier }) });
   }
 
   async addAutoplay(all: Track[], seedId: string): Promise<void> {

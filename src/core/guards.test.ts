@@ -33,6 +33,8 @@ describe('parseNativeState', () => {
       prevIndex: [2],
       mineIndex: [0, 1],
       lapIndex: [0],
+      heardIndex: [2],
+      autoIndex: [0, 2],
       listStart: 1,
       nextStart: 2,
       context: { label: 'Liked', mode: 'list' },
@@ -78,11 +80,13 @@ describe('parseNativeState', () => {
     // The playing song keeps its mark.
     expect(st?.mineIndex).toEqual([1, 2]);
     expect(st?.lapIndex).toEqual([0, 2]);
+    // Undo's flags (heard, autoplay), the same way.
+    expect(parseNativeState({ index: 1, queueIds: ['A', 'B', 'C'], heardIndex: [2, 3, 'x'], autoIndex: [0, -1, 0.5] })).toMatchObject({ heardIndex: [2], autoIndex: [0] });
     // The lap's first 50.
     const queueIds = Array.from({ length: 60 }, (_, i) => `t${i}`);
     expect(parseNativeState({ index: 59, queueIds, lapIndex: queueIds.map((_, i) => i) })?.lapIndex).toEqual(queueIds.slice(0, 50).map((_, i) => i));
     // An older native sends neither.
-    expect(parseNativeState({ index: 0, queueIds: ['A'] })).toMatchObject({ mineIndex: [], lapIndex: [] });
+    expect(parseNativeState({ index: 0, queueIds: ['A'] })).toMatchObject({ mineIndex: [], lapIndex: [], heardIndex: [], autoIndex: [] });
   });
 
   it('reads where the current list and the autoplay on the way start; an older native sends neither', () => {
@@ -116,6 +120,8 @@ describe('parseNativeState', () => {
       prevIndex: [],
       mineIndex: [],
       lapIndex: [],
+      heardIndex: [],
+      autoIndex: [],
       listStart: 0,
       nextStart: -1,
       context: null,

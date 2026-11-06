@@ -110,6 +110,8 @@ export function parseNativeState(x: unknown, prevQueueIds: readonly string[] = [
     lapIndex: inQueue(x.lapIndex)
       .filter((i) => i !== index)
       .slice(0, UP_NEXT_MAX),
+    heardIndex: inQueue(x.heardIndex),
+    autoIndex: inQueue(x.autoIndex),
     listStart: at(x.listStart, 0),
     nextStart: at(x.nextStart, -1),
     context: ctx ? { label: isStr(ctx.label) ? ctx.label : '', mode: ctx.mode === 'radio' ? 'radio' : 'list' } : null,

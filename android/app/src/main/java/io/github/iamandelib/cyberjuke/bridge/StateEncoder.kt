@@ -36,8 +36,13 @@ internal object StateEncoder {
         val kinds = StringBuilder()
         val previous = ArrayList<Int>()
         val lap = ArrayList<Int>()
+        // The Up next entries heard already (Previous walked back over them): an Undo keeps it.
+        val heardAhead = ArrayList<Int>()
         val pending = QueueInfo.pendingSerials
+        val heard = QueueInfo.heardUids
         fun serialAt(i: Int) = c.getMediaItemAt(i).mediaMetadata.extras?.getLong(QueueCommands.EXTRA_QUEUE_SERIAL, 0L) ?: 0L
+        fun heardAt(i: Int) = (c.getMediaItemAt(i).mediaMetadata.extras?.getLong(QueueCommands.EXTRA_UID, 0L) ?: 0L).let { it != 0L && it in heard }
+        fun autoAt(i: Int) = c.getMediaItemAt(i).mediaMetadata.extras?.getBoolean(QueueCommands.EXTRA_AUTOPLAY, false) == true
         // The songs you queued keep their serial after they play: the "queued by you" mark (rule 8).
         val mine = (0 until count).filter { serialAt(it) != 0L }
         val timeline = c.currentTimeline
@@ -59,15 +64,14 @@ internal object StateEncoder {
                         else -> 'l'
                     },
                 )
+                if (heardAt(i)) heardAhead.add(i)
                 i = timeline.getNextWindowIndex(i, repeat, shuffle)
             }
             // The heard tracks before it in play order ("Played"), nearest first, then sent oldest
             // first: the queue shows them above the current one.
-            val heard = QueueInfo.heardUids
             var j = timeline.getPreviousWindowIndex(index, repeat, shuffle)
             while (j != C.INDEX_UNSET && j != index && previous.size < MAX_UP_NEXT && j < count) {
-                val uid = c.getMediaItemAt(j).mediaMetadata.extras?.getLong(QueueCommands.EXTRA_UID, 0L) ?: 0L
-                if (uid != 0L && uid in heard) previous.add(j)
+                if (heardAt(j)) previous.add(j)
                 j = timeline.getPreviousWindowIndex(j, repeat, shuffle)
             }
             // The next lap ("From the top"), repeat all only: the play order from its first item up to the
@@ -115,6 +119,9 @@ internal object StateEncoder {
         state.put("prevIndex", JSArray().apply { previous.asReversed().forEach { put(it) } })
         state.put("mineIndex", JSArray(mine))
         state.put("lapIndex", JSArray(lap))
+        state.put("heardIndex", JSArray(heardAhead))
+        // The Played and "From the top" entries autoplay added: an Undo keeps the tag.
+        state.put("autoIndex", JSArray((previous + lap).distinct().filter { autoAt(it) }))
         // Queue indices like the above; nothing before the list start is of this list, and -1 is no autoplay on the way.
         state.put("listStart", if (count > 0) QueueInfo.listStart else 0)
         state.put("nextStart", if (count > 0) QueueInfo.nextStart else -1)

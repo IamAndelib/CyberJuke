@@ -15,8 +15,10 @@ export interface UpNextItem {
   index: number;
   /** Added with "Add to queue" and not played yet (shown under "Queued by you"). */
   queued?: boolean;
-  /** Added by autoplay (shown under "Autoplay"). */
+  /** Added by autoplay (shown under "Autoplay"; Played and "From the top" rows carry it too). */
   auto?: boolean;
+  /** Heard already: an Up next row Previous walked back over. */
+  heard?: boolean;
 }
 
 /**
@@ -70,6 +72,56 @@ export function sectionsOf(upNext: UpNextItem[], seed: UpNextSections['seed']): 
     else out.runs.push({ kind, items: [item] });
   }
   return out;
+}
+
+/** What Undo of a removed queue row needs to put the same song back, as it was, where it was (K3; undoOf). */
+export interface Undo {
+  /** Back among what played (`played`), unheard behind the current one (`top`), or into an Up next section (`list`: the list you're in, its suggestions too). */
+  kind: UpNextKind;
+  /** The song after it in play order, heard or not, and its queue index once this one is gone: matched by both, by the id alone if the index has moved on. */
+  before: { id: string; index: number } | null;
+  /** Queued by you (rule 8's mark), added by autoplay, heard. */
+  mine?: true;
+  auto?: true;
+  heard?: true;
+  /** Of an earlier list (before the current list's marker): it goes back into that one. */
+  earlier?: true;
+}
+
+/**
+ * The Undo of ✕ on a row `kind` shows (Up next's, Played or "From the top"), from the state before it goes:
+ * its own kind, tag, mark and heard state, its own list, and the song after it in play order. A suggestion
+ * of the list you're in goes back into it, before what's on the way (S6); a "From the top" song you heard,
+ * among the played.
+ */
+export function undoOf(s: Pick<PlayerState, 'upNext' | 'previous' | 'lap' | 'mine' | 'listStart' | 'nextStart'>, it: UpItem, kind: UpNextKind): Undo {
+  const rows = kind === 'played' ? s.previous : kind === 'top' ? s.lap : s.upNext;
+  const k = rows.findIndex((u) => u.index === it.index);
+  const heard = kind === 'played' || s.previous.some((u) => u.index === it.index) || rows[k]?.heard === true;
+  const next = kind === 'played' || kind === 'top' ? behindAfter(s.previous, s.lap, it.index) : rows[k + 1];
+  const onWay = s.nextStart >= 0 && it.index >= s.nextStart;
+  return {
+    kind: kind === 'top' && heard ? 'played' : kind === 'autoplay' && !onWay ? 'list' : kind,
+    before: next ? { id: next.track.id, index: next.index - (next.index > it.index ? 1 : 0) } : null,
+    ...(s.mine.includes(it.index) && { mine: true }),
+    ...(rows[k]?.auto && { auto: true }),
+    ...(heard && { heard: true }),
+    ...(it.index < s.listStart && { earlier: true }),
+  };
+}
+
+/**
+ * The song after queue index `index` in play order, behind the current one, heard or not: Played shows the
+ * heard ones, "From the top" (Repeat all) all but the songs you queued, so a Played row comes first only
+ * when it is one of those.
+ */
+function behindAfter(previous: UpNextItem[], lap: UpNextItem[], index: number): UpNextItem | undefined {
+  const after = (rows: UpNextItem[]) => {
+    const k = rows.findIndex((u) => u.index === index);
+    return k < 0 ? undefined : rows[k + 1];
+  };
+  const [p, l] = [after(previous), after(lap)];
+  return p && !lap.some((u) => u.index === p.index) ? p : (l ?? p);
 }
 
 /** Autoplay is running low: `left` tracks to go after the current one. */
@@ -205,13 +257,12 @@ export interface Player {
    */
   addToQueue(tracks: Track[]): Promise<void>;
   /**
-   * Undo a remove (K3): put `track` back as `kind`, right before `beforeId` (the row that
-   * followed it in Up next) if that is still ahead (a queued track only before a queued one,
-   * the others never before one), else at the end of its section. Never at or before the
-   * current track. `played` and `top` go back behind it, before `beforeId` (see Queue.restore).
-   * `mine`: it was queued by you, and keeps that mark (rule 8).
+   * Undo a remove (K3): put `track` back as it was, where it was (`undo`, from undoOf): as its kind, right
+   * before the song that followed it if that is still ahead (a queued track only before a queued one,
+   * the others never before one), else at the end of its section. Never at or before the current track;
+   * a list song never on the way. `played` and `top` go back behind it (see Queue.restore).
    */
-  restore(track: Track, kind: UpNextKind, beforeId: string | null, mine: boolean): Promise<void>;
+  restore(track: Track, undo: Undo): Promise<void>;
   /** Autoplay tracks computed for `seedId`; ignored if the seed changed meanwhile. */
   addAutoplay(tracks: Track[], seedId: string): Promise<void>;
   /** The Autoplay setting (C3). Off drops the autoplay tracks still to come. */

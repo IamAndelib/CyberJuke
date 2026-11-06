@@ -95,8 +95,8 @@ import kotlin.math.roundToInt
  * - skipToIndex, removeItem and moveItem take an optional `expectId` (K2: the id the caller
  *   sees at `index` / `from`); if the item there has another id the call rejects with code
  *   STALE_INDEX and nothing changes. Checked in the service, on the player itself.
- * - restore({ track, kind: 'played' | 'top' | 'queued' | 'list' | 'autoplay', beforeId }) (K3): Undo of a
- *   removal, see [io.github.iamandelib.cyberjuke.playback.NativeQueue.restore] and restorePlayed.
+ * - restore({ track, kind: 'played' | 'top' | 'queued' | 'list' | 'autoplay', beforeId, beforeIndex?, mine?, auto?, heard?, earlier? })
+ *   (K3): Undo of a removal, see [io.github.iamandelib.cyberjuke.playback.NativeQueue.restore] and restorePlayed.
  * - removeIds({ ids }) (K5): removes every item with one of these ids; if the current one
  *   goes, the next one that stays plays, or playback pauses when none is left.
  * - Size caps (K6): more than 2000 tracks or ids, or a string over 2000 characters, rejects
@@ -644,13 +644,15 @@ class JukePlayerPlugin : Plugin() {
     }
 
     /**
-     * `restore({ track, kind: 'played' | 'queued' | 'list' | 'autoplay' | 'top', beforeId: string | null, mine?: true })`:
+     * `restore({ track, kind: 'played' | 'queued' | 'list' | 'autoplay' | 'top', beforeId: string | null, beforeIndex?: number, mine?: true, auto?: true, heard?: true, earlier?: true })`:
      * Undo of a removal (K3). The track goes back as `kind`, right before the first entry after
-     * the current track with id `beforeId` (a queued one only before a queued one, the others
-     * never before one), else at the end of its section; never at or before the current track.
-     * 'played' goes back before `beforeId` among every entry before the current track, heard or not,
-     * else right before the current track; 'top' (a "From the top" row) the same, but unheard. A
-     * 'played' or 'list' track gets the queued-by-you mark back when `mine`.
+     * the current track that is the one at `beforeIndex` if it has id `beforeId`, else the first with that id
+     * (a queued one only before a queued one, the others never before one), else at the end of its section;
+     * never at or before the current track, and a 'list' one never on the way. 'played' goes back before that
+     * entry among every entry before the current track, heard or not, else right before the current track;
+     * 'top' (a "From the top" row) the same, but unheard. A 'played' or 'list' track gets the queued-by-you
+     * mark back when `mine`, the autoplay tag when `auto`, is heard again when `heard`, and goes back into an
+     * earlier list (before the current list's marker) when `earlier`.
      */
     @PluginMethod
     fun restore(call: PluginCall) {
@@ -666,7 +668,11 @@ class JukePlayerPlugin : Plugin() {
             putString(QueueCommands.ARG_TRACKS, arr.toString())
             putString(QueueCommands.ARG_KIND, kind)
             if (beforeId.isNotEmpty()) putString(QueueCommands.ARG_BEFORE, beforeId)
+            putInt(QueueCommands.ARG_BEFORE_INDEX, call.intArg("beforeIndex") ?: -1)
             putBoolean(QueueCommands.ARG_MINE, call.getBoolean("mine", false) ?: false)
+            putBoolean(QueueCommands.ARG_AUTO, call.getBoolean("auto", false) ?: false)
+            putBoolean(QueueCommands.ARG_HEARD, call.getBoolean("heard", false) ?: false)
+            putBoolean(QueueCommands.ARG_EARLIER, call.getBoolean("earlier", false) ?: false)
         }
         withController(call) { c -> sendCommand(call, c, QueueCommands.RESTORE, args) }
     }

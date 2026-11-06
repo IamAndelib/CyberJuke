@@ -44,6 +44,10 @@ export interface NativeState {
   mineIndex?: number[];
   /** The list indices of the next lap ("From the top"): repeat all only, play order from its first song to before the current one, without the songs you queued, the first 50. Absent from older natives: none. */
   lapIndex?: number[];
+  /** The list indices of the upNextIndex entries heard already (Previous walked back over them), for an Undo. Absent from older natives: none. */
+  heardIndex?: number[];
+  /** The list indices of the prevIndex and lapIndex entries added by autoplay, for an Undo. Absent from older natives: none. */
+  autoIndex?: number[];
   /** Queue index of the current list's first song, and of the first song of the autoplay on the way (-1: none). Absent from older natives: 0 and -1. */
   listStart?: number;
   nextStart?: number;
@@ -99,11 +103,14 @@ interface JukePlayerPlugin {
   queueNext(o: { tracks: NativeTrack[] }): Promise<void>;
   /**
    * K3: Undo of a remove, back in its section before `beforeId` (else at the section's end), never at or
-   * before the current track; 'played' goes back before `beforeId` among every track before the current one, heard or
-   * not, else right before the current one; 'top' (a "From the top" row) the same, but unheard. A 'played' or 'list'
-   * track gets the queued-by-you mark back when `mine` (rule 8).
+   * before the current track, and a 'list' song never on the way; 'played' goes back before `beforeId` among every
+   * track before the current one, heard or not, else right before the current one; 'top' (a "From the top" row) the
+   * same, but unheard. `beforeIndex`: that song's list index, matched with its id first (a station's next round repeats
+   * ids). A 'played' or 'list' track gets the queued-by-you mark back when `mine` (rule 8), the autoplay tag when
+   * `auto`, is heard again when `heard`, and goes back into an earlier list (before the current list's marker) when
+   * `earlier`. Older natives ignore the last five: by id, as a list song, unheard, by the song after it.
    */
-  restore(o: { track: NativeTrack; kind: 'played' | 'queued' | 'list' | 'autoplay' | 'top'; beforeId: string | null; mine?: true }): Promise<void>;
+  restore(o: { track: NativeTrack; kind: 'played' | 'queued' | 'list' | 'autoplay' | 'top'; beforeId: string | null; beforeIndex?: number; mine?: true; auto?: true; heard?: true; earlier?: true }): Promise<void>;
   /** K5: remove every item with one of these ids (at most BRIDGE_MAX_ITEMS); the current one skips to the next that stays, or stops. */
   removeIds(o: { ids: string[] }): Promise<void>;
   removeItem(o: { index: number; expectId?: string }): Promise<void>;

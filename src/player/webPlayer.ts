@@ -18,7 +18,7 @@ import { Queue } from './queue';
 import { stationPlaying } from './radio';
 import type { RepeatMode } from './native';
 import type { CrossfadeMs, Ipv4Mode, Quality } from '../stores/library';
-import { AUTOPLAY_LOW, EMPTY_STATE, firstBatchOfRadio, mayAutoplay, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type UpNextKind } from './types';
+import { AUTOPLAY_LOW, EMPTY_STATE, firstBatchOfRadio, mayAutoplay, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type Undo } from './types';
 
 /* Minimal typings for the parts of the IFrame API we use. */
 interface YTPlayer {
@@ -183,6 +183,8 @@ export class WebPlayer implements Player {
     const prev = this.s.value;
     const index = this.q.index;
     const items = this.q.items;
+    // Played and "From the top" rows keep their autoplay tag, for an Undo.
+    const row = (i: number) => ({ track: items[i], index: i, ...(this.q.isAuto(i) && { auto: true }) });
     this.s.value = {
       ...prev,
       queue: items,
@@ -191,9 +193,9 @@ export class WebPlayer implements Player {
       shuffle: this.q.shuffle,
       repeat: this.q.repeat,
       upNext: this.q.upNextItems().map(({ item, ...u }) => ({ track: item, ...u })),
-      previous: this.q.previousIndices().map((i) => ({ track: items[i], index: i })),
+      previous: this.q.previousIndices().map(row),
       mine: this.q.mineIndices(),
-      lap: this.q.lapIndices().map((i) => ({ track: items[i], index: i })),
+      lap: this.q.lapIndices().map(row),
       listStart: this.q.listStartIndex,
       nextStart: this.q.nextStartIndex,
       context: this.context,
@@ -495,11 +497,11 @@ export class WebPlayer implements Player {
     if (wasEmpty) await this.loadCurrent(true, true);
   }
 
-  async restore(track: Track, kind: UpNextKind, beforeId: string | null, mine: boolean): Promise<void> {
+  async restore(track: Track, undo: Undo): Promise<void> {
     if (!this.q.current) return this.playList([track], 0);
-    // Autoplay rows don't come back while autoplay is off (they'd be dropped).
-    if (kind === 'autoplay' && !this.keepsGoing(this.seed?.id)) return;
-    this.q.restore(track, kind, beforeId, mine);
+    // Autoplay rows on the way don't come back while autoplay is off (they'd be dropped).
+    if (undo.kind === 'autoplay' && !this.keepsGoing(this.seed?.id)) return;
+    this.q.restore(track, undo);
     this.publish();
   }
 

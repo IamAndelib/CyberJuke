@@ -4,7 +4,7 @@ import rules from '../../tests/spec/queue-rules.json';
 import { Queue } from './queue';
 import type { RepeatMode } from './native';
 import type { Track } from '../data/model';
-import { EMPTY_STATE, placeOf, sectionsOf, type UpItem, type UpNextKind as Section } from './types';
+import { EMPTY_STATE, placeOf, sectionsOf, undoOf, type Undo, type UpItem, type UpNextItem, type UpNextKind as Section } from './types';
 
 type Step = { op: string; [k: string]: unknown };
 interface Case {
@@ -41,7 +41,8 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
       };
       // Up next as the app builds it from what the player publishes.
       const upNext = () => q.upNextItems().map(({ item, ...u }) => ({ track: item as Track, ...u }));
-      let undo: [string, Section, string | null, boolean] | null = null;
+      const rows = (xs: number[]): UpNextItem[] => xs.map((i) => ({ track: q.items[i] as Track, index: i, ...(q.isAuto(i) && { auto: true }) }));
+      let undo: [string, Undo] | null = null;
       let top: string[] = [];
       for (const s of c.steps) {
         switch (s.op) {
@@ -72,20 +73,23 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
           case 'move':
             q.move(indexOf(s.id), s.toId != null ? indexOf(s.toId) : (s.to as number));
             break;
-          case 'restore':
-            q.restore(t(s.id as string), s.kind as Section, (s.beforeId as string | null) ?? null, s.mine === true);
+          case 'restore': {
+            const before = s.beforeId == null ? null : { id: s.beforeId as string, index: (s.beforeIndex as number) ?? -1 };
+            q.restore(t(s.id as string), { kind: s.kind as Section, before, ...(s.mine === true && { mine: true }), ...(s.auto === true && { auto: true }), ...(s.heard === true && { heard: true }), ...(s.earlier === true && { earlier: true }) });
             break;
+          }
           case 'removeRow': {
-            // Up next's ✕: Undo puts it back as its row's kind, before the row that followed it.
-            const rows = upNext();
-            const k = rows.findIndex((u) => u.track.id === s.id);
-            const { kind } = sectionsOf(rows, null).runs.find((r) => r.items.some((u) => u.index === rows[k].index))!;
-            undo = [s.id as string, kind, rows[k + 1]?.track.id ?? null, q.mineIndices().includes(rows[k].index)];
-            q.remove(rows[k].index);
+            // ✕ on a row of Up next (or of Played, or "From the top": `from`), as UpNext.removeWithUndo keeps its Undo.
+            const st = { upNext: upNext(), previous: rows(q.previousIndices()), lap: rows(q.lapIndices()), mine: q.mineIndices(), listStart: q.listStartIndex, nextStart: q.nextStartIndex };
+            const from = s.from === 'played' ? st.previous : s.from === 'top' ? st.lap : st.upNext;
+            const row = from.find((u) => u.track.id === s.id)!;
+            const kind = s.from ? (s.from as Section) : sectionsOf(st.upNext, null).runs.find((r) => r.items.some((u) => u.index === row.index))!.kind;
+            undo = [s.id as string, undoOf(st, row, kind)];
+            q.remove(row.index);
             break;
           }
           case 'undo':
-            q.restore(t(undo![0]), undo![1], undo![2], undo![3]);
+            q.restore(t(undo![0]), undo![1]);
             break;
           case 'removeIds':
             q.removeIds(s.ids as string[]);

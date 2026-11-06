@@ -61,23 +61,16 @@ class QueueRulesTest {
                 "setList" -> p.queue.setList(strings(s.getJSONArray("ids")), s.optInt("start", 0))
                 "queueNext" -> p.queue.queueNext(strings(s.getJSONArray("ids")))
                 "addAuto" -> p.queue.addAutoplay(strings(s.getJSONArray("ids")), s.optBoolean("joinList", false))
-                "restore" -> {
-                    val before = if (s.isNull("beforeId")) null else s.getString("beforeId")
-                    val kind = s.getString("kind")
-                    if (kind == QueueCommands.KIND_PLAYED || kind == QueueCommands.KIND_TOP) {
-                        p.queue.restorePlayed(s.getString("id"), before, s.optBoolean("mine", false), kind == QueueCommands.KIND_TOP)
-                    } else {
-                        p.queue.restore(s.getString("id"), NativeQueue.Section.of(kind) ?: throw IllegalArgumentException("kind in $where"), before)
-                    }
-                }
+                "restore" -> restore(
+                    p,
+                    Undo(s.getString("id"), s.getString("kind"), if (s.isNull("beforeId")) null else s.getString("beforeId"), s.optInt("beforeIndex", -1), s.optBoolean("mine", false), s.optBoolean("auto", false), s.optBoolean("heard", false), s.optBoolean("earlier", false)),
+                    where,
+                )
                 "removeRow" -> {
-                    // Up next's ✕: Undo puts it back as its row's kind, before the row that followed it.
-                    val up = p.upNext()
-                    val at = up.indexOf(s.getString("id"))
-                    undo = Undo(up[at], sections(p).first { up[at] in it.second }.first, up.getOrNull(at + 1), p.serials[p.ids.indexOf(up[at])] != 0L)
-                    p.remove(p.ids.indexOf(up[at]))
+                    undo = undoOf(p, s.getString("id"), s.optString("from"))
+                    p.remove(p.ids.indexOf(s.getString("id")))
                 }
-                "undo" -> undo!!.let { (id, kind, before, mine) -> p.queue.restore(id, NativeQueue.Section.of(kind)!!, before, mine) }
+                "undo" -> restore(p, undo!!, where)
                 "removeIds" -> p.queue.removeIds(strings(s.getJSONArray("ids")).toSet())
                 "dropOnTheWay" -> p.queue.dropOnTheWay()
                 "skipTo" -> p.queue.skipTo(p.ids.indexOf(s.getString("id")), s.optBoolean("lap", false))
@@ -150,8 +143,49 @@ class QueueRulesTest {
 
     private fun strings(a: JSONArray) = (0 until a.length()).map { a.getString(it) }
 
-    /** What Up next's ✕ keeps for its Undo: the row's kind, the row after it, and its queued-by-you mark. */
-    private data class Undo(val id: String, val kind: String, val before: String?, val mine: Boolean)
+    /** What a row's ✕ keeps for its Undo (the page's Undo): its kind, the song after it in play order and that one's index once it is gone, its mark, tag and heard state, and whether it is of an earlier list. */
+    private data class Undo(val id: String, val kind: String, val before: String?, val beforeIndex: Int, val mine: Boolean, val auto: Boolean, val heard: Boolean, val earlier: Boolean)
+
+    /** PlaybackService's ACTION_RESTORE. */
+    private fun restore(p: FakePlayer, u: Undo, where: String) {
+        if (u.kind == QueueCommands.KIND_PLAYED || u.kind == QueueCommands.KIND_TOP) {
+            p.queue.restorePlayed(u.id, u.before, u.mine, u.kind == QueueCommands.KIND_TOP, u.beforeIndex, u.auto, u.earlier)
+        } else {
+            p.queue.restore(u.id, NativeQueue.Section.of(u.kind) ?: throw IllegalArgumentException("kind in $where"), u.before, u.mine, u.beforeIndex, u.auto, u.heard, u.earlier)
+        }
+    }
+
+    /**
+     * ✕ on the row of [id] in Up next (or in Played, or "From the top": [from]), as the page's undoOf keeps its
+     * Undo from the state StateEncoder sends: a suggestion of the list you're in goes back into it, and a
+     * Played or "From the top" row before the song after it in play order, heard or not.
+     */
+    private fun undoOf(p: FakePlayer, id: String, from: String): Undo {
+        val (played, lap, up) = Triple(p.played(), p.top(), p.upNext())
+        val rows = when (from) {
+            "played" -> played
+            "top" -> lap
+            else -> up
+        }
+        val i = p.ids.indexOf(id)
+        val heard = from == "played" || id in played || p.uids[i] in p.queue.heardUids
+        val next = if (from == "played" || from == "top") behindAfter(played, lap, id) else rows.getOrNull(rows.indexOf(id) + 1)
+        val way = p.queue.nextStartIndex()
+        val kind = when {
+            from == "top" && heard -> "played"
+            from.isNotEmpty() -> from
+            else -> sections(p).first { id in it.second }.first.let { if (it == "autoplay" && !(way >= 0 && i >= way)) "list" else it }
+        }
+        val at = next?.let { p.ids.indexOf(it) }?.let { if (it > i) it - 1 else it } ?: -1
+        return Undo(id, kind, next, at, p.serials[i] != 0L, p.auto[i], heard, i < p.queue.listStartIndex())
+    }
+
+    /** The song after [id] in play order behind the current one: Played shows the heard ones, "From the top" all but the songs you queued. */
+    private fun behindAfter(played: List<String>, lap: List<String>, id: String): String? {
+        fun after(rows: List<String>) = rows.indexOf(id).takeIf { it >= 0 }?.let { rows.getOrNull(it + 1) }
+        val (p, l) = after(played) to after(lap)
+        return if (p != null && p !in lap) p else l ?: p
+    }
 
     /** Just enough ExoPlayer for the queue logic; ids are unique within a case. */
     internal class FakePlayer(private val rnd: Random) : QueueHost<String> {

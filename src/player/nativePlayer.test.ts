@@ -498,13 +498,21 @@ describe('NativePlayer: edits (K2)', () => {
     expect(fake.plugin.skipToIndex).toHaveBeenCalledWith({ index: 0, expectId: 'A', lap: true });
   });
 
-  it('restore sends the track, its section, the track it goes before (K3) and the mark of a song you queued (rule 8)', async () => {
+  it('restore sends the track, its section, the song it goes before and its index (K3), its mark (rule 8), tag and heard state', async () => {
     const p = new NativePlayer();
     list(p);
-    await p.restore(tr('Z'), 'list', 'C', false);
-    expect(fake.plugin.restore).toHaveBeenCalledWith({ track: toNative(tr('Z')), kind: 'list', beforeId: 'C' });
-    await p.restore(tr('Y'), 'played', null, true);
-    expect(fake.plugin.restore).toHaveBeenLastCalledWith({ track: toNative(tr('Y')), kind: 'played', beforeId: null, mine: true });
+    await p.restore(tr('Z'), { kind: 'list', before: { id: 'C', index: 2 } });
+    expect(fake.plugin.restore).toHaveBeenCalledWith({ track: toNative(tr('Z')), kind: 'list', beforeId: 'C', beforeIndex: 2 });
+    await p.restore(tr('Y'), { kind: 'played', before: null, mine: true, auto: true, heard: true, earlier: true });
+    expect(fake.plugin.restore).toHaveBeenLastCalledWith({ track: toNative(tr('Y')), kind: 'played', beforeId: null, mine: true, auto: true, heard: true, earlier: true });
+  });
+
+  it('Played and "From the top" rows carry their autoplay tag, Up next rows their heard state (for an Undo)', () => {
+    const p = new NativePlayer();
+    emit('state', state({ index: 2, trackId: 'C', repeat: 'all', queueIds: ['A', 'B', 'C', 'D'], upNextIds: ['D'], upNextKinds: 'l', upNextIndex: [3], prevIndex: [0, 1], lapIndex: [0, 1], heardIndex: [3], autoIndex: [1] }));
+    expect(p.state.value.previous.map((u) => u.auto === true)).toEqual([false, true]);
+    expect(p.state.value.lap.map((u) => u.auto === true)).toEqual([false, true]);
+    expect(p.state.value.upNext[0].heard).toBe(true);
   });
 
   it('removeIds sends at most BRIDGE_MAX_ITEMS ids a call (K5, K6)', async () => {

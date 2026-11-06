@@ -136,6 +136,18 @@ class QueueOpsTest {
         }
     }
 
+    /** A station's next round repeats ids: Undo goes back before the song that followed it, by its index, not before another copy (S10). */
+    @Test
+    fun restoreGoesBeforeTheSongThatFollowedItNotAnotherCopy() {
+        val p = player(listOf("x1", "x2", "x3"))
+        p.queue.addAutoplay(listOf("x3", "x2", "x1"))
+        val way = p.queue.nextStartIndex()
+        p.remove(way) // the next round's x2 followed it, and now has its index
+        p.queue.restore("x3", Section.AUTO, "x2", beforeIndex = way)
+        assertEquals(listOf("x2", "x3", "x3", "x2", "x1"), p.upNext())
+        assertTrue(p.auto[3] && p.queue.nextStartIndex() == 3)
+    }
+
     @Test
     fun shuffledAutoplayRestoreWithoutAnAnchorGoesLast() {
         for (seed in 0L until 20L) {
