@@ -2,6 +2,7 @@
 
 Status: approved by the maintainer on 5 Nov 2026 ("go ahead with the queue rules"); version 2 approved the same day ("approve the doc"); version 3, below, the same day: everything is a list, and some lists lead on to the next: radios, Repeat all, Signal stations and Shuffle the Jukebox.
 Main at writing: 0aa6e69 (1.4.0 + #147, #148); version 2 at 02d7ec3 (rules 4 and 3 built: #152, #154).
+Version 4 (6 Nov, main 66bc36c; the maintainer delegated every remaining decision): a simulation of 14.6 million steps over every list kind, Repeat, Shuffle and action (`scratchpad/sim-report`, findings S1-S15, wording A1-A5, design gaps D1-D18) checked the rules against both queues. Every rule held where the code follows it; where the wording was unclear it is made exact below, and the ideal model the rules imply is `2026-11-06-queue-architecture.md`.
 
 ## 1. Why
 
@@ -44,16 +45,18 @@ Home and Search start a Vibe; the Genres, Artists and album pages play their lis
 
 1. **The list comes first.** A Vibe plays only after a list, shuffle or not. Nothing but ✕ (or sign-out) takes a list song out.
 2. **The current list and what's on the way.**
-   - Up next shows the rest of the current list. Below it, under **"On the way"**, the next list (a Vibe batch, a Jukebox shuffle batch, the next station) shows one more song each time a song of the current list finishes, so about 25 songs always follow the playing one.
-   - "On the way" rows look like any row but have no ↑ ↓ ✕; a tap on one starts that list from it, and the songs it jumped over play right after it (as a tap ahead does today).
+   - Up next shows the rest of the current list. Below it, under **"On the way"**, the next list (a Vibe batch, a Jukebox shuffle batch, the next station) fills Up next to 25 rows: as songs finish, one more shows (D1: a function of what's ahead, not a counter).
+   - "On the way" rows look like any row but have no ↑ ↓ ✕, and the current list's last row has ↓ off, so nothing crosses the line (S7, D15). A tap on one starts that list from it; the current list's songs it jumped over that you haven't heard play right after it, at the new list's start, shuffle or not; heard ones stay in Played (A2, D3).
+   - With shuffle on, the next list is mixed when it arrives (and again at each shuffle toggle), so "On the way" shows the order it will play (D2).
+   - A batch never repeats a song already in the queue (D8). Vibe turned on again mid-list fetches the next batch at once (D6).
    - The next list is fetched in full as soon as the current one starts, so the player always has it: for gapless and crossfade, on a slow connection, and when Android closes the app's screen with the phone locked (the app's side picks Jukebox songs). Nothing loads because you scrolled.
    - With Vibe off, a list that ends has nothing on the way.
 3. **Shuffle, reorder, ✕ and Save act on the current list.**
-   - Shuffle on mixes what hasn't played of the current list; what Played shows stays behind. The next list is mixed when it starts, and "On the way" shows it in that mixed order.
+   - Shuffle on mixes what hasn't played of the current list; what Played shows, songs from earlier lists, and songs you walked back over with Previous stay where they are (S1, D5).
    - **Turning shuffle off never skips a song, in every list:** every song of the current list not yet heard stays ahead, in list order; Played keeps what you heard, as you heard it. (Before, an album went back to list order from the playing song's place, as Spotify does, and the unheard songs before it only came round with Repeat all.)
    - This is only about turning shuffle off. A list started mid-way (song 3 of an album tapped) still starts there, as everywhere: songs 1-2 come round with Repeat all, under "From the top".
-   - [Save queue as playlist] saves the current list: what you heard of it, the playing song and the rest of it, plus the songs you queued (rule 8). For an album, the album; for a Vibe batch, at most 26 songs. Duplicates dropped, at most 1000 songs.
-4. **Each song keeps its own label** (built: #152). A row's section comes from its own kind, never from its position; a heading shows each time the kind changes; "N of M" counts the current list's songs; Undo puts a song back as its own kind, in its own place.
+   - [Save queue as playlist] saves the current list: what you heard of it, the playing song (also after Previous into the list before: S3) and the rest of it, plus the songs you queued (rule 8). For an album, the album; for a Vibe batch, its 25 songs (D7). Duplicates dropped, at most 1000 songs.
+4. **Each song keeps its own label** (built: #152). A row's section comes from its own kind, never from its position; a heading shows each time the kind changes; "N of M" counts the current list's songs, a radio's first batch included and the songs you queued not (A3, S12); Undo puts a song back as its own kind, in its own place.
 5. **Repeat all loops the current list**: an album, a Vibe batch, a Jukebox shuffle batch, a station.
    - After its last song, Up next goes on under **"From the top"** with the next lap, from the first song up to the one before the playing song (approved concept A). Its rows have ↑ ↓ ✕, which act on the list itself; with shuffle on, ✕ only. The first ↑ and the last ↓ are off. Songs you queued are never in it (rule 8).
    - Played stays as it is: opened, it shows what you heard, so a song can show both there and under "From the top"; ↑ ↓ ✕ in either acts on the same song. "N up next" counts to the end of the list, not the next lap.
@@ -61,14 +64,16 @@ Home and Search start a Vibe; the Genres, Artists and album pages play their lis
    - Nothing is on the way while it's on.
    - Media3 loops its whole queue, not part of it, so while Repeat all is on the player holds only the current list and the songs you queued: songs heard from earlier lists leave the queue (they stay in Recently played, and don't come back to Played when Repeat is off), and what was on the way goes; when Repeat is off, the next list is fetched afresh (for a station, the same next station; for a Vibe, a new batch). Jumping back at the end instead would fight gapless and crossfade.
    - So with Repeat all on, Previous on the list's first song goes to its last song, as on any player: the list is a loop. Played shows only this list's songs meanwhile.
+   - Songs from earlier lists leave the queue, heard or not (A5). One that is playing when Repeat all turns on (you went back with Previous) plays out, then leaves once another song plays (S4).
+   - The loop starts at the lap's first song: never at a song you queued and heard (S5).
    - This replaces version 2's "a radio has no Repeat all" and the old single-song exception: Repeat all means one thing everywhere.
 6. **Repeat one** replays the song when it ends, and Next moves on (unchanged).
-7. **Previous walks back through what you heard,** across lists: from the first song of a new batch, Previous plays the last song heard of the batch before, and Next comes back to the new batch where you were. The list ahead stays the current list; an earlier one never becomes current again.
+7. **Previous goes to the song before** (what you heard; in a list started mid-way, the song before it in the list, as every player does: A1), across lists: from the first song of a new batch, Previous plays the last song heard of the batch before, and Next comes back to the new batch where you were. The list ahead stays the current list; an earlier one never becomes current again.
 8. **Songs you queue belong to no list** ("Add to queue", "Queued by you"), the same for every kind of list (Spotify's and Apple Music's queue).
    - They play next, in the order you added them; shuffle never mixes them, so their ↑ ↓ show with shuffle on too.
    - Each keeps its mark after it plays. It stays where it played: in Played, with ↑ ↓ ✕ and Undo, and Previous goes back to it.
    - **Repeat all never brings one back:** "From the top" leaves it out, and when the list loops (its last song ends and its first starts again) it leaves the queue. Going back past it yourself (Previous, a tap on an earlier song) and playing on plays it again where it was, with Repeat on or off: you're walking through what you heard.
-   - **Save** saves them with the current list, in the order they played or will play: the ones still to come, the ones heard in this list, and the ones heard in earlier lists of the same chain (Vibe batches, stations), also those that left the player with Repeat all. Starting something new yourself (a tap on another album, playlist or song) starts over: songs you queued and heard before it aren't saved; the ones still to come are.
+   - **Save** saves them with the current list, where they played or will play (A4): the ones still to come, the ones heard in this list, and the ones heard in earlier lists of the same chain (Vibe batches, stations), also those that left the player with Repeat all; the phone's player keeps that memory with its session, so it survives Android closing the app's screen. Starting something new yourself (once it starts: a tap refused offline changes nothing) (a tap on another album, playlist or song) starts over: songs you queued and heard before it aren't saved; the ones still to come are.
 
 ## 4. Signal Radio stations: lists that lead on
 
@@ -82,7 +87,9 @@ Each station is a list of 32-50 songs. When it ends, the next station follows, t
 
 - **Always going:** stations ignore the Vibe setting (as now) and never end, so no Vibe follows them.
 - The next station is on the way (rule 2): fetched in full when the current one starts, an hour or two ahead.
-- **Labels follow the song:** "Playing from", the Radio tab's on-air mark and "N of M" (within its station) change when the next station's first song plays.
+- **Labels follow the song:** "Playing from", the Radio tab's on-air mark and "N of M" (within its station) change when the next station's first song plays. Walking back into the station before with Previous, they show that station, and Up next's heading for the list ahead names its station (D11).
+- **Shuffle toggled while the next station is on the way:** it stays the next station; only its songs are mixed or unmixed (D10). "Not played yet" is kept with the session and starts over when you start something yourself.
+- Offline, unsaved songs skipped are neither heard nor kept (D13).
 - **Repeat all already on** when a station is tapped: it loops that station, as any list.
 - **Offline:** unsaved songs are dimmed as everywhere, and Next skips to the next saved one, across stations; with none saved, "No carrier", as now.
 
@@ -105,7 +112,7 @@ Each station is a list of 32-50 songs. When it ends, the next station follows, t
 ## 5a. Vibe (after the queue rules)
 
 Autoplay is renamed **Vibe** (this doc says Vibe throughout): the same feature, with wording in Settings and Up next that says what it does (shown as a concept first). One change to how it picks:
-- **No repeats within a session.** Today a Jukebox suggestion skips the queue and the last 50 songs heard. Vibe skips every song heard since the current list or radio started, read from Recently played (which keeps up to 1000 songs or 3 days, with when each played; no new store, and it survives a restart). New Cyberspace posts are unheard, so they come up as usual.
+- **No repeats within a session.** Today a Jukebox suggestion skips the queue and the last 50 songs heard. Vibe skips every song heard since you last started something yourself (a tap on a list or a song: the same boundary as Save's memory; with batches, "since the current list started" would reset every 25 songs: D9), read from Recently played (which keeps up to 1000 songs or 3 days, with when each played; no new store, and it survives a restart). New Cyberspace posts are unheard, so they come up as usual.
 - When every match has been heard (a small genre, or offline with a few saved songs), it falls back to skipping the last 50, as today, so it never goes quiet.
 - Cost: one filter of at most 1000 entries per refill (about every 20 songs), on the app's side only; the phone's player doesn't change.
 - **Not doing:** continuing with Global songs once the Jukebox is used up. Nobody can realistically hear all of it, and it would send Jukebox sessions to YouTube Music, which they never do today.
@@ -132,8 +139,9 @@ Order:
 1. **Labels:** rule 4, F2. Done (#152).
 2. **Shuffle:** rule 3's first part, F1, F7. Done (#154; and queued songs kept next when shuffle turns on or off, found by a fuzz).
 3. **Lists that lead on (the core):** the two markers, moving on, Repeat all keeping the current list (the single-song exception goes), turning shuffle off skipping nothing, Save acting on the current list. No visual change but Save's count.
-4. **"From the top":** rule 5's display, F3 (approved concept A), with rule 8's mark, loop and Save.
-4b. **Queued songs' ↑ ↓ with shuffle on:** rule 8's first point.
+4. **"From the top":** rule 5's display, F3 (approved concept A), with rule 8's mark, loop and Save. Done (#159).
+4b. **Queued songs' ↑ ↓ with shuffle on:** rule 8's first point. Done (#160).
+4c. **The simulation's fixes:** S1-S15 and A2 (version 4), and Save's memory kept by the phone's player.
 5. **Vibe batches and "On the way":** rules 2 and 7, F4: batches of 25 fetched when a batch starts, a Home tap starting one, "On the way" in Up next (concept screenshots first).
 6. **Signal stations** (section 4) and **Shuffle the Jukebox** batches, on steps 3-5.
 7. **Up to the playing song:** the button in Up next (concept q2).
