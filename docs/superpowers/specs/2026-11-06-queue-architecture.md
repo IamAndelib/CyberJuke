@@ -96,7 +96,7 @@ Patches the model makes unnecessary: `keepQueuedNext`, `afterQueued`, the three 
 | play order | Media3 `ShuffleOrder` kept in line by `setShuffleOrder` after Media3's random inserts (`placeAhead`, `enforceShuffleOrder`, `restoreShuffledListItem`, the move fix-up for `cloneAndMove`) | yes, by repair |
 | queued | `pending` serials + `enforceLinearOrder` / `enforceShuffleOrder` / `resortByList` | yes, by repair |
 | loop | `onTransition(forward)` guessing the loop from "forward to an earlier play position" | the loop target is Media3's window 0 (F5) |
-| shuffle off | `enforceLinearOrder` + `moveUnheardAhead` | heard songs after the playing one come ahead (F2) |
+| shuffle off | `unshuffle`: the playlist moved (`moveItem`) into the order `rearranged` makes from the old `ShuffleOrder`, by a heard-this-lap set | yes, since step 4c (F2) |
 
 The model's native form keeps Media3 for what it is best at (gapless, crossfade hand-over, preloading, the notification) and gives it a timeline already in play order, with Media3's shuffle mode off: a shuffle toggle becomes `moveMediaItems` to the new order (Media3 keeps the playing item playing). That removes every `ShuffleOrder` repair above, and list order (album order, for shuffle off and Save) is a small uid array the queue keeps and `LastSession` saves. The cost: moving items discards a preload of the next item when it moves (it reloads), on a toggle only.
 

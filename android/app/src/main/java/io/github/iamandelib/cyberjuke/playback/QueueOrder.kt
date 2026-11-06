@@ -174,6 +174,9 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     private val heard = HashSet<Long>()
     val heardUids: Set<Long> get() = heard
 
+    /** The uids heard in this lap: all of them until Repeat all starts the list over ([dropHeardMine]; a restored session's too). */
+    private val lap = HashSet<Long>()
+
     /**
      * Where the current list starts and where the one on the way does, by uid (0: unset, so the
      * list starts at its first song and nothing is on the way). Removals happen outside the
@@ -261,7 +264,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     }
 
     private fun hear(index: Int) {
-        host.uidAt(index).takeIf { it != 0L }?.let { heard.add(it) }
+        host.uidAt(index).takeIf { it != 0L }?.let { heard.add(it); lap.add(it) }
     }
 
     /** The current item is heard. */
@@ -365,6 +368,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         }
         val s = start.coerceIn(0, items.size - 1)
         heard.clear()
+        lap.clear()
         val list = ArrayList<T>(items.size + kept.size)
         val serials = ArrayList<Long>(items.size + kept.size)
         list.addAll(items.subList(0, s + 1))
@@ -390,6 +394,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         require(sections.size == items.size) { "one section per item" }
         pending.clear()
         this.heard.clear()
+        lap.clear()
         this.listStart = 0L
         this.nextStart = 0L
         listLeft = null
@@ -437,8 +442,8 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     /**
      * The play order shuffle turned on or off makes from [order], the one it had (list indices). What
      * stays where it is, in the order it had: behind, what Played shows and earlier lists' songs
-     * (before the current list's marker); ahead, the songs you walked back over (heard; with Repeat
-     * all the lap ahead is all to come) and earlier lists'. Then: the current item, the queued ones
+     * (before the current list's marker); ahead, the songs you walked back over (heard in this lap:
+     * the next lap of Repeat all is all to come) and earlier lists'. Then: the current item, the queued ones
      * next, the walked-back ones, the current list's other songs (also those before where it
      * started), what's on the way; the last two each mixed on its own if [mix], else in list order.
      */
@@ -447,7 +452,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         val p = order.indexOf(cur)
         val (start, way) = listStartIndex() to nextStartIndex()
         val queued = pendingIndices()
-        val kept = order.filterIndexed { k, i -> i != cur && i !in queued && (i < start || (isHeard(i) && (k < p || !host.repeatAll))) }
+        val kept = order.filterIndexed { k, i -> i != cur && i !in queued && (i < start || if (k < p) isHeard(i) else host.uidAt(i) in lap) }
         val (behind, back) = kept.partition { order.indexOf(it) < p }
         val (onWay, list) = (0 until host.count).filter { it != cur && it !in queued && it !in kept }.partition { way >= 0 && it >= way }
         fun part(songs: List<Int>) = if (mix) songs.shuffled(random) else songs
@@ -681,8 +686,12 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         drop { it < listStartIndex() }
     }
 
-    /** Repeat all's next lap: the heard songs you queued leave, all but the playing one (rule 8). */
-    private fun dropHeardMine() = drop { host.serialAt(it) != 0L && isHeard(it) }
+    /** Repeat all's next lap: the heard songs you queued leave, all but the playing one (rule 8), and only the playing one is heard this lap. */
+    private fun dropHeardMine() {
+        drop { host.serialAt(it) != 0L && isHeard(it) }
+        lap.clear()
+        if (host.currentIndex in 0 until host.count) hear(host.currentIndex)
+    }
 
     /** Removes the items [gone] picks by list index, except the playing one and the queued ones. */
     private inline fun drop(gone: (Int) -> Boolean) {
@@ -822,7 +831,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
 
     /** Drops entries that have played (now current) or are no longer in the playlist. */
     fun prune() {
-        if (heard.isNotEmpty()) heard.retainAll((0 until host.count).map { host.uidAt(it) }.toSet())
+        if (heard.isNotEmpty()) (0 until host.count).map { host.uidAt(it) }.toSet().let { heard.retainAll(it); lap.retainAll(it) }
         if (pending.isEmpty()) return
         val present = HashSet<Long>()
         for (i in 0 until host.count) present.add(host.serialAt(i))

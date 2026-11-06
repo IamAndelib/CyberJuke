@@ -86,6 +86,8 @@ export class Queue<T extends Identified> {
   private queued = new Set<Entry<T>>();
   /** Entries of this list that have been current: heard ("Played" shows the ones before the current one). */
   private heard = new Set<Entry<T>>();
+  /** The entries heard in this lap: all of them until Repeat all starts the list over (dropHeardMine). */
+  private lap = new Set<Entry<T>>();
   /** Where the current list starts (null: its first song) and where the one on the way does (null: none). */
   private listStart: Entry<T> | null = null;
   private nextStart: Entry<T> | null = null;
@@ -210,6 +212,7 @@ export class Queue<T extends Identified> {
     this.list = items.map((item) => this.entry(item));
     const i = clamp(startIndex, 0, this.list.length - 1);
     this.heard = new Set();
+    this.lap = new Set();
     this.listStart = this.nextStart = null;
     this.listLeft = this.nextLeft = null;
     this.cur = this.list[i];
@@ -445,7 +448,7 @@ export class Queue<T extends Identified> {
     const entry: Entry<T> = kind === 'autoplay' ? { ...this.entry(item), auto: true } : this.entry(item);
     if (kind === 'queued' || mine) entry.mine = true;
     if (kind === 'queued') this.queued.add(entry);
-    if (kind === 'played') this.heard.add(entry);
+    if (kind === 'played') this.hear(entry);
     const follower = this.order[at];
     this.order.splice(at, 0, entry);
     const firstAuto = this.list.findIndex((e, i) => e.auto && i > this.listStartIndex);
@@ -500,6 +503,7 @@ export class Queue<T extends Identified> {
   clear(): void {
     this.queued.clear();
     this.heard.clear();
+    this.lap.clear();
     this.list = [];
     this.order = [];
     this.cur = null;
@@ -532,8 +536,9 @@ export class Queue<T extends Identified> {
     this.order = this.order.filter((e) => !out.has(e));
   }
 
-  /** Repeat all's next lap: the heard songs you queued leave, all but the playing one (rule 8). */
+  /** Repeat all's next lap: the heard songs you queued leave, all but the playing one (rule 8), and only the playing one is heard this lap. */
   private dropHeardMine(): void {
+    this.lap = new Set(this.cur ? [this.cur] : []);
     const gone = new Set(this.list.filter((e) => e.mine && e !== this.cur && this.heard.has(e)));
     this.unmark(gone);
     this.list = this.list.filter((e) => !gone.has(e));
@@ -569,7 +574,12 @@ export class Queue<T extends Identified> {
     if (!this.cur) return;
     if (on) [this.listStart, this.nextStart, this.listLeft, this.nextLeft] = [this.list.indexOf(this.nextStart!) < this.list.indexOf(this.cur) ? this.nextStart : this.cur, null, null, null];
     this.queued.delete(this.cur);
-    this.heard.add(this.cur);
+    this.hear(this.cur);
+  }
+
+  private hear(e: Entry<T>): void {
+    this.heard.add(e);
+    this.lap.add(e);
   }
 
   /** The index in `arr` (the list or the play order) right after the current track and the queued run after it. */
@@ -597,7 +607,7 @@ export class Queue<T extends Identified> {
   /**
    * A new list (setList), or shuffle turned on or off ([toggled]). What stays where it is, in the order
    * it had: behind, what Played shows and the earlier lists' songs (before the current list's marker);
-   * ahead, the songs you walked back over (heard; with Repeat all the lap ahead is all to come) and the
+   * ahead, the songs you walked back over (heard in this lap: the next lap of Repeat all is all to come) and the
    * earlier lists'. Then: the queued tracks next, as they were going to play; the walked-back ones; the current
    * list's other songs, also those before where it started; what's on the way. Shuffle on mixes the last
    * two, each on its own (Spotify, YouTube Music's radio shuffles); off puts them in list order, so turning
@@ -615,7 +625,7 @@ export class Queue<T extends Identified> {
     }
     const p = cur ? this.order.indexOf(cur) : -1;
     const [start, way] = [this.listStartIndex, this.nextStartIndex];
-    const stays = (e: Entry<T>, k: number) => this.list.indexOf(e) < start || (this.heard.has(e) && (k < p || this.repeat !== 'all'));
+    const stays = (e: Entry<T>, k: number) => this.list.indexOf(e) < start || (k < p ? this.heard : this.lap).has(e);
     const kept = toggled ? this.order.filter((e, k) => e !== cur && !this.queued.has(e) && stays(e, k)) : [];
     const [behind, back] = [kept.filter((e) => this.order.indexOf(e) < p), kept.filter((e) => this.order.indexOf(e) > p)];
     const rest = this.list.filter((e) => e !== cur && !this.queued.has(e) && !kept.includes(e));
