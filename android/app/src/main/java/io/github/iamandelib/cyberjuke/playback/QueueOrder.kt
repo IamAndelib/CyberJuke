@@ -220,7 +220,8 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
 
     /** ✕ on the item at [index]: it goes, and a song you queued leaves Save's memory too ([heardMine]). */
     fun remove(index: Int) {
-        if (host.serialAt(index) != 0L) forgotten.add(host.idAt(index))
+        // A copy still waiting to play leaves the one you heard remembered.
+        if (host.serialAt(index).let { it != 0L && it !in pending }) forgotten.add(host.idAt(index))
         host.removeAt(index)
     }
 

@@ -68,7 +68,8 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             q.prev((s.positionMs as number) ?? 0);
             break;
           case 'remove':
-            q.remove(indexOf(s.id));
+            // The nth copy of the id in list order (0: the first).
+            q.remove(q.items.flatMap((x, i) => (x.id === s.id ? [i] : []))[(s.nth as number | undefined) ?? 0]);
             break;
           case 'move':
             q.move(indexOf(s.id), s.toId != null ? indexOf(s.toId) : (s.to as number));

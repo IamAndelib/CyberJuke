@@ -79,7 +79,7 @@ class QueueRulesTest {
                 "next" -> p.next()
                 "nextAuto" -> p.nextAuto()
                 "prev" -> p.prev(s.optLong("positionMs", 0L))
-                "remove" -> p.queue.remove(p.ids.indexOf(s.getString("id")))
+                "remove" -> p.queue.remove(p.ids.withIndex().filter { it.value == s.getString("id") }[s.optInt("nth", 0)].index)
                 "move" -> p.queue.move(p.ids.indexOf(s.getString("id")), if (s.has("toId")) p.ids.indexOf(s.getString("toId")) else s.getInt("to"))
                 "setShuffle" -> p.toggleShuffle(s.getBoolean("on"))
                 "setRepeat" -> {

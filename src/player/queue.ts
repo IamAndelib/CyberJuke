@@ -405,7 +405,8 @@ export class Queue<T extends Identified> {
   remove(index: number): boolean | 'stopped' {
     if (!inRange(index, this.list)) return false;
     const e = this.list[index];
-    if (e.mine) this.forgotten.add(e.item.id);
+    // A copy still waiting to play leaves the one you heard remembered.
+    if (e.mine && !this.queued.has(e)) this.forgotten.add(e.item.id);
     let changed: boolean | 'stopped' = false;
     if (e === this.cur) {
       const next = this.order[this.order.indexOf(e) + 1];
