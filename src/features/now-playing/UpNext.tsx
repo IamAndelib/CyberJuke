@@ -111,8 +111,8 @@ const upTo = (n: number) => (n >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : n);
 /**
  * Removes a queue row, with Undo: the same song back, as it was, where it was (K3, undoOf): its kind,
  * autoplay tag, heard state and queued-by-you mark (rule 8), before the song that followed it in play
- * order. The Undo goes once a new list or another track starts, when "back where it was" no longer
- * means anything.
+ * order. The Undo goes once a new list or another track starts, or Repeat changes (Repeat all drops what
+ * isn't the list you're in), when "back where it was" no longer means anything.
  */
 export function removeWithUndo(it: UpItem, kind: Kind): void {
   const s = player.state.peek();
@@ -122,11 +122,12 @@ export function removeWithUndo(it: UpItem, kind: Kind): void {
   void player.remove(it.index, it.track.id);
   const ctx0 = playContext.peek();
   const cur0 = currentId.peek();
+  const rep0 = repeatMode.peek();
   toast('Removed from queue', undefined, {
     label: 'Undo',
     // The glow starts once the song is back, so a slow restore doesn't eat into it.
     run: () => void player.restore(it.track, undo).then(() => glowRow(glowScope(kind), it.track.id)),
-    stale: () => playContext.value !== ctx0 || currentId.value !== cur0,
+    stale: () => playContext.value !== ctx0 || currentId.value !== cur0 || repeatMode.value !== rep0,
     ...(it.track.membersOnly && { membersOnly: true }),
   });
 }
