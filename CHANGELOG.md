@@ -20,9 +20,9 @@
 ### Fixed
 - After you tap a suggestion in the queue and go back with Previous, your list's songs stay under their own heading instead of under Autoplay, and Now Playing still says "3 of 8" instead of "Single track". When suggestions and your list's songs take turns, each gets its heading again.
 - **Undo** after ✕ in the queue puts a song back as what it was and where it was: one of your list's songs stays in your list, even with Autoplay off, and a suggestion goes back to its place instead of the end.
-- Turning shuffle on no longer moves songs you haven't heard into Played: after Previous, on a second Repeat all lap, or after tapping a played song, everything still to come stays in Up next and gets mixed. Suggestions that arrive while shuffled go after the ones already there.
+- Turning shuffle on no longer moves songs you haven't heard into Played: everything still to come stays in Up next. After Previous, or a tap on a played song, the songs you went back over stay next, in the order you heard them, and the rest gets mixed; on a second Repeat all lap the whole lap ahead is mixed. Shuffle mixes only the list you're in: once an album's suggestions play, the album's songs you never played no longer come back into Up next. Suggestions that arrive while shuffled go after the ones already there.
 - On a genre or Most saved, pulling down to refresh while the new tracks button shows takes you to Latest from every genre, where the new songs are, as tapping the button does. Before, it refreshed that genre and nothing new appeared.
-- Turning shuffle off no longer skips songs: every song of the list you haven't heard stays in Up next, in the list's order.
+- Turning shuffle off no longer skips songs: every song of the list you haven't heard stays in Up next, in the list's order. The songs you heard stay in Played, in the order you heard them, instead of coming up again.
 - A song you tap on Home or in Search while songs you queued are waiting gets its suggestions with Repeat all on too, and Repeat all keeps those suggestions in its loop.
 
 ## [1.4.0] - 2026-11-04

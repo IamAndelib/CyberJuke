@@ -41,10 +41,11 @@
  *    before the current; a "From the top" one the same, but it stays unheard;
  *  - "played" is what was heard before the current track: the tracks of this list before it in
  *    play order that have been current (a list started mid-way hasn't played the ones before
- *    it). Shuffle turned on mixes what hasn't played: what Played shows stays behind, in the
- *    order it played, and everything else is mixed ahead (Up next, and the list tracks before
- *    where the list started), the list's ahead of the autoplay ones; new autoplay tracks go at
- *    the end, mixed among themselves. Off puts the list order back;
+ *    it). Shuffle turned on mixes what hasn't played of the current list: what Played shows and
+ *    earlier lists stay behind, the songs you walked back over stay next, as heard, and the rest
+ *    of the current list (also the tracks before where it started) is mixed ahead of what's on
+ *    the way, mixed on its own; new autoplay tracks go at the end, mixed among themselves. Off
+ *    puts the mixed ones back in list order, the others where they are (rebuildOrder);
  *  - Repeat all never brings back a song you queued (rule 8): when the list loops (next() from its
  *    last song to order[0], as Media3's), or a tap on a "From the top" row enters the next lap
  *    (skipTo's `lap`), the heard ones leave, all but the playing one. Previous walks back: they stay.
@@ -594,39 +595,35 @@ export class Queue<T extends Identified> {
   }
 
   /**
-   * Shuffle on. [keepPlayed] (shuffle turned on or off): what Played shows stays behind the current
-   * one, in the order it played, and all the others are mixed ahead (Spotify, YouTube Music): Up
-   * next, also the ones before where the list started. Queued tracks play next, in the order added;
-   * then the current list, mixed; then what's on the way, mixed on its own (YouTube Music's radio
-   * shuffles). Shuffle off puts the list order back, but the current list's unheard songs before
-   * the current one go right after the queued run, in list order: turning shuffle off skips none.
+   * A new list (setList), or shuffle turned on or off ([toggled]). What stays where it is, in the order
+   * it had: behind, what Played shows and the earlier lists' songs (before the current list's marker);
+   * ahead, the songs you walked back over (heard; with Repeat all the lap ahead is all to come) and the
+   * earlier lists'. Then: the queued tracks next, as they were going to play; the walked-back ones; the current
+   * list's other songs, also those before where it started; what's on the way. Shuffle on mixes the last
+   * two, each on its own (Spotify, YouTube Music's radio shuffles); off puts them in list order, so turning
+   * shuffle off skips none and brings no heard song ahead again. A new list unshuffled is in list order.
    */
-  private rebuildOrder(keepPlayed = false): void {
+  private rebuildOrder(toggled = false): void {
     // The queued tracks, as they were going to play: they stay next, in that order, either way
     // (the list may hold them elsewhere: an Undo while shuffled puts one back by play order).
     const queued = this.order.filter((e) => e !== this.cur && this.queued.has(e));
     const cur = this.cur;
-    if (!this.shuffle) {
+    if (!toggled && !this.shuffle) {
       this.order = this.list.slice();
       this.keepQueuedNext(queued);
-      const unheard = keepPlayed && cur ? this.list.slice(this.listStartIndex, this.list.indexOf(cur)).filter((e) => !this.heard.has(e) && !this.queued.has(e)) : [];
-      if (unheard.length) {
-        this.order = this.order.filter((e) => !unheard.includes(e));
-        this.order.splice(this.afterQueued(this.order), 0, ...unheard);
-      }
       return;
     }
-    const played = keepPlayed ? this.played() : [];
-    const ahead = this.list.filter((e) => e !== cur && !this.queued.has(e) && !played.includes(e));
-    // Blocks by list index: the songs before where the list started, the current list, what's on the way.
+    const p = cur ? this.order.indexOf(cur) : -1;
     const [start, way] = [this.listStartIndex, this.nextStartIndex];
-    const block = (e: Entry<T>) => (way >= 0 && this.list.indexOf(e) >= way ? 2 : this.list.indexOf(e) >= start ? 1 : 0);
-    this.order = [
-      ...played,
-      ...(cur ? [cur] : []),
-      ...queued,
-      ...[0, 1, 2].flatMap((b) => shuffled(ahead.filter((e) => block(e) === b), this.rand)),
-    ];
+    const stays = (e: Entry<T>, k: number) => this.list.indexOf(e) < start || (this.heard.has(e) && (k < p || this.repeat !== 'all'));
+    const kept = toggled ? this.order.filter((e, k) => e !== cur && !this.queued.has(e) && stays(e, k)) : [];
+    const [behind, back] = [kept.filter((e) => this.order.indexOf(e) < p), kept.filter((e) => this.order.indexOf(e) > p)];
+    const rest = this.list.filter((e) => e !== cur && !this.queued.has(e) && !kept.includes(e));
+    const part = (onWay: boolean) => {
+      const songs = rest.filter((e) => (way >= 0 && this.list.indexOf(e) >= way) === onWay);
+      return this.shuffle ? shuffled(songs, this.rand) : songs;
+    };
+    this.order = [...behind, ...(cur ? [cur] : []), ...queued, ...back, ...part(false), ...part(true)];
   }
 
 }

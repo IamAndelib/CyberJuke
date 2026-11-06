@@ -627,7 +627,7 @@ test('the queue shows the whole list: what played folds under [+] Played, the pl
   await expect(page.getByTestId('upnext-played-fold')).toHaveAttribute('aria-expanded', 'false');
 });
 
-test('Previous twice, then shuffle on: the album songs after the playing one all stay in Up next, none moves into Played', async ({ page }) => {
+test('Previous twice, then shuffle on: the album songs after the playing one all stay in Up next, the two you went back over next, none moves into Played', async ({ page }) => {
   const titles = await playAlbum(page);
   const title = page.getByTestId('np-title');
   for (let k = 1; k <= 4; k++) {
@@ -649,7 +649,9 @@ test('Previous twice, then shuffle on: the album songs after the playing one all
   await expect(page.getByTestId('upnext-played-fold')).toHaveText('Played · 2');
   await page.getByTestId('upnext-played-fold').click();
   await expect(page.getByTestId('upnext-played').locator('.row-title')).toHaveText(titles.slice(0, 2));
-  expect((await list.allTextContents()).map((s) => s.trim()).sort()).toEqual(titles.slice(3).sort());
+  const after = (await list.allTextContents()).map((s) => s.trim());
+  expect(after.slice(0, 2)).toEqual(titles.slice(3, 5));
+  expect(after.sort()).toEqual(titles.slice(3).sort());
 });
 
 test("after an album's suggestions start, Repeat all loops them: no album song in Played, and Next past the last goes to the first suggestion", async ({ page }) => {
