@@ -225,6 +225,24 @@ test("↑ ↓ never cross the line between two lists: a radio's own suggestions 
   await expect(played.last().getByTestId('upnext-remove')).toBeEnabled();
 });
 
+test('"N of M" counts the album, not a song you queued, which shows where it plays from alone (A3)', async ({ page }) => {
+  const titles = await playAlbum(page);
+  const from = page.getByTestId('np-from');
+  await expect(from).toContainText('1 of 8 · ');
+  await page.getByTestId('np-close').click();
+  await page.getByTestId('tab-home').click();
+  await queueRow(page, 0);
+  await openNowPlaying(page);
+  await expect(from).toContainText('1 of 8 · ');
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).not.toHaveText(titles[0]);
+  await expect(from).toContainText('Playing from');
+  await expect(from).not.toContainText(' of ');
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-title')).toHaveText(titles[1]);
+  await expect(from).toContainText('2 of 8 · ');
+});
+
 test('a tapped suggestion, then Previous: the album songs stay under the album, "3 of 8" stays right, and Undo puts each song back', async ({ page }) => {
   const titles = await playAlbum(page);
   // At the third song five are left: suggestions line up after the album.

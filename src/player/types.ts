@@ -317,12 +317,17 @@ export function nsfwAutoplayIds(upNext: readonly UpNextItem[]): string[] {
 }
 
 /**
- * Where the current track is in the list you started (autoplay's tracks ahead not counted):
- * "3 of 50", or "Single track". Once an autoplay row is in Up next, every list track ahead is
- * too (autoplay adds only once fewer than 50 are ahead), while more autoplay tracks may wait
- * past the 50 shown, and a tapped one may sit among the list's.
+ * Now Playing's "N of M" (rule 4): the playing song's place in the current list, and that list's songs (a
+ * radio's first batch included; not what's on the way, nor the songs you queued: A3, S12). A song you queued
+ * belongs to no list: no place (''). After Previous into the list before, its place in the list you started,
+ * also counting that list's songs that came along into the current one (Up next's list rows).
  */
-export function placeOf(s: PlayerState): string {
-  const n = s.upNext.some((u) => u.auto) ? s.index + 1 + s.upNext.filter((u) => !u.auto).length : s.queue.length;
-  return n > 1 ? `${s.index + 1} of ${n}` : 'Single track';
+export function placeOf(s: Pick<PlayerState, 'queue' | 'index' | 'upNext' | 'listStart' | 'nextStart' | 'mine'>): string {
+  const mine = new Set(s.mine);
+  if (s.index < 0 || mine.has(s.index)) return '';
+  const count = (from: number, to: number) => s.queue.slice(from, to).filter((_, k) => !mine.has(from + k)).length;
+  const back = s.index < s.listStart;
+  const n = count(back ? 0 : s.listStart, s.index + 1);
+  const m = back ? n + s.upNext.filter((u) => !u.auto && !mine.has(u.index)).length : count(s.listStart, s.nextStart < 0 ? s.queue.length : s.nextStart);
+  return m > 1 ? `${n} of ${m}` : 'Single track';
 }

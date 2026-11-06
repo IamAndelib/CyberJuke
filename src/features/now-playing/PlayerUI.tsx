@@ -721,14 +721,14 @@ function NpControls() {
  * Under "Now playing": where the music comes from (P8), "Playing from Home · Latest", or
  * for an autoplay track what autoplay plays ("Autoplay · similar to …", as Up next calls it).
  * A list's position ("3 of 50") comes first; not for a single song's radio, an autoplay
- * track or under shuffle, where it means little.
+ * track or under shuffle, where it means little, nor for a song you queued, which has none.
  */
 function NpFrom() {
   const ctx = playContext.value;
   const auto = currentAuto.value;
   const from = !ctx?.label ? '' : auto ? autoplayLabel.value : `Playing from ${ctx.label}`;
   const pos = queuePlace.value;
-  const text = from && (shuffleOn.value || auto || ctx?.mode === 'radio') ? from : from ? `${pos} · ${from}` : pos;
+  const text = from && (shuffleOn.value || auto || ctx?.mode === 'radio' || !pos) ? from : from ? `${pos} · ${from}` : pos;
   return (
     <span class="np-from" data-testid="np-from">
       <Marquee text={text} />

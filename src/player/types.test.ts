@@ -20,17 +20,31 @@ describe('nsfwAutoplayIds', () => {
 
 describe('placeOf', () => {
   const tracks = (n: number, p: string) => Array.from({ length: n }, (_, i) => ({ id: `${p}${i}`, nsfw: false }) as Track);
-  const at = (list: Track[], auto: Track[], index: number): PlayerState => {
+  const at = (list: Track[], auto: Track[], index: number, more: Partial<PlayerState> = {}): PlayerState => {
     const queue = [...list, ...auto];
     const upNext = queue.slice(index + 1, index + 51).map((track, i) => ({ track, index: index + 1 + i, ...(i + index + 1 >= list.length && { auto: true }) }));
-    return { ...EMPTY_STATE, queue, index, upNext };
+    return { ...EMPTY_STATE, queue, index, upNext, nextStart: auto.length ? list.length : -1, ...more };
   };
 
-  it('counts the list you started, not autoplay, however many autoplay songs are past Up next\'s 50', () => {
+  it("counts the current list's songs, not what's on the way, however many songs are past Up next's 50", () => {
     expect(placeOf(at(tracks(12, 'l'), tracks(60, 'a'), 3))).toBe('4 of 12');
     expect(placeOf(at(tracks(12, 'l'), [], 3))).toBe('4 of 12');
     expect(placeOf(at(tracks(80, 'l'), [], 0))).toBe('1 of 80');
     expect(placeOf(at(tracks(1, 'l'), tracks(30, 'a'), 0))).toBe('Single track');
+    // Moved on into the suggestions: they are the list now.
+    expect(placeOf(at(tracks(12, 'l'), tracks(60, 'a'), 13, { listStart: 12, nextStart: -1 }))).toBe('2 of 60');
+  });
+
+  it("leaves out the songs you queued, and gives one no place (A3)", () => {
+    expect(placeOf(at(tracks(12, 'l'), [], 3, { mine: [1, 2] }))).toBe('2 of 10');
+    expect(placeOf(at(tracks(12, 'l'), [], 3, { mine: [3] }))).toBe('');
+  });
+
+  it('after Previous into the list before, its place in the list you started, also its songs that came along', () => {
+    // Song 3 of 8, a tap on a suggestion took songs 4-8 along into the new list, then Previous.
+    const queue = [...tracks(3, 'l'), ...tracks(1, 's'), ...tracks(5, 'm')];
+    const upNext = queue.slice(3).map((track, i) => ({ track, index: 3 + i, ...(i === 0 && { auto: true }) }));
+    expect(placeOf({ ...EMPTY_STATE, queue, index: 2, upNext, listStart: 3 })).toBe('3 of 8');
   });
 });
 

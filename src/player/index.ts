@@ -165,7 +165,7 @@ export const shuffleOn = computed(() => state.value.shuffle);
 export const repeatMode = computed(() => state.value.repeat);
 /** The current track's length (0 until known). */
 export const durationMs = computed(() => state.value.durationMs);
-/** Where the current track is in the list you started (placeOf). */
+/** Where the current track is in the current list ("3 of 8", placeOf). */
 export const queuePlace = computed(() => placeOf(state.value));
 /** "Next" does something: a track after this one, or repeat wraps around. */
 export const canSkipNext = computed(() => state.value.upNext.length > 0 || state.value.repeat === 'all');

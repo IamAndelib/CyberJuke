@@ -133,7 +133,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             const lap = () => q.lapIndices().map((i) => q.items[i].id);
             if ('top' in s) expect(lap()).toEqual(s.top);
             if ('topSet' in s) expect(lap().sort()).toEqual((s.topSet as string[]).slice().sort());
-            if ('place' in s) expect(placeOf({ ...EMPTY_STATE, queue: q.items as Track[], index: q.index, upNext: upNext() })).toBe(s.place);
+            if ('place' in s) expect(placeOf({ ...EMPTY_STATE, queue: q.items as Track[], index: q.index, upNext: upNext(), listStart: q.listStartIndex, nextStart: q.nextStartIndex, mine: q.mineIndices() })).toBe(s.place);
             const sec = sectionsOf(upNext(), null, q.nextStartIndex);
             const sIds = (xs: UpItem[]) => xs.map((x) => x.track.id);
             if ('queuedIds' in s) expect(sIds(sec.queued)).toEqual(s.queuedIds);
