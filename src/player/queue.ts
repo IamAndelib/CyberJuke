@@ -5,7 +5,8 @@
  *
  * Terms (mirroring the native plugin contract):
  *  - "list": the queue in list order (what setQueue/moveItem index into);
- *  - "play order": the order tracks will actually play (differs when shuffled).
+ *  - "play order": the order tracks will actually play (differs when shuffled; unshuffled the list
+ *    is the play order, as Media3's).
  *
  * The rules (shared with the native queue; the cases both must pass are in
  * tests/spec/queue-rules.json):
@@ -296,15 +297,13 @@ export class Queue<T extends Identified> {
         arr.splice(arr.indexOf(e), 1);
         arr.splice(arr.indexOf(this.cur!) + 1, 0, e);
       };
-      const [start, back] = [this.listStartIndex, this.list.indexOf(this.cur!) < this.listStartIndex];
-      const inList = this.list.indexOf(e) >= start;
+      const back = this.list.indexOf(this.cur!) < this.listStartIndex;
+      const inList = this.list.indexOf(e) >= this.listStartIndex;
       at(this.order);
       if (!this.shuffle) {
         at(this.list);
-        // The current list keeps its songs: from a song before it (Previous took you there), one of it moved before its
-        // first song starts it; its first song moved after the playing one (list order apart from play order) hands it on.
+        // From a song before the current list (Previous took you there), one of it moved before its first song starts it.
         if (back && inList) this.listStart = e;
-        else if (!back && e === this.listStart) this.listStart = this.list[start];
       }
     }
     // Shuffled, the list's unheard songs it jumped over come along: they go just before the list on the way, which starts at them.
@@ -347,8 +346,7 @@ export class Queue<T extends Identified> {
 
   /**
    * Move an item in list order, to where the item at `to` was. Unshuffled, it moves past that item in
-   * play order too, before or after it as it was (play order differs from list order after shuffle
-   * was turned off, or an Undo). Shuffled, only a song you queued moved past another one does, as
+   * play order too (the same order then). Shuffled, only a song you queued moved past another one does, as
    * shuffle never mixes them (rule 8). Never across the line between two lists (S7): with its two ends on
    * different sides of a marker it does nothing (but among the songs you queued, which belong to no list),
    * and each line stays at its place in the list.
@@ -693,6 +691,12 @@ export class Queue<T extends Identified> {
       return this.shuffle ? shuffled(songs, this.rand) : songs;
     };
     this.order = [...behind, ...(cur ? [cur] : []), ...queued, ...back, ...part(false), ...part(true)];
+    if (this.shuffle) return;
+    // Off, the list takes that order, as the native queue's does (S13): unshuffled, list order is play order. The current
+    // list then starts at its first song in it that isn't one you queued, so none of its songs falls into history.
+    const first = this.order.find((e) => this.list.indexOf(e) >= start && (way < 0 || this.list.indexOf(e) < way) && !this.queued.has(e));
+    this.list = this.order.slice();
+    if (this.listStart && first) this.listStart = first;
   }
 
 }
