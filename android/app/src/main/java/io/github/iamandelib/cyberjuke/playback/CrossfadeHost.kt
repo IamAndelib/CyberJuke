@@ -60,6 +60,8 @@ internal class ExoCrossfadeHost(
     private val hand: () -> Unit,
     /** PlaybackService.dropIncoming. */
     private val drop: () -> Unit,
+    /** The item a fade on [main] goes into: [crossfadeTarget], where the queue lands (PlaybackService.fadeTarget). */
+    private val fadeTarget: (Player) -> Int = ::crossfadeTarget,
 ) : Crossfader.Host {
     /** The one position message [at] set (arm cancels before it sets another). */
     private var message: PlayerMessage? = null
@@ -67,7 +69,7 @@ internal class ExoCrossfadeHost(
 
     override fun facts(settingMs: Long): CrossfadePlan.Facts {
         val p = main() ?: return CrossfadePlan.Facts(settingMs, playing = false, repeatOne = false, hasNext = false, outage = false)
-        val target = crossfadeTarget(p)
+        val target = fadeTarget(p)
         // The album each was opened from (PlayerShared.toMediaItem); a track without one belongs to
         // none, and a track into its own start (Repeat one) to no album's run.
         val album = p.currentMediaItem?.mediaMetadata?.albumTitle?.takeIf { it.isNotEmpty() }
@@ -94,7 +96,7 @@ internal class ExoCrossfadeHost(
 
     override fun nextDurationMs(): Long {
         val p = main() ?: return -1L
-        return durationOf(p, crossfadeTarget(p), window)
+        return durationOf(p, fadeTarget(p), window)
     }
 
     override fun positionMs(): Long = main()?.currentPosition?.coerceAtLeast(0L) ?: 0L
@@ -126,7 +128,7 @@ internal class ExoCrossfadeHost(
 
     override fun incomingIsNext(): Boolean {
         val p = main() ?: return false
-        val target = crossfadeTarget(p)
+        val target = fadeTarget(p)
         if (target == C.INDEX_UNSET || target >= p.mediaItemCount) return false
         return incoming()?.currentMediaItem == p.getMediaItemAt(target)
     }

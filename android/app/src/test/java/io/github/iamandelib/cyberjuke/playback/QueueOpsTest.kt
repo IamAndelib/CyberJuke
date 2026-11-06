@@ -49,6 +49,32 @@ class QueueOpsTest {
         }
     }
 
+    /** A crossfade fades into where the loop lands (PlaybackService.fadeTarget): past a heard song you queued first in play order (S5). */
+    @Test
+    fun theLoopLandsPastAHeardSongYouQueued() {
+        val p = player(listOf("a", "b", "c"))
+        p.queue.queueNext(listOf("M"))
+        p.next()
+        p.next()
+        p.remove(p.ids.indexOf("a"))
+        val (m, b, c) = listOf("M", "b", "c").map { p.ids.indexOf(it) }
+        assertEquals("Repeat off: no loop", m, p.queue.landing(m))
+        p.repeat = "all"
+        p.queue.onRepeatModeChanged(true)
+        assertEquals("ahead: where it is", c, p.queue.landing(c))
+        p.next()
+        assertEquals("the loop: the first song that stays", b, p.queue.landing(m))
+        assertEquals("the loop onto a song that stays: there", b, p.queue.landing(b))
+        assertEquals("none", -1, p.queue.landing(-1))
+        // Media3's own loop onto M: the queue moves on to b itself, and says so (PlaybackService leaves the rest to that move).
+        p.current = m
+        assertTrue(p.queue.onTransition(forward = true))
+        assertEquals("b", p.ids[p.current])
+        assertEquals(listOf("b", "c"), p.ids)
+        p.current = p.ids.indexOf("c")
+        assertFalse(p.queue.onTransition(forward = true))
+    }
+
     @Test
     fun aRefreshedLinkKeepsTheSongPlayingWithShuffleOff() {
         val p = player(listOf("a", "b", "c", "d"), start = 1)

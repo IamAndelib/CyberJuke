@@ -289,13 +289,14 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
      * before the last one in play order with Repeat all on is the loop: the heard songs you queued
      * leave (rule 8), and the lap starts at its first song that stays ([startLap]). Previous and a
      * tap walk back, so they stay. The song Repeat all came on during, from before the current list
-     * ([onRepeatModeChanged]), leaves once another plays.
+     * ([onRepeatModeChanged]), leaves once another plays. Returns true when it moved playback on
+     * itself ([startLap]): that move's own transition follows.
      */
-    fun onTransition(forward: Boolean) {
-        if (replacing) return
+    fun onTransition(forward: Boolean): Boolean {
+        if (replacing) return false
         val cur = playPos(host.currentIndex)
         val looped = forward && host.repeatAll && cur >= 0 && cur < playPos(indexOfUid(lastUid))
-        if (looped) startLap()
+        val movedOn = looped && startLap()
         hearCurrent()
         if (looped) dropHeardMine()
         if (visit != 0L && host.currentIndex in 0 until host.count && host.uidAt(host.currentIndex) != visit) {
@@ -305,6 +306,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         lastUid = if (host.currentIndex in 0 until host.count) host.uidAt(host.currentIndex) else 0L
         prune()
         if (host.shuffleEnabled) enforceShuffleOrder() else enforceLinearOrder()
+        return movedOn
     }
 
     /**
@@ -709,12 +711,28 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     /**
      * The loop: Media3 goes to the first item in play order, which may be a heard song you queued
      * (it leaves, [dropHeardMine]). Then the first one that stays plays: that one loop isn't gapless.
+     * Returns true when it seeks.
      */
-    private fun startLap() {
-        val order = (if (host.shuffleEnabled) host.shuffleOrder() else null) ?: IntArray(host.count) { it }
-        fun stays(i: Int) = host.serialAt(i) == 0L || !isHeard(i)
-        if (!stays(host.currentIndex)) order.firstOrNull(::stays)?.let(host::seekTo)
+    private fun startLap(): Boolean {
+        if (staysAtLoop(host.currentIndex)) return false
+        host.seekTo(lapStart() ?: return false)
+        return true
     }
+
+    /**
+     * Where moving on to [index] lands (a crossfade fades into it: PlaybackService): the loop, Repeat all
+     * going back in play order onto a heard song you queued, lands where [startLap] would seek to.
+     */
+    fun landing(index: Int): Int {
+        if (index !in 0 until host.count || !host.repeatAll || staysAtLoop(index) || playPos(index) >= playPos(host.currentIndex)) return index
+        return lapStart() ?: index
+    }
+
+    private fun staysAtLoop(index: Int) = host.serialAt(index) == 0L || !isHeard(index)
+
+    /** The first item in play order that stays at the loop, null if none. */
+    private fun lapStart(): Int? =
+        ((if (host.shuffleEnabled) host.shuffleOrder() else null) ?: IntArray(host.count) { it }).firstOrNull(::staysAtLoop)
 
     /** Repeat all's next lap: the heard songs you queued leave, all but the playing one (rule 8), and only the playing one is heard this lap. */
     private fun dropHeardMine() {

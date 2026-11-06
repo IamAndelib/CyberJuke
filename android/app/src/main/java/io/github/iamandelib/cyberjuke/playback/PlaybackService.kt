@@ -565,6 +565,7 @@ class PlaybackService : MediaSessionService() {
                 start = ::startIncoming,
                 hand = ::handOver,
                 drop = ::dropIncoming,
+                fadeTarget = ::fadeTarget,
             ),
             crossfadeMs,
         )
@@ -747,6 +748,12 @@ class PlaybackService : MediaSessionService() {
     }
 
     /**
+     * The item a fade on [p] goes into: [crossfadeTarget], or for the service's player where the queue
+     * lands (Repeat all's loop past a heard song you queued: NativeQueue.landing), so the hand-over is there.
+     */
+    private fun fadeTarget(p: Player): Int = crossfadeTarget(p).let { if (it == C.INDEX_UNSET || p !== player) it else queue.landing(it) }
+
+    /**
      * A crossfade's start (Metrolist's startCrossfade): a second player plays the track the fade
      * goes into from its start, at volume 0 (Crossfader fades it in), outside the session and
      * without audio focus; the service's player keeps both, and the controls, and stops at its
@@ -754,7 +761,7 @@ class PlaybackService : MediaSessionService() {
      */
     private fun startIncoming(): Boolean {
         val old = player ?: return false
-        val target = crossfadeTarget(old)
+        val target = fadeTarget(old)
         if (target == C.INDEX_UNSET || target >= old.mediaItemCount || incoming != null) return false
         val built = try {
             buildPlayer(handleAudioFocus = false)
@@ -850,7 +857,7 @@ class PlaybackService : MediaSessionService() {
         val items = List(n) { old.getMediaItemAt(it) }
         val same = n == next.mediaItemCount && items.indices.all { items[it] === next.getMediaItemAt(it) }
         if (!same) {
-            val at = crossfadeTarget(old)
+            val at = fadeTarget(old)
             val cur = next.currentMediaItemIndex
             if (at != C.INDEX_UNSET && at < n) {
                 next.replaceMediaItems(cur + 1, next.mediaItemCount, items.subList(at + 1, n))
@@ -1038,8 +1045,10 @@ class PlaybackService : MediaSessionService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             // A Next, a tap and Previous all come as a seek: forwardAsked says it moved on (Repeat all's loop).
-            queue.onTransition(forward = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || forwardAsked)
+            val movedOn = queue.onTransition(forward = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || forwardAsked)
             forwardAsked = false
+            // The queue moved on from it (the loop past a heard song you queued): that transition does the rest.
+            if (movedOn) return
             // Not in repeat all's loop: it would lose its songs lap after lap.
             val trimmed = if (player?.repeatMode != Player.REPEAT_MODE_ALL) queue.trimPlayedAuto(QueueCommands.KEEP_PLAYED_AUTO) else 0
             if (trimmed > 0) Log.i(TAG, "Trimmed $trimmed played autoplay item(s)")
