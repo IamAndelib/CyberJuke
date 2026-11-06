@@ -139,8 +139,9 @@ internal interface QueueHost<T> {
  * - Autoplay tracks ([addAutoplay]) play after the list in the order added; they are the list on
  *   the way, and moving on to one of them (played on to, or tapped) makes the current list start
  *   at it or at the first of them, whichever comes first in list order ([listStartIndex]; the
- *   songs before it are history; shuffled, the batch's songs before it stay ahead, and a tap brings
- *   the list's unheard songs it jumped over along, at the new list's start: [bringJumpedOver]). A
+ *   songs before it are history; shuffled, the batch's songs before it stay ahead; a tap, shuffle or
+ *   not, brings the list's unheard songs it jumped over along, at the new list's start, and leaves the
+ *   heard ones behind it: [skipTo], A2). A
  *   radio's first suggestions join its list instead (joinList). Repeat all loops the list you're in:
  *   turning it on drops what's on the way (it comes back once repeat is off) and the songs before
  *   the current list, heard or not, keeping the playing song and the queued ones (the playing one, if
@@ -784,19 +785,25 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
 
     /**
      * A user jump to [index]. An item further ahead plays now and what it jumps over stays next
-     * (YouTube Music): it moves to right after the current one first. [lap]: a tap on a "From the
-     * top" row enters the next lap, so the heard songs you queued leave, as at the loop. Returns
-     * true when it is an autoplay item: more follow from it, after the autoplay items still after
-     * it, which stay.
+     * (YouTube Music): it moves to right after the current one first. A jump that moves on, shuffle
+     * or not, brings along only the current list's unheard songs it jumped over; the others stay
+     * behind it, in Played (A2). [lap]: a tap on a "From the top" row enters the next lap, so the
+     * heard songs you queued leave, as at the loop. Returns true when it is an autoplay item: more
+     * follow from it, after the autoplay items still after it, which stay.
      */
     fun skipTo(index: Int, lap: Boolean = false): Boolean {
         if (index !in 0 until host.count) return false
         val on = movesOn(index) // before it moves next: its place in the list is what counts
-        if (on && host.shuffleEnabled) bringJumpedOver()
-        val inList = index >= listStartIndex()
-        val to = if (upcoming().indexOf(index) > 0) bringNext(index) else index
+        val (start, way) = listStartIndex() to nextStartIndex()
+        val up = upcoming()
+        // Moving on, what it jumps over that comes along: the list on the way's and the current list's unheard (this lap); not the heard ones nor earlier lists'.
+        val jumped = if (on) up.take(up.indexOf(index).coerceAtLeast(0)).filter { host.serialAt(it) !in pending } else emptyList()
+        val comes = { i: Int -> i >= way || i >= start && host.uidAt(i) !in this.lap }
+        val to = if (up.indexOf(index) > 0) bringNext(index, jumped.filterNot(comes)) else index
+        // Shuffled, the list's order is untouched so far: the current list's songs that come along move.
+        if (on && host.shuffleEnabled) bringJumpedOver(jumped.filter { it < way && comes(it) }.sorted())
         // From a song before the current list (Previous took you there), a song of it moves before its first one: it starts there now.
-        if (inList && to < listStartIndex()) listStart = host.uidAt(to)
+        if (index >= start && to < listStartIndex()) listStart = host.uidAt(to)
         host.seekTo(to)
         if (on && nextStart != 0L) moveOn(host.currentIndex) // the transition may have moved on already
         if (lap) dropHeardMine()
@@ -837,12 +844,12 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     }
 
     /**
-     * Shuffled, a tap that moves on: the current list's unheard songs it jumped over come along. They
-     * go just before the list on the way, which starts at them; the play order stays as it was.
+     * Shuffled, a tap that moves on: the current list's unheard songs it jumped over ([kept], in list
+     * order) come along. They go just before the list on the way, which starts at them; the play order
+     * stays as it was.
      */
-    private fun bringJumpedOver() {
+    private fun bringJumpedOver(kept: List<Int>) {
         val way = nextStartIndex()
-        val kept = (listStartIndex() until way).filter { !isHeard(it) && host.serialAt(it) !in pending }
         if (kept.isEmpty()) return
         val rest = (0 until host.count).filter { it !in kept }
         val target = (rest.take(way - kept.size) + kept + rest.drop(way - kept.size)).toIntArray()
@@ -862,16 +869,18 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         host.setShuffleOrder(order.toIntArray())
     }
 
-    /** Moves [index] to play right after the current item; returns where it is now. */
-    private fun bringNext(index: Int): Int {
+    /** Moves [index] to play right after the current item, after [behind] (songs it jumped over that stay behind it: A2); returns where it is now. */
+    private fun bringNext(index: Int, behind: List<Int>): Int {
         val cur = host.currentIndex
+        val moving = behind + index
         if (!host.shuffleEnabled) {
-            host.moveItem(index, cur + 1)
-            return cur + 1
+            val rest = (cur + 1 until host.count).filter { it !in moving }
+            for ((from, to) in QueueOrder.moves(((0..cur) + moving + rest).toIntArray())) host.moveItem(from, to)
+            return cur + 1 + behind.size
         }
         val order = host.shuffleOrder()?.toMutableList() ?: return index
-        order.remove(index)
-        order.add(order.indexOf(cur) + 1, index)
+        order.removeAll(moving)
+        order.addAll(order.indexOf(cur) + 1, moving)
         host.setShuffleOrder(order.toIntArray())
         return index
     }

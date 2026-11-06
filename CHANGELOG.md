@@ -17,6 +17,7 @@
 - With Repeat all on, a single song played from a list (not a radio) just repeats; it no longer brings suggestions.
 - With Repeat all on, a song you add with **Add to queue** plays once: when the list starts over it leaves the queue, instead of coming round again in every lap, and the next lap starts at the list's first song, never at it. Previous, or a tap on a song in Played, still takes you back to it.
 - A played song of the list before can no longer be moved with ↓ into the list you're in; tap it to hear it again.
+- After Previous, a tap on a suggestion in the queue leaves the songs you went back over in Played instead of playing them again; the list's songs you haven't heard yet still come after it, shuffle on or off.
 
 ### Fixed
 - After you tap a suggestion in the queue and go back with Previous, your list's songs stay under their own heading instead of under Autoplay, and Now Playing still says "3 of 8" instead of "Single track". When suggestions and your list's songs take turns, each gets its heading again.

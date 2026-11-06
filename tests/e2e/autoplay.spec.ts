@@ -243,6 +243,25 @@ test('"N of M" counts the album, not a song you queued, which shows where it pla
   await expect(from).toContainText('2 of 8 · ');
 });
 
+test('after Previous, a tapped suggestion leaves the songs you went back over in Played; the unheard ones come after it (A2)', async ({ page }) => {
+  const titles = await playAlbum(page);
+  for (let k = 1; k <= 3; k++) {
+    await page.getByTestId('np-next').click();
+    await expect(page.getByTestId('np-title')).toHaveText(titles[k]);
+  }
+  const q = await withAutoplay(page, 5);
+  // Previous until song 2 (each first restarts the song).
+  await expect(async () => {
+    await page.getByTestId('np-prev').click();
+    await expect(page.getByTestId('np-title')).toHaveText(titles[1], { timeout: 1500 });
+  }).toPass();
+  await page.locator('[data-testid="upnext-row"][data-section="autoplay"] .row-main').first().click();
+  await expect(page.getByTestId('np-title')).toHaveText(q.autoplay[0].title);
+  await expect(page.locator('[data-testid="upnext-row"][data-section="list"] .row-title')).toHaveText(titles.slice(4));
+  await page.getByTestId('upnext-played-fold').click();
+  await expect(page.getByTestId('upnext-played').locator('.row-title')).toHaveText(titles.slice(0, 4));
+});
+
 test('a tapped suggestion, then Previous: the album songs stay under the album, "3 of 8" stays right, and Undo puts each song back', async ({ page }) => {
   const titles = await playAlbum(page);
   // At the third song five are left: suggestions line up after the album.

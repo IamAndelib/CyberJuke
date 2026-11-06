@@ -21,8 +21,8 @@
  *  - autoplay tracks (addAuto) play after the list, in the order added; they are the list on
  *    the way, and moving on to one of them (played on to, or tapped) makes the current list start
  *    at it or at the first of them, whichever comes first in list order (listStartIndex; the songs
- *    before it are history; shuffled, the batch's songs before it stay ahead, and a tap brings the
- *    list's unheard songs it jumped over along, at the new list's start, as an unshuffled tap). A
+ *    before it are history; shuffled, the batch's songs before it stay ahead; a tap, shuffle or not, brings the
+ *    list's unheard songs it jumped over along, at the new list's start, and leaves the heard ones behind it: A2). A
  *    radio's first suggestions join its list instead (joinList). Repeat all loops the list you're in: turning it on drops
  *    what's on the way (it comes back once repeat is off) and the songs before the current list, heard or not,
  *    keeping the playing song and the queued ones (the playing one, if you went back to it, leaves once another
@@ -283,31 +283,38 @@ export class Queue<T extends Identified> {
   /**
    * Jump to a list index. A track further ahead plays now and what it jumps over stays in Up
    * next (YouTube Music): it moves to right after the current one first. Tracks still queued
-   * stay next (see the rule above); so do the autoplay tracks after an autoplay track jumped to. Shuffled, a
-   * jump that moves on brings the current list's unheard songs along (the rule above). `lap`: a tap
-   * on a "From the top" row enters the next lap, so the heard songs you queued leave, as at the loop.
+   * stay next (see the rule above); so do the autoplay tracks after an autoplay track jumped to. A
+   * jump that moves on, shuffle or not, brings along only the current list's unheard songs it jumped
+   * over; the others stay behind it, in Played (A2). `lap`: a tap on a "From the top" row enters the
+   * next lap, so the heard songs you queued leave, as at the loop.
    */
   skipTo(index: number, lap = false): T | null {
     const e = this.list[index];
     if (!e) return null;
     const on = this.movesOn(e);
     const p = this.cur ? this.order.indexOf(this.cur) : -1;
+    const [start, way] = [this.listStartIndex, this.nextStartIndex];
+    // Moving on, what it jumps over that comes along: the list on the way's and the current list's unheard (this lap); not the heard ones nor earlier lists'.
+    const jumped = on && p >= 0 ? this.order.slice(p + 1, this.order.indexOf(e)).filter((x) => !this.queued.has(x)) : [];
+    const comes = (x: Entry<T>) => this.list.indexOf(x) >= way || (this.list.indexOf(x) >= start && !this.lap.has(x));
+    const behind = jumped.filter((x) => !comes(x));
     if (p >= 0 && this.order.indexOf(e) > p + 1) {
+      // Right after the current one, after the songs that stay behind it.
       const at = (arr: Entry<T>[]) => {
-        arr.splice(arr.indexOf(e), 1);
-        arr.splice(arr.indexOf(this.cur!) + 1, 0, e);
+        const rest = arr.filter((x) => x !== e && !behind.includes(x));
+        rest.splice(rest.indexOf(this.cur!) + 1, 0, ...behind, e);
+        return rest;
       };
-      const back = this.list.indexOf(this.cur!) < this.listStartIndex;
-      const inList = this.list.indexOf(e) >= this.listStartIndex;
-      at(this.order);
+      const back = this.list.indexOf(this.cur!) < start;
+      this.order = at(this.order);
       if (!this.shuffle) {
-        at(this.list);
+        this.list = at(this.list);
         // From a song before the current list (Previous took you there), one of it moved before its first song starts it.
-        if (back && inList) this.listStart = e;
+        if (back && index >= start) this.listStart = e;
       }
     }
-    // Shuffled, the list's unheard songs it jumped over come along: they go just before the list on the way, which starts at them.
-    const kept = on && this.shuffle ? this.list.slice(this.listStartIndex, this.nextStartIndex).filter((x) => !this.heard.has(x) && !this.queued.has(x)) : [];
+    // Shuffled, the current list's songs that come along go just before the list on the way, which starts at them.
+    const kept = on && this.shuffle ? this.list.slice(start, way).filter((x) => jumped.includes(x) && comes(x)) : [];
     if (kept.length) {
       this.list = this.list.filter((x) => !kept.includes(x));
       this.list.splice(this.nextStartIndex, 0, ...kept);
