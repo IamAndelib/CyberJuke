@@ -307,8 +307,9 @@ export class Queue<T extends Identified> {
    * next (YouTube Music): it moves to right after the current one first. Tracks still queued
    * stay next (see the rule above); so do the autoplay tracks after an autoplay track jumped to. A
    * jump that moves on, shuffle or not, brings along only the current list's unheard songs it jumped
-   * over; the others stay behind it, in Played (A2). `lap`: a tap on a "From the top" row enters the
-   * next lap, so the heard songs you queued leave, as at the loop.
+   * over; the others stay behind it, in Played (A2). Shuffled, from a song before the current list (Previous took you
+   * there) to one of it, the earlier lists' songs it jumps over stay behind it too. `lap`: a tap on a "From the top" row
+   * enters the next lap, so the heard songs you queued leave, as at the loop.
    */
   skipTo(index: number, lap = false): T | null {
     const e = this.list[index];
@@ -316,10 +317,13 @@ export class Queue<T extends Identified> {
     const on = this.movesOn(e);
     const p = this.cur ? this.order.indexOf(this.cur) : -1;
     const [start, way] = [this.listStartIndex, this.nextStartIndex];
+    // From a song before the current list (Previous took you there) to one of it.
+    const back = p >= 0 && this.list.indexOf(this.cur!) < start && index >= start;
     // Moving on, what it jumps over that comes along: the list on the way's and the current list's unheard (this lap); not the heard ones nor earlier lists'.
-    const jumped = on && p >= 0 ? this.order.slice(p + 1, this.order.indexOf(e)).filter((x) => !this.queued.has(x)) : [];
+    // Shuffled, back into the current list, the earlier lists' songs it jumps over stay behind it too (unshuffled they join the list it starts there).
+    const jumped = (on || (back && this.shuffle)) && p >= 0 ? this.order.slice(p + 1, this.order.indexOf(e)).filter((x) => !this.queued.has(x)) : [];
     const comes = (x: Entry<T>) => this.list.indexOf(x) >= way || (this.list.indexOf(x) >= start && !this.lap.has(x));
-    const behind = jumped.filter((x) => !comes(x));
+    const behind = jumped.filter((x) => (on ? !comes(x) : this.list.indexOf(x) < start));
     if (p >= 0 && this.order.indexOf(e) > p + 1) {
       // Right after the current one, after the songs that stay behind it.
       const at = (arr: Entry<T>[]) => {
@@ -327,12 +331,11 @@ export class Queue<T extends Identified> {
         rest.splice(rest.indexOf(this.cur!) + 1, 0, ...behind, e);
         return rest;
       };
-      const back = this.list.indexOf(this.cur!) < start;
       this.order = at(this.order);
       if (!this.shuffle) {
         this.list = at(this.list);
         // From a song before the current list (Previous took you there), one of it moved before its first song starts it.
-        if (back && index >= start) this.listStart = e;
+        if (back) this.listStart = e;
       }
     }
     // Shuffled, the current list's songs that come along go just before the list on the way, which starts at them.
