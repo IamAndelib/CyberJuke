@@ -143,8 +143,8 @@ internal interface QueueHost<T> {
  *   the list's unheard songs it jumped over along, at the new list's start: [bringJumpedOver]). A
  *   radio's first suggestions join its list instead (joinList). Repeat all loops the list you're in:
  *   turning it on drops what's on the way (it comes back once repeat is off) and the songs before
- *   the current list, heard or not, keeping the playing song and the queued ones (one before it you
- *   went back to leaves once another plays, [onTransition]), and autoplay adds nothing while it is
+ *   the current list, heard or not, keeping the playing song and the queued ones (the playing one, if
+ *   you went back to it, leaves once another plays: [visit]), and autoplay adds nothing while it is
  *   on (Stations.mayAutoplay). Turning autoplay off drops what's on the way too,
  *   never the list you're in. A jump ahead ([skipTo]) keeps what it jumps over next, and the
  *   autoplay tracks after it. The played trim leaves the current list alone. A removed marker's
@@ -192,6 +192,9 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     private var last = emptyList<Pair<Long, String>>()
     private var listLeft: String? = null
     private var nextLeft: String? = null
+
+    /** Repeat all turned on while a song before the current list played (Previous took you back to it), by uid: it leaves once another plays (0: none). */
+    private var visit = 0L
 
     /** List index of the current list's first song. */
     fun listStartIndex(): Int = indexOfUid(listStart).coerceAtLeast(0)
@@ -285,8 +288,8 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
      * moved on (a song's end, Next, an error skip, the crossfade's hand-over). Forward to an item
      * before the last one in play order with Repeat all on is the loop: the heard songs you queued
      * leave (rule 8), and the lap starts at its first song that stays ([startLap]). Previous and a
-     * tap walk back, so they stay. With Repeat all, a song from before the current list (Previous
-     * took you back to it) leaves once another plays, unless you queued it (it leaves at the loop).
+     * tap walk back, so they stay. The song Repeat all came on during, from before the current list
+     * ([onRepeatModeChanged]), leaves once another plays.
      */
     fun onTransition(forward: Boolean) {
         if (replacing) return
@@ -295,7 +298,10 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         if (looped) startLap()
         hearCurrent()
         if (looped) dropHeardMine()
-        if (host.repeatAll) listStartIndex().let { start -> drop { it < start && host.serialAt(it) == 0L } }
+        if (visit != 0L && host.currentIndex in 0 until host.count && host.uidAt(host.currentIndex) != visit) {
+            indexOfUid(visit).takeIf { it >= 0 }?.let(host::removeAt)
+            visit = 0L
+        }
         lastUid = if (host.currentIndex in 0 until host.count) host.uidAt(host.currentIndex) else 0L
         prune()
         if (host.shuffleEnabled) enforceShuffleOrder() else enforceLinearOrder()
@@ -363,6 +369,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         val kept = keptIdx.map { host.itemAt(it) }
         val keptSerials = keptIdx.map { host.serialAt(it) }
         pending.retainAll(keptSerials.toHashSet())
+        visit = 0L
         listStart = 0L
         nextStart = 0L
         listLeft = null
@@ -401,6 +408,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         pending.clear()
         this.heard.clear()
         lap.clear()
+        visit = 0L
         this.listStart = 0L
         this.nextStart = 0L
         listLeft = null
@@ -685,11 +693,17 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         nextLeft = null
     }
 
-    /** Repeat all loops the list you're in: what's on the way and the history before it go (not the playing item or the queued ones). */
+    /**
+     * Repeat all loops the list you're in: what's on the way and the history before it go (not the playing item or the
+     * queued ones). The playing one, if it is before the list and not yours, goes once another plays ([onTransition]).
+     */
     fun onRepeatModeChanged(repeatAll: Boolean) {
+        visit = 0L
         if (!repeatAll) return
         dropOnTheWay()
         drop { it < listStartIndex() }
+        val cur = host.currentIndex
+        if (cur in 0 until host.count && host.serialAt(cur) == 0L && cur < listStartIndex()) visit = host.uidAt(cur)
     }
 
     /**

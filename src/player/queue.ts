@@ -24,8 +24,8 @@
  *    list's unheard songs it jumped over along, at the new list's start, as an unshuffled tap). A
  *    radio's first suggestions join its list instead (joinList). Repeat all loops the list you're in: turning it on drops
  *    what's on the way (it comes back once repeat is off) and the songs before the current list, heard or not,
- *    keeping the playing song and the queued ones (one before it you went back to leaves once another plays,
- *    settle), and autoplay adds nothing while it is on (mayAutoplay). Turning autoplay off drops what's on the way too, never the list you're in.
+ *    keeping the playing song and the queued ones (the playing one, if you went back to it, leaves once another
+ *    plays: `visit`), and autoplay adds nothing while it is on (mayAutoplay). Turning autoplay off drops what's on the way too, never the list you're in.
  *    Repeat one leaves them: it replays the track when it ends, and a skip moves on as with
  *    repeat off (none at the end, as Media3's). Jumping to an autoplay track keeps the ones
  *    after it (Spotify, YouTube Music): more follow it once they run low;
@@ -91,6 +91,8 @@ export class Queue<T extends Identified> {
   /** Where the current list starts (null: its first song) and where the one on the way does (null: none). */
   private listStart: Entry<T> | null = null;
   private nextStart: Entry<T> | null = null;
+  /** Repeat all turned on while a song before the current list played (Previous took you back to it): it leaves once another plays. */
+  private visit: Entry<T> | null = null;
   /** The ids of the song the current list's marker last left and of the last one that left the list on the way (until moving on): an Undo of one stays in its list. */
   private listLeft: string | null = null;
   private nextLeft: string | null = null;
@@ -213,6 +215,7 @@ export class Queue<T extends Identified> {
     const i = clamp(startIndex, 0, this.list.length - 1);
     this.heard = new Set();
     this.lap = new Set();
+    this.visit = null;
     this.listStart = this.nextStart = null;
     this.listLeft = this.nextLeft = null;
     this.cur = this.list[i];
@@ -324,12 +327,17 @@ export class Queue<T extends Identified> {
     this.rebuildOrder(true);
   }
 
-  /** Repeat all loops the list you're in: what's on the way and the history before it go (not the playing song or the queued ones). */
+  /**
+   * Repeat all loops the list you're in: what's on the way and the history before it go (not the playing song or the
+   * queued ones). The playing one, if it is before the list and not yours, goes once another plays (settle).
+   */
   setRepeat(mode: RepeatMode): void {
     this.repeat = mode;
+    this.visit = null;
     if (mode !== 'all') return;
     this.dropOnTheWay();
     this.drop((i) => i < this.listStartIndex);
+    if (this.cur && !this.cur.mine && this.index < this.listStartIndex) this.visit = this.cur;
   }
 
   // ---- editing -------------------------------------------------------------------
@@ -514,6 +522,7 @@ export class Queue<T extends Identified> {
     this.queued.clear();
     this.heard.clear();
     this.lap.clear();
+    this.visit = null;
     this.list = [];
     this.order = [];
     this.cur = null;
@@ -579,16 +588,18 @@ export class Queue<T extends Identified> {
    * The current entry changed: it is heard, a queued track that starts playing is no longer "queued",
    * and moving on starts the current list at it or at the first song on the way, whichever comes first
    * in list order (shuffled, that keeps the batch's songs before it ahead; `on`: skipTo works it out before it reorders).
-   * With repeat all, a song from before the current list (Previous took you back to it) leaves once another plays,
-   * unless you queued it (it leaves at the loop, rule 8).
+   * The song Repeat all came on during, from before the current list (setRepeat), leaves once another plays.
    */
   private settle(on = this.cur !== null && this.movesOn(this.cur)): void {
     if (!this.cur) return;
     if (on) [this.listStart, this.nextStart, this.listLeft, this.nextLeft] = [this.list.indexOf(this.nextStart!) < this.list.indexOf(this.cur) ? this.nextStart : this.cur, null, null, null];
     this.queued.delete(this.cur);
     this.hear(this.cur);
-    const start = this.listStartIndex;
-    if (this.repeat === 'all') this.drop((i) => i < start && !this.list[i].mine);
+    const visit = this.visit;
+    if (visit && visit !== this.cur) {
+      this.visit = null;
+      this.drop((i) => this.list[i] === visit);
+    }
   }
 
   private hear(e: Entry<T>): void {
