@@ -217,14 +217,14 @@ export class WebPlayer implements Player {
     return mayAutoplay(this.q.repeat) || firstBatchOfRadio(this.context, this.q.length, this.q.queuedCount);
   }
 
-  /** Rule 2, inline: with nothing on the way, ask for the next list (once per list and length: native's checkLow). */
+  /** Rule 2, inline: with nothing on the way, ask for the next list (once per list, length and song: native's checkLow; a fetch that brought nothing is asked again at the next song). */
   private checkLow(): void {
     const seed = this.seed;
     if (!seed || !this.keepsGoing(seed.id) || !this.mayAdd() || !this.q.current || this.q.nextStartIndex >= 0) {
       this.lowKey = null;
       return;
     }
-    const key = `${seed.id}|${this.q.listStartIndex}|${this.q.length}`;
+    const key = `${seed.id}|${this.q.listStartIndex}|${this.q.length}|${this.q.index}`;
     if (key === this.lowKey) return;
     this.lowKey = key;
     const ev: QueueLow = { left: this.q.ahead, seedId: seed.id };

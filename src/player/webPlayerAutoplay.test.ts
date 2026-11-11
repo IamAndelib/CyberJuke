@@ -102,6 +102,16 @@ describe('the next list is asked for the moment nothing is on the way (rule 2)',
     expect(await settle()).toBe(1);
   });
 
+  it('a fetch that brought nothing (offline, a failed radio) is asked again at the next song, once a song', async () => {
+    const { p, settle } = await asks((p) => p.playList([t('a'), t('b'), t('c')], 0, { label: 'Liked', mode: 'list' }));
+    expect(await settle()).toBe(1);
+    await p.setRepeat('off');
+    expect(await settle()).toBe(0);
+    await p.next();
+    await p.setRepeat('off');
+    expect(await settle()).toBe(1);
+  });
+
   it("a Home tap: once for its first batch, joined, and again for the one on the way", async () => {
     const { p, settle } = await asks((p) => p.playList([t('h')], 0, radio('Home · Latest')));
     expect(await settle()).toBe(1);

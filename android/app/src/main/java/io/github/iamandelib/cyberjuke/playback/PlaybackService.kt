@@ -1381,7 +1381,8 @@ class PlaybackService : MediaSessionService() {
     /**
      * Rule 2: with nothing on the way, get the next list ([Radios.needsNext]), as the current one starts. A
      * Global radio is refilled here, a page at a time; Jukebox picks come from the web side (`queueLow`).
-     * Once per list and length: a radio's first batch joins its list, then the next comes on the way.
+     * Once per list, length and song: a radio's first batch joins its list, then the next comes on the way;
+     * a fetch that brought nothing (offline, a failed page) is asked again at the next song (web checkLow).
      */
     private fun checkLow() {
         val p = player ?: return
@@ -1394,7 +1395,7 @@ class PlaybackService : MediaSessionService() {
             QueueInfo.clearLow()
             return
         }
-        val key = "$seedId|${queue.listStartIndex()}|${p.mediaItemCount}"
+        val key = "$seedId|${queue.listStartIndex()}|${p.mediaItemCount}|${p.currentMediaItemIndex}"
         if (key == lowKey) return
         lowKey = key
         if (radio.active) radio.refill() else QueueInfo.emitQueueLow(queue.ahead(), seedId)
