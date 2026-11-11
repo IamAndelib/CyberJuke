@@ -670,19 +670,17 @@ test('in Now Playing an Undo message sits at the bottom, and Up next scrolls cle
   const t = await box(toast);
   const vh = page.viewportSize()!.height;
   expect(vh - (t.y + t.height)).toBeLessThanOrEqual(30);
-  // At the end of Up next, the last row's buttons are all above the message.
-  // (Again until it stays there: rows off screen skip layout, so their height is a guess until shown.)
-  const scroll = page.locator('.np-scroll');
-  await expect.poll(() => scroll.evaluate(async (el) => {
+  // At the end of Up next, the last row's buttons are all above the message. Scrolled and measured
+  // together, until it holds: rows never shown yet have a placeholder height (content-visibility),
+  // and grow to their own a frame after they scroll into view, which moves the end down again.
+  await expect.poll(() => page.locator('.np-scroll').evaluate(async (el) => {
     el.scrollTo(0, el.scrollHeight);
     await new Promise(requestAnimationFrame);
-    return el.scrollHeight - el.clientHeight - el.scrollTop;
-  })).toBeLessThanOrEqual(1);
-  const last = rows.last();
-  for (const id of ['upnext-up', 'upnext-down', 'upnext-remove']) {
-    const b = await box(last.getByTestId(id));
-    expect(b.y + b.height, id).toBeLessThanOrEqual(t.y);
-  }
+    await new Promise(requestAnimationFrame);
+    const rows = el.querySelectorAll('[data-testid="upnext-row"]');
+    const last = rows[rows.length - 1];
+    return Math.max(...['upnext-up', 'upnext-down', 'upnext-remove'].map((id) => last.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect().bottom));
+  }), "the last row's buttons").toBeLessThanOrEqual(t.y);
 });
 
 test('closing Now Playing gives focus back to the mini player, keeps the app inert only while open, and takes the next tap', async ({ page }) => {
