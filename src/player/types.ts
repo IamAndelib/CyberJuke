@@ -45,6 +45,8 @@ export type UpRowKind = Exclude<UpNextKind, 'played' | 'top'>;
 export interface UpRun {
   kind: UpRowKind;
   items: UpItem[];
+  /** Of the list on the way (rule 2): Up next shows these under "On the way", to look at and tap only. */
+  way?: true;
 }
 
 /**
@@ -70,7 +72,7 @@ export function sectionsOf(upNext: UpNextItem[], seed: UpNextSections['seed'], n
     out[kind].push(item);
     const run = out.runs.at(-1);
     if (run?.kind === kind && onWay(run.items[0]) === onWay(item)) run.items.push(item);
-    else out.runs.push({ kind, items: [item] });
+    else out.runs.push({ kind, items: [item], ...(onWay(item) && { way: true as const }) });
   }
   return out;
 }

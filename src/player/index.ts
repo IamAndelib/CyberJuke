@@ -210,7 +210,7 @@ function sameItems(a: UpItem[], b: UpItem[]): boolean {
 }
 
 function sameSections(a: UpNextSections, b: UpNextSections): boolean {
-  return a.seed === b.seed && a.runs.length === b.runs.length && a.runs.every((r, k) => r.kind === b.runs[k].kind && sameItems(r.items, b.runs[k].items));
+  return a.seed === b.seed && a.runs.length === b.runs.length && a.runs.every((r, k) => r.kind === b.runs[k].kind && r.way === b.runs[k].way && sameItems(r.items, b.runs[k].items));
 }
 
 // e2e: what Up next holds, with the fields similarity works on.
@@ -228,6 +228,8 @@ exposeForTests('__cyberjukeQueue', () => {
     queued: items(sec.queued),
     list: items(sec.list),
     autoplay: items(sec.autoplay),
+    // The list on the way, all of it (Up next shows the first few: UpNext's WAY_FILL).
+    way: items(sec.runs.flatMap((r) => (r.way ? r.items : []))),
     top: s.lap.map((u) => u.track.id),
     mine: s.mine.map((i) => s.queue[i].id),
     // Where the list on the way starts in the queue (-1: none), and the queue's length.

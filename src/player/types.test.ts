@@ -50,16 +50,16 @@ describe('placeOf', () => {
 
 describe('sectionsOf', () => {
   const u = (id: string, index: number, more: Partial<UpNextItem> = {}): UpNextItem => ({ track: t(id, false), index, ...more });
-  const runs = (upNext: UpNextItem[], nextStart: number) => sectionsOf(upNext, null, nextStart).runs.map((r) => [r.kind, r.items.map((x) => x.track.id)]);
+  const runs = (upNext: UpNextItem[], nextStart: number) => sectionsOf(upNext, null, nextStart).runs.map((r) => [r.kind, r.items.map((x) => x.track.id), ...(r.way ? ['way'] : [])]);
 
   it("starts a new run where the list on the way starts, so ↑ ↓ never cross that line (S7, D15)", () => {
     // A radio's own suggestions, then the next batch: one kind, two runs.
     const up = [u('s1', 1, { auto: true }), u('s2', 2, { auto: true }), u('t1', 3, { auto: true }), u('t2', 4, { auto: true })];
-    expect(runs(up, 3)).toEqual([['autoplay', ['s1', 's2']], ['autoplay', ['t1', 't2']]]);
+    expect(runs(up, 3)).toEqual([['autoplay', ['s1', 's2']], ['autoplay', ['t1', 't2'], 'way']]);
     expect(runs(up, -1)).toEqual([['autoplay', ['s1', 's2', 't1', 't2']]]);
     expect(sectionsOf(up, null, 3).autoplay.map((x) => x.track.id)).toEqual(['s1', 's2', 't1', 't2']);
     // List songs a shuffled tap brought along start the list on the way.
-    expect(runs([u('b', 2), u('c', 3), u('t1', 4, { auto: true })], 3)).toEqual([['list', ['b']], ['list', ['c']], ['autoplay', ['t1']]]);
+    expect(runs([u('b', 2), u('c', 3), u('t1', 4, { auto: true })], 3)).toEqual([['list', ['b']], ['list', ['c'], 'way'], ['autoplay', ['t1'], 'way']]);
   });
 });
 
