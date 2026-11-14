@@ -332,13 +332,14 @@ export function nsfwAutoplayIds(upNext: readonly UpNextItem[]): string[] {
  * Now Playing's "N of M" (rule 4): the playing song's place in the current list, and that list's songs (a
  * radio's first batch included; not what's on the way, nor the songs you queued: A3, S12). A song you queued
  * belongs to no list: no place (''). After Previous into the list before, its place in the list you started,
- * also counting that list's songs that came along into the current one (Up next's list rows).
+ * also counting that list's songs that came along into the current one (Up next's list rows); a suggestion
+ * there has none, as the queue keeps no bounds for an earlier batch.
  */
-export function placeOf(s: Pick<PlayerState, 'queue' | 'index' | 'upNext' | 'listStart' | 'nextStart' | 'mine'>): string {
+export function placeOf(s: Pick<PlayerState, 'queue' | 'index' | 'upNext' | 'listStart' | 'nextStart' | 'mine' | 'currentAuto'>): string {
   const mine = new Set(s.mine);
-  if (s.index < 0 || mine.has(s.index)) return '';
-  const count = (from: number, to: number) => s.queue.slice(from, to).filter((_, k) => !mine.has(from + k)).length;
   const back = s.index < s.listStart;
+  if (s.index < 0 || mine.has(s.index) || (back && s.currentAuto)) return '';
+  const count = (from: number, to: number) => s.queue.slice(from, to).filter((_, k) => !mine.has(from + k)).length;
   const n = count(back ? 0 : s.listStart, s.index + 1);
   const m = back ? n + s.upNext.filter((u) => !u.auto && !mine.has(u.index)).length : count(s.listStart, s.nextStart < 0 ? s.queue.length : s.nextStart);
   return m > 1 ? `${n} of ${m}` : 'Single track';
