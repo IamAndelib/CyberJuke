@@ -4,7 +4,7 @@
  * goes through playList, once the offline guard lets it (the app wires this under it); nothing else
  * does: a batch arriving or a station moving on (addAutoplay), Repeat, a tap in Up next, or a
  * reloaded page taking up the phone's session. A list started has a new context (both players give
- * each list its own); one that doesn't start (nothing in it plays, the player failed) keeps the old.
+ * each list its own); one that doesn't start (nothing in it plays, the player refused it) keeps the old.
  * Kept in Preferences, so a restart goes on with it.
  */
 import { readJson, type KV } from '../core/storage';
@@ -25,13 +25,18 @@ export function sessionStarts(p: Player, store: KV, now = () => Date.now()): Ses
   return {
     player: {
       ...p,
-      playList: async (tracks, start, ctx) => {
+      // Both players show the new list before they wait for anything (native's optimistic state, the
+      // web player's first publish), so it counts at once: a refill asked meanwhile is already this list's.
+      playList: (tracks, start, ctx) => {
         const was = p.state.peek().context;
+        // Taken first: the list's first song, recorded as it starts playing, is heard since.
         const t = now();
-        await p.playList(tracks, start, ctx);
-        if (p.state.peek().context === was) return;
-        at = t;
-        void store.set(KEY, String(t)).catch(() => {});
+        const done = p.playList(tracks, start, ctx);
+        if (p.state.peek().context !== was) {
+          at = t;
+          void store.set(KEY, String(t)).catch(() => {});
+        }
+        return done;
       },
     },
     since: async () => {

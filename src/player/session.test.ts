@@ -66,6 +66,21 @@ describe('sessionStarts', () => {
     expect(store.m.get('vibe.since')).toBe('5000');
   });
 
+  it('a list counts as soon as it shows, before the player has answered: a refill asked meanwhile skips only what it heard', async () => {
+    const { s, inner, clock } = setup();
+    await s.player.playList([t('a')], 0, HOME);
+    clock.now = 5000;
+    let answer = () => {};
+    inner.playList.mockImplementationOnce(async (tracks, i, ctx) => {
+      inner.state.value = { ...inner.state.value, queue: tracks, index: i, current: tracks[i], context: { ...ctx! } };
+      await new Promise<void>((r) => (answer = r));
+    });
+    const started = s.player.playList([t('b')], 0, HOME);
+    expect(await s.since()).toBe(5000);
+    answer();
+    await started;
+  });
+
   it('nothing else starts one: a batch or the next station arriving, Repeat, Shuffle, a tap in Up next, Next', async () => {
     const { s, clock } = setup();
     await s.player.playList([t('a')], 0, HOME);
