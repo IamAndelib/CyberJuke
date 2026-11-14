@@ -37,7 +37,6 @@ const savedRange = signal<SavedRange>('month');
 
 /** Most-saved list length; beyond this it's mostly single-save noise. */
 const SAVED_MAX = 100;
-const SAVED_CTX = radio('Most saved');
 
 /** How many random songs Shuffle starts with: as many as each next batch adds. */
 const SHUFFLE_SIZE = VIBE_BATCH;
@@ -185,7 +184,7 @@ function MostSaved({ genre }: { genre: string | null }) {
   }
   return (
     <div data-testid="saved-list">
-      <Tracks tracks={list} ctx={SAVED_CTX} showSaves hideGenre={genre != null} />
+      <Tracks tracks={list} ctx={radio(genre == null ? 'Most saved' : `Most saved · ${genre}`)} showSaves hideGenre={genre != null} />
       <div class="list-foot end">— {list.length === SAVED_MAX ? `top ${SAVED_MAX}` : 'end of tape'} —</div>
     </div>
   );

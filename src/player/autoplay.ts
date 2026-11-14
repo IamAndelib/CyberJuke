@@ -39,6 +39,12 @@ export function shuffleGenre(label: string | undefined): string | null | undefin
   return label?.startsWith(`${SHUFFLE} · `) ? label.slice(SHUFFLE.length + 3) : undefined;
 }
 
+/** The genre a Home list was picked in, by its label ("Home · rock", "Most saved · rock"); null for any other list (Latest, Most saved with no chip). */
+export function pickedGenre(label: string | undefined): string | null {
+  const m = label?.match(/^(?:Home|Most saved) · (.+)$/);
+  return m && m[1] !== 'Latest' ? m[1] : null;
+}
+
 /**
  * The list playing leads on to the next whatever the Vibe setting: a Signal Radio station, or
  * Home's Jukebox shuffle (natively Stations.keepsGoing, the same rule).
@@ -211,6 +217,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       recent: deps.history(),
       exclude: inQueue,
       heard,
+      genre: pickedGenre(s.context?.label) ?? undefined,
       before: [s.current, ...s.upNext.map((u) => u.track)],
       count,
       showNsfw: deps.showNsfw(),

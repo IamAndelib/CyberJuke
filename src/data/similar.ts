@@ -193,6 +193,8 @@ export interface SimilarOptions {
    * else is left (a small genre, offline with a few saved songs), so it never goes quiet.
    */
   heard?: Iterable<string>;
+  /** A genre picked on Home: its songs first, then its family's, then popular ones (instead of the seed's matches). */
+  genre?: string;
   /** What plays just before the picks, oldest first (the variety rules look at it). */
   before?: readonly Track[];
   count: number;
@@ -252,15 +254,22 @@ export function similarTracks(catalog: readonly Track[], o: SimilarOptions): Tra
   const byScore = (a: Scored, b: Scored) => b.score - a.score;
   const good = scored.filter((s) => s.like >= GOOD_MATCH).sort(byScore);
   const near = scored.filter((s) => s.like < GOOD_MATCH && (s.like > 0 || [...s.f.families].some((x) => seed.families.has(x)))).sort(byScore);
+  const popular = (tier: Scored[]) => tier.map((s) => ({ ...s, score: boost(idx, s.f.track, now) })).sort(byScore);
   const inNear = new Set(near);
-  const rest = scored
-    .filter((s) => s.like < GOOD_MATCH && !inNear.has(s))
-    .map((s) => ({ ...s, score: boost(idx, s.f.track, now) }))
-    .sort(byScore);
+  let base = [good, near, popular(scored.filter((s) => s.like < GOOD_MATCH && !inNear.has(s)))];
+  if (o.genre) {
+    // A genre picked on Home: its own songs, then its family's, then popular ones.
+    const g = normalize(o.genre);
+    const fams = genreFamilies(g);
+    const own = scored.filter((s) => s.f.genre === g).sort(byScore);
+    const kin = scored.filter((s) => s.f.genre !== g && [...s.f.families].some((x) => fams.has(x))).sort(byScore);
+    const taken = new Set([...own, ...kin]);
+    base = [own, kin, popular(scored.filter((s) => !taken.has(s)))];
+  }
   const heard = new Set(o.heard ?? []);
   const isHeard = (s: Scored) => heard.has(s.f.track.id) || heard.has(audioKey(s.f.track));
-  const tiers = [good, near, rest].map((tier) => tier.filter((s) => !isHeard(s)));
-  tiers.push([good, near, rest].flatMap((tier) => tier.filter(isHeard)));
+  const tiers = base.map((tier) => tier.filter((s) => !isHeard(s)));
+  tiers.push(base.flatMap((tier) => tier.filter(isHeard)));
 
   // What plays before the picks; when nothing is given, the seed does.
   const history: string[][] = (o.before ?? []).slice(-(VARIETY_WINDOW - 1)).map((t) => featOf(t).artists);

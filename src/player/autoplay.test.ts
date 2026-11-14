@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals';
 import { describe, expect, it, vi } from 'vitest';
 import type { Track } from '../data/model';
-import { chainsOn, createAutoplay, shuffleLabel, type AutoplayDeps } from './autoplay';
+import { chainsOn, createAutoplay, pickedGenre, shuffleLabel, type AutoplayDeps } from './autoplay';
 import { STATIONS, stationById, stationLabel, stationOfTrackId, stationTracks } from './radio';
 import { EMPTY_STATE, VIBE_BATCH, type Player, type PlayerState, type QueueLow } from './types';
 
@@ -514,6 +514,28 @@ describe('autoplay', () => {
     const { ap, added } = setup({ current: seed, seed, queue: [seed], upNext: [] });
     await ap.fill({ left: 0, seedId: seed.id });
     expect(added).toEqual([]);
+  });
+});
+
+describe('pickedGenre', () => {
+  it("reads a Home list's genre from its label, null for any other", () => {
+    expect(pickedGenre('Home · rock')).toBe('rock');
+    expect(pickedGenre('Most saved · hip hop')).toBe('hip hop');
+    expect(pickedGenre('Home · Latest')).toBeNull();
+    expect(pickedGenre('Most saved')).toBeNull();
+    expect(pickedGenre('Jukebox shuffle · rock')).toBeNull();
+    expect(pickedGenre('Liked')).toBeNull();
+    expect(pickedGenre(undefined)).toBeNull();
+  });
+
+  it("a Vibe batch after a Home genre tap picks that genre first", async () => {
+    const seed = track('g0', { artist: 'G0', genre: 'house' });
+    const catalog = [seed, ...Array.from({ length: 30 }, (_, i) => track(`m${i}`, { artist: `M${i}`, genre: 'metal' })), ...Array.from({ length: 30 }, (_, i) => track(`h${i}`, { artist: `H${i}`, genre: 'house' }))];
+    const context = { label: 'Most saved · metal', mode: 'radio' as const };
+    const { ap, added } = setup({ current: seed, seed, index: 0, queue: [seed], context }, { catalog: () => catalog });
+    await ap.fill({ left: 0, seedId: 'g0' });
+    expect(added[0][0]).toHaveLength(VIBE_BATCH - 1);
+    expect(added[0][0].every((id) => id.startsWith('m'))).toBe(true);
   });
 });
 
