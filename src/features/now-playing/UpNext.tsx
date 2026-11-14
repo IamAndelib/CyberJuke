@@ -286,7 +286,7 @@ export function UpNext() {
   const stationOf = (rows: UpItem[]) => stationShown(ctx, sec.seed?.id, rows[0]?.track.id);
   const title = (r: UpRun) => {
     const st = r.kind !== 'queued' && stationOf(r.items);
-    return !st ? titles[r.kind] : r.kind === 'list' ? `Next from: ${stationLabel(st)}` : `More from ${st.callsign}`;
+    return st ? `Next from: ${stationLabel(st)}` : titles[r.kind];
   };
   const wayStation = stationOf(way);
   const repeat = repeatMode.value;

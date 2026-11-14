@@ -131,7 +131,7 @@ test('a station leads on to the next station, which plays past its end, and its 
   await expect.poll(async () => (await queueState(page)).current?.id).toBe(idsOf('mirrorball')[0]);
   // Labels follow the song (D11): MIRRORBALL, 1 of its 40, and Up next's heading names it.
   await expect(page.getByTestId('np-from')).toHaveText('1 of 40 · Playing from Signal Radio · MIRRORBALL');
-  await expect(page.getByTestId('upnext-autoplay-label').first()).toHaveText('More from MIRRORBALL');
+  await expect(page.getByTestId('upnext-autoplay-label').first()).toHaveText('Next from: Signal Radio · MIRRORBALL');
   await expect.poll(async () => (await onTheWay(page)).size).toBe(32);
   const q = await queueState(page);
   expect((await onTheWay(page)).ids).toEqual(idsOf('slow-orbit').slice(0, 50 - 39));
@@ -179,7 +179,7 @@ test('labels follow the song: the next station once its first song plays, on the
   }).toPass();
   await expect(page.getByTestId('np-from')).toHaveText('32 of 32 · Playing from Signal Radio · THE CRYPT');
   await expect(page.locator('[data-testid="upnext-row"]').first()).toHaveAttribute('data-track-id', idsOf('mirrorball')[0]);
-  await expect(page.getByTestId('upnext-autoplay-label').first()).toHaveText('More from MIRRORBALL');
+  await expect(page.getByTestId('upnext-autoplay-label').first()).toHaveText('Next from: Signal Radio · MIRRORBALL');
   await page.getByTestId('np-close').click();
   await expect(crypt).toHaveAttribute('aria-current', 'true');
   await expect(mirrorball).not.toHaveAttribute('aria-current');
