@@ -94,8 +94,8 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
   /**
    * The last batch added, until the player's state shows it: `queue` is the list the
    * state had when the call returned; once that changes, the batch is in it (or was
-   * dropped: a new list). `repeats`: it holds songs already in the queue (a shuffle's or a
-   * station's next round), so its ids say nothing about whether it is in.
+   * dropped: a new list). `repeats`: it holds songs already in the queue (Home's Shuffle's next
+   * round, a station coming round again after the chain wraps), so its ids say nothing about whether it is in.
    */
   let batch: { seedId: string; ids: string[]; at: number; queue?: readonly Track[]; repeats?: boolean } | null = null;
   /**
@@ -155,13 +155,14 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       b.queue = player.state.peek().queue;
     };
 
-    // Stations lead on: the next after the one playing (the playing song's, not the label's: the
-    // one tuned in), whole, with a song that can play now. (A station's track in another list,
-    // Liked say, gets similar picks like any other.)
+    // Stations lead on: the next after the current list's station (not the label's, the one tuned
+    // in; nor the playing song's, which may be the station before, after Previous, or one you
+    // queued), whole, with a song that can play now. (A station's track in another list, Liked
+    // say, gets similar picks like any other.)
     const playable = deps.playable ?? (() => true);
     const station = stationPlaying(s.context, seed.id);
     if (station) {
-      const from = stationOfTrackId(s.current.id) ?? station;
+      const from = stationOfTrackId(s.queue.slice(Math.max(0, s.listStart)).find((t) => stationOfTrackId(t.id))?.id) ?? station;
       const ok = (st: Station) => stationTracks(st).some(playable);
       const played = await hear(from);
       const to = ahead?.from === from && ok(ahead.to) ? ahead.to : nextStation(from, s.shuffle, played, ok, deps.rng);

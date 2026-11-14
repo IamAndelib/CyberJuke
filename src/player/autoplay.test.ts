@@ -279,6 +279,23 @@ describe('autoplay', () => {
     expect(a.added[0][0]).toEqual(idsOf(STATIONS[0].id));
   });
 
+  it("the chain goes on from the current list's station: back on the station before with Previous, or with a song you queued playing", async () => {
+    const crypt = tracksOf('the-crypt');
+    const mirror = tracksOf('mirrorball');
+    const queue = [...crypt, ...mirror];
+    // MIRRORBALL is the current list; Previous went back to THE CRYPT's last song (rule 7).
+    const a = onStation('the-crypt');
+    a.s.value = { ...a.s.value, queue, index: crypt.length - 1, current: crypt.at(-1)!, listStart: crypt.length, nextStart: -1 };
+    await a.ap.fill({ left: 0, seedId: crypt[0].id });
+    expect(a.added[0][0]).toEqual(idsOf('slow-orbit'));
+    // A Jukebox song you queued plays: still MIRRORBALL's next, not the next after THE CRYPT.
+    const mine = track('c7');
+    const b = onStation('the-crypt');
+    b.s.value = { ...b.s.value, queue: [...crypt, mirror[0], mine, ...mirror.slice(1)], index: crypt.length + 1, current: mine, listStart: crypt.length, nextStart: -1 };
+    await b.ap.fill({ left: 0, seedId: crypt[0].id });
+    expect(b.added[0][0]).toEqual(idsOf('slow-orbit'));
+  });
+
   it('a station that comes round again (its songs already in the queue) is added once: a signal from before the state shows it waits', async () => {
     const before = tracksOf('distortion-field');
     const a = onStation('cipher');
