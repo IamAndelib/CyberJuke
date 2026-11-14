@@ -355,8 +355,9 @@ export function UpNext() {
             </li>
           </>
         )}
-        {here.map((r, k) => (
-          <Fragment key={k}>
+        {here.map((r) => (
+          // By its kind and first row, not its place: a run before it that goes doesn't remount its rows.
+          <Fragment key={`${r.kind}:${r.items[0].index}`}>
             <li class={'upnext-label' + (r.kind === 'autoplay' && vibe ? ' auto' : '')} data-testid={`upnext-${r.kind}-label`} aria-hidden="true">
               {title(r)}
             </li>
