@@ -23,7 +23,7 @@ const seeded = (playlists: unknown[]) => ({ [FILE]: { version: 1, playlists } })
 const NIGHT = { id: 'pn', name: 'Night drive', created: 2, updated: 2, tracks: [tr(1), tr(2), tr(3)] };
 const EMPTY = { id: 'pe', name: 'Road trip', created: 1, updated: 1, tracks: [] };
 
-type Queue = { current: { id: string }; list: { id: string }[]; autoplay: unknown[]; mine: string[] };
+type Queue = { current: { id: string }; list: { id: string }[]; autoplay: unknown[]; way: unknown[]; mine: string[] };
 const queueState = (page: Page) => page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => Queue }).__cyberjukeQueue());
 const titles = (page: Page) => page.getByTestId('screen-playlist').getByTestId('track-title');
 const saved = (page: Page) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? 'null'), FILE);
@@ -332,8 +332,10 @@ test.describe('adding songs', () => {
     const last = (await page.getByTestId('np-title').textContent())!;
     await page.getByTestId('np-next').click();
     await expect(page.getByTestId('np-title')).not.toHaveText(last);
-    // Read what the list is once we are in it, not before (a refill in between could change it).
-    const n = (await queueState(page)).autoplay.length + 1; // the song playing is the list's first
+    // The list you're in: the song playing and the suggestions after it, without the next batch,
+    // which comes on the way as this one starts and isn't saved (read together, in one state).
+    const q = await queueState(page);
+    const n = q.autoplay.length - q.way.length + 1;
     expect(n).toBeGreaterThan(1);
     await page.getByTestId('upnext-save').click();
     await expect(page.getByTestId('name-sheet')).toContainText(`With ${n} songs`);
