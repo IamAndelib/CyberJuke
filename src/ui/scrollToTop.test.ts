@@ -104,4 +104,37 @@ describe('scrollToTop', () => {
     expect(f.pending()).toBe(0);
     expect(done).toBe(1);
   });
+
+  it('scrolls to another place with `to`, down as well as up, and lands exactly there', () => {
+    for (const [from, to] of [
+      [3000, 800],
+      [100, 800],
+    ]) {
+      const f = frames();
+      const el = { scrollTop: from };
+      let done = 0;
+      scrollToTop(el, { ...f, to, onDone: () => done++ });
+      let last = el.scrollTop;
+      while (f.pending()) {
+        f.frame();
+        // Straight there, never past it.
+        expect(Math.abs(el.scrollTop - to)).toBeLessThanOrEqual(Math.abs(last - to));
+        last = el.scrollTop;
+      }
+      expect(el.scrollTop).toBe(to);
+      expect(done).toBe(1);
+    }
+  });
+
+  it('with `to`, jumps at once under reduced motion, and only finishes when already there', () => {
+    const f = frames();
+    const el = { scrollTop: 3000 };
+    scrollToTop(el, { ...f, to: 800, reduced: true });
+    expect(el.scrollTop).toBe(800);
+    expect(f.pending()).toBe(0);
+    let done = 0;
+    scrollToTop(el, { ...f, to: 800, onDone: () => done++ });
+    expect(f.pending()).toBe(0);
+    expect(done).toBe(1);
+  });
 });

@@ -174,8 +174,15 @@
   height: 100%;
   overflow-y: auto;
   overscroll-behavior-y: none;
-  /* At the bottom, room for a message (Toasts.tsx) under the last row of Up next. */
-  padding: var(--safe-top) calc(var(--safe-right)) calc(18px + 48px + 24px + var(--safe-bottom)) var(--safe-left);
+  padding: var(--safe-top) var(--safe-right) 0 var(--safe-left);
+}
+/* At the bottom, room for a message (Toasts.tsx) and the button back to the song playing under the last row (on the content: the button's dock ends the scroller). */
+.np-scroll > .upnext {
+  padding-bottom: calc(18px + 48px + 24px + var(--safe-bottom));
+}
+/* Back to the song playing: back-to-top's button (ui/ui.css) at the bottom edge of the sheet, where a toast goes (Toasts.tsx). */
+.np .totop {
+  bottom: calc(18px + var(--safe-bottom));
 }
 .np-head {
   display: flex;

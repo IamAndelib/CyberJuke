@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- In a long queue, an arrow button (like back to top) appears over Now Playing once you've scrolled down past the song playing; tap it to jump back up to it.
 - With Repeat all on, Up next goes on under "From the top" with the songs that play next time round, and you can reorder or remove them there.
 
 ### Changed

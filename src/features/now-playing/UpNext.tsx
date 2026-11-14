@@ -1,6 +1,6 @@
 import { Fragment } from 'preact';
 import { signal } from '@preact/signals';
-import { useLayoutEffect, useRef } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { autoplayLabel, currentId, currentPlaysOffline, currentTrack, isPlaying, lapTracks, player, playContext, previousTracks, repeatMode, saveSongs, shuffleOn, undoOf, upNextSections, type PlayContext, type UpItem, type UpNextKind, type UpRun } from '../../player';
 import { stationLabel, stationShown } from '../../player/radio';
 import { isLocal, type Track } from '../../data/model';
@@ -13,6 +13,7 @@ import { PLAYLISTS_MAX, createPlaylist } from '../../stores/playlists';
 import { askName } from '../../ui/nav';
 import { Icon } from '../../ui/icons';
 import { afterPress } from '../../ui/press';
+import { useJumpButton } from '../../ui/useJumpButton';
 import { Art } from '../../ui/components/Art';
 import { Bars, longPress } from '../../ui/components/TrackRow';
 import { UP_NEXT_MAX } from '../../core/guards';
@@ -383,6 +384,48 @@ export function UpNext() {
         <div class="dim small upnext-empty">{`${settings.value.autoplay ? 'Nothing queued.' : 'Autoplay is off.'} ⋯ → Add to queue plays a track next.`}</div>
       )}
     </section>
+  );
+}
+
+/**
+ * An arrow over the bottom of Now Playing, once the song playing has scrolled out of view above (you
+ * went down into Up next): it scrolls the sheet back so the "Now playing" label sits at the top, just
+ * under the status bar. Not when the song is below the view (scroll down to it). Back-to-top's button
+ * (ui/useJumpButton), the last child of the sheet's scroller `.np-scroll`, as on a screen. "Above the
+ * view" is an IntersectionObserver whose view reaches 100000px below the scroller: the row is
+ * "not intersecting" exactly when it is above, and a fling from below to above crosses that edge.
+ */
+export function ToPlaying() {
+  const dock = useRef<HTMLDivElement>(null);
+  const [above, setAbove] = useState(false);
+  const scroller = () => dock.current?.closest<HTMLElement>('.np-scroll') ?? null;
+  /** The top of the view: under the status bar (the scroller's top padding). */
+  const inset = (el: HTMLElement) => parseFloat(getComputedStyle(el).paddingTop) || 0;
+  const jump = useJumpButton(scroller, {
+    to: () => {
+      const el = scroller();
+      const label = el?.querySelector('[data-testid="upnext-current-label"]');
+      return el && label ? el.scrollTop + label.getBoundingClientRect().top - el.getBoundingClientRect().top - inset(el) : 0;
+    },
+  });
+  useEffect(() => {
+    const root = scroller();
+    const row = root?.querySelector('[data-testid="upnext-current"]');
+    if (!root || !row) return;
+    // The view starts under the status bar: the root's top edge moves down by the padding.
+    const io = new IntersectionObserver((entries) => setAbove(!entries[entries.length - 1].isIntersecting), { root, rootMargin: `${-inset(root)}px 0px 100000px 0px` });
+    io.observe(row);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div class="totop-dock" ref={dock}>
+      <div class={'totop' + (above ? ' on' : '')}>
+        <button class="pixel-btn totop-btn" aria-label="Back to the song playing" {...jump.props} tabIndex={above ? 0 : -1} aria-hidden={above ? undefined : true} data-testid="np-to-playing">
+          <Icon name="up" size={24} />
+        </button>
+        <div class="pixel-shadow" aria-hidden="true" />
+      </div>
+    </div>
   );
 }
 
