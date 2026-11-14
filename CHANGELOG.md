@@ -39,6 +39,7 @@
 - Now Playing's "3 of 8" counts only the list's songs, not the ones you queued; while one of yours plays, it shows just where the music comes from.
 - Removing the first song of the list you're in no longer lets a song you queued take its place as the list's start, which could leave the list's other songs out of Repeat all's loop.
 - In Up next, the next station's songs and Home's Shuffle's next batch no longer look like Vibe's suggestions (the ~ heading, the dimmed covers), and a screen reader no longer calls them "vibe".
+- After Previous takes you back into the station before, Up next gives each station's songs their own heading, instead of naming the station before over the next one's songs.
 
 ## [1.4.0] - 2026-11-04
 

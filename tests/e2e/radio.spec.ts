@@ -190,6 +190,26 @@ test('labels follow the song: the next station once its first song plays, on the
   await expect(mirrorball).not.toHaveAttribute('aria-current');
 });
 
+test("after Previous into the station before, each of Up next's headings names its own station's songs (D11)", async ({ page }) => {
+  await clockStart(page);
+  await start(page);
+  await openRadio(page);
+  await tune(page, 'the-crypt');
+  // Past THE CRYPT and MIRRORBALL: SLOW ORBIT's first song.
+  await playOn(page, (32 + 40) * (FAKE_TRACK_MS + 200));
+  await expect.poll(async () => (await queueState(page)).current?.id).toBe(idsOf('slow-orbit')[0]);
+  await openNowPlaying(page);
+  // Previous twice (the first restarts the song): MIRRORBALL's second-to-last song.
+  await expect(async () => {
+    await page.getByTestId('np-prev').click();
+    await expect(page.getByTestId('np-title')).toHaveText(titlesOf('mirrorball')[38], { timeout: 1500 });
+  }).toPass();
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText(['Next from: Signal Radio · MIRRORBALL', 'Next from: Signal Radio · SLOW ORBIT']);
+  const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
+  await expect(rows.first()).toHaveAttribute('data-track-id', idsOf('mirrorball')[39]);
+  await expect(rows.nth(1)).toHaveAttribute('data-track-id', idsOf('slow-orbit')[0]);
+});
+
 test('a tap on the next station under On the way: "N of M" is each song\'s place in its own station, also for the songs that came along', async ({ page }) => {
   await start(page);
   await openRadio(page);

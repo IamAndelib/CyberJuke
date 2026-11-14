@@ -41,7 +41,7 @@ export interface UpItem {
 
 export type UpRowKind = Exclude<UpNextKind, 'played' | 'top'>;
 
-/** Up next's rows in play order, a run each time the kind changes or the list on the way starts: Up next shows a heading over each. */
+/** Up next's rows in play order, a run each time the kind changes, the current list starts or the list on the way does: Up next shows a heading over each. */
 export interface UpRun {
   kind: UpRowKind;
   items: UpItem[];
@@ -52,8 +52,10 @@ export interface UpRun {
 /**
  * Up next's three sections (C2): each row by its own kind, never by its place (a tapped
  * suggestion, moved next, stays a suggestion and the list after it stays the list), each in
- * play order; the same rows as `runs`, which also break where the list on the way starts (queue index
- * `nextStart`, -1 for none), so ↑ ↓ never cross that line (S7, D15); and the track autoplay follows.
+ * play order; the same rows as `runs`, which also break where the current list starts (queue index
+ * `listStart`: after Previous into the list before, the rest of that one) and where the list on the way
+ * does (`nextStart`, -1 for none), so ↑ ↓ never cross those lines and each heading names its own list
+ * (S7, D11, D15); the songs you queued belong to no list. And the track autoplay follows.
  */
 export interface UpNextSections {
   queued: UpItem[];
@@ -63,15 +65,16 @@ export interface UpNextSections {
   seed: Track | null;
 }
 
-export function sectionsOf(upNext: UpNextItem[], seed: UpNextSections['seed'], nextStart: number): UpNextSections {
+export function sectionsOf(upNext: UpNextItem[], seed: UpNextSections['seed'], listStart: number, nextStart: number): UpNextSections {
   const out: UpNextSections = { queued: [], list: [], autoplay: [], runs: [], seed };
   const onWay = (u: UpItem) => nextStart >= 0 && u.index >= nextStart;
+  const earlier = (u: UpItem) => u.index < listStart;
   for (const u of upNext) {
     const item: UpItem = { track: u.track, index: u.index };
     const kind = u.queued ? 'queued' : u.auto ? 'autoplay' : 'list';
     out[kind].push(item);
     const run = out.runs.at(-1);
-    if (run?.kind === kind && onWay(run.items[0]) === onWay(item)) run.items.push(item);
+    if (run?.kind === kind && onWay(run.items[0]) === onWay(item) && (kind === 'queued' || earlier(run.items[0]) === earlier(item))) run.items.push(item);
     else out.runs.push({ kind, items: [item], ...(onWay(item) && { way: true as const }) });
   }
   return out;
