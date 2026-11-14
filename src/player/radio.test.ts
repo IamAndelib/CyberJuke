@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STATIONS, nextStation, stationById, stationFreq, stationLabel, stationOfTrackId, stationQueue, stationTrack, stationTracks } from './radio';
+import { STATIONS, nextStation, stationById, stationFreq, stationLabel, stationOfTrackId, stationTrack, stationTracks } from './radio';
 import { asTrack, isTrackFull } from '../core/guards';
 
 /** A seeded generator, so a run can be repeated. */
@@ -91,37 +91,5 @@ describe('nextStation', () => {
     // Only the one playing has saved songs, or none has: nothing follows.
     expect(nextStation(stationById('cold-wave')!, false, [], (s) => s.id === 'cold-wave')).toBeNull();
     expect(nextStation(cipher, true, [], () => false)).toBeNull();
-  });
-});
-
-describe('stationQueue', () => {
-  it('plays every track of the station exactly once per round, shuffled', () => {
-    const r = rng(7);
-    const ids = stationTracks(cipher).map((t) => t.id);
-    const round = stationQueue(cipher, null, r);
-    expect([...round.map((t) => t.id)].sort()).toEqual([...ids].sort());
-    expect(round.map((t) => t.id)).not.toEqual(ids);
-    expect(round.every((t) => t.id.startsWith('sig:cipher:'))).toBe(true);
-  });
-
-  it('never starts a round with the track the last one ended on', () => {
-    const r = rng(11);
-    let last: string | undefined;
-    for (let i = 0; i < 200; i++) {
-      const round = stationQueue(cipher, last, r);
-      expect(round).toHaveLength(cipher.tracks.length);
-      if (last) expect(round[0].ytId).not.toBe(last);
-      last = round.at(-1)!.ytId;
-    }
-    // A generator that keeps everything in place would start with it: it goes to the end instead.
-    const first = stationTracks(cipher)[0];
-    const kept = stationQueue(cipher, first.ytId, () => 0.999999);
-    expect(kept[0].ytId).not.toBe(first.ytId);
-    expect(kept.at(-1)).toBe(first);
-  });
-
-  it('a station of one track plays it again', () => {
-    const one = { ...cipher, id: 'one', tracks: cipher.tracks.slice(0, 1) };
-    expect(stationQueue(one, one.tracks[0].ytId).map((t) => t.ytId)).toEqual([one.tracks[0].ytId]);
   });
 });

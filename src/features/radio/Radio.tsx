@@ -1,7 +1,7 @@
 import { computed } from '@preact/signals';
 import { online } from '../../core/network';
-import { currentPlaysOffline, isPlaying, player, playContext } from '../../player';
-import { BAND_NAMES, STATIONS, stationFreq, stationLabel, stationQueue, stationTracks, type Band, type Station } from '../../player/radio';
+import { currentPlaysOffline, isPlaying, newStationChain, player, playContext, shuffleOn } from '../../player';
+import { BAND_NAMES, STATIONS, stationFreq, stationLabel, stationTracks, type Band, type Station } from '../../player/radio';
 import type { Track } from '../../data/model';
 import { Icon } from '../../ui/icons';
 import { Screen } from '../../ui/components/Screen';
@@ -22,9 +22,10 @@ let allStationTracks: Track[] | null = null;
 const allTracks = () => (allStationTracks ??= STATIONS.flatMap((s) => stationTracks(s)));
 
 /**
- * Tune in: a fresh round of the station, then the next ones (player/radio). The station that's
- * on already doesn't restart: playing, Now Playing opens; paused, it plays (as a track row does,
- * so offline a refused play opens nothing).
+ * Tune in: the station in its listed order (shuffle on: from a random song, the rest mixed, as the
+ * Shuffle button starts a list), then the next stations (player/radio nextStation), a new chain. The
+ * station that's on already doesn't restart: playing, Now Playing opens; paused, it plays (as a
+ * track row does, so offline a refused play opens nothing).
  */
 function tuneIn(s: Station): void {
   if (onAir.peek() === s) {
@@ -32,7 +33,9 @@ function tuneIn(s: Station): void {
     else void player.play();
     return;
   }
-  void playFrom(stationQueue(s), 0, list(stationLabel(s)));
+  const tracks = [...stationTracks(s)];
+  newStationChain();
+  void playFrom(tracks, shuffleOn.peek() ? Math.floor(Math.random() * tracks.length) : 0, list(stationLabel(s)));
 }
 
 function showInfo(s: Station): void {

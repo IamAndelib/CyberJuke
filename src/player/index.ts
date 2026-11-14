@@ -19,6 +19,7 @@ import { auth } from '../data/auth';
 import { music, musicTracks } from '../data/ytmusic';
 import { hasAudio } from '../core/guards';
 import { logError } from '../core/log';
+import { kv } from '../core/storage';
 import { heldFor } from '../core/held';
 import { online } from '../core/network';
 import { OFFLINE } from '../core/offlineText';
@@ -28,7 +29,7 @@ import { isSaved, savedOffline, savedTracks } from '../stores/savedOffline';
 import { createAutoplay, shuffleGenre, type Autoplay } from './autoplay';
 import { NativePlayer } from './nativePlayer';
 import { offlineGuard, playsOffline, type OfflineRefusal } from './offlineGuard';
-import { stationPlaying } from './radio';
+import { stationOfTrackId, stationPlaying } from './radio';
 import { safePlayer } from './safePlayer';
 import { nsfwAutoplayIds, placeOf, sectionsOf, wantsPlay, type PlayContext, type Player, type UpItem, type UpNextSections } from './types';
 import { WebPlayer } from './webPlayer';
@@ -191,14 +192,15 @@ export const lapTracks = computed<UpItem[]>(() => {
 });
 
 /**
- * What autoplay's tracks are, for Up next's heading and Now Playing while one plays: a station's
- * next rounds, a Jukebox shuffle's more random picks, or songs similar to the seed.
+ * What autoplay's tracks are, for Up next's heading and Now Playing while one plays: the station
+ * the chain has moved on to (the playing song's), a Jukebox shuffle's more random picks, or songs
+ * similar to the seed.
  */
 export const autoplayLabel = computed(() => {
   const ctx = playContext.value;
   const seed = upNextSections.value.seed;
   const station = stationPlaying(ctx, seed?.id);
-  if (station) return `More from ${station.callsign}`;
+  if (station) return `More from ${(stationOfTrackId(currentTrack.value?.id) ?? station).callsign}`;
   const genre = shuffleGenre(ctx?.label);
   if (genre !== undefined) return `More random picks from ${genre ?? 'the Jukebox'}`;
   return seed?.title ? `Autoplay · similar to ${seed.title}` : 'Autoplay';
@@ -275,6 +277,7 @@ function startAutoplay(): Autoplay {
     signedIn: () => auth.signedIn(),
     blocked: () => block.blocked.peek() != null,
     removed: () => removed,
+    store: kv,
     playable: (t) => online.peek() || isSaved(t, savedOffline.peek()),
     radio: (ytId, next) => music.radio(ytId, next).then((page) => ({ tracks: musicTracks(page.items), next: page.next })),
     log: logError,
@@ -286,6 +289,11 @@ function startAutoplay(): Autoplay {
     if (catalog.tracks.value.length && currentId.value) untracked(() => a.ready());
   });
   return autoplay;
+}
+
+/** A station tuned in on the Radio tab starts a new chain: no station heard yet (autoplay's memory of them). */
+export function newStationChain(): void {
+  autoplay?.newStationChain();
 }
 
 /**

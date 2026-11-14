@@ -2,6 +2,7 @@ import { signal } from '@preact/signals';
 import { describe, expect, it, vi } from 'vitest';
 import type { Track } from '../data/model';
 import { chainsOn, createAutoplay, shuffleLabel, type AutoplayDeps } from './autoplay';
+import { STATIONS, stationById, stationLabel, stationTracks } from './radio';
 import { EMPTY_STATE, VIBE_BATCH, type Player, type PlayerState, type QueueLow } from './types';
 
 const track = (id: string, p: Partial<Track> = {}): Track => ({
@@ -243,39 +244,112 @@ describe('autoplay', () => {
     expect(b.radio).not.toHaveBeenCalled();
   });
 
-  it('a Signal Radio station goes on with the next round of its station, on the way from its start, natively too, never with Global radio or the catalog', async () => {
-    const { stationById, stationLabel, stationTracks } = await import('./radio');
-    const st = stationById('cold-wave')!;
-    const round = stationTracks(st);
-    const seed = round[0];
-    const last = round.at(-1)!;
-    const a = setup({ current: seed, seed, index: 0, queue: [...round], upNext: round.slice(1).map((t, i) => ({ track: t, index: 1 + i })), context: { label: stationLabel(st), mode: 'list' } });
+  const tracksOf = (id: string) => [...stationTracks(stationById(id)!)];
+  const idsOf = (id: string) => tracksOf(id).map((t) => t.id);
+  /** A station's list playing from its first song (tuned in, or moved on to in the chain); the label is the one tuned in. */
+  function onStation(id: string, more: Partial<PlayerState> = {}, deps: Partial<AutoplayDeps> = {}) {
+    const list = tracksOf(id);
+    const a = setup({ current: list[0], seed: list[0], index: 0, queue: list, upNext: list.slice(1).map((t, i) => ({ track: t, index: 1 + i })), context: { label: stationLabel(stationById('cipher')!), mode: 'list' }, ...more }, deps);
+    return { ...a, list };
+  }
+  /** A small Preferences double. */
+  const memoryKv = () => {
+    const m = new Map<string, string>();
+    return { m, get: async (k: string) => m.get(k) ?? null, set: async (k: string, v: string) => void m.set(k, v), remove: async (k: string) => void m.delete(k) };
+  };
+
+  it('a Signal Radio station leads on to the next station, all of it in its listed order, on the way from its start, natively too, never Global radio or the catalog', async () => {
+    const a = onStation('cipher');
     (a.player as { kind: string }).kind = 'native';
-    await a.ap.fill({ left: round.length - 1, seedId: seed.id });
-    expect(a.added).toHaveLength(1);
-    const [ids, seedId] = a.added[0];
-    expect(seedId).toBe(seed.id);
-    expect([...ids].sort()).toEqual(round.map((t) => t.id).sort());
-    expect(ids[0]).not.toBe(last.id);
+    await a.ap.fill({ left: a.list.length - 1, seedId: a.list[0].id });
+    expect(a.added).toEqual([[idsOf('distortion-field'), a.list[0].id]]);
     expect(a.radio).not.toHaveBeenCalled();
-    // Asked again before the state shows the round (native lags the call): nothing more.
-    await a.ap.fill({ left: round.length - 1, seedId: seed.id });
+    // Asked again before the state shows it (native lags the call): nothing more.
+    await a.ap.fill({ left: a.list.length - 1, seedId: a.list[0].id });
     expect(a.added).toHaveLength(1);
-    // The state shows it on the way: still nothing. Moved on into it: the round after that.
-    const next = ids.map((id) => round.find((t) => t.id === id)!);
-    a.s.value = { ...a.s.value, queue: [...round, ...next], nextStart: round.length };
-    await a.ap.fill({ left: 3, seedId: seed.id });
-    expect(a.added).toHaveLength(1);
-    a.s.value = { ...a.s.value, index: round.length, current: next[0], listStart: round.length, nextStart: -1 };
-    await a.ap.fill({ left: next.length - 1, seedId: seed.id });
-    expect(a.added).toHaveLength(2);
-    expect(a.added[1][0]).toHaveLength(round.length);
-    expect(a.added[1][0][0]).not.toBe(next.at(-1)!.id);
   });
 
-  it("a station's track in another list (Recently played) gets similar picks, not the station's rounds", async () => {
-    const { stationById, stationTracks } = await import('./radio');
-    const seed = stationTracks(stationById('cold-wave')!)[0];
+  it('the chain goes on from the station of the song playing, not the one tuned in (the label), and wraps after the last', async () => {
+    const last = STATIONS.at(-1)!;
+    // Tuned in to CIPHER (the label and the seed), the chain has moved on to the last station.
+    const a = onStation('cipher');
+    const now = tracksOf(last.id);
+    a.s.value = { ...a.s.value, queue: [...a.list, ...now], index: a.list.length, current: now[0], listStart: a.list.length, nextStart: -1, upNext: [] };
+    await a.ap.fill({ left: now.length - 1, seedId: a.list[0].id });
+    expect(a.added[0][0]).toEqual(idsOf(STATIONS[0].id));
+  });
+
+  it('a station that comes round again (its songs already in the queue) is added once: a signal from before the state shows it waits', async () => {
+    const before = tracksOf('distortion-field');
+    const a = onStation('cipher');
+    a.s.value = { ...a.s.value, queue: [...before, ...a.list], index: before.length, listStart: before.length };
+    await a.ap.fill({ left: 0, seedId: a.list[0].id });
+    await a.ap.fill({ left: 0, seedId: a.list[0].id });
+    expect(a.added).toEqual([[before.map((t) => t.id), a.list[0].id]]);
+  });
+
+  it('with shuffle, a random station not heard yet in this chain; kept with the session, until a station is tuned in', async () => {
+    const store = memoryKv();
+    let r = 0;
+    const rng = () => [0, 0.99][r++ % 2];
+    const a = onStation('cipher', { shuffle: true }, { store, rng });
+    await a.ap.fill({ left: 0, seedId: a.list[0].id });
+    // The first not heard (rng 0): DISTORTION FIELD, all of it (the player mixes it on arrival).
+    expect(a.added[0][0]).toEqual(idsOf('distortion-field'));
+    // Moved on into it: the last not heard (rng 0.99).
+    const df = tracksOf('distortion-field');
+    a.s.value = { ...a.s.value, queue: [...a.list, ...df], index: a.list.length, current: df[0], listStart: a.list.length, nextStart: -1 };
+    await a.ap.fill({ left: 0, seedId: a.list[0].id });
+    expect(a.added[1][0]).toEqual(idsOf(STATIONS.at(-1)!.id));
+    // A restart keeps what was heard: CIPHER and DISTORTION FIELD don't come again.
+    const b = onStation('circuit-crush', { shuffle: true }, { store, rng: () => 0 });
+    await b.ap.fill({ left: 0, seedId: b.list[0].id });
+    expect(b.added[0][0]).toEqual(idsOf('cold-wave'));
+    // Tuned in again: every station is new again.
+    b.ap.newStationChain();
+    b.s.value = { ...b.s.value, nextStart: -1, queue: [...b.list] };
+    await b.ap.fill({ left: 1, seedId: b.list[0].id });
+    expect(b.added[1][0]).toEqual(idsOf('cipher'));
+  });
+
+  it('with shuffle, once all 16 have been heard, a new random order of them: any but the one playing', async () => {
+    const store = memoryKv();
+    store.m.set('radio.heard', JSON.stringify(STATIONS.map((s) => s.id).filter((id) => id !== 'cipher')));
+    const a = onStation('cipher', { shuffle: true }, { store, rng: () => 0 });
+    await a.ap.fill({ left: 0, seedId: a.list[0].id });
+    expect(a.added[0][0]).toEqual(idsOf('distortion-field'));
+    expect(JSON.parse(store.m.get('radio.heard')!)).toEqual(['cipher']);
+  });
+
+  it('the next station dropped (Repeat all on, then off) comes back the same, shuffle or not', async () => {
+    let r = 0.1;
+    const a = onStation('cipher', { shuffle: true }, { rng: () => (r += 0.3) % 1 });
+    await a.ap.fill({ left: 0, seedId: a.list[0].id });
+    a.s.value = { ...a.s.value, queue: [...a.list] };
+    await a.ap.fill({ left: 1, seedId: a.list[0].id });
+    expect(a.added).toHaveLength(2);
+    expect(a.added[1][0]).toEqual(a.added[0][0]);
+  });
+
+  it('offline, the next station with a saved song, all of it (Next skips the unsaved ones); none, nothing', async () => {
+    const cw = idsOf('cold-wave');
+    // DISTORTION FIELD has nothing saved: COLD WAVE, with its unsaved songs too.
+    const a = onStation('cipher', {}, { playable: (t) => t.id === cw[3] });
+    await a.ap.fill({ left: 0, seedId: a.list[0].id });
+    expect(a.added[0][0]).toEqual(cw);
+    const b = onStation('cipher', {}, { playable: (t) => t.id.startsWith('sig:cipher:') });
+    await b.ap.fill({ left: 0, seedId: b.list[0].id });
+    expect(b.added).toEqual([]);
+  });
+
+  it('with repeat all, a station loops: no next station', async () => {
+    const a = onStation('cipher', { repeat: 'all' });
+    await a.ap.fill({ left: 0, seedId: a.list[0].id });
+    expect(a.added).toEqual([]);
+  });
+
+  it("a station's track in another list (Recently played) gets similar picks, not the next station", async () => {
+    const seed = tracksOf('cold-wave')[0];
     const a = setup({ current: seed, seed, index: 0, queue: [seed], context: { label: 'Recently played', mode: 'list' } });
     await a.ap.fill({ left: 0, seedId: seed.id });
     for (const [ids] of a.added) expect(ids.some((id) => id.startsWith('sig:'))).toBe(false);
@@ -395,6 +469,9 @@ describe('chainsOn', () => {
 
   it('is true for a station playing, false for its track in another list or any other list', () => {
     expect(chainsOn({ label: 'Signal Radio · CIPHER' }, 'sig:cipher:abc')).toBe(true);
+    // The chain moved on: the seed is another station's (a tapped row on the way), the label the one tuned in.
+    expect(chainsOn({ label: 'Signal Radio · CIPHER' }, 'sig:cold-wave:abc')).toBe(true);
+    expect(chainsOn({ label: 'Signal Radio · CIPHER' }, 'p1')).toBe(false);
     expect(chainsOn({ label: 'Liked' }, 'sig:cipher:abc')).toBe(false);
     expect(chainsOn({ label: 'Liked' }, 'p1')).toBe(false);
     expect(chainsOn(null, 'p1')).toBe(false);

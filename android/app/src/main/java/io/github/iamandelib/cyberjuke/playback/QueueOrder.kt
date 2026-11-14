@@ -585,7 +585,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     /**
      * Undo of a removal (K3): puts [item] back as [section], right before the first item ahead
      * of the current one (play order) that is the song that followed it: the item at [beforeIndex] if it
-     * still has id [beforeId] (a station's next round repeats ids), else the first with that id (a queued
+     * still has id [beforeId] (a station coming round again repeats ids), else the first with that id (a queued
      * item only before a queued one, the others never before one); with no such item, at the end of that
      * section (a list item after the last list item ahead, its suggestion last). It never lands at or before the
      * current item, a queued item never lands after list items, and a list item (its suggestions too,

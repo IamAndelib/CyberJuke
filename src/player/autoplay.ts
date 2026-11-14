@@ -8,22 +8,27 @@
  *  - a Jukebox seed: similar Jukebox tracks from the cached catalog (data/similar);
  *  - a Global seed: YouTube Music's radio for it (web player only; natively the playback
  *    service runs Global radios itself, so they refill with the screen off);
- *  - a Signal Radio station playing: its next round (player/radio), all its tracks again;
+ *  - a Signal Radio station playing: the next station (player/radio nextStation), all of it;
  *  - Home's Shuffle (its label, shuffleLabel): more random songs from the same pool.
- * Offline, only songs saved on the phone (playable). Nothing while autoplay is off (the setting,
- * C3), but for a station, or with repeat all but for a radio's first batch (mayAutoplay).
+ * Offline, only songs saved on the phone (playable); a station whole, if it has one (Next skips the
+ * others). Nothing while autoplay is off (the setting, C3), but for a station or a Jukebox shuffle
+ * (chainsOn), or with repeat all but for a radio's first batch (mayAutoplay).
  */
 import { whenIdle } from '../core/idle';
 import { shuffled } from '../core/shuffle';
+import { readJson, type KV } from '../core/storage';
 import { audioKey, isGlobal, isLocal, type Track } from '../data/model';
 import { similarTracks } from '../data/similar';
-import { stationPlaying, stationQueue } from './radio';
+import { STATIONS, nextStation, stationOfTrackId, stationPlaying, stationTracks, type Station } from './radio';
 import { VIBE_BATCH, firstBatchOfRadio, mayAutoplay, type Player, type QueueLow } from './types';
 
 /** How long a signal waits for the player's state to show the batch just added (native's lags the call). */
 const BATCH_LAG_MS = 5000;
 
 const SHUFFLE = 'Jukebox shuffle';
+
+/** The stations heard in this chain, in Preferences (store). */
+const HEARD_KEY = 'radio.heard';
 
 /** The label Home's Shuffle starts its list with: "Jukebox shuffle", or "Jukebox shuffle · rock" for one genre. */
 export const shuffleLabel = (genre: string | null): string => (genre ? `${SHUFFLE} · ${genre}` : SHUFFLE);
@@ -59,6 +64,8 @@ export interface AutoplayDeps {
   blocked: () => boolean;
   /** Track ids removed from Up next this session: never picked again. */
   removed?: () => ReadonlySet<string>;
+  /** Where the stations heard in a chain are kept (Preferences), so a restart goes on with them; none, memory only. */
+  store?: KV;
   /** Whether a track can play now (offline: only saved ones); only those are picked. */
   playable?: (t: Track) => boolean;
   /** One page of a song's radio (Music.radio). */
@@ -73,6 +80,8 @@ export interface Autoplay {
   fill(e: QueueLow): Promise<void>;
   /** The catalog has loaded and the player has its state: answer a signal that came before (the player won't send it again). */
   ready(): void;
+  /** A station was tuned in on the Radio tab: a new chain, where no station has been heard yet. */
+  newStationChain(): void;
   stop(): void;
 }
 
@@ -85,9 +94,10 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
   /**
    * The last batch added, until the player's state shows it: `queue` is the list the
    * state had when the call returned; once that changes, the batch is in it (or was
-   * dropped: a new list).
+   * dropped: a new list). `repeats`: it holds songs already in the queue (a shuffle's or a
+   * station's next round), so its ids say nothing about whether it is in.
    */
-  let batch: { seedId: string; ids: string[]; at: number; queue?: readonly Track[]; round?: boolean } | null = null;
+  let batch: { seedId: string; ids: string[]; at: number; queue?: readonly Track[]; repeats?: boolean } | null = null;
   /**
    * A signal that came before the player's state or, for a Jukebox seed, while the catalog
    * was still loading (first launch, sign-in, a reloaded WebView, which native hands the
@@ -96,6 +106,23 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
   let starved: QueueLow | null = null;
   /** A signal from before the state showed the last batch: looked at again once the state changes. */
   let lagged: QueueLow | null = null;
+  /** The stations heard in this chain (null: not read from the store yet); with shuffle, the next is one not heard yet. */
+  let heard: string[] | null = null;
+  /** The next station picked, for the station playing: the same comes again if it was dropped (Repeat all on, then off). */
+  let ahead: { from: Station; to: Station } | null = null;
+
+  /** `st` is heard: the stations heard so far in this chain, with it; once all are, it alone (a new round of them). */
+  async function hear(st: Station): Promise<string[]> {
+    if (!heard) {
+      const was = deps.store ? await readJson<unknown>(deps.store, HEARD_KEY, []) : [];
+      heard ??= Array.isArray(was) ? was.filter((id): id is string => typeof id === 'string') : [];
+    }
+    if (!heard.includes(st.id)) {
+      heard = heard.length + 1 >= STATIONS.length ? [st.id] : [...heard, st.id];
+      void deps.store?.set(HEARD_KEY, JSON.stringify(heard)).catch(() => {});
+    }
+    return heard;
+  }
 
   async function run(e: QueueLow): Promise<void> {
     const s = player.state.peek();
@@ -112,9 +139,8 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     // A batch never repeats a song already in the queue (D8), nor one removed from Up next.
     const inQueue = new Set([...s.queue.flatMap((t) => [t.id, audioKey(t)]), ...(deps.removed?.() ?? [])]);
     // The signal may be older than the state with the last batch (native's lags the call): wait
-    // for it, or a radio's first batch would come twice. (A station's round holds tracks already
-    // in the queue: its ids say nothing about that.)
-    if (batch && (batch.seedId !== seed.id || now() - batch.at > BATCH_LAG_MS || (batch.queue && batch.queue !== s.queue) || (!batch.round && batch.ids.some((id) => inQueue.has(id))))) batch = null;
+    // for it, or a radio's first batch would come twice.
+    if (batch && (batch.seedId !== seed.id || now() - batch.at > BATCH_LAG_MS || (batch.queue && batch.queue !== s.queue) || (!batch.repeats && batch.ids.some((id) => inQueue.has(id))))) batch = null;
     if (batch) {
       lagged = e;
       return;
@@ -122,20 +148,25 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     // One list on the way at a time: the next is fetched when it starts.
     if (s.nextStart >= 0) return;
     const count = first ? VIBE_BATCH - 1 : VIBE_BATCH;
-    const add = async (tracks: Track[], round = false) => {
-      const b: NonNullable<typeof batch> = { seedId: seed.id, ids: tracks.map((t) => t.id), at: now(), ...(round && { round }) };
+    const add = async (tracks: Track[]) => {
+      const b: NonNullable<typeof batch> = { seedId: seed.id, ids: tracks.map((t) => t.id), at: now(), ...(tracks.some((t) => inQueue.has(t.id)) && { repeats: true }) };
       batch = b;
       await player.addAutoplay(tracks, seed.id);
       b.queue = player.state.peek().queue;
     };
 
-    // A station plays on: its next round, which doesn't start with the last track queued. (A
-    // station's track in another list, Liked say, gets similar picks like any other.)
+    // Stations lead on: the next after the one playing (the playing song's, not the label's: the
+    // one tuned in), whole, with a song that can play now. (A station's track in another list,
+    // Liked say, gets similar picks like any other.)
     const playable = deps.playable ?? (() => true);
     const station = stationPlaying(s.context, seed.id);
     if (station) {
-      const round = stationQueue(station, s.queue.at(-1)?.ytId, deps.rng).filter(playable);
-      if (round.length) await add(round, true);
+      const from = stationOfTrackId(s.current.id) ?? station;
+      const ok = (st: Station) => stationTracks(st).some(playable);
+      const played = await hear(from);
+      const to = ahead?.from === from && ok(ahead.to) ? ahead.to : nextStation(from, s.shuffle, played, ok, deps.rng);
+      ahead = to && { from, to };
+      if (to) await add([...stationTracks(to)]);
       return;
     }
 
@@ -164,7 +195,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     if (pool) {
       const fresh = pool.filter((t) => !inQueue.has(t.id));
       const from = fresh.length ? fresh : pool.filter((t) => t.id !== s.queue.at(-1)?.id);
-      if (from.length) await add(shuffled(from, deps.rng).slice(0, count), !fresh.length);
+      if (from.length) await add(shuffled(from, deps.rng).slice(0, count));
       return;
     }
     // What played since this seed started steers it (Jukebox tracks only: similarTracks skips Global ones).
@@ -233,6 +264,11 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
   return {
     fill,
     ready,
+    newStationChain: () => {
+      heard = [];
+      ahead = null;
+      void deps.store?.remove(HEARD_KEY).catch(() => {});
+    },
     stop: () => {
       idle();
       off();

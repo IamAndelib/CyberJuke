@@ -1,16 +1,14 @@
 /**
  * Signal Radio: hyphen8d's curated SIGNAL stations, which Cyberspace's Jukebox plays since 4.0
- * (bundled from hyphen8d/signal by scripts/update-stations.mjs), and how a station plays. As on
- * cyberspace.online (its player, not SIGNAL's own app), a station is a shuffle of all its
- * tracks, then another shuffle, and so on; a new round never starts with the track the last
- * one ended on.
+ * (bundled from hyphen8d/signal by scripts/update-stations.mjs), and how a station plays: its
+ * tracks as a list, then the next station (nextStation), as on a radio dial or with Poweramp's
+ * "Advance Category".
  *
  * Station tracks are ordinary Tracks with no post: id `sig:<station id>:<video id>`, the
  * callsign as genre, source 'signal'. Pure apart from the bundled data.
  */
 import data from '../data/radio/stations.json';
 import { artworkUrl, makeTrack, type Track } from '../data/model';
-import { shuffled } from '../core/shuffle';
 
 export type Band = 'ym' | 'zm';
 
@@ -47,14 +45,14 @@ export function stationById(id: string): Station | null {
 }
 
 /**
- * The station playing: a list the Radio tab started (its label) whose seed is one of that
- * station's tracks. It plays on round after round whatever the Autoplay setting: it isn't
- * autoplay, it is the station (natively Stations.keepsGoing, the same rule). A station's track
- * in any other list (Liked, Recently played) is just a track there.
+ * Stations playing: a list the Radio tab started (its label) whose seed is a station track, of the
+ * station tuned in or, once the chain has moved on, another's; returns the seed's station. They
+ * lead on whatever the Autoplay setting: it isn't autoplay, it is the radio (natively
+ * Stations.keepsGoing, the same rule). A station's track in any other list (Liked, Recently
+ * played) is just a track there.
  */
 export function stationPlaying(context: { label: string } | null | undefined, seedId: string | null | undefined): Station | null {
-  const s = stationOfTrackId(seedId);
-  return s && context?.label === stationLabel(s) ? s : null;
+  return context?.label.startsWith(STATION_LABEL) ? stationOfTrackId(seedId) : null;
 }
 
 /** The station a track id belongs to (`sig:<station>:<video id>`), or null. */
@@ -98,14 +96,4 @@ export function nextStation(current: Station, shuffle: boolean, heard: readonly 
   const fresh = after.filter((s) => !heard.includes(s.id));
   const from = fresh.length ? fresh : after;
   return from.length ? from[Math.floor(rng() * from.length)] : null;
-}
-
-/**
- * One round of a station: all its tracks, shuffled. After `lastYtId` (the last track queued),
- * the round doesn't start with that same track: it goes to the end instead.
- */
-export function stationQueue(s: Station, lastYtId?: string | null, rng: () => number = Math.random): Track[] {
-  const round = shuffled(stationTracks(s), rng);
-  if (lastYtId && round.length > 1 && round[0].ytId === lastYtId) round.push(round.shift()!);
-  return round;
 }
