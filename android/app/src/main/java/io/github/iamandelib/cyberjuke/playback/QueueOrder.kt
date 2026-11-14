@@ -548,9 +548,13 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         val p = order.indexOf(cur)
         val (start, way) = listStartIndex() to nextStartIndex()
         val queued = pendingIndices()
-        val kept = order.filterIndexed { k, i -> i != cur && i !in queued && (i < start || if (k < p) isHeard(i) else host.uidAt(i) in lap) }
-        val (behind, back) = kept.partition { order.indexOf(it) < p }
-        val (onWay, list) = (0 until host.count).filter { it != cur && it !in queued && it !in kept }.partition { way >= 0 && it >= way }
+        // Sets and a position map, not List.contains / indexOf in the loops: linear in a long queue.
+        val inQueued = queued.toHashSet()
+        val posOf = HashMap<Int, Int>(order.size * 2).apply { order.forEachIndexed { k, i -> put(i, k) } }
+        val kept = order.filterIndexed { k, i -> i != cur && i !in inQueued && (i < start || if (k < p) isHeard(i) else host.uidAt(i) in lap) }
+        val inKept = kept.toHashSet()
+        val (behind, back) = kept.partition { posOf.getValue(it) < p }
+        val (onWay, list) = (0 until host.count).filter { it != cur && it !in inQueued && it !in inKept }.partition { way >= 0 && it >= way }
         fun part(songs: List<Int>) = if (mix) songs.shuffled(random) else songs
         return (behind + cur + queued + back + part(list) + part(onWay)).toIntArray()
     }
@@ -941,7 +945,8 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     private fun bringJumpedOver(kept: List<Int>) {
         val way = nextStartIndex()
         if (kept.isEmpty()) return
-        val rest = (0 until host.count).filter { it !in kept }
+        val inKept = kept.toHashSet()
+        val rest = (0 until host.count).filter { it !in inKept }
         val target = (rest.take(way - kept.size) + kept + rest.drop(way - kept.size)).toIntArray()
         val (order, moves) = host.shuffleOrder() to QueueOrder.moves(target)
         for ((from, to) in moves) host.moveItem(from, to) // Media3 keeps the shuffle order by index: put it back by item
