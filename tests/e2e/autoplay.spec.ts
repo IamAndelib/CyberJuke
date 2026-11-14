@@ -111,9 +111,12 @@ test('a Home row starts a Vibe: the tapped song and 24 similar Jukebox tracks, t
 
   await openNowPlaying(page);
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveText(`Vibe · like ${title}`);
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveClass(/\bauto\b/);
   await expect(page.getByTestId('upnext-list-label')).toHaveCount(0);
   const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
   await expect(rows.first().locator('.row-title')).toHaveText(q.autoplay[0].title);
+  await expect(rows.first()).toHaveClass(/\bautoplay\b/);
+  await expect(rows.first().locator('.row-main')).toHaveAttribute('aria-label', `Play ${q.autoplay[0].title}, vibe`);
   // Its 24, then the batch on the way under its own heading, as much of it as fills Up next to 25 rows (D1):
   // to look at and tap, with no ↑ ↓ ✕.
   await expect(rows).toHaveCount(24);

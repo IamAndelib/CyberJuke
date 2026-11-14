@@ -132,6 +132,11 @@ test('a station leads on to the next station, which plays past its end, and its 
   // Labels follow the song (D11): MIRRORBALL, 1 of its 40, and Up next's heading names it.
   await expect(page.getByTestId('np-from')).toHaveText('1 of 40 · Playing from Signal Radio · MIRRORBALL');
   await expect(page.getByTestId('upnext-autoplay-label').first()).toHaveText('Next from: Signal Radio · MIRRORBALL');
+  // A station's songs, not Vibe's: no "~" heading, no dimmed art, no ", vibe" for a screen reader.
+  await expect(page.getByTestId('upnext-autoplay-label').first()).not.toHaveClass(/\bauto\b/);
+  const row = page.locator('[data-testid="upnext-row"][data-section="autoplay"]').first();
+  await expect(row).not.toHaveClass(/\bautoplay\b/);
+  await expect(row.locator('.row-main')).toHaveAttribute('aria-label', `Play ${titlesOf('mirrorball')[1]}`);
   await expect.poll(async () => (await onTheWay(page)).size).toBe(32);
   const q = await queueState(page);
   expect((await onTheWay(page)).ids).toEqual(idsOf('slow-orbit').slice(0, 50 - 39));

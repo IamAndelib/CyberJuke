@@ -2,6 +2,7 @@ import { Fragment } from 'preact';
 import { signal } from '@preact/signals';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { autoplayLabel, currentId, currentPlaysOffline, currentTrack, isPlaying, lapTracks, player, playContext, previousTracks, repeatMode, saveSongs, shuffleOn, undoOf, upNextSections, type PlayContext, type UpItem, type UpNextKind, type UpRun } from '../../player';
+import { chainsOn } from '../../player/autoplay';
 import { stationLabel, stationShown } from '../../player/radio';
 import { isLocal, type Track } from '../../data/model';
 import { online } from '../../core/network';
@@ -194,6 +195,8 @@ export function UpNext() {
       void player.move(it.index, to.index, it.track.id);
     });
 
+  // Autoplay's rows are Vibe's unless the list leads on by itself: a station's next, Home's Shuffle's next batch are their own (chainsOn).
+  const vibe = !chainsOn(ctx, sec.seed?.id);
   // peek: the line moves only with the rows, which change with it (not every tick).
   const listStart = player.state.peek().listStart;
   /**
@@ -210,7 +213,7 @@ export function UpNext() {
         <li
           // With the kind: Played and "From the top" can show one song at once.
           key={`${kind}:${it.track.id}:${it.index}`}
-          class={'row' + (kind === 'list' ? '' : ` ${kind}`) + offClass(it.track) + (it === glowing?.item ? ' moved' : '')}
+          class={'row' + (kind === 'list' || (kind === 'autoplay' && !vibe) ? '' : ` ${kind}`) + offClass(it.track) + (it === glowing?.item ? ' moved' : '')}
           data-testid={kind === 'played' ? 'upnext-played' : 'upnext-row'}
           data-track-id={it.track.id}
           data-index={it.index}
@@ -224,7 +227,7 @@ export function UpNext() {
             {...longPress(it.track, kind === 'queued' ? it : null)}
             // A "From the top" row enters the next lap (the songs you queued and heard leave).
             onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id, kind === 'top'))}
-            aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', vibe', top: ', from the top', way: ', on the way' }[kind]}`}
+            aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: vibe ? ', vibe' : '', top: ', from the top', way: ', on the way' }[kind]}`}
           >
             <RowBody track={it.track} />
           </button>
@@ -353,7 +356,7 @@ export function UpNext() {
         )}
         {here.map((r, k) => (
           <Fragment key={k}>
-            <li class={'upnext-label' + (r.kind === 'autoplay' ? ' auto' : '')} data-testid={`upnext-${r.kind}-label`} aria-hidden="true">
+            <li class={'upnext-label' + (r.kind === 'autoplay' && vibe ? ' auto' : '')} data-testid={`upnext-${r.kind}-label`} aria-hidden="true">
               {title(r)}
             </li>
             {rows(r.kind, r.items)}
