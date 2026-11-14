@@ -460,12 +460,12 @@ describe('Queue: editing', () => {
     expect(q.upNextItems().filter((x) => x.auto).map((x) => x.item.id)).toEqual(['s1', 's2', 's3']);
   });
 
-  it("restore goes back before the song that followed it, not another copy of it: a station's next round repeats ids (S10)", () => {
+  it("restore goes back before the song that followed it, not another copy of it: a list on the way that repeats ids, as Home's Shuffle's next round does (S10)", () => {
     const q = new Queue();
     q.setList([t('x1'), t('x2'), t('x3')], 0);
-    q.addAuto([t('x3'), t('x2'), t('x1')]); // the next round: the same songs
+    q.addAuto([t('x3'), t('x2'), t('x1')]); // the next round (Home's Shuffle; a station coming round again): the same songs
     const way = q.nextStartIndex;
-    q.remove(way); // ✕ on the next round's x3; the next round's x2 followed it, and now has its index
+    q.remove(way); // ✕ on the next round's x3; its x2 followed it, and now has its index
     q.restore(t('x3'), { kind: 'autoplay', before: { id: 'x2', index: way } });
     expect(q.items.findIndex((x, i) => x.id === 'x3' && q.isAuto(i))).toBeGreaterThanOrEqual(q.nextStartIndex);
     expect(ids(q.upNext())).toEqual(['x2', 'x3', 'x3', 'x2', 'x1']);
@@ -474,7 +474,7 @@ describe('Queue: editing', () => {
   it("Undo of the list's copy of a song gives the list on the way no marker back, though the copy on the way that held it went too (F10)", () => {
     const q = new Queue();
     q.setList([t('x1'), t('x2'), t('x3')], 0);
-    q.addAuto([t('x3'), t('x2'), t('x1')]); // the next round: the same songs
+    q.addAuto([t('x3'), t('x2'), t('x1')]); // the next round (Home's Shuffle; a station coming round again): the same songs
     q.remove(3); // ✕ on the next round's x3, the first on the way: the next round's x2 starts it now
     q.remove(2); // ✕ on the list's x3
     q.restore(t('x3'), { kind: 'list', before: { id: 'x2', index: 2 } });

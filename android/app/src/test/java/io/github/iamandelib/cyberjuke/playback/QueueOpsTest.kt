@@ -136,7 +136,7 @@ class QueueOpsTest {
         }
     }
 
-    /** A station's next round repeats ids: Undo goes back before the song that followed it, by its index, not before another copy (S10). */
+    /** A list on the way can repeat ids (Home's Shuffle's next round, a station coming round again): Undo goes back before the song that followed it, by its index, not before another copy (S10). */
     @Test
     fun restoreGoesBeforeTheSongThatFollowedItNotAnotherCopy() {
         val p = player(listOf("x1", "x2", "x3"))
