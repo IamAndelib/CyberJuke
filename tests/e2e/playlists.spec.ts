@@ -277,6 +277,27 @@ test.describe('adding songs', () => {
     await expect(sheet.getByTestId('pl-pick').nth(1)).toBeEnabled();
   });
 
+  test('a name typed the moment the name sheet opens stays: the sheet starts empty before it shows', async ({ page }) => {
+    await seedStorage(page, seeded([]));
+    await start(page);
+    await page.getByTestId('track-play').nth(2).click();
+    await openNowPlaying(page);
+    // Type as soon as the field is in the page, before the browser paints it (a quick typist, a busy phone).
+    await page.evaluate(() => {
+      new MutationObserver((_, mo) => {
+        const input = document.querySelector<HTMLInputElement>('[data-testid="name-input"]');
+        if (!input) return;
+        mo.disconnect();
+        input.value = 'Typed fast';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }).observe(document.body, { childList: true, subtree: true });
+    });
+    await page.getByTestId('upnext-save').click();
+    await page.waitForTimeout(300);
+    await expect(page.getByTestId('name-input')).toHaveValue('Typed fast');
+    await expect(page.getByTestId('name-ok')).toBeEnabled();
+  });
+
   test('Save queue as playlist saves the queue as it shows, played, playing and up next, with shuffle and repeat on', async ({ page }) => {
     await seedStorage(page, seeded([]));
     await start(page);

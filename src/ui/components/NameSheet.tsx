@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { useModal, useSheetContent } from '../useModal';
 import { nameRequest } from '../nav';
 import { PLAYLIST_NAME_MAX, cleanName } from '../../stores/playlists';
@@ -10,7 +10,8 @@ export function NameSheet() {
   const sheet = useRef<HTMLDivElement>(null);
   const r = useSheetContent(req, sheet);
   const [name, setName] = useState('');
-  useEffect(() => {
+  // Before the sheet paints: the field never shows the last name asked for, and what's typed at once stays.
+  useLayoutEffect(() => {
     if (req) setName(req.initial ?? '');
   }, [req]);
   const close = () => (nameRequest.value = null);
