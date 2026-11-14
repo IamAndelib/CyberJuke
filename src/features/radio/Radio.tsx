@@ -3,6 +3,7 @@ import { online } from '../../core/network';
 import { currentPlaysOffline, isPlaying, newStationChain, player, playContext, shuffleOn } from '../../player';
 import { BAND_NAMES, STATIONS, stationFreq, stationLabel, stationTracks, type Band, type Station } from '../../player/radio';
 import type { Track } from '../../data/model';
+import { isSaved, savedOffline } from '../../stores/savedOffline';
 import { Icon } from '../../ui/icons';
 import { Screen } from '../../ui/components/Screen';
 import { askConfirm, nowPlayingOpen, useSearchContext } from '../../ui/nav';
@@ -34,8 +35,10 @@ function tuneIn(s: Station): void {
     return;
   }
   const tracks = [...stationTracks(s)];
-  newStationChain();
-  void playFrom(tracks, shuffleOn.peek() ? Math.floor(Math.random() * tracks.length) : 0, list(stationLabel(s)));
+  const start = shuffleOn.peek() ? Math.floor(Math.random() * tracks.length) : 0;
+  // A new chain, but only if the tune-in plays: offline, a tap refused ("No carrier") changes nothing (rule 8).
+  if (online.peek() || isSaved(tracks[start], savedOffline.peek())) newStationChain();
+  void playFrom(tracks, start, list(stationLabel(s)));
 }
 
 function showInfo(s: Station): void {

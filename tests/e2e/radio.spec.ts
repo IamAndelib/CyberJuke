@@ -288,6 +288,20 @@ test('offline the stations dim like any track that cannot play, and a tap says w
   await expect(cipher).not.toHaveClass(/\boff\b/);
 });
 
+test('offline, a tap on another station is refused and changes nothing: the stations heard in the chain playing stay', async ({ page, backend }) => {
+  await start(page);
+  await openRadio(page);
+  await tune(page, 'cipher');
+  const heard = () => page.evaluate(() => localStorage.getItem('CapacitorStorage.radio.heard'));
+  await expect.poll(heard).toBe('["cipher"]');
+  await setOffline(page, backend, true);
+  await page.locator('[data-testid="station"][data-station="the-crypt"]').getByTestId('station-tune').click({ force: true });
+  await expect(page.getByTestId('toast').last()).toHaveText(OFFLINE.tap);
+  expect((await queueState(page)).context?.label).toBe('Signal Radio · CIPHER');
+  await expectStable(heard, 500);
+  expect(await heard()).toBe('["cipher"]');
+});
+
 test('offline a station dims even with one of its tracks saved: tuning in needs the network', async ({ page, backend }) => {
   await start(page);
   await openRadio(page);
