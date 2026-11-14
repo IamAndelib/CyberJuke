@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STATIONS, nextStation, stationById, stationFreq, stationLabel, stationOfTrackId, stationTrack, stationTracks } from './radio';
+import { STATIONS, nextStation, stationById, stationFreq, stationLabel, stationOfTrackId, stationPlace, stationShown, stationTrack, stationTracks } from './radio';
 import { asTrack, isTrackFull } from '../core/guards';
 
 /** A seeded generator, so a run can be repeated. */
@@ -91,5 +91,43 @@ describe('nextStation', () => {
     // Only the one playing has saved songs, or none has: nothing follows.
     expect(nextStation(stationById('cold-wave')!, false, [], (s) => s.id === 'cold-wave')).toBeNull();
     expect(nextStation(cipher, true, [], () => false)).toBeNull();
+  });
+});
+
+describe('labels follow the song (D11)', () => {
+  const crypt = stationById('the-crypt')!;
+  const mirrorball = stationById('mirrorball')!;
+  const slowOrbit = stationById('slow-orbit')!;
+  const ids = (s: typeof crypt) => stationTracks(s).map((t) => ({ id: t.id }));
+  const tuned = { label: stationLabel(crypt) };
+  const seed = stationTracks(crypt)[0].id;
+
+  it('while stations play, the station of the song (or of the rows under a heading), not the one tuned in', () => {
+    expect(stationShown(tuned, seed, stationTracks(crypt)[5].id)).toBe(crypt);
+    expect(stationShown(tuned, seed, stationTracks(mirrorball)[0].id)).toBe(mirrorball);
+    // A song you queued playing: the current list's station (its first station song), else the one tuned in.
+    expect(stationShown(tuned, seed, 'ytm:abcdefghijk', [{ id: 'ytm:abcdefghijk' }, ...ids(mirrorball)])).toBe(mirrorball);
+    expect(stationShown(tuned, seed, 'ytm:abcdefghijk')).toBe(crypt);
+  });
+
+  it("a station's track in any other list is just a track: no station shown", () => {
+    expect(stationShown({ label: 'Liked' }, seed, stationTracks(mirrorball)[0].id)).toBeNull();
+    expect(stationShown({ label: 'Signal Radio' }, seed, seed)).toBeNull();
+    expect(stationShown(null, seed, seed)).toBeNull();
+  });
+
+  it('"N of M" within the station of the song playing: forward into the next, and back with Previous', () => {
+    const queue = [...ids(crypt), ...ids(mirrorball), ...ids(slowOrbit)];
+    expect(stationPlace(queue, 0, [])).toBe('1 of 32');
+    expect(stationPlace(queue, 32, [])).toBe('1 of 40');
+    // Back from SLOW ORBIT into MIRRORBALL's last song: its place there, not counted from THE CRYPT's first.
+    expect(stationPlace(queue, 71, [])).toBe('40 of 40');
+    expect(stationPlace(queue, 72, [])).toBe('1 of 32');
+    // A song you queued has no place, and isn't counted among the station's.
+    const mine = [...ids(crypt).slice(0, 3), { id: 'ytm:abcdefghijk' }, ...ids(crypt).slice(3), ...ids(mirrorball)];
+    expect(stationPlace(mine, 3, [3])).toBe('');
+    expect(stationPlace(mine, 4, [3])).toBe('4 of 32');
+    expect(stationPlace(mine, 33, [3])).toBe('1 of 40');
+    expect(stationPlace(queue, -1, [])).toBe('');
   });
 });

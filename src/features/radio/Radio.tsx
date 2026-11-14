@@ -1,6 +1,5 @@
-import { computed } from '@preact/signals';
 import { online } from '../../core/network';
-import { currentPlaysOffline, isPlaying, newStationChain, player, playContext, shuffleOn } from '../../player';
+import { currentPlaysOffline, isPlaying, newStationChain, player, shuffleOn, stationOnAir as onAir } from '../../player';
 import { BAND_NAMES, STATIONS, stationFreq, stationLabel, stationTracks, type Band, type Station } from '../../player/radio';
 import type { Track } from '../../data/model';
 import { isSaved, savedOffline } from '../../stores/savedOffline';
@@ -12,12 +11,6 @@ import { plural } from '../../core/text';
 
 const BANDS: readonly Band[] = ['ym', 'zm'];
 
-/** The station playing now (the list was started from it), or null. */
-const onAir = computed<Station | null>(() => {
-  const label = playContext.value?.label;
-  return label ? (STATIONS.find((s) => stationLabel(s) === label) ?? null) : null;
-});
-
 /** Every station track, for Here on this tab: built the first time Search asks. */
 let allStationTracks: Track[] | null = null;
 const allTracks = () => (allStationTracks ??= STATIONS.flatMap((s) => stationTracks(s)));
@@ -25,8 +18,8 @@ const allTracks = () => (allStationTracks ??= STATIONS.flatMap((s) => stationTra
 /**
  * Tune in: the station in its listed order (shuffle on: from a random song, the rest mixed, as the
  * Shuffle button starts a list), then the next stations (player/radio nextStation), a new chain. The
- * station that's on already doesn't restart: playing, Now Playing opens; paused, it plays (as a
- * track row does, so offline a refused play opens nothing).
+ * station on air (the song playing's, not the one tuned in: D11) doesn't restart: playing, Now Playing
+ * opens; paused, it plays (as a track row does, so offline a refused play opens nothing).
  */
 function tuneIn(s: Station): void {
   if (onAir.peek() === s) {

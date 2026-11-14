@@ -29,7 +29,7 @@ import { isSaved, savedOffline, savedTracks } from '../stores/savedOffline';
 import { createAutoplay, shuffleGenre, type Autoplay } from './autoplay';
 import { NativePlayer } from './nativePlayer';
 import { offlineGuard, playsOffline, type OfflineRefusal } from './offlineGuard';
-import { stationOfTrackId, stationPlaying } from './radio';
+import { stationPlace, stationShown } from './radio';
 import { safePlayer } from './safePlayer';
 import { nsfwAutoplayIds, placeOf, sectionsOf, wantsPlay, type PlayContext, type Player, type UpItem, type UpNextSections } from './types';
 import { WebPlayer } from './webPlayer';
@@ -152,8 +152,19 @@ export const shuffleOn = computed(() => state.value.shuffle);
 export const repeatMode = computed(() => state.value.repeat);
 /** The current track's length (0 until known). */
 export const durationMs = computed(() => state.value.durationMs);
-/** Where the current track is in the current list ("3 of 8", placeOf). */
-export const queuePlace = computed(() => placeOf(state.value));
+/**
+ * The station playing while stations play (D11, labels follow the song): the playing song's, or the
+ * current list's while a song you queued plays, not the one tuned in; null in any other list.
+ */
+export const stationOnAir = computed(() => {
+  const s = state.value;
+  return stationShown(s.context, s.seed?.id, s.current?.id, s.queue.slice(Math.max(0, s.listStart)));
+});
+/** Where the current track is in the current list ("3 of 8", placeOf); while stations play, in its station. */
+export const queuePlace = computed(() => {
+  const s = state.value;
+  return stationOnAir.value ? stationPlace(s.queue, s.index, s.mine) : placeOf(s);
+});
 /** "Next" does something: a track after this one, or repeat wraps around. */
 export const canSkipNext = computed(() => state.value.upNext.length > 0 || state.value.repeat === 'all');
 
@@ -192,15 +203,12 @@ export const lapTracks = computed<UpItem[]>(() => {
 });
 
 /**
- * What autoplay's tracks are, for Up next's heading and Now Playing while one plays: the station
- * the chain has moved on to (the playing song's), a Jukebox shuffle's more random picks, or songs
- * similar to the seed.
+ * What autoplay's tracks are, for Up next's heading and Now Playing while one plays: a Jukebox
+ * shuffle's more random picks, or songs similar to the seed. Stations name their own (stationShown).
  */
 export const autoplayLabel = computed(() => {
   const ctx = playContext.value;
   const seed = upNextSections.value.seed;
-  const station = stationPlaying(ctx, seed?.id);
-  if (station) return `More from ${(stationOfTrackId(currentTrack.value?.id) ?? station).callsign}`;
   const genre = shuffleGenre(ctx?.label);
   if (genre !== undefined) return `More random picks from ${genre ?? 'the Jukebox'}`;
   return seed?.title ? `Autoplay · similar to ${seed.title}` : 'Autoplay';

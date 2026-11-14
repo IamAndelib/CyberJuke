@@ -19,9 +19,11 @@ import {
   queuePlace,
   repeatMode,
   shuffleOn,
+  stationOnAir,
   upNextSections,
   waitingForNetwork,
 } from '../../player';
+import { stationLabel } from '../../player/radio';
 import { block } from '../../stores/block';
 import { toggleLikeWithUndo } from '../../stores/undo';
 import { toast } from '../../stores/toast';
@@ -719,14 +721,16 @@ function NpControls() {
 
 /**
  * Under "Now playing": where the music comes from (P8), "Playing from Home · Latest", or
- * for an autoplay track what autoplay plays ("Autoplay · similar to …", as Up next calls it).
- * A list's position ("3 of 50") comes first; not for a single song's radio, an autoplay
+ * for an autoplay track what autoplay plays ("Autoplay · similar to …", as Up next calls it);
+ * stations name the one of the song playing, not the one tuned in (D11).
+ * A list's position ("3 of 50", a station's within it) comes first; not for a single song's radio, an autoplay
  * track or under shuffle, where it means little, nor for a song you queued, which has none.
  */
 function NpFrom() {
   const ctx = playContext.value;
-  const auto = currentAuto.value;
-  const from = !ctx?.label ? '' : auto ? autoplayLabel.value : `Playing from ${ctx.label}`;
+  const station = stationOnAir.value;
+  const auto = currentAuto.value && !station;
+  const from = !ctx?.label ? '' : station ? `Playing from ${stationLabel(station)}` : auto ? autoplayLabel.value : `Playing from ${ctx.label}`;
   const pos = queuePlace.value;
   const text = from && (shuffleOn.value || auto || ctx?.mode === 'radio' || !pos) ? from : from ? `${pos} · ${from}` : pos;
   return (

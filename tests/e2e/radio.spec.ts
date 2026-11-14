@@ -129,12 +129,13 @@ test('a station leads on to the next station, which plays past its end, and its 
   // Past THE CRYPT's end: MIRRORBALL's first song, and SLOW ORBIT on the way.
   await playOn(page, 32 * (FAKE_TRACK_MS + 200));
   await expect.poll(async () => (await queueState(page)).current?.id).toBe(idsOf('mirrorball')[0]);
-  await expect(page.getByTestId('np-from')).toHaveText('More from MIRRORBALL');
+  // Labels follow the song (D11): MIRRORBALL, 1 of its 40, and Up next's heading names it.
+  await expect(page.getByTestId('np-from')).toHaveText('1 of 40 · Playing from Signal Radio · MIRRORBALL');
   await expect(page.getByTestId('upnext-autoplay-label').first()).toHaveText('More from MIRRORBALL');
   await expect.poll(async () => (await onTheWay(page)).size).toBe(32);
   const q = await queueState(page);
   expect((await onTheWay(page)).ids).toEqual(idsOf('slow-orbit').slice(0, 50 - 39));
-  // The label stays the station tuned in (labels follow the song in a later change).
+  // The list's own label stays the station tuned in; only what is shown follows the song.
   expect(q.context?.label).toBe('Signal Radio · THE CRYPT');
   // The rest of MIRRORBALL, in order, before SLOW ORBIT.
   expect(q.autoplay.slice(0, 39).map((t) => t.id)).toEqual(idsOf('mirrorball').slice(1));
@@ -147,6 +148,41 @@ test('a station leads on to the next station, which plays past its end, and its 
   await openLibrary(page, 'recent');
   const recent = page.getByTestId('recent-list').getByTestId('track-title');
   await expect(recent.first()).toHaveText(now);
+});
+
+test('labels follow the song: the next station once its first song plays, on the Radio tab too, and the one before again after Previous', async ({ page }) => {
+  await clockStart(page);
+  await start(page);
+  await openRadio(page);
+  await tune(page, 'the-crypt');
+  const crypt = page.locator('[data-testid="station"][data-station="the-crypt"]');
+  const mirrorball = page.locator('[data-testid="station"][data-station="mirrorball"]');
+  await expect(crypt).toHaveAttribute('aria-current', 'true');
+  await playOn(page, 32 * (FAKE_TRACK_MS + 200));
+  await expect.poll(async () => (await queueState(page)).current?.id).toBe(idsOf('mirrorball')[0]);
+  // MIRRORBALL is on air now, not THE CRYPT tuned in.
+  await expect(mirrorball).toHaveAttribute('aria-current', 'true');
+  await expect(mirrorball.getByTestId('station-on')).toBeVisible();
+  await expect(crypt).not.toHaveAttribute('aria-current');
+  await expect(page.getByTestId('screen-radio').locator('[aria-current]')).toHaveCount(1);
+  // A tap on it opens Now Playing and it plays on: no new chain from its first song.
+  await mirrorball.getByTestId('station-tune').click();
+  await expect(page.getByTestId('now-playing')).toHaveClass(/open/);
+  expect((await queueState(page)).context?.label).toBe('Signal Radio · THE CRYPT');
+  await expect(page.getByTestId('np-from')).toHaveText('1 of 40 · Playing from Signal Radio · MIRRORBALL');
+
+  // Previous, back into THE CRYPT's last song (the first restarts the song): THE CRYPT again, and the
+  // heading over MIRRORBALL's songs, still ahead, names MIRRORBALL.
+  await expect(async () => {
+    await page.getByTestId('np-prev').click();
+    await expect(page.getByTestId('np-title')).toHaveText(titlesOf('the-crypt')[31], { timeout: 1500 });
+  }).toPass();
+  await expect(page.getByTestId('np-from')).toHaveText('32 of 32 · Playing from Signal Radio · THE CRYPT');
+  await expect(page.locator('[data-testid="upnext-row"]').first()).toHaveAttribute('data-track-id', idsOf('mirrorball')[0]);
+  await expect(page.getByTestId('upnext-autoplay-label').first()).toHaveText('More from MIRRORBALL');
+  await page.getByTestId('np-close').click();
+  await expect(crypt).toHaveAttribute('aria-current', 'true');
+  await expect(mirrorball).not.toHaveAttribute('aria-current');
 });
 
 test('stations lead on with Autoplay off too: it is the radio, not autoplay', async ({ page }) => {
@@ -162,7 +198,7 @@ test('stations lead on with Autoplay off too: it is the radio, not autoplay', as
   await expect.poll(() => place(page)).toEqual({ at: 1, of: 32 });
   await toListEnd(page);
   await expect.poll(() => place(page)).toEqual({ at: 32, of: 32 });
-  await expect(page.getByTestId('upnext-way-label')).toHaveText('On the way');
+  await expect(page.getByTestId('upnext-way-label')).toHaveText('On the way · AFTER HOURS');
   expect(await onTheWay(page)).toEqual({ station: 'after-hours', size: 40, ids: idsOf('after-hours').slice(0, 40) });
   // Turning Autoplay off while a station plays leaves the next one alone.
   await page.getByTestId('np-close').click();
@@ -172,7 +208,7 @@ test('stations lead on with Autoplay off too: it is the radio, not autoplay', as
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await openNowPlaying(page);
-  await expect(page.getByTestId('upnext-way-label')).toHaveText('On the way');
+  await expect(page.getByTestId('upnext-way-label')).toHaveText('On the way · AFTER HOURS');
   expect(await place(page)).toEqual({ at: 32, of: 32 });
   expect((await onTheWay(page)).station).toBe('after-hours');
 });

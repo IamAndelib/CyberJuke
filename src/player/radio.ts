@@ -55,6 +55,33 @@ export function stationPlaying(context: { label: string } | null | undefined, se
   return context?.label.startsWith(STATION_LABEL) ? stationOfTrackId(seedId) : null;
 }
 
+/**
+ * Labels follow the song (D11): while stations play, the station to show for a track (the song playing,
+ * or the first row under an Up next heading) is its own; for a song you queued, the station of the first
+ * station song in `list` (the current list), else the one tuned in. Null in any other list.
+ */
+export function stationShown(context: { label: string } | null | undefined, seedId: string | null | undefined, trackId: string | null | undefined, list: readonly { id: string }[] = []): Station | null {
+  const tuned = stationPlaying(context, seedId);
+  return tuned && (stationOfTrackId(trackId) ?? stationOfTrackId(list.find((t) => stationOfTrackId(t.id))?.id) ?? tuned);
+}
+
+/**
+ * "N of M" while stations play (D11): the playing song's place among its station's songs around it in the
+ * queue (each station comes whole), past or ahead of the current list's marker alike; the songs you queued
+ * (`mine`, queue indices) have none and aren't counted.
+ */
+export function stationPlace(queue: readonly { id: string }[], index: number, mine: readonly number[]): string {
+  const st = stationOfTrackId(queue[index]?.id);
+  if (!st || mine.includes(index)) return '';
+  const ours = (i: number) => mine.includes(i) || stationOfTrackId(queue[i]?.id) === st;
+  let [a, b] = [index, index];
+  while (a > 0 && ours(a - 1)) a--;
+  while (b < queue.length - 1 && ours(b + 1)) b++;
+  const count = (from: number, to: number) => queue.slice(from, to + 1).filter((_, k) => !mine.includes(from + k)).length;
+  const m = count(a, b);
+  return m > 1 ? `${count(a, index)} of ${m}` : 'Single track';
+}
+
 /** The station a track id belongs to (`sig:<station>:<video id>`), or null. */
 export function stationOfTrackId(id: string | null | undefined): Station | null {
   if (!id?.startsWith(PREFIX)) return null;
