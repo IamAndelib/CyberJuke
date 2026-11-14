@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals';
 import { describe, expect, it, vi } from 'vitest';
 import type { Track } from '../data/model';
+import { UP_NEXT_MAX } from '../core/guards';
 import { offlineGuard, playsOffline } from './offlineGuard';
 import { EMPTY_STATE, type Player, type PlayerState } from './types';
 
@@ -233,6 +234,35 @@ describe('offlineGuard', () => {
     await p.next();
     expect(inner.next).toHaveBeenCalledTimes(1);
     expect(refused).not.toHaveBeenCalled();
+  });
+
+  it('offline, Next goes on to a saved song past the 50 rows Up next holds (a whole station on the way), not to one already heard', async () => {
+    const q = Array.from({ length: 120 }, (_, i) => t(`s${String(i).padStart(3, 'x')}`));
+    const rows = (from: number) => q.slice(from, from + UP_NEXT_MAX).map((x, k) => ({ track: x, index: from + k }));
+    // Unshuffled: the saved song at 100 is ahead; one before the current song isn't.
+    const ahead = setup({ queue: q, index: 10, current: q[10], upNext: rows(11) }, [q[100].ytId]);
+    ahead.offline();
+    await ahead.p.next();
+    expect(ahead.inner.next).toHaveBeenCalledTimes(1);
+    const behind = setup({ queue: q, index: 10, current: q[10], upNext: rows(11) }, [q[3].ytId]);
+    behind.offline();
+    await behind.p.next();
+    expect(behind.inner.next).not.toHaveBeenCalled();
+    // Shuffled: a song of the list not played yet counts wherever it is; a played one doesn't.
+    const mixed = { queue: q, index: 60, current: q[60], shuffle: true, upNext: rows(70), previous: [{ track: q[5], index: 5 }] };
+    const unheard = setup(mixed, [q[3].ytId]);
+    unheard.offline();
+    await unheard.p.next();
+    expect(unheard.inner.next).toHaveBeenCalledTimes(1);
+    const heard = setup(mixed, [q[5].ytId]);
+    heard.offline();
+    await heard.p.next();
+    expect(heard.inner.next).not.toHaveBeenCalled();
+    // Up next not full shows everything ahead: nothing more is looked for.
+    const short = setup({ queue: q, index: 10, current: q[10], upNext: rows(11).slice(0, 5) }, [q[100].ytId]);
+    short.offline();
+    await short.p.next();
+    expect(short.inner.next).not.toHaveBeenCalled();
   });
 
   it('offline with Repeat all, Next at the last song goes round to a saved one before it', async () => {

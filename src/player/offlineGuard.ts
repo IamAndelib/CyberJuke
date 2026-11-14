@@ -22,10 +22,17 @@ import { livePosition, wantsPlay, type Player, type PlayerState } from './types'
 /** Previous in the first 3 s goes to the song before, later it starts this one again (Media3's default). */
 const PREV_RESTARTS_MS = 3000;
 
-/** Offline, Next has somewhere to go: a saved song ahead (with Repeat all, anywhere in the list but here). */
-function savedAhead(s: Pick<PlayerState, 'upNext' | 'queue' | 'index' | 'repeat'>, saved: ReadonlySet<string>): boolean {
+/**
+ * Offline, Next has somewhere to go: a saved song ahead (with Repeat all, anywhere in the list but here).
+ * Up next holds the first UP_NEXT_MAX rows; when full, the rest ahead is in the queue too (a whole station
+ * on the way): after this song in list order, or shuffled, any song not played yet.
+ */
+function savedAhead(s: Pick<PlayerState, 'upNext' | 'queue' | 'index' | 'repeat' | 'shuffle' | 'previous'>, saved: ReadonlySet<string>): boolean {
   if (s.upNext.some((u) => isSaved(u.track, saved))) return true;
-  return s.repeat === 'all' && s.queue.some((t, i) => i !== s.index && isSaved(t, saved));
+  if (s.repeat === 'all') return s.queue.some((t, i) => i !== s.index && isSaved(t, saved));
+  if (s.upNext.length < UP_NEXT_MAX) return false;
+  const played = new Set(s.previous.map((u) => u.index));
+  return s.queue.some((t, i) => (s.shuffle ? i !== s.index && !played.has(i) : i > s.index) && isSaved(t, saved));
 }
 
 /**
