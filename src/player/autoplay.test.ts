@@ -2,7 +2,7 @@ import { signal } from '@preact/signals';
 import { describe, expect, it, vi } from 'vitest';
 import type { Track } from '../data/model';
 import { chainsOn, createAutoplay, shuffleLabel, type AutoplayDeps } from './autoplay';
-import { STATIONS, stationById, stationLabel, stationTracks } from './radio';
+import { STATIONS, stationById, stationLabel, stationOfTrackId, stationTracks } from './radio';
 import { EMPTY_STATE, VIBE_BATCH, type Player, type PlayerState, type QueueLow } from './types';
 
 const track = (id: string, p: Partial<Track> = {}): Track => ({
@@ -294,6 +294,27 @@ describe('autoplay', () => {
     b.s.value = { ...b.s.value, queue: [...crypt, mirror[0], mine, ...mirror.slice(1)], index: crypt.length + 1, current: mine, listStart: crypt.length, nextStart: -1 };
     await b.ap.fill({ left: 0, seedId: crypt[0].id });
     expect(b.added[0][0]).toEqual(idsOf('slow-orbit'));
+    // A station song you queued (from Liked) after MIRRORBALL's last: still MIRRORBALL's next.
+    const liked = tracksOf('cipher')[3];
+    const c = onStation('the-crypt');
+    c.s.value = { ...c.s.value, queue: [...crypt, ...mirror, liked], index: queue.length - 1, current: mirror.at(-1)!, listStart: crypt.length, nextStart: -1, mine: [queue.length] };
+    await c.ap.fill({ left: 1, seedId: crypt[0].id });
+    expect(c.added[0][0]).toEqual(idsOf('slow-orbit'));
+  });
+
+  it("shuffled, a tap on the next station's row brings the current station's unheard songs to the new list's start: the chain still goes on from the station tapped, heard", async () => {
+    const store = memoryKv();
+    const crypt = tracksOf('the-crypt');
+    const a = onStation('the-crypt', { shuffle: true }, { store, rng: () => 0 });
+    await a.ap.fill({ left: 0, seedId: crypt[0].id });
+    const next = stationOfTrackId(a.added[0][0][0])!;
+    const way = tracksOf(next.id);
+    // The 3rd song of the station on the way tapped while THE CRYPT's 5th played: THE CRYPT's 27
+    // unheard songs came along and start the new list (rule 2), the song tapped plays.
+    a.s.value = { ...a.s.value, queue: [...crypt, ...way], index: crypt.length + 2, current: way[2], listStart: 5, nextStart: -1, upNext: [] };
+    await a.ap.fill({ left: 0, seedId: crypt[0].id });
+    expect(stationOfTrackId(a.added[1][0][0])).not.toBe(next);
+    expect(JSON.parse(store.m.get('radio.heard')!)).toEqual(['the-crypt', next.id]);
   });
 
   it('a station that comes round again (its songs already in the queue) is added once: a signal from before the state shows it waits', async () => {

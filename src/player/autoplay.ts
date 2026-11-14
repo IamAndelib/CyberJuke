@@ -19,7 +19,7 @@ import { shuffled } from '../core/shuffle';
 import { readJson, type KV } from '../core/storage';
 import { audioKey, isGlobal, isLocal, type Track } from '../data/model';
 import { similarTracks } from '../data/similar';
-import { STATIONS, nextStation, stationOfTrackId, stationPlaying, stationTracks, type Station } from './radio';
+import { STATIONS, listStation, nextStation, stationPlaying, stationTracks, type Station } from './radio';
 import { VIBE_BATCH, firstBatchOfRadio, mayAutoplay, type Player, type QueueLow } from './types';
 
 /** How long a signal waits for the player's state to show the batch just added (native's lags the call). */
@@ -155,14 +155,14 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       b.queue = player.state.peek().queue;
     };
 
-    // Stations lead on: the next after the current list's station (not the label's, the one tuned
-    // in; nor the playing song's, which may be the station before, after Previous, or one you
-    // queued), whole, with a song that can play now. (A station's track in another list, Liked
-    // say, gets similar picks like any other.)
+    // Stations lead on: the next after the current list's station (listStation; nothing is on the
+    // way here), whole, with a song that can play now: not the label's (the one tuned in), nor the
+    // playing song's (the station before, after Previous, or one you queued). (A station's track in
+    // another list, Liked say, gets similar picks like any other.)
     const playable = deps.playable ?? (() => true);
     const station = stationPlaying(s.context, seed.id);
     if (station) {
-      const from = stationOfTrackId(s.queue.slice(Math.max(0, s.listStart)).find((t) => stationOfTrackId(t.id))?.id) ?? station;
+      const from = listStation(s.queue, s.mine) ?? station;
       const ok = (st: Station) => stationTracks(st).some(playable);
       const played = await hear(from);
       const to = ahead?.from === from && ok(ahead.to) ? ahead.to : nextStation(from, s.shuffle, played, ok, deps.rng);

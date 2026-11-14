@@ -82,6 +82,16 @@ export function stationPlace(queue: readonly { id: string }[], index: number, mi
   return m > 1 ? `${count(a, index)} of ${m}` : 'Single track';
 }
 
+/**
+ * The current list's station: of the last station song in `queue` you didn't queue (`mine`, queue
+ * indices). Pass the queue up to the list on the way, if one is: nothing else comes after the current
+ * list. Not the list's first song: shuffled, a tap on the way brings the station before's unheard
+ * songs to the new list's start (rule 2).
+ */
+export function listStation(queue: readonly { id: string }[], mine: readonly number[]): Station | null {
+  return stationOfTrackId(queue.filter((t, i) => !mine.includes(i) && stationOfTrackId(t.id)).at(-1)?.id);
+}
+
 /** The station a track id belongs to (`sig:<station>:<video id>`), or null. */
 export function stationOfTrackId(id: string | null | undefined): Station | null {
   if (!id?.startsWith(PREFIX)) return null;
