@@ -302,17 +302,16 @@ export function Screen({
 
   useEffect(() => () => cancelAnimationFrame(frame.current), []);
 
-  const toTopRef = useRef(top.go);
-  toTopRef.current = top.go;
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
     const on = (e: Event) => {
       e.preventDefault();
-      toTopRef.current();
+      top.go();
     };
     el.addEventListener(TO_TOP_EVENT, on);
     return () => el.removeEventListener(TO_TOP_EVENT, on);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Mount-only: `go` reads everything through refs.
   }, []);
 
   return (

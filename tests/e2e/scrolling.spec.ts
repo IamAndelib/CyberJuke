@@ -383,8 +383,9 @@ test('A–Z letter: a letter whose genres are all in Favourites is skipped, not 
 // ---- Now Playing: back to the song playing ------------------------------------------------
 
 /** Now Playing open on a song with a long queue under it (its suggestions), and the queue's scroller. */
-async function longQueue(page: Page) {
+async function longQueue(page: Page, safeTop = 0) {
   await start(page);
+  if (safeTop) await page.evaluate((v) => document.documentElement.style.setProperty('--safe-area-inset-top', `${v}px`), safeTop);
   await playAndOpen(page);
   await expect(page.getByTestId('upnext-row').nth(10)).toBeAttached();
   const np = page.locator('.np-scroll');
@@ -463,4 +464,43 @@ test('Now Playing: after the jump, a swipe down scrolls the queue up instead of 
   await touchDrag(page, 200, 300, 500, 300);
   await expect(page.getByTestId('now-playing')).toHaveClass(/open/);
   await expect.poll(() => np.evaluate((el) => el.scrollTop)).toBeLessThan(y);
+});
+
+test('Now Playing: the jump lands "Now playing" below the status bar, and a row under it counts as out of view', async ({ page }) => {
+  const { np, toBottom, labelAt, btn } = await longQueue(page, 40);
+  await toBottom();
+  await expect(btn).toBeVisible();
+  await btn.click();
+  await expect.poll(async () => Math.abs((await labelAt()) - 40)).toBeLessThan(2);
+  await expect(btn).toBeHidden();
+  // The playing row's bottom edge under the status bar (above the padding's end): out of view.
+  await np.evaluate((el) => {
+    const row = document.querySelector('[data-testid="upnext-current"]')!;
+    el.scrollTop += row.getBoundingClientRect().bottom - el.getBoundingClientRect().top - 20;
+  });
+  await expect(btn).toBeVisible();
+});
+
+test('Now Playing: a swipe that starts on the button scrolls the queue', async ({ page }) => {
+  const { np, toBottom, btn } = await longQueue(page);
+  await toBottom();
+  await expect(btn).toBeVisible();
+  const b = await box(btn);
+  const y = await np.evaluate((el) => el.scrollTop);
+  await touchDrag(page, b.x + b.width / 2, b.y + b.height / 2, b.y + b.height / 2 + 300, 300);
+  await expect.poll(() => np.evaluate((el) => el.scrollTop)).toBeLessThan(y - 100);
+});
+
+test('Now Playing: with Played open, the song playing below the view shows no button, and the last row clears it at the end', async ({ page }) => {
+  const { np, toBottom, btn } = await longQueue(page);
+  for (let i = 0; i < 3; i++) await page.getByTestId('np-next').click();
+  await page.getByTestId('upnext-played-fold').click();
+  await expect(page.getByTestId('upnext-played')).toHaveCount(3);
+  await np.evaluate((el) => void (el.scrollTop = 0));
+  await page.getByTestId('upnext-played').first().scrollIntoViewIfNeeded();
+  await expect(btn).toBeHidden();
+  await toBottom();
+  await expect(btn).toBeVisible();
+  const last = await box(page.getByTestId('upnext-row').last());
+  expect(last.y + last.height).toBeLessThanOrEqual((await box(btn)).y);
 });

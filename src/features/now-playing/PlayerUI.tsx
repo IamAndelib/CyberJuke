@@ -677,9 +677,9 @@ function NowPlayingContent() {
           )}
 
           <UpNext />
+          <ToPlaying />
         </div>
       )}
-      {t && <ToPlaying />}
     </>
   );
 }

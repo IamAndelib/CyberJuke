@@ -388,48 +388,35 @@ export function UpNext() {
 }
 
 /**
- * [^] over the bottom of Now Playing, once the song playing has scrolled out of view above (you went
- * down into Up next): it scrolls the sheet back so the "Now playing" label sits at the top. Not when
- * the song is below the view (scroll down to it). A back-to-top button (ui/useJumpButton) in the
- * sheet beside its scroller, `.np-scroll`. Checked as the sheet scrolls and when the queue's height
- * changes (Played opens), not by an IntersectionObserver: a fast fling can pass the row between two
- * of its reports.
+ * An arrow over the bottom of Now Playing, once the song playing has scrolled out of view above (you
+ * went down into Up next): it scrolls the sheet back so the "Now playing" label sits at the top, just
+ * under the status bar. Not when the song is below the view (scroll down to it). Back-to-top's button
+ * (ui/useJumpButton), the last child of the sheet's scroller `.np-scroll`, as on a screen. "Above the
+ * view" is an IntersectionObserver whose view reaches 100000px below the scroller: the row is
+ * "not intersecting" exactly when it is above, and a fling from below to above crosses that edge.
  */
 export function ToPlaying() {
   const dock = useRef<HTMLDivElement>(null);
   const [above, setAbove] = useState(false);
-  const has = !!currentTrack.value;
-  const scroller = () => dock.current?.parentElement?.querySelector<HTMLElement>('.np-scroll') ?? null;
+  const scroller = () => dock.current?.closest<HTMLElement>('.np-scroll') ?? null;
+  /** The top of the view: under the status bar (the scroller's top padding). */
+  const inset = (el: HTMLElement) => parseFloat(getComputedStyle(el).paddingTop) || 0;
   const jump = useJumpButton(scroller, {
     to: () => {
       const el = scroller();
       const label = el?.querySelector('[data-testid="upnext-current-label"]');
-      return el && label ? el.scrollTop + label.getBoundingClientRect().top - el.getBoundingClientRect().top : 0;
+      return el && label ? el.scrollTop + label.getBoundingClientRect().top - el.getBoundingClientRect().top - inset(el) : 0;
     },
   });
   useEffect(() => {
     const root = scroller();
     const row = root?.querySelector('[data-testid="upnext-current"]');
     if (!root || !row) return;
-    let frame = 0;
-    const check = () => {
-      frame = 0;
-      setAbove(row.getBoundingClientRect().bottom <= root.getBoundingClientRect().top);
-    };
-    const soon = () => {
-      if (!frame) frame = requestAnimationFrame(check);
-    };
-    check();
-    root.addEventListener('scroll', soon, { passive: true });
-    const ro = new ResizeObserver(soon);
-    ro.observe(row.closest('ol')!);
-    return () => {
-      cancelAnimationFrame(frame);
-      root.removeEventListener('scroll', soon);
-      ro.disconnect();
-      setAbove(false);
-    };
-  }, [has]);
+    // The view starts under the status bar: the root's top edge moves down by the padding.
+    const io = new IntersectionObserver((entries) => setAbove(!entries[entries.length - 1].isIntersecting), { root, rootMargin: `${-inset(root)}px 0px 100000px 0px` });
+    io.observe(row);
+    return () => io.disconnect();
+  }, []);
   return (
     <div class="totop-dock" ref={dock}>
       <div class={'totop' + (above ? ' on' : '')}>

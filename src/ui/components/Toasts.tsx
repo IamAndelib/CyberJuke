@@ -24,7 +24,6 @@ const TOAST_GAP_ABOVE_BUTTON_PX = 12;
  */
 function toastBottom(): string | null {
   if (document.querySelector('.np.open')) {
-    // Above the button back to the song playing, when it shows.
     const r = document.querySelector('.np .totop.on')?.getBoundingClientRect();
     return r?.width ? `${innerHeight - r.top + TOAST_GAP_ABOVE_BUTTON_PX}px` : `calc(${TOAST_GAP_PX}px + var(--safe-bottom))`;
   }
