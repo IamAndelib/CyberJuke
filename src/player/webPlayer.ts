@@ -15,7 +15,7 @@ import { localAudioUrl } from '../data/local';
 const fileUrl = (t: Track | null | undefined): string | undefined => t?.mp3 ?? (isLocalTrack(t) ? localAudioUrl(t!.id) : undefined);
 import { trackErrorText, type TrackErrorFacts } from './errorText';
 import { Queue } from './queue';
-import { stationPlaying } from './radio';
+import { chainsOn } from './autoplay';
 import type { RepeatMode } from './native';
 import type { CrossfadeMs, Ipv4Mode, Quality } from '../stores/library';
 import { EMPTY_STATE, firstBatchOfRadio, mayAutoplay, LIST_CONTEXT, livePosition, wantsPlay, type NetStatus, type PlayContext, type Player, type PlayerState, type QueueLow, type Undo } from './types';
@@ -207,9 +207,9 @@ export class WebPlayer implements Player {
     this.checkLow();
   }
 
-  /** More follows the list for [seedId]: Autoplay on, or a Signal Radio station playing (always). */
+  /** More follows the list for [seedId]: Autoplay on, or a station or Jukebox shuffle playing (always). */
   private keepsGoing(seedId: string | undefined): boolean {
-    return this.autoplayOn || !!stationPlaying(this.context, seedId);
+    return this.autoplayOn || chainsOn(this.context, seedId);
   }
 
   /** Autoplay may add: not under repeat all, but a radio's first batch (its loop) always. */
@@ -514,8 +514,8 @@ export class WebPlayer implements Player {
 
   async setAutoplay(enabled: boolean): Promise<void> {
     this.autoplayOn = enabled;
-    // A station's next rounds stay: it plays on whatever the setting.
-    if (!enabled && !stationPlaying(this.context, this.seed?.id)) this.q.dropOnTheWay();
+    // A station's or a shuffle's next batch stays: it plays on whatever the setting.
+    if (!enabled && !chainsOn(this.context, this.seed?.id)) this.q.dropOnTheWay();
     this.publish();
   }
 

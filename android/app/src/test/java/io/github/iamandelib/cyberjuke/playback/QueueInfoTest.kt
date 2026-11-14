@@ -26,6 +26,15 @@ class QueueInfoTest {
     }
 
     @Test
+    fun aJukeboxShufflePlaysOnWhateverTheAutoplaySetting() {
+        for (label in listOf("Jukebox shuffle", "Jukebox shuffle · rock")) {
+            assertEquals(true, Stations.keepsGoing(autoplayEnabled = false, seedId = "post0001", contextLabel = label))
+        }
+        assertEquals(false, Stations.keepsGoing(autoplayEnabled = false, seedId = "post0001", contextLabel = "Jukebox shuffled"))
+        assertEquals(false, Stations.keepsGoing(autoplayEnabled = false, seedId = "post0001", contextLabel = "Liked"))
+    }
+
+    @Test
     fun repeatAllLoopsTheListYoureIn() {
         assertEquals(true, Stations.mayAutoplay(Player.REPEAT_MODE_OFF))
         // Repeat one only replays the track when it ends: autoplay goes on as with repeat off.

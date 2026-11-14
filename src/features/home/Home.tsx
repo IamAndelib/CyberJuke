@@ -26,7 +26,7 @@ import { Rail, RailRow, type RailItem } from '../../ui/components/Rail';
 import { usePaged } from '../../ui/usePaged';
 import { feedKey } from '../../stores/feed';
 import { auth } from '../../data/auth';
-import { canStartPlayback, shuffleLabel } from '../../player';
+import { VIBE_BATCH, canStartPlayback, shuffleLabel } from '../../player';
 import { list as listCtx, playAll, radio, withRest } from '../../ui/playAll';
 
 /** Selected genre chip on Home (null = All). Survives tab switches. */
@@ -39,8 +39,8 @@ const savedRange = signal<SavedRange>('month');
 const SAVED_MAX = 100;
 const SAVED_CTX = radio('Most saved');
 
-/** How many random songs Shuffle starts with. */
-const SHUFFLE_SIZE = 50;
+/** How many random songs Shuffle starts with: as many as each next batch adds. */
+const SHUFFLE_SIZE = VIBE_BATCH;
 
 /**
  * SHUFFLE_SIZE random songs from the whole Jukebox or the chip's genre; autoplay goes on drawing
@@ -49,7 +49,7 @@ const SHUFFLE_SIZE = 50;
  */
 async function shuffleJukebox(genre: string | null): Promise<void> {
   const all = genre ? catalogGenre(genre) : catalog.tracks.value;
-  const tracks = all.length ? shuffled(all).slice(0, SHUFFLE_SIZE) : genre ? shuffled((await source.byGenre(genre)).tracks) : await source.shuffle(SHUFFLE_SIZE);
+  const tracks = all.length ? shuffled(all).slice(0, SHUFFLE_SIZE) : genre ? shuffled((await source.byGenre(genre)).tracks).slice(0, SHUFFLE_SIZE) : await source.shuffle(SHUFFLE_SIZE);
   if (!tracks.length) throw new Error('No tracks found');
   await playAll(tracks, { shuffle: false, ctx: listCtx(shuffleLabel(genre)) });
 }

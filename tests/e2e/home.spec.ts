@@ -274,3 +274,27 @@ test("Shuffle follows the genre chip: that genre's songs, and more of them after
   await page.getByTestId('chip-all').click();
   await expect(hero).toContainText('Shuffle the Jukebox');
 });
+
+test('Shuffle the Jukebox plays 25 and keeps going 25 at a time, also with Autoplay off', async ({ page }) => {
+  type Q = { context: { label: string } | null; length: number; nextStart: number; way: unknown[] };
+  const queue = () => page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => Q }).__cyberjukeQueue());
+  await start(page);
+  await openSettings(page);
+  await page.getByTestId('autoplay-toggle').click();
+  await expect(page.getByTestId('autoplay-toggle')).toHaveAttribute('aria-checked', 'false');
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('shuffle-all').click();
+  // The first 25 are the list; the next 25 are already on the way, whatever the Autoplay setting.
+  await expect.poll(async () => (await queue()).way.length).toBe(25);
+  let q = await queue();
+  expect(q.context?.label).toBe('Jukebox shuffle');
+  expect(q.nextStart).toBe(25);
+  expect(q.length).toBe(50);
+  // The next batch starts: another 25 come on the way.
+  await openNowPlaying(page);
+  for (let i = 0; i < 25; i++) await page.getByTestId('np-next').click();
+  await expect.poll(async () => (await queue()).length).toBe(75);
+  q = await queue();
+  expect(q.nextStart).toBe(50);
+  expect(q.way).toHaveLength(25);
+});

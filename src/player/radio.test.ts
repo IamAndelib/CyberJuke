@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STATIONS, stationById, stationFreq, stationLabel, stationOfTrackId, stationQueue, stationTrack, stationTracks } from './radio';
+import { STATIONS, nextStation, stationById, stationFreq, stationLabel, stationOfTrackId, onAirOf, stationPlace, stationShown, stationTrack, stationTracks } from './radio';
 import { asTrack, isTrackFull } from '../core/guards';
 
 /** A seeded generator, so a run can be repeated. */
@@ -47,34 +47,104 @@ describe('Signal Radio stations', () => {
   });
 });
 
-describe('stationQueue', () => {
-  it('plays every track of the station exactly once per round, shuffled', () => {
-    const r = rng(7);
-    const ids = stationTracks(cipher).map((t) => t.id);
-    const round = stationQueue(cipher, null, r);
-    expect([...round.map((t) => t.id)].sort()).toEqual([...ids].sort());
-    expect(round.map((t) => t.id)).not.toEqual(ids);
-    expect(round.every((t) => t.id.startsWith('sig:cipher:'))).toBe(true);
+describe('nextStation', () => {
+  const ids = STATIONS.map((s) => s.id);
+
+  it('shuffle off: the next in the Radio tab order (YM, then ZM, by frequency), the first again after the last', () => {
+    expect(nextStation(cipher, false, [])).toBe(stationById('distortion-field'));
+    expect(nextStation(stationById('hackback')!, false, [])).toBe(stationById('the-crypt'));
+    expect(nextStation(STATIONS.at(-1)!, false, [])).toBe(STATIONS[0]);
+    // What has been heard doesn't matter without shuffle.
+    expect(nextStation(cipher, false, ids)).toBe(stationById('distortion-field'));
   });
 
-  it('never starts a round with the track the last one ended on', () => {
-    const r = rng(11);
-    let last: string | undefined;
-    for (let i = 0; i < 200; i++) {
-      const round = stationQueue(cipher, last, r);
-      expect(round).toHaveLength(cipher.tracks.length);
-      if (last) expect(round[0].ytId).not.toBe(last);
-      last = round.at(-1)!.ytId;
+  it('shuffle on: a random station not heard yet in this chain, never the one playing', () => {
+    const r = rng(3);
+    const heard = ['cipher', 'cold-wave', 'the-crypt'];
+    const seen = new Set<string>();
+    for (let i = 0; i < 300; i++) {
+      const s = nextStation(cipher, true, heard, undefined, r)!;
+      expect(heard).not.toContain(s.id);
+      seen.add(s.id);
     }
-    // A generator that keeps everything in place would start with it: it goes to the end instead.
-    const first = stationTracks(cipher)[0];
-    const kept = stationQueue(cipher, first.ytId, () => 0.999999);
-    expect(kept[0].ytId).not.toBe(first.ytId);
-    expect(kept.at(-1)).toBe(first);
+    expect(seen.size).toBe(STATIONS.length - heard.length);
+    // One left: that one.
+    expect(nextStation(cipher, true, ids.filter((id) => id !== 'mirrorball'))).toBe(stationById('mirrorball'));
   });
 
-  it('a station of one track plays it again', () => {
-    const one = { ...cipher, id: 'one', tracks: cipher.tracks.slice(0, 1) };
-    expect(stationQueue(one, one.tracks[0].ytId).map((t) => t.ytId)).toEqual([one.tracks[0].ytId]);
+  it('shuffle on, all 16 heard: a new random order of them, starting with any but the one playing', () => {
+    const r = rng(5);
+    const seen = new Set<string>();
+    for (let i = 0; i < 300; i++) seen.add(nextStation(cipher, true, ids, undefined, r)!.id);
+    expect(seen).toEqual(new Set(ids.filter((id) => id !== 'cipher')));
+  });
+
+  it('offline: skips stations with no saved song, in the same order; none, nothing', () => {
+    const saved = new Set(['cold-wave', 'the-crypt']);
+    const ok = (s: { id: string }) => saved.has(s.id);
+    expect(nextStation(cipher, false, [], ok)).toBe(stationById('cold-wave'));
+    expect(nextStation(stationById('cold-wave')!, false, [], ok)).toBe(stationById('the-crypt'));
+    expect(nextStation(stationById('the-crypt')!, false, [], ok)).toBe(stationById('cold-wave'));
+    // Shuffled, the unheard one with saved songs; once both are heard, either.
+    expect(nextStation(cipher, true, ['cold-wave'], ok, () => 0.9)).toBe(stationById('the-crypt'));
+    expect(nextStation(stationById('the-crypt')!, true, ['cold-wave', 'the-crypt'], ok)).toBe(stationById('cold-wave'));
+    // Only the one playing has saved songs, or none has: nothing follows.
+    expect(nextStation(stationById('cold-wave')!, false, [], (s) => s.id === 'cold-wave')).toBeNull();
+    expect(nextStation(cipher, true, [], () => false)).toBeNull();
+  });
+});
+
+describe('labels follow the song (D11)', () => {
+  const crypt = stationById('the-crypt')!;
+  const mirrorball = stationById('mirrorball')!;
+  const slowOrbit = stationById('slow-orbit')!;
+  const tuned = { label: stationLabel(crypt) };
+  const seed = stationTracks(crypt)[0].id;
+
+  it('while stations play, the station of the song (or of the rows under a heading), not the one tuned in', () => {
+    expect(stationShown(tuned, seed, stationTracks(crypt)[5].id)).toBe(crypt);
+    expect(stationShown(tuned, seed, stationTracks(mirrorball)[0].id)).toBe(mirrorball);
+    // Not a station's song: the fallback given (the current list's station), else the one tuned in.
+    expect(stationShown(tuned, seed, 'ytm:abcdefghijk', mirrorball)).toBe(mirrorball);
+    expect(stationShown(tuned, seed, 'ytm:abcdefghijk')).toBe(crypt);
+  });
+
+  it('on air: the playing song\'s station; for a song you queued, a station\'s one included, the current list\'s', () => {
+    const [c, m, so] = [stationTracks(crypt), stationTracks(mirrorball), stationTracks(slowOrbit)];
+    const liked = stationTracks(stationById('cipher')!)[3];
+    const jukebox = { id: 'ytm:abcdefghijk' };
+    const at = (queue: readonly { id: string }[], index: number, mine: number[] = [], nextStart = -1) => onAirOf({ context: tuned, seed: c[0], current: queue[index], queue, index, mine, nextStart });
+    // Moved on to MIRRORBALL; Previous back into THE CRYPT's last song.
+    expect(at([...c, ...m], 32)).toBe(mirrorball);
+    expect(at([...c, ...m], 31)).toBe(crypt);
+    // A CIPHER song you queued (from Liked), playing in MIRRORBALL, SLOW ORBIT on the way: MIRRORBALL.
+    expect(at([...c, m[0], liked, ...m.slice(1), ...so], 33, [33], 73)).toBe(mirrorball);
+    // A Jukebox song you queued, after a shuffled tap on the way brought THE CRYPT's unheard songs to MIRRORBALL's list start.
+    expect(at([...c, m[2], jukebox, ...m.slice(0, 2), ...m.slice(3)], 33, [33])).toBe(mirrorball);
+    expect(onAirOf({ context: { label: 'Liked' }, seed: c[0], current: c[0], queue: c, index: 0, mine: [], nextStart: -1 })).toBeNull();
+  });
+
+  it("a station's track in any other list is just a track: no station shown", () => {
+    expect(stationShown({ label: 'Liked' }, seed, stationTracks(mirrorball)[0].id)).toBeNull();
+    expect(stationShown({ label: 'Signal Radio' }, seed, seed)).toBeNull();
+    expect(stationShown(null, seed, seed)).toBeNull();
+  });
+
+  it('"N of M": the song\'s place in its own station, however the queue was moved or trimmed', () => {
+    const [c, m] = [stationTracks(crypt), stationTracks(mirrorball)];
+    // Shuffle off, a tap on MIRRORBALL's 3rd song (on the way) while THE CRYPT's 5th played: THE
+    // CRYPT's unheard songs come along after it (rule 2), [C1..C5, M3, C6..C32, M1, M2, M4..M40].
+    const queue = [...c.slice(0, 5), m[2], ...c.slice(5), m[0], m[1], ...m.slice(3)];
+    expect(stationPlace(queue[5].id, false)).toBe('3 of 40');
+    expect(stationPlace(queue[6].id, false)).toBe('6 of 32');
+    expect(stationPlace(queue[33].id, false)).toBe('1 of 40');
+    // Previous two stations back, into MIRRORBALL's last song, its first 22 trimmed (KEEP_PLAYED).
+    expect(stationPlace(m[39].id, false)).toBe('40 of 40');
+    expect(stationPlace(stationTracks(slowOrbit)[0].id, false)).toBe('1 of 32');
+    // A song you queued has no place, a station's included; nor has a song of no station.
+    expect(stationPlace(m[4].id, true)).toBe('');
+    expect(stationPlace('ytm:abcdefghijk', false)).toBe('');
+    expect(stationPlace(undefined, false)).toBe('');
+    expect(stationPlace('sig:mirrorball:zzzzzzzzzzz', false)).toBe('');
   });
 });

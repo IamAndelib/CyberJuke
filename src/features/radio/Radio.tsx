@@ -1,7 +1,6 @@
-import { computed } from '@preact/signals';
 import { online } from '../../core/network';
-import { currentPlaysOffline, isPlaying, player, playContext } from '../../player';
-import { BAND_NAMES, STATIONS, stationFreq, stationLabel, stationQueue, stationTracks, type Band, type Station } from '../../player/radio';
+import { canStartPlayback, currentPlaysOffline, isPlaying, newStationChain, player, shuffleOn, stationOnAir as onAir } from '../../player';
+import { BAND_NAMES, STATIONS, stationFreq, stationLabel, stationTracks, type Band, type Station } from '../../player/radio';
 import type { Track } from '../../data/model';
 import { Icon } from '../../ui/icons';
 import { Screen } from '../../ui/components/Screen';
@@ -11,20 +10,16 @@ import { plural } from '../../core/text';
 
 const BANDS: readonly Band[] = ['ym', 'zm'];
 
-/** The station playing now (the list was started from it), or null. */
-const onAir = computed<Station | null>(() => {
-  const label = playContext.value?.label;
-  return label ? (STATIONS.find((s) => stationLabel(s) === label) ?? null) : null;
-});
-
 /** Every station track, for Here on this tab: built the first time Search asks. */
 let allStationTracks: Track[] | null = null;
 const allTracks = () => (allStationTracks ??= STATIONS.flatMap((s) => stationTracks(s)));
 
 /**
- * Tune in: a fresh round of the station, then the next ones (player/radio). The station that's
- * on already doesn't restart: playing, Now Playing opens; paused, it plays (as a track row does,
- * so offline a refused play opens nothing).
+ * Tune in: the station in its listed order (shuffle on: from a random song, the rest mixed, as the
+ * Shuffle button starts a list), then the next stations (player/radio nextStation), a new chain. The
+ * station on air (the song playing's, not the one tuned in: D11) doesn't restart: playing, Now Playing
+ * opens; paused, it plays (as a track row does, so offline a refused play opens nothing). Any other
+ * station needs the network.
  */
 function tuneIn(s: Station): void {
   if (onAir.peek() === s) {
@@ -32,7 +27,12 @@ function tuneIn(s: Station): void {
     else void player.play();
     return;
   }
-  void playFrom(stationQueue(s), 0, list(stationLabel(s)));
+  // Offline, as its dimmed row says, refused ("No carrier"), even with a song of it saved; and a
+  // refused tap changes nothing (rule 8): the chain playing keeps its memory.
+  if (!canStartPlayback()) return;
+  const tracks = [...stationTracks(s)];
+  newStationChain();
+  void playFrom(tracks, shuffleOn.peek() ? Math.floor(Math.random() * tracks.length) : 0, list(stationLabel(s)));
 }
 
 function showInfo(s: Station): void {

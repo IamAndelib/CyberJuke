@@ -97,7 +97,7 @@ interface JukePlayerPlugin {
   /**
    * Jukebox autoplay picks for `seedId` (after queueLow); dropped if the seed changed, autoplay is off, repeat all is on but for a radio's first batch (mayAutoplay), or a list is on the way already.
    * A station the Radio tab started (a `sig:…` seed in a list labelled `Signal Radio · <CALLSIGN>`) is not autoplay:
-   * queueLow and its next rounds come whatever the Autoplay setting (setAutoplay(false) keeps them too). A station's
+   * queueLow and the next station come whatever the Autoplay setting (setAutoplay(false) keeps it too). A station's
    * track in any other list (Liked, Recently played) is just a track.
    */
   addAutoplay(o: { tracks: NativeTrack[]; seedId: string }): Promise<void>;
@@ -109,8 +109,8 @@ interface JukePlayerPlugin {
    * K3: Undo of a remove, back in its section before `beforeId` (else at the section's end), never at or
    * before the current track, and a 'list' song never on the way; 'played' goes back before `beforeId` among every
    * track before the current one, heard or not, else right before the current one; 'top' (a "From the top" row) the
-   * same, but unheard. `beforeIndex`: that song's list index, matched with its id first (a station's next round repeats
-   * ids). A 'played' or 'list' track gets the queued-by-you mark back when `mine` (rule 8), the autoplay tag when
+   * same, but unheard. `beforeIndex`: that song's list index, matched with its id first (Home's Shuffle's next round, or a
+   * station coming round again, repeats ids). A 'played' or 'list' track gets the queued-by-you mark back when `mine` (rule 8), the autoplay tag when
    * `auto`, is heard again when `heard`, and goes back into an earlier list (before the current list's marker) when
    * `earlier`. Older natives ignore beforeIndex, auto, heard and earlier: by id, as a list song, unheard, by the song after it.
    */

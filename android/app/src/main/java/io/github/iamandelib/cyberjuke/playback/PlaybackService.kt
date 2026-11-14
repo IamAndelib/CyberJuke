@@ -1249,7 +1249,7 @@ class PlaybackService : MediaSessionService() {
         lowKey = null
         if (!enabled) {
             radio.stop()
-            // A station's next rounds stay (Stations.keepsGoing).
+            // A station's next station, or a Jukebox shuffle's next batch, stays (Stations.keepsGoing).
             if (!Stations.keepsGoing(false, seedId, context?.first)) queue.dropOnTheWay()
         }
         queueChanged()

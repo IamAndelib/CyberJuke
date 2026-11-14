@@ -199,7 +199,7 @@ export interface PlayerState {
   context: PlayContext | null;
   /** The track autoplay follows: the started track, or the autoplay track tapped. */
   seed: Track | null;
-  /** The current track was added by autoplay (a station's next round too). */
+  /** The current track was added by autoplay (the next station, Home's Shuffle's next batch too). */
   currentAuto: boolean;
   /** The connection dropped and playback paused; it resumes by itself once it's back (native only). */
   waitingForNetwork: boolean;

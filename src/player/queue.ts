@@ -504,7 +504,7 @@ export class Queue<T extends Identified> {
     const behind = kind === 'played' || kind === 'top';
     const auto = kind === 'autoplay' || undo.auto === true;
     const fits = (e: Entry<T>, k: number) => (behind ? k < p : k > p && (of(e) === 'queued') === (kind === 'queued'));
-    // By entry: a station's next round repeats ids (S10).
+    // By entry: Home's Shuffle's next round, or a station coming round again, repeats ids (S10).
     const named = before && this.list[before.index]?.item.id === before.id ? this.list[before.index] : null;
     let at = before ? this.order.findIndex((e, k) => (named ? e === named : e.item.id === before.id) && fits(e, k)) : -1;
     if (at < 0 && behind) at = p;

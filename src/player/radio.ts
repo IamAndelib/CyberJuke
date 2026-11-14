@@ -1,16 +1,14 @@
 /**
  * Signal Radio: hyphen8d's curated SIGNAL stations, which Cyberspace's Jukebox plays since 4.0
- * (bundled from hyphen8d/signal by scripts/update-stations.mjs), and how a station plays. As on
- * cyberspace.online (its player, not SIGNAL's own app), a station is a shuffle of all its
- * tracks, then another shuffle, and so on; a new round never starts with the track the last
- * one ended on.
+ * (bundled from hyphen8d/signal by scripts/update-stations.mjs), and how a station plays: its
+ * tracks as a list, then the next station (nextStation), as on a radio dial or with Poweramp's
+ * "Advance Category".
  *
  * Station tracks are ordinary Tracks with no post: id `sig:<station id>:<video id>`, the
  * callsign as genre, source 'signal'. Pure apart from the bundled data.
  */
 import data from '../data/radio/stations.json';
 import { artworkUrl, makeTrack, type Track } from '../data/model';
-import { shuffled } from '../core/shuffle';
 
 export type Band = 'ym' | 'zm';
 
@@ -47,14 +45,53 @@ export function stationById(id: string): Station | null {
 }
 
 /**
- * The station playing: a list the Radio tab started (its label) whose seed is one of that
- * station's tracks. It plays on round after round whatever the Autoplay setting: it isn't
- * autoplay, it is the station (natively Stations.keepsGoing, the same rule). A station's track
- * in any other list (Liked, Recently played) is just a track there.
+ * Stations playing: a list the Radio tab started (its label) whose seed is a station track, of the
+ * station tuned in or, once the chain has moved on, another's; returns the seed's station. They
+ * lead on whatever the Autoplay setting: it isn't autoplay, it is the radio (natively
+ * Stations.keepsGoing, the same rule). A station's track in any other list (Liked, Recently
+ * played) is just a track there.
  */
 export function stationPlaying(context: { label: string } | null | undefined, seedId: string | null | undefined): Station | null {
-  const s = stationOfTrackId(seedId);
-  return s && context?.label === stationLabel(s) ? s : null;
+  return context?.label.startsWith(STATION_LABEL) ? stationOfTrackId(seedId) : null;
+}
+
+/**
+ * Labels follow the song (D11): while stations play, the station to show for a track (the song playing,
+ * or the first row under an Up next heading) is its own; for one of no station, `fallback` (the current
+ * list's), else the one tuned in. Null in any other list.
+ */
+export function stationShown(context: { label: string } | null | undefined, seedId: string | null | undefined, trackId: string | null | undefined, fallback: Station | null = null): Station | null {
+  const tuned = stationPlaying(context, seedId);
+  return tuned && (stationOfTrackId(trackId) ?? fallback ?? tuned);
+}
+
+/**
+ * The station on air while stations play (D11): the playing song's; for a song you queued, a station's
+ * one too (it belongs to no list, rule 8), the current list's (listStation, up to the list on the way).
+ */
+export function onAirOf(s: { context: { label: string } | null; seed: { id: string } | null; current: { id: string } | null; queue: readonly { id: string }[]; index: number; mine: readonly number[]; nextStart: number }): Station | null {
+  const list = listStation(s.nextStart < 0 ? s.queue : s.queue.slice(0, s.nextStart), s.mine);
+  return stationShown(s.context, s.seed?.id, s.mine.includes(s.index) ? null : s.current?.id, list);
+}
+
+/**
+ * "N of M" while stations play (D11): the song's place in its own station's listed songs, however the
+ * queue has been moved or trimmed since. A song you queued (`mine`) has none, nor one no station lists.
+ */
+export function stationPlace(id: string | null | undefined, mine: boolean): string {
+  const st = stationOfTrackId(id);
+  const at = st && !mine ? stationTracks(st).findIndex((t) => t.id === id) : -1;
+  return at < 0 ? '' : `${at + 1} of ${st!.tracks.length}`;
+}
+
+/**
+ * The current list's station: of the last station song in `queue` you didn't queue (`mine`, queue
+ * indices). Pass the queue up to the list on the way, if one is: nothing else comes after the current
+ * list. Not the list's first song: shuffled, a tap on the way brings the station before's unheard
+ * songs to the new list's start (rule 2).
+ */
+export function listStation(queue: readonly { id: string }[], mine: readonly number[]): Station | null {
+  return stationOfTrackId(queue.filter((t, i) => !mine.includes(i) && stationOfTrackId(t.id)).at(-1)?.id);
 }
 
 /** The station a track id belongs to (`sig:<station>:<video id>`), or null. */
@@ -86,11 +123,16 @@ export function stationTrack(id: string): Track | null {
 }
 
 /**
- * One round of a station: all its tracks, shuffled. After `lastYtId` (the last track queued),
- * the round doesn't start with that same track: it goes to the end instead.
+ * The station after `current`: shuffle off, the next in the Radio tab's order (YM, then ZM, by
+ * frequency), the first again after the last; shuffle on, a random one not `heard` yet in this chain,
+ * any but `current` once all have been. Only stations `ok` takes (offline: one with a saved song);
+ * null if none.
  */
-export function stationQueue(s: Station, lastYtId?: string | null, rng: () => number = Math.random): Track[] {
-  const round = shuffled(stationTracks(s), rng);
-  if (lastYtId && round.length > 1 && round[0].ytId === lastYtId) round.push(round.shift()!);
-  return round;
+export function nextStation(current: Station, shuffle: boolean, heard: readonly string[], ok: (s: Station) => boolean = () => true, rng: () => number = Math.random): Station | null {
+  const at = STATIONS.indexOf(current);
+  const after = [...STATIONS.slice(at + 1), ...STATIONS.slice(0, at)].filter(ok);
+  if (!shuffle) return after[0] ?? null;
+  const fresh = after.filter((s) => !heard.includes(s.id));
+  const from = fresh.length ? fresh : after;
+  return from.length ? from[Math.floor(rng() * from.length)] : null;
 }

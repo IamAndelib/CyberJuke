@@ -1,7 +1,8 @@
 import { Fragment } from 'preact';
 import { signal } from '@preact/signals';
 import { useLayoutEffect, useRef } from 'preact/hooks';
-import { autoplayLabel, currentId, currentPlaysOffline, currentTrack, isPlaying, lapTracks, player, playContext, previousTracks, repeatMode, saveSongs, shuffleOn, undoOf, upNextSections, type PlayContext, type UpItem, type UpNextKind } from '../../player';
+import { autoplayLabel, currentId, currentPlaysOffline, currentTrack, isPlaying, lapTracks, player, playContext, previousTracks, repeatMode, saveSongs, shuffleOn, undoOf, upNextSections, type PlayContext, type UpItem, type UpNextKind, type UpRun } from '../../player';
+import { stationLabel, stationShown } from '../../player/radio';
 import { isLocal, type Track } from '../../data/model';
 import { online } from '../../core/network';
 import { settings } from '../../stores/library';
@@ -281,6 +282,13 @@ export function UpNext() {
     });
 
   const titles = { queued: 'Queued by you', list: ctx?.label ? `Next from: ${ctx.label}` : 'Next from the list', autoplay: autoplayLabel.value };
+  // While stations play, a heading names the station of the rows under it, not the one tuned in (D11).
+  const stationOf = (rows: UpItem[]) => stationShown(ctx, sec.seed?.id, rows[0]?.track.id);
+  const title = (r: UpRun) => {
+    const st = r.kind !== 'queued' && stationOf(r.items);
+    return st ? `Next from: ${stationLabel(st)}` : titles[r.kind];
+  };
+  const wayStation = stationOf(way);
   const repeat = repeatMode.value;
   const current = currentTrack.value;
   const played = previousTracks.value;
@@ -345,7 +353,7 @@ export function UpNext() {
         {here.map((r, k) => (
           <Fragment key={k}>
             <li class={'upnext-label' + (r.kind === 'autoplay' ? ' auto' : '')} data-testid={`upnext-${r.kind}-label`} aria-hidden="true">
-              {titles[r.kind]}
+              {title(r)}
             </li>
             {rows(r.kind, r.items)}
           </Fragment>
@@ -353,7 +361,7 @@ export function UpNext() {
         {way.length > 0 && (
           <>
             <li class="upnext-label" data-testid="upnext-way-label" aria-hidden="true">
-              On the way
+              {wayStation ? `On the way · ${wayStation.callsign}` : 'On the way'}
             </li>
             {rows('way', way)}
           </>
