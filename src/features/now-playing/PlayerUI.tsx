@@ -45,7 +45,7 @@ import { OfflineLine } from '../../ui/components/OfflineLine';
 import { Marquee } from './Marquee';
 import { MembersTag } from '../../ui/components/TrackRow';
 import { LyricsPanel } from './Lyrics';
-import { UpNext, removeWithUndo } from './UpNext';
+import { ToPlaying, UpNext, removeWithUndo } from './UpNext';
 import { useModal, useSheetContent } from '../../ui/useModal';
 import { useLiked } from '../../ui/useFavs';
 import { shareTrack } from '../../ui/share';
@@ -679,6 +679,7 @@ function NowPlayingContent() {
           <UpNext />
         </div>
       )}
+      {t && <ToPlaying />}
     </>
   );
 }

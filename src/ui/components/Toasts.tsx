@@ -20,10 +20,14 @@ const TOAST_GAP_ABOVE_BUTTON_PX = 12;
  * Where the toasts go (CSS `bottom`): above whatever is docked under the page (tab bar, mini
  * player, the block banner), and above the back-to-top and search buttons showing there, so
  * a toast never sits on something the user may want to tap. Over Now Playing: at the bottom edge, where
- * the sheet leaves room for it under its last row (now-playing.css).
+ * the sheet leaves room for it under its last row (now-playing.css), above the button back to the song playing.
  */
 function toastBottom(): string | null {
-  if (document.querySelector('.np.open')) return `calc(${TOAST_GAP_PX}px + var(--safe-bottom))`;
+  if (document.querySelector('.np.open')) {
+    // Above the button back to the song playing, when it shows.
+    const r = document.querySelector('.np .totop.on')?.getBoundingClientRect();
+    return r?.width ? `${innerHeight - r.top + TOAST_GAP_ABOVE_BUTTON_PX}px` : `calc(${TOAST_GAP_PX}px + var(--safe-bottom))`;
+  }
   const main = document.querySelector('.main');
   if (!main) return null;
   const mainBottom = main.getBoundingClientRect().bottom;

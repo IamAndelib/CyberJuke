@@ -1,5 +1,6 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { expectStable, isFeedQuery, nextFrame, openSearch, scrollTo, scrollTopOf, start, waitForTracks } from '../helpers';
+import { box, expectStable, isFeedQuery, nextFrame, openSearch, playAndOpen, scrollTo, scrollTopOf, start, touchDrag, waitForTracks } from '../helpers';
 
 /** Scroll memory, back-to-top, and the overlay scrollbar / A–Z fast scroller. */
 
@@ -377,4 +378,89 @@ test('A–Z letter: a letter whose genres are all in Favourites is skipped, not 
   await nextFrame(page);
   await nextFrame(page);
   await expect(screen.locator('.az-pop-letter')).toHaveText(first);
+});
+
+// ---- Now Playing: back to the song playing ------------------------------------------------
+
+/** Now Playing open on a song with a long queue under it (its suggestions), and the queue's scroller. */
+async function longQueue(page: Page) {
+  await start(page);
+  await playAndOpen(page);
+  await expect(page.getByTestId('upnext-row').nth(10)).toBeAttached();
+  const np = page.locator('.np-scroll');
+  const toBottom = () => np.evaluate((el) => void (el.scrollTop = el.scrollHeight));
+  /** How far the "Now playing" label is below the scroller's top edge. */
+  const labelAt = () => page.getByTestId('upnext-current-label').evaluate((l) => l.getBoundingClientRect().top - l.closest('.np-scroll')!.getBoundingClientRect().top);
+  return { np, toBottom, labelAt, btn: page.getByTestId('np-to-playing') };
+}
+
+test('Now Playing: a button back to the song playing shows once you scroll down past it, and takes you to its label', async ({ page }) => {
+  const { np, toBottom, labelAt, btn } = await longQueue(page);
+  // At the top the song playing is below the player, and not above the view: no button.
+  await expect(btn).toBeHidden();
+  const row = page.getByTestId('upnext-current');
+  await row.scrollIntoViewIfNeeded();
+  await expect(btn).toBeHidden();
+  await toBottom();
+  await expect(btn).toBeVisible();
+  await expect(btn).toHaveAttribute('aria-label', 'Back to the song playing');
+  const b = await box(btn);
+  expect(b.width).toBeCloseTo(48, 1);
+  expect(b.height).toBeCloseTo(48, 1);
+  expect(Math.abs(b.x + b.width / 2 + 2 - page.viewportSize()!.width / 2)).toBeLessThanOrEqual(4);
+  await btn.click();
+  // The "Now playing" label ends at the top of the view, the button gone.
+  await expect.poll(async () => Math.abs(await labelAt())).toBeLessThan(2);
+  await expect(btn).toBeHidden();
+  await expect(row).toBeInViewport();
+  // Scrolling back down brings it again, and scrolling up past the label hides it.
+  await toBottom();
+  await expect(btn).toBeVisible();
+  await np.evaluate((el) => void (el.scrollTop = 0));
+  await expect(btn).toBeHidden();
+});
+
+test('Now Playing: the button back to the song playing is stopped by a touch on the list', async ({ page }) => {
+  const { np, toBottom, btn } = await longQueue(page);
+  await toBottom();
+  await expect(btn).toBeVisible();
+  // A finger on the list during the jump stops it where it is.
+  await np.evaluate((el) => {
+    const b = document.querySelector<HTMLElement>('[data-testid="np-to-playing"]')!;
+    const touch = (target: Element, type: string) => target.dispatchEvent(new PointerEvent(type, { pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+    touch(b, 'pointerdown');
+    touch(b, 'pointerup');
+    touch(el, 'pointerdown');
+  });
+  const at = await np.evaluate((el) => el.scrollTop);
+  await expectStable(() => np.evaluate((el) => el.scrollTop), 400);
+  expect(Math.abs((await np.evaluate((el) => el.scrollTop)) - at)).toBeLessThanOrEqual(1);
+});
+
+test('Now Playing: with reduced motion the button back to the song playing jumps at once', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const { np, toBottom, labelAt, btn } = await longQueue(page);
+  await toBottom();
+  await expect(btn).toBeVisible();
+  const top = await np.evaluate((el) => {
+    document.querySelector<HTMLElement>('[data-testid="np-to-playing"]')!.click();
+    return el.scrollTop;
+  });
+  const after = await np.evaluate((el) => el.scrollTop);
+  expect(after).toBe(top);
+  expect(top).toBeGreaterThan(0);
+  expect(Math.abs(await labelAt())).toBeLessThan(2);
+});
+
+test('Now Playing: after the jump, a swipe down scrolls the queue up instead of closing the sheet', async ({ page }) => {
+  const { np, toBottom, btn } = await longQueue(page);
+  await toBottom();
+  await btn.click();
+  await expect(btn).toBeHidden();
+  await expectStable(() => np.evaluate((el) => el.scrollTop), 300);
+  const y = await np.evaluate((el) => el.scrollTop);
+  expect(y).toBeGreaterThan(100);
+  await touchDrag(page, 200, 300, 500, 300);
+  await expect(page.getByTestId('now-playing')).toHaveClass(/open/);
+  await expect.poll(() => np.evaluate((el) => el.scrollTop)).toBeLessThan(y);
 });
