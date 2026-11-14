@@ -18,13 +18,16 @@ class RadiosTest {
     @Test
     fun theNextListIsAskedForTheMomentNothingIsOnTheWay() {
         // As a list starts (an album, a batch moved on to), not when it nears its end: however many are left.
-        assertEquals(true, Radios.needsNext(keepsGoing = true, mayAdd = true, nextStart = -1, count = 12, idle = false))
+        assertEquals(true, Radios.needsNext(seedId = "t1", keepsGoing = true, mayAdd = true, nextStart = -1, count = 12, idle = false))
         // A list on the way already: nothing more until it starts.
-        assertEquals(false, Radios.needsNext(keepsGoing = true, mayAdd = true, nextStart = 12, count = 37, idle = false))
+        assertEquals(false, Radios.needsNext(seedId = "t1", keepsGoing = true, mayAdd = true, nextStart = 12, count = 37, idle = false))
         // Vibe off (and no station), Repeat all (but a radio's first batch), an empty player, a restored session before its first Play.
-        assertEquals(false, Radios.needsNext(keepsGoing = false, mayAdd = true, nextStart = -1, count = 12, idle = false))
-        assertEquals(false, Radios.needsNext(keepsGoing = true, mayAdd = false, nextStart = -1, count = 12, idle = false))
-        assertEquals(false, Radios.needsNext(keepsGoing = true, mayAdd = true, nextStart = -1, count = 0, idle = false))
-        assertEquals(false, Radios.needsNext(keepsGoing = true, mayAdd = true, nextStart = -1, count = 12, idle = true))
+        assertEquals(false, Radios.needsNext(seedId = "t1", keepsGoing = false, mayAdd = true, nextStart = -1, count = 12, idle = false))
+        assertEquals(false, Radios.needsNext(seedId = "t1", keepsGoing = true, mayAdd = false, nextStart = -1, count = 12, idle = false))
+        assertEquals(false, Radios.needsNext(seedId = "t1", keepsGoing = true, mayAdd = true, nextStart = -1, count = 0, idle = false))
+        assertEquals(false, Radios.needsNext(seedId = "t1", keepsGoing = true, mayAdd = true, nextStart = -1, count = 12, idle = true))
+        // No seed, or a song on the phone: a local list ends like an album, so the page isn't asked at every song (the web adds nothing to it).
+        assertEquals(false, Radios.needsNext(seedId = null, keepsGoing = true, mayAdd = true, nextStart = -1, count = 12, idle = false))
+        assertEquals(false, Radios.needsNext(seedId = "loc:0123456789abcdef", keepsGoing = true, mayAdd = true, nextStart = -1, count = 12, idle = false))
     }
 }

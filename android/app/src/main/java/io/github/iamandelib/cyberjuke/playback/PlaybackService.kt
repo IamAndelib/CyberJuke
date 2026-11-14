@@ -1392,7 +1392,7 @@ class PlaybackService : MediaSessionService() {
         val idle = p.playbackState == Player.STATE_IDLE && !p.playWhenReady
         val keepsGoing = Stations.keepsGoing(autoplayEnabled, seedId, context?.first)
         val mayAdd = Stations.mayAutoplay(p.repeatMode) || radioFirstBatch()
-        if (seedId == null || !Radios.needsNext(keepsGoing, mayAdd, queue.nextStartIndex(), p.mediaItemCount, idle)) {
+        if (!Radios.needsNext(seedId, keepsGoing, mayAdd, queue.nextStartIndex(), p.mediaItemCount, idle)) {
             lowKey = null
             QueueInfo.clearLow()
             return
