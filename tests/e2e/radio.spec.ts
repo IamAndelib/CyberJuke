@@ -316,6 +316,26 @@ test('with Repeat all, a station loops, also one tuned in with Repeat all alread
   await expect.poll(async () => (await queueState(page)).current?.id).toBe(idsOf('slow-orbit')[0]);
 });
 
+test("with nothing after a station's last song (offline, no station saved), Up next doesn't say Vibe is off: stations ignore it", async ({ page, backend }) => {
+  await start(page);
+  await openSettings(page);
+  await page.getByTestId('autoplay-toggle').click();
+  await expect(page.getByTestId('autoplay-toggle')).toHaveAttribute('aria-checked', 'false');
+  await openRadio(page);
+  await tune(page, 'slow-orbit');
+  await openNowPlaying(page);
+  // Repeat all drops the next station; its last song, then offline nothing can come after it.
+  const repeat = page.getByTestId('np-repeat');
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'all');
+  await toListEnd(page);
+  await setOffline(page, backend, true);
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'one');
+  const empty = page.getByTestId('up-next').locator('.upnext-empty');
+  await expect(empty).toHaveText('Nothing queued. ⋯ → Add to queue plays a track next.');
+});
+
 test("a station's track played from another list is just a track there: with Autoplay off it stops at the end", async ({ page }) => {
   await start(page);
   await openSettings(page);

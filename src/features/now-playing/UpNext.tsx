@@ -195,7 +195,7 @@ export function UpNext() {
       void player.move(it.index, to.index, it.track.id);
     });
 
-  // Autoplay's rows are Vibe's unless the list leads on by itself: a station's next, Home's Shuffle's next batch are their own (chainsOn).
+  // Autoplay's rows are Vibe's unless the list leads on by itself, whatever Vibe is set to: a station's next, Home's Shuffle's next batch are their own (chainsOn).
   const vibe = !chainsOn(ctx, sec.seed?.id);
   // peek: the line moves only with the rows, which change with it (not every tick).
   const listStart = player.state.peek().listStart;
@@ -384,7 +384,7 @@ export function UpNext() {
         {glowing ? `${g?.to == null ? 'Back at' : 'Moved to'} ${glowing.place} of ${glowing.of}` : ''}
       </p>
       {total === 0 && repeat !== 'all' && (
-        <div class="dim small upnext-empty">{`${settings.value.autoplay ? 'Nothing queued.' : 'Vibe is off.'} ⋯ → Add to queue plays a track next.`}</div>
+        <div class="dim small upnext-empty">{`${settings.value.autoplay || !vibe ? 'Nothing queued.' : 'Vibe is off.'} ⋯ → Add to queue plays a track next.`}</div>
       )}
     </section>
   );

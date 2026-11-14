@@ -41,6 +41,7 @@
 - In Up next, the next station's songs and Home's Shuffle's next batch no longer look like Vibe's suggestions (the ~ heading, the dimmed covers), and a screen reader no longer calls them "vibe".
 - After Previous takes you back into the station before, Up next gives each station's songs their own heading, instead of naming the station before over the next one's songs.
 - The queue's heading names Repeat as its button does: "Queue · Repeat all" or "Queue · Repeat one", instead of Repeat queue or Repeat song.
+- With nothing after the song playing, Up next no longer says "Vibe is off." while a station or Home's Shuffle plays: they keep going whatever Vibe is set to.
 
 ## [1.4.0] - 2026-11-04
 
