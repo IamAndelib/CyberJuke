@@ -1,8 +1,7 @@
 import { online } from '../../core/network';
-import { currentPlaysOffline, isPlaying, newStationChain, player, shuffleOn, stationOnAir as onAir } from '../../player';
+import { canStartPlayback, currentPlaysOffline, isPlaying, newStationChain, player, shuffleOn, stationOnAir as onAir } from '../../player';
 import { BAND_NAMES, STATIONS, stationFreq, stationLabel, stationTracks, type Band, type Station } from '../../player/radio';
 import type { Track } from '../../data/model';
-import { isSaved, savedOffline } from '../../stores/savedOffline';
 import { Icon } from '../../ui/icons';
 import { Screen } from '../../ui/components/Screen';
 import { askConfirm, nowPlayingOpen, useSearchContext } from '../../ui/nav';
@@ -19,7 +18,8 @@ const allTracks = () => (allStationTracks ??= STATIONS.flatMap((s) => stationTra
  * Tune in: the station in its listed order (shuffle on: from a random song, the rest mixed, as the
  * Shuffle button starts a list), then the next stations (player/radio nextStation), a new chain. The
  * station on air (the song playing's, not the one tuned in: D11) doesn't restart: playing, Now Playing
- * opens; paused, it plays (as a track row does, so offline a refused play opens nothing).
+ * opens; paused, it plays (as a track row does, so offline a refused play opens nothing). Any other
+ * station needs the network.
  */
 function tuneIn(s: Station): void {
   if (onAir.peek() === s) {
@@ -27,11 +27,12 @@ function tuneIn(s: Station): void {
     else void player.play();
     return;
   }
+  // Offline, as its dimmed row says, refused ("No carrier"), even with a song of it saved; and a
+  // refused tap changes nothing (rule 8): the chain playing keeps its memory.
+  if (!canStartPlayback()) return;
   const tracks = [...stationTracks(s)];
-  const start = shuffleOn.peek() ? Math.floor(Math.random() * tracks.length) : 0;
-  // A new chain, but only if the tune-in plays: offline, a tap refused ("No carrier") changes nothing (rule 8).
-  if (online.peek() || isSaved(tracks[start], savedOffline.peek())) newStationChain();
-  void playFrom(tracks, start, list(stationLabel(s)));
+  newStationChain();
+  void playFrom(tracks, shuffleOn.peek() ? Math.floor(Math.random() * tracks.length) : 0, list(stationLabel(s)));
 }
 
 function showInfo(s: Station): void {

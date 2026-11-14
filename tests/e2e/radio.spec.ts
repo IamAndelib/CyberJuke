@@ -340,6 +340,9 @@ test('offline the stations dim like any track that cannot play, and a tap says w
   await setOffline(page, backend, true);
   await expect(stations.and(page.locator('.off'))).toHaveCount(15);
   await expect(cipher).not.toHaveClass(/\boff\b/);
+  // A tap on it still opens Now Playing.
+  await cipher.getByTestId('station-tune').click();
+  await expect(page.getByTestId('now-playing')).toHaveClass(/open/);
 });
 
 test('offline, a tap on another station is refused and changes nothing: the stations heard in the chain playing stay', async ({ page, backend }) => {
@@ -356,7 +359,7 @@ test('offline, a tap on another station is refused and changes nothing: the stat
   expect(await heard()).toBe('["cipher"]');
 });
 
-test('offline a station dims even with one of its tracks saved: tuning in needs the network', async ({ page, backend }) => {
+test('offline a station dims, and a tap is refused, even with its first song saved: tuning in needs the network', async ({ page, backend }) => {
   await start(page);
   await openRadio(page);
   const cipher = page.locator('[data-testid="station"][data-station="cipher"]');
@@ -364,6 +367,10 @@ test('offline a station dims even with one of its tracks saved: tuning in needs 
   await setOffline(page, backend, true);
   await expect(cipher).toHaveClass(/\boff\b/);
   await expect(cipher.getByTestId('station-tune')).toHaveAttribute('aria-disabled', 'true');
+  await cipher.getByTestId('station-tune').click({ force: true });
+  await expect(page.getByTestId('toast').last()).toContainText('No carrier');
+  await expectStable(async () => page.getByTestId('mini-player').count(), 500);
+  await expect(page.getByTestId('mini-player')).toHaveCount(0);
 });
 
 test('the station on air, paused: a tap plays it on (as a track row does), and Now Playing stays shut', async ({ page }) => {
