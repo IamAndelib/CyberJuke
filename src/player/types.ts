@@ -14,7 +14,7 @@ export interface UpNextItem {
   index: number;
   /** Added with "Add to queue" and not played yet (shown under "Queued by you"). */
   queued?: boolean;
-  /** Added by autoplay (shown under "Autoplay"; Played and "From the top" rows carry it too). */
+  /** Added by autoplay: a Vibe batch, the next station, Home's Shuffle's next batch (Played and "From the top" rows carry it too). */
   auto?: boolean;
   /** Heard in this lap: an Up next row Previous walked back over. */
   heard?: boolean;
