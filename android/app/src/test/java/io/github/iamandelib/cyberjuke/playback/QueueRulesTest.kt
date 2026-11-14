@@ -63,7 +63,7 @@ class QueueRulesTest {
                 "addAuto" -> p.queue.addAutoplay(strings(s.getJSONArray("ids")), s.optBoolean("joinList", false))
                 "restore" -> restore(
                     p,
-                    Undo(s.getString("id"), s.getString("kind"), if (s.isNull("beforeId")) null else s.getString("beforeId"), s.optInt("beforeIndex", -1), s.optBoolean("mine", false), s.optBoolean("auto", false), s.optBoolean("heard", false), s.optBoolean("earlier", false)),
+                    Undo(s.getString("id"), s.getString("kind"), if (s.isNull("beforeId")) null else s.getString("beforeId"), s.optInt("beforeIndex", -1), s.optBoolean("mine", false), s.optBoolean("auto", false), s.optBoolean("heard", false), s.optBoolean("earlier", false), if (s.isNull("listBeforeId")) null else s.getString("listBeforeId"), s.optInt("listBeforeIndex", -1)),
                     where,
                 )
                 "removeRow" -> {
@@ -148,15 +148,15 @@ class QueueRulesTest {
 
     private fun strings(a: JSONArray) = (0 until a.length()).map { a.getString(it) }
 
-    /** What a row's ✕ keeps for its Undo (the page's Undo): its kind, the song after it in play order and that one's index once it is gone, its mark, tag and heard state, and whether it is of an earlier list. */
-    private data class Undo(val id: String, val kind: String, val before: String?, val beforeIndex: Int, val mine: Boolean, val auto: Boolean, val heard: Boolean, val earlier: Boolean)
+    /** What a row's ✕ keeps for its Undo (the page's Undo): its kind, the song after it in play order and that one's index once it is gone, its mark, tag and heard state, whether it is of an earlier list, and the song after it in list order (at its own index once it is gone). */
+    private data class Undo(val id: String, val kind: String, val before: String?, val beforeIndex: Int, val mine: Boolean, val auto: Boolean, val heard: Boolean, val earlier: Boolean, val listBefore: String? = null, val listBeforeIndex: Int = -1)
 
     /** PlaybackService's ACTION_RESTORE. */
     private fun restore(p: FakePlayer, u: Undo, where: String) {
         if (u.kind == QueueCommands.KIND_PLAYED || u.kind == QueueCommands.KIND_TOP) {
             p.queue.restorePlayed(u.id, u.before, u.mine, u.kind == QueueCommands.KIND_TOP, u.beforeIndex, u.auto, u.earlier)
         } else {
-            p.queue.restore(u.id, NativeQueue.Section.of(u.kind) ?: throw IllegalArgumentException("kind in $where"), u.before, u.mine, u.beforeIndex, u.auto, u.heard, u.earlier)
+            p.queue.restore(u.id, NativeQueue.Section.of(u.kind) ?: throw IllegalArgumentException("kind in $where"), u.before, u.mine, u.beforeIndex, u.auto, u.heard, u.earlier, u.listBefore, u.listBeforeIndex)
         }
     }
 
@@ -182,7 +182,7 @@ class QueueRulesTest {
             else -> sections(p).first { id in it.second }.first.let { if (it == "autoplay" && !(way >= 0 && i >= way)) "list" else it }
         }
         val at = next?.let { p.ids.indexOf(it) }?.let { if (it > i) it - 1 else it } ?: -1
-        return Undo(id, kind, next, at, p.serials[i] != 0L, p.auto[i], heard, i < p.queue.listStartIndex())
+        return Undo(id, kind, next, at, p.serials[i] != 0L, p.auto[i], heard, i < p.queue.listStartIndex(), p.ids.getOrNull(i + 1), i)
     }
 
     /** The song after [id] in play order behind the current one: Played shows the heard ones, "From the top" all but the songs you queued (the page's behindAfter). */
@@ -231,8 +231,11 @@ class QueueRulesTest {
             queue.onPlaylistChanged()
             onTimeline?.invoke()
         }
+        /** Offline, the ids that can't play while a saved one is ahead (PlaybackService: OfflineNext.passesOver). */
+        var passing: (String) -> Boolean = { false }
+
         /** The current item changed; [forward]: a Next or a song's end (PlaybackService: a forward move). */
-        private fun transition(forward: Boolean = false): () -> Unit = { queue.onTransition(forward) }
+        private fun transition(forward: Boolean = false): () -> Unit = { queue.onTransition(forward, current in ids.indices && passing(ids[current])) }
 
         // ---- QueueHost ----
         override val count get() = ids.size
@@ -358,6 +361,9 @@ class QueueRulesTest {
 
         // ---- player operations ----
         override fun seekTo(index: Int) = moveTo(index, forward = false)
+
+        /** PlaybackService.movingOn: a seek that moves on (offline, past a song that can't play: OfflineNext). */
+        fun seekForward(index: Int) = moveTo(index, forward = true)
 
         /** Player.seekTo; [forward]: a Next (PlaybackService tells the queue it moved forward). */
         private fun moveTo(index: Int, forward: Boolean) {

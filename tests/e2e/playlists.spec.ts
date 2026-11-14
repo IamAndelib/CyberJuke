@@ -305,7 +305,7 @@ test.describe('adding songs', () => {
     await openNowPlaying(page);
     await page.getByTestId('np-shuffle').click();
     await page.getByTestId('np-repeat').click();
-    await expect(page.getByTestId('upnext-title')).toHaveText('Queue · Shuffled · Repeat queue');
+    await expect(page.getByTestId('upnext-title')).toHaveText('Queue · Shuffled · Repeat all');
     const q = await page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => { current: { id: string }; previous: { id: string }[]; upNext: { id: string }[] } }).__cyberjukeQueue());
     expect((await page.getByTestId('upnext-save').boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await page.getByTestId('upnext-save').click();

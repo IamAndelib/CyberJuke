@@ -1,5 +1,7 @@
 package io.github.iamandelib.cyberjuke.playback
 
+import io.github.iamandelib.cyberjuke.local.LocalRules
+
 /** Pure, so JVM tests load it. */
 internal object Radios {
     /**
@@ -11,12 +13,13 @@ internal object Radios {
 
     /**
      * Whether to ask for the next list now (rule 2): nothing is on the way ([nextStart] -1, as the current
-     * list starts) while the list keeps going ([keepsGoing]: autoplay on, or a station) and may grow
+     * list starts) for a seed ([seedId]) that isn't a song on the phone (a local list ends like an album:
+     * the web's autoplay adds nothing to it, so it isn't asked) while the list keeps going ([keepsGoing]: autoplay on, or a station) and may grow
      * ([mayAdd]: not under repeat all, but a radio's first batch), with [count] items in the player and
      * loading (not [idle]: a restored session before its first Play asks for nothing). However many are
      * left: the next list is there long before it plays, also with the page asleep (web player
      * webPlayer.checkLow, the same rule).
      */
-    fun needsNext(keepsGoing: Boolean, mayAdd: Boolean, nextStart: Int, count: Int, idle: Boolean): Boolean =
-        keepsGoing && mayAdd && nextStart < 0 && count > 0 && !idle
+    fun needsNext(seedId: String?, keepsGoing: Boolean, mayAdd: Boolean, nextStart: Int, count: Int, idle: Boolean): Boolean =
+        seedId != null && !LocalRules.isId(seedId) && keepsGoing && mayAdd && nextStart < 0 && count > 0 && !idle
 }

@@ -645,7 +645,7 @@ export function Settings() {
           <div class="setting-text">
             <div class="setting-name">Vibe</div>
             <div class="setting-desc" id="autoplay-desc">
-              Keeps playing songs like your list when it ends, a batch at a time.
+              Keeps playing songs like your list when it ends, a batch at a time. A song you tap on Home or in Search starts one.
             </div>
           </div>
           <Toggle on={s.autoplay} onChange={(v) => updateSettings({ autoplay: v })} label="Vibe" describedBy="autoplay-desc" testid="autoplay-toggle" />

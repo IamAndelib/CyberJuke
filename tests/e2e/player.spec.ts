@@ -267,6 +267,23 @@ test('Add to queue plays next in the order added, under "Queued by you"', async 
   await expect(page.locator('[data-testid="upnext-row"][data-queued="true"]')).toHaveCount(1);
 });
 
+test("Up next's rows stay as they are when a heading before them goes (no remount: scroll, focus and glow keep their row)", async ({ page }) => {
+  await start(page);
+  await page.getByTestId('track-play').nth(0).click();
+  await expect(page.getByTestId('mini-player')).toBeVisible();
+  await queue(page, 5);
+  await openNowPlaying(page);
+  await expect(page.getByTestId('upnext-queued-label')).toBeVisible();
+  const row = page.locator('[data-testid="upnext-row"][data-section="autoplay"]').first();
+  const id = (await row.getAttribute('data-track-id'))!;
+  await row.evaluate((el) => ((el as HTMLElement & { mark?: true }).mark = true));
+  // The song you queued plays: its heading goes, the suggestions' stays.
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('upnext-queued-label')).toHaveCount(0);
+  const same = page.locator(`[data-testid="upnext-row"][data-track-id="${id}"]`);
+  expect(await same.evaluate((el) => (el as HTMLElement & { mark?: true }).mark === true)).toBe(true);
+});
+
 test('a seek-bar drag held still before release still seeks, and the bar follows the next track', async ({ page }) => {
   await start(page);
   await playAndOpen(page);

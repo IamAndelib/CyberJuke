@@ -463,7 +463,7 @@ test('Vibe is on by default and the setting is kept; Settings lines are short (C
   const toggle = page.getByTestId('autoplay-toggle');
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   const settings = page.getByTestId('screen-settings');
-  await expect(settings).toContainText('Keeps playing songs like your list when it ends, a batch at a time.');
+  await expect(settings).toContainText('Keeps playing songs like your list when it ends, a batch at a time. A song you tap on Home or in Search starts one.');
   for (const line of ['Hidden by default.', 'Best quality the connection can keep up with', 'Shows a button on Home when new tracks are posted.', 'Auto switches when IPv6 gets blocked.']) {
     await expect(settings).toContainText(line);
   }

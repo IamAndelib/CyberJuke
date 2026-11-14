@@ -421,6 +421,17 @@ test('Now Playing: a button back to the song playing shows once you scroll down 
   await expect(btn).toBeHidden();
 });
 
+test('Now Playing: from the keyboard, the button back to the song playing leaves focus on that song, not on the hidden button', async ({ page }) => {
+  const { toBottom, labelAt, btn } = await longQueue(page);
+  await toBottom();
+  await expect(btn).toBeVisible();
+  await btn.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => Math.abs(await labelAt())).toBeLessThan(2);
+  await expect(btn).toBeHidden();
+  await expect(page.getByTestId('upnext-current').locator('.row-main')).toBeFocused();
+});
+
 test('Now Playing: the button back to the song playing is stopped by a touch on the list', async ({ page }) => {
   const { np, toBottom, btn } = await longQueue(page);
   await toBottom();

@@ -76,15 +76,16 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             break;
           case 'restore': {
             const before = s.beforeId == null ? null : { id: s.beforeId as string, index: (s.beforeIndex as number) ?? -1 };
-            q.restore(t(s.id as string), { kind: s.kind as Section, before, ...(s.mine === true && { mine: true }), ...(s.auto === true && { auto: true }), ...(s.heard === true && { heard: true }), ...(s.earlier === true && { earlier: true }) });
+            const listBefore = s.listBeforeId == null ? undefined : { id: s.listBeforeId as string, index: s.listBeforeIndex as number };
+            q.restore(t(s.id as string), { kind: s.kind as Section, before, ...(listBefore && { listBefore }), ...(s.mine === true && { mine: true }), ...(s.auto === true && { auto: true }), ...(s.heard === true && { heard: true }), ...(s.earlier === true && { earlier: true }) });
             break;
           }
           case 'removeRow': {
             // ✕ on a row of Up next (or of Played, or "From the top": `from`), as UpNext.removeWithUndo keeps its Undo.
-            const st = { upNext: upNext(), previous: rows(q.previousIndices()), lap: rows(q.lapIndices()), mine: q.mineIndices(), listStart: q.listStartIndex, nextStart: q.nextStartIndex, shuffle: q.shuffle };
+            const st = { queue: q.items as Track[], upNext: upNext(), previous: rows(q.previousIndices()), lap: rows(q.lapIndices()), mine: q.mineIndices(), listStart: q.listStartIndex, nextStart: q.nextStartIndex, shuffle: q.shuffle };
             const from = s.from === 'played' ? st.previous : s.from === 'top' ? st.lap : st.upNext;
             const row = from.find((u) => u.track.id === s.id)!;
-            const kind = s.from ? (s.from as Section) : sectionsOf(st.upNext, null, st.nextStart).runs.find((r) => r.items.some((u) => u.index === row.index))!.kind;
+            const kind = s.from ? (s.from as Section) : sectionsOf(st.upNext, null, st.listStart, st.nextStart).runs.find((r) => r.items.some((u) => u.index === row.index))!.kind;
             undo = [s.id as string, undoOf(st, row, kind)];
             q.remove(row.index);
             break;
@@ -136,8 +137,8 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
             const lap = () => q.lapIndices().map((i) => q.items[i].id);
             if ('top' in s) expect(lap()).toEqual(s.top);
             if ('topSet' in s) expect(lap().sort()).toEqual((s.topSet as string[]).slice().sort());
-            if ('place' in s) expect(placeOf({ ...EMPTY_STATE, queue: q.items as Track[], index: q.index, upNext: upNext(), listStart: q.listStartIndex, nextStart: q.nextStartIndex, mine: q.mineIndices() })).toBe(s.place);
-            const sec = sectionsOf(upNext(), null, q.nextStartIndex);
+            if ('place' in s) expect(placeOf({ ...EMPTY_STATE, queue: q.items as Track[], index: q.index, upNext: upNext(), listStart: q.listStartIndex, nextStart: q.nextStartIndex, mine: q.mineIndices(), currentAuto: q.isAuto(q.index) })).toBe(s.place);
+            const sec = sectionsOf(upNext(), null, q.listStartIndex, q.nextStartIndex);
             const sIds = (xs: UpItem[]) => xs.map((x) => x.track.id);
             if ('queuedIds' in s) expect(sIds(sec.queued)).toEqual(s.queuedIds);
             if ('listIds' in s) expect(sIds(sec.list)).toEqual(s.listIds);

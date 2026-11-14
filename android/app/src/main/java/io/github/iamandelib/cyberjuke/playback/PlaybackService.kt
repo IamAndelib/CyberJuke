@@ -990,6 +990,7 @@ class PlaybackService : MediaSessionService() {
                 outagePauses = 0
                 offlineSkips = 0
                 lastReadyId = player?.currentMediaItem?.mediaId
+                queue.onReady()
                 player?.currentMediaItem?.mediaId?.let { expiredRetried.remove(it) }
                 // No NetBlock.success() here: READY from a cached URL or buffered bytes proves
                 // nothing about YouTube; a successful extraction or InnerTube request does (M1).
@@ -1048,8 +1049,12 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            val p = player
+            // Offline, a song that can't play with a saved one ahead is only passed over (its end, below, or its
+            // load error moves on): the queue doesn't hear it (D13).
+            val passing = p != null && OfflineNext.passesOver(AudioCache.online, playsOffline(mediaItem)) { p.offlineNext() != null }
             // A Next, a tap and Previous all come as a seek: forwardAsked says it moved on (Repeat all's loop).
-            val movedOn = queue.onTransition(forward = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || forwardAsked)
+            val movedOn = queue.onTransition(forward = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || forwardAsked, passing = passing)
             forwardAsked = false
             // The queue moved on from it (the loop past a heard song you queued): that transition does the rest.
             if (movedOn) return
@@ -1080,10 +1085,7 @@ class PlaybackService : MediaSessionService() {
             if (player?.playbackState == Player.STATE_READY) lastReadyId = mediaItem?.mediaId
             failureSpot.clear()
             // Offline, a song ending moves on to the next saved one, past those that aren't (OfflineNext).
-            val p = player
-            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && p != null && !AudioCache.online &&
-                JukeUris.audioIdOf(mediaItem) !in AudioCache.savedLiked && !JukeUris.isLocal(mediaItem)
-            ) {
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && passing && p != null) {
                 p.offlineNext()?.let { movingOn(p) { p.seekToDefaultPosition(it) } }
             }
             StreamResolver.releaseFormats()
@@ -1302,14 +1304,14 @@ class PlaybackService : MediaSessionService() {
         queueChanged()
     }
 
-    private fun restore(item: MediaItem, section: NativeQueue.Section, beforeId: String?, beforeIndex: Int, mine: Boolean, auto: Boolean, heard: Boolean, earlier: Boolean) {
+    private fun restore(item: MediaItem, section: NativeQueue.Section, beforeId: String?, beforeIndex: Int, mine: Boolean, auto: Boolean, heard: Boolean, earlier: Boolean, listBeforeId: String?, listBeforeIndex: Int) {
         if (section == NativeQueue.Section.AUTO && !Stations.keepsGoing(autoplayEnabled, seedId, context?.first)) {
             Log.i(TAG, "restore: autoplay item dropped (autoplay off)")
             return
         }
         // During a fade, among the tracks after the one fading in: it takes over first.
         crossfade?.settle()
-        queue.restore(item, section, beforeId, mine, beforeIndex, auto, heard, earlier)
+        queue.restore(item, section, beforeId, mine, beforeIndex, auto, heard, earlier, listBeforeId, listBeforeIndex)
         queueChanged()
     }
 
@@ -1390,7 +1392,7 @@ class PlaybackService : MediaSessionService() {
         val idle = p.playbackState == Player.STATE_IDLE && !p.playWhenReady
         val keepsGoing = Stations.keepsGoing(autoplayEnabled, seedId, context?.first)
         val mayAdd = Stations.mayAutoplay(p.repeatMode) || radioFirstBatch()
-        if (seedId == null || !Radios.needsNext(keepsGoing, mayAdd, queue.nextStartIndex(), p.mediaItemCount, idle)) {
+        if (!Radios.needsNext(seedId, keepsGoing, mayAdd, queue.nextStartIndex(), p.mediaItemCount, idle)) {
             lowKey = null
             QueueInfo.clearLow()
             return
@@ -1960,7 +1962,9 @@ class PlaybackService : MediaSessionService() {
                         if (kind == QueueCommands.KIND_PLAYED || kind == QueueCommands.KIND_TOP) {
                             restorePlayed(item, before, at, mine, kind == QueueCommands.KIND_TOP, auto, earlier)
                         } else {
-                            restore(item, NativeQueue.Section.of(kind) ?: return bad, before, at, mine, auto, args.getBoolean(QueueCommands.ARG_HEARD, false), earlier)
+                            val listBefore = BridgeLimits.checkString(args.getString(QueueCommands.ARG_LIST_BEFORE), "listBeforeId")
+                            val listAt = args.getInt(QueueCommands.ARG_LIST_BEFORE_INDEX, -1)
+                            restore(item, NativeQueue.Section.of(kind) ?: return bad, before, at, mine, auto, args.getBoolean(QueueCommands.ARG_HEARD, false), earlier, listBefore, listAt)
                         }
                     }
                 }

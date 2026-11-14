@@ -314,4 +314,10 @@ test('Shuffle the Jukebox plays 25 and keeps going 25 at a time, also with Autop
   q = await queue();
   expect(q.nextStart).toBe(50);
   expect(q.way).toHaveLength(25);
+  // The next batch's songs are Home's Shuffle's, not Vibe's: no "~" heading, no dimmed art, no ", vibe".
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More random picks from the Jukebox');
+  await expect(page.getByTestId('upnext-autoplay-label')).not.toHaveClass(/\bauto\b/);
+  const row = page.locator('[data-testid="upnext-row"][data-section="autoplay"]').first();
+  await expect(row).not.toHaveClass(/\bautoplay\b/);
+  await expect(row.locator('.row-main')).not.toHaveAttribute('aria-label', /, vibe$/);
 });

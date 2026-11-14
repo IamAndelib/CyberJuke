@@ -172,7 +172,7 @@ test('with shuffle on, songs you queued keep ↑ ↓ and play in the order you s
   await expect.poll(order).toEqual([mine[0], mine[2]]);
 });
 
-test('Repeat off or Repeat song: no "From the top"', async ({ page }) => {
+test('Repeat off or Repeat one: no "From the top"', async ({ page }) => {
   const titles = await playAlbum(page);
   await nextTo(page, titles, 5);
   await expect(page.getByTestId('upnext-top-label')).toHaveCount(0);

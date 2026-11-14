@@ -111,9 +111,12 @@ test('a Home row starts a Vibe: the tapped song and 24 similar Jukebox tracks, t
 
   await openNowPlaying(page);
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveText(`Vibe · like ${title}`);
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveClass(/\bauto\b/);
   await expect(page.getByTestId('upnext-list-label')).toHaveCount(0);
   const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
   await expect(rows.first().locator('.row-title')).toHaveText(q.autoplay[0].title);
+  await expect(rows.first()).toHaveClass(/\bautoplay\b/);
+  await expect(rows.first().locator('.row-main')).toHaveAttribute('aria-label', `Play ${q.autoplay[0].title}, vibe`);
   // Its 24, then the batch on the way under its own heading, as much of it as fills Up next to 25 rows (D1):
   // to look at and tap, with no ↑ ↓ ✕.
   await expect(rows).toHaveCount(24);
@@ -498,11 +501,11 @@ test('with repeat on, a song you tap still gets its suggestions; a list you star
   const q = await withAutoplay(page);
   expect(q.seed?.title).toBe(title);
   await openNowPlaying(page);
-  await expect(page.getByTestId('upnext-title')).toHaveText('Queue · Repeat queue');
+  await expect(page.getByTestId('upnext-title')).toHaveText('Queue · Repeat all');
   // Repeat one goes on as repeat off does.
   await repeat.click();
   await expect(repeat).toHaveAttribute('data-mode', 'one');
-  await expect(page.getByTestId('upnext-title')).toHaveText('Queue · Repeat song');
+  await expect(page.getByTestId('upnext-title')).toHaveText('Queue · Repeat one');
   await page.getByTestId('np-close').click();
   await visible(page, 'track-play').nth(3).click();
   await expect.poll(async () => (await queueState(page)).seed?.id).not.toBe(q.seed?.id);
@@ -678,7 +681,7 @@ test('Shuffle and Repeat both show beside "Queue", whole, and never run into the
   await page.getByTestId('np-shuffle').click();
   await page.getByTestId('np-repeat').click();
   const title = page.getByTestId('upnext-title');
-  await expect(title).toHaveText('Queue · Shuffled · Repeat queue');
+  await expect(title).toHaveText('Queue · Shuffled · Repeat all');
   const count = page.getByTestId('up-next').locator('.section-head > .small');
   await expect(count).toHaveText(/up next/);
   const t = (await title.boundingBox())!;
@@ -773,7 +776,7 @@ test('the queue shows the whole list: what played folds under [+] Played, the pl
   const repeat = page.getByTestId('np-repeat');
   while ((await repeat.getAttribute('data-mode')) !== 'all') await repeat.click();
   await expect(page.getByTestId('upnext-played').first().locator('.row-title')).toHaveText(titles[0]);
-  await expect(page.getByTestId('upnext-title')).toHaveText('Queue · Repeat queue');
+  await expect(page.getByTestId('upnext-title')).toHaveText('Queue · Repeat all');
   // A new list starts folded.
   await page.getByTestId('np-close').click();
   await page.getByTestId('tab-genres').click();

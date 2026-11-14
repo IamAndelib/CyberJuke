@@ -484,8 +484,8 @@ export class Queue<T extends Identified> {
    * A played one goes back before that song among every track before the current one, heard or not, else right
    * before the current one; a "From the top" one (`top`) the same, but unheard. In list order (what shuffle off
    * plays) it goes before the track that follows it; shuffled, a queued one goes after the queued run there and
-   * a list one before the autoplay tracks of the list you're in (as the native queue's), so both stay ahead once
-   * shuffle is off; an autoplay one before one on the way goes where that list starts. A marker's own song (one on
+   * a list one before the song that followed it in list order (`listBefore`), within the list you're in (as the
+   * native queue's), so it keeps its own place (rule 4); an autoplay one before one on the way goes where that list starts. A marker's own song (one on
    * the way: that list's), back right before the marker's song (past the songs you queued: S14; or last, the marker
    * gone with it), gets the marker back: it stays in its own list; shuffled, so does a played one of the current list
    * back right before its first song. With nothing playing, it is added (and plays). It keeps its
@@ -528,12 +528,14 @@ export class Queue<T extends Identified> {
     if (kind === 'played' || undo.heard) this.hear(entry);
     const follower = this.order[at];
     this.order.splice(at, 0, entry);
-    const firstAuto = this.list.findIndex((e, i) => e.auto && i > this.listStartIndex);
+    // Shuffled, a list song goes back before the song after it in list order (by entry, as `before`), within the current list.
+    const lb = undo.listBefore;
+    const follows = !lb ? -1 : this.list[lb.index]?.item.id === lb.id ? lb.index : this.list.findIndex((e) => e.item.id === lb.id);
     let li = follower ? this.list.indexOf(follower) : this.list.length;
     // Shuffled, a suggestion before one on the way goes where that list starts: it takes it back if it left it (below), else it ends yours.
     if (this.shuffle && kind === 'autoplay' && follower && this.nextStart) li = Math.min(li, way);
     if (this.shuffle && kind === 'queued') li = this.afterQueued(this.list);
-    if (this.shuffle && kind === 'list') li = firstAuto < 0 ? this.list.length : firstAuto;
+    if (this.shuffle && kind === 'list') li = follows < 0 ? this.list.length : undo.earlier ? follows : Math.max(follows, this.listStartIndex);
     if (kind === 'list' && way >= 0) li = Math.min(li, way);
     if (undo.earlier && kind !== 'queued') li = Math.min(li, this.listStartIndex);
     this.list.splice(li, 0, entry);

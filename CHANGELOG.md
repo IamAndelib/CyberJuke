@@ -38,6 +38,13 @@
 - In the queue, ↑ ↓ keep a song in its own list. Where a radio's suggestions end and the next ones on the way begin, a new heading starts, and moving a song past the end of one no longer puts it in the other, where Repeat all or turning Vibe off then dropped it or kept it by mistake.
 - Now Playing's "3 of 8" counts only the list's songs, not the ones you queued; while one of yours plays, it shows just where the music comes from.
 - Removing the first song of the list you're in no longer lets a song you queued take its place as the list's start, which could leave the list's other songs out of Repeat all's loop.
+- In Up next, the next station's songs and Home's Shuffle's next batch no longer look like Vibe's suggestions (the ~ heading, the dimmed covers), and a screen reader no longer calls them "vibe".
+- After Previous takes you back into the station before, Up next gives each station's songs their own heading, instead of naming the station before over the next one's songs.
+- The queue's heading names Repeat as its button does: "Queue · Repeat all" or "Queue · Repeat one", instead of Repeat queue or Repeat song.
+- With nothing after the song playing, Up next no longer says "Vibe is off." while a station or Home's Shuffle plays: they keep going whatever Vibe is set to.
+- With shuffle on, **Undo** after ✕ in the queue puts the song back at its own place in the list too, so "3 of 8" stays the same and, once you turn shuffle off, the list plays in its order again. Before, it went back at the end of the album (or second in a batch of suggestions).
+- Offline, the songs that aren't saved and get skipped on the way to the next saved one no longer show in Played or count as heard: once you're back online they still play, and a song you queued stays queued.
+- With Repeat all on a song of the list before that you went back to with Previous, it still plays once and then leaves the loop after the app was closed and reopened; before, it then came round in every lap.
 
 ## [1.4.0] - 2026-11-04
 

@@ -132,6 +132,11 @@ test('a station leads on to the next station, which plays past its end, and its 
   // Labels follow the song (D11): MIRRORBALL, 1 of its 40, and Up next's heading names it.
   await expect(page.getByTestId('np-from')).toHaveText('1 of 40 · Playing from Signal Radio · MIRRORBALL');
   await expect(page.getByTestId('upnext-autoplay-label').first()).toHaveText('Next from: Signal Radio · MIRRORBALL');
+  // A station's songs, not Vibe's: no "~" heading, no dimmed art, no ", vibe" for a screen reader.
+  await expect(page.getByTestId('upnext-autoplay-label').first()).not.toHaveClass(/\bauto\b/);
+  const row = page.locator('[data-testid="upnext-row"][data-section="autoplay"]').first();
+  await expect(row).not.toHaveClass(/\bautoplay\b/);
+  await expect(row.locator('.row-main')).toHaveAttribute('aria-label', `Play ${titlesOf('mirrorball')[1]}`);
   await expect.poll(async () => (await onTheWay(page)).size).toBe(32);
   const q = await queueState(page);
   expect((await onTheWay(page)).ids).toEqual(idsOf('slow-orbit').slice(0, 50 - 39));
@@ -183,6 +188,26 @@ test('labels follow the song: the next station once its first song plays, on the
   await page.getByTestId('np-close').click();
   await expect(crypt).toHaveAttribute('aria-current', 'true');
   await expect(mirrorball).not.toHaveAttribute('aria-current');
+});
+
+test("after Previous into the station before, each of Up next's headings names its own station's songs (D11)", async ({ page }) => {
+  await clockStart(page);
+  await start(page);
+  await openRadio(page);
+  await tune(page, 'the-crypt');
+  // Past THE CRYPT and MIRRORBALL: SLOW ORBIT's first song.
+  await playOn(page, (32 + 40) * (FAKE_TRACK_MS + 200));
+  await expect.poll(async () => (await queueState(page)).current?.id).toBe(idsOf('slow-orbit')[0]);
+  await openNowPlaying(page);
+  // Previous twice (the first restarts the song): MIRRORBALL's second-to-last song.
+  await expect(async () => {
+    await page.getByTestId('np-prev').click();
+    await expect(page.getByTestId('np-title')).toHaveText(titlesOf('mirrorball')[38], { timeout: 1500 });
+  }).toPass();
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText(['Next from: Signal Radio · MIRRORBALL', 'Next from: Signal Radio · SLOW ORBIT']);
+  const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
+  await expect(rows.first()).toHaveAttribute('data-track-id', idsOf('mirrorball')[39]);
+  await expect(rows.nth(1)).toHaveAttribute('data-track-id', idsOf('slow-orbit')[0]);
 });
 
 test('a tap on the next station under On the way: "N of M" is each song\'s place in its own station, also for the songs that came along', async ({ page }) => {
@@ -291,6 +316,26 @@ test('with Repeat all, a station loops, also one tuned in with Repeat all alread
   await expect.poll(async () => (await queueState(page)).current?.id).toBe(idsOf('slow-orbit')[0]);
 });
 
+test("with nothing after a station's last song (offline, no station saved), Up next doesn't say Vibe is off: stations ignore it", async ({ page, backend }) => {
+  await start(page);
+  await openSettings(page);
+  await page.getByTestId('autoplay-toggle').click();
+  await expect(page.getByTestId('autoplay-toggle')).toHaveAttribute('aria-checked', 'false');
+  await openRadio(page);
+  await tune(page, 'slow-orbit');
+  await openNowPlaying(page);
+  // Repeat all drops the next station; its last song, then offline nothing can come after it.
+  const repeat = page.getByTestId('np-repeat');
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'all');
+  await toListEnd(page);
+  await setOffline(page, backend, true);
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'one');
+  const empty = page.getByTestId('up-next').locator('.upnext-empty');
+  await expect(empty).toHaveText('Nothing queued. ⋯ → Add to queue plays a track next.');
+});
+
 test("a station's track played from another list is just a track there: with Autoplay off it stops at the end", async ({ page }) => {
   await start(page);
   await openSettings(page);
@@ -381,8 +426,16 @@ test('the station on air, paused: a tap plays it on (as a track row does), and N
   const first = (await page.getByTestId('mini-title').textContent())!.trim();
   await page.getByTestId('mini-toggle').click();
   await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Play');
-  await cipher.getByTestId('station-tune').click();
+  // Paused, its label and its info sheet say a tap plays it, not that it opens Now Playing.
+  const tuneBtn = cipher.getByTestId('station-tune');
+  await expect(tuneBtn).toHaveAttribute('aria-label', /, on air, paused: tap to play$/);
+  await cipher.getByTestId('station-info').click();
+  await expect(page.getByTestId('confirm-ok')).toHaveText('Play');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('confirm-sheet')).toBeHidden();
+  await tuneBtn.click();
   await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Pause');
+  await expect(tuneBtn).toHaveAttribute('aria-label', /, on air: open Now Playing$/);
   await expect(page.getByTestId('mini-title')).toHaveText(first);
   await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
   // Playing, the same tap opens Now Playing.

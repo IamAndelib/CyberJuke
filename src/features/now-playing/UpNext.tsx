@@ -2,6 +2,7 @@ import { Fragment } from 'preact';
 import { signal } from '@preact/signals';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { autoplayLabel, currentId, currentPlaysOffline, currentTrack, isPlaying, lapTracks, player, playContext, previousTracks, repeatMode, saveSongs, shuffleOn, undoOf, upNextSections, type PlayContext, type UpItem, type UpNextKind, type UpRun } from '../../player';
+import { chainsOn } from '../../player/autoplay';
 import { stationLabel, stationShown } from '../../player/radio';
 import { isLocal, type Track } from '../../data/model';
 import { online } from '../../core/network';
@@ -194,6 +195,8 @@ export function UpNext() {
       void player.move(it.index, to.index, it.track.id);
     });
 
+  // Autoplay's rows are Vibe's unless the list leads on by itself, whatever Vibe is set to: a station's next, Home's Shuffle's next batch are their own (chainsOn).
+  const vibe = !chainsOn(ctx, sec.seed?.id);
   // peek: the line moves only with the rows, which change with it (not every tick).
   const listStart = player.state.peek().listStart;
   /**
@@ -210,7 +213,7 @@ export function UpNext() {
         <li
           // With the kind: Played and "From the top" can show one song at once.
           key={`${kind}:${it.track.id}:${it.index}`}
-          class={'row' + (kind === 'list' ? '' : ` ${kind}`) + offClass(it.track) + (it === glowing?.item ? ' moved' : '')}
+          class={'row' + (kind === 'list' || (kind === 'autoplay' && !vibe) ? '' : ` ${kind}`) + offClass(it.track) + (it === glowing?.item ? ' moved' : '')}
           data-testid={kind === 'played' ? 'upnext-played' : 'upnext-row'}
           data-track-id={it.track.id}
           data-index={it.index}
@@ -224,7 +227,7 @@ export function UpNext() {
             {...longPress(it.track, kind === 'queued' ? it : null)}
             // A "From the top" row enters the next lap (the songs you queued and heard leave).
             onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id, kind === 'top'))}
-            aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', vibe', top: ', from the top', way: ', on the way' }[kind]}`}
+            aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: vibe ? ', vibe' : '', top: ', from the top', way: ', on the way' }[kind]}`}
           >
             <RowBody track={it.track} />
           </button>
@@ -309,7 +312,7 @@ export function UpNext() {
               {' '}
               <span class="upnext-modes">
                 {shuffle && <span>· Shuffled </span>}
-                {repeat !== 'off' && <span>· {repeat === 'one' ? 'Repeat song' : 'Repeat queue'}</span>}
+                {repeat !== 'off' && <span>· {repeat === 'one' ? 'Repeat one' : 'Repeat all'}</span>}
               </span>
             </>
           )}
@@ -345,15 +348,17 @@ export function UpNext() {
               Now playing
             </li>
             <li class={'row is-current' + (!online.value && !currentPlaysOffline.value ? ' off' : '')} data-testid="upnext-current" data-track-id={current.id} data-section="current">
-              <div class="row-main" aria-current="true" {...longPress(current)}>
+              {/* tabIndex -1: where focus goes after "Back to the song playing" (ToPlaying). */}
+              <div class="row-main" aria-current="true" tabIndex={-1} {...longPress(current)}>
                 <RowBody track={current} playing={isPlaying.value} />
               </div>
             </li>
           </>
         )}
-        {here.map((r, k) => (
-          <Fragment key={k}>
-            <li class={'upnext-label' + (r.kind === 'autoplay' ? ' auto' : '')} data-testid={`upnext-${r.kind}-label`} aria-hidden="true">
+        {here.map((r) => (
+          // By its kind and first row, not its place: a run before it that goes doesn't remount its rows.
+          <Fragment key={`${r.kind}:${r.items[0].index}`}>
+            <li class={'upnext-label' + (r.kind === 'autoplay' && vibe ? ' auto' : '')} data-testid={`upnext-${r.kind}-label`} aria-hidden="true">
               {title(r)}
             </li>
             {rows(r.kind, r.items)}
@@ -381,7 +386,7 @@ export function UpNext() {
         {glowing ? `${g?.to == null ? 'Back at' : 'Moved to'} ${glowing.place} of ${glowing.of}` : ''}
       </p>
       {total === 0 && repeat !== 'all' && (
-        <div class="dim small upnext-empty">{`${settings.value.autoplay ? 'Nothing queued.' : 'Vibe is off.'} ⋯ → Add to queue plays a track next.`}</div>
+        <div class="dim small upnext-empty">{`${settings.value.autoplay || !vibe ? 'Nothing queued.' : 'Vibe is off.'} ⋯ → Add to queue plays a track next.`}</div>
       )}
     </section>
   );
@@ -394,6 +399,7 @@ export function UpNext() {
  * (ui/useJumpButton), the last child of the sheet's scroller `.np-scroll`, as on a screen. "Above the
  * view" is an IntersectionObserver whose view reaches 100000px below the scroller: the row is
  * "not intersecting" exactly when it is above, and a fling from below to above crosses that edge.
+ * Focus on the button (the keyboard, TalkBack) goes to the song playing, as the button hides.
  */
 export function ToPlaying() {
   const dock = useRef<HTMLDivElement>(null);
@@ -406,6 +412,10 @@ export function ToPlaying() {
       const el = scroller();
       const label = el?.querySelector('[data-testid="upnext-current-label"]');
       return el && label ? el.scrollTop + label.getBoundingClientRect().top - el.getBoundingClientRect().top - inset(el) : 0;
+    },
+    // From the keyboard or TalkBack the button had focus, and it hides: focus goes to the song playing.
+    before: () => {
+      if (dock.current?.contains(document.activeElement)) scroller()?.querySelector<HTMLElement>('[data-testid="upnext-current"] .row-main')?.focus({ preventScroll: true });
     },
   });
   useEffect(() => {
