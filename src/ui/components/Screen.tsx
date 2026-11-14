@@ -1,21 +1,18 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { scrollAnimating } from '../clickGuard';
 import { Icon } from '../icons';
 import { reducedMotion } from '../../core/motion';
 import { online } from '../../core/network';
 import { OFFLINE } from '../../core/offlineText';
 import { toast } from '../../stores/toast';
 import { PULL_MIN_SPIN_MS, PULL_REFRESH_AT, PULL_REST, PULL_SPRING_MS, pullIntent, rubberBand } from '../pullToRefresh';
-import { scrollToTop } from '../scrollToTop';
+import { useJumpButton } from '../useJumpButton';
 import { FastScroller } from './FastScroller';
 
 /** Back-to-top shows past this many screen-heights. */
 const TOTOP_SCREENS = 1.5;
 /** How long a restore keeps waiting for the content to grow tall enough. */
 const RESTORE_WAIT_MS = 1000;
-/** A finger that moves this far on back-to-top is scrolling, not tapping it. */
-const TOTOP_MOVE_PX = 10;
 
 /** Sent to a screen's scroller to run its back-to-top (registered with the click guard, stopped by a touch). */
 const TO_TOP_EVENT = 'cyberjuke:totop';
@@ -49,11 +46,7 @@ const PTR_LABEL = { pull: '[ pull to refresh ]', release: '[ release to refresh 
  * would only drop what the list shows.
  * Touch listeners are passive, so they never hold up the start of a scroll.
  *
- * Back-to-top: a finger down on it only stops a fling; the jump starts when the finger
- * lifts without having moved TOTOP_MOVE_PX (so a scroll that starts on the button
- * doesn't jump). Android WebViews often drop that tap's click, so the jump doesn't wait
- * for it, and the click that follows is ignored; keyboard Enter/Space still go through
- * click. The jump is a frame-by-frame animation (`scrollToTop`) that a new touch on the
+ * Back-to-top is a `useJumpButton`: a frame-by-frame animation that a new touch on the
  * list cancels, and that touch's tap is swallowed (clickGuard).
  */
 export function Screen({
@@ -109,12 +102,6 @@ export function Screen({
   /** Target of a restore still waiting for content; saving is paused meanwhile. */
   const pending = useRef<(() => void) | null>(null);
   const frame = useRef(0);
-  /** Cancels a running back-to-top animation. */
-  const stopTop = useRef<(() => void) | null>(null);
-  /** Back-to-top was pressed by a pointer: that press's own click is then ignored. */
-  const topArmed = useRef(false);
-  /** The finger on back-to-top, until it lifts or moves away. */
-  const topTap = useRef<{ id: number; x: number; y: number } | null>(null);
 
   const updateTop = () => {
     frame.current = 0;
@@ -131,14 +118,7 @@ export function Screen({
   };
 
   const cancelRestore = () => pending.current?.();
-  const cancelTop = () => {
-    stopTop.current?.();
-    stopTop.current = null;
-  };
-  /** A new touch or wheel on the list (not on back-to-top itself): stop a running back-to-top. */
-  const interruptTop = (e: Event) => {
-    if (!(e.target as Element | null)?.closest?.('.totop-btn')) cancelTop();
-  };
+  const top = useJumpButton(() => scroller.current, { before: cancelRestore });
 
   useLayoutEffect(() => {
     keyRef.current = scrollKey;
@@ -183,7 +163,7 @@ export function Screen({
   }, [scrollKey]);
 
   // Touch and wheel, as passive native listeners: pull-to-refresh, and stopping a
-  // restore or a back-to-top in progress.
+  // restore in progress.
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
@@ -258,7 +238,6 @@ export function Screen({
 
     const onStart = (e: TouchEvent) => {
       cancelRestore();
-      interruptTop(e);
       pull.start = null;
       if (!refresh.current || pull.busy || e.touches.length !== 1 || el.scrollTop > 0) return;
       pull.start = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -304,10 +283,7 @@ export function Screen({
         springTo(0);
       }
     };
-    const onWheel = (e: WheelEvent) => {
-      cancelRestore();
-      interruptTop(e);
-    };
+    const onWheel = () => cancelRestore();
     el.addEventListener('touchstart', onStart, { passive: true });
     el.addEventListener('touchmove', onMove, { passive: true });
     el.addEventListener('touchend', onEnd, { passive: true });
@@ -322,37 +298,12 @@ export function Screen({
       cancelAnimationFrame(pull.frame);
       clearTimeout(pull.timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Mount-only: everything it uses is a ref (`onRefresh` goes through `refresh`).
   }, []);
 
-  useEffect(
-    () => () => {
-      cancelAnimationFrame(frame.current);
-      stopTop.current?.();
-    },
-    [],
-  );
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
 
-  const toTop = () => {
-    cancelRestore();
-    cancelTop();
-    const el = scroller.current;
-    if (!el) return;
-    const done = scrollAnimating(el);
-    const stop = scrollToTop(el, {
-      reduced: reducedMotion(),
-      onDone: () => {
-        stopTop.current = null;
-        done();
-      },
-    });
-    stopTop.current = () => {
-      stop();
-      done();
-    };
-  };
-  const toTopRef = useRef(toTop);
-  toTopRef.current = toTop;
+  const toTopRef = useRef(top.go);
+  toTopRef.current = top.go;
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
@@ -363,36 +314,6 @@ export function Screen({
     el.addEventListener(TO_TOP_EVENT, on);
     return () => el.removeEventListener(TO_TOP_EVENT, on);
   }, []);
-  const onTopDown = (e: PointerEvent) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    // No focus move or compatibility mouse events.
-    e.preventDefault();
-    topArmed.current = true;
-    topTap.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
-    // Finger down only stops what is moving: a back-to-top already running, or a fling
-    // (any write to scrollTop ends the momentum).
-    cancelTop();
-    const el = scroller.current;
-    el?.scrollTo({ top: el.scrollTop, behavior: 'instant' });
-  };
-  const moved = (e: PointerEvent) => {
-    const t = topTap.current;
-    return !t || t.id !== e.pointerId || Math.hypot(e.clientX - t.x, e.clientY - t.y) >= TOTOP_MOVE_PX;
-  };
-  const onTopMove = (e: PointerEvent) => {
-    if (topTap.current && moved(e)) topTap.current = null;
-  };
-  const onTopUp = (e: PointerEvent) => {
-    const tap = !moved(e);
-    topTap.current = null;
-    if (tap) toTop();
-  };
-  const onTopClick = (e: MouseEvent) => {
-    const tapClick = topArmed.current && e.detail > 0;
-    topArmed.current = false;
-    // A keyboard click (Enter/Space, detail 0) or one with no pointerdown before it.
-    if (!tapClick) toTop();
-  };
 
   return (
     <div
@@ -402,7 +323,6 @@ export function Screen({
       role={role}
       aria-label={label}
       onScroll={onScroll}
-      onPointerDown={interruptTop}
       onKeyDown={cancelRestore}
     >
       <FastScroller scroller={scroller} az={azScroller} onDragStart={cancelRestore} />
@@ -433,11 +353,7 @@ export function Screen({
             <button
               class="pixel-btn totop-btn"
               aria-label="Back to top"
-              onPointerDown={onTopDown}
-              onPointerMove={onTopMove}
-              onPointerUp={onTopUp}
-              onPointerCancel={() => (topTap.current = null)}
-              onClick={onTopClick}
+              {...top.props}
               tabIndex={showTop ? 0 : -1}
               aria-hidden={showTop ? undefined : true}
               data-testid="back-to-top"
