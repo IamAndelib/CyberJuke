@@ -510,6 +510,8 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         // Only the queued ones wait: a song you queued that played and is ahead again (Previous) is a list song.
         for (i in upcoming()) if (sections[i] == Section.QUEUED) pending.add(host.serialAt(i))
         if (host.shuffleEnabled) enforceShuffleOrder() else enforceLinearOrder()
+        // Restored under Repeat all on a song Previous took you back to: it still leaves once another plays.
+        markVisit()
     }
 
     /** Shuffle on (or a new list, shuffled): a fresh shuffle order from the list order it plays in now ([rearranged]). */
@@ -819,8 +821,13 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         if (!repeatAll) return
         dropOnTheWay()
         drop { it < listStartIndex() }
+        markVisit()
+    }
+
+    /** With Repeat all on, the playing song before the current list, not yours, is a visit: it leaves once another plays ([onTransition]). */
+    private fun markVisit() {
         val cur = host.currentIndex
-        if (cur in 0 until host.count && host.serialAt(cur) == 0L && cur < listStartIndex()) visit = host.uidAt(cur)
+        if (host.repeatAll && cur in 0 until host.count && host.serialAt(cur) == 0L && cur < listStartIndex()) visit = host.uidAt(cur)
     }
 
     /**

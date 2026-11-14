@@ -347,4 +347,22 @@ class LastSessionTest {
         o.getJSONArray("tracks").getJSONObject(1).put("id", "t1")
         assertNull(LastSession.decode(o.toString()))
     }
+
+    /**
+     * Repeat all on a song of the list before that Previous took you back to, then a restart: restored with Repeat
+     * all already set (PlaybackService sets the mode first), it still leaves once another plays (rule 5, S4).
+     */
+    @Test
+    fun aSongWalkedBackToUnderRepeatAllStillLeavesAfterARestart() {
+        val p = QueueRulesTest.FakePlayer(java.util.Random(1))
+        p.repeat = "all"
+        p.queue.restoreSession(listOf("b", "s1", "s2"), listOf(Section.LIST, Section.AUTO, Section.AUTO), 0, 0L, null, listOf(true, false, false), listStart = 1)
+        p.nextAuto()
+        assertEquals("s1", p.ids[p.current])
+        assertEquals(listOf("s1", "s2"), p.ids)
+        // The loop then plays only the current list.
+        p.nextAuto()
+        p.nextAuto()
+        assertEquals("s1", p.ids[p.current])
+    }
 }
