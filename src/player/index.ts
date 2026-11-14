@@ -163,7 +163,7 @@ export const stationOnAir = computed(() => {
 /** Where the current track is in the current list ("3 of 8", placeOf); while stations play, in its station. */
 export const queuePlace = computed(() => {
   const s = state.value;
-  return stationOnAir.value ? stationPlace(s.queue, s.index, s.mine) : placeOf(s);
+  return stationOnAir.value ? stationPlace(s.current?.id, s.mine.includes(s.index)) : placeOf(s);
 });
 /** "Next" does something: a track after this one, or repeat wraps around. */
 export const canSkipNext = computed(() => state.value.upNext.length > 0 || state.value.repeat === 'all');

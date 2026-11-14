@@ -116,18 +116,21 @@ describe('labels follow the song (D11)', () => {
     expect(stationShown(null, seed, seed)).toBeNull();
   });
 
-  it('"N of M" within the station of the song playing: forward into the next, and back with Previous', () => {
-    const queue = [...ids(crypt), ...ids(mirrorball), ...ids(slowOrbit)];
-    expect(stationPlace(queue, 0, [])).toBe('1 of 32');
-    expect(stationPlace(queue, 32, [])).toBe('1 of 40');
-    // Back from SLOW ORBIT into MIRRORBALL's last song: its place there, not counted from THE CRYPT's first.
-    expect(stationPlace(queue, 71, [])).toBe('40 of 40');
-    expect(stationPlace(queue, 72, [])).toBe('1 of 32');
-    // A song you queued has no place, and isn't counted among the station's.
-    const mine = [...ids(crypt).slice(0, 3), { id: 'ytm:abcdefghijk' }, ...ids(crypt).slice(3), ...ids(mirrorball)];
-    expect(stationPlace(mine, 3, [3])).toBe('');
-    expect(stationPlace(mine, 4, [3])).toBe('4 of 32');
-    expect(stationPlace(mine, 33, [3])).toBe('1 of 40');
-    expect(stationPlace(queue, -1, [])).toBe('');
+  it('"N of M": the song\'s place in its own station, however the queue was moved or trimmed', () => {
+    const [c, m] = [stationTracks(crypt), stationTracks(mirrorball)];
+    // Shuffle off, a tap on MIRRORBALL's 3rd song (on the way) while THE CRYPT's 5th played: THE
+    // CRYPT's unheard songs come along after it (rule 2), [C1..C5, M3, C6..C32, M1, M2, M4..M40].
+    const queue = [...c.slice(0, 5), m[2], ...c.slice(5), m[0], m[1], ...m.slice(3)];
+    expect(stationPlace(queue[5].id, false)).toBe('3 of 40');
+    expect(stationPlace(queue[6].id, false)).toBe('6 of 32');
+    expect(stationPlace(queue[33].id, false)).toBe('1 of 40');
+    // Previous two stations back, into MIRRORBALL's last song, its first 22 trimmed (KEEP_PLAYED).
+    expect(stationPlace(m[39].id, false)).toBe('40 of 40');
+    expect(stationPlace(stationTracks(slowOrbit)[0].id, false)).toBe('1 of 32');
+    // A song you queued has no place, a station's included; nor has a song of no station.
+    expect(stationPlace(m[4].id, true)).toBe('');
+    expect(stationPlace('ytm:abcdefghijk', false)).toBe('');
+    expect(stationPlace(undefined, false)).toBe('');
+    expect(stationPlace('sig:mirrorball:zzzzzzzzzzz', false)).toBe('');
   });
 });

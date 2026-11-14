@@ -66,20 +66,13 @@ export function stationShown(context: { label: string } | null | undefined, seed
 }
 
 /**
- * "N of M" while stations play (D11): the playing song's place among its station's songs around it in the
- * queue (each station comes whole), past or ahead of the current list's marker alike; the songs you queued
- * (`mine`, queue indices) have none and aren't counted.
+ * "N of M" while stations play (D11): the song's place in its own station's listed songs, however the
+ * queue has been moved or trimmed since. A song you queued (`mine`) has none, nor one no station lists.
  */
-export function stationPlace(queue: readonly { id: string }[], index: number, mine: readonly number[]): string {
-  const st = stationOfTrackId(queue[index]?.id);
-  if (!st || mine.includes(index)) return '';
-  const ours = (i: number) => mine.includes(i) || stationOfTrackId(queue[i]?.id) === st;
-  let [a, b] = [index, index];
-  while (a > 0 && ours(a - 1)) a--;
-  while (b < queue.length - 1 && ours(b + 1)) b++;
-  const count = (from: number, to: number) => queue.slice(from, to + 1).filter((_, k) => !mine.includes(from + k)).length;
-  const m = count(a, b);
-  return m > 1 ? `${count(a, index)} of ${m}` : 'Single track';
+export function stationPlace(id: string | null | undefined, mine: boolean): string {
+  const st = stationOfTrackId(id);
+  const at = st && !mine ? stationTracks(st).findIndex((t) => t.id === id) : -1;
+  return at < 0 ? '' : `${at + 1} of ${st!.tracks.length}`;
 }
 
 /**

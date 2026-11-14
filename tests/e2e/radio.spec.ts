@@ -185,6 +185,24 @@ test('labels follow the song: the next station once its first song plays, on the
   await expect(mirrorball).not.toHaveAttribute('aria-current');
 });
 
+test('a tap on the next station under On the way: "N of M" is each song\'s place in its own station, also for the songs that came along', async ({ page }) => {
+  await start(page);
+  await openRadio(page);
+  await tune(page, 'the-crypt');
+  await openNowPlaying(page);
+  for (let k = 2; k <= 9; k++) {
+    await page.getByTestId('np-next').click();
+    await expect.poll(() => place(page)).toEqual({ at: k, of: 32 });
+  }
+  // MIRRORBALL's 2nd song, tapped: THE CRYPT's 23 unheard songs come after it (rule 2).
+  const way = page.locator('[data-testid="upnext-row"][data-section="way"]');
+  await expect(way.nth(1)).toHaveAttribute('data-track-id', idsOf('mirrorball')[1]);
+  await way.nth(1).locator('.row-main').click();
+  await expect(page.getByTestId('np-from')).toHaveText('2 of 40 · Playing from Signal Radio · MIRRORBALL');
+  await page.getByTestId('np-next').click();
+  await expect(page.getByTestId('np-from')).toHaveText('10 of 32 · Playing from Signal Radio · THE CRYPT');
+});
+
 test('stations lead on with Autoplay off too: it is the radio, not autoplay', async ({ page }) => {
   await start(page);
   await openSettings(page);
