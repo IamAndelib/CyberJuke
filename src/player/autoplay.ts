@@ -41,8 +41,8 @@ export function shuffleGenre(label: string | undefined): string | null | undefin
 
 /** The genre a Home list was picked in, by its label ("Home · rock", "Most saved · rock"); null for any other list (Latest, Most saved with no chip). */
 export function pickedGenre(label: string | undefined): string | null {
-  const m = label?.match(/^(?:Home|Most saved) · (.+)$/);
-  return m && m[1] !== 'Latest' ? m[1] : null;
+  const m = label === 'Home · Latest' ? null : label?.match(/^(?:Home|Most saved) · (.+)$/);
+  return m?.[1] ?? null;
 }
 
 /**

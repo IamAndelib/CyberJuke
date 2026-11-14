@@ -523,6 +523,8 @@ describe('pickedGenre', () => {
     expect(pickedGenre('Most saved · hip hop')).toBe('hip hop');
     expect(pickedGenre('Home · Latest')).toBeNull();
     expect(pickedGenre('Most saved')).toBeNull();
+    // Only Home's Latest is no genre: under Most saved, a genre named Latest is one.
+    expect(pickedGenre('Most saved · Latest')).toBe('Latest');
     expect(pickedGenre('Jukebox shuffle · rock')).toBeNull();
     expect(pickedGenre('Liked')).toBeNull();
     expect(pickedGenre(undefined)).toBeNull();
