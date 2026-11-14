@@ -412,7 +412,7 @@
   margin-top: 10px;
   border-top: var(--border-w) solid var(--color-border);
 }
-/* "Queue · Shuffled · Repeat queue": the modes beside the title, small; when they don't fit
+/* "Queue · Shuffled · Repeat all": the modes beside the title, small; when they don't fit
    they move together to a line under it. The count on the right always keeps its distance. */
 .upnext .upnext-head {
   align-items: baseline;

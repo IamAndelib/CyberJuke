@@ -40,6 +40,7 @@
 - Removing the first song of the list you're in no longer lets a song you queued take its place as the list's start, which could leave the list's other songs out of Repeat all's loop.
 - In Up next, the next station's songs and Home's Shuffle's next batch no longer look like Vibe's suggestions (the ~ heading, the dimmed covers), and a screen reader no longer calls them "vibe".
 - After Previous takes you back into the station before, Up next gives each station's songs their own heading, instead of naming the station before over the next one's songs.
+- The queue's heading names Repeat as its button does: "Queue · Repeat all" or "Queue · Repeat one", instead of Repeat queue or Repeat song.
 
 ## [1.4.0] - 2026-11-04
 

@@ -312,7 +312,7 @@ export function UpNext() {
               {' '}
               <span class="upnext-modes">
                 {shuffle && <span>· Shuffled </span>}
-                {repeat !== 'off' && <span>· {repeat === 'one' ? 'Repeat song' : 'Repeat queue'}</span>}
+                {repeat !== 'off' && <span>· {repeat === 'one' ? 'Repeat one' : 'Repeat all'}</span>}
               </span>
             </>
           )}
