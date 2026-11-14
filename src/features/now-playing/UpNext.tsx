@@ -348,7 +348,8 @@ export function UpNext() {
               Now playing
             </li>
             <li class={'row is-current' + (!online.value && !currentPlaysOffline.value ? ' off' : '')} data-testid="upnext-current" data-track-id={current.id} data-section="current">
-              <div class="row-main" aria-current="true" {...longPress(current)}>
+              {/* tabIndex -1: where focus goes after "Back to the song playing" (ToPlaying). */}
+              <div class="row-main" aria-current="true" tabIndex={-1} {...longPress(current)}>
                 <RowBody track={current} playing={isPlaying.value} />
               </div>
             </li>
@@ -397,6 +398,7 @@ export function UpNext() {
  * (ui/useJumpButton), the last child of the sheet's scroller `.np-scroll`, as on a screen. "Above the
  * view" is an IntersectionObserver whose view reaches 100000px below the scroller: the row is
  * "not intersecting" exactly when it is above, and a fling from below to above crosses that edge.
+ * Focus on the button (the keyboard, TalkBack) goes to the song playing, as the button hides.
  */
 export function ToPlaying() {
   const dock = useRef<HTMLDivElement>(null);
@@ -409,6 +411,10 @@ export function ToPlaying() {
       const el = scroller();
       const label = el?.querySelector('[data-testid="upnext-current-label"]');
       return el && label ? el.scrollTop + label.getBoundingClientRect().top - el.getBoundingClientRect().top - inset(el) : 0;
+    },
+    // From the keyboard or TalkBack the button had focus, and it hides: focus goes to the song playing.
+    before: () => {
+      if (dock.current?.contains(document.activeElement)) scroller()?.querySelector<HTMLElement>('[data-testid="upnext-current"] .row-main')?.focus({ preventScroll: true });
     },
   });
   useEffect(() => {
