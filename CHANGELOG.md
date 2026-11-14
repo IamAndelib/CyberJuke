@@ -8,6 +8,7 @@
 
 ### Changed
 - **Autoplay is now called Vibe**, in Settings, Up next ("Vibe · like …") and Now Playing. It works as before: when a list ends, songs like it keep playing.
+- Vibe no longer brings back a song you've heard since you last started something yourself (a song, an album, a playlist, a station or Home's Shuffle), also after closing the app; before, it skipped only the last 50. Only once there's nothing else left (a small genre, or offline with a few saved songs) do songs you've heard come round again.
 - A Signal Radio station plays its songs in order (or mixed, with Shuffle), and then the next station follows, as on a radio dial; with Shuffle, a random station you haven't heard yet. Before, a station reshuffled itself for ever. Repeat all keeps you on the station. Now Playing ("Playing from" and "3 of 40"), the Radio tab's on-air mark and Up next's headings name the station of the song playing, also when Previous takes you back into the station before.
 - Home's **Shuffle** starts with 25 random songs and keeps going 25 at a time, also with Vibe off, like a station.
 - Suggestions come in batches (25 Jukebox songs, or a page of a Global song's radio), and the next batch is fetched as soon as the one before starts, so it's there in time, also with the screen locked: an album shows what follows it from its start, and a song you tap on Home or in Search plays with the songs like it and the next batch lined up. Going to the background no longer adds 50 at once.

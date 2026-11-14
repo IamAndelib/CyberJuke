@@ -10,7 +10,8 @@
  */
 import { Capacitor } from '@capacitor/core';
 import { computed, effect, untracked } from '@preact/signals';
-import { addRecent, likedIds, recent, settings, showNsfw } from '../stores/library';
+import { addRecent, history, likedIds, recent, settings, showNsfw } from '../stores/library';
+import { playedSince } from '../stores/history';
 import { block } from '../stores/block';
 import { offlinePlays } from '../stores/local';
 import { catalog } from '../stores/catalog';
@@ -31,6 +32,7 @@ import { NativePlayer } from './nativePlayer';
 import { offlineGuard, playsOffline, type OfflineRefusal } from './offlineGuard';
 import { onAirOf, stationPlace } from './radio';
 import { safePlayer } from './safePlayer';
+import { sessionStarts } from './session';
 import { nsfwAutoplayIds, placeOf, sectionsOf, wantsPlay, type PlayContext, type Player, type UpItem, type UpNextSections } from './types';
 import { WebPlayer } from './webPlayer';
 
@@ -91,7 +93,9 @@ export function playableNow(tracks: Track[]): Track[] | null {
   return null;
 }
 
-const guarded = offlineGuard(safePlayer(Capacitor.isNativePlatform() ? new NativePlayer() : new WebPlayer(), commandFailed), {
+/** When you last started something (D9): under the offline guard, so a tap it refuses changes nothing. */
+const session = sessionStarts(safePlayer(Capacitor.isNativePlatform() ? new NativePlayer() : new WebPlayer(), commandFailed), kv);
+const guarded = offlineGuard(session.player, {
   online: () => online.peek(),
   saved: () => savedOffline.peek(),
   liked: (t) => likedIds.peek().has(t.id),
@@ -278,6 +282,7 @@ function startAutoplay(): Autoplay {
     player,
     catalog: () => catalog.tracks.peek(),
     history: () => recent.peek(),
+    heard: async () => playedSince(history.peek(), await session.since()),
     showNsfw: () => showNsfw.peek(),
     signedIn: () => auth.signedIn(),
     blocked: () => block.blocked.peek() != null,

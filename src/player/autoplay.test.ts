@@ -204,6 +204,15 @@ describe('autoplay', () => {
     calls.mockRestore();
   });
 
+  it('a Jukebox seed skips the songs heard since you last started something (D9)', async () => {
+    const seed = track('c0', { artist: 'A0' });
+    const heard = ['c1', 'c2', 'c15', 'c16', 'c30'].map((id) => track(id));
+    const { ap, added } = setup({ current: seed, seed, queue: [seed], upNext: [] }, { heard: async () => heard });
+    await ap.fill({ left: 0, seedId: 'c0' });
+    expect(added[0][0]).toHaveLength(VIBE_BATCH);
+    expect(added[0][0].filter((id) => heard.some((t) => t.id === id))).toEqual([]);
+  });
+
   it('refills reuse one similarity index: the catalog itself goes to similarTracks while every song plays', async () => {
     const seed = track('c0', { artist: 'A0' });
     const { ap, s } = setup({ current: seed, seed, queue: [seed], upNext: [] });
@@ -403,6 +412,15 @@ describe('autoplay', () => {
     // Up to a batch of 25: the 20 left.
     expect(added[0][0]).toHaveLength(20);
     expect(new Set(added[0][0])).toEqual(new Set(rock.slice(10).map((t) => t.id)));
+  });
+
+  it("a shuffle's next round brings the songs heard since you last started something last (D9)", async () => {
+    const rock = Array.from({ length: 30 }, (_, i) => track(`r${i}`, { genre: 'rock', artist: 'A' }));
+    const heard = async () => rock.slice(10, 20);
+    const { ap, added } = setup({ current: rock[0], seed: rock[0], index: 0, queue: rock.slice(0, 10), context: { label: shuffleLabel('rock'), mode: 'list' } }, { catalog: () => rock, heard });
+    await ap.fill({ left: 9, seedId: 'r0' });
+    expect(new Set(added[0][0].slice(0, 10))).toEqual(new Set(rock.slice(20).map((t) => t.id)));
+    expect(new Set(added[0][0].slice(10))).toEqual(new Set(rock.slice(10, 20).map((t) => t.id)));
   });
 
   it("Home's Jukebox shuffle goes on with random songs from the whole catalog, past the variety rules of similar picks", async () => {
