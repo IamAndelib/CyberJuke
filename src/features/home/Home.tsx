@@ -39,8 +39,8 @@ const savedRange = signal<SavedRange>('month');
 const SAVED_MAX = 100;
 const SAVED_CTX = radio('Most saved');
 
-/** How many random songs Shuffle starts with. */
-const SHUFFLE_SIZE = 50;
+/** How many random songs Shuffle starts with, and each next batch adds (VIBE_BATCH). */
+const SHUFFLE_SIZE = 25;
 
 /**
  * SHUFFLE_SIZE random songs from the whole Jukebox or the chip's genre; autoplay goes on drawing

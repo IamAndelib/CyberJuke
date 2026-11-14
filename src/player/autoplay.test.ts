@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals';
 import { describe, expect, it, vi } from 'vitest';
 import type { Track } from '../data/model';
-import { createAutoplay, shuffleLabel, type AutoplayDeps } from './autoplay';
+import { chainsOn, createAutoplay, shuffleLabel, type AutoplayDeps } from './autoplay';
 import { EMPTY_STATE, VIBE_BATCH, type Player, type PlayerState, type QueueLow } from './types';
 
 const track = (id: string, p: Partial<Track> = {}): Track => ({
@@ -384,5 +384,19 @@ describe('autoplay', () => {
     const { ap, added } = setup({ current: seed, seed, queue: [seed], upNext: [] });
     await ap.fill({ left: 0, seedId: seed.id });
     expect(added).toEqual([]);
+  });
+});
+
+describe('chainsOn', () => {
+  it('is true for a Jukebox shuffle, whole or one genre, whatever the seed', () => {
+    expect(chainsOn({ label: shuffleLabel(null) }, 'p1')).toBe(true);
+    expect(chainsOn({ label: shuffleLabel('rock') }, 'p1')).toBe(true);
+  });
+
+  it('is true for a station playing, false for its track in another list or any other list', () => {
+    expect(chainsOn({ label: 'Signal Radio · CIPHER' }, 'sig:cipher:abc')).toBe(true);
+    expect(chainsOn({ label: 'Liked' }, 'sig:cipher:abc')).toBe(false);
+    expect(chainsOn({ label: 'Liked' }, 'p1')).toBe(false);
+    expect(chainsOn(null, 'p1')).toBe(false);
   });
 });

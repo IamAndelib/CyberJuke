@@ -34,6 +34,13 @@ export function shuffleGenre(label: string | undefined): string | null | undefin
   return label?.startsWith(`${SHUFFLE} · `) ? label.slice(SHUFFLE.length + 3) : undefined;
 }
 
+/**
+ * The list playing leads on to the next whatever the Vibe setting: a Signal Radio station, or
+ * Home's Jukebox shuffle (natively Stations.keepsGoing, the same rule).
+ */
+export const chainsOn = (context: { label: string } | null | undefined, seedId: string | null | undefined): boolean =>
+  !!stationPlaying(context, seedId) || shuffleGenre(context?.label) !== undefined;
+
 /** The songs a Jukebox shuffle draws from: the whole catalog or one genre's; null for any other list. */
 function shufflePool(label: string | undefined, catalog: readonly Track[]): readonly Track[] | null {
   const genre = shuffleGenre(label);
