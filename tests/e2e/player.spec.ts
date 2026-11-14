@@ -121,7 +121,16 @@ test('Now Playing: a swipe down closes it, a short drag springs back, the seek b
   await expect(np).toHaveClass(/open/);
   await expect.poll(() => np.evaluate((el) => (el as HTMLElement).style.transform)).toBe('');
 
-  // A drag on the seek bar never moves the sheet.
+  // A drag on the seek bar never moves the sheet. (Measured once the sheet has settled: still sliding,
+  // the finger would land on what has moved under it.)
+  const seekY = async () => (await page.getByTestId('seek').boundingBox())!.y;
+  await expect
+    .poll(async () => {
+      const y = await seekY();
+      await page.waitForTimeout(150);
+      return (await seekY()) - y;
+    })
+    .toBe(0);
   const seek = (await page.getByTestId('seek').boundingBox())!;
   await touchDrag(page, seek.x + 20, seek.y + seek.height / 2, seek.y + seek.height / 2 + h * 0.4, 400);
   await expect(np).toHaveClass(/open/);
