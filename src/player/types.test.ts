@@ -73,7 +73,7 @@ describe('sectionsOf', () => {
 
 describe('undoOf', () => {
   const u = (id: string, index: number, more: Partial<UpNextItem> = {}): UpNextItem => ({ track: t(id, false), index, ...more });
-  const none = { upNext: [], previous: [], lap: [], mine: [], listStart: 0, nextStart: -1, shuffle: false };
+  const none = { queue: [] as Track[], upNext: [], previous: [], lap: [], mine: [], listStart: 0, nextStart: -1, shuffle: false };
 
   it('anchors a Played row on the song after it in play order, heard or not, at its index once it is gone (S9)', () => {
     // Repeat all, Previous from a to c: Played shows a, From the top a and b.
@@ -99,5 +99,12 @@ describe('undoOf', () => {
     expect(undoOf(s, u('b', 1), 'list')).toEqual({ kind: 'list', before: { id: 's1', index: 1 }, mine: true, heard: true });
     expect(undoOf(s, u('s1', 2), 'autoplay')).toEqual({ kind: 'list', before: { id: 't1', index: 2 }, auto: true });
     expect(undoOf(s, u('t1', 3), 'autoplay')).toEqual({ kind: 'autoplay', before: null, auto: true });
+  });
+
+  it('carries the song after it in list order too, at its index once it is gone: shuffled, a list song goes back before it (rule 4)', () => {
+    const s = { ...none, queue: ['a', 'b', 'c', 'd'].map((id) => t(id, false)), upNext: [u('d', 3), u('b', 1), u('c', 2)], shuffle: true };
+    expect(undoOf(s, u('b', 1), 'list')).toEqual({ kind: 'list', before: { id: 'c', index: 1 }, listBefore: { id: 'c', index: 1 } });
+    // The last song in list order has none: it goes back last.
+    expect(undoOf(s, u('d', 3), 'list').listBefore).toBeUndefined();
   });
 });

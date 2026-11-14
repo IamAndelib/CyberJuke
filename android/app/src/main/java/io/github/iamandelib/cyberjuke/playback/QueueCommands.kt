@@ -45,7 +45,7 @@ internal object QueueCommands {
     /** Removes every item whose id is in [ARG_IDS] (K5, sign-out). */
     const val ACTION_REMOVE_IDS = "io.github.iamandelib.cyberjuke.REMOVE_IDS"
 
-    /** Undo of a removal (K3): one track in [ARG_TRACKS], [ARG_KIND], [ARG_BEFORE], [ARG_BEFORE_INDEX], [ARG_MINE], [ARG_AUTO], [ARG_HEARD], [ARG_EARLIER]. */
+    /** Undo of a removal (K3): one track in [ARG_TRACKS], [ARG_KIND], [ARG_BEFORE], [ARG_BEFORE_INDEX], [ARG_MINE], [ARG_AUTO], [ARG_HEARD], [ARG_EARLIER], [ARG_LIST_BEFORE], [ARG_LIST_BEFORE_INDEX]. */
     const val ACTION_RESTORE = "io.github.iamandelib.cyberjuke.RESTORE"
 
     /** The NativeTrack[] JSON. */
@@ -80,6 +80,10 @@ internal object QueueCommands {
     const val ARG_AUTO = "auto"
     const val ARG_HEARD = "heard"
     const val ARG_EARLIER = "earlier"
+
+    /** [ACTION_RESTORE]: the song after it in list order and its list index, matched with its id first: shuffled, a list item goes back before it. */
+    const val ARG_LIST_BEFORE = "listBeforeId"
+    const val ARG_LIST_BEFORE_INDEX = "listBeforeIndex"
 
     /** [ACTION_SKIP_TO]: a "From the top" row, which enters the next lap (NativeQueue.skipTo). */
     const val ARG_LAP = "lap"

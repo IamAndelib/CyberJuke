@@ -592,9 +592,10 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
      * [auto]) never at or past the start of what's on the way (S6). It keeps the queued-by-you mark
      * ([mine]: it played, then Previous brought it ahead again; a serial, never pending: it has played),
      * the autoplay tag ([auto]) and its heard state ([heard]); one of an earlier list ([earlier]) goes back
-     * into it, before the current list's marker in list order.
+     * into it, before the current list's marker in list order. Shuffled, a list item goes back in list order
+     * before the song after it there ([listBeforeIndex] and [listBeforeId], matched as [beforeIndex]), within its list (rule 4).
      */
-    fun restore(item: T, section: Section, beforeId: String?, mine: Boolean = false, beforeIndex: Int = -1, auto: Boolean = false, heard: Boolean = false, earlier: Boolean = false) {
+    fun restore(item: T, section: Section, beforeId: String?, mine: Boolean = false, beforeIndex: Int = -1, auto: Boolean = false, heard: Boolean = false, earlier: Boolean = false, listBeforeId: String? = null, listBeforeIndex: Int = -1) {
         prune()
         if (host.count == 0) {
             when (section) {
@@ -650,7 +651,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
                 if (heard) hear(at)
                 regain(at)
             } else {
-                restoreShuffledListItem(item, anchor, mine, auto, heard, earlier)
+                restoreShuffledListItem(item, anchor, mine, auto, heard, earlier, anchorOf(listBeforeId, listBeforeIndex, 0 until host.count))
             }
         }
     }
@@ -659,7 +660,7 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
      * The Undo's anchor among [among]: the item at [index] if it still has [id] (by entry), else the first
      * with [id] (the index moved on); null when that isn't one of them.
      */
-    private fun anchorOf(id: String?, index: Int, among: List<Int>): Int? {
+    private fun anchorOf(id: String?, index: Int, among: Iterable<Int>): Int? {
         if (id == null) return null
         if (index in 0 until host.count && host.idAt(index) == id) return index.takeIf { it in among }
         return among.firstOrNull { host.idAt(it) == id }
@@ -698,13 +699,15 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     }
 
     /**
-     * Shuffle on: the list index only matters later; the shuffle order decides when it plays: before
-     * [anchor], else after the last list item ahead, else after the queued run (a suggestion: last); never
-     * at or past the first item on the way.
+     * Shuffle on: in list order (what shuffle off plays) right before [follows], the song after it there,
+     * within the list you're in (else at its end, before what's on the way); one of an earlier list before its
+     * marker. The shuffle order decides when it plays: before [anchor], else after the last list item ahead,
+     * else after the queued run (a suggestion: last); never at or past the first item on the way.
      */
-    private fun restoreShuffledListItem(item: T, anchor: Int?, mine: Boolean, auto: Boolean, heard: Boolean, earlier: Boolean) {
-        // Before the first autoplay item of the list you're in (after its first song), so it stays in it; one of an earlier list before its marker.
-        val at = if (earlier) listStartIndex() else (listStartIndex() + 1 until host.count).firstOrNull { host.isAutoAt(it) } ?: host.count
+    private fun restoreShuffledListItem(item: T, anchor: Int?, mine: Boolean, auto: Boolean, heard: Boolean, earlier: Boolean, follows: Int?) {
+        val start = listStartIndex()
+        val end = nextStartIndex().takeIf { it >= 0 } ?: host.count
+        val at = minOf(follows?.let { if (earlier) it else maxOf(it, start) } ?: host.count, end).let { if (earlier) minOf(it, start) else it }
         insert(at, item, mine, auto)
         if (heard) hear(at)
         regain(at)

@@ -86,6 +86,8 @@ export interface Undo {
   kind: UpNextKind;
   /** The song after it in play order, heard or not, and its queue index once this one is gone: matched by both, by the id alone if the index has moved on. */
   before: { id: string; index: number } | null;
+  /** The song after it in list order and its queue index once this one is gone: shuffled, a list song goes back before it (rule 4: its own place). */
+  listBefore?: { id: string; index: number };
   /** Queued by you (rule 8's mark), added by autoplay, heard. */
   mine?: true;
   auto?: true;
@@ -96,19 +98,21 @@ export interface Undo {
 
 /**
  * The Undo of ✕ on a row `kind` shows (Up next's, Played or "From the top"), from the state before it goes:
- * its own kind, tag, mark and heard state, its own list, and the song after it in play order. A suggestion
+ * its own kind, tag, mark and heard state, its own list, and the song after it in play order and in list order. A suggestion
  * of the list you're in goes back into it, before what's on the way (S6); a "From the top" song you heard,
  * among the played.
  */
-export function undoOf(s: Pick<PlayerState, 'upNext' | 'previous' | 'lap' | 'mine' | 'listStart' | 'nextStart' | 'shuffle'>, it: UpItem, kind: UpNextKind): Undo {
+export function undoOf(s: Pick<PlayerState, 'queue' | 'upNext' | 'previous' | 'lap' | 'mine' | 'listStart' | 'nextStart' | 'shuffle'>, it: UpItem, kind: UpNextKind): Undo {
   const rows = kind === 'played' ? s.previous : kind === 'top' ? s.lap : s.upNext;
   const k = rows.findIndex((u) => u.index === it.index);
   const heard = kind === 'played' || s.previous.some((u) => u.index === it.index) || rows[k]?.heard === true;
   const next = kind === 'played' || kind === 'top' ? behindAfter(s.previous, s.lap, it.index, s.shuffle) : rows[k + 1];
   const onWay = s.nextStart >= 0 && it.index >= s.nextStart;
+  const follows = s.queue[it.index + 1];
   return {
     kind: kind === 'top' && heard ? 'played' : kind === 'autoplay' && !onWay ? 'list' : kind,
     before: next ? { id: next.track.id, index: next.index - (next.index > it.index ? 1 : 0) } : null,
+    ...(follows && { listBefore: { id: follows.id, index: it.index } }),
     ...(s.mine.includes(it.index) && { mine: true }),
     ...(rows[k]?.auto && { auto: true }),
     ...(heard && { heard: true }),

@@ -1302,14 +1302,14 @@ class PlaybackService : MediaSessionService() {
         queueChanged()
     }
 
-    private fun restore(item: MediaItem, section: NativeQueue.Section, beforeId: String?, beforeIndex: Int, mine: Boolean, auto: Boolean, heard: Boolean, earlier: Boolean) {
+    private fun restore(item: MediaItem, section: NativeQueue.Section, beforeId: String?, beforeIndex: Int, mine: Boolean, auto: Boolean, heard: Boolean, earlier: Boolean, listBeforeId: String?, listBeforeIndex: Int) {
         if (section == NativeQueue.Section.AUTO && !Stations.keepsGoing(autoplayEnabled, seedId, context?.first)) {
             Log.i(TAG, "restore: autoplay item dropped (autoplay off)")
             return
         }
         // During a fade, among the tracks after the one fading in: it takes over first.
         crossfade?.settle()
-        queue.restore(item, section, beforeId, mine, beforeIndex, auto, heard, earlier)
+        queue.restore(item, section, beforeId, mine, beforeIndex, auto, heard, earlier, listBeforeId, listBeforeIndex)
         queueChanged()
     }
 
@@ -1960,7 +1960,9 @@ class PlaybackService : MediaSessionService() {
                         if (kind == QueueCommands.KIND_PLAYED || kind == QueueCommands.KIND_TOP) {
                             restorePlayed(item, before, at, mine, kind == QueueCommands.KIND_TOP, auto, earlier)
                         } else {
-                            restore(item, NativeQueue.Section.of(kind) ?: return bad, before, at, mine, auto, args.getBoolean(QueueCommands.ARG_HEARD, false), earlier)
+                            val listBefore = BridgeLimits.checkString(args.getString(QueueCommands.ARG_LIST_BEFORE), "listBeforeId")
+                            val listAt = args.getInt(QueueCommands.ARG_LIST_BEFORE_INDEX, -1)
+                            restore(item, NativeQueue.Section.of(kind) ?: return bad, before, at, mine, auto, args.getBoolean(QueueCommands.ARG_HEARD, false), earlier, listBefore, listAt)
                         }
                     }
                 }

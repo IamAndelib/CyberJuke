@@ -520,11 +520,13 @@ describe('NativePlayer: edits (K2)', () => {
     expect(fake.plugin.skipToIndex).toHaveBeenCalledWith({ index: 0, expectId: 'A', lap: true });
   });
 
-  it('restore sends the track, its section, the song it goes before and its index (K3), its mark (rule 8), tag and heard state', async () => {
+  it('restore sends the track, its section, the song it goes before in play and list order and their indices (K3), its mark (rule 8), tag and heard state', async () => {
     const p = new NativePlayer();
     list(p);
     await p.restore(tr('Z'), { kind: 'list', before: { id: 'C', index: 2 } });
     expect(fake.plugin.restore).toHaveBeenCalledWith({ track: toNative(tr('Z')), kind: 'list', beforeId: 'C', beforeIndex: 2 });
+    await p.restore(tr('Z'), { kind: 'list', before: { id: 'C', index: 2 }, listBefore: { id: 'B', index: 1 } });
+    expect(fake.plugin.restore).toHaveBeenLastCalledWith({ track: toNative(tr('Z')), kind: 'list', beforeId: 'C', beforeIndex: 2, listBeforeId: 'B', listBeforeIndex: 1 });
     await p.restore(tr('Y'), { kind: 'played', before: null, mine: true, auto: true, heard: true, earlier: true });
     expect(fake.plugin.restore).toHaveBeenLastCalledWith({ track: toNative(tr('Y')), kind: 'played', beforeId: null, mine: true, auto: true, heard: true, earlier: true });
   });
