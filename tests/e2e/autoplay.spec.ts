@@ -160,6 +160,26 @@ test('On the way fills Up next to 25 rows, one more as each song ends; Repeat al
   await expect(page.locator('[data-testid="upnext-row"][data-section="autoplay"]')).toHaveCount(23);
 });
 
+test("from the keyboard, removing the list's last row moves focus on to the first song on the way", async ({ page }) => {
+  const titles = await playAlbum(page);
+  for (let k = 1; k <= 6; k++) {
+    await page.getByTestId('np-next').click();
+    await expect(page.getByTestId('np-title')).toHaveText(titles[k]);
+  }
+  const way = page.locator('[data-testid="upnext-row"][data-section="way"]');
+  await expect(way.first()).toBeVisible();
+  const first = (await way.first().getAttribute('data-track-id'))!;
+  await page.locator('[data-testid="upnext-row"][data-section="list"]').getByTestId('upnext-remove').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-testid="upnext-row"][data-section="list"]')).toHaveCount(0);
+  await expect
+    .poll(() => page.evaluate(() => {
+      const a = document.activeElement as HTMLElement | null;
+      return `${a?.className}:${a?.closest('li')?.getAttribute('data-track-id')}`;
+    }))
+    .toBe(`row-main:${first}`);
+});
+
 test('Up next: autoplay rows reorder like the others (not with shuffle), and Remove offers Undo', async ({ page }) => {
   await start(page);
   await visible(page, 'track-play').first().click();

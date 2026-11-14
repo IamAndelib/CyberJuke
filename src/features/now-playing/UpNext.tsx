@@ -32,9 +32,9 @@ const REMOVE_GUARD_MS = 300;
 interface Refocus {
   /** The row: its track and section, at this place in the list (or anywhere: null). */
   id: string;
-  kind: Kind;
+  kind: Kind | 'way';
   index: number | null;
-  /** Its button: this one, else (disabled at the end of the section) the other arrow, else Remove. */
+  /** Its button: this one, else (disabled at the end of the section) the other arrow, else Remove; a row on the way has only its play button. */
   button: RowButton;
   /** Not before this row (the one removed: id and index) has gone. */
   gone?: [string, number];
@@ -60,7 +60,9 @@ function focusRow(root: HTMLElement, r: Refocus): boolean {
       return true;
     }
   }
-  return false;
+  const main = row.querySelector<HTMLElement>('.row-main');
+  main?.focus({ preventScroll: true });
+  return !!main;
 }
 
 /** A row's art and text; the playing track's art carries the visualiser (or ⏸), as in every list. */
@@ -258,11 +260,11 @@ export function UpNext() {
                 onClick={(e) => {
                   const b = e.currentTarget;
                   const near = items[k + 1] ?? items[k - 1];
-                  // The only row of its part: the next row with buttons, else the one before.
-                  const rows = [...(root.current?.querySelectorAll<HTMLElement>('li[data-section]:not([data-section="current"], [data-section="way"])') ?? [])];
+                  // The only row of its part: the next row (on the way, its play button), else the one before.
+                  const rows = [...(root.current?.querySelectorAll<HTMLElement>('li[data-section]:not([data-section="current"])') ?? [])];
                   const at = rows.indexOf(b.closest('li')!);
                   const other = rows[at + 1] ?? rows[at - 1];
-                  const to = near ? { id: near.track.id, kind } : other && { id: other.dataset.trackId!, kind: other.dataset.section as Kind };
+                  const to = near ? { id: near.track.id, kind } : other && { id: other.dataset.trackId!, kind: other.dataset.section as Kind | 'way' };
                   afterPress(b, () => {
                     if (remove(it, kind)) keepFocus(b, to ? { ...to, index: null, button: 'remove', gone: [it.track.id, it.index] } : null);
                   });
