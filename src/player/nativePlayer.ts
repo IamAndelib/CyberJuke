@@ -336,6 +336,10 @@ export class NativePlayer implements Player {
       previous: [],
       mine: queued.map((_, k) => i + 1 + k),
       lap: [],
+      // The new list from its start, nothing on the way yet: so its first Vibe batch is asked for, whatever
+      // order native's queueLow and state events come in.
+      listStart: 0,
+      nextStart: -1,
       // Native starts Save's memory over with the new list.
       heardMine: [],
       context,
@@ -448,12 +452,15 @@ export class NativePlayer implements Player {
     const queue = s.queue.filter((_, j) => j !== index);
     const map = (j: number) => (j > index ? j - 1 : j);
     const kept = (rows: UpNextItem[]) => rows.filter((u) => u.index !== index).map((u) => ({ ...u, index: map(u.index) }));
-    this.show(queue, map(s.index), kept(s.upNext), kept(s.previous), s.mine.filter((j) => j !== index).map(map), kept(s.lap));
+    // A marker's song gone, the song after it takes the marker; none after it, nothing is on the way.
+    const nextStart = s.nextStart < 0 ? -1 : map(s.nextStart) < queue.length ? map(s.nextStart) : -1;
+    this.show(queue, map(s.index), kept(s.upNext), kept(s.previous), s.mine.filter((j) => j !== index).map(map), kept(s.lap), { listStart: map(s.listStart), nextStart });
   }
 
-  private show(queue: Track[], index: number, upNext: UpNextItem[], previous: UpNextItem[], mine: number[], lap: UpNextItem[]): void {
+  /** Shown now, until native's state follows. A move never crosses a marker, so the markers stay where they are. */
+  private show(queue: Track[], index: number, upNext: UpNextItem[], previous: UpNextItem[], mine: number[], lap: UpNextItem[], marks?: Pick<PlayerState, 'listStart' | 'nextStart'>): void {
     this.builtFrom = '';
-    this.s.value = { ...this.s.value, queue, index, current: queue[index] ?? null, upNext, previous, mine, lap };
+    this.s.value = { ...this.s.value, queue, index, current: queue[index] ?? null, upNext, previous, mine, lap, ...marks };
   }
 
   async removeIds(ids: string[]): Promise<void> {
