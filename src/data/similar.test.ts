@@ -175,6 +175,22 @@ describe('similarTracks: exclusions and filters', () => {
     expect(ids.filter((id) => id === tracks[1].id || id === 'dup-post')).toHaveLength(1);
   });
 
+  it('leaves out the songs heard since you last started something while anything else is left (D9), then they come, never the last 50', () => {
+    const { seed, tracks } = catalog();
+    // The best matches (the same artist, the same genre) were heard: none of them, however good.
+    const heard = tracks.filter((t) => t.id.startsWith('owls') || t.id.startsWith('gaze'));
+    const picks = similarTracks(tracks, opts(seed, { count: 10, heard: heard.map((t) => t.ytId) }));
+    expect(picks).toHaveLength(10);
+    expect(picks.filter((t) => heard.includes(t))).toEqual([]);
+    // All but the heard ones queued: they come back, but for the last 50 played.
+    const queued = tracks.filter((t) => !heard.includes(t)).map((t) => t.id);
+    const gaze = heard.filter((t) => t.id.startsWith('gaze'));
+    const back = similarTracks(tracks, opts(seed, { count: 50, exclude: queued, heard: heard.map((t) => t.id), recent: [gaze[0]] }));
+    expect(back.every((t) => heard.includes(t))).toBe(true);
+    expect(back).toEqual(expect.arrayContaining(gaze.slice(1)));
+    expect(back).not.toContain(gaze[0]);
+  });
+
   it('tells Jukebox MP3s apart by their link (they have no video id)', () => {
     const mp3 = (id: string, file: string, artist: string) => track({ id, ytId: '', mp3: `https://latex.gg/share/${file}.mp3`, artist, genre: 'hip hop' });
     const seed = mp3('seed-mp3', 'SEED0001', 'Mephisztoe');

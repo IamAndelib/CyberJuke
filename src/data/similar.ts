@@ -15,7 +15,8 @@
  *
  * Picking: weighted random draws from the top candidates, so each radio differs. Never the
  * same artist twice in a row, at most 2 tracks by one artist in any 10. When good matches run
- * out it widens to the seed's genre family, then to popular Jukebox tracks.
+ * out it widens to the seed's genre family, then to popular Jukebox tracks. The songs heard
+ * since you last started something come only once nothing else is left (D9).
  */
 import { audioKey, isGlobal, type Track } from './model';
 import { artistKey, splitArtists } from './artists';
@@ -187,6 +188,11 @@ export interface SimilarOptions {
   played?: readonly Track[];
   /** Ids or video ids to leave out (everything already in the queue). */
   exclude?: Iterable<string>;
+  /**
+   * Ids or video ids heard since you last started something (D9): picked only once nothing
+   * else is left (a small genre, offline with a few saved songs), so it never goes quiet.
+   */
+  heard?: Iterable<string>;
   /** What plays just before the picks, oldest first (the variety rules look at it). */
   before?: readonly Track[];
   count: number;
@@ -242,7 +248,7 @@ export function similarTracks(catalog: readonly Track[], o: SimilarOptions): Tra
     scored.push({ f, like, score: like + boost(idx, t, now) });
   }
 
-  // Tiers: good matches, then the seed's genre family (or anything alike at all), then popular.
+  // Tiers: good matches, then the seed's genre family (or anything alike at all), then popular; then the heard ones, as alike.
   const byScore = (a: Scored, b: Scored) => b.score - a.score;
   const good = scored.filter((s) => s.like >= GOOD_MATCH).sort(byScore);
   const near = scored.filter((s) => s.like < GOOD_MATCH && (s.like > 0 || [...s.f.families].some((x) => seed.families.has(x)))).sort(byScore);
@@ -251,7 +257,10 @@ export function similarTracks(catalog: readonly Track[], o: SimilarOptions): Tra
     .filter((s) => s.like < GOOD_MATCH && !inNear.has(s))
     .map((s) => ({ ...s, score: boost(idx, s.f.track, now) }))
     .sort(byScore);
-  const tiers = [good, near, rest];
+  const heard = new Set(o.heard ?? []);
+  const isHeard = (s: Scored) => heard.has(s.f.track.id) || heard.has(audioKey(s.f.track));
+  const tiers = [good, near, rest].map((tier) => tier.filter((s) => !isHeard(s)));
+  tiers.push([good, near, rest].flatMap((tier) => tier.filter(isHeard)));
 
   // What plays before the picks; when nothing is given, the seed does.
   const history: string[][] = (o.before ?? []).slice(-(VARIETY_WINDOW - 1)).map((t) => featOf(t).artists);

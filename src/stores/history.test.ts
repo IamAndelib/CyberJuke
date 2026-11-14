@@ -10,6 +10,7 @@ import {
   dayLabel,
   groupByDay,
   migrateHistory,
+  playedSince,
   pruneHistory,
   uniqueTracks,
   type HistoryEntry,
@@ -133,5 +134,17 @@ describe('stored shape (v2)', () => {
     expect(ids(decodeHistory(raw, NOW))).toEqual(['a']);
     expect(decodeHistory({ v: 3 }, NOW)).toEqual([]);
     expect(decodeHistory(null, NOW)).toEqual([]);
+  });
+});
+
+describe('playedSince', () => {
+  it('the songs played at or after a time (Vibe skips them, D9); none before the first list', () => {
+    const es = [
+      { track: tr('c'), playedAt: NOW },
+      { track: tr('b'), playedAt: NOW - H },
+      { track: tr('a'), playedAt: NOW - 2 * H },
+    ];
+    expect(playedSince(es, NOW - H).map((t) => t.id)).toEqual(['c', 'b']);
+    expect(playedSince(es, null)).toEqual([]);
   });
 });
