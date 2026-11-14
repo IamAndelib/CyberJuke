@@ -198,14 +198,14 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     starved = null;
     // The catalog itself while every song plays (online): similarTracks keeps its index per array.
     const usable = catalog.every(playable) ? catalog : catalog.filter(playable);
-    const heard = new Set(((await deps.heard?.()) ?? []).map(audioKey));
+    const heardKeys = new Set(((await deps.heard?.()) ?? []).map(audioKey));
     // A Jukebox shuffle plays on like a station: random songs from its pool not yet queued (those heard
     // since you last started something last), then, once every one is, another round of it (but the song just queued).
     const pool = shufflePool(s.context?.label, usable)?.filter((t) => !t.membersOnly || deps.signedIn());
     if (pool) {
       const fresh = pool.filter((t) => !inQueue.has(t.id));
       const from = fresh.length ? fresh : pool.filter((t) => t.id !== s.queue.at(-1)?.id);
-      if (from.length) await add(shuffled(from, deps.rng).sort((a, b) => +heard.has(audioKey(a)) - +heard.has(audioKey(b))).slice(0, count));
+      if (from.length) await add(shuffled(from, deps.rng).sort((a, b) => +heardKeys.has(audioKey(a)) - +heardKeys.has(audioKey(b))).slice(0, count));
       return;
     }
     // What played since this seed started steers it (Jukebox tracks only: similarTracks skips Global ones).
@@ -216,7 +216,7 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       played: from < 0 ? [] : played.slice(from + 1).reverse(),
       recent: deps.history(),
       exclude: inQueue,
-      heard,
+      heard: heardKeys,
       genre: pickedGenre(s.context?.label) ?? undefined,
       before: [s.current, ...s.upNext.map((u) => u.track)],
       count,
