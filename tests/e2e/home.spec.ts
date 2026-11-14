@@ -266,7 +266,7 @@ test("Shuffle follows the genre chip: that genre's songs, and more of them after
   await openNowPlaying(page);
   await toListEnd(page);
   await expect.poll(async () => (await queue()).autoplay.length, { message: 'more of the genre after the list' }).toBeGreaterThan(0);
-  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText(`More random picks from ${genre}`);
+  await expect(page.getByTestId('upnext-way-label')).toHaveText('On the way');
   const q = await queue();
   expect([...q.list, ...q.autoplay].every((t) => t.genre === genre)).toBe(true);
   await page.getByTestId('np-close').click();

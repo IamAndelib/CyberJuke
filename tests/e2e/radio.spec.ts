@@ -139,12 +139,12 @@ test('a station plays on with Autoplay off too: it is the station, not autoplay'
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await openRadio(page);
   await tune(page, 'slow-orbit');
-  // Near the end of the round its next one (32 more) follows, as with Autoplay on.
+  // The round's next one (32 more) is on the way, as with Autoplay on.
   await openNowPlaying(page);
   await expect.poll(() => place(page)).toEqual({ at: 1, of: 32 });
   await toListEnd(page);
   await expect.poll(() => place(page)).toEqual({ at: 32, of: 32 });
-  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from SLOW ORBIT');
+  await expect(page.getByTestId('upnext-way-label')).toHaveText('On the way');
   // Turning Autoplay off while a station plays leaves its rounds alone.
   await page.getByTestId('np-close').click();
   await openSettings(page);
@@ -153,7 +153,7 @@ test('a station plays on with Autoplay off too: it is the station, not autoplay'
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await openNowPlaying(page);
-  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from SLOW ORBIT');
+  await expect(page.getByTestId('upnext-way-label')).toHaveText('On the way');
   expect(await place(page)).toEqual({ at: 32, of: 32 });
 });
 

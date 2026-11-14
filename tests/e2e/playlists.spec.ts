@@ -328,7 +328,8 @@ test.describe('adding songs', () => {
     await page.getByTestId('album-play').click();
     await openNowPlaying(page);
     await toListEnd(page);
-    const autos = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
+    // The suggestions, on the way.
+    const autos = page.locator('[data-testid="upnext-row"][data-section="way"]');
     await expect(autos.first()).toBeVisible();
     const n = await autos.count();
     expect(n).toBeGreaterThan(1);
@@ -352,9 +353,10 @@ test.describe('adding songs', () => {
     await page.getByTestId('music-open').first().click();
     await page.getByTestId('album-play').click();
     await openNowPlaying(page);
-    const autos = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
+    // The suggestions, on the way from the album's start.
+    const autos = page.locator('[data-testid="upnext-row"][data-section="way"]');
     const list = page.locator('[data-testid="upnext-row"][data-section="list"]');
-    // Next until the suggestions come, with some of the album still ahead.
+    // Until the suggestions show, with some of the album still ahead.
     while (!(await autos.count())) {
       const title = (await page.getByTestId('np-title').textContent())!;
       await page.getByTestId('np-next').click();

@@ -105,6 +105,9 @@ function saveQueue(shown: Track[]): void {
   });
 }
 
+/** Up next fills up to this many rows with the list on the way: one more shows as each song ends (D1). */
+const WAY_FILL = 25;
+
 /** A count Up next shows: "50+" when it may hold more than it shows. */
 const upTo = (n: number) => (n >= UP_NEXT_MAX ? `${UP_NEXT_MAX}+` : n);
 
@@ -144,15 +147,19 @@ const offClass = (t: Track) => (!online.value && !isSaved(t, savedOffline.value)
  * track, marked as in every list, then Up next, each song under its own kind's heading (AP1),
  * one each time the kind changes: queued by you, the rest of the list ("Next from: <source>"),
  * autoplay ("Autoplay · similar to <seed>"); with Repeat all, then the next lap, under "From the
- * top" (a tap on one there starts it). Up and Down move a track under its heading, and the last
- * played one's Down past the playing track, to hear it again; Remove (every row but the playing
- * one) offers Undo.
+ * top" (a tap on one there starts it). Below the list you're in, the list on the way, under "On the
+ * way", as many rows as fill Up next to WAY_FILL: to look at, and a tap starts it from there. Up and
+ * Down move a track under its heading, and the last played one's Down past the playing track, to
+ * hear it again; Remove (every row but the playing one and those on the way) offers Undo.
  */
 export function UpNext() {
   const sec = upNextSections.value;
   const shuffle = shuffleOn.value;
   const ctx = playContext.value;
-  const total = sec.queued.length + sec.list.length + sec.autoplay.length;
+  const here = sec.runs.filter((r) => !r.way);
+  const ahead = here.reduce((n, r) => n + r.items.length, 0);
+  const way = sec.runs.flatMap((r) => (r.way ? r.items : [])).slice(0, Math.max(0, WAY_FILL - ahead));
+  const total = ahead + way.length;
   const guardUntil = useRef(0);
   const guarded = () => performance.now() < guardUntil.current;
   const root = useRef<HTMLElement>(null);
@@ -191,7 +198,7 @@ export function UpNext() {
    * side of the current list's start, as a heading ends where the list on the way starts (S7); the
    * songs you queued belong to no list.
    */
-  const rows = (kind: Kind, items: UpItem[], past?: UpItem) =>
+  const rows = (kind: Kind | 'way', items: UpItem[], past?: UpItem) =>
     items.map((it, k) => {
       const apart = (b?: UpItem) => !b || (kind !== 'queued' && b.index < listStart !== it.index < listStart);
       const down = items[k + 1] ?? past;
@@ -213,57 +220,60 @@ export function UpNext() {
             {...longPress(it.track, kind === 'queued' ? it : null)}
             // A "From the top" row enters the next lap (the songs you queued and heard leave).
             onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id, kind === 'top'))}
-            aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', autoplay', top: ', from the top' }[kind]}`}
+            aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', autoplay', top: ', from the top', way: ', on the way' }[kind]}`}
           >
             <RowBody track={it.track} />
           </button>
-          <div class="upnext-actions">
-            {/* Reorder within each section. With shuffle on the order is random, so no arrows, but songs you queued keep theirs: shuffle never mixes them (rule 8). */}
-            {!shuffle || kind === 'queued' ? (
-              <>
-                <button
-                  class="icon-btn"
-                  aria-label={`Move ${it.track.title} up`}
-                  disabled={apart(items[k - 1])}
-                  onClick={(e) => move(e.currentTarget, it, kind, items[k - 1], 'up')}
-                  data-role="up"
-                  data-testid="upnext-up"
-                >
-                  <Icon name="up" size={20} />
-                </button>
-                <button
-                  class="icon-btn"
-                  aria-label={`Move ${it.track.title} down`}
-                  disabled={apart(down)}
-                  onClick={(e) => down && move(e.currentTarget, it, down === past ? 'list' : kind, down, 'down')}
-                  data-role="down"
-                  data-testid="upnext-down"
-                >
-                  <Icon name="down" size={20} />
-                </button>
-              </>
-            ) : null}
-            <button
-              class="icon-btn"
-              aria-label={`Remove ${it.track.title} from queue`}
-              onClick={(e) => {
-                const b = e.currentTarget;
-                const near = items[k + 1] ?? items[k - 1];
-                // The only row of its part: the next row with buttons, else the one before.
-                const rows = [...(root.current?.querySelectorAll<HTMLElement>('li[data-section]:not([data-section="current"])') ?? [])];
-                const at = rows.indexOf(b.closest('li')!);
-                const other = rows[at + 1] ?? rows[at - 1];
-                const to = near ? { id: near.track.id, kind } : other && { id: other.dataset.trackId!, kind: other.dataset.section as Kind };
-                afterPress(b, () => {
-                  if (remove(it, kind)) keepFocus(b, to ? { ...to, index: null, button: 'remove', gone: [it.track.id, it.index] } : null);
-                });
-              }}
-              data-role="remove"
-              data-testid="upnext-remove"
-            >
-              <Icon name="close" size={20} />
-            </button>
-          </div>
+          {/* The list on the way only shows what's coming: it can't be reordered or removed from (S7, D15). */}
+          {kind !== 'way' && (
+            <div class="upnext-actions">
+              {/* Reorder within each section. With shuffle on the order is random, so no arrows, but songs you queued keep theirs: shuffle never mixes them (rule 8). */}
+              {!shuffle || kind === 'queued' ? (
+                <>
+                  <button
+                    class="icon-btn"
+                    aria-label={`Move ${it.track.title} up`}
+                    disabled={apart(items[k - 1])}
+                    onClick={(e) => move(e.currentTarget, it, kind, items[k - 1], 'up')}
+                    data-role="up"
+                    data-testid="upnext-up"
+                  >
+                    <Icon name="up" size={20} />
+                  </button>
+                  <button
+                    class="icon-btn"
+                    aria-label={`Move ${it.track.title} down`}
+                    disabled={apart(down)}
+                    onClick={(e) => down && move(e.currentTarget, it, down === past ? 'list' : kind, down, 'down')}
+                    data-role="down"
+                    data-testid="upnext-down"
+                  >
+                    <Icon name="down" size={20} />
+                  </button>
+                </>
+              ) : null}
+              <button
+                class="icon-btn"
+                aria-label={`Remove ${it.track.title} from queue`}
+                onClick={(e) => {
+                  const b = e.currentTarget;
+                  const near = items[k + 1] ?? items[k - 1];
+                  // The only row of its part: the next row with buttons, else the one before.
+                  const rows = [...(root.current?.querySelectorAll<HTMLElement>('li[data-section]:not([data-section="current"], [data-section="way"])') ?? [])];
+                  const at = rows.indexOf(b.closest('li')!);
+                  const other = rows[at + 1] ?? rows[at - 1];
+                  const to = near ? { id: near.track.id, kind } : other && { id: other.dataset.trackId!, kind: other.dataset.section as Kind };
+                  afterPress(b, () => {
+                    if (remove(it, kind)) keepFocus(b, to ? { ...to, index: null, button: 'remove', gone: [it.track.id, it.index] } : null);
+                  });
+                }}
+                data-role="remove"
+                data-testid="upnext-remove"
+              >
+                <Icon name="close" size={20} />
+              </button>
+            </div>
+          )}
         </li>
       );
     });
@@ -276,7 +286,7 @@ export function UpNext() {
   // The next lap: native may send it a moment after Repeat changes.
   const lap = repeat === 'all' ? lapTracks.value : [];
   const g = glow.value;
-  const parts = g?.scope === 'queue' ? [open ? played : [], ...sec.runs.map((r) => r.items)] : g?.scope === 'queue:top' ? [lap] : null;
+  const parts = g?.scope === 'queue' ? [open ? played : [], ...here.map((r) => r.items)] : g?.scope === 'queue:top' ? [lap] : null;
   const glowing = g && parts && movedRow(g, parts);
   return (
     <section ref={root} class="upnext" data-testid="up-next">
@@ -330,7 +340,7 @@ export function UpNext() {
             </li>
           </>
         )}
-        {sec.runs.map((r, k) => (
+        {here.map((r, k) => (
           <Fragment key={k}>
             <li class={'upnext-label' + (r.kind === 'autoplay' ? ' auto' : '')} data-testid={`upnext-${r.kind}-label`} aria-hidden="true">
               {titles[r.kind]}
@@ -338,6 +348,14 @@ export function UpNext() {
             {rows(r.kind, r.items)}
           </Fragment>
         ))}
+        {way.length > 0 && (
+          <>
+            <li class="upnext-label" data-testid="upnext-way-label" aria-hidden="true">
+              On the way
+            </li>
+            {rows('way', way)}
+          </>
+        )}
         {lap.length > 0 && (
           <>
             <li class="upnext-label" data-testid="upnext-top-label" aria-hidden="true">

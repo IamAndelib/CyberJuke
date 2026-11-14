@@ -110,14 +110,54 @@ test('a Home row starts a Vibe: the tapped song and 24 similar Jukebox tracks, t
   for (let i = 1; i < artists.length; i++) expect(artists[i], `pick ${i}`).not.toBe(artists[i - 1]);
 
   await openNowPlaying(page);
-  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText([`Autoplay · similar to ${title}`, `Autoplay · similar to ${title}`]);
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText(`Autoplay · similar to ${title}`);
   await expect(page.getByTestId('upnext-list-label')).toHaveCount(0);
   const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
   await expect(rows.first().locator('.row-title')).toHaveText(q.autoplay[0].title);
+  // Its 24, then the batch on the way under its own heading, as much of it as fills Up next to 25 rows (D1):
+  // to look at and tap, with no ↑ ↓ ✕.
+  await expect(rows).toHaveCount(24);
+  await expect(page.getByTestId('upnext-way-label')).toHaveText('On the way');
+  const way = page.locator('[data-testid="upnext-row"][data-section="way"]');
+  await expect(way).toHaveCount(1);
+  await expect(way.first()).toHaveAttribute('data-track-id', q.autoplay[24].id);
+  await expect(way.locator('button:not(.row-main)')).toHaveCount(0);
+  await expect(page.getByTestId('up-next').locator('.section-head')).toContainText('25 up next');
   // The artwork slightly dimmed; the text keeps its theme's contrast.
   const opacity = (sel: string) => rows.first().locator(sel).evaluate((el) => Number(getComputedStyle(el).opacity));
   expect(await opacity('.row-art')).toBeLessThan(1);
   expect(await opacity('.row-main')).toBe(1);
+});
+
+test('On the way fills Up next to 25 rows, one more as each song ends; Repeat all and Vibe off show none', async ({ page }) => {
+  await start(page);
+  await visible(page, 'track-play').first().click();
+  await withOnTheWay(page);
+  await openNowPlaying(page);
+  const way = page.locator('[data-testid="upnext-row"][data-section="way"]');
+  const count = page.getByTestId('up-next').locator('.section-head');
+  await expect(way).toHaveCount(1);
+  await page.getByTestId('np-next').click();
+  await expect(way).toHaveCount(2);
+  await expect(count).toContainText('25 up next');
+  // Repeat all loops the list you're in: nothing is on the way. Off again, a batch comes (D18).
+  const repeat = page.getByTestId('np-repeat');
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'all');
+  await expect(page.getByTestId('upnext-way-label')).toHaveCount(0);
+  await repeat.click();
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('data-mode', 'off');
+  await expect(way).toHaveCount(2);
+  // Vibe off: what's on the way goes; the list you're in stays.
+  await page.getByTestId('np-close').click();
+  await openSettings(page);
+  await page.getByTestId('autoplay-toggle').click();
+  await expect(page.getByTestId('autoplay-toggle')).toHaveAttribute('aria-checked', 'false');
+  await page.getByTestId('tab-home').click();
+  await openNowPlaying(page);
+  await expect(page.getByTestId('upnext-way-label')).toHaveCount(0);
+  await expect(page.locator('[data-testid="upnext-row"][data-section="autoplay"]')).toHaveCount(23);
 });
 
 test('Up next: autoplay rows reorder like the others (not with shuffle), and Remove offers Undo', async ({ page }) => {
@@ -228,12 +268,12 @@ test("↑ ↓ never cross the line between two lists: a radio's own suggestions 
   // The radio's own suggestions, then the next batch on the way.
   await withOnTheWay(page);
   await openNowPlaying(page);
-  const line = page.getByTestId('upnext-autoplay-label').nth(1);
-  await expect(page.getByTestId('upnext-autoplay-label')).toHaveCount(2);
+  const line = page.getByTestId('upnext-way-label');
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveCount(1);
   await expect(line.locator('xpath=preceding-sibling::li[1]').getByTestId('upnext-down')).toBeDisabled();
   await expect(line.locator('xpath=preceding-sibling::li[1]').getByTestId('upnext-up')).toBeEnabled();
-  await expect(line.locator('xpath=following-sibling::li[1]').getByTestId('upnext-up')).toBeDisabled();
-  await expect(line.locator('xpath=following-sibling::li[1]').getByTestId('upnext-down')).toBeEnabled();
+  // The rows on the way have no ↑ ↓ ✕ at all.
+  await expect(line.locator('xpath=following-sibling::li[1]').locator('.upnext-actions')).toHaveCount(0);
   // A tap on the first one on the way moves on: the radio's songs are an earlier list now, and Played's last can't go past the playing one into this one.
   await line.locator('xpath=following-sibling::li[1]').locator('.row-main').click();
   await expect(page.getByTestId('upnext-autoplay-label')).toHaveCount(1);
@@ -273,7 +313,7 @@ test('after Previous, a tapped suggestion leaves the songs you went back over in
     await page.getByTestId('np-prev').click();
     await expect(page.getByTestId('np-title')).toHaveText(titles[1], { timeout: 1500 });
   }).toPass();
-  await page.locator('[data-testid="upnext-row"][data-section="autoplay"] .row-main').first().click();
+  await page.locator('[data-testid="upnext-row"][data-section="way"] .row-main').first().click();
   await expect(page.getByTestId('np-title')).toHaveText(q.autoplay[0].title);
   await expect(page.locator('[data-testid="upnext-row"][data-section="list"] .row-title')).toHaveText(titles.slice(4));
   await page.getByTestId('upnext-played-fold').click();
@@ -288,8 +328,8 @@ test('a tapped suggestion, then Previous: the album songs stay under the album, 
   await expect(page.getByTestId('np-title')).toHaveText(titles[2]);
   const q = await withAutoplay(page, 5);
   await expect(page.getByTestId('np-from')).toContainText('3 of 8');
-  // A tap on the first suggestion plays it; Previous (twice: the first restarts it) goes back.
-  await page.locator('[data-testid="upnext-row"][data-section="autoplay"] .row-main').first().click();
+  // A tap on the first suggestion (on the way) plays it; Previous (twice: the first restarts it) goes back.
+  await page.locator('[data-testid="upnext-row"][data-section="way"] .row-main').first().click();
   await expect(page.getByTestId('np-title')).toHaveText(q.autoplay[0].title);
   await page.getByTestId('np-prev').click();
   await page.getByTestId('np-prev').click();
@@ -302,7 +342,9 @@ test('a tapped suggestion, then Previous: the album songs stay under the album, 
   await expect(page.locator('[data-testid="upnext-row"][data-section="list"] .row-title')).toHaveText(titles.slice(3));
   await expect(page.getByTestId('upnext-list-label')).toHaveCount(1);
   await withOnTheWay(page);
-  await expect(page.getByTestId('upnext-autoplay-label')).toHaveCount(3);
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveCount(2);
+  // With 30 ahead in the list you're in, none of the next one shows yet (D1).
+  await expect(page.getByTestId('upnext-way-label')).toHaveCount(0);
   await expect(page.getByTestId('np-from')).toContainText('3 of 8');
   // ✕ then Undo, on the suggestion and on the album's last song: each comes back as it was, where it was.
   const order = await rows.evaluateAll((els) => els.map((el) => `${el.getAttribute('data-track-id')}:${el.getAttribute('data-section')}`));
@@ -506,10 +548,10 @@ test('the next batch is on the way from the list\'s start, so going to the backg
   await setVisibility(page, 'hidden');
   expect(await expectStable(() => queueState(page), 1500)).toEqual(q);
   await setVisibility(page, 'visible');
-  // Up next shows 50 at most: it says when there may be more.
-  const ahead = q.list.length + q.autoplay.length;
+  // Up next shows the list, then as much on the way as fills it to 25 rows (D1); 50+ when there may be more.
+  const shown = Math.min(q.list.length + q.autoplay.length, Math.max(25, q.list.length));
   await openNowPlaying(page);
-  await expect(page.getByTestId('up-next').locator('.section-head')).toContainText(`${ahead >= 50 ? '50+' : ahead} up next`);
+  await expect(page.getByTestId('up-next').locator('.section-head')).toContainText(`${shown >= 50 ? '50+' : shown} up next`);
 });
 
 test("songs removed from Up next don't come back in later suggestions", async ({ page }) => {
@@ -519,16 +561,20 @@ test("songs removed from Up next don't come back in later suggestions", async ({
   await openNowPlaying(page);
   const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
   const gone: string[] = [];
-  // Remove them as they come: the refills that follow bring none of them back.
-  for (let i = 0; i < 30; i++) {
+  // Remove all of the batch you're in (the one on the way can't be removed from)...
+  const n = await rows.count();
+  for (let i = 0; i < n; i++) {
     gone.push((await rows.first().getAttribute('data-track-id'))!);
     // A click on the button itself: the "Removed" toast's Undo may lie over the row by now.
     await rows.first().getByTestId('upnext-remove').dispatchEvent('click');
     await expect(page.locator(`[data-testid="upnext-row"][data-track-id="${gone[i]}"]`)).toHaveCount(0);
-    await expect(rows.first()).toBeVisible();
     // Past Up next's guard against a double tap removing two rows (REMOVE_GUARD_MS).
     await page.waitForTimeout(320);
   }
+  // ...then the one on the way starts, and the batch after it brings none of them back.
+  const before = (await queueState(page)).length;
+  await page.getByTestId('np-next').click();
+  await expect.poll(async () => (await queueState(page)).length).toBeGreaterThan(before);
   const after = await queueState(page);
   expect(after.autoplay.filter((t) => gone.includes(t.id))).toEqual([]);
 });
