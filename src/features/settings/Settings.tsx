@@ -643,12 +643,12 @@ export function Settings() {
         </div>
         <div class="setting">
           <div class="setting-text">
-            <div class="setting-name">Autoplay</div>
+            <div class="setting-name">Vibe</div>
             <div class="setting-desc" id="autoplay-desc">
-              Plays similar songs when your list ends.
+              When a list ends, keep going with songs like it, a batch at a time.
             </div>
           </div>
-          <Toggle on={s.autoplay} onChange={(v) => updateSettings({ autoplay: v })} label="Autoplay" describedBy="autoplay-desc" testid="autoplay-toggle" />
+          <Toggle on={s.autoplay} onChange={(v) => updateSettings({ autoplay: v })} label="Vibe" describedBy="autoplay-desc" testid="autoplay-toggle" />
         </div>
         <div class="setting">
           <div class="setting-text">

@@ -457,13 +457,13 @@ test('the artist page says when the Jukebox could not load, and Retry loads it (
   await expect(jukebox.getByTestId('track-row').first().or(jukebox.locator('.section-note'))).toBeVisible();
 });
 
-test('Autoplay is on by default and the setting is kept; Settings lines are short (C3, U2)', async ({ page }) => {
+test('Vibe is on by default and the setting is kept; Settings lines are short (C3, U2)', async ({ page }) => {
   await page.goto('/');
   await openSettings(page);
   const toggle = page.getByTestId('autoplay-toggle');
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   const settings = page.getByTestId('screen-settings');
-  await expect(settings).toContainText('Plays similar songs when your list ends.');
+  await expect(settings).toContainText('When a list ends, keep going with songs like it, a batch at a time.');
   for (const line of ['Hidden by default.', 'Best quality the connection can keep up with', 'Shows a button on Home when new tracks are posted.', 'Auto switches when IPv6 gets blocked.']) {
     await expect(settings).toContainText(line);
   }
@@ -474,7 +474,7 @@ test('Autoplay is on by default and the setting is kept; Settings lines are shor
   await expect(page.getByTestId('autoplay-toggle')).toHaveAttribute('aria-checked', 'false');
 });
 
-test('saved settings without the Autoplay key keep it on', async ({ page }) => {
+test('saved settings without the autoplay key keep it on', async ({ page }) => {
   await seedStorage(page, { 'CapacitorStorage.settings': { theme: 'dark', showNsfw: false, quality: 'high' } });
   await page.goto('/');
   await openSettings(page);

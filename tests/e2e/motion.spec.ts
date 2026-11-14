@@ -500,7 +500,7 @@ test('Now Playing says where the music comes from; a list its position too, but 
   const seed = (await page.getByTestId('np-title').textContent())!.trim();
   await expect(page.locator('[data-testid="upnext-row"][data-section="autoplay"]').first()).toBeVisible();
   await page.getByTestId('np-next').click();
-  await expect(from).toHaveText(`Autoplay · similar to ${seed}`);
+  await expect(from).toHaveText(`Vibe · like ${seed}`);
   await page.getByTestId('np-close').click();
   // A genre's Play: the list, and where in it.
   await page.getByTestId('tab-genres').click();

@@ -293,7 +293,7 @@ test('Account is the first card and says "members-only shared tracks"', async ({
   // Small groups, each about one thing.
   await expect(settings.locator('.card-title')).toHaveText(['Account', 'Theme', 'Playback', 'Content', 'Storage', 'Network', 'Updates', 'About', 'Support', 'Licenses', 'Source code']);
   const card = (title: string) => settings.locator('section.card').filter({ has: page.locator('.card-title', { hasText: new RegExp(`^${title}$`) }) });
-  await expect(card('Playback').locator('.setting-name')).toHaveText(['Audio quality', 'Autoplay', 'Gapless playback', 'Crossfade']);
+  await expect(card('Playback').locator('.setting-name')).toHaveText(['Audio quality', 'Vibe', 'Gapless playback', 'Crossfade']);
   await expect(card('Content').locator('.setting-name')).toHaveText(['Show NSFW tracks', 'Check for new tracks']);
   await expect(card('Storage').locator('.setting-name')).toHaveText(['Recent songs cache', 'Download using mobile data']);
   await expect(card('Network').locator('.setting-name')).toHaveText(['IPv4']);

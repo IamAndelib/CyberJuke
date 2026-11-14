@@ -224,7 +224,7 @@ export function UpNext() {
             {...longPress(it.track, kind === 'queued' ? it : null)}
             // A "From the top" row enters the next lap (the songs you queued and heard leave).
             onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id, kind === 'top'))}
-            aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', autoplay', top: ', from the top', way: ', on the way' }[kind]}`}
+            aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', vibe', top: ', from the top', way: ', on the way' }[kind]}`}
           >
             <RowBody track={it.track} />
           </button>
@@ -381,7 +381,7 @@ export function UpNext() {
         {glowing ? `${g?.to == null ? 'Back at' : 'Moved to'} ${glowing.place} of ${glowing.of}` : ''}
       </p>
       {total === 0 && repeat !== 'all' && (
-        <div class="dim small upnext-empty">{`${settings.value.autoplay ? 'Nothing queued.' : 'Autoplay is off.'} ⋯ → Add to queue plays a track next.`}</div>
+        <div class="dim small upnext-empty">{`${settings.value.autoplay ? 'Nothing queued.' : 'Vibe is off.'} ⋯ → Add to queue plays a track next.`}</div>
       )}
     </section>
   );

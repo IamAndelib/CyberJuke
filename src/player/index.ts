@@ -208,7 +208,7 @@ export const autoplayLabel = computed(() => {
   const seed = upNextSections.value.seed;
   const genre = shuffleGenre(ctx?.label);
   if (genre !== undefined) return `More random picks from ${genre ?? 'the Jukebox'}`;
-  return seed?.title ? `Autoplay · similar to ${seed.title}` : 'Autoplay';
+  return seed?.title ? `Vibe · like ${seed.title}` : 'Vibe';
 });
 
 
