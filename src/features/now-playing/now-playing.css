@@ -675,7 +675,7 @@ button.lyr-line {
   content: '[-]';
 }
 
-/* Autoplay, under "Autoplay · similar to <seed>": the artwork a little dimmed. Not the text,
+/* Autoplay, under "Vibe · like <seed>": the artwork a little dimmed. Not the text,
    which keeps its theme's contrast (themes.test.ts). */
 .upnext .row.autoplay .row-art {
   opacity: 0.72;

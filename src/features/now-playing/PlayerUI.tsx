@@ -722,7 +722,7 @@ function NpControls() {
 
 /**
  * Under "Now playing": where the music comes from (P8), "Playing from Home · Latest", or
- * for an autoplay track what autoplay plays ("Autoplay · similar to …", as Up next calls it);
+ * for an autoplay track what autoplay plays ("Vibe · like …", as Up next calls it);
  * stations name the one of the song playing, not the one tuned in (D11).
  * A list's position ("3 of 50", a station's within it) comes first; not for a single song's radio, an autoplay
  * track or under shuffle, where it means little, nor for a song you queued, which has none.

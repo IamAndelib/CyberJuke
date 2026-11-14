@@ -150,7 +150,7 @@ const offClass = (t: Track) => (!online.value && !isSaved(t, savedOffline.value)
  * comes first, folded under "[+] Played · N" (a tap on one plays from there), then the playing
  * track, marked as in every list, then Up next, each song under its own kind's heading (AP1),
  * one each time the kind changes: queued by you, the rest of the list ("Next from: <source>"),
- * autoplay ("Autoplay · similar to <seed>"); with Repeat all, then the next lap, under "From the
+ * autoplay ("Vibe · like <seed>"); with Repeat all, then the next lap, under "From the
  * top" (a tap on one there starts it). Below the list you're in, the list on the way, under "On the
  * way", as many rows as fill Up next to WAY_FILL: to look at, and a tap starts it from there. Up and
  * Down move a track under its heading, and the last played one's Down past the playing track, to
