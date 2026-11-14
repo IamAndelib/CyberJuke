@@ -29,7 +29,7 @@ import { isSaved, savedOffline, savedTracks } from '../stores/savedOffline';
 import { createAutoplay, shuffleGenre, type Autoplay } from './autoplay';
 import { NativePlayer } from './nativePlayer';
 import { offlineGuard, playsOffline, type OfflineRefusal } from './offlineGuard';
-import { stationPlace, stationShown } from './radio';
+import { onAirOf, stationPlace } from './radio';
 import { safePlayer } from './safePlayer';
 import { nsfwAutoplayIds, placeOf, sectionsOf, wantsPlay, type PlayContext, type Player, type UpItem, type UpNextSections } from './types';
 import { WebPlayer } from './webPlayer';
@@ -153,13 +153,10 @@ export const repeatMode = computed(() => state.value.repeat);
 /** The current track's length (0 until known). */
 export const durationMs = computed(() => state.value.durationMs);
 /**
- * The station playing while stations play (D11, labels follow the song): the playing song's, or the
- * current list's while a song you queued plays, not the one tuned in; null in any other list.
+ * The station playing while stations play (D11, labels follow the song, onAirOf): the playing song's,
+ * or the current list's while a song you queued plays, not the one tuned in; null in any other list.
  */
-export const stationOnAir = computed(() => {
-  const s = state.value;
-  return stationShown(s.context, s.seed?.id, s.current?.id, s.queue.slice(Math.max(0, s.listStart)));
-});
+export const stationOnAir = computed(() => onAirOf(state.value));
 /** Where the current track is in the current list ("3 of 8", placeOf); while stations play, in its station. */
 export const queuePlace = computed(() => {
   const s = state.value;

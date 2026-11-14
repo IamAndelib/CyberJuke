@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STATIONS, nextStation, stationById, stationFreq, stationLabel, stationOfTrackId, stationPlace, stationShown, stationTrack, stationTracks } from './radio';
+import { STATIONS, nextStation, stationById, stationFreq, stationLabel, stationOfTrackId, onAirOf, stationPlace, stationShown, stationTrack, stationTracks } from './radio';
 import { asTrack, isTrackFull } from '../core/guards';
 
 /** A seeded generator, so a run can be repeated. */
@@ -98,16 +98,30 @@ describe('labels follow the song (D11)', () => {
   const crypt = stationById('the-crypt')!;
   const mirrorball = stationById('mirrorball')!;
   const slowOrbit = stationById('slow-orbit')!;
-  const ids = (s: typeof crypt) => stationTracks(s).map((t) => ({ id: t.id }));
   const tuned = { label: stationLabel(crypt) };
   const seed = stationTracks(crypt)[0].id;
 
   it('while stations play, the station of the song (or of the rows under a heading), not the one tuned in', () => {
     expect(stationShown(tuned, seed, stationTracks(crypt)[5].id)).toBe(crypt);
     expect(stationShown(tuned, seed, stationTracks(mirrorball)[0].id)).toBe(mirrorball);
-    // A song you queued playing: the current list's station (its first station song), else the one tuned in.
-    expect(stationShown(tuned, seed, 'ytm:abcdefghijk', [{ id: 'ytm:abcdefghijk' }, ...ids(mirrorball)])).toBe(mirrorball);
+    // Not a station's song: the fallback given (the current list's station), else the one tuned in.
+    expect(stationShown(tuned, seed, 'ytm:abcdefghijk', mirrorball)).toBe(mirrorball);
     expect(stationShown(tuned, seed, 'ytm:abcdefghijk')).toBe(crypt);
+  });
+
+  it('on air: the playing song\'s station; for a song you queued, a station\'s one included, the current list\'s', () => {
+    const [c, m, so] = [stationTracks(crypt), stationTracks(mirrorball), stationTracks(slowOrbit)];
+    const liked = stationTracks(stationById('cipher')!)[3];
+    const jukebox = { id: 'ytm:abcdefghijk' };
+    const at = (queue: readonly { id: string }[], index: number, mine: number[] = [], nextStart = -1) => onAirOf({ context: tuned, seed: c[0], current: queue[index], queue, index, mine, nextStart });
+    // Moved on to MIRRORBALL; Previous back into THE CRYPT's last song.
+    expect(at([...c, ...m], 32)).toBe(mirrorball);
+    expect(at([...c, ...m], 31)).toBe(crypt);
+    // A CIPHER song you queued (from Liked), playing in MIRRORBALL, SLOW ORBIT on the way: MIRRORBALL.
+    expect(at([...c, m[0], liked, ...m.slice(1), ...so], 33, [33], 73)).toBe(mirrorball);
+    // A Jukebox song you queued, after a shuffled tap on the way brought THE CRYPT's unheard songs to MIRRORBALL's list start.
+    expect(at([...c, m[2], jukebox, ...m.slice(0, 2), ...m.slice(3)], 33, [33])).toBe(mirrorball);
+    expect(onAirOf({ context: { label: 'Liked' }, seed: c[0], current: c[0], queue: c, index: 0, mine: [], nextStart: -1 })).toBeNull();
   });
 
   it("a station's track in any other list is just a track: no station shown", () => {

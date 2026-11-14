@@ -57,12 +57,21 @@ export function stationPlaying(context: { label: string } | null | undefined, se
 
 /**
  * Labels follow the song (D11): while stations play, the station to show for a track (the song playing,
- * or the first row under an Up next heading) is its own; for a song you queued, the station of the first
- * station song in `list` (the current list), else the one tuned in. Null in any other list.
+ * or the first row under an Up next heading) is its own; for one of no station, `fallback` (the current
+ * list's), else the one tuned in. Null in any other list.
  */
-export function stationShown(context: { label: string } | null | undefined, seedId: string | null | undefined, trackId: string | null | undefined, list: readonly { id: string }[] = []): Station | null {
+export function stationShown(context: { label: string } | null | undefined, seedId: string | null | undefined, trackId: string | null | undefined, fallback: Station | null = null): Station | null {
   const tuned = stationPlaying(context, seedId);
-  return tuned && (stationOfTrackId(trackId) ?? stationOfTrackId(list.find((t) => stationOfTrackId(t.id))?.id) ?? tuned);
+  return tuned && (stationOfTrackId(trackId) ?? fallback ?? tuned);
+}
+
+/**
+ * The station on air while stations play (D11): the playing song's; for a song you queued, a station's
+ * one too (it belongs to no list, rule 8), the current list's (listStation, up to the list on the way).
+ */
+export function onAirOf(s: { context: { label: string } | null; seed: { id: string } | null; current: { id: string } | null; queue: readonly { id: string }[]; index: number; mine: readonly number[]; nextStart: number }): Station | null {
+  const list = listStation(s.nextStart < 0 ? s.queue : s.queue.slice(0, s.nextStart), s.mine);
+  return stationShown(s.context, s.seed?.id, s.mine.includes(s.index) ? null : s.current?.id, list);
 }
 
 /**
