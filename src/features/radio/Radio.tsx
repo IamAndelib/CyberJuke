@@ -39,7 +39,8 @@ function showInfo(s: Station): void {
   askConfirm({
     title: `${s.callsign} · ${stationFreq(s)}`,
     body: `${plural(s.tracks.length, 'track')} · ${s.desc}`,
-    confirm: onAir.peek() === s ? 'Open Now Playing' : `Tune in to ${s.callsign}`,
+    // On air, a tap opens Now Playing, or paused plays it on (tuneIn).
+    confirm: onAir.peek() !== s ? `Tune in to ${s.callsign}` : isPlaying.peek() ? 'Open Now Playing' : 'Play',
     run: () => tuneIn(s),
     info: true,
   });
@@ -51,13 +52,14 @@ function StationRow({ s, on }: { s: Station; on: boolean }) {
   // air stays bright while its track still plays. A tap on a dimmed one is refused with the
   // reason; ⓘ still opens.
   const off = !online.value && !(on && currentPlaysOffline.value);
+  const playing = on && isPlaying.value;
   return (
     <li class={'row station' + (on ? ' is-current' : '') + (off ? ' off' : '')} data-testid="station" data-station={s.id} aria-current={on || undefined}>
       <button
         class="row-main"
         aria-disabled={off || undefined}
         onClick={() => tuneIn(s)}
-        aria-label={on ? `${s.callsign}, ${freq}, on air: open Now Playing` : `Tune in to ${s.callsign}, ${freq}`}
+        aria-label={on ? `${s.callsign}, ${freq}, on air${playing ? ': open Now Playing' : ', paused: tap to play'}` : `Tune in to ${s.callsign}, ${freq}`}
         data-testid="station-tune"
       >
         <span class="station-freq" aria-hidden="true">

@@ -426,8 +426,16 @@ test('the station on air, paused: a tap plays it on (as a track row does), and N
   const first = (await page.getByTestId('mini-title').textContent())!.trim();
   await page.getByTestId('mini-toggle').click();
   await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Play');
-  await cipher.getByTestId('station-tune').click();
+  // Paused, its label and its info sheet say a tap plays it, not that it opens Now Playing.
+  const tuneBtn = cipher.getByTestId('station-tune');
+  await expect(tuneBtn).toHaveAttribute('aria-label', /, on air, paused: tap to play$/);
+  await cipher.getByTestId('station-info').click();
+  await expect(page.getByTestId('confirm-ok')).toHaveText('Play');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('confirm-sheet')).toBeHidden();
+  await tuneBtn.click();
   await expect(page.getByTestId('mini-toggle')).toHaveAttribute('aria-label', 'Pause');
+  await expect(tuneBtn).toHaveAttribute('aria-label', /, on air: open Now Playing$/);
   await expect(page.getByTestId('mini-title')).toHaveText(first);
   await expect(page.getByTestId('now-playing')).not.toHaveClass(/open/);
   // Playing, the same tap opens Now Playing.
