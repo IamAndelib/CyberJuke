@@ -86,6 +86,21 @@ export function stationTrack(id: string): Track | null {
 }
 
 /**
+ * The station after `current`: shuffle off, the next in the Radio tab's order (YM, then ZM, by
+ * frequency), the first again after the last; shuffle on, a random one not `heard` yet in this chain,
+ * any but `current` once all have been. Only stations `ok` takes (offline: one with a saved song);
+ * null if none.
+ */
+export function nextStation(current: Station, shuffle: boolean, heard: readonly string[], ok: (s: Station) => boolean = () => true, rng: () => number = Math.random): Station | null {
+  const at = STATIONS.indexOf(current);
+  const after = [...STATIONS.slice(at + 1), ...STATIONS.slice(0, at)].filter(ok);
+  if (!shuffle) return after[0] ?? null;
+  const fresh = after.filter((s) => !heard.includes(s.id));
+  const from = fresh.length ? fresh : after;
+  return from.length ? from[Math.floor(rng() * from.length)] : null;
+}
+
+/**
  * One round of a station: all its tracks, shuffled. After `lastYtId` (the last track queued),
  * the round doesn't start with that same track: it goes to the end instead.
  */

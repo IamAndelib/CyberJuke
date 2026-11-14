@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STATIONS, stationById, stationFreq, stationLabel, stationOfTrackId, stationQueue, stationTrack, stationTracks } from './radio';
+import { STATIONS, nextStation, stationById, stationFreq, stationLabel, stationOfTrackId, stationQueue, stationTrack, stationTracks } from './radio';
 import { asTrack, isTrackFull } from '../core/guards';
 
 /** A seeded generator, so a run can be repeated. */
@@ -44,6 +44,53 @@ describe('Signal Radio stations', () => {
     expect(stationLabel(cipher)).toBe('Signal Radio · CIPHER');
     expect(stationFreq(cipher)).toBe('133.7');
     expect(stationFreq(stationById('cold-wave')!)).toBe('273.0');
+  });
+});
+
+describe('nextStation', () => {
+  const ids = STATIONS.map((s) => s.id);
+
+  it('shuffle off: the next in the Radio tab order (YM, then ZM, by frequency), the first again after the last', () => {
+    expect(nextStation(cipher, false, [])).toBe(stationById('distortion-field'));
+    expect(nextStation(stationById('hackback')!, false, [])).toBe(stationById('the-crypt'));
+    expect(nextStation(STATIONS.at(-1)!, false, [])).toBe(STATIONS[0]);
+    // What has been heard doesn't matter without shuffle.
+    expect(nextStation(cipher, false, ids)).toBe(stationById('distortion-field'));
+  });
+
+  it('shuffle on: a random station not heard yet in this chain, never the one playing', () => {
+    const r = rng(3);
+    const heard = ['cipher', 'cold-wave', 'the-crypt'];
+    const seen = new Set<string>();
+    for (let i = 0; i < 300; i++) {
+      const s = nextStation(cipher, true, heard, undefined, r)!;
+      expect(heard).not.toContain(s.id);
+      seen.add(s.id);
+    }
+    expect(seen.size).toBe(STATIONS.length - heard.length);
+    // One left: that one.
+    expect(nextStation(cipher, true, ids.filter((id) => id !== 'mirrorball'))).toBe(stationById('mirrorball'));
+  });
+
+  it('shuffle on, all 16 heard: a new random order of them, starting with any but the one playing', () => {
+    const r = rng(5);
+    const seen = new Set<string>();
+    for (let i = 0; i < 300; i++) seen.add(nextStation(cipher, true, ids, undefined, r)!.id);
+    expect(seen).toEqual(new Set(ids.filter((id) => id !== 'cipher')));
+  });
+
+  it('offline: skips stations with no saved song, in the same order; none, nothing', () => {
+    const saved = new Set(['cold-wave', 'the-crypt']);
+    const ok = (s: { id: string }) => saved.has(s.id);
+    expect(nextStation(cipher, false, [], ok)).toBe(stationById('cold-wave'));
+    expect(nextStation(stationById('cold-wave')!, false, [], ok)).toBe(stationById('the-crypt'));
+    expect(nextStation(stationById('the-crypt')!, false, [], ok)).toBe(stationById('cold-wave'));
+    // Shuffled, the unheard one with saved songs; once both are heard, either.
+    expect(nextStation(cipher, true, ['cold-wave'], ok, () => 0.9)).toBe(stationById('the-crypt'));
+    expect(nextStation(stationById('the-crypt')!, true, ['cold-wave', 'the-crypt'], ok)).toBe(stationById('cold-wave'));
+    // Only the one playing has saved songs, or none has: nothing follows.
+    expect(nextStation(stationById('cold-wave')!, false, [], (s) => s.id === 'cold-wave')).toBeNull();
+    expect(nextStation(cipher, true, [], () => false)).toBeNull();
   });
 });
 
