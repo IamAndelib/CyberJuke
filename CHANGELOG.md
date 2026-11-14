@@ -7,8 +7,8 @@
 - With Repeat all on, Up next goes on under "From the top" with the songs that play next time round, and you can reorder or remove them there.
 
 ### Changed
-- **Autoplay is now called Vibe**, in Settings, Up next ("Vibe · like …") and Now Playing. It works as before: when a list ends, songs like it keep playing.
-- Vibe no longer brings back a song you've heard since you last started something yourself (a song, an album, a playlist, a station or Home's Shuffle), also after closing the app; before, it skipped only the last 50. Only once there's nothing else left (a small genre, or offline with a few saved songs) do songs you've heard come round again.
+- **Autoplay is now called Vibe**, in Settings, Up next ("Vibe · like …") and Now Playing: when a list ends, songs like it keep playing.
+- Vibe no longer brings back a song you've heard since you last started something yourself (a song, an album, a playlist, a station or Home's Shuffle), also after closing the app; before, it skipped only the last 50. Songs you've heard come round again only once nothing else is left: offline with a few saved songs, or in Home's Shuffle of a small genre.
 - A Signal Radio station plays its songs in order (or mixed, with Shuffle), and then the next station follows, as on a radio dial; with Shuffle, a random station you haven't heard yet. Before, a station reshuffled itself for ever. Repeat all keeps you on the station. Now Playing ("Playing from" and "3 of 40"), the Radio tab's on-air mark and Up next's headings name the station of the song playing, also when Previous takes you back into the station before.
 - Pick a genre on Home and tap a song (Latest or Most saved): Vibe keeps to that genre first, then related genres (metal, then hard rock and punk), then popular songs.
 - Home's **Shuffle** starts with 25 random songs and keeps going 25 at a time, also with Vibe off, like a station.
