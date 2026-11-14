@@ -231,8 +231,11 @@ class QueueRulesTest {
             queue.onPlaylistChanged()
             onTimeline?.invoke()
         }
+        /** Offline, the ids that can't play while a saved one is ahead (PlaybackService: OfflineNext.passesOver). */
+        var passing: (String) -> Boolean = { false }
+
         /** The current item changed; [forward]: a Next or a song's end (PlaybackService: a forward move). */
-        private fun transition(forward: Boolean = false): () -> Unit = { queue.onTransition(forward) }
+        private fun transition(forward: Boolean = false): () -> Unit = { queue.onTransition(forward, current in ids.indices && passing(ids[current])) }
 
         // ---- QueueHost ----
         override val count get() = ids.size
@@ -358,6 +361,9 @@ class QueueRulesTest {
 
         // ---- player operations ----
         override fun seekTo(index: Int) = moveTo(index, forward = false)
+
+        /** PlaybackService.movingOn: a seek that moves on (offline, past a song that can't play: OfflineNext). */
+        fun seekForward(index: Int) = moveTo(index, forward = true)
 
         /** Player.seekTo; [forward]: a Next (PlaybackService tells the queue it moved forward). */
         private fun moveTo(index: Int, forward: Boolean) {

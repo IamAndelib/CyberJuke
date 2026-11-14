@@ -347,4 +347,53 @@ class QueueOpsTest {
         q.queue.addAutoplay(listOf("s1", "s2"))
         assertEquals(1, q.queue.nextStartIndex())
     }
+
+    /** Offline, a song ends onto one that can't play: PlaybackService passes it over to the next saved one, unheard (D13, final QA C4). */
+    @Test
+    fun aSongPassedOverOfflineIsNotHeard() {
+        val p = player(listOf("a", "b", "c", "d"))
+        p.queue.queueNext(listOf("M"))
+        p.passing = { it == "M" || it == "b" }
+        p.nextAuto() // onto M, which can't play
+        p.seekForward(p.ids.indexOf("c")) // past b too, to the saved c
+        assertEquals("not in Played", listOf("a"), p.played())
+        assertEquals("not heard", listOf("a", "c"), p.ids.filter { p.uids[p.ids.indexOf(it)] in p.queue.heardUids })
+        assertTrue("not remembered for Save", p.queue.heardMine.none { it.id == "M" })
+        assertEquals("the song you queued still comes next", listOf("M", "d"), p.upNext())
+        assertEquals(1, p.queue.pendingSerials.size)
+    }
+
+    /** One passed over that loads after all (the network came back before its error) is heard once ready. */
+    @Test
+    fun aSongPassedOverThatPlaysAfterAllIsHeard() {
+        val p = player(listOf("a", "b", "c"))
+        p.passing = { it == "b" }
+        p.nextAuto()
+        p.passing = { false }
+        p.queue.onReady()
+        p.nextAuto()
+        assertEquals(listOf("a", "b"), p.played())
+        // A song you queued passed over, then played after all, no longer waits.
+        val q = player(listOf("a", "b"))
+        q.queue.queueNext(listOf("M"))
+        q.passing = { it == "M" }
+        q.nextAuto()
+        q.passing = { false }
+        q.queue.onReady()
+        assertTrue(q.queue.pendingSerials.isEmpty())
+    }
+
+    /** Repeat all's loop onto a song that can't play: the new lap starts with the saved one after it. */
+    @Test
+    fun aSongPassedOverAtTheLoopIsNotHeardThisLap() {
+        val p = player(listOf("a", "b", "c"))
+        p.repeat = "all"
+        p.queue.onRepeatModeChanged(true)
+        p.nextAuto()
+        p.nextAuto()
+        p.passing = { it == "a" }
+        p.nextAuto() // the loop, onto a
+        p.seekForward(p.ids.indexOf("b"))
+        assertEquals(setOf(p.uids[p.ids.indexOf("b")]), p.queue.lapUids)
+    }
 }

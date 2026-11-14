@@ -43,6 +43,7 @@
 - The queue's heading names Repeat as its button does: "Queue · Repeat all" or "Queue · Repeat one", instead of Repeat queue or Repeat song.
 - With nothing after the song playing, Up next no longer says "Vibe is off." while a station or Home's Shuffle plays: they keep going whatever Vibe is set to.
 - With shuffle on, **Undo** after ✕ in the queue puts the song back at its own place in the list too, so "3 of 8" stays the same and, once you turn shuffle off, the list plays in its order again. Before, it went back at the end of the album (or second in a batch of suggestions).
+- Offline, the songs that aren't saved and get skipped on the way to the next saved one no longer show in Played or count as heard: once you're back online they still play, and a song you queued stays queued.
 
 ## [1.4.0] - 2026-11-04
 

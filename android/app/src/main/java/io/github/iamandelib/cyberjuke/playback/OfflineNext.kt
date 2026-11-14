@@ -1,5 +1,6 @@
 package io.github.iamandelib.cyberjuke.playback
 
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 
 /**
@@ -22,6 +23,13 @@ internal object OfflineNext {
         }
         return null
     }
+
+    /**
+     * Offline, the item a move just landed on is only passed over: it can't play here ([playable]: saved, or a
+     * song on the phone) and a saved one is [ahead], which its end or its load error moves on to. The queue then
+     * doesn't hear it (D13), so it doesn't show in Played or count as heard once you're back online.
+     */
+    fun passesOver(online: Boolean, playable: Boolean, ahead: () -> Boolean): Boolean = !online && !playable && ahead()
 }
 
 /**
@@ -32,13 +40,14 @@ internal object OfflineNext {
 internal fun Player.offlineNext(from: Int = currentMediaItemIndex): Int? {
     val t = currentTimeline
     if (AudioCache.online || from < 0 || from >= t.windowCount) return null
-    val saved = AudioCache.savedLiked
     val mode = if (repeatMode == Player.REPEAT_MODE_ONE) Player.REPEAT_MODE_OFF else repeatMode
     return OfflineNext.target(
         from,
         mediaItemCount,
         { t.getNextWindowIndex(it, mode, shuffleModeEnabled) },
-        // A saved liked song, or a song from a folder on the phone, which always plays.
-        { getMediaItemAt(it).let { m -> JukeUris.isLocal(m) || JukeUris.audioIdOf(m) in saved } },
+        { playsOffline(getMediaItemAt(it)) },
     )
 }
+
+/** A saved liked song ([AudioCache.savedLiked]), or a song from a folder on the phone, which always plays. */
+internal fun playsOffline(m: MediaItem?): Boolean = JukeUris.isLocal(m) || JukeUris.audioIdOf(m) in AudioCache.savedLiked

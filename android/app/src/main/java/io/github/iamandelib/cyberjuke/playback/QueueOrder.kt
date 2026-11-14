@@ -328,17 +328,22 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         host.uidAt(index).takeIf { it != 0L }?.let { heard.add(it); lap.add(it) }
     }
 
-    /** The current item is heard. */
-    private fun hearCurrent() {
+    /** The current item is heard, unless only [passing] (it still moves on). */
+    private fun hearCurrent(passing: Boolean = false) {
         val cur = host.currentIndex
         if (cur !in 0 until host.count) return
-        hear(cur)
-        remember(cur)
+        if (!passing) {
+            hear(cur)
+            remember(cur)
+        }
         if (movesOn(cur)) moveOn(cur)
     }
 
     /** The uid of the item current at the last transition (0: none). */
     private var lastUid = 0L
+
+    /** The uid of the current item if it was only passed over ([onTransition]), 0 otherwise: heard once it plays after all ([onReady]). */
+    private var passed = 0L
 
     /**
      * The current item changed (any reason): keep the pending ones right after it. [forward]: it
@@ -346,16 +351,18 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
      * before the last one in play order with Repeat all on is the loop: the heard songs you queued
      * leave (rule 8), and the lap starts at its first song that stays ([startLap]). Previous and a
      * tap walk back, so they stay. The song Repeat all came on during, from before the current list
-     * ([onRepeatModeChanged]), leaves once another plays. Returns true when it moved playback on
-     * itself ([startLap]): that move's own transition follows.
+     * ([onRepeatModeChanged]), leaves once another plays. [passing]: the item is only passed over (offline,
+     * not saved, a saved one ahead: OfflineNext.passesOver), so it isn't heard nor remembered for Save (D13).
+     * Returns true when it moved playback on itself ([startLap]): that move's own transition follows.
      */
-    fun onTransition(forward: Boolean): Boolean {
+    fun onTransition(forward: Boolean, passing: Boolean = false): Boolean {
         if (replacing) return false
         val cur = playPos(host.currentIndex)
         val looped = forward && host.repeatAll && cur >= 0 && cur <= playPos(indexOfUid(lastUid))
         val movedOn = looped && startLap()
-        hearCurrent()
-        if (looped) dropHeardMine()
+        hearCurrent(passing)
+        if (looped) dropHeardMine(hearPlaying = !passing)
+        passed = if (passing && host.currentIndex in 0 until host.count) host.uidAt(host.currentIndex) else 0L
         if (visit != 0L && host.currentIndex in 0 until host.count && host.uidAt(host.currentIndex) != visit) {
             indexOfUid(visit).takeIf { it >= 0 }?.let(host::removeAt)
             visit = 0L
@@ -364,6 +371,15 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         prune()
         if (host.shuffleEnabled) enforceShuffleOrder() else enforceLinearOrder()
         return movedOn
+    }
+
+    /** The current item is ready to play: one only passed over that loads after all (the network came back) is heard now, and no longer waits if you queued it. */
+    fun onReady() {
+        val cur = host.currentIndex
+        if (passed == 0L || cur !in 0 until host.count || host.uidAt(cur) != passed) return
+        passed = 0L
+        hearCurrent()
+        prune()
     }
 
     /**
@@ -833,11 +849,11 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
     private fun lapStart(): Int? =
         ((if (host.shuffleEnabled) host.shuffleOrder() else null) ?: IntArray(host.count) { it }).firstOrNull(::staysAtLoop)
 
-    /** Repeat all's next lap: the heard songs you queued leave, all but the playing one (rule 8), and only the playing one is heard this lap. */
-    private fun dropHeardMine() {
+    /** Repeat all's next lap: the heard songs you queued leave, all but the playing one (rule 8), and only the playing one is heard this lap (unless [hearPlaying] is false: it is only passed over). */
+    private fun dropHeardMine(hearPlaying: Boolean = true) {
         drop { host.serialAt(it) != 0L && isHeard(it) }
         lap.clear()
-        if (host.currentIndex in 0 until host.count) hear(host.currentIndex)
+        if (hearPlaying && host.currentIndex in 0 until host.count) hear(host.currentIndex)
     }
 
     /** Removes the items [gone] picks by list index, except the playing one and the queued ones. */
@@ -1000,14 +1016,14 @@ internal class NativeQueue<T>(private val host: QueueHost<T>, private val random
         return pending.mapNotNull { bySerial[it] }.filter { it != current }
     }
 
-    /** Drops entries that have played (now current) or are no longer in the playlist. */
+    /** Drops entries that have played (now current, unless only [passed] over: it still waits) or are no longer in the playlist. */
     fun prune() {
         if (heard.isNotEmpty()) (0 until host.count).map { host.uidAt(it) }.toSet().let { heard.retainAll(it); lap.retainAll(it) }
         if (pending.isEmpty()) return
         val present = HashSet<Long>()
         for (i in 0 until host.count) present.add(host.serialAt(i))
         val current = host.currentIndex
-        if (current in 0 until host.count) present.remove(host.serialAt(current))
+        if (current in 0 until host.count && host.uidAt(current) != passed) present.remove(host.serialAt(current))
         pending.retainAll(present)
     }
 

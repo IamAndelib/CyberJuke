@@ -1,7 +1,9 @@
 package io.github.iamandelib.cyberjuke.playback
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OfflineNextTest {
@@ -46,5 +48,14 @@ class OfflineNextTest {
     fun followsTheShuffleOrder() {
         val order = mapOf(0 to 3, 3 to 1, 1 to 2, 2 to -1)
         assertEquals(2, OfflineNext.target(0, 4, { order.getValue(it) }) { it == 2 || it == 4 })
+    }
+
+    /** D13: offline, a song that can't play with a saved one ahead is passed over (the queue doesn't hear it). */
+    @Test
+    fun passesOverOnlyASongThatCantPlayOfflineWithASavedOneAhead() {
+        assertTrue(OfflineNext.passesOver(online = false, playable = false) { true })
+        assertFalse("saved, or on the phone: it plays", OfflineNext.passesOver(online = false, playable = true) { true })
+        assertFalse("none saved ahead: it waits for the network, and plays then", OfflineNext.passesOver(online = false, playable = false) { false })
+        assertFalse("online", OfflineNext.passesOver(online = true, playable = false) { error("not asked online") })
     }
 }
