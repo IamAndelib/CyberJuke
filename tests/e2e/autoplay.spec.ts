@@ -110,7 +110,7 @@ test('a Home row starts a Vibe: the tapped song and 24 similar Jukebox tracks, t
   for (let i = 1; i < artists.length; i++) expect(artists[i], `pick ${i}`).not.toBe(artists[i - 1]);
 
   await openNowPlaying(page);
-  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText(`Autoplay · similar to ${title}`);
+  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText(`Vibe · like ${title}`);
   await expect(page.getByTestId('upnext-list-label')).toHaveCount(0);
   const rows = page.locator('[data-testid="upnext-row"][data-section="autoplay"]');
   await expect(rows.first().locator('.row-title')).toHaveText(q.autoplay[0].title);
@@ -409,7 +409,7 @@ test('a Global result starts a Global radio; tapping an autoplay track continues
   const pick = q.autoplay[3];
   await rows.nth(3).locator('.row-main').click();
   await expect(page.getByTestId('np-title')).toHaveText(pick.title);
-  await expect(page.getByTestId('upnext-autoplay-label').first()).toHaveText(`Autoplay · similar to ${pick.title}`);
+  await expect(page.getByTestId('upnext-autoplay-label').first()).toHaveText(`Vibe · like ${pick.title}`);
   const after = await queueState(page);
   expect(after.seed?.id).toBe(pick.id);
   expect(after.autoplay.map((t) => t.id)).toEqual([...q.autoplay.slice(0, 3), ...q.autoplay.slice(4)].map((t) => t.id));
@@ -624,7 +624,7 @@ test('with Autoplay off, a Home tap plays the feed on from that song instead of 
   await expect(visible(page, 'track-row')).toHaveCount(1);
   await visible(page, 'track-play').first().click();
   await openNowPlaying(page);
-  await expect(page.getByTestId('up-next')).toContainText('Autoplay is off.');
+  await expect(page.getByTestId('up-next')).toContainText('Vibe is off.');
 });
 
 test("offline, Up next's rows that can't play are dimmed, as in every list", async ({ page, backend }) => {

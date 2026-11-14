@@ -150,7 +150,7 @@ const offClass = (t: Track) => (!online.value && !isSaved(t, savedOffline.value)
  * comes first, folded under "[+] Played · N" (a tap on one plays from there), then the playing
  * track, marked as in every list, then Up next, each song under its own kind's heading (AP1),
  * one each time the kind changes: queued by you, the rest of the list ("Next from: <source>"),
- * autoplay ("Autoplay · similar to <seed>"); with Repeat all, then the next lap, under "From the
+ * autoplay ("Vibe · like <seed>"); with Repeat all, then the next lap, under "From the
  * top" (a tap on one there starts it). Below the list you're in, the list on the way, under "On the
  * way", as many rows as fill Up next to WAY_FILL: to look at, and a tap starts it from there. Up and
  * Down move a track under its heading, and the last played one's Down past the playing track, to
@@ -224,7 +224,7 @@ export function UpNext() {
             {...longPress(it.track, kind === 'queued' ? it : null)}
             // A "From the top" row enters the next lap (the songs you queued and heard leave).
             onClick={(e) => afterPress(e.currentTarget, () => player.skipTo(it.index, it.track.id, kind === 'top'))}
-            aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', autoplay', top: ', from the top', way: ', on the way' }[kind]}`}
+            aria-label={`Play ${it.track.title}${{ played: ', played', queued: ', queued by you', list: '', autoplay: ', vibe', top: ', from the top', way: ', on the way' }[kind]}`}
           >
             <RowBody track={it.track} />
           </button>
@@ -381,7 +381,7 @@ export function UpNext() {
         {glowing ? `${g?.to == null ? 'Back at' : 'Moved to'} ${glowing.place} of ${glowing.of}` : ''}
       </p>
       {total === 0 && repeat !== 'all' && (
-        <div class="dim small upnext-empty">{`${settings.value.autoplay ? 'Nothing queued.' : 'Autoplay is off.'} ⋯ → Add to queue plays a track next.`}</div>
+        <div class="dim small upnext-empty">{`${settings.value.autoplay ? 'Nothing queued.' : 'Vibe is off.'} ⋯ → Add to queue plays a track next.`}</div>
       )}
     </section>
   );

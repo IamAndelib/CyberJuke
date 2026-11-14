@@ -275,6 +275,23 @@ test("Shuffle follows the genre chip: that genre's songs, and more of them after
   await expect(hero).toContainText('Shuffle the Jukebox');
 });
 
+test("a song tapped under a genre chip: the Vibe starts in that genre, on Latest and on Most saved", async ({ page }) => {
+  type Q = { context: { label: string } | null; list: { genre: string }[]; autoplay: { genre: string }[] };
+  const queue = () => page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => Q }).__cyberjukeQueue());
+  await start(page);
+  const chip = page.getByTestId('genre-chip').first();
+  const genre = (await chip.getAttribute('data-genre'))!;
+  await chip.click();
+  for (const [sort, label] of [['sort-latest', `Home · ${genre}`], ['sort-saved', `Most saved · ${genre}`]]) {
+    await page.getByTestId(sort).click();
+    await page.getByTestId('track-row').first().click();
+    await expect.poll(async () => (await queue()).autoplay.length).toBeGreaterThan(0);
+    const q = await queue();
+    expect(q.context?.label).toBe(label);
+    expect(q.autoplay[0].genre).toBe(genre);
+  }
+});
+
 test('Shuffle the Jukebox plays 25 and keeps going 25 at a time, also with Autoplay off', async ({ page }) => {
   type Q = { context: { label: string } | null; length: number; nextStart: number; way: unknown[] };
   const queue = () => page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => Q }).__cyberjukeQueue());

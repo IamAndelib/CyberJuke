@@ -175,6 +175,48 @@ describe('similarTracks: exclusions and filters', () => {
     expect(ids.filter((id) => id === tracks[1].id || id === 'dup-post')).toHaveLength(1);
   });
 
+  it('leaves out the songs heard since you last started something while anything else is left (D9), then they come, never the last 50', () => {
+    const { seed, tracks } = catalog();
+    // The best matches (the same artist, the same genre) were heard: none of them, however good.
+    const heard = tracks.filter((t) => t.id.startsWith('owls') || t.id.startsWith('gaze'));
+    const picks = similarTracks(tracks, opts(seed, { count: 10, heard: heard.map((t) => t.ytId) }));
+    expect(picks).toHaveLength(10);
+    expect(picks.filter((t) => heard.includes(t))).toEqual([]);
+    // All but the heard ones queued: they come back, but for the last 50 played.
+    const queued = tracks.filter((t) => !heard.includes(t)).map((t) => t.id);
+    const gaze = heard.filter((t) => t.id.startsWith('gaze'));
+    const back = similarTracks(tracks, opts(seed, { count: 50, exclude: queued, heard: heard.map((t) => t.id), recent: [gaze[0]] }));
+    expect(back.every((t) => heard.includes(t))).toBe(true);
+    expect(back).toEqual(expect.arrayContaining(gaze.slice(1)));
+    expect(back).not.toContain(gaze[0]);
+  });
+
+  it('a genre picked on Home: its unheard songs first, then its family, then popular ones, the heard last', () => {
+    n = 0;
+    const seed = track({ id: 'seed', artist: 'Seed', genre: 'jazz' });
+    const metal = (i: number) => track({ id: `metal${i}`, artist: `Metal ${i}`, genre: 'metal' });
+    const tracks = [
+      seed,
+      ...[0, 1, 2].map(metal),
+      ...[0, 1].map((i) => track({ id: `punk${i}`, artist: `Punk ${i}`, genre: 'punk' })),
+      ...[0, 1].map((i) => track({ id: `jazz${i}`, artist: `Jazz ${i}`, genre: 'jazz', saves: 50 })),
+      ...[0, 1].map((i) => track({ id: `tech${i}`, artist: `Tech ${i}`, genre: 'techno' })),
+    ];
+    const ids = (heard: string[] = [], genre?: string) => similarTracks(tracks, opts(seed, { count: 20, genre, heard })).map((t) => t.id);
+    const kind = (id: string) => id.replace(/\d+$/, '');
+    // Without a genre the seed's own (jazz) leads, as before.
+    expect(kind(ids()[0])).toBe('jazz');
+    // With one: metal, then the rock family (punk), then the rest.
+    const picks = ids([], 'metal').map(kind);
+    expect(picks.slice(0, 3)).toEqual(['metal', 'metal', 'metal']);
+    expect(picks.slice(3, 5).sort()).toEqual(['punk', 'punk']);
+    expect(picks.slice(5).sort()).toEqual(['jazz', 'jazz', 'tech', 'tech']);
+    // A heard metal song waits behind every other tier.
+    const heard = ids(['metal0'], 'metal');
+    expect(heard.at(-1)).toBe('metal0');
+    expect(heard.slice(0, 2).map(kind)).toEqual(['metal', 'metal']);
+  });
+
   it('tells Jukebox MP3s apart by their link (they have no video id)', () => {
     const mp3 = (id: string, file: string, artist: string) => track({ id, ytId: '', mp3: `https://latex.gg/share/${file}.mp3`, artist, genre: 'hip hop' });
     const seed = mp3('seed-mp3', 'SEED0001', 'Mephisztoe');

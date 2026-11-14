@@ -39,6 +39,12 @@ export function shuffleGenre(label: string | undefined): string | null | undefin
   return label?.startsWith(`${SHUFFLE} · `) ? label.slice(SHUFFLE.length + 3) : undefined;
 }
 
+/** The genre a Home list was picked in, by its label ("Home · rock", "Most saved · rock"); null for any other list (Latest, Most saved with no chip). */
+export function pickedGenre(label: string | undefined): string | null {
+  const m = label === 'Home · Latest' ? null : label?.match(/^(?:Home|Most saved) · (.+)$/);
+  return m?.[1] ?? null;
+}
+
 /**
  * The list playing leads on to the next whatever the Vibe setting: a Signal Radio station, or
  * Home's Jukebox shuffle (natively Stations.keepsGoing, the same rule).
@@ -58,6 +64,8 @@ export interface AutoplayDeps {
   catalog: () => readonly Track[];
   /** Recently played, newest first. */
   history: () => readonly Track[];
+  /** The songs heard since you last started something yourself (D9, player/session): Jukebox picks skip them while others are left. */
+  heard?: () => Promise<readonly Track[]>;
   showNsfw: () => boolean;
   signedIn: () => boolean;
   /** YouTube is backing us off (Y1): no Global requests. */
@@ -190,13 +198,14 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
     starved = null;
     // The catalog itself while every song plays (online): similarTracks keeps its index per array.
     const usable = catalog.every(playable) ? catalog : catalog.filter(playable);
-    // A Jukebox shuffle plays on like a station: random songs from its pool not yet queued,
-    // then, once every one is, another round of it (but the song just queued).
+    const heardKeys = new Set(((await deps.heard?.()) ?? []).map(audioKey));
+    // A Jukebox shuffle plays on like a station: random songs from its pool not yet queued (those heard
+    // since you last started something last), then, once every one is, another round of it (but the song just queued).
     const pool = shufflePool(s.context?.label, usable)?.filter((t) => !t.membersOnly || deps.signedIn());
     if (pool) {
       const fresh = pool.filter((t) => !inQueue.has(t.id));
       const from = fresh.length ? fresh : pool.filter((t) => t.id !== s.queue.at(-1)?.id);
-      if (from.length) await add(shuffled(from, deps.rng).slice(0, count));
+      if (from.length) await add(shuffled(from, deps.rng).sort((a, b) => +heardKeys.has(audioKey(a)) - +heardKeys.has(audioKey(b))).slice(0, count));
       return;
     }
     // What played since this seed started steers it (Jukebox tracks only: similarTracks skips Global ones).
@@ -207,6 +216,8 @@ export function createAutoplay(deps: AutoplayDeps): Autoplay {
       played: from < 0 ? [] : played.slice(from + 1).reverse(),
       recent: deps.history(),
       exclude: inQueue,
+      heard: heardKeys,
+      genre: pickedGenre(s.context?.label) ?? undefined,
       before: [s.current, ...s.upNext.map((u) => u.track)],
       count,
       showNsfw: deps.showNsfw(),

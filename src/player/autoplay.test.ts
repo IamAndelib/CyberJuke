@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals';
 import { describe, expect, it, vi } from 'vitest';
 import type { Track } from '../data/model';
-import { chainsOn, createAutoplay, shuffleLabel, type AutoplayDeps } from './autoplay';
+import { chainsOn, createAutoplay, pickedGenre, shuffleLabel, type AutoplayDeps } from './autoplay';
 import { STATIONS, stationById, stationLabel, stationOfTrackId, stationTracks } from './radio';
 import { EMPTY_STATE, VIBE_BATCH, type Player, type PlayerState, type QueueLow } from './types';
 
@@ -202,6 +202,15 @@ describe('autoplay', () => {
     expect(added).toHaveLength(1);
     expect(calls.mock.calls[0][1].played?.map((t) => t.id)).toEqual(['c7']);
     calls.mockRestore();
+  });
+
+  it('a Jukebox seed skips the songs heard since you last started something (D9)', async () => {
+    const seed = track('c0', { artist: 'A0' });
+    const heard = ['c1', 'c2', 'c15', 'c16', 'c30'].map((id) => track(id));
+    const { ap, added } = setup({ current: seed, seed, queue: [seed], upNext: [] }, { heard: async () => heard });
+    await ap.fill({ left: 0, seedId: 'c0' });
+    expect(added[0][0]).toHaveLength(VIBE_BATCH);
+    expect(added[0][0].filter((id) => heard.some((t) => t.id === id))).toEqual([]);
   });
 
   it('refills reuse one similarity index: the catalog itself goes to similarTracks while every song plays', async () => {
@@ -405,6 +414,15 @@ describe('autoplay', () => {
     expect(new Set(added[0][0])).toEqual(new Set(rock.slice(10).map((t) => t.id)));
   });
 
+  it("a shuffle's next round brings the songs heard since you last started something last (D9)", async () => {
+    const rock = Array.from({ length: 30 }, (_, i) => track(`r${i}`, { genre: 'rock', artist: 'A' }));
+    const heard = async () => rock.slice(10, 20);
+    const { ap, added } = setup({ current: rock[0], seed: rock[0], index: 0, queue: rock.slice(0, 10), context: { label: shuffleLabel('rock'), mode: 'list' } }, { catalog: () => rock, heard });
+    await ap.fill({ left: 9, seedId: 'r0' });
+    expect(new Set(added[0][0].slice(0, 10))).toEqual(new Set(rock.slice(20).map((t) => t.id)));
+    expect(new Set(added[0][0].slice(10))).toEqual(new Set(rock.slice(10, 20).map((t) => t.id)));
+  });
+
   it("Home's Jukebox shuffle goes on with random songs from the whole catalog, past the variety rules of similar picks", async () => {
     // One artist only: similar picks would hold back on playing them all in a row.
     const cat = Array.from({ length: VIBE_BATCH + 1 }, (_, i) => track(`a${i}`, { artist: 'A' }));
@@ -496,6 +514,30 @@ describe('autoplay', () => {
     const { ap, added } = setup({ current: seed, seed, queue: [seed], upNext: [] });
     await ap.fill({ left: 0, seedId: seed.id });
     expect(added).toEqual([]);
+  });
+});
+
+describe('pickedGenre', () => {
+  it("reads a Home list's genre from its label, null for any other", () => {
+    expect(pickedGenre('Home · rock')).toBe('rock');
+    expect(pickedGenre('Most saved · hip hop')).toBe('hip hop');
+    expect(pickedGenre('Home · Latest')).toBeNull();
+    expect(pickedGenre('Most saved')).toBeNull();
+    // Only Home's Latest is no genre: under Most saved, a genre named Latest is one.
+    expect(pickedGenre('Most saved · Latest')).toBe('Latest');
+    expect(pickedGenre('Jukebox shuffle · rock')).toBeNull();
+    expect(pickedGenre('Liked')).toBeNull();
+    expect(pickedGenre(undefined)).toBeNull();
+  });
+
+  it("a Vibe batch after a Home genre tap picks that genre first", async () => {
+    const seed = track('g0', { artist: 'G0', genre: 'house' });
+    const catalog = [seed, ...Array.from({ length: 30 }, (_, i) => track(`m${i}`, { artist: `M${i}`, genre: 'metal' })), ...Array.from({ length: 30 }, (_, i) => track(`h${i}`, { artist: `H${i}`, genre: 'house' }))];
+    const context = { label: 'Most saved · metal', mode: 'radio' as const };
+    const { ap, added } = setup({ current: seed, seed, index: 0, queue: [seed], context }, { catalog: () => catalog });
+    await ap.fill({ left: 0, seedId: 'g0' });
+    expect(added[0][0]).toHaveLength(VIBE_BATCH - 1);
+    expect(added[0][0].every((id) => id.startsWith('m'))).toBe(true);
   });
 });
 

@@ -15,7 +15,8 @@
  *
  * Picking: weighted random draws from the top candidates, so each radio differs. Never the
  * same artist twice in a row, at most 2 tracks by one artist in any 10. When good matches run
- * out it widens to the seed's genre family, then to popular Jukebox tracks.
+ * out it widens to the seed's genre family, then to popular Jukebox tracks. The songs heard
+ * since you last started something come only once nothing else is left (D9).
  */
 import { audioKey, isGlobal, type Track } from './model';
 import { artistKey, splitArtists } from './artists';
@@ -187,6 +188,13 @@ export interface SimilarOptions {
   played?: readonly Track[];
   /** Ids or video ids to leave out (everything already in the queue). */
   exclude?: Iterable<string>;
+  /**
+   * Ids or video ids heard since you last started something (D9): picked only once every other
+   * candidate is used up (in practice offline, with a few saved songs), so it never goes quiet.
+   */
+  heard?: Iterable<string>;
+  /** A genre picked on Home: its songs first, then its family's, then popular ones (instead of the seed's matches). */
+  genre?: string;
   /** What plays just before the picks, oldest first (the variety rules look at it). */
   before?: readonly Track[];
   count: number;
@@ -242,16 +250,29 @@ export function similarTracks(catalog: readonly Track[], o: SimilarOptions): Tra
     scored.push({ f, like, score: like + boost(idx, t, now) });
   }
 
-  // Tiers: good matches, then the seed's genre family (or anything alike at all), then popular.
   const byScore = (a: Scored, b: Scored) => b.score - a.score;
-  const good = scored.filter((s) => s.like >= GOOD_MATCH).sort(byScore);
-  const near = scored.filter((s) => s.like < GOOD_MATCH && (s.like > 0 || [...s.f.families].some((x) => seed.families.has(x)))).sort(byScore);
-  const inNear = new Set(near);
-  const rest = scored
-    .filter((s) => s.like < GOOD_MATCH && !inNear.has(s))
-    .map((s) => ({ ...s, score: boost(idx, s.f.track, now) }))
-    .sort(byScore);
-  const tiers = [good, near, rest];
+  const popular = (tier: Scored[]) => tier.map((s) => ({ ...s, score: boost(idx, s.f.track, now) })).sort(byScore);
+  /** The seed's tiers: good matches, then its genre family (or anything alike at all), then popular. */
+  const seedTiers = () => {
+    const good = scored.filter((s) => s.like >= GOOD_MATCH).sort(byScore);
+    const near = scored.filter((s) => s.like < GOOD_MATCH && (s.like > 0 || [...s.f.families].some((x) => seed.families.has(x)))).sort(byScore);
+    const inNear = new Set(near);
+    return [good, near, popular(scored.filter((s) => s.like < GOOD_MATCH && !inNear.has(s)))];
+  };
+  /** A genre picked on Home: its own songs, then its family's, then popular ones. */
+  const genreTiers = (g: string) => {
+    const fams = genreFamilies(g);
+    const own = scored.filter((s) => s.f.genre === g).sort(byScore);
+    const kin = scored.filter((s) => s.f.genre !== g && [...s.f.families].some((x) => fams.has(x))).sort(byScore);
+    const taken = new Set([...own, ...kin]);
+    return [own, kin, popular(scored.filter((s) => !taken.has(s)))];
+  };
+  const base = o.genre ? genreTiers(normalize(o.genre)) : seedTiers();
+  // Then the heard ones, in the same order.
+  const heard = new Set(o.heard ?? []);
+  const isHeard = (s: Scored) => heard.has(s.f.track.id) || heard.has(audioKey(s.f.track));
+  const tiers = base.map((tier) => tier.filter((s) => !isHeard(s)));
+  tiers.push(base.flatMap((tier) => tier.filter(isHeard)));
 
   // What plays before the picks; when nothing is given, the seed does.
   const history: string[][] = (o.before ?? []).slice(-(VARIETY_WINDOW - 1)).map((t) => featOf(t).artists);

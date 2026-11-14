@@ -42,6 +42,11 @@ export function withinHistoryDays(entries: HistoryEntry[], now: number): History
   return entries.filter((e) => e.playedAt >= cutoff);
 }
 
+/** The tracks played at or after `at` (epoch ms), newest first; none for null. */
+export function playedSince(entries: readonly HistoryEntry[], at: number | null): Track[] {
+  return at == null ? [] : entries.filter((e) => e.playedAt >= at).map((e) => e.track);
+}
+
 /** Record a play. Returns the same array when nothing changes (already on top today). */
 export function addPlay(entries: HistoryEntry[], track: Track, now: number): HistoryEntry[] {
   const today = dayKey(now);
