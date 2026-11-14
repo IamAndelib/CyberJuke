@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { bufferedAhead, openNowPlaying, openSettings, playAndOpen, playerCalls, recordToasts, saved, seedStorage, setOffline, start, toastsSeen, openLibrary } from '../helpers';
+import { bufferedAhead, openNowPlaying, openSettings, playAndOpen, playerCalls, recordToasts, saved, seedStorage, setOffline, start, tapDimmed, toastsSeen, openLibrary } from '../helpers';
 
 /**
  * The listening cache (native): liked songs saved on the phone play offline, from any list,
@@ -110,7 +110,7 @@ test('offline with liked songs saved, the banner and the refusal toast open Like
   await openLibrary(page, 'recent');
   await page.getByTestId('tab-home').click();
   await expect(page.getByTestId('shuffle-all')).toContainText('Shuffle liked songs');
-  await page.getByTestId('screen-home').locator('.row.off').first().getByTestId('track-play').click({ force: true });
+  await tapDimmed(page.getByTestId('screen-home').locator('.row.off').first().getByTestId('track-play'));
   await expect(page.getByTestId('toast')).toContainText(TAP_LIKED);
   await page.getByTestId('toast-action').click();
   await expect(page.getByTestId('screen-library')).toBeVisible();

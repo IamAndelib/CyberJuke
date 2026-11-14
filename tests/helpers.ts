@@ -37,6 +37,23 @@ export async function toListEnd(page: Page): Promise<void> {
   }
 }
 
+/**
+ * Tap a dimmed (aria-disabled) control, which Playwright won't click unless forced, once it takes the tap
+ * itself: just after a tab shows, a list row's content can be skipped for a frame (content-visibility), and
+ * a tap then lands on the bare row.
+ */
+export async function tapDimmed(target: Locator): Promise<void> {
+  await expect
+    .poll(() =>
+      target.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+      }),
+    )
+    .toBe(true);
+  await target.click({ force: true });
+}
+
 export async function start(page: Page, path = '/'): Promise<void> {
   await page.goto(path);
   await waitForTracks(page);

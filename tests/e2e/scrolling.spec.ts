@@ -121,10 +121,17 @@ test('the last row stays clear of back-to-top and search buttons at the end of a
   await scrollTo(page, 'screen-home', 1e6);
   const btn = page.getByTestId('screen-home').getByTestId('back-to-top');
   await expect(btn).toBeVisible();
-  const more = (await page.getByTestId('track-more').last().boundingBox())!;
-  const b = (await btn.boundingBox())!;
-  const f = (await page.getByTestId('search-fab').boundingBox())!;
-  expect(more.y + more.height).toBeLessThanOrEqual(Math.min(b.y, f.y));
+  // Scrolled and measured together, until it holds: rows never shown yet have a placeholder height
+  // (content-visibility) and grow to their own a frame after they scroll into view, moving the end down.
+  await expect
+    .poll(async () => {
+      await scrollTo(page, 'screen-home', 1e6);
+      const more = (await page.getByTestId('track-more').last().boundingBox())!;
+      const b = (await btn.boundingBox())!;
+      const f = (await page.getByTestId('search-fab').boundingBox())!;
+      return more.y + more.height - Math.min(b.y, f.y);
+    }, { message: 'the last row clear of the buttons' })
+    .toBeLessThanOrEqual(0);
 });
 
 test('back-to-top: finger down stops a fling, finger up jumps to the top, with no click needed', async ({ page }) => {
