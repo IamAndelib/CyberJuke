@@ -82,13 +82,16 @@ What "gapless" does not do: the app inserts nothing between two tracks, but Medi
 
 ## Signal Radio
 - [ ] The **Radio** tab comes after Library; all five tab labels show whole (also on a small phone). Settings opens from the icon at the top right of Home (no label), with no tab highlighted while it shows, and Back returns to Home. From Settings, tap Genres, then Home: Home shows, not Settings. The Radio tab's header says "by hyphen8d", with nothing under the station list. Airplane mode on: the stations dim (the one playing stays bright), and tapping one says "No carrier. Connect to play." It lists the YM and ZM bands, each station with its frequency, name and tagline.
-- [ ] Tap a station: it plays one of its tracks, the station is marked with a radio icon, and Now Playing says "Playing from Signal Radio · " and its name. Up next shows the rest of the station, then "More from …".
+- [ ] Tap a station (Shuffle off): it plays its first track, the station is marked with a radio icon, and Now Playing says "Playing from Signal Radio · " and its name. Up next shows the rest of the station in its order.
 - [ ] Tap the station that's on: Now Playing opens, and the music doesn't restart; paused, the tap plays it on. Tap another station: its tracks play, and the mark moves.
 - [ ] On the Radio tab, Search (Here) finds a song from any station; tapping it plays that song.
 - [ ] The ⓘ button shows what the station plays and how many tracks it has; **Tune in** starts it.
-- [ ] Let a station play with the screen off for longer than its round (about 2 hours for a 32-track station): it keeps going, a new shuffle of the same station.
+- [ ] Let a station play to its end (or press Next up to its last song): the next station on the Radio tab follows, from its first song, and Now Playing says "More from" its name; after CIRCUIT CRUSH (the last ZM station) comes CIPHER. Once more with the screen locked for longer than the station (about 2 hours for a 32-track station): the next one plays, and the one after it lines up, without the screen.
+- [ ] Shuffle on, tune in: the station plays mixed, then a random other station, mixed too. Let several play (Next to each one's last song): none comes twice until all 16 have. Toggle Shuffle with the next station under **On the way**: it stays the same station, its songs mixed or in order.
+- [ ] Repeat all on while a station plays: nothing shows under **On the way**, and at its last song it goes round to its first ("From the top"). Tap another station with Repeat all still on: it loops that one. Repeat off again: the next station lines up.
+- [ ] Swipe the app away while a station plays (don't reopen it): it plays to the end of the station and the station on the way, then stops, as a Jukebox list does (only the app picks the next station).
 - [ ] Swipe the app away while a station plays and reopen it: Now Playing and Up next show the station's titles, not "Unknown track".
-- [ ] Settings → **Autoplay** off, then tune in and let it play past its first round: it keeps going. A Jukebox list still stops at its end.
+- [ ] Settings → **Autoplay** off, then tune in and let it play past its end: the next station follows. A Jukebox list still stops at its end.
 
 ## Local music
 - [ ] Settings → **Local music** → on: Android's folder picker opens at once. Back out: it stays on with no folder. On Android 7, 12 and 13+ (or what you have), choose **Music**: the row says "Looking… N songs so far", then "N songs". No storage permission is asked for, and Android's app info lists none.
