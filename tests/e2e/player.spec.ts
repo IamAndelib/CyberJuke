@@ -121,7 +121,16 @@ test('Now Playing: a swipe down closes it, a short drag springs back, the seek b
   await expect(np).toHaveClass(/open/);
   await expect.poll(() => np.evaluate((el) => (el as HTMLElement).style.transform)).toBe('');
 
-  // A drag on the seek bar never moves the sheet.
+  // A drag on the seek bar never moves the sheet. (Measured once the sheet has settled: still sliding,
+  // the finger would land on what has moved under it.)
+  const seekY = async () => (await page.getByTestId('seek').boundingBox())!.y;
+  await expect
+    .poll(async () => {
+      const y = await seekY();
+      await page.waitForTimeout(150);
+      return (await seekY()) - y;
+    })
+    .toBe(0);
   const seek = (await page.getByTestId('seek').boundingBox())!;
   await touchDrag(page, seek.x + 20, seek.y + seek.height / 2, seek.y + seek.height / 2 + h * 0.4, 400);
   await expect(np).toHaveClass(/open/);
@@ -661,6 +670,8 @@ test('in Now Playing an Undo message sits at the bottom, and Up next scrolls cle
   await page.getByTestId('track-play').first().click();
   await openNowPlaying(page);
   const rows = page.getByTestId('upnext-row');
+  // The radio's suggestions, then the next batch on the way: all of Up next is there.
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __cyberjukeQueue: () => { nextStart: number } }).__cyberjukeQueue().nextStart)).toBeGreaterThanOrEqual(0);
   await expect(rows.nth(3)).toBeVisible();
   await rows.first().getByTestId('upnext-remove').click();
   const toast = page.getByTestId('toast');
@@ -668,13 +679,16 @@ test('in Now Playing an Undo message sits at the bottom, and Up next scrolls cle
   const t = await box(toast);
   const vh = page.viewportSize()!.height;
   expect(vh - (t.y + t.height)).toBeLessThanOrEqual(30);
-  // At the end of Up next, the last row's buttons are all above the message.
-  await page.locator('.np-scroll').evaluate((el) => el.scrollTo(0, el.scrollHeight));
-  const last = rows.last();
-  for (const id of ['upnext-up', 'upnext-down', 'upnext-remove']) {
-    const b = await box(last.getByTestId(id));
-    expect(b.y + b.height, id).toBeLessThanOrEqual(t.y);
-  }
+  // At the end of Up next, the last row is all above the message. Scrolled and measured
+  // together, until it holds: rows never shown yet have a placeholder height (content-visibility),
+  // and grow to their own a frame after they scroll into view, which moves the end down again.
+  await expect.poll(() => page.locator('.np-scroll').evaluate(async (el) => {
+    el.scrollTo(0, el.scrollHeight);
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    const rows = el.querySelectorAll('[data-testid="upnext-row"]');
+    return rows[rows.length - 1].getBoundingClientRect().bottom;
+  }), 'the last row').toBeLessThanOrEqual(t.y);
 });
 
 test('closing Now Playing gives focus back to the mini player, keeps the app inert only while open, and takes the next tap', async ({ page }) => {

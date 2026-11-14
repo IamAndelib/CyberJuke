@@ -95,7 +95,7 @@ interface JukePlayerPlugin {
   /** A new list. Tracks queued with queueNext stay next (P1); autoplay starts over from the start track (a Global one gets its radio natively). */
   setQueue(o: { tracks: NativeTrack[]; startIndex: number; positionMs?: number; playWhenReady: boolean; context?: { label: string; mode: 'radio' | 'list' } }): Promise<void>;
   /**
-   * Jukebox autoplay picks for `seedId` (after queueLow); dropped if the seed changed, autoplay is off, or repeat all is on but for a radio's first batch (mayAutoplay).
+   * Jukebox autoplay picks for `seedId` (after queueLow); dropped if the seed changed, autoplay is off, repeat all is on but for a radio's first batch (mayAutoplay), or a list is on the way already.
    * A station the Radio tab started (a `sig:…` seed in a list labelled `Signal Radio · <CALLSIGN>`) is not autoplay:
    * queueLow and its next rounds come whatever the Autoplay setting (setAutoplay(false) keeps them too). A station's
    * track in any other list (Liked, Recently played) is just a track.
@@ -233,7 +233,7 @@ interface JukePlayerPlugin {
   /** YouTube is refusing this network: playback paused, nothing is requested until `until`. */
   addListener(event: 'blocked', cb: (e: BlockedEvent) => void): Promise<{ remove: () => Promise<void> }>;
   addListener(event: 'unblocked', cb: (e: Record<string, never>) => void): Promise<{ remove: () => Promise<void> }>;
-  /** Autoplay has `left` (<= 5) Jukebox tracks to go: send more with addAutoplay. */
+  /** Nothing is on the way (as a list starts): send the next list with addAutoplay. `left` (tracks to go after the current one) is informational only. */
   addListener(event: 'queueLow', cb: (e: { left: number; seedId: string | null }) => void): Promise<{ remove: () => Promise<void> }>;
   /** The Global tracks in the queue (radio items, and after a reload every Global track), so they can be shown. */
   addListener(event: 'tracks', cb: (e: { tracks: NativeTrack[] }) => void): Promise<{ remove: () => Promise<void> }>;

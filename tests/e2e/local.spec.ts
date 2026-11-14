@@ -1,5 +1,5 @@
 import { expect, musicFolder, test, type FakeLocalFolder } from '../fixtures';
-import { nextFrame, openLibrary, openNowPlaying, openSearch, openSettings, saved, seedStorage, setOffline } from '../helpers';
+import { nextFrame, openLibrary, openNowPlaying, openSearch, openSettings, saved, seedStorage, setOffline, tapDimmed } from '../helpers';
 
 /**
  * Local music (Settings → Local music, Library → Local) on the fake JukeLocal: the folder
@@ -318,7 +318,7 @@ test.describe('playing', () => {
     await setOffline(page, backend, true);
     const line = page.getByTestId('offline-banner-library');
     await expect(line).toHaveText('[ offline ] no carrier · your local songs still play');
-    await page.getByTestId('screen-home').locator('.row.off').first().getByTestId('track-play').click({ force: true });
+    await tapDimmed(page.getByTestId('screen-home').locator('.row.off').first().getByTestId('track-play'));
     await expect(page.getByTestId('toast').last()).toContainText('No carrier. Your local songs still play.');
     await page.getByTestId('toast-action').click();
     await expect(page.getByTestId('screen-library')).toBeVisible();

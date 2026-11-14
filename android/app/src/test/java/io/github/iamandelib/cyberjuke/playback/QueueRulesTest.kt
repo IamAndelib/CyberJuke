@@ -113,6 +113,7 @@ class QueueRulesTest {
             assertEquals("upNextStartsWith in $where (got $up)", want, up.take(want.size))
         }
         if (s.has("listStart")) assertEquals("listStart in $where", s.getString("listStart"), p.ids[p.queue.listStartIndex()])
+        if (s.has("nextStart")) assertEquals("nextStart in $where", if (s.isNull("nextStart")) null else s.getString("nextStart"), p.ids.getOrNull(p.queue.nextStartIndex()))
         if (s.has("queued")) {
             val pending = p.queue.pendingSerials
             val queued = up.takeWhile { p.serials[p.ids.indexOf(it)] in pending }.size

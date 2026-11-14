@@ -572,6 +572,23 @@ describe('NativePlayer: starting a list', () => {
     expect(p.state.value).toMatchObject({ mine: [2], lap: [] });
   });
 
+  it("shows the new list's own markers at once: nothing on the way yet, so its first Vibe batch is asked for", async () => {
+    const p = new NativePlayer();
+    emit('state', state({ index: 1, trackId: 'B', queueIds: ['A', 'B', 'C', 'S'], upNextIds: ['C', 'S'], upNextKinds: 'la', upNextIndex: [2, 3], listStart: 1, nextStart: 3 }));
+    fake.plugin.setQueue.mockImplementationOnce(() => new Promise<void>(() => {}));
+    void p.playList([tr('X'), tr('Y')], 0, { label: 'Liked', mode: 'list' });
+    expect(p.state.value).toMatchObject({ listStart: 0, nextStart: -1 });
+  });
+
+  it('a removal shown before native answers keeps the line before the list on the way under the right song', async () => {
+    const p = new NativePlayer();
+    emit('state', state({ index: 1, trackId: 'B', queueIds: ['A', 'B', 'C', 'S', 'T'], upNextIds: ['C', 'S', 'T'], upNextKinds: 'laa', upNextIndex: [2, 3, 4], listStart: 0, nextStart: 3 }));
+    fake.plugin.removeItem.mockImplementationOnce(() => new Promise<void>(() => {}));
+    void p.remove(2, 'C');
+    expect(p.state.value).toMatchObject({ listStart: 0, nextStart: 2 });
+    expect(p.state.value.queue[p.state.value.nextStart].id).toBe('S');
+  });
+
   it('when native skips the start track, its events are trusted again at once', async () => {
     const p = new NativePlayer();
     await p.playList([tr('A'), tr('B')], 0, { label: '', mode: 'list' });
@@ -612,7 +629,7 @@ describe('NativePlayer: starting a list', () => {
   });
 });
 
-describe('NativePlayer: running low', () => {
+describe('NativePlayer: nothing on the way (queueLow)', () => {
   it('a listener added after the signal (autoplay starts late on a reloaded page) still hears it', async () => {
     const p = new NativePlayer();
     emit('queueLow', { left: 2, seedId: 'A' });

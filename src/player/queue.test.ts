@@ -146,6 +146,18 @@ describe('Queue: next / prev', () => {
 });
 
 describe('Queue: shuffle', () => {
+  it('with shuffle on, a batch is mixed as it arrives, after the list, so On the way shows the order it plays (D2)', () => {
+    const q = new Queue(seeded(7));
+    q.setList(abc(), 0);
+    q.setShuffle(true);
+    const batch = Array.from({ length: 25 }, (_, k) => t(`s${k}`));
+    q.addAuto(batch);
+    const up = ids(q.upNext());
+    expect(up.slice(0, 4).sort()).toEqual(['b', 'c', 'd', 'e']);
+    expect(up.slice(4).sort()).toEqual(ids(batch).sort());
+    expect(up.slice(4)).not.toEqual(ids(batch));
+  });
+
   it('turned on, mixes every track not heard yet, also those before where the list started; the heard ones stay behind', () => {
     const q = new Queue(seeded());
     q.setList(abc(), 2);

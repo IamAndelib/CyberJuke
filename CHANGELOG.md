@@ -6,6 +6,8 @@
 - With Repeat all on, Up next goes on under "From the top" with the songs that play next time round, and you can reorder or remove them there.
 
 ### Changed
+- Suggestions come in batches (25 Jukebox songs, or a page of a Global song's radio), and the next batch is fetched as soon as the one before starts, so it's there in time, also with the screen locked: an album shows what follows it from its start, and a song you tap on Home or in Search plays with the songs like it and the next batch lined up. Going to the background no longer adds 50 at once.
+- Up next shows what follows the list you're in under **On the way**: the next batch of suggestions, or a station's next round, enough to fill Up next to 25 songs, one more as each song ends. Songs there can't be moved or removed; tap one to start it from that song.
 - **Save queue as playlist** saves the whole list you're in, not only the 100 or so songs Up next shows: an album, or once its suggestions are playing, those. It keeps the songs you queued, also after the album repeats or its suggestions start.
 - After you delete a playlist, **Undo** brings it back where it was, with all its songs.
 - A page title too long for the top bar on a narrow phone, such as Recently played beside [Clear], is set a little smaller, so more of it shows (often all).
@@ -20,6 +22,7 @@
 - After Previous, a tap on a suggestion in the queue leaves the songs you went back over in Played instead of playing them again; the list's songs you haven't heard yet still come after it, shuffle on or off.
 
 ### Fixed
+- A name you start typing the moment the New playlist or Rename sheet opens is no longer wiped (on a busy phone the field could clear itself a moment after it showed).
 - After you tap a suggestion in the queue and go back with Previous, your list's songs stay under their own heading instead of under Autoplay, and Now Playing still says "3 of 8" instead of "Single track". When suggestions and your list's songs take turns, each gets its heading again.
 - **Undo** after ✕ in the queue puts back the same song, as what it was and where it was: one of your list's songs stays in your list, even with Autoplay off, and never lands among the suggestions after it, shuffle on or off; a suggestion goes back to its place instead of the end, and stays a suggestion also from Played; a song you heard stays heard, and a song of the list before stays in that list. It goes back right where it was, also next to songs you haven't heard yet in Played or From the top, and by the right copy when a radio's next round repeats songs. Once you change Repeat, the Undo goes, as Repeat all keeps only the list you're in.
 - Turning shuffle on no longer moves songs you haven't heard into Played: everything still to come stays in Up next. After Previous, or a tap on a played song, the songs you went back over stay next, in the order you heard them, and the rest gets mixed; on a second Repeat all lap the whole lap ahead is mixed. Shuffle mixes only the list you're in: once an album's suggestions play, the album's songs you never played no longer come back into Up next. Suggestions that arrive while shuffled go after the ones already there.

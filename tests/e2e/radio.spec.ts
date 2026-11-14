@@ -66,7 +66,7 @@ test('the Radio tab lists both bands; tuning in plays the station and Now Playin
   await expect(cipher.getByTestId('station-on')).toBeVisible();
   await expect(screen.locator('[aria-current]')).toHaveCount(1);
 
-  // The round is the list (all 50 tracks, once each); the next round comes near its end.
+  // The round is the list (all 50 tracks, once each); the next round comes on the way as it starts.
   const q = await queueState(page);
   expect(q.context).toEqual({ label: 'Signal Radio · CIPHER', mode: 'list' });
   expect(q.current?.source).toBe('signal');
@@ -107,9 +107,9 @@ test('a station plays on past its rounds, and its tracks are kept like any other
   await openRadio(page);
   await tune(page, 'the-crypt');
   await openNowPlaying(page);
-  // The first round; the next comes near its end.
+  // The first round; the next comes on the way.
   await expect.poll(() => place(page)).toEqual({ at: 1, of: 32 });
-  // Past both of them but the last few: another round comes.
+  // Past the first round, the second starts: another round comes on the way.
   await playOn(page, 60 * (FAKE_TRACK_MS + 200));
   // On the station's later rounds, Now Playing says so, as Up next does.
   await expect(page.getByTestId('np-from')).toHaveText('More from THE CRYPT');
@@ -139,12 +139,12 @@ test('a station plays on with Autoplay off too: it is the station, not autoplay'
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await openRadio(page);
   await tune(page, 'slow-orbit');
-  // Near the end of the round its next one (32 more) follows, as with Autoplay on.
+  // The round's next one (32 more) is on the way, as with Autoplay on.
   await openNowPlaying(page);
   await expect.poll(() => place(page)).toEqual({ at: 1, of: 32 });
   await toListEnd(page);
   await expect.poll(() => place(page)).toEqual({ at: 32, of: 32 });
-  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from SLOW ORBIT');
+  await expect(page.getByTestId('upnext-way-label')).toHaveText('On the way');
   // Turning Autoplay off while a station plays leaves its rounds alone.
   await page.getByTestId('np-close').click();
   await openSettings(page);
@@ -153,7 +153,7 @@ test('a station plays on with Autoplay off too: it is the station, not autoplay'
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await openNowPlaying(page);
-  await expect(page.getByTestId('upnext-autoplay-label')).toHaveText('More from SLOW ORBIT');
+  await expect(page.getByTestId('upnext-way-label')).toHaveText('On the way');
   expect(await place(page)).toEqual({ at: 32, of: 32 });
 });
 

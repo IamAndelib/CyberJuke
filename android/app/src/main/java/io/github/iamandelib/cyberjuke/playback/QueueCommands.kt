@@ -121,9 +121,6 @@ internal object QueueCommands {
 
     /** Track ids of Global (YouTube Music) tracks: `ytm:<ytId>`, as on the web side. */
     const val GLOBAL_PREFIX = "ytm:"
-
-    /** Items left (any kind) when the queue is "low" and autoplay adds more (AP4). */
-    const val LOW = 5
 }
 
 /**
@@ -163,14 +160,17 @@ internal object QueueInfo {
     var seedId: String? = null
 
     fun interface QueueLowListener {
-        /** Autoplay has [left] items to go and the web side should add more after [seedId]. */
+        /**
+         * Nothing is on the way ([Radios.needsNext]): the web side should add the next list after
+         * [seedId]. [left] (items to go after the current one) only says how far off the end is.
+         */
         fun onQueueLow(left: Int, seedId: String?)
     }
 
     private val lowListeners = CopyOnWriteArraySet<QueueLowListener>()
 
     /**
-     * The last "running low" not answered yet (left, seedId). The service only says it once per
+     * The last "nothing on the way" not answered yet (left, seedId). The service only says it once per
      * state; if nobody was listening then (the app swiped away, the WebView reloading), the
      * plugin repeats it to the page's new `queueLow` listener, so autoplay doesn't run dry.
      */
@@ -187,7 +187,7 @@ internal object QueueInfo {
         lowListeners.forEach { it.onQueueLow(left, seedId) }
     }
 
-    /** Autoplay has enough ahead again (or stopped): nothing to repeat to a new listener. */
+    /** A list is on the way again (or autoplay stopped): nothing to repeat to a new listener. */
     fun clearLow() {
         lastLow = null
     }

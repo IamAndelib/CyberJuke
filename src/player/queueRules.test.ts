@@ -126,6 +126,7 @@ describe('Queue rules (tests/spec/queue-rules.json)', () => {
               expect(ids(q.upNext()).slice(0, want.length)).toEqual(want);
             }
             if ('listStart' in s) expect(q.items[q.listStartIndex]?.id).toBe(s.listStart);
+            if ('nextStart' in s) expect(q.items[q.nextStartIndex]?.id ?? null).toBe(s.nextStart);
             if ('queued' in s) expect(q.queuedCount).toBe(s.queued);
             if ('list' in s) expect(ids(q.items)).toEqual(s.list);
             if ('played' in s) expect(q.previousIndices().map((i) => q.items[i].id)).toEqual(s.played);
